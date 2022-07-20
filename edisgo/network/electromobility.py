@@ -54,8 +54,7 @@ class Electromobility:
     @property
     def charging_processes_df(self):
         """
-        DataFrame with all
-        `SimBEV <https://github.com/rl-institut/simbev>`_
+        DataFrame with all `SimBEV <https://github.com/rl-institut/simbev>`_
         charging processes.
 
         Returns
