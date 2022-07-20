@@ -3,7 +3,8 @@ import os
 
 from zipfile import ZipFile
 
-import geopandas as gpd
+if "READTHEDOCS" not in os.environ:
+    import geopandas as gpd
 import pandas as pd
 
 from sklearn import preprocessing
@@ -53,7 +54,8 @@ class Electromobility:
     @property
     def charging_processes_df(self):
         """
-        DataFrame with all `SimBEV <https://github.com/rl-institut/simbev>`_
+        DataFrame with all
+        `SimBEV <https://github.com/rl-institut/simbev>`_
         charging processes.
 
         Returns
@@ -77,7 +79,8 @@ class Electromobility:
     @property
     def grid_connections_gdf(self):
         """
-        GeoDataFrame with all `SimBEV <https://github.com/rl-institut/simbev>`_
+        GeoDataFrame with all
+        `SimBEV <https://github.com/rl-institut/simbev>`_
         grid connections.
 
         Returns
@@ -113,7 +116,9 @@ class Electromobility:
     @property
     def simbev_config_df(self):
         """
-        Dict with all `SimBEV <https://github.com/rl-institut/simbev>`_. config data.
+        Dict with all
+        `SimBEV <https://github.com/rl-institut/simbev>`_
+        config data.
 
         Returns
         -------
@@ -152,7 +157,7 @@ class Electromobility:
 
         Returns
         -------
-        :obj:`int`
+        int
             Stepsize in minutes
 
         """
@@ -169,7 +174,7 @@ class Electromobility:
 
         Returns
         -------
-        :obj:`int`
+        int
             Number of simulated days
 
         """
@@ -181,12 +186,11 @@ class Electromobility:
     @property
     def eta_charging_points(self):
         """
-        `SimBEV <https://github.com/rl-institut/simbev>`_ charging point
-        efficiency.
+        Charging point efficiency.
 
         Returns
         -------
-        :obj:`float`
+        float
             Charging point efficiency
 
         """
