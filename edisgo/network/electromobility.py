@@ -157,7 +157,7 @@ class Electromobility:
 
         Returns
         -------
-        :obj:`int`
+        int
             Stepsize in minutes
 
         """
@@ -174,7 +174,7 @@ class Electromobility:
 
         Returns
         -------
-        :obj:`int`
+        int
             Number of simulated days
 
         """
@@ -186,12 +186,11 @@ class Electromobility:
     @property
     def eta_charging_points(self):
         """
-        `SimBEV <https://github.com/rl-institut/simbev>`_
-        charging point efficiency.
+        Charging point efficiency.
 
         Returns
         -------
-        :obj:`float`
+        float
             Charging point efficiency
 
         """
