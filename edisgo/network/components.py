@@ -1087,6 +1087,8 @@ class PotentialChargingParks(BasicComponent):
         """
         substations = self._topology.buses_df.loc[self._topology.transformers_df.bus1]
 
+        if self.geometry.y > 90:
+            print("break")
         nearest_substation, distance = find_nearest_bus(self.geometry, substations)
 
         lv_grid_id = int(self._topology.buses_df.at[nearest_substation, "lv_grid_id"])

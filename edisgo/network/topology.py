@@ -645,6 +645,51 @@ class Topology:
 
     @property
     def lv_grids_df(self):
+        """
+        DataFrame containing technical data of lv grids.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Columns of the DataFrame are:
+                peak_generation_capacity : float
+                    Cumulative peak generation capacity of generators in the network in
+                    MW.
+
+                p_set : float
+                    Cumulative peak load of loads in the network in MW.
+
+                installed_charging_point_capacity : float
+                    Connected charging points within the network.
+
+                substation_capacity : float
+                    Cumulative capacity of transformers to overlaying network.
+
+                generators_weight : float
+                    Weighting used in grid friendly siting of public charging points.
+                    In the case of generators the weight is defined by dividing the
+                    peak_generation_capacity by substation_capacity and norming the
+                    results from 0 .. 1. A higher weight is more attractive.
+
+                loads_weight : float
+                    Weighting used in grid friendly siting of public charging points.
+                    In the case of loads the weight is defined by dividing the
+                    p_set by substation_capacity and norming the results from 0 .. 1.
+                    The result is then substracted from 1 as the higher the p_set is
+                    in relation to the substation_capacity the less attractive this lv
+                    grid is for new loads from a grid perspective. A higher weight is
+                    more attractive.
+
+                installed_charging_point_weight : float
+                    Weighting used in grid friendly siting of public charging points.
+                    In the case of charging points the weight is defined by dividing the
+                    installed_charging_point_capacity by substation_capacity and norming
+                    the results from 0 .. 1. The result is then substracted from 1 as
+                    the higher the installed_charging_point_capacity is in relation to
+                    the substation_capacity the less attractive this lv grid is for new
+                    loads from a grid perspective. A higher weight is more attractive.
+
+        """
         lv_grids_df = pd.DataFrame(
             index=[_._id for _ in self.mv_grid.lv_grids], columns=COLUMNS["lv_grids_df"]
         )

@@ -3,13 +3,14 @@ import os
 
 from zipfile import ZipFile
 
-if "READTHEDOCS" not in os.environ:
-    import geopandas as gpd
 import pandas as pd
 
 from sklearn import preprocessing
 
 from edisgo.network.components import PotentialChargingParks
+
+if "READTHEDOCS" not in os.environ:
+    import geopandas as gpd
 
 logger = logging.getLogger("edisgo")
 

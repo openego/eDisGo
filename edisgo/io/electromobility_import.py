@@ -326,14 +326,21 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
         path = Path(path)
 
     for f in files:
-        gdf = gpd.read_file(path / f).to_crs(
-            epsg=edisgo_obj.topology.grid_district["srid"]
-        )
+        gdf = gpd.read_file(path / f)
 
-        if "potential" in gdf.columns:
-            gdf = gdf.rename(columns={"potential": "user_centric_weight"})
-        elif "charge_spots" in gdf.columns:
-            gdf = gdf.rename(columns={"charge_spots": "user_centric_weight"})
+        if "undefined" in gdf.crs.name.lower():
+            gdf = gdf.set_crs(epsg=3035, allow_override=True).to_crs(
+                epsg=edisgo_obj.topology.grid_district["srid"]
+            )
+        else:
+            gdf = gdf.to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
+
+        gdf = gdf.rename(
+            columns={
+                "charge_spots": "user_centric_weight",
+                "potential": "user_centric_weight",
+            }
+        )
 
         # drop unnecessary columns
         gdf = gdf[KEEP_COLS["grid_connections_gdf"]]
