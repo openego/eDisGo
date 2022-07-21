@@ -21,9 +21,12 @@ COLUMNS = {
         "destination",
         "use_case",
         "nominal_charging_capacity_kW",
-        "chargingdemand_kWh",
+        "grid_charging_capacity_kW" "chargingdemand_kWh",
+        "park_time_timesteps",
         "park_start_timesteps",
         "park_end_timesteps",
+        "charging_park_id",
+        "charging_point_id",
     ],
     "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
     "potential_charging_parks_df": [
@@ -62,10 +65,49 @@ class Electromobility:
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            DataFrame with AGS, car ID, trip destination, charging use case
-            (private or public), netto charging capacity, charging demand,
-            charge start, charge end, grid connection point and charging point
-            ID.
+            DataFrame with AGS, car ID, trip destination, charging use case,
+            netto charging capacity, charging demand, charge start, charge end, grid
+            connection point and charging point ID. The columns are:
+
+                ags : int
+                    8-digit AGS (Amtlicher Gemeindeschlüssel, eng. Community
+                    Identification Number). Leading zeros are missing.
+
+                car_id : int
+                    Car ID to differntiate charging processes from different cars.
+
+                destination : str
+                    SimBEV driving destination.
+
+                use_case : str
+                    SimBEV use case. Can be "hpc", "home", "public" or "work".
+
+                nominal_charging_capacity_kW : float
+                    Vehicle charging capacity in kW.
+
+                grid_charging_capacity_kW : float
+                    Grid-sided charging capacity including charging infrastructure
+                    losses in kW.
+
+                chargingdemand_kWh : float
+                    Charging demand in kWh.
+
+                park_time_timesteps : int
+                    Number of parking time steps.
+
+                park_start_timesteps : int
+                    Time step the parking event starts.
+
+                park_end_timesteps : int
+                    Time step the parking event ends.
+
+                charging_park_id : int
+                    Designated charging park ID from grid_connections_gdf. Is NaN if
+                    the charging demand is not yet distributed.
+
+                charging_point_id : int
+                    Designated charging point ID. Is used to differentiate between
+                    multiple charging points at one charging park.
 
         """
         try:
