@@ -1307,10 +1307,30 @@ class EDisGo:
         self,
         simbev_directory: PurePath | str,
         tracbev_directory: PurePath | str,
-        **kwargs,
+        import_electromobility_data_kwds=None,
+        allocate_charging_demand_kwds=None
     ):
         """
-        Import electromobility data from SimBEV and TracBEV.
+        Imports electromobility data and integrates charging points into grid.
+
+        So far, this function requires electromobility data from
+        `SimBEV <https://github.com/rl-institut/simbev>`_ and
+        `TracBEV <https://github.com/rl-institut/tracbev>`_ to be stored in the
+        directories specified through the parameters `simbev_directory` and
+        `tracbev_directory`. SimBEV provides data on standing times, charging demand,
+        etc. per vehicle, whereas TracBEV provides potential charging point locations.
+
+        After electromobility data is loaded, the charging demand from SimBEV is
+        allocated to potential charging points from TracBEV. Afterwards,
+        all potential charging points with charging demand allocated to them are
+        integrated into the grid.
+
+        Be aware that this function does not yield charging time series per charging
+        point but only charging processes (see
+        :attr:`~.network.electromobility.Electromobility.charging_processes_df` for
+        more information). The actual charging time series are determined through
+        applying a charging strategy using the function
+        :attr:`~.edisgo.EDisGo.charging_strategy`.
 
         Parameters
         ----------
@@ -1318,82 +1338,72 @@ class EDisGo:
             SimBEV directory holding SimBEV data.
         tracbev_directory : str
             TracBEV directory holding TracBEV data.
-        kwargs :
-            Kwargs may contain any further attributes you want to specify.
+        import_electromobility_data_kwds : dict
+            These may contain any further attributes you want to specify when calling
+            the function to import electromobility data from SimBEV and TracBEV using
+            :func:`~.io.electromobility_import.import_electromobility`.
 
             gc_to_car_rate_home : float
                 Specifies the minimum rate between possible grid connections
                 points for the use case "home" and the total number of cars.
-                Default 0.5 .
+                Default 0.5.
             gc_to_car_rate_work : float
                 Specifies the minimum rate between possible grid connections
                 points for the use case "work" and the total number of cars.
-                Default 0.25 .
+                Default 0.25.
             gc_to_car_rate_public : float
                 Specifies the minimum rate between possible grid connections
                 points for the use case "public" and the total number of cars.
-                Default 0.1 .
+                Default 0.1.
             gc_to_car_rate_hpc : float
                 Specifies the minimum rate between possible grid connections
                 points for the use case "hpc" and the total number of cars.
-                Default 0.005 .
+                Default 0.005.
             mode_parking_times : str
                 If the mode_parking_times is set to "frugal" only parking times
-                with any charging demand are imported. Default "frugal".
+                with any charging demand are imported. Any other input will lead
+                to all parking and driving events being imported. Default "frugal".
             charging_processes_dir : str
                 Charging processes sub-directory. Default "simbev_run".
             simbev_config_file : str
                 Name of the simbev config file. Default "metadata_simbev_run.json".
             grid_connections_dir : str
-                Possible grid Connections sub-directory.
+                Possible grid connections sub-directory.
                 Default "grid_connections".
-        """
-        import_electromobility(self, simbev_directory, tracbev_directory, **kwargs)
 
-    def distribute_charging_demand(self, **kwargs):
-        """
-        Distribute charging demand and integrate charging parks into the grid.
+        allocate_charging_demand_kwds :
+            These may contain any further attributes you want to specify when calling
+            the function that allocates charging processes from SimBEV to potential
+            charging points from TracBEV using
+            :func:`~.io.electromobility_import.distribute_charging_demand`.
 
-        Distribute charging demand from SimBEV onto potential charging parks from
-        TracBEV. Integrates all designated charging parks into the grid. The charging
-        demand is not integrated here, but an empty dummy timeseries is generated.
-
-        Parameters
-        ----------
-        kwargs :
-            Kwargs may contain any further attributes you want to specify.
-
-            mode Default : str
+            mode : str
                 Distribution mode. If the mode is set to "user_friendly" only the
                 simbev weights are used for the distribution. If the mode is
                 "grid_friendly" also grid conditions are respected.
                 Default "user_friendly".
             generators_weight_factor : float
-                Weighting factor of the generators weight within a lv grid in
-                comparison to the loads weight. Default 0.5 .
+                Weighting factor of the generators weight within an LV grid in
+                comparison to the loads weight. Default 0.5.
             distance_weight : float
                 Weighting factor for the distance between a grid connection point
-                and it's nearest substation in comparison to the combination of
-                the generators and load factors of the lv grids.
-                Default 1 / 3 .
+                and its nearest substation in comparison to the combination of
+                the generators and load factors of the LV grids.
+                Default 1 / 3.
             user_friendly_weight : float
                 Weighting factor of the user friendly weight in comparison to the
-                grid friendly weight. Default 0.5 .
+                grid friendly weight. Default 0.5.
 
         """
-        if (
-            self.electromobility.charging_processes_df.empty
-            or self.electromobility.grid_connections_gdf.empty
-        ):
-            logger.error(
-                "Please import electromobility data from SimBEV and TracBEV before "
-                "distribution. The respective dataframes 'charging_processes_df' and/or"
-                " 'grid_connections_gdf' are empty and need to be filled first."
-            )
-        else:
-            distribute_charging_demand(self, **kwargs)
+        if import_electromobility_data_kwds is None:
+            import_electromobility_data_kwds = {}
+        import_electromobility(self, simbev_directory, tracbev_directory,
+                               **import_electromobility_data_kwds)
 
-            integrate_charging_parks(self)
+        if allocate_charging_demand_kwds is None:
+            allocate_charging_demand_kwds = {}
+        distribute_charging_demand(self, **allocate_charging_demand_kwds)
+        integrate_charging_parks(self)
 
     def charging_strategy(self, strategy="dumb", **kwargs):
         """

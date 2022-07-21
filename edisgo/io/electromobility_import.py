@@ -108,7 +108,7 @@ def import_electromobility(
     ----------
     edisgo_obj : :class:`~.EDisGo`
     simbev_directory : str or pathlib.PurePath
-            SimBEV directory holding SimBEV data.
+        SimBEV directory holding SimBEV data.
     tracbev_directory : str or pathlib.PurePath
         TracBEV directory holding TracBEV data.
     kwargs :
@@ -491,22 +491,22 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
     kwargs :
         Kwargs may contain any further attributes you want to specify.
 
-        mode Default : str
+        mode : str
             Distribution mode. If the mode is set to "user_friendly" only the
             simbev weights are used for the distribution. If the mode is
             "grid_friendly" also grid conditions are respected.
             Default "user_friendly".
         generators_weight_factor : float
             Weighting factor of the generators weight within a lv grid in
-            comparison to the loads weight. Default 0.5 .
+            comparison to the loads weight. Default 0.5.
         distance_weight : float
             Weighting factor for the distance between a grid connection point
             and it's nearest substation in comparison to the combination of
             the generators and load factors of the lv grids.
-            Default 1 / 3 .
+            Default 1 / 3.
         user_friendly_weight : float
             Weighting factor of the user friendly weight in comparison to the
-            grid friendly weight. Default 0.5 .
+            grid friendly weight. Default 0.5.
 
     """
     distribute_private_charging_demand(edisgo_obj)
@@ -606,7 +606,7 @@ def get_weights_df(edisgo_obj, grid_connections_indices, **kwargs):
 
 def normalize(weights_df):
     """
-    Normalize a given DataFrame so that it's sum equals 1 and return a
+    Normalize a given DataFrame so that its sum equals 1 and return a
     flattened Array.
 
     Parameters
@@ -726,7 +726,7 @@ def weighted_random_choice(
 
 def distribute_private_charging_demand(edisgo_obj):
     """
-    Distributes all private charging processes. Each car gets it's own
+    Distributes all private charging processes. Each car gets its own
     private charging point if a charging process takes place.
 
     Parameters
@@ -851,7 +851,7 @@ def distribute_private_charging_demand(edisgo_obj):
 def distribute_public_charging_demand(edisgo_obj, **kwargs):
     """
     Distributes all public charging processes. For each process it is
-    checked if a matching charging point is existing to minimize the
+    checked if a matching charging point exists to minimize the
     number of charging points.
 
     Parameters
