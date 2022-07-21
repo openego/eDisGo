@@ -2606,7 +2606,7 @@ class Topology:
             for c in nx.connected_components(self.to_graph())
         )
         if len(subgraphs) > 1:
-            raise ValueError("The pypsa graph has isolated nodes or edges.")
+            logger.warning("The network has isolated nodes or edges.")
 
         # check impedance
         for branch_component in ["lines", "transformers"]:
