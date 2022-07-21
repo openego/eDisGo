@@ -143,13 +143,13 @@ def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_SEST',
             try:
                 model = update_model(model, timesteps, parameters, optimize_storage=optimize_storage,
                                      optimize_ev=optimize_ev,
-                                     charging_start=charging_start, energy_level_start=energy_level_start,
-                                     energy_level_end=energy_level_end, **kwargs)
+                                     charging_start_ev=charging_start, energy_level_start_ev=energy_level_start,
+                                     energy_level_end_ev=energy_level_end, **kwargs)
             except NameError:
                 model = setup_model(parameters, timesteps, objective=objective,
                                     optimize_storage=False, optimize_ev_charging=True,
-                                    charging_start=charging_start,
-                                    energy_level_start=energy_level_start, energy_level_end=energy_level_end,
+                                    charging_start_ev=charging_start,
+                                    energy_level_start_ev=energy_level_start, energy_level_end_ev=energy_level_end,
                                     overlap_interations=overlap_iterations, **kwargs)
 
             print('Set up model for week {}.'.format(iteration))

@@ -19,7 +19,7 @@ optimize_hp = True
 def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_hp_test',
                                            load_results=False, iteration=0):
     objective = 'minimize_loading'
-    timesteps_per_iteration = 24 * 4
+    timesteps_per_iteration = 24*4
     iterations_per_era = 7
     overlap_iterations = 24
     solver = 'gurobi'
@@ -76,7 +76,7 @@ def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_hp_test',
         edisgo_obj.topology.buses_df.index]
     print('Downstream node matrix imported.')
 
-    # Todo: add Hps
+    # add Hps
     timeindex = pd.date_range("2011-01-01", periods=8760, freq="h")
     cop = pd.read_csv("examples/minimum_working/COP_2011.csv").set_index(timeindex).resample("15min").ffill()
     heat_demand = (
@@ -129,11 +129,15 @@ def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_hp_test',
         try:
             model = update_model(model, timesteps, parameters, optimize_storage=optimize_storage,
                                  optimize_ev=optimize_ev, optimize_hp=optimize_hp,
-                                 cop=cop, heat_demand=heat_demands,  **kwargs)
+                                 cop=cop, heat_demand=heat_demands,
+                                 charging_start_hp=charging_start, energy_level_start_tes=energy_level_start,
+                                 energy_level_end_tes=energy_level_end,  **kwargs)
         except NameError:
             model = setup_model(parameters, timesteps, objective=objective,
                                 optimize_storage=optimize_storage, optimize_ev_charging=optimize_ev,
-                                cop=cop, heat_demand=heat_demands, **kwargs)
+                                cop=cop, heat_demand=heat_demands,
+                                charging_start_hp=charging_start, energy_level_start_tes=energy_level_start,
+                                energy_level_end_tes=energy_level_end, **kwargs)
 
         print('Set up model for week {}.'.format(iteration))
 
@@ -143,7 +147,8 @@ def run_optimized_charging_feeder_parallel(grid_feeder_tuple, run='_hp_test',
         energy_level[iteration] = result_dict['energy_tes']
 
         if iteration % iterations_per_era != iterations_per_era - 1:
-            charging_start = charging_hp[iteration].iloc[-overlap_iterations]
+            charging_start = {"hp": charging_hp[iteration].iloc[-overlap_iterations],
+                              "tes": charging_tes[iteration].iloc[-overlap_iterations]}
             energy_level_start = energy_level[iteration].iloc[-overlap_iterations]
         else:
             charging_start = None
@@ -186,7 +191,7 @@ if __name__ == '__main__':
 
     # grid_ids = [2534]
     root_dir = r'H:\Grids'
-    grid_id_feeder_tuples = [(176, 6)]#[(2534,0), (2534,1), (2534,6)](176, 6)
+    grid_id_feeder_tuples = [(2534,0)]#[(2534,0), (2534,1), (2534,6)](176, 6)
     # run_id = datetime.datetime.now().strftime("%Y%m%d-%H%M")
     # for grid_id in grid_ids:
     #     edisgo_dir = root_dir + r'\{}\feeder'.format(grid_id)

@@ -313,10 +313,10 @@ def setup_model(
             timeinvariant_parameters=timeinvariant_parameters,
             grid_object=grid_object,
             charging_efficiency=kwargs.get("charging_efficiency", 0.9),
-            energy_level_start=kwargs.get("energy_level_start", None),
-            energy_level_end=kwargs.get("energy_level_end", None),
-            energy_level_beginning=kwargs.get("energy_level_beginning", None),
-            charging_start=kwargs.get("charging_start", None),
+            energy_level_start=kwargs.get("energy_level_start_ev", None),
+            energy_level_end=kwargs.get("energy_level_end_ev", None),
+            energy_level_beginning=kwargs.get("energy_level_beginning_ev", None),
+            charging_start=kwargs.get("charging_start_ev", None),
         )
 
     if optimize_hp:
@@ -327,6 +327,10 @@ def setup_model(
             grid_object=grid_object,
             cop=kwargs.get("cop"),
             heat_demand=kwargs.get("heat_demand"),
+            energy_level_start=kwargs.get("energy_level_start_hp", None),
+            energy_level_end=kwargs.get("energy_level_end_hp", None),
+            energy_level_beginning=kwargs.get("energy_level_beginning_hp", None),
+            charging_starts=kwargs.get("charging_starts_hp", {"hp": None, "tes": None}),
         )
 
     if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
@@ -685,10 +689,7 @@ def add_ev_model_bands(
 
 
 def add_rolling_horizon(comp_type, charging_starts, energy_level_beginning, energy_level_end, energy_level_start, model):
-    sets = {"ev": "charging_points", "hp": "heat_pumps"}
-    energy_attrs = {"ev": ["ev"], "hp": ["tes"]}
-    charging_attrs = {"ev": ["ev"], "hp": ["hp", "tes"]}
-    flex_set = getattr(model, f"flexible_{sets[comp_type.lower()]}_set")
+    charging_attrs, energy_attrs, flex_set = get_attrs_rolling_horizon(comp_type, model)
     # set initial energy level
     for energy_attr in energy_attrs[comp_type.lower()]:
         setattr(model, f"energy_level_start_{energy_attr}",
@@ -763,6 +764,7 @@ def add_rolling_horizon(comp_type, charging_starts, energy_level_beginning, ener
                     flex_set,
                     initialize=charging_starts[charging_attr],
                     mutable=True,
+                    within=pm.Any
                 ))
         setattr(model, f"slack_initial_charging_pos_{charging_attr}",
                 pm.Var(
@@ -792,6 +794,14 @@ def add_rolling_horizon(comp_type, charging_starts, energy_level_beginning, ener
     return model
 
 
+def get_attrs_rolling_horizon(comp_type, model):
+    sets = {"ev": "charging_points", "hp": "heat_pumps"}
+    energy_attrs = {"ev": ["ev"], "hp": ["tes"]}
+    charging_attrs = {"ev": ["ev"], "hp": ["hp", "tes"]}
+    flex_set = getattr(model, f"flexible_{sets[comp_type.lower()]}_set")
+    return charging_attrs, energy_attrs, flex_set
+
+
 def add_heat_pump_model(
         model,
         timeinvariant_parameters,
@@ -803,11 +813,10 @@ def add_heat_pump_model(
         energy_level_beginning=None,
         charging_starts={"hp":None, "tes":None},
 ):
-    # Todo: make update possible
     def energy_balance_hp_tes(model, hp, time):
         return (
-            model.charging_hp[hp, time] * cop.loc[model.timeindex[time], "COP 2011"]
-            == model.heat_demand.loc[model.timeindex[time], hp]
+            model.charging_hp[hp, time] * model.cop_hp[time]
+            == model.heat_demand_hp[hp, time]
             + model.charging_tes[hp, time]
         )
 
@@ -825,7 +834,20 @@ def add_heat_pump_model(
     # save fix parameters
     model.tech_data_hps = grid_object.heat_pumps_df
     model.cop = cop
+    model.cop_hp = pm.Param(
+        model.time_set,
+        initialize=set_cop_hp,
+        mutable=True,
+        within=pm.Any
+    )
     model.heat_demand = heat_demand
+    model.heat_demand_hp = pm.Param(
+        model.flexible_heat_pumps_set,
+        model.time_set,
+        initialize=set_heat_demand,
+        mutable=True,
+        within=pm.Any
+    )
     # set up variables
     model.energy_level_tes = pm.Var(
         model.flexible_heat_pumps_set,
@@ -857,7 +879,8 @@ def add_heat_pump_model(
 
 
 def update_model(
-    model, timesteps, parameters, optimize_storage=True, optimize_ev=True, **kwargs
+    model, timesteps, parameters, optimize_storage=True, optimize_ev=True,
+    optimize_hp=True, **kwargs
 ):
     """
     Method to update model parameter where necessary if rolling horizon
@@ -932,51 +955,77 @@ def update_model(
                 model.upper_bound_ev[cp, t].set_value(
                     set_upper_band_ev(model, cp, indexer)
                 )
-        # set initial energy level
-        energy_level_start = kwargs.get("energy_level_start", None)
-        charging_initial = kwargs.get("charging_start", None)
-        # if run is new start of era deactivate initial energy level,
-        # otherwise activate initial energy and charging
-        if energy_level_start is None:
-            model.InitialEnergyLevelEV.deactivate()
-            model.InitialEnergyLevelStartEV.activate()
-        else:
-            for cp in model.flexible_charging_points_set:
-                model.energy_level_start_ev[cp].set_value(energy_level_start[cp])
-            model.InitialEnergyLevelEV.activate()
-            model.InitialEnergyLevelStartEV.deactivate()
-        # set initial charging
-        if charging_initial is not None:
-            for cp in model.flexible_charging_points_set:
-                model.charging_initial_ev[cp].set_value(charging_initial[cp])
-            model.InitialChargingPowerEV.activate()
-        # set energy level beginning if necessary
+        model = update_rolling_horizon("ev", kwargs, model)
 
-        energy_level_beginning = kwargs.get("energy_level_beginning", None)
-        if energy_level_beginning is not None:
-            for cp in model.flexible_charging_points_set:
-                model.energy_level_beginning_ev[cp].set_value(energy_level_beginning[cp])
-
-        # set final energy level and if necessary charging power
-        energy_level_end = kwargs.get("energy_level_end", None)
-        if energy_level_end is None:
-            model.FinalEnergyLevelFixEV.deactivate()
-            model.FinalEnergyLevelEndEV.deactivate()
-            model.FinalChargingPowerEV.deactivate()
-        elif type(energy_level_end) == bool:
-            model.FinalEnergyLevelFixEV.activate()
-            model.FinalEnergyLevelEndEV.deactivate()
-            model.FinalChargingPowerEV.activate()
-        else:
-            for cp in model.flexible_charging_points_set:
-                model.energy_level_end_ev[cp].set_value(energy_level_end[cp])
-            model.FinalEnergyLevelEndEV.activate()
-            model.FinalChargingPowerEV.activate()
-            model.FinalEnergyLevelFixEV.deactivate()
+    if optimize_hp:
+        for t in model.time_set:
+            overlap = t - len(timesteps) + 1
+            if overlap > 0:
+                indexer = len(timesteps) - 1
+            else:
+                indexer = t
+            model.cop_hp[t].set_value(
+                set_cop_hp(model, indexer)
+            )
+            for hp in model.flexible_heat_pumps_set:
+                model.heat_demand_hp[hp, t].set_value(
+                    set_heat_demand(model, hp, indexer)
+                )
+        model = update_rolling_horizon("hp", kwargs, model)
 
     if optimize_storage:
         raise NotImplementedError
     print("It took {} seconds to update the model.".format(perf_counter() - t1))
+    return model
+
+
+def update_rolling_horizon(comp_type, kwargs, model):
+    charging_attrs, energy_attrs, flex_set = get_attrs_rolling_horizon(comp_type, model)
+    for energy_attr in energy_attrs[comp_type.lower()]:
+        # set initial energy level
+        energy_level_start = kwargs.get(f"energy_level_start_{energy_attr}", None)
+        # if run is new start of era deactivate initial energy level,
+        # otherwise activate initial energy and charging
+        if energy_level_start is None:
+            getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").deactivate()
+            getattr(model, f"InitialEnergyLevelStart{energy_attr.upper()}").activate()
+        else:
+            for comp in flex_set:
+                getattr(model, f"energy_level_start_{energy_attr}")[comp].set_value(
+                    energy_level_start[comp])
+            getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").activate()
+            getattr(model, f"InitialEnergyLevelStart{energy_attr.upper()}").deactivate()
+        # set energy level beginning if necessary
+        energy_level_beginning = kwargs.get("energy_level_beginning", None)
+        if energy_level_beginning is not None:
+            for comp in flex_set:
+                getattr(model, f"energy_level_beginning_{energy_attr}")[comp].set_value(
+                    energy_level_beginning[comp])
+        # set final energy level and if necessary charging power
+        energy_level_end = kwargs.get(f"energy_level_end_{energy_attr}", None)
+        if energy_level_end is None:
+            getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
+            getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
+        elif type(energy_level_end) == bool:
+            getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").activate()
+            getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
+        else:
+            for comp in flex_set:
+                getattr(model, f"energy_level_end_{energy_attr}")[comp].set_value(energy_level_end[comp])
+            getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").activate()
+            getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
+    # set initial charging
+    for charging_attr in charging_attrs[comp_type.lower()]:
+        charging_initial = kwargs.get(f"charging_starts", {charging_attr: None})
+        if charging_initial[charging_attr] is not None:
+            for comp in flex_set:
+                getattr(model, f"charging_initial_{charging_attr}")[comp].set_value(
+                    charging_initial[charging_attr][comp])
+            getattr(model, f"InitialChargingPower{charging_attr.upper()}").activate()
+        if energy_level_end is None:
+            getattr(model, f"FinalChargingPower{charging_attr.upper()}").deactivate()
+        else:
+            getattr(model, f"FinalChargingPower{charging_attr.upper()}").activate()
     return model
 
 
@@ -1395,6 +1444,14 @@ def set_upper_band_ev(model, cp, time):
 
 def set_power_band_ev(model, cp, time):
     return model.upper_ev_power.loc[model.timeindex[time], cp]
+
+
+def set_cop_hp(model, time):
+    return model.cop.loc[model.timeindex[time], "COP 2011"]
+
+
+def set_heat_demand(model, hp, time):
+    return model.heat_demand.loc[model.timeindex[time], hp]
 
 
 def active_power(model, branch, time):
