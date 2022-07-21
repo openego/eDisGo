@@ -2164,14 +2164,9 @@ class TestTimeSeries:
         self.edisgo.timeseries.check_integrity()
         assert "No time index set. Empty time series will be returned." in caplog.text
         caplog.clear()
-        # check warning empty timeseries
+        # add timeseries
         index = pd.date_range("1/1/2018", periods=3, freq="H")
         self.edisgo.timeseries.timeindex = index
-        self.edisgo.timeseries.check_integrity()
-        for attr in attrs:
-            assert "{} is empty".format(attr) in caplog.text
-        caplog.clear()
-        # add timeseries
         for attr in attrs:
             tmp = attr.split("_")
             if len(tmp) == 3:

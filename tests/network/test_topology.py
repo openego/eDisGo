@@ -1505,4 +1505,5 @@ class TestTopologyWithEdisgoObject:
         self.edisgo.topology.buses_df = self.edisgo.topology.buses_df.append(bus)
         self.edisgo.topology.check_integrity()
         assert "The following buses are isolated: {}.".format(bus.name) in caplog.text
+        assert "The network has isolated nodes or edges." in caplog.text
         caplog.clear()
