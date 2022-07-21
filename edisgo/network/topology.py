@@ -2517,13 +2517,9 @@ class Topology:
 
     def check_integrity(self):
         """
-        Check imported data integrity. Checks for duplicated labels and not
-        connected components.
+        Check imported data integrity.
 
-        Parameters
-        ----------
-        self: class:`~.network.topology.Topology`
-            topology class containing mv and lv grids
+        Checks for duplicated labels and isolated components.
 
         """
         # check for duplicate labels (of components)

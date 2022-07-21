@@ -1949,10 +1949,10 @@ class TimeSeries:
 
     def check_integrity(self):
         """
-        Check for NaN, duplicated indices or columns and if timeseries is empty.
+        Check for NaN, duplicated indices or columns and if time series is empty.
         """
         if len(self.timeindex) == 0:
-            logger.warning("No timeindex set. Empty timeseries will be returned.")
+            logger.warning("No time index set. Empty time series will be returned.")
         else:
             for attr in self._attributes:
                 df = getattr(self, attr)

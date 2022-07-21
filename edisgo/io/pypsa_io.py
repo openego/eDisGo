@@ -1,5 +1,5 @@
 """
-This module provides tools to convert graph based representation of the network
+This module provides tools to convert eDisGo representation of the network
 topology to PyPSA data model. Call :func:`to_pypsa` to retrieve the PyPSA network
 container.
 """
