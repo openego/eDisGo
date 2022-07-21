@@ -1,8 +1,15 @@
 Release v0.1.1
 ================
 
-Release date: <Month> <Day>, <Year>
+Release date: July 21, 2022
+
+This release comes with some minor additions and bug fixes.
 
 Changes
 -------
 
+* Added a pull request and issue template
+* Fix readthecods API doc
+* Consider parallel lines in calculation of x, r and s_nom
+* Bug fix calculation of x and r of new lines
+* Bug fix of getting a list of all weather cells within grid district
