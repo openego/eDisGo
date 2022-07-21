@@ -47,9 +47,8 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
     # check for nan value
     if is_fluct != is_fluct:
         print(
-            "value of fluctuating for slack generator is {}, it is changed to zero".format(
-                is_fluct
-            )
+            f"value of fluctuating for slack generator is {is_fluct}, it is changed to"
+            f" zero"
         )
         psa_network.generators.fluctuating.loc[gen_slack_loc] = False
         psa_network.generators.p_nom.loc[gen_slack_loc] = False
@@ -82,7 +81,12 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
     slack_bus_hv.v_nom = trafo["v_nom_0"]
     slack_bus_hv.control = "Slack"
 
-    buses_df = slack_bus_hv.append(psa_network.buses)
+    buses_df = pd.concat(
+        [
+            slack_bus_hv,
+            psa_network.buses,
+        ]
+    )
     psa_network.buses = buses_df
 
     # Move Generator_slack to new slack bus
@@ -175,10 +179,21 @@ def aggregate_fluct_generators(psa_network):
                     },
                     index=[gen_name],
                 )
-                gen_aggr_df_all = gen_aggr_df_all.append(gen_aggr_df)
-                # drop aggregated generators and add new generator to generator dataframe
+                gen_aggr_df_all = pd.concat(
+                    [
+                        gen_aggr_df_all,
+                        gen_aggr_df,
+                    ]
+                )
+                # drop aggregated generators and add new generator to generator
+                # dataframe
                 gen_df = gen_df.drop(gens_to_aggr.index)
-                gen_df = gen_df.append(gen_aggr_df)
+                gen_df = pd.concat(
+                    [
+                        gen_df,
+                        gen_aggr_df,
+                    ]
+                )
                 # gens = gens.drop(gens_to_aggr.index)
 
                 # sum timeseries for aggregated generators
@@ -205,5 +220,6 @@ def aggregate_fluct_generators(psa_network):
 
     # write aggregated generator dataframe on pypsa network
     psa_network.generators = gen_df
-    # write aggregated timeseries into psa_network.generators_t as pypsa.descriptors.Dict()
+    # write aggregated timeseries into psa_network.generators_t as
+    # pypsa.descriptors.Dict()
     psa_network.generators_t = Dict(gen_t_dict)

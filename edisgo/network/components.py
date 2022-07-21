@@ -8,7 +8,7 @@ from math import acos, tan
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 class BasicComponent(ABC):
@@ -181,73 +181,6 @@ class Component(BasicComponent):
         return "_".join([self.__class__.__name__, str(self._id)])
 
 
-# ToDo implement if needed
-# class Station(Component):
-#     """Station object (medium or low voltage)
-#
-#     Represents a station, contains transformers.
-#
-#     Attributes
-#     ----------
-#     """
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#
-#         self._transformers = kwargs.get('transformers', None)
-#
-#     @property
-#     def transformers(self):
-#         """:obj:`list` of :class:`Transformer` : Transformers located in
-#         station"""
-#         return self._transformers
-#
-#     @transformers.setter
-#     def transformers(self, transformer):
-#         """
-#         Parameters
-#         ----------
-#         transformer : :obj:`list` of :class:`Transformer`
-#         """
-#         self._transformers = transformer
-#
-#     def add_transformer(self, transformer):
-#         self._transformers.append(transformer)
-#
-#
-# class Transformer(Component):
-#     """Transformer object
-#
-#     Attributes
-#     ----------
-#     _voltage_op : :obj:`float`
-#         Operational voltage
-#     _type : :pandas:`pandas.DataFrame<dataframe>`
-#         Specification of type, refers to  ToDo: ADD CORRECT REF TO (STATIC) DATA
-#     """
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self._mv_grid = kwargs.get('mv_grid', None)
-#         self._voltage_op = kwargs.get('voltage_op', None)
-#         self._type = kwargs.get('type', None)
-#
-#     @property
-#     def mv_grid(self):
-#         return self._mv_grid
-#
-#     @property
-#     def voltage_op(self):
-#         return self._voltage_op
-#
-#     @property
-#     def type(self):
-#         return self._type
-#
-#     def __repr__(self):
-#         return str(self._id)
-
-
 class Load(Component):
     """
     Load object
@@ -273,7 +206,7 @@ class Load(Component):
         return self.topology.loads_df
 
     @property
-    def p_nom(self):
+    def p_set(self):
         """
         Peak load in MW.
 
@@ -288,11 +221,11 @@ class Load(Component):
             Peak load in MW.
 
         """
-        return self.topology.loads_df.at[self.id, "p_nom"]
+        return self.topology.loads_df.at[self.id, "p_set"]
 
-    @p_nom.setter
-    def p_nom(self, p_nom):
-        self.topology._loads_df.at[self.id, "p_nom"] = float(p_nom)
+    @p_set.setter
+    def p_set(self, p_set):
+        self.topology._loads_df.at[self.id, "p_set"] = float(p_set)
 
     @property
     def annual_consumption(self):
@@ -421,7 +354,8 @@ class Generator(Component):
             Nominal power of generator in MW.
 
         """
-        # ToDo: Should this change the time series as well? (same for loads, and type setter...)
+        # TODO: Should this change the time series as well?
+        #  (same for loads, and type setter...)
         return self.topology.generators_df.at[self.id, "p_nom"]
 
     @nominal_power.setter
@@ -1005,118 +939,3 @@ class Switch(BasicComponent):
         else:
             return None
         return col
-
-
-# ToDo implement if needed
-# class MVStation(Station):
-#     """MV Station object"""
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#
-#     def __repr__(self, side=None):
-#         repr_base = super().__repr__()
-#
-#         # As we don't consider HV-MV transformers in PFA, we don't have to care
-#         # about primary side bus of MV station. Hence, the general repr()
-#         # currently returned, implicitely refers to the secondary side (MV level)
-#         # if side == 'hv':
-#         #     return '_'.join(['primary', repr_base])
-#         # elif side == 'mv':
-#         #     return '_'.join(['secondary', repr_base])
-#         # else:
-#         #     return repr_base
-#         return repr_base
-#
-#
-# class LVStation(Station):
-#     """LV Station object"""
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self._mv_grid = kwargs.get('mv_grid', None)
-#
-#     @property
-#     def mv_grid(self):
-#         return self._mv_grid
-#
-#     def __repr__(self, side=None):
-#         repr_base = super().__repr__()
-#
-#         if side == 'mv':
-#             return '_'.join(['primary', repr_base])
-#         elif side == 'lv':
-#             return '_'.join(['secondary', repr_base])
-#         else:
-#             return repr_base
-
-# ToDo Implement if necessary
-# class Line(Component):
-#     """
-#     Line object
-#
-#     Parameters
-#     ----------
-#     _type: :pandas:`pandas.Series<Series>`
-#         Equipment specification including R and X for power flow analysis
-#         Columns:
-#
-#         ======== ================== ====== =========
-#         Column   Description        Unit   Data type
-#         ======== ================== ====== =========
-#         name     Name (e.g. NAYY..) -      str
-#         U_n      Nominal voltage    kV     int
-#         I_max_th Max. th. current   A      float
-#         R        Resistance         Ohm/km float
-#         L        Inductance         mH/km  float
-#         C        Capacitance        uF/km  float
-#         Source   Data source        -      str
-#         ============================================
-#
-#     _length: float
-#         Length of the line calculated in linear distance. Unit: m
-#     _quantity: float
-#         Quantity of parallel installed lines.
-#     _kind: String
-#         Specifies whether the line is an underground cable ('cable') or an
-#         overhead line ('line').
-#     """
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self._type = kwargs.get('type', None)
-#         self._length = kwargs.get('length', None)
-#         self._quantity = kwargs.get('quantity', 1)
-#         self._kind = kwargs.get('kind', None)
-#
-#     @property
-#     def geom(self):
-#         """Provide :shapely:`Shapely LineString object<linestrings>` geometry of
-#         :class:`Line`"""
-#         adj_nodes = self._grid._graph.nodes_from_line(self)
-#
-#         return LineString([adj_nodes[0].geom, adj_nodes[1].geom])
-#
-#     @property
-#     def type(self):
-#         return self._type
-#
-#     @type.setter
-#     def type(self, new_type):
-#         self._type = new_type
-#
-#     @property
-#     def length(self):
-#         return self._length
-#
-#     @length.setter
-#     def length(self, new_length):
-#         self._length = new_length
-#
-#     @property
-#     def quantity(self):
-#         return self._quantity
-#
-#     @quantity.setter
-#     def quantity(self, new_quantity):
-#         self._quantity = new_quantity

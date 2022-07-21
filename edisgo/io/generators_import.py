@@ -6,11 +6,10 @@ import pandas as pd
 
 from sqlalchemy import func
 
-from edisgo.network.timeseries import add_generators_timeseries
 from edisgo.tools import session_scope
 from edisgo.tools.geo import proj2equidistant
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import model_draft, supply
@@ -192,7 +191,7 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         """
 
         # set capacity difference threshold
-        cap_diff_threshold = 10 ** -1
+        cap_diff_threshold = 10**-1
 
         capacity_imported = (
             generators_res_mv["p_nom"].sum()
@@ -203,21 +202,17 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         capacity_grid = edisgo_object.topology.generators_df.p_nom.sum()
 
         logger.debug(
-            "Cumulative generator capacity (updated): {} MW".format(
-                round(capacity_imported, 1)
-            )
+            f"Cumulative generator capacity (updated): {round(capacity_imported, 1)} MW"
         )
 
         if abs(capacity_imported - capacity_grid) > cap_diff_threshold:
             raise ValueError(
-                "Cumulative capacity of imported generators ({} MW) "
-                "differs from cumulative capacity of generators "
-                "in updated grid ({} MW) by {} MW.".format(
-                    round(capacity_imported, 1),
-                    round(capacity_grid, 1),
-                    round(capacity_imported - capacity_grid, 1),
-                )
+                f"Cumulative capacity of imported generators ("
+                f"{round(capacity_imported, 1)} MW) differs from cumulative capacity of"
+                f" generators in updated grid ({round(capacity_grid, 1)} MW) by "
+                f"{round(capacity_imported - capacity_grid, 1)} MW."
             )
+
         else:
             logger.debug("Cumulative capacity of imported generators validated.")
 
@@ -306,7 +301,12 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         generators_conv_mv = _import_conv_generators(session)
         generators_res_mv, generators_res_lv = _import_res_generators(session)
 
-    generators_mv = generators_conv_mv.append(generators_res_mv)
+    generators_mv = pd.concat(
+        [
+            generators_conv_mv,
+            generators_res_mv,
+        ]
+    )
 
     # validate that imported generators are located inside the grid district
     _validate_sample_geno_location()
@@ -315,18 +315,11 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         edisgo_object=edisgo_object,
         imported_generators_mv=generators_mv,
         imported_generators_lv=generators_res_lv,
-        **kwargs
+        **kwargs,
     )
 
     if kwargs.get("p_target", None) is None:
         _validate_generation()
-
-    # update time series if they were already set
-    if not edisgo_object.timeseries.generators_active_power.empty:
-        add_generators_timeseries(
-            edisgo_obj=edisgo_object,
-            generator_names=edisgo_object.topology.generators_df.index,
-        )
 
 
 def _update_grids(
@@ -337,7 +330,7 @@ def _update_grids(
     update_existing=True,
     p_target=None,
     allowed_number_of_comp_per_lv_bus=2,
-    **kwargs
+    **kwargs,
 ):
     """
     Update network according to new generator dataset.
@@ -429,14 +422,14 @@ def _update_grids(
         return None
 
     # set capacity difference threshold
-    cap_diff_threshold = 10 ** -4
+    cap_diff_threshold = 10**-4
 
     # get all imported generators
     imported_gens = pd.concat(
         [imported_generators_lv, imported_generators_mv], sort=True
     )
 
-    logger.debug("{} generators imported.".format(len(imported_gens)))
+    logger.debug(f"{len(imported_gens)} generators imported.")
 
     # get existing generators and append ID column
     existing_gens = edisgo_object.topology.generators_df
@@ -445,9 +438,8 @@ def _update_grids(
     )
 
     logger.debug(
-        "Cumulative generator capacity (existing): {} MW".format(
-            round(existing_gens.p_nom.sum(), 1)
-        )
+        "Cumulative generator capacity (existing): "
+        f"{round(existing_gens.p_nom.sum(), 1)} MW"
     )
 
     # check if capacity of any of the imported generators is <= 0
@@ -533,10 +525,16 @@ def _update_grids(
     new_gens_mv = imported_generators_mv[
         ~imported_generators_mv.index.isin(list(existing_gens.id))
     ]
+    new_gens_mv = new_gens_mv.assign(
+        p=new_gens_mv.p_nom,
+    )
 
     new_gens_lv = imported_generators_lv[
         ~imported_generators_lv.index.isin(list(existing_gens.id))
     ]
+    new_gens_lv = new_gens_lv.assign(
+        p=new_gens_lv.p_nom,
+    )
 
     if p_target is not None:
 
@@ -610,7 +608,7 @@ def _update_grids(
 
         # drop types not in p_target from new_gens
         for gen_type in new_gens.generator_type.unique():
-            if not gen_type in p_target.keys():
+            if gen_type not in p_target.keys():
                 new_gens.drop(
                     new_gens[new_gens["generator_type"] == gen_type].index,
                     inplace=True,

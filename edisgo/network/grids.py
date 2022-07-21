@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 
 import matplotlib.pyplot as plt
@@ -7,6 +9,7 @@ import pandas as pd
 from networkx.drawing.nx_pydot import graphviz_layout
 
 from edisgo.network.components import Generator, Load, Switch
+from edisgo.tools.geopandas_helper import to_geopandas
 from edisgo.tools.networkx_helper import translate_df_to_graph
 
 
@@ -77,6 +80,24 @@ class Grid(ABC):
         return translate_df_to_graph(self.buses_df, self.lines_df)
 
     @property
+    def geopandas(self):
+        """
+        Returns components as :geopandas:`GeoDataFrame`\\ s
+
+        Returns container with :geopandas:`GeoDataFrame`\\ s containing all
+        georeferenced components within the grid.
+
+        Returns
+        -------
+        :class:`~.tools.geopandas_helper.GeoPandasGridContainer` or \
+            list(:class:`~.tools.geopandas_helper.GeoPandasGridContainer`)
+            Data container with GeoDataFrames containing all georeferenced components
+            within the grid(s).
+
+        """
+        return to_geopandas(self)
+
+    @property
     def station(self):
         """
         DataFrame with form of buses_df with only grid's station's secondary
@@ -143,8 +164,8 @@ class Grid(ABC):
             List of loads within the network.
 
         """
-        for l in self.loads_df.index:
-            yield Load(id=l, edisgo_obj=self.edisgo_obj)
+        for load in self.loads_df.index:
+            yield Load(id=load, edisgo_obj=self.edisgo_obj)
 
     @property
     def storage_units_df(self):
@@ -173,12 +194,10 @@ class Grid(ABC):
         :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all charging points in topology. For more
             information on the dataframe see
-            :attr:`~.network.topology.Topology.charging_points_df`.
+            :attr:`~.network.topology.Topology.loads_df`.
 
         """
-        return self.edisgo_obj.topology.charging_points_df[
-            self.edisgo_obj.topology.charging_points_df.bus.isin(self.buses_df.index)
-        ]
+        return self.loads_df[self.loads_df.type == "charging_point"]
 
     @property
     def switch_disconnectors_df(self):
@@ -288,7 +307,7 @@ class Grid(ABC):
         return self.generators_df.groupby(["type"]).sum()["p_nom"]
 
     @property
-    def p_nom(self):
+    def p_set(self):
         """
         Cumulative peak load of loads in the network in MW.
 
@@ -298,10 +317,10 @@ class Grid(ABC):
             Cumulative peak load of loads in the network in MW.
 
         """
-        return self.loads_df.p_nom.sum()
+        return self.loads_df.p_set.sum()
 
     @property
-    def p_nom_per_sector(self):
+    def p_set_per_sector(self):
         """
         Cumulative peak load of loads in the network per sector in MW.
 
@@ -311,7 +330,7 @@ class Grid(ABC):
             Cumulative peak load of loads in the network per sector in MW.
 
         """
-        return self.loads_df.groupby(["sector"]).sum()["p_nom"]
+        return self.loads_df.groupby(["sector"]).sum()["p_set"]
 
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self.id)])
@@ -493,7 +512,7 @@ class LVGrid(Grid):
             edge_color_is_sequence = False
 
         node_size = [
-            top.get_connected_components_from_bus(v)["loads"].p_nom.sum() * 50000 + 10
+            top.get_connected_components_from_bus(v)["loads"].p_set.sum() * 50000 + 10
             for v in G
         ]
         if isinstance(node_color, pd.Series):
@@ -535,3 +554,10 @@ class LVGrid(Grid):
         else:
             plt.savefig(filename, dpi=150, bbox_inches="tight", pad_inches=0.1)
             plt.close()
+
+    @property
+    def geopandas(self):
+        """
+        TODO: Remove this as soon as LVGrids are georeferenced
+        """
+        raise NotImplementedError("LV Grids are not georeferenced yet.")

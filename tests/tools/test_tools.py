@@ -1,5 +1,3 @@
-import os
-
 from math import sqrt
 
 import numpy as np
@@ -8,35 +6,31 @@ import pytest
 from numpy.testing import assert_allclose, assert_array_equal
 
 from edisgo import EDisGo
-from edisgo.io import ding0_import
-from edisgo.network.topology import Topology
 from edisgo.tools import tools
 
 
 class TestTools:
     @classmethod
     def setup_class(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        self.edisgo.set_time_series_worst_case_analysis()
         self.timesteps = self.edisgo.timeseries.timeindex
         self.edisgo.analyze()
 
     def test_calculate_relative_line_load(self):
         # test without providing lines and time steps
         rel_line_load = tools.calculate_relative_line_load(self.edisgo)
-        assert rel_line_load.shape == (2, 129)
+        assert rel_line_load.shape == (4, 129)
 
         # test with providing lines
         rel_line_load = tools.calculate_relative_line_load(
             self.edisgo, lines=["Line_10005", "Line_50000002", "Line_90000021"]
         )
-        assert rel_line_load.shape == (2, 3)
+        assert rel_line_load.shape == (4, 3)
         assert np.isclose(
             rel_line_load.at[self.timesteps[0], "Line_10005"],
             self.edisgo.results.i_res.at[self.timesteps[0], "Line_10005"]
-            / (7.274613391789284 / 20 / sqrt(3)),
+            / (7.274613391789284 / 2 / 20 / sqrt(3)),
         )
         assert np.isclose(
             rel_line_load.at[self.timesteps[1], "Line_50000002"],
@@ -52,7 +46,7 @@ class TestTools:
         assert np.isclose(
             rel_line_load.at[self.timesteps[0], "Line_10005"],
             self.edisgo.results.i_res.at[self.timesteps[0], "Line_10005"]
-            / (7.274613391789284 / 20 / sqrt(3)),
+            / (7.274613391789284 / 2 / 20 / sqrt(3)),
         )
 
     def test_calculate_line_reactance(self):

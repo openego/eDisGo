@@ -3,7 +3,6 @@ import os
 import sys
 
 from setuptools import find_packages, setup
-from setuptools.command.install import install
 
 if sys.version_info[:2] < (3, 7):
     error = (
@@ -35,7 +34,7 @@ requirements = [
     "demandlib",
     "networkx >= 2.5.0",
     "geopy >= 2.0.0",
-    "pandas >= 1.2.0, < 1.3.0",
+    "pandas >= 1.2.0",
     "geopandas >= 0.9.0",
     "pyproj >= 3.0.0",
     "shapely >= 1.7.0",
@@ -53,17 +52,25 @@ requirements = [
     "pygeos",
 ]
 
-geo_plot_requirements = ["contextily", "descartes", "plotly", "dash==2.0.0"]
+geo_plot_requirements = [
+    "contextily",
+    "descartes",
+    "plotly",
+    "dash==2.0.0",
+    "werkzeug==2.0.3",
+]
 examples_requirements = [
     "jupyter",
     "jupyterlab",
     "plotly",
     "dash==2.0.0",
     "jupyter_dash",
+    "werkzeug==2.0.3",
 ]
 dev_requirements = [
     "pytest",
     "sphinx_rtd_theme",
+    "sphinx-autodoc-typehints",
     "pre-commit",
     "black",
     "isort",

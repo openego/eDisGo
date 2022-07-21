@@ -27,11 +27,11 @@ from glob import glob
 
 import edisgo
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 try:
     import configparser as cp
-except:
+except Exception:
     # to be compatible with Python2.7
     import ConfigParser as cp
 
@@ -43,7 +43,7 @@ package_path = edisgo.__path__[0]
 internal_config_file = os.path.join(package_path, "config", "config_system.cfg")
 try:
     cfg.read(internal_config_file)
-except:
+except Exception:
     logger.exception("Internal config {} file not found.".format(internal_config_file))
 
 
@@ -147,7 +147,7 @@ class Config:
                 # try str -> float conversion
                 try:
                     config_dict[sec][subsec] = float(val)
-                except:
+                except Exception:
                     pass
 
         # convert to time object
@@ -172,12 +172,12 @@ class Config:
         if key2 is None:
             try:
                 return self._data[key1]
-            except:
+            except Exception:
                 raise KeyError("Config does not contain section {}.".format(key1))
         else:
             try:
                 return self._data[key1][key2]
-            except:
+            except Exception:
                 raise KeyError(
                     "Config does not contain value for {} or "
                     "section {}.".format(key2, key1)
@@ -268,13 +268,13 @@ def get(section, key):
         pass
     try:
         return cfg.getfloat(section, key)
-    except:
+    except Exception:
         try:
             return cfg.getint(section, key)
-        except:
+        except Exception:
             try:
                 return cfg.getboolean(section, key)
-            except:
+            except Exception:
                 return cfg.get(section, key)
 
 

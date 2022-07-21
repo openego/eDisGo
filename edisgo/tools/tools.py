@@ -14,16 +14,11 @@ from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
 
+    import geopandas as gpd
+
     from egoio.db_tables import climate
-    from egoio.tools.db import connection
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
-
-    geopandas = True
-    try:
-        import geopandas as gpd
-    except:
-        geopandas = False
 
 
 def select_worstcase_snapshots(edisgo_obj):
@@ -77,7 +72,8 @@ def calculate_relative_line_load(edisgo_obj, lines=None, timesteps=None):
         Line names/representatives of lines to calculate line loading for. If
         None, line loading is calculated for all lines in the network.
         Default: None.
-    timesteps : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
+    timesteps : :pandas:`pandas.Timestamp<Timestamp>` or \
+        list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
         Specifies time steps to calculate line loading for. If timesteps is
         None, all time steps power flow analysis was conducted for are used.
         Default: None.
@@ -394,7 +390,7 @@ def get_path_length_to_station(edisgo_obj):
     return edisgo_obj.topology.buses_df.path_length_to_station
 
 
-def assign_voltage_level_to_component(edisgo_obj, df):
+def assign_voltage_level_to_component(df, buses_df):
     """
     Adds column with specification of voltage level component is in.
 
@@ -405,10 +401,13 @@ def assign_voltage_level_to_component(edisgo_obj, df):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.EDisGo`
     df : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with component names in the index. Only required column is
         column 'bus', giving the name of the bus the component is connected to.
+    buses_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with bus information. Bus names are in the index. Only required column
+        is column 'v_nom', giving the nominal voltage of the voltage level the
+        bus is in.
 
     Returns
     --------
@@ -419,7 +418,7 @@ def assign_voltage_level_to_component(edisgo_obj, df):
 
     """
     df["voltage_level"] = df.apply(
-        lambda _: "lv" if edisgo_obj.topology.buses_df.at[_.bus, "v_nom"] < 1 else "mv",
+        lambda _: "lv" if buses_df.at[_.bus, "v_nom"] < 1 else "mv",
         axis=1,
     )
     return df

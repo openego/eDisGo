@@ -8,13 +8,12 @@ from edisgo.flex_opt import reinforce_measures
 
 class TestReinforceMeasures:
     @classmethod
-    def setup_class(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
-        )
-        self.edisgo.analyze()
-        self.timesteps = pd.date_range("1/1/1970", periods=2, freq="H")
+    def setup_class(cls):
+        cls.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+
+        cls.edisgo.set_time_series_worst_case_analysis()
+        cls.edisgo.analyze()
+        cls.timesteps = pd.date_range("1/1/1970", periods=2, freq="H")
 
     def test_reinforce_mv_lv_station_overloading(self):
         # implicitly checks function _station_overloading

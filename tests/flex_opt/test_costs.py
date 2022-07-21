@@ -9,10 +9,8 @@ from edisgo.flex_opt.costs import grid_expansion_costs, line_expansion_costs
 class TestCosts:
     @classmethod
     def setup_class(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        self.edisgo.set_time_series_worst_case_analysis()
         self.edisgo.analyze()
 
     def test_costs(self):
@@ -21,8 +19,11 @@ class TestCosts:
             "MVStation_1_transformer_1"
         ]
         hv_mv_trafo.name = "MVStation_1_transformer_reinforced_2"
-        self.edisgo.topology.transformers_hvmv_df = (
-            self.edisgo.topology.transformers_hvmv_df.append(hv_mv_trafo)
+        self.edisgo.topology.transformers_hvmv_df = pd.concat(
+            [
+                self.edisgo.topology.transformers_hvmv_df,
+                hv_mv_trafo.to_frame().T,
+            ]
         )
         mv_lv_trafo = self.edisgo.topology.transformers_df.loc[
             "LVStation_1_transformer_1"
@@ -31,8 +32,11 @@ class TestCosts:
         self.edisgo.topology.transformers_df.drop(
             "LVStation_1_transformer_1", inplace=True
         )
-        self.edisgo.topology.transformers_df = (
-            self.edisgo.topology.transformers_df.append(mv_lv_trafo)
+        self.edisgo.topology.transformers_df = pd.concat(
+            [
+                self.edisgo.topology.transformers_df,
+                mv_lv_trafo.to_frame().T,
+            ]
         )
 
         self.edisgo.results.equipment_changes = pd.DataFrame(

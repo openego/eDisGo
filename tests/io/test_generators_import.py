@@ -6,7 +6,6 @@ from shapely.geometry import Point
 
 from edisgo import EDisGo
 from edisgo.io import generators_import as generators_import
-from edisgo.network.grids import LVGrid
 
 
 class TestGeneratorsImport:
@@ -19,10 +18,8 @@ class TestGeneratorsImport:
 
     @pytest.yield_fixture(autouse=True)
     def setup_class(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        self.edisgo.set_time_series_worst_case_analysis()
 
     def test_update_grids(self):
 
@@ -259,9 +256,9 @@ class TestGeneratorsImportOEDB:
 
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_2_path,
-            worst_case_analysis="worst-case",
             generator_scenario="nep2035",
         )
+        edisgo.set_time_series_worst_case_analysis()
 
         # check number of generators
         assert len(edisgo.topology.generators_df) == 18 + 1618
@@ -271,16 +268,15 @@ class TestGeneratorsImportOEDB:
     @pytest.mark.slow
     def test_oedb_with_worst_case_timeseries(self):
 
-        edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_2_path,
-            worst_case_analysis="worst-case",
-        )
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        edisgo.set_time_series_worst_case_analysis()
 
         gens_before = edisgo.topology.generators_df.copy()
         gens_ts_active_before = edisgo.timeseries.generators_active_power.copy()
         gens_ts_reactive_before = edisgo.timeseries.generators_reactive_power.copy()
 
         edisgo.import_generators("nep2035")
+        edisgo.set_time_series_worst_case_analysis()
 
         # check number of generators
         assert len(edisgo.topology.generators_df) == 18 + 1618
@@ -392,14 +388,14 @@ class TestGeneratorsImportOEDB:
                 edisgo.timeseries.generators_active_power.loc[:, new_gen.name]
                 / new_gen.p_nom
             ).tolist(),
-            [1, 0],
+            [0.0, 0.0, 1.0, 1.0],
         ).all()
         assert np.isclose(
             (
                 edisgo.timeseries.generators_reactive_power.loc[:, new_gen.name]
                 / new_gen.p_nom
             ).tolist(),
-            [-np.tan(np.arccos(0.95)), 0],
+            [0.0, 0.0, -np.tan(np.arccos(0.95)), -np.tan(np.arccos(0.95))],
         ).all()
 
     @pytest.mark.slow
@@ -415,17 +411,26 @@ class TestGeneratorsImportOEDB:
         )
 
         edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_2_path,
-            timeseries_generation_dispatchable=ts_gen_dispatchable,
-            timeseries_generation_fluctuating=ts_gen_fluctuating,
-            timeseries_load="demandlib",
+            ding0_grid=pytest.ding0_test_network_2_path, timeindex=timeindex
         )
+        edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts=ts_gen_fluctuating,
+            dispatchable_generators_ts=ts_gen_dispatchable,
+            conventional_loads_ts="demandlib",
+        )
+        edisgo.set_time_series_reactive_power_control()
 
         gens_before = edisgo.topology.generators_df.copy()
         gens_ts_active_before = edisgo.timeseries.generators_active_power.copy()
         gens_ts_reactive_before = edisgo.timeseries.generators_reactive_power.copy()
 
         edisgo.import_generators("nep2035")
+        edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts=ts_gen_fluctuating,
+            dispatchable_generators_ts=ts_gen_dispatchable,
+            conventional_loads_ts="demandlib",
+        )
+        edisgo.set_time_series_reactive_power_control()
 
         # check number of generators
         assert len(edisgo.topology.generators_df) == 18 + 1618

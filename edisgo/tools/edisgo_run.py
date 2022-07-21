@@ -3,7 +3,6 @@ import glob
 import logging
 import multiprocessing as mp
 import os
-import re
 import sys
 
 import multiprocess as mp2
@@ -110,7 +109,7 @@ def run_edisgo_basic(
             return (
                 None,
                 pd.DataFrame(),
-                {"network": grid_district, "msg": str(e)},
+                {"network": edisgo_grid, "msg": str(e)},
             )
 
     logging.info("Grid expansion for MV network {}".format(edisgo_grid.topology.id))
@@ -147,12 +146,12 @@ def run_edisgo_basic(
     except MaximumIterationError:
         grid_issues["network"] = edisgo_grid.network.id
         grid_issues["msg"] = str(edisgo_grid.network.results.unresolved_issues)
-        costs = pd.DataFrame()
+        costs = pd.DataFrame(dtype=float)
         logging.warning("Unresolved issues left after network expansion.")
     except Exception as e:
         grid_issues["network"] = edisgo_grid.network.id
         grid_issues["msg"] = repr(e)
-        costs = pd.DataFrame()
+        costs = pd.DataFrame(dtype=float)
         logging.exception()
 
     return edisgo_grid, costs, grid_issues
@@ -236,7 +235,8 @@ def run_edisgo_pool(
         Ding0 network data file names
     run_args_opt : list
         eDisGo options, see :func:`run_edisgo_basic` and
-        :func:`run_edisgo_twice`, has to contain generator_scenario and analysis as entries
+        :func:`run_edisgo_twice`, has to contain generator_scenario and analysis as
+        entries
     workers: int
         Number of parallel process
     worker_lifetime : int
@@ -501,7 +501,7 @@ def edisgo_run():
     # get current time for output file names
     exec_time = pd.datetime.now().strftime("%Y-%m-%d_%H%M")
 
-    logger = setup_logging(
+    logger = setup_logging(  # noqa: F841
         logfilename="test.log",
         logfile_loglevel="debug",
         console_loglevel="info",
@@ -529,7 +529,7 @@ def edisgo_run():
         raise FileNotFoundError("Some of the Arguments for input files are missing.")
 
     # this is the serial version of the run system
-    run_func = run_edisgo_basic
+    run_func = run_edisgo_basic  # noqa: F841
 
     run_args_opt_no_scenario = [None]
     run_args_opt = [args.scenario]
@@ -547,7 +547,7 @@ def edisgo_run():
 
     if not args.parallel:
         for ding0_filename in ding0_file_list:
-            grid_district = _get_griddistrict(ding0_filename)
+            grid_district = _get_griddistrict(ding0_filename)  # noqa: F821, F841
 
             run_args = [ding0_filename]
             run_args.extend(run_args_opt_no_scenario)

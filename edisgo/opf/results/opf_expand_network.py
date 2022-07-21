@@ -3,9 +3,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from edisgo.network.timeseries import add_storage_units_timeseries
-
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def expand_network(edisgo, tolerance=1e-6):
@@ -25,11 +23,10 @@ def expand_network(edisgo, tolerance=1e-6):
 
     nep_factor = edisgo.opf_results.lines.nep.values.astype("float")
 
-    # Only round up numbers that are reasonably far away from the nearest
-    # Integer
-    # ToDo: fix! if there was more than 1 line before the optimization this ceil
-    # will overestimate the number of added lines (np.ceil(nep_factor*lines.num_parallel - tolerance))
-    # this will give number of added lines
+    # Only round up numbers that are reasonably far away from the nearest Integer
+    # TODO: fix! if there was more than 1 line before the optimization this ceil will
+    # overestimate the number of added lines (np.ceil(nep_factor*lines.num_parallel -
+    # tolerance)) this will give number of added lines
     nep_factor = np.ceil(nep_factor - tolerance)
 
     # Get the names of all MV grid lines
@@ -73,58 +70,7 @@ def grid_expansion_costs(opf_results, tolerance=1e-6):
     )
     costs_cable = opf_results.pypsa.lines.loc[lines, "costs_cable"] * num_new_lines
 
-    earthworks = [1 if num_new_lines[l] > 0 else 0 for l in lines]
-    costs_earthwork = (
-        opf_results.pypsa.lines.loc[lines, "costs_earthworks"] * earthworks
-    )
-
-    total_costs = costs_cable + costs_earthwork
-    extended_lines = total_costs[total_costs > 0].index
-    costs_df = pd.DataFrame(
-        data={
-            "total_costs": total_costs.loc[extended_lines],
-            "type": ["line"] * len(extended_lines),
-            "length": opf_results.pypsa.lines.loc[extended_lines, "length"],
-            "quantity": num_new_lines.loc[extended_lines],
-            "voltage_level": ["mv"] * len(extended_lines),
-        },
-        index=extended_lines,
-    )
-
-    return costs_df
-
-
-def grid_expansion_costs(opf_results, tolerance=1e-6):
-    """
-    Calculates grid expansion costs from OPF.
-
-    As grid expansion is conducted continuously number of expanded lines is
-    determined by simply rounding up (including some tolerance).
-
-    Parameters
-    ---------
-    opf_results : OPFResults class
-    tolerance : float
-
-    Returns
-    --------
-    float
-        Grid expansion costs determined by OPF
-
-    """
-    # ToDo maybe choose differenct default tolerance
-    lines = opf_results.lines.index
-
-    num_new_lines = (
-        np.ceil(
-            opf_results.lines.nep * opf_results.pypsa.lines.loc[lines, "num_parallel"]
-            - tolerance
-        )
-        - opf_results.pypsa.lines.loc[lines, "num_parallel"]
-    )
-    costs_cable = opf_results.pypsa.lines.loc[lines, "costs_cable"] * num_new_lines
-
-    earthworks = [1 if num_new_lines[l] > 0 else 0 for l in lines]
+    earthworks = [1 if num_new_lines[line] > 0 else 0 for line in lines]
     costs_earthwork = (
         opf_results.pypsa.lines.loc[lines, "costs_earthworks"] * earthworks
     )
@@ -187,57 +133,57 @@ def integrate_storage_units(
         reactive_power_ts = pd.DataFrame(
             0.0, columns=storage_ts.columns, index=storage_ts.index
         )
+    else:
+        storage_ts = None
+        reactive_power_ts = None
 
-    # ToDo adding timeseries will only work if timeseries.mode is None
-    # ToDo @Anya why is for mode manual kwarg called 'storage_units_reactive_power'
-    # and for mode None kwarg called 'timeseries_storage_units'
-    for st in edisgo.opf_results.storage_units.index:
+    # check if storage should be discarded
+    add_storage_units = list(edisgo.opf_results.storage_units.index)
+    for st in add_storage_units:
         storage_cap = edisgo.opf_results.storage_units.at[st, "emax"]
-        if storage_cap >= min_storage_size and (storage_ts.loc[:, st] > 0.001).any():
-            if not as_load:
-                storage = edisgo.topology.add_storage_unit(
-                    bus=st, p_nom=storage_cap
-                )  # as C-rate is currently always 1
-            else:
-                storage = edisgo.topology.add_load(
-                    load_id=1,
-                    bus=st,
-                    p_nom=storage_cap,
-                    annual_consumption=0.0,
-                    sector="storage",
-                )
-            if timeseries:
-                ts_active = storage_ts.loc[:, [st]].rename(columns={st: storage})
-                ts_reactive = reactive_power_ts.loc[:, [st]].rename(
-                    columns={st: storage}
-                )
-                if not as_load:
-                    add_storage_units_timeseries(
-                        edisgo_obj=edisgo,
-                        storage_unit_names=storage,
-                        timeseries_storage_units=ts_active,
-                        timeseries_storage_units_reactive_power=ts_reactive,
-                    )
-                else:
-                    # ToDo change once fixed in timeseries
-                    edisgo.timeseries.loads_active_power = pd.concat(
-                        [edisgo.timeseries.loads_active_power, -ts_active],
-                        axis=1,
-                        sort=False,
-                    )
-                    edisgo.timeseries.loads_reactive_power = pd.concat(
-                        [edisgo.timeseries.loads_reactive_power, ts_reactive],
-                        axis=1,
-                        sort=False,
-                    )
-
-            added_storage_units.append(storage)
-        else:
+        if storage_cap < min_storage_size:
+            add_storage_units.remove(st)
             logger.info(
-                "Storage size of storage unit at bus {} is too small and "
-                "therefore discarded.".format(st)
+                f"Storage size of storage unit at bus {st} is too small and "
+                "the storage therefore discarded."
             )
             storage_cap_discarded += storage_cap
+        elif timeseries:
+            if (storage_ts.loc[:, st] < 0.001).all():
+                add_storage_units.remove(st)
+                logger.info(
+                    f"Storage use of storage unit at bus {st} is too small and "
+                    "the storage therefore discarded."
+                )
+                storage_cap_discarded += storage_cap
+
+    for st in add_storage_units:
+        storage_cap = edisgo.opf_results.storage_units.at[st, "emax"]
+
+        if not as_load:
+            storage = edisgo.add_component(
+                comp_type="storage_unit",
+                add_ts=timeseries,
+                ts_active_power=storage_ts,
+                ts_reactive_power=reactive_power_ts,
+                bus=st,
+                p_nom=storage_cap,
+            )  # as C-rate is currently always 1
+        else:
+            storage = edisgo.add_component(
+                comp_type="storage_unit",
+                add_ts=timeseries,
+                ts_active_power=storage_ts,
+                ts_reactive_power=reactive_power_ts,
+                bus=st,
+                p_set=storage_cap,
+                type="storage",
+                annual_consumption=0.0,
+                sector="storage",
+            )
+
+        added_storage_units.append(storage)
+
     return added_storage_units, storage_cap_discarded
 
 
@@ -375,12 +321,12 @@ def integrate_curtailment_as_load(edisgo, curtailment_per_node):
 
     for n in active_power_ts.columns:
 
-        if not n in curtailment_loads.bus:
+        if n not in curtailment_loads.bus:
             # add load component
             load = edisgo.topology.add_load(
                 load_id=1,
                 bus=n,
-                p_nom=curtailment_per_node.loc[:, n].max(),
+                p_set=curtailment_per_node.loc[:, n].max(),
                 annual_consumption=0.0,
                 sector="curtailment",
             )

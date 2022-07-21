@@ -1,320 +1,310 @@
+import logging
 import os
 import shutil
-
-from math import acos, tan
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from matplotlib import pyplot as plt
+from pandas.util.testing import assert_frame_equal
 from shapely.geometry import Point
 
 from edisgo import EDisGo
-from edisgo.flex_opt import check_tech_constraints as checks
 
 
 class TestEDisGo:
-    @classmethod
-    def setup_class(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
-        )
-        self.timesteps = pd.date_range("1/1/1970", periods=2, freq="H")
+    @pytest.fixture(autouse=True)
+    def setup_fixture(self):
+        """
+        Fixture to set up new EDisGo object before each test function.
 
-    def test_exceptions(self):
-        msg = (
-            "No power flow results to check over-load for. Please perform "
-            "power flow analysis first."
-        )
-        with pytest.raises(Exception, match=msg):
-            checks.mv_line_load(self.edisgo)
-        self.edisgo.analyze()
-        msg = "Inserted grid is invalid."
-        with pytest.raises(ValueError, match=msg):
-            checks._station_load(self.edisgo, None)
+        """
+        self.setup_edisgo_object()
 
-    def test_save(self):
-        cur_dir = os.getcwd()
-        self.edisgo.save(cur_dir)
-        # Todo: check values?
-        # Todo: check files before rmtree?
-        shutil.rmtree(os.path.join(cur_dir, "results"))
-        shutil.rmtree(os.path.join(cur_dir, "topology"))
-        shutil.rmtree(os.path.join(cur_dir, "timeseries"))
+    def setup_edisgo_object(self):
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
 
-    def test_crit_station(self):
-        # TODO: have checks of technical constraints not require edisgo
-        # object and then move this test
-        # calculate results if not already existing
-        if self.edisgo.results.pfa_p.empty:
-            self.edisgo.analyze()
-        # check results
-        overloaded_mv_station = checks.hv_mv_station_load(self.edisgo)
-        assert overloaded_mv_station.empty
-        overloaded_lv_station = checks.mv_lv_station_load(self.edisgo)
-        assert len(overloaded_lv_station) == 4
-        assert np.isclose(
-            overloaded_lv_station.at["LVGrid_1", "s_missing"],
-            0.01936,
-            atol=1e-5,
-        )
-        assert overloaded_lv_station.at["LVGrid_1", "time_index"] == self.timesteps[1]
-        assert np.isclose(
-            overloaded_lv_station.at["LVGrid_4", "s_missing"],
-            0.03427,
-            atol=1e-5,
-        )
-        assert overloaded_lv_station.at["LVGrid_4", "time_index"] == self.timesteps[0]
+    def setup_worst_case_time_series(self):
+        self.edisgo.set_time_series_worst_case_analysis()
 
-    def test_crit_lines(self):
-        # TODO: have checks of technical constraints not require edisgo
-        # object and then move this test
-        if self.edisgo.results.i_res.empty:
-            self.edisgo.analyze()
-        mv_crit_lines = checks.mv_line_load(self.edisgo)
-        lv_crit_lines = checks.lv_line_load(self.edisgo)
-        assert len(lv_crit_lines) == 2
-        assert (lv_crit_lines.time_index == self.timesteps[1]).all()
-        assert np.isclose(
-            lv_crit_lines.at["Line_50000002", "max_rel_overload"],
-            1.02055,
-            atol=1e-5,
+    def test_set_time_series_manual(self, caplog):
+
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        gens_ts = pd.DataFrame(
+            data={
+                "GeneratorFluctuating_15": [2.0, 5.0, 6.0],
+                "GeneratorFluctuating_24": [4.0, 7.0, 8.0],
+            },
+            index=timeindex,
         )
-        assert np.isclose(
-            lv_crit_lines.at["Line_60000001", "max_rel_overload"],
-            1.03730,
-            atol=1e-5,
+        loads_ts = pd.DataFrame(
+            data={
+                "Load_residential_LVGrid_5_3": [2.0, 5.0, 6.0],
+            },
+            index=timeindex,
         )
-        assert len(mv_crit_lines) == 4
-        assert (mv_crit_lines.time_index == self.timesteps[0]).all()
-        assert np.isclose(
-            mv_crit_lines.at["Line_10006", "max_rel_overload"],
-            1.16306,
-            atol=1e-5,
-        )
-        assert np.isclose(
-            mv_crit_lines.at["Line_10026", "max_rel_overload"],
-            1.06230,
-            atol=1e-5,
+        storage_units_ts = pd.DataFrame(
+            data={
+                "Storage_1": [4.0, 7.0, 8.0],
+            },
+            index=timeindex,
         )
 
-    def test_analyze(self):
-        if self.edisgo.results.grid_losses.empty:
-            self.edisgo.analyze()
-        # check results
-        assert np.isclose(
-            self.edisgo.results.grid_losses.loc[self.timesteps].values,
-            np.array([[0.16484, 0.55544], [0.41859, 0.17233]]),
-            atol=1e-5,
-        ).all()
-        assert np.isclose(
-            self.edisgo.results.pfa_slack.loc[self.timesteps].values,
-            np.array([[-21.68225, 10.54364], [1.36397, 0.13840]]),
-            atol=1e-5,
-        ).all()
-        assert np.isclose(
-            self.edisgo.results.v_res.loc[
-                self.timesteps, "Bus_BranchTee_LVGrid_4_2"
-            ].values,
-            np.array([1.01695, 0.99917]),
-            atol=1e-5,
-        ).all()
-        assert np.isclose(
-            self.edisgo.results.v_res.loc[
-                self.timesteps, "virtual_BusBar_MVGrid_1_LVGrid_4_MV"
-            ].values,
-            np.array([1.00630, 0.99930]),
-            atol=1e-5,
-        ).all()
-        assert np.isclose(
-            self.edisgo.results.pfa_p.loc[self.timesteps, "Line_60000002"].values,
-            np.array([0.00801, 0.08144]),
-            atol=1e-5,
-        ).all()
-        assert np.isclose(
-            self.edisgo.results.pfa_q.loc[self.timesteps, "Line_60000002"].values,
-            np.array([0.00263, 0.02661]),
-            atol=1e-5,
-        ).all()
-        assert np.isclose(
-            self.edisgo.results.i_res.loc[
-                self.timesteps, ["Line_10005", "Line_90000021"]
-            ].values,
-            np.array([[0.22308, 0.00019], [0.00004, 0.00188]]),
-            atol=1e-5,
+        # test setting some time series and with no time index being previously set
+        with caplog.at_level(logging.WARNING):
+            self.edisgo.set_time_series_manual(
+                generators_p=gens_ts,
+                generators_q=gens_ts,
+                loads_p=loads_ts,
+                storage_units_q=storage_units_ts,
+            )
+        assert (
+            "When setting time series manually a time index is not automatically "
+            "set" in caplog.text
+        )
+        assert self.edisgo.timeseries.generators_active_power.shape == (0, 2)
+        self.edisgo.set_timeindex(timeindex)
+        assert_frame_equal(gens_ts, self.edisgo.timeseries.generators_active_power)
+        assert_frame_equal(gens_ts, self.edisgo.timeseries.generators_reactive_power)
+        assert_frame_equal(loads_ts, self.edisgo.timeseries.loads_active_power)
+        assert self.edisgo.timeseries.loads_reactive_power.empty
+        assert self.edisgo.timeseries.storage_units_active_power.empty
+        assert_frame_equal(
+            storage_units_ts, self.edisgo.timeseries.storage_units_reactive_power
+        )
+
+        # test overwriting time series and with some components that do not exist
+        timeindex2 = pd.date_range("1/1/2018", periods=4, freq="H")
+        gens_ts2 = pd.DataFrame(
+            data={
+                "GeneratorFluctuating_15": [1.0, 2.0, 5.0, 6.0],
+                "GeneratorFluctuating_14": [5.0, 2.0, 5.0, 6.0],
+                "GeneratorFluctuating_x": [8.0, 4.0, 7.0, 8.0],
+            },
+            index=timeindex2,
+        )
+        loads_ts2 = pd.DataFrame(
+            data={
+                "Load_residential_LVGrid_5_3": [2.0, 5.0, 6.0],
+                "Load_residential_LVGrid_x": [2.0, 5.0, 6.0],
+            },
+            index=timeindex,
+        )
+        self.edisgo.set_time_series_manual(
+            generators_p=gens_ts2, loads_p=loads_ts2, storage_units_p=storage_units_ts
+        )
+        assert self.edisgo.timeseries.generators_active_power.shape == (3, 3)
+        assert_frame_equal(
+            gens_ts2.loc[
+                timeindex, ["GeneratorFluctuating_15", "GeneratorFluctuating_14"]
+            ],
+            self.edisgo.timeseries.generators_active_power.loc[
+                :, ["GeneratorFluctuating_15", "GeneratorFluctuating_14"]
+            ],
+        )
+        assert_frame_equal(
+            gens_ts.loc[:, ["GeneratorFluctuating_24"]],
+            self.edisgo.timeseries.generators_active_power.loc[
+                :, ["GeneratorFluctuating_24"]
+            ],
+        )
+        assert_frame_equal(gens_ts, self.edisgo.timeseries.generators_reactive_power)
+        assert_frame_equal(
+            loads_ts2.loc[:, ["Load_residential_LVGrid_5_3"]],
+            self.edisgo.timeseries.loads_active_power.loc[
+                :, ["Load_residential_LVGrid_5_3"]
+            ],
+        )
+        assert self.edisgo.timeseries.loads_reactive_power.empty
+        assert_frame_equal(
+            storage_units_ts, self.edisgo.timeseries.storage_units_active_power
+        )
+        assert_frame_equal(
+            storage_units_ts, self.edisgo.timeseries.storage_units_reactive_power
+        )
+
+    def test_set_time_series_worst_case_analysis(self):
+        self.edisgo.set_time_series_worst_case_analysis(
+            cases="load_case", generators_names=["Generator_1"], loads_names=[]
+        )
+        assert self.edisgo.timeseries.generators_active_power.shape == (2, 1)
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (2, 1)
+        assert self.edisgo.timeseries.loads_active_power.shape == (2, 0)
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (2, 0)
+        assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 1)
+        assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 1)
+
+        self.edisgo.set_time_series_worst_case_analysis()
+        assert self.edisgo.timeseries.generators_active_power.shape == (
+            4,
+            len(self.edisgo.topology.generators_df),
+        )
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.generators_df),
+        )
+        assert self.edisgo.timeseries.loads_active_power.shape == (
+            4,
+            len(self.edisgo.topology.loads_df),
+        )
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.loads_df),
+        )
+        assert self.edisgo.timeseries.storage_units_active_power.shape == (
+            4,
+            len(self.edisgo.topology.storage_units_df),
+        )
+        assert self.edisgo.timeseries.storage_units_reactive_power.shape == (
+            4,
+            len(self.edisgo.topology.storage_units_df),
+        )
+
+    def test_set_time_series_active_power_predefined(self, caplog):
+
+        # check warning
+        self.edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts="oedb"
+        )
+        assert (
+            "When setting time series using predefined profiles a time index is"
+            in caplog.text
+        )
+
+        # check if right functions are called
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+        ts_fluc = pd.DataFrame(
+            data={
+                "wind": [5, 6],
+            },
+            index=timeindex,
+        )
+        ts_disp = pd.DataFrame(
+            data={
+                "other": [5, 6],
+            },
+            index=timeindex,
+        )
+        ts_cp = pd.DataFrame(
+            data={
+                "hpc": [5, 6],
+            },
+            index=timeindex,
+        )
+        self.edisgo.topology._loads_df.loc[
+            "Load_residential_LVGrid_1_4", ["type", "sector"]
+        ] = ("charging_point", "hpc")
+
+        self.edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts=ts_fluc,
+            fluctuating_generators_names=["GeneratorFluctuating_8"],
+            dispatchable_generators_ts=ts_disp,
+            dispatchable_generators_names=["Generator_1"],
+            conventional_loads_ts="demandlib",
+            conventional_loads_names=[
+                "Load_residential_LVGrid_3_2",
+                "Load_residential_LVGrid_3_3",
+            ],
+            charging_points_ts=ts_cp,
+            charging_points_names=None,
+        )
+
+        assert self.edisgo.timeseries.generators_active_power.shape == (2, 2)
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (2, 0)
+        assert self.edisgo.timeseries.loads_active_power.shape == (2, 3)
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (2, 0)
+        assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 0)
+        assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
+
+    def test_set_time_series_reactive_power_control(self):
+
+        # set active power time series for fixed cosphi
+        timeindex = pd.date_range("1/1/1970", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+        ts_solar = np.array([0.1, 0.2, 0.3])
+        ts_wind = [0.4, 0.5, 0.6]
+        self.edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts=pd.DataFrame(
+                {"solar": ts_solar, "wind": ts_wind}, index=timeindex
+            ),
+            dispatchable_generators_ts=pd.DataFrame(
+                {"other": ts_solar}, index=timeindex
+            ),
+            conventional_loads_ts="demandlib",
+        )
+
+        # test only setting reactive power for one generator
+        gen = "GeneratorFluctuating_4"  # solar MV generator
+        self.edisgo.set_time_series_reactive_power_control(
+            generators_parametrisation=pd.DataFrame(
+                {
+                    "components": [[gen]],
+                    "mode": ["default"],
+                    "power_factor": ["default"],
+                },
+                index=[1],
+            ),
+            loads_parametrisation=None,
+            storage_units_parametrisation=None,
+        )
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (3, 1)
+        assert self.edisgo.timeseries.loads_reactive_power.empty
+        assert self.edisgo.timeseries.storage_units_reactive_power.empty
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.generators_reactive_power.loc[:, gen],
+                ts_solar * -np.tan(np.arccos(0.9)) * 1.93,
+            )
         ).all()
 
-    def test_reinforce(self):
-        results = self.edisgo.reinforce(combined_analysis=True)
-        assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 10
-        assert len(results.equipment_changes) == 10
-        # Todo: test other relevant values
+        # test changing only configuration of one load
+        load = "Load_residential_LVGrid_1_5"
+        self.edisgo.set_time_series_reactive_power_control(
+            loads_parametrisation=pd.DataFrame(
+                {
+                    "components": [
+                        [load],
+                        self.edisgo.topology.loads_df.index.drop([load]),
+                    ],
+                    "mode": ["capacitive", "default"],
+                    "power_factor": [0.98, "default"],
+                },
+                index=[1, 2],
+            ),
+            storage_units_parametrisation=None,
+        )
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (3, 28)
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (3, 50)
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.loads_reactive_power.loc[:, load],
+                self.edisgo.timeseries.loads_active_power.loc[:, load]
+                * -np.tan(np.arccos(0.98)),
+            )
+        ).all()
 
     def test_to_pypsa(self):
-        # run powerflow and check results
-        pypsa_network = self.edisgo.to_pypsa()
-        pf_results = pypsa_network.pf(self.timesteps[0])
 
-        if all(pf_results["converged"]["0"].tolist()):
-            print("network converged")
-        else:
-            raise ValueError("Power flow analysis did not converge.")
-        # ToDo maybe move slack test somewhere else
-        slack_df = pypsa_network.generators[pypsa_network.generators.control == "Slack"]
-        assert len(slack_df) == 1
-        assert slack_df.bus.values[0] == "Bus_MVStation_1"
+        self.setup_worst_case_time_series()
+
+        # test mode None and timesteps None (default)
+        pypsa_network = self.edisgo.to_pypsa()
+        assert len(pypsa_network.buses) == 140
+        assert len(pypsa_network.buses_t.v_mag_pu_set) == 4
+
+        # test mode "mv" and timesteps given
+        pypsa_network = self.edisgo.to_pypsa(
+            mode="mv", timesteps=self.edisgo.timeseries.timeindex[0]
+        )
+        assert len(pypsa_network.buses) == 31
+        assert len(pypsa_network.buses_t.v_mag_pu_set) == 1
+
         # test exception
-        msg = "The entered mode is not a valid option."
+        msg = "Provide proper mode or leave it empty to export entire network topology."
         with pytest.raises(ValueError, match=msg):
             self.edisgo.to_pypsa(mode="unknown")
-
-    def test_generator_import(self):
-        """This function just checks if API to import generators exists but
-        generator import for test grid will not work and raise an error."""
-
-        # test exception
-        msg = (
-            "At least one imported generator is not located in the MV "
-            "grid area. Check compatibility of grid and generator "
-            "datasets."
-        )
-        with pytest.raises(ValueError, match=msg):
-            self.edisgo.import_generators("nep2035")
-
-    def test_mv_to_pypsa(self):
-        # test only mv
-        pypsa_network = self.edisgo.to_pypsa(mode="mv")
-        pf_results = pypsa_network.pf(self.timesteps[0])
-        # check if pf converged
-        if all(pf_results["converged"]["0"].tolist()):
-            print("mv converged")
-        else:
-            raise ValueError("Power flow analysis did not converge.")
-        # ToDo maybe move slack test somewhere else
-        slack_df = pypsa_network.generators[pypsa_network.generators.control == "Slack"]
-        assert len(slack_df) == 1
-        assert slack_df.bus.values[0] == "Bus_MVStation_1"
-        # test mvlv
-        pypsa_network = self.edisgo.to_pypsa(mode="mvlv")
-        pf_results = pypsa_network.pf(self.timesteps[0])
-        # check if pf converged
-        if all(pf_results["converged"]["0"].tolist()):
-            print("mvlv converged")
-        else:
-            raise ValueError("Power flow analysis did not converge.")
-        # ToDo maybe move slack test somewhere else
-        slack_df = pypsa_network.generators[pypsa_network.generators.control == "Slack"]
-        assert len(slack_df) == 1
-        assert slack_df.bus.values[0] == "Bus_MVStation_1"
-        # test only mv aggregating loads by sector and generators by
-        # curtailability
-        pypsa_network = self.edisgo.to_pypsa(
-            mode="mv",
-            aggregate_generators="curtailable",
-            aggregate_loads="sectoral",
-        )
-        pf_results = pypsa_network.pf(self.timesteps[0])
-        # check if pf converged
-        if all(pf_results["converged"]["0"].tolist()):
-            print("mv converged")
-        else:
-            raise ValueError("Power flow analysis did not converge.")
-        # ToDo maybe move slack test somewhere else
-        slack_df = pypsa_network.generators[pypsa_network.generators.control == "Slack"]
-        assert len(slack_df) == 1
-        assert slack_df.bus.values[0] == "Bus_MVStation_1"
-        assert np.isclose(
-            pypsa_network.generators_t["p_set"].loc[
-                self.timesteps, "LVGrid_1_fluctuating"
-            ],
-            [0.04845, 0],
-        ).all()
-        assert np.isclose(
-            pypsa_network.loads_t["p_set"].loc[self.timesteps, "LVGrid_1_agricultural"],
-            [0.01569, 0.1569],
-        ).all()
-
-    def test_lv_to_pypsa(self):
-        # test lv to pypsa
-        pypsa_network = self.edisgo.to_pypsa(mode="lv", lv_grid_name="LVGrid_2")
-        pf_results = pypsa_network.pf(self.timesteps[0])
-        # check if pf converged
-        if all(pf_results["converged"]["0"].tolist()):
-            print("lv converged")
-        else:
-            raise ValueError("Power flow analysis did not converge.")
-        # ToDo maybe move slack test somewhere else
-        slack_df = pypsa_network.generators[pypsa_network.generators.control == "Slack"]
-        assert len(slack_df) == 1
-        assert slack_df.bus.values[0] == "BusBar_MVGrid_1_LVGrid_2_LV"
-        # test exception
-        msg = "For exporting lv grids, name of lv_grid has to be provided."
-        with pytest.raises(ValueError, match=msg):
-            self.edisgo.to_pypsa(mode="lv")
-
-    def test_mv_lv_to_pypsa_with_charging_points(self):
-
-        # add charging points to LVGrid
-        cp1 = self.edisgo.add_component(
-            comp_type="ChargingPoint",
-            ts_active_power=pd.Series(
-                data=np.array([0.01, 0.02]), index=self.timesteps
-            ),
-            ts_reactive_power=pd.Series(
-                data=np.array([0.04, 0.03]), index=self.timesteps
-            ),
-            bus="BusBar_MVGrid_1_LVGrid_2_LV",
-            p_nom=0.005,
-            sector="work",
-        )
-        cp2 = self.edisgo.add_component(
-            comp_type="ChargingPoint",
-            ts_active_power=pd.Series(
-                data=np.array([0.05, 0.06]), index=self.timesteps
-            ),
-            ts_reactive_power=pd.Series(
-                data=np.array([0.08, 0.07]), index=self.timesteps
-            ),
-            bus="BusBar_MVGrid_1_LVGrid_2_LV",
-            p_nom=0.005,
-            sector="work",
-        )
-        # set charging points timeseries
-        # Todo: Check timeseries (has to be moved to add component)
-        # active_power = pd.DataFrame(data=np.array([[1, 2], [4, 3]]),
-        #                             index=self.timesteps,
-        #                             columns=['ChargingPoint_LVGrid_2_0',
-        #                                      'ChargingPoint_LVGrid_2_1'])
-        # reactive_power = pd.DataFrame(data=np.array([[6, 8], [7, 9]]),
-        #                               index=self.timesteps,
-        #                               columns=['ChargingPoint_LVGrid_2_0',
-        #                                        'ChargingPoint_LVGrid_2_1'])
-        # test lv to pypsa
-        pypsa_network = self.edisgo.to_pypsa(mode="lv", lv_grid_name="LVGrid_2")
-        pf_results = pypsa_network.pf(self.timesteps[0])
-        # check if pf converged
-        if all(pf_results["converged"]["0"].tolist()):
-            print("lv converged")
-        else:
-            raise ValueError("Power flow analysis did not converge.")
-        # test lv to pypsa aggregate
-        pypsa_network = self.edisgo.to_pypsa(
-            mode="mvlv",
-            aggregate_generators="curtailable",
-            aggregate_loads="sectoral",
-        )
-        pf_results = pypsa_network.pf(self.timesteps[0])
-        # check if pf converged
-        if all(pf_results["converged"]["0"].tolist()):
-            print("lv converged")
-        else:
-            raise ValueError("Power flow analysis did not converge.")
-
-        self.edisgo.remove_component("ChargingPoint", cp1)
-        self.edisgo.remove_component("ChargingPoint", cp2)
 
     def test_to_graph(self):
         graph = self.edisgo.to_graph()
@@ -324,127 +314,57 @@ class TestEDisGo:
             + len(self.edisgo.topology.transformers_df.bus0.unique())
         )
 
-    def test_edisgo_timeseries_analysis(self):
-        dirname = os.path.dirname(__file__)
-        test_network_directory = os.path.join(dirname, "ding0_test_network_1")
-        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
-        ts_gen_dispatchable = pd.DataFrame({"other": [0.775] * 8760}, index=timeindex)
-        ts_storage = pd.DataFrame({"Storage_1": [0.0] * 8760}, index=timeindex)
-        edisgo = EDisGo(
-            ding0_grid=test_network_directory,
-            timeseries_generation_fluctuating="oedb",
-            timeseries_generation_dispatchable=ts_gen_dispatchable,
-            timeseries_load="demandlib",
-            timeseries_storage_units=ts_storage,
-        )
-        # check if export to pypsa is possible to make sure all values are set
-        pypsa_network = edisgo.to_pypsa()
-        assert len(pypsa_network.generators_t["p_set"]) == 8760
-        assert len(pypsa_network.generators_t["q_set"]) == 8760
-        assert len(pypsa_network.loads_t["p_set"]) == 8760
-        assert len(pypsa_network.loads_t["q_set"]) == 8760
-        # Todo: relocate? Check other values
-        edisgo.analyze(timesteps=timeindex[range(10)])
-        print()
+    @pytest.mark.slow
+    def test_generator_import(self):
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        edisgo.import_generators("nep2035")
+        assert len(edisgo.topology.generators_df) == 1636
 
-    def test_plot_mv_grid_topology(self):
-        plt.ion()
-        self.edisgo.plot_mv_grid_topology(technologies=True)
-        plt.close("all")
-        self.edisgo.plot_mv_grid_topology()
-        plt.close("all")
+    def test_analyze(self):
 
-    def test_plot_mv_voltages(self):
-        plt.ion()
-        # if not already done so, analyse grid
-        try:
-            if self.results.v_res is None:
-                self.edisgo.analyze()
-        except AttributeError:
-            self.edisgo.analyze()
-        except ValueError:
-            pass
-        # plot mv voltages
-        self.edisgo.plot_mv_voltages()
-        plt.close("all")
+        self.setup_worst_case_time_series()
 
-    def test_plot_mv_line_loading(self):
-        # if not already done so, analyse grid
-        plt.ion()
-        try:
-            if self.edisgo.results.i_res.empty:
-                self.edisgo.analyze()
-        except AttributeError:
-            self.edisgo.analyze()
-        # plot mv line loading
-        self.edisgo.plot_mv_line_loading()
-        plt.close("all")
+        # test mode None and timesteps None (default)
+        self.edisgo.analyze()
+        assert self.edisgo.results.v_res.shape == (4, 140)
 
-    def test_plot_mv_grid_expansion_costs(self):
-        plt.ion()
-        try:
-            if self.edisgo.results.grid_expansion_costs.empty:
-                self.edisgo.reinforce()
-        except AttributeError:
-            self.edisgo.reinforce()
-        # plot grid expansion costs
-        self.edisgo.plot_mv_grid_expansion_costs()
-        plt.close("all")
+        # test mode "mv" and timesteps given
+        self.edisgo.analyze(mode="mv", timesteps=self.edisgo.timeseries.timeindex[0])
+        assert self.edisgo.results.v_res.shape == (1, 31)
 
-    def test_plot_mv_storage_integration(self):
-        plt.ion()
-        storage_1 = self.edisgo.topology.add_storage_unit(
-            "Bus_BranchTee_MVGrid_1_8", 0.3
-        )
-        storage_2 = self.edisgo.topology.add_storage_unit(
-            "Bus_BranchTee_MVGrid_1_8", 0.6
-        )
-        storage_3 = self.edisgo.topology.add_storage_unit(
-            "Bus_BranchTee_MVGrid_1_10", 0.3
-        )
-        self.edisgo.plot_mv_storage_integration()
-        plt.close("all")
-        self.edisgo.topology.remove_storage_unit(storage_1)
-        self.edisgo.topology.remove_storage_unit(storage_2)
-        self.edisgo.topology.remove_storage_unit(storage_3)
+        # test mode "lv"
+        self.edisgo.analyze(mode="lv", lv_grid_name="LVGrid_1")
+        assert self.edisgo.results.v_res.shape == (4, 15)
 
-    def test_histogramm_voltage(self):
-        plt.ion()
-        # if not already done so, analyse grid
-        try:
-            if self.edisgo.results.v_res.empty:
-                self.edisgo.analyze()
-        except AttributeError:
-            self.edisgo.analyze()
+        # ToDo: test non convergence
 
-        self.edisgo.histogram_voltage()
-        plt.close("all")
+    def test_reinforce(self):
+        self.setup_worst_case_time_series()
+        results = self.edisgo.reinforce(combined_analysis=True)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 10
+        assert len(results.equipment_changes) == 10
+        # Todo: test other relevant values
 
-    def test_histogramm_relative_line_load(self):
-        plt.ion()
-        try:
-            if self.edisgo.results.i_res.empty:
-                self.edisgo.analyze()
-        except AttributeError:
-            self.edisgo.analyze()
+    def test_add_component(self, caplog):
 
-        self.edisgo.histogram_relative_line_load()
-        plt.close("all")
+        self.setup_worst_case_time_series()
+        index = self.edisgo.timeseries.timeindex
+        dummy_ts = pd.Series(data=[0.1, 0.2, 0.1, 0.2], index=index)
 
-    def test_add_component(self):
-        """Test add_component method"""
         # Test add bus
         num_buses = len(self.edisgo.topology.buses_df)
         bus_name = self.edisgo.add_component(
-            comp_type="Bus", bus_name="Testbus", v_nom=20
+            comp_type="bus", bus_name="Testbus", v_nom=20
         )
         assert bus_name == "Testbus"
         assert len(self.edisgo.topology.buses_df) == num_buses + 1
         assert self.edisgo.topology.buses_df.loc["Testbus", "v_nom"] == 20
+
         # Test add line
         num_lines = len(self.edisgo.topology.lines_df)
         line_name = self.edisgo.add_component(
-            comp_type="Line",
+            comp_type="line",
             bus0="Bus_MVStation_1",
             bus1="Testbus",
             length=0.001,
@@ -455,44 +375,64 @@ class TestEDisGo:
         assert self.edisgo.topology.lines_df.loc[line_name, "bus0"] == "Bus_MVStation_1"
         assert self.edisgo.topology.lines_df.loc[line_name, "bus1"] == "Testbus"
         assert self.edisgo.topology.lines_df.loc[line_name, "length"] == 0.001
-        # Test add load
+
+        # Test add load (with time series)
         num_loads = len(self.edisgo.topology.loads_df)
         load_name = self.edisgo.add_component(
-            comp_type="Load",
+            comp_type="load",
+            type="conventional_load",
             load_id=4,
             bus="Testbus",
-            p_nom=0.2,
+            p_set=0.2,
             annual_consumption=3.2,
             sector="residential",
+            ts_active_power=dummy_ts,
+            ts_reactive_power=dummy_ts,
         )
-        assert load_name == "Load_MVGrid_1_residential_4"
+        assert load_name == "Conventional_Load_MVGrid_1_residential_4"
         assert len(self.edisgo.topology.loads_df) == num_loads + 1
         assert self.edisgo.topology.loads_df.loc[load_name, "bus"] == "Testbus"
-        assert self.edisgo.topology.loads_df.loc[load_name, "p_nom"] == 0.2
+        assert self.edisgo.topology.loads_df.loc[load_name, "p_set"] == 0.2
         assert self.edisgo.topology.loads_df.loc[load_name, "annual_consumption"] == 3.2
         assert self.edisgo.topology.loads_df.loc[load_name, "sector"] == "residential"
-        index = self.edisgo.timeseries.timeindex
-        assert np.isclose(
-            self.edisgo.timeseries.loads_active_power.loc[index[0], load_name],
-            0.15 * 0.2,
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[:, load_name] == dummy_ts
+        ).all()
+        assert (
+            self.edisgo.timeseries.loads_reactive_power.loc[:, load_name] == dummy_ts
+        ).all()
+
+        # Test add load (with reactive power time series default mode)
+        load_name = self.edisgo.add_component(
+            comp_type="load",
+            type="conventional_load",
+            load_id=4,
+            bus="Testbus",
+            p_set=0.2,
+            annual_consumption=3.2,
+            sector="residential",
+            ts_active_power=dummy_ts,
+            ts_reactive_power="default",
         )
-        assert np.isclose(
-            self.edisgo.timeseries.loads_active_power.loc[index[1], load_name],
-            0.2,
-        )
-        assert np.isclose(
-            self.edisgo.timeseries.loads_reactive_power.loc[index[0], load_name],
-            tan(acos(0.9)) * 0.15 * 0.2,
-        )
-        assert np.isclose(
-            self.edisgo.timeseries.loads_reactive_power.loc[index[1], load_name],
-            tan(acos(0.9)) * 0.2,
-        )
-        # Todo: test other modes of timeseries (manual, None)
-        # Test add generator
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[:, load_name] == dummy_ts
+        ).all()
+        assert (
+            self.edisgo.timeseries.loads_reactive_power.loc[:, load_name]
+            == dummy_ts * np.tan(np.arccos(0.9))
+        ).all()
+        # check that reactive power time series were not all set to default
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[
+                :, "Conventional_Load_MVGrid_1_residential_4"
+            ]
+            == dummy_ts
+        ).all()
+
+        # Test add generator (without time series)
         num_gens = len(self.edisgo.topology.generators_df)
         gen_name = self.edisgo.add_component(
-            "Generator",
+            "generator",
             generator_id=5,
             bus="Testbus",
             p_nom=2.5,
@@ -503,67 +443,55 @@ class TestEDisGo:
         assert self.edisgo.topology.generators_df.loc[gen_name, "bus"] == "Testbus"
         assert self.edisgo.topology.generators_df.loc[gen_name, "p_nom"] == 2.5
         assert self.edisgo.topology.generators_df.loc[gen_name, "type"] == "solar"
-        assert np.isclose(
-            self.edisgo.timeseries.generators_active_power.loc[index[0], gen_name],
-            0.85 * 2.5,
+        assert self.edisgo.timeseries.generators_active_power.shape == (4, num_gens)
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (4, num_gens)
+
+        # Test add generator (test that warning is raised when no active power time
+        # series is provided for default mode)
+        gen_name = self.edisgo.add_component(
+            "generator",
+            generator_id=5,
+            bus="Testbus",
+            p_nom=2.5,
+            generator_type="solar",
+            ts_reactive_power="default",
         )
-        assert np.isclose(
-            self.edisgo.timeseries.generators_active_power.loc[index[1], gen_name],
-            0,
+        assert (
+            f"Default reactive power time series of {gen_name} cannot be set as "
+            f"active power time series was not provided." in caplog.text
         )
-        assert np.isclose(
-            self.edisgo.timeseries.generators_reactive_power.loc[index[0], gen_name],
-            -tan(acos(0.9)) * 0.85 * 2.5,
+
+        # Test add generator (with reactive power time series default mode)
+        gen_name = self.edisgo.add_component(
+            "generator",
+            generator_id=5,
+            bus="Testbus",
+            p_nom=2.5,
+            generator_type="solar",
+            ts_active_power=dummy_ts,
+            ts_reactive_power="default",
         )
-        assert np.isclose(
-            self.edisgo.timeseries.generators_reactive_power.loc[index[1], gen_name],
-            0,
-        )
-        # Todo: test other modes of timeseries (manual, None)
+        assert (
+            self.edisgo.timeseries.generators_reactive_power.loc[:, gen_name]
+            == dummy_ts * -np.tan(np.arccos(0.9))
+        ).all()
+
         # Test add storage unit
         num_storages = len(self.edisgo.topology.storage_units_df)
         storage_name = self.edisgo.add_component(
-            "StorageUnit", bus="Testbus", p_nom=3.1
+            comp_type="storage_unit", bus="Testbus", p_nom=3.1, add_ts=False
         )
-        assert storage_name == "StorageUnit_MVGrid_1_1"
+        assert storage_name == "StorageUnit_MVGrid_1_2"
         assert len(self.edisgo.topology.storage_units_df) == num_storages + 1
         assert (
             self.edisgo.topology.storage_units_df.loc[storage_name, "bus"] == "Testbus"
         )
         assert self.edisgo.topology.storage_units_df.loc[storage_name, "p_nom"] == 3.1
-        assert np.isclose(
-            self.edisgo.timeseries.storage_units_active_power.loc[
-                index[0], storage_name
-            ],
-            3.1,
-        )
-        assert np.isclose(
-            self.edisgo.timeseries.storage_units_active_power.loc[
-                index[1], storage_name
-            ],
-            -3.1,
-        )
-        assert np.isclose(
-            self.edisgo.timeseries.storage_units_reactive_power.loc[
-                index[0], storage_name
-            ],
-            -tan(acos(0.9)) * 3.1,
-        )
-        assert np.isclose(
-            self.edisgo.timeseries.storage_units_reactive_power.loc[
-                index[1], storage_name
-            ],
-            tan(acos(0.9)) * 3.1,
-        )
-        # Todo: test other modes of timeseries (manual, None)
-        # Remove test objects
-        self.edisgo.remove_component("StorageUnit", storage_name)
-        self.edisgo.remove_component("Load", load_name)
-        self.edisgo.remove_component("Generator", gen_name)
-        # Todo: check if components were removed
 
     def test_integrate_component(self):
-        """Test integrate_component method"""
+
+        self.setup_worst_case_time_series()
+
         num_gens = len(self.edisgo.topology.generators_df)
 
         random_bus = "Bus_BranchTee_MVGrid_1_1"
@@ -580,12 +508,12 @@ class TestEDisGo:
             "generator_type": "misc",
             "subtype": "misc_sub",
         }
-        comp_name = self.edisgo.integrate_component(
-            comp_type="Generator",
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
+            comp_type="generator",
             geolocation=(x, y),
             voltage_level=4,
             add_ts=False,
-            **comp_data
+            **comp_data,
         )
 
         assert len(self.edisgo.topology.generators_df) == num_gens + 1
@@ -602,17 +530,19 @@ class TestEDisGo:
         # Point, with time series
         num_cps = len(self.edisgo.topology.charging_points_df)
 
-        comp_data = {"p_nom": 4, "sector": "fast"}
-        ts_active_power = pd.Series(data=[1, 2], index=self.edisgo.timeseries.timeindex)
-        ts_reactive_power = pd.Series(
-            data=[0, 0], index=self.edisgo.timeseries.timeindex
+        comp_data = {"p_set": 4, "sector": "fast"}
+        dummy_ts = pd.Series(
+            data=[0.1, 0.2, 0.1, 0.2], index=self.edisgo.timeseries.timeindex
         )
-        comp_name = self.edisgo.integrate_component(
-            comp_type="ChargingPoint",
+        ts_active_power = dummy_ts
+        ts_reactive_power = dummy_ts
+
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
+            comp_type="charging_point",
             geolocation=geom,
             ts_active_power=ts_active_power,
             ts_reactive_power=ts_reactive_power,
-            **comp_data
+            **comp_data,
         )
 
         assert len(self.edisgo.topology.charging_points_df) == num_cps + 1
@@ -635,31 +565,25 @@ class TestEDisGo:
         )
         # check time series
         assert (
-            self.edisgo.timeseries.charging_points_active_power.loc[:, comp_name].values
-            == [1, 2]
+            self.edisgo.timeseries.loads_active_power.loc[:, comp_name].values
+            == [0.1, 0.2, 0.1, 0.2]
         ).all()
         assert (
-            self.edisgo.timeseries.charging_points_reactive_power.loc[
-                :, comp_name
-            ].values
-            == [0, 0]
+            self.edisgo.timeseries.loads_reactive_power.loc[:, comp_name].values
+            == [0.1, 0.2, 0.1, 0.2]
         ).all()
 
         # ##### LV integration
 
         # test charging point integration by nominal power, geom as shapely
         # Point, with time series
-        comp_data = {"number": 13, "p_nom": 0.04, "sector": "fast"}
-        ts_active_power = pd.Series(data=[1, 2], index=self.edisgo.timeseries.timeindex)
-        ts_reactive_power = pd.Series(
-            data=[0, 0], index=self.edisgo.timeseries.timeindex
-        )
-        comp_name = self.edisgo.integrate_component(
-            comp_type="ChargingPoint",
+        comp_data = {"number": 13, "p_set": 0.04, "sector": "fast"}
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
+            comp_type="charging_point",
             geolocation=geom,
             ts_active_power=ts_active_power,
             ts_reactive_power=ts_reactive_power,
-            **comp_data
+            **comp_data,
         )
 
         assert len(self.edisgo.topology.charging_points_df) == num_cps + 2
@@ -671,27 +595,85 @@ class TestEDisGo:
         )
         # check time series
         assert (
-            self.edisgo.timeseries.charging_points_active_power.loc[:, comp_name].values
-            == [1, 2]
+            self.edisgo.timeseries.loads_active_power.loc[:, comp_name].values
+            == [0.1, 0.2, 0.1, 0.2]
         ).all()
         assert (
-            self.edisgo.timeseries.charging_points_reactive_power.loc[
-                :, comp_name
-            ].values
-            == [0, 0]
+            self.edisgo.timeseries.loads_reactive_power.loc[:, comp_name].values
+            == [0.1, 0.2, 0.1, 0.2]
         ).all()
 
+    def test_remove_component(self):
+
+        self.setup_worst_case_time_series()
+
+        # Test remove bus (where bus cannot be removed, because load is still connected)
+        num_buses = len(self.edisgo.topology.buses_df)
+        self.edisgo.remove_component(
+            comp_type="bus", comp_name="Bus_BranchTee_LVGrid_2_2"
+        )
+        assert len(self.edisgo.topology.buses_df) == num_buses
+        assert "Bus_BranchTee_LVGrid_2_2" in self.edisgo.topology.buses_df.index
+
+        # Test remove load (with time series)
+        num_loads = len(self.edisgo.topology.loads_df)
+        load_name = "Load_residential_LVGrid_1_6"
+        self.edisgo.remove_component(
+            comp_type="load",
+            comp_name=load_name,
+        )
+        assert len(self.edisgo.topology.loads_df) == num_loads - 1
+        assert load_name not in self.edisgo.timeseries.loads_active_power.columns
+        assert load_name not in self.edisgo.timeseries.loads_reactive_power.columns
+
+        # Test remove line
+        num_lines = len(self.edisgo.topology.lines_df)
+        self.edisgo.remove_component(comp_type="line", comp_name="Line_20000002")
+        assert len(self.edisgo.topology.lines_df) == num_lines
+
+        # Test remove generator (without time series)
+        num_gens = len(self.edisgo.topology.generators_df)
+        self.edisgo.remove_component(
+            "generator", comp_name="GeneratorFluctuating_10", drop_ts=False
+        )
+        assert len(self.edisgo.topology.generators_df) == num_gens - 1
+        assert self.edisgo.timeseries.generators_active_power.shape == (4, num_gens)
+        assert self.edisgo.timeseries.generators_reactive_power.shape == (4, num_gens)
+
+        # Test remove storage unit (with time series)
+        num_storages = len(self.edisgo.topology.storage_units_df)
+        self.edisgo.remove_component(comp_type="storage_unit", comp_name="Storage_1")
+        assert len(self.edisgo.topology.storage_units_df) == num_storages - 1
+        assert load_name not in self.edisgo.timeseries.loads_active_power.columns
+        assert load_name not in self.edisgo.timeseries.loads_reactive_power.columns
+
     def test_aggregate_components(self):
-        """Test aggregate_components method"""
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
+
+        self.setup_worst_case_time_series()
+
+        # ##### test without any aggregation
+
+        self.edisgo.topology._loads_df.at[
+            "Load_residential_LVGrid_1_4", "bus"
+        ] = "Bus_BranchTee_LVGrid_1_10"
+
+        # save original values
+        number_gens_before = len(self.edisgo.topology.generators_df)
+        number_loads_before = len(self.edisgo.topology.loads_df)
+
+        self.edisgo.aggregate_components(
+            aggregate_generators_by_cols=[], aggregate_loads_by_cols=[]
         )
 
-        # ##### test mode "by_component_type"
+        assert number_gens_before == len(self.edisgo.topology.generators_df)
+        assert number_loads_before == len(self.edisgo.topology.loads_df)
 
+        # ##### test default (aggregate by bus only) - same EDisGo object as above
+        # is used
+
+        # save original values
         gens_p_nom_before = self.edisgo.topology.generators_df.p_nom.sum()
-        loads_p_nom_before = self.edisgo.topology.loads_df.p_nom.sum()
+        loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
         gens_feedin_before = self.edisgo.timeseries.generators_active_power.sum().sum()
         gens_feedin_reactive_before = (
             self.edisgo.timeseries.generators_reactive_power.sum().sum()
@@ -702,14 +684,6 @@ class TestEDisGo:
         )
         num_gens_before = len(self.edisgo.topology.generators_df)
         num_loads_before = len(self.edisgo.topology.loads_df)
-
-        # test without charging points and aggregation at the same bus
-
-        # manipulate grid so that more than one load is connected
-        # at the same bus
-        self.edisgo.topology._loads_df.at[
-            "Load_residential_LVGrid_1_4", "bus"
-        ] = "Bus_BranchTee_LVGrid_1_10"
         feedin_before = (
             self.edisgo.timeseries.generators_active_power.loc[
                 :, ["GeneratorFluctuating_13", "GeneratorFluctuating_14"]
@@ -727,8 +701,8 @@ class TestEDisGo:
         )
 
         self.edisgo.aggregate_components()
-        # test that total p_nom and total feed-in/demand stayed
-        # the same
+
+        # test that total p_nom and total feed-in/demand stayed the same
         assert np.isclose(
             gens_p_nom_before, self.edisgo.topology.generators_df.p_nom.sum()
         )
@@ -740,7 +714,7 @@ class TestEDisGo:
             gens_feedin_reactive_before,
             self.edisgo.timeseries.generators_reactive_power.sum().sum(),
         )
-        assert np.isclose(loads_p_nom_before, self.edisgo.topology.loads_df.p_nom.sum())
+        assert np.isclose(loads_p_set_before, self.edisgo.topology.loads_df.p_set.sum())
         assert np.isclose(
             loads_demand_before,
             self.edisgo.timeseries.loads_active_power.sum().sum(),
@@ -765,7 +739,7 @@ class TestEDisGo:
         )
         assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
         assert self.edisgo.topology.loads_df.at[
-            "Loads_Bus_BranchTee_LVGrid_1_10", "p_nom"
+            "Loads_Bus_BranchTee_LVGrid_1_10", "p_set"
         ] == (2 * 0.001397)
         assert (
             self.edisgo.timeseries.loads_active_power.loc[
@@ -776,101 +750,127 @@ class TestEDisGo:
         # test that analyze does not fail
         self.edisgo.analyze()
 
-        # test with charging points and aggregation by bus and type/sector
+        # ##### test with charging points, aggregation of loads by bus, type and sector
+        # and aggregation of generators only by bus
 
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
-        )
+        # reset EDisGo object
+        self.setup_edisgo_object()
+        self.setup_worst_case_time_series()
+
+        # add charging point
         self.edisgo.add_component(
-            "ChargingPoint",
-            bus="Bus_BranchTee_LVGrid_1_10",
-            sector="home",
-            p_nom=0.2,
+            comp_type="load",
             ts_active_power=pd.Series(
-                data=[0.1, 0.2], index=self.edisgo.timeseries.timeindex
+                data=[0.1, 0.2, 0.1, 0.2], index=self.edisgo.timeseries.timeindex
             ),
             ts_reactive_power=pd.Series(
-                data=[0, 0], index=self.edisgo.timeseries.timeindex
+                data=[0, 0, 0, 0], index=self.edisgo.timeseries.timeindex
             ),
+            bus="Bus_BranchTee_LVGrid_1_10",
+            type="charging_point",
+            sector="home",
+            p_set=0.2,
         )
         # manipulate grid so that more than one load of the same sector is
         # connected at the same bus
         self.edisgo.topology._loads_df.at[
             "Load_residential_LVGrid_1_4", "bus"
         ] = "Bus_BranchTee_LVGrid_1_10"
+
+        # save original values (only loads, as generators did not change)
+        loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
+        loads_demand_before = self.edisgo.timeseries.loads_active_power.sum().sum()
+        loads_demand_reactive_before = (
+            self.edisgo.timeseries.loads_reactive_power.sum().sum()
+        )
+        num_loads_before = len(self.edisgo.topology.loads_df)
+
+        self.edisgo.aggregate_components(
+            aggregate_loads_by_cols=["bus", "type", "sector"],
+            aggregate_generators_by_cols=["bus"],
+        )
+
+        # test that total p_nom and total feed-in/demand stayed the same
+        assert np.isclose(
+            gens_p_nom_before, self.edisgo.topology.generators_df.p_nom.sum()
+        )
+        assert np.isclose(
+            gens_feedin_before,
+            self.edisgo.timeseries.generators_active_power.sum().sum(),
+        )
+        assert np.isclose(
+            gens_feedin_reactive_before,
+            self.edisgo.timeseries.generators_reactive_power.sum().sum(),
+        )
+        assert np.isclose(
+            loads_p_set_before,
+            self.edisgo.topology.loads_df.p_set.sum(),
+        )
+        assert np.isclose(
+            loads_demand_before,
+            self.edisgo.timeseries.loads_active_power.sum().sum(),
+        )
+        assert np.isclose(
+            loads_demand_reactive_before,
+            self.edisgo.timeseries.loads_reactive_power.sum().sum(),
+        )
+        charging_points_df = self.edisgo.topology.charging_points_df
+        assert np.isclose(0.2, charging_points_df.p_set.sum())
+        assert np.isclose(
+            0.6,
+            self.edisgo.timeseries.loads_active_power.loc[:, charging_points_df.index]
+            .sum()
+            .sum(),
+        )
+        assert np.isclose(
+            0,
+            self.edisgo.timeseries.loads_reactive_power.loc[:, charging_points_df.index]
+            .sum()
+            .sum(),
+        )
+        # test that generators were aggregated
+        assert num_gens_before - 4 == len(self.edisgo.topology.generators_df)
+        # test that two loads were aggregated and that charging point was not aggregated
+        # with load
+        assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
+        assert self.edisgo.topology.loads_df.at[
+            "Loads_Bus_BranchTee_LVGrid_1_10_conventional_load_residential", "p_set"
+        ] == (2 * 0.001397)
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[
+                :, "Loads_Bus_BranchTee_LVGrid_1_10_conventional_load_residential"
+            ].sum()
+            == load_before
+        )
+
+        # test that analyze does not fail
+        self.edisgo.analyze()
+
+        # #### test without aggregation of loads and aggregation of generators
+        # by bus and type
+
+        # reset EDisGo object
+        self.setup_edisgo_object()
+        self.setup_worst_case_time_series()
+
         # manipulate grid so that two generators of different types are
         # connected at the same bus
         self.edisgo.topology._generators_df.at[
             "GeneratorFluctuating_13", "type"
         ] = "misc"
 
-        self.edisgo.aggregate_components(
-            aggregate_loads_by_cols=["bus", "sector"],
-            aggregate_generators_by_cols=["bus", "type"],
+        # save original values (values of loads were changed in previous aggregation)
+        loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
+        loads_demand_before = self.edisgo.timeseries.loads_active_power.sum().sum()
+        loads_demand_reactive_before = (
+            self.edisgo.timeseries.loads_reactive_power.sum().sum()
         )
-        # test that total p_nom and total feed-in/demand stayed
-        # the same
-        assert np.isclose(
-            gens_p_nom_before, self.edisgo.topology.generators_df.p_nom.sum()
-        )
-        assert np.isclose(
-            gens_feedin_before,
-            self.edisgo.timeseries.generators_active_power.sum().sum(),
-        )
-        assert np.isclose(
-            gens_feedin_reactive_before,
-            self.edisgo.timeseries.generators_reactive_power.sum().sum(),
-        )
-        assert np.isclose(
-            loads_p_nom_before,
-            self.edisgo.topology.loads_df.p_nom.sum()
-            - self.edisgo.topology.charging_points_df.p_nom.sum(),
-        )
-        assert np.isclose(
-            loads_demand_before,
-            self.edisgo.timeseries.loads_active_power.sum().sum(),
-        )
-        assert np.isclose(
-            loads_demand_reactive_before,
-            self.edisgo.timeseries.loads_reactive_power.sum().sum(),
-        )
-        assert np.isclose(0.2, self.edisgo.topology.charging_points_df.p_nom.sum())
-        assert np.isclose(
-            0.3,
-            self.edisgo.timeseries.charging_points_active_power.sum().sum(),
-        )
-        assert np.isclose(
-            0,
-            self.edisgo.timeseries.charging_points_reactive_power.sum().sum(),
-        )
-        # test that two generators were not aggregated
-        assert num_gens_before - 3 == len(self.edisgo.topology.generators_df)
-        # test that two loads were aggregated and one charging point was added
-        assert num_loads_before == len(self.edisgo.topology.loads_df)
-        assert self.edisgo.topology.loads_df.at[
-            "Loads_Bus_BranchTee_LVGrid_1_10_residential", "p_nom"
-        ] == (2 * 0.001397)
-        assert (
-            self.edisgo.timeseries.loads_active_power.loc[
-                :, "Loads_Bus_BranchTee_LVGrid_1_10_residential"
-            ].sum()
-            == load_before
-        )
-        # test that charging point was not aggregated with load
-        assert 1 == len(self.edisgo.topology.charging_points_df)
-        # test that analyze does not fail
-        self.edisgo.analyze()
-
-        # #### test mode "by_load_and_generation"
-
-        # test with charging points
-        num_gens_before = len(self.edisgo.topology.generators_df)
         num_loads_before = len(self.edisgo.topology.loads_df)
 
-        self.edisgo.aggregate_components(mode="by_load_and_generation")
-        # test that total p_nom and total feed-in/demand stayed
-        # the same
+        self.edisgo.aggregate_components(
+            aggregate_generators_by_cols=["bus", "type"], aggregate_loads_by_cols=[]
+        )
+        # test that total p_nom and total feed-in/demand stayed the same
         assert np.isclose(
             gens_p_nom_before, self.edisgo.topology.generators_df.p_nom.sum()
         )
@@ -882,66 +882,7 @@ class TestEDisGo:
             gens_feedin_reactive_before,
             self.edisgo.timeseries.generators_reactive_power.sum().sum(),
         )
-        assert np.isclose(
-            loads_p_nom_before + 0.2, self.edisgo.topology.loads_df.p_nom.sum()
-        )
-        assert np.isclose(
-            loads_demand_before + 0.3,
-            self.edisgo.timeseries.loads_active_power.sum().sum(),
-        )
-        assert np.isclose(
-            loads_demand_reactive_before,
-            self.edisgo.timeseries.loads_reactive_power.sum().sum(),
-        )
-        # test that generators at the same bus and load and
-        # charging point at same bus were aggregated
-        assert num_gens_before - 1 == len(self.edisgo.topology.generators_df)
-        assert num_loads_before - 1 == len(self.edisgo.topology.loads_df)
-        assert self.edisgo.topology.loads_df.at[
-            "Loads_Bus_BranchTee_LVGrid_1_10", "p_nom"
-        ] == (2 * 0.001397 + 0.2)
-        assert (
-            self.edisgo.timeseries.loads_active_power.loc[
-                :, "Loads_Bus_BranchTee_LVGrid_1_10"
-            ].sum()
-            == load_before + 0.3
-        )
-        # test that analyze does not fail
-        self.edisgo.analyze()
-
-        # test without charging points
-
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
-        )
-        num_gens_before = len(self.edisgo.topology.generators_df)
-        num_loads_before = len(self.edisgo.topology.loads_df) + len(
-            self.edisgo.topology.charging_points_df
-        )
-        feedin_before = (
-            self.edisgo.timeseries.generators_active_power.loc[
-                :, ["GeneratorFluctuating_17", "GeneratorFluctuating_18"]
-            ]
-            .sum()
-            .sum()
-        )
-
-        self.edisgo.aggregate_components(mode="by_load_and_generation")
-        # test that total p_nom and total feed-in/demand stayed
-        # the same
-        assert np.isclose(
-            gens_p_nom_before, self.edisgo.topology.generators_df.p_nom.sum()
-        )
-        assert np.isclose(
-            gens_feedin_before,
-            self.edisgo.timeseries.generators_active_power.sum().sum(),
-        )
-        assert np.isclose(
-            gens_feedin_reactive_before,
-            self.edisgo.timeseries.generators_reactive_power.sum().sum(),
-        )
-        assert np.isclose(loads_p_nom_before, self.edisgo.topology.loads_df.p_nom.sum())
+        assert np.isclose(loads_p_set_before, self.edisgo.topology.loads_df.p_set.sum())
         assert np.isclose(
             loads_demand_before,
             self.edisgo.timeseries.loads_active_power.sum().sum(),
@@ -950,29 +891,100 @@ class TestEDisGo:
             loads_demand_reactive_before,
             self.edisgo.timeseries.loads_reactive_power.sum().sum(),
         )
-        # test that generators were aggregated
-        assert num_gens_before - 4 == len(self.edisgo.topology.generators_df)
-        assert (
-            self.edisgo.topology.generators_df.at[
-                "Generators_Bus_BranchTee_LVGrid_4_2", "p_nom"
-            ]
-            == 0.065
-        )
-        assert (
-            self.edisgo.timeseries.generators_active_power.loc[
-                :, "Generators_Bus_BranchTee_LVGrid_4_2"
-            ].sum()
-            == feedin_before
-        )
-        # test that no loads were aggregated
+        # test that generators at the same bus were aggregated and loads stayed the same
+        assert num_gens_before - 3 == len(self.edisgo.topology.generators_df)
         assert num_loads_before == len(self.edisgo.topology.loads_df)
+
         # test that analyze does not fail
         self.edisgo.analyze()
 
-    def test_reduce_memory(self):
-        """Test reduce_memory method"""
-        # check one time series attribute and one results attribute
+    def test_plot_mv_grid_topology(self):
+        plt.ion()
+        self.edisgo.plot_mv_grid_topology(technologies=True)
+        plt.close("all")
+        self.edisgo.plot_mv_grid_topology()
+        plt.close("all")
 
+    def test_plot_mv_voltages(self):
+        self.setup_worst_case_time_series()
+        plt.ion()
+        self.edisgo.analyze()
+        self.edisgo.plot_mv_voltages()
+        plt.close("all")
+
+    def test_plot_mv_line_loading(self):
+        self.setup_worst_case_time_series()
+        plt.ion()
+        self.edisgo.analyze()
+        self.edisgo.plot_mv_line_loading()
+        plt.close("all")
+
+    def test_plot_mv_grid_expansion_costs(self):
+        # test with storage
+        self.setup_worst_case_time_series()
+        plt.ion()
+        self.edisgo.reinforce()
+        self.edisgo.plot_mv_grid_expansion_costs()
+        plt.close("all")
+
+        # test without storage
+        self.setup_edisgo_object()
+        self.edisgo.remove_component("storage_unit", "Storage_1", False)
+        self.setup_worst_case_time_series()
+        plt.ion()
+        self.edisgo.reinforce()
+        self.edisgo.plot_mv_grid_expansion_costs()
+        plt.close("all")
+
+    def test_plot_mv_storage_integration(self):
+        plt.ion()
+        storage_1 = self.edisgo.topology.add_storage_unit(
+            "Bus_BranchTee_MVGrid_1_8", 0.3
+        )
+        storage_2 = self.edisgo.topology.add_storage_unit(
+            "Bus_BranchTee_MVGrid_1_8", 0.6
+        )
+        storage_3 = self.edisgo.topology.add_storage_unit(
+            "Bus_BranchTee_MVGrid_1_10", 0.3
+        )
+        self.edisgo.plot_mv_storage_integration()
+        plt.close("all")
+        self.edisgo.topology.remove_storage_unit(storage_1)
+        self.edisgo.topology.remove_storage_unit(storage_2)
+        self.edisgo.topology.remove_storage_unit(storage_3)
+
+    def test_histogramm_voltage(self):
+        self.setup_worst_case_time_series()
+        plt.ion()
+        self.edisgo.analyze()
+        self.edisgo.histogram_voltage()
+        plt.close("all")
+
+    def test_histogramm_relative_line_load(self):
+        self.setup_worst_case_time_series()
+        plt.ion()
+        self.edisgo.analyze()
+        self.edisgo.histogram_relative_line_load()
+        plt.close("all")
+
+    def test_save(self):
+        save_dir = os.path.join(os.getcwd(), "edisgo_network")
+        self.edisgo.save(save_dir)
+
+        # check that results, topology and timeseries directory are created
+        dirs_in_save_dir = os.listdir(save_dir)
+        assert len(dirs_in_save_dir) == 3
+        # Todo: check anything else?
+        shutil.rmtree(os.path.join(save_dir, "results"))
+        shutil.rmtree(os.path.join(save_dir, "topology"))
+        shutil.rmtree(os.path.join(save_dir, "timeseries"))
+
+    def test_reduce_memory(self):
+
+        self.setup_worst_case_time_series()
+        self.edisgo.analyze()
+
+        # check one time series attribute and one results attribute
         mem_ts_before = self.edisgo.timeseries.generators_active_power.memory_usage(
             deep=True
         ).sum()
@@ -1020,3 +1032,130 @@ class TestEDisGo:
             mem_res_with_default_2,
             self.edisgo.results.i_res.memory_usage(deep=True).sum(),
         )
+
+    def test_check_integrity(self, caplog):
+        self.edisgo.check_integrity()
+        assert (
+            "The following generators are missing in generators_active_power: "
+            "{}".format(self.edisgo.topology.generators_df.index.values) in caplog.text
+        )
+        assert (
+            "The following generators are missing in generators_reactive_power: "
+            "{}".format(self.edisgo.topology.generators_df.index.values) in caplog.text
+        )
+        assert (
+            "The following loads are missing in loads_active_power: "
+            "{}".format(self.edisgo.topology.loads_df.index.values) in caplog.text
+        )
+        assert (
+            "The following loads are missing in loads_reactive_power: "
+            "{}".format(self.edisgo.topology.loads_df.index.values) in caplog.text
+        )
+        assert (
+            "The following storage_units are missing in storage_units_active_power"
+            ": {}".format(self.edisgo.topology.storage_units_df.index.values)
+            in caplog.text
+        )
+        assert (
+            "The following storage_units are missing in storage_units_reactive_power"
+            ": {}".format(self.edisgo.topology.storage_units_df.index.values)
+            in caplog.text
+        )
+        caplog.clear()
+        # set timeseries
+        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        ts_gens = pd.DataFrame(
+            index=index, columns=self.edisgo.topology.generators_df.index, data=0
+        )
+        ts_loads = pd.DataFrame(
+            index=index, columns=self.edisgo.topology.loads_df.index, data=0
+        )
+        ts_stor = pd.DataFrame(
+            index=index, columns=self.edisgo.topology.storage_units_df.index, data=0
+        )
+        self.edisgo.timeseries.timeindex = index
+        self.edisgo.timeseries.generators_active_power = ts_gens
+        self.edisgo.timeseries.generators_reactive_power = ts_gens
+        self.edisgo.timeseries.loads_active_power = ts_loads
+        self.edisgo.timeseries.loads_reactive_power = ts_loads
+        self.edisgo.timeseries.storage_units_active_power = ts_stor
+        self.edisgo.timeseries.storage_units_reactive_power = ts_stor
+        # check that no warning is raised
+        self.edisgo.check_integrity()
+        assert not caplog.text
+        manipulated_comps = {
+            "generators": ["Generator_1", "GeneratorFluctuating_4"],
+            "loads": ["Load_agricultural_LVGrid_1_3"],
+            "storage_units": ["Storage_1"],
+        }
+        for comp_type, comp_names in manipulated_comps.items():
+            comps = getattr(self.edisgo.topology, comp_type + "_df")
+            # remove timeseries of single components and check for warning
+            for ts_type in ["active_power", "reactive_power"]:
+                comp_ts_tmp = getattr(
+                    self.edisgo.timeseries, "_".join([comp_type, ts_type])
+                )
+                setattr(
+                    self.edisgo.timeseries,
+                    "_".join([comp_type, ts_type]),
+                    comp_ts_tmp.drop(columns=comp_names),
+                )
+                self.edisgo.check_integrity()
+                assert (
+                    "The following {type} are missing in {ts}: {comps}".format(
+                        type=comp_type,
+                        ts="_".join([comp_type, ts_type]),
+                        comps=str(comp_names).replace(",", ""),
+                    )
+                    in caplog.text
+                )
+                setattr(
+                    self.edisgo.timeseries, "_".join([comp_type, ts_type]), comp_ts_tmp
+                )
+                caplog.clear()
+            # remove topology entries for single components and check for warning
+            setattr(self.edisgo.topology, comp_type + "_df", comps.drop(comp_names))
+            self.edisgo.check_integrity()
+            for ts_type in ["active_power", "reactive_power"]:
+                assert (
+                    "The following {type} have entries in {type}_{ts_type}, but not "
+                    "in {top}: {comps}".format(
+                        type=comp_type,
+                        top=comp_type + "_df",
+                        comps=str(comp_names).replace(",", ""),
+                        ts_type=ts_type,
+                    )
+                    in caplog.text
+                )
+            caplog.clear()
+            setattr(self.edisgo.topology, comp_type + "_df", comps)
+            # set values higher than nominal power for single components and check for
+            # warning
+            comp_ts_tmp = getattr(
+                self.edisgo.timeseries, "_".join([comp_type, "active_power"])
+            )
+            comp_ts_tmp_adapted = comp_ts_tmp.copy()
+            comp_ts_tmp_adapted.loc[index[2], comp_names] = 100
+            setattr(
+                self.edisgo.timeseries,
+                "_".join([comp_type, "active_power"]),
+                comp_ts_tmp_adapted,
+            )
+            self.edisgo.check_integrity()
+            if comp_type in ["generators", "storage_units"]:
+                attr = "p_nom"
+            else:
+                attr = "p_set"
+            assert (
+                "Values of active power in the timeseries object exceed {} for "
+                "the following {}: {}".format(
+                    attr, comp_type, str(comp_names).replace(",", "")
+                )
+                in caplog.text
+            )
+            setattr(
+                self.edisgo.timeseries,
+                "_".join([comp_type, "active_power"]),
+                comp_ts_tmp,
+            )
+            caplog.clear()

@@ -8,7 +8,7 @@ from edisgo.tools.preprocess_pypsa_opf_structure import (
     preprocess_pypsa_opf_structure,
 )
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def read_from_json(edisgo_obj, path, mode="mv"):
@@ -116,7 +116,8 @@ class OPFResults:
         # Bus Variables
         self.set_bus_variables(pypsa_net)
         # Generator Variables
-        # TODO Adjust for case that generators are fixed and no variables are returned from julia
+        # TODO: Adjust for case that generators are fixed and no variables are returned
+        # from julia
         self.set_gen_variables(pypsa_net)
         self.set_load_variables(pypsa_net)
         # Storage Variables
@@ -134,7 +135,8 @@ class OPFResults:
         br_statics.index = pypsa_net.lines.index
         self.lines = br_statics
 
-        # time dependent variables: cm: squared current magnitude, p: active power flow, q: reactive power flow
+        # time dependent variables: cm: squared current magnitude, p: active power flow,
+        # q: reactive power flow
         ts = pypsa_net.snapshots.sort_values()
         cm_t = pd.DataFrame(index=ts, columns=pypsa_net.lines.index)
         p_t = pd.DataFrame(index=ts, columns=pypsa_net.lines.index)
@@ -193,7 +195,7 @@ class OPFResults:
                     qg_t.loc[date_idx] = gen_t.qg
                 self.generators_t.pg = pg_t
                 self.generators_t.qg = qg_t
-            except:
+            except Exception:
                 logger.warning("Error in writing OPF solutions for slack time series.")
         else:
             try:
@@ -208,7 +210,7 @@ class OPFResults:
                     qg_t.loc[date_idx] = gen_t.qg
                 self.generators_t.pg = pg_t
                 self.generators_t.qg = qg_t
-            except:
+            except Exception:
                 logger.warning(
                     "Error in writing OPF solutions for generator time series."
                 )

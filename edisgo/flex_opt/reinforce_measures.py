@@ -11,7 +11,7 @@ from networkx.algorithms.shortest_paths.weighted import (
 
 from edisgo.network.grids import LVGrid, MVGrid
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
@@ -187,21 +187,23 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
             # transformer of the same kind as the transformer that best
             # meets the missing power demand
             new_transformers = grid.transformers_df.loc[
-                grid.transformers_df[s_max_per_trafo >= s_trafo_missing][
-                    "s_nom"
-                ].idxmin()
+                [
+                    grid.transformers_df[s_max_per_trafo >= s_trafo_missing][
+                        "s_nom"
+                    ].idxmin()
+                ]
             ]
-            name = new_transformers.name.split("_")
+            name = new_transformers.index[0].split("_")
             name.insert(-1, "reinforced")
             name[-1] = len(grid.transformers_df) + 1
-            new_transformers.name = "_".join([str(_) for _ in name])
+            new_transformers.index = ["_".join([str(_) for _ in name])]
 
             # add new transformer to list of added transformers
-            transformers_changes["added"][grid_name] = [new_transformers.name]
+            transformers_changes["added"][grid_name] = [new_transformers.index[0]]
         else:
             # get any transformer to get attributes for new transformer from
-            duplicated_transformer = grid.transformers_df.iloc[0]
-            name = duplicated_transformer.name.split("_")
+            duplicated_transformer = grid.transformers_df.iloc[[0]]
+            name = duplicated_transformer.index[0].split("_")
             name.insert(-1, "reinforced")
             duplicated_transformer.s_nom = standard_transformer.S_nom
             duplicated_transformer.type_info = standard_transformer.name
@@ -213,11 +215,21 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
             number_transformers = math.ceil(
                 (s_trafo_missing + s_max_per_trafo.sum()) / standard_transformer.S_nom
             )
-            new_transformers = pd.DataFrame()
+
+            index = []
+
             for i in range(number_transformers):
                 name[-1] = i + 1
-                duplicated_transformer.name = "_".join([str(_) for _ in name])
-                new_transformers = new_transformers.append(duplicated_transformer)
+                index.append("_".join([str(_) for _ in name]))
+
+            if number_transformers > 1:
+                new_transformers = duplicated_transformer.iloc[
+                    np.arange(len(duplicated_transformer)).repeat(number_transformers)
+                ]
+            else:
+                new_transformers = duplicated_transformer.copy()
+
+            new_transformers.index = index
 
             # add new transformer to list of added transformers
             transformers_changes["added"][grid_name] = new_transformers.index.values
@@ -237,12 +249,18 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
 
         # add new transformers to topology
         if voltage_level == "lv":
-            edisgo_obj.topology.transformers_df = (
-                edisgo_obj.topology.transformers_df.append(new_transformers)
+            edisgo_obj.topology.transformers_df = pd.concat(
+                [
+                    edisgo_obj.topology.transformers_df,
+                    new_transformers,
+                ]
             )
         else:
-            edisgo_obj.topology.transformers_hvmv_df = (
-                edisgo_obj.topology.transformers_hvmv_df.append(new_transformers)
+            edisgo_obj.topology.transformers_hvmv_df = pd.concat(
+                [
+                    edisgo_obj.topology.transformers_hvmv_df,
+                    new_transformers,
+                ]
             )
     return transformers_changes
 
@@ -293,21 +311,24 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
     for grid_repr in critical_stations.keys():
         grid = edisgo_obj.topology._grids[grid_repr]
         # get any transformer to get attributes for new transformer from
-        duplicated_transformer = grid.transformers_df.iloc[0]
+        duplicated_transformer = grid.transformers_df.iloc[[0]]
         # change transformer parameters
-        name = duplicated_transformer.name.split("_")
+        name = duplicated_transformer.index[0].split("_")
         name.insert(-1, "reinforced")
         name[-1] = len(grid.transformers_df) + 1
-        duplicated_transformer.name = "_".join([str(_) for _ in name])
+        duplicated_transformer.index = ["_".join([str(_) for _ in name])]
         duplicated_transformer.s_nom = standard_transformer.S_nom
         duplicated_transformer.r_pu = standard_transformer.r_pu
         duplicated_transformer.x_pu = standard_transformer.x_pu
         duplicated_transformer.type_info = standard_transformer.name
         # add new transformer to topology
-        edisgo_obj.topology.transformers_df = (
-            edisgo_obj.topology.transformers_df.append(duplicated_transformer)
+        edisgo_obj.topology.transformers_df = pd.concat(
+            [
+                edisgo_obj.topology.transformers_df,
+                duplicated_transformer,
+            ]
         )
-        transformers_changes["added"][grid_repr] = [duplicated_transformer.name]
+        transformers_changes["added"][grid_repr] = duplicated_transformer.index.tolist()
 
     if transformers_changes["added"]:
         logger.debug(
@@ -399,7 +420,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     for repr_node in nodes_feeder.keys():
 
         # find node farthest away
-        get_weight = lambda u, v, data: data["length"]
+        get_weight = lambda u, v, data: data["length"]  # noqa: E731
         path_length = 0
         for n in nodes_feeder[repr_node]:
             path_length_dict_tmp = dijkstra_shortest_path_length(
@@ -494,6 +515,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             ] = path_length_dict[node_2_3]
             edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
             lines_changes[crit_line_name] = 1
+            # ToDo: Include switch disconnector
 
     if not lines_changes:
         logger.debug(

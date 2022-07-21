@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from edisgo import EDisGo
-from edisgo.network.components import Generator, Load, Storage, Switch
+from edisgo.network.components import Generator, Load, Switch
 
 
 class TestComponents:
@@ -10,10 +10,8 @@ class TestComponents:
 
     @classmethod
     def setup_class(self):
-        self.edisgo_obj = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case",
-        )
+        self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        self.edisgo_obj.set_time_series_worst_case_analysis()
 
     def test_load_class(self):
         """Test Load class getter, setter, methods"""
@@ -22,7 +20,7 @@ class TestComponents:
 
         # test getter
         assert load.id == "Load_agricultural_LVGrid_1_1"
-        assert load.p_nom == 0.0523
+        assert load.p_set == 0.0523
         assert load.annual_consumption == 238
         assert load.sector == "agricultural"
         assert load.bus == "Bus_BranchTee_LVGrid_1_2"
@@ -33,8 +31,8 @@ class TestComponents:
         assert isinstance(load.reactive_power_timeseries, pd.Series)
 
         # test setter
-        load.p_nom = 0.06
-        assert load.p_nom == 0.06
+        load.p_set = 0.06
+        assert load.p_set == 0.06
         load.annual_consumption = 4
         assert load.annual_consumption == 4
         load.sector = "residential"
@@ -46,7 +44,8 @@ class TestComponents:
         msg = "Given bus ID does not exist."
         with pytest.raises(AttributeError, match=msg):
             load.bus = "None"
-        # ToDo add test for active_power_timeseries and reactive_power_timeseries once implemented
+        # TODO: add test for active_power_timeseries and reactive_power_timeseries once
+        #  implemented
 
     def test_generator_class(self):
         """Test Generator class getter, setter, methods"""
@@ -83,7 +82,8 @@ class TestComponents:
         msg = "Given bus ID does not exist."
         with pytest.raises(AttributeError, match=msg):
             gen.bus = "None"
-        # ToDo add test for active_power_timeseries and reactive_power_timeseries once implemented
+        # TODO: add test for active_power_timeseries and reactive_power_timeseries once
+        #  implemented
 
     def test_switch_class(self):
         """Test Switch class"""

@@ -28,7 +28,6 @@ __author__ = "nesnoj, gplssm"
 # serve to show the default.
 
 import os
-import shlex
 import sys
 
 from unittest.mock import MagicMock
@@ -55,6 +54,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",  # enable Napoleon Sphinx v>1.3
     "sphinx.ext.extlinks",  # enables external links with a key
+    "sphinx_autodoc_typehints",
 ]
 
 # Napoleon settings
@@ -76,8 +76,13 @@ extlinks = {
         "http://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.%s.html",
         "pandas.",
     ),
+    "geopandas": (
+        "https://geopandas.org/en/stable/docs/reference/api/geopandas.%s.html",
+        "geopandas.",
+    ),
     "networkx": (
-        "https://networkx.github.io/documentation/stable/reference/classes/graph.html#%s",
+        "https://networkx.github.io/documentation/stable/reference/classes/"
+        "graph.html#%s",
         "networkx.",
     ),
     "sqlalchemy": (
@@ -86,7 +91,7 @@ extlinks = {
     ),
     "shapely": ("https://shapely.readthedocs.io/en/latest/manual.html#%s", "shapely."),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "Ding0"),
-    "pypsa": ("https://pypsa.org/doc/components.html#%s", "pypsa"),
+    "pypsa": ("https://pypsa.readthedocs.io/en/latest/components.html#%s", "pypsa"),
     "plotly": ("https://plotly.com/python-api-reference/generated/#%s.html", "plotly"),
 }
 # Add any paths that contain templates here, relative to this directory.
@@ -104,9 +109,9 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = u"eDisGo"
-copyright = u"2017, open_eGo-Team"
-author = u"open_eGo-Team"
+project = "eDisGo"
+copyright = "2017, open_eGo-Team"
+author = "open_eGo-Team"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -162,8 +167,9 @@ pygments_style = "sphinx"
 todo_include_todos = True
 
 
-# Fix import error of modules which depend on C modules (mock out the imports for these modules)
-# see http://read-the-docs.readthedocs.io/en/latest/faq.html#i-get-import-errors-on-libraries-that-depend-on-c-modules
+# Fix import error of modules which depend on C modules (mock out the imports for these
+# modules) see http://read-the-docs.readthedocs.io/en/latest/
+#  faq.html#i-get-import-errors-on-libraries-that-depend-on-c-modules
 if "READTHEDOCS" in os.environ:
 
     class Mock(MagicMock):
@@ -181,7 +187,7 @@ if "READTHEDOCS" in os.environ:
 # a list of builtin themes.
 # html_theme = 'alabaster'
 
-import sphinx_rtd_theme
+import sphinx_rtd_theme  # noqa: E402
 
 html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 html_theme = "sphinx_rtd_theme"
@@ -282,20 +288,20 @@ htmlhelp_basename = "edisgodoc"
 
 latex_elements = {
     # The paper size ('letterpaper' or 'a4paper').
-    #'papersize': 'letterpaper',
+    # 'papersize': 'letterpaper',
     # The font size ('10pt', '11pt' or '12pt').
-    #'pointsize': '10pt',
+    # 'pointsize': '10pt',
     # Additional stuff for the LaTeX preamble.
-    #'preamble': '',
+    # 'preamble': '',
     # Latex figure (float) alignment
-    #'figure_align': 'htbp',
+    # 'figure_align': 'htbp',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, "edisgo.tex", u"eDisGo Documentation", u"open_eGo-Team", "manual"),
+    (master_doc, "edisgo.tex", "eDisGo Documentation", "open_eGo-Team", "manual"),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -323,7 +329,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "eDisGo", u"eDisGo Documentation", [author], 1)]
+man_pages = [(master_doc, "eDisGo", "eDisGo Documentation", [author], 1)]
 
 # If true, show URL addresses after external links.
 # man_show_urls = False
@@ -338,7 +344,7 @@ texinfo_documents = [
     (
         master_doc,
         "eDisGo",
-        u"eDisGo Documentation",
+        "eDisGo Documentation",
         author,
         "eDisGo",
         "One line description of project.",

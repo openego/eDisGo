@@ -1,6 +1,5 @@
 import os
 
-import numpy as np
 import pandas as pd
 
 if "READTHEDOCS" not in os.environ:
@@ -79,14 +78,17 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
             },
             index=hvmv_trafos,
         )
-        costs_trafos = costs_trafos.append(
-            pd.DataFrame(
-                {
-                    "costs_transformers": len(mvlv_trafos)
-                    * [float(edisgo_obj.config["costs_transformers"]["lv"])]
-                },
-                index=mvlv_trafos,
-            )
+        costs_trafos = pd.concat(
+            [
+                costs_trafos,
+                pd.DataFrame(
+                    {
+                        "costs_transformers": len(mvlv_trafos)
+                        * [float(edisgo_obj.config["costs_transformers"]["lv"])]
+                    },
+                    index=mvlv_trafos,
+                ),
+            ]
         )
         return costs_trafos.loc[trafos.index, "costs_transformers"].values
 
@@ -100,7 +102,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
 
         return costs_lines[["costs", "voltage_level"]]
 
-    costs = pd.DataFrame()
+    costs = pd.DataFrame(dtype=float)
 
     if without_generator_import:
         equipment_changes = edisgo_obj.results.equipment_changes.loc[
@@ -124,21 +126,27 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
             ~added_transformers["equipment"].isin(added_removed_transformers.equipment)
         ]
         # calculate costs for transformers
-        all_trafos = edisgo_obj.topology.transformers_hvmv_df.append(
-            edisgo_obj.topology.transformers_df
+        all_trafos = pd.concat(
+            [
+                edisgo_obj.topology.transformers_hvmv_df,
+                edisgo_obj.topology.transformers_df,
+            ]
         )
         trafos = all_trafos.loc[added_transformers["equipment"]]
         # calculate costs for each transformer
-        costs = costs.append(
-            pd.DataFrame(
-                {
-                    "type": trafos.type_info.values,
-                    "total_costs": _get_transformer_costs(trafos),
-                    "quantity": len(trafos) * [1],
-                    "voltage_level": len(trafos) * ["mv/lv"],
-                },
-                index=trafos.index,
-            )
+        costs = pd.concat(
+            [
+                costs,
+                pd.DataFrame(
+                    {
+                        "type": trafos.type_info.values,
+                        "total_costs": _get_transformer_costs(trafos),
+                        "quantity": len(trafos) * [1],
+                        "voltage_level": len(trafos) * ["mv/lv"],
+                    },
+                    index=trafos.index,
+                ),
+            ]
         )
 
         # costs for lines
@@ -163,35 +171,43 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         ]
         if not lines_added.empty:
             line_costs = _get_line_costs(lines_added)
-            costs = costs.append(
-                pd.DataFrame(
-                    {
-                        "type": edisgo_obj.topology.lines_df.loc[
-                            lines_added.index, "type_info"
-                        ].values,
-                        "total_costs": line_costs.costs.values,
-                        "length": (lines_added.quantity * lines_added.length).values,
-                        "quantity": lines_added.quantity.values,
-                        "voltage_level": line_costs.voltage_level.values,
-                    },
-                    index=lines_added.index,
-                )
+            costs = pd.concat(
+                [
+                    costs,
+                    pd.DataFrame(
+                        {
+                            "type": edisgo_obj.topology.lines_df.loc[
+                                lines_added.index, "type_info"
+                            ].values,
+                            "total_costs": line_costs.costs.values,
+                            "length": (
+                                lines_added.quantity * lines_added.length
+                            ).values,
+                            "quantity": lines_added.quantity.values,
+                            "voltage_level": line_costs.voltage_level.values,
+                        },
+                        index=lines_added.index,
+                    ),
+                ]
             )
 
     # if no costs incurred write zero costs to DataFrame
     if costs.empty:
-        costs = costs.append(
-            pd.DataFrame(
-                {
-                    "type": ["N/A"],
-                    "total_costs": [0],
-                    "length": [0],
-                    "quantity": [0],
-                    "voltage_level": "",
-                    "mv_feeder": "",
-                },
-                index=["No reinforced equipment."],
-            )
+        costs = pd.concat(
+            [
+                costs,
+                pd.DataFrame(
+                    {
+                        "type": ["N/A"],
+                        "total_costs": [0],
+                        "length": [0],
+                        "quantity": [0],
+                        "voltage_level": "",
+                        "mv_feeder": "",
+                    },
+                    index=["No reinforced equipment."],
+                ),
+            ]
         )
 
     return costs
@@ -257,15 +273,18 @@ def line_expansion_costs(edisgo_obj, lines_names):
         index=mv_lines,
     )
 
-    costs_lines = costs_lines.append(
-        pd.DataFrame(
-            {
-                "costs_earthworks": (costs_cable_earthwork_lv - costs_cable_lv)
-                * lines_df.loc[lv_lines].length,
-                "costs_cable": costs_cable_lv * lines_df.loc[lv_lines].length,
-                "voltage_level": ["lv"] * len(lv_lines),
-            },
-            index=lv_lines,
-        )
+    costs_lines = pd.concat(
+        [
+            costs_lines,
+            pd.DataFrame(
+                {
+                    "costs_earthworks": (costs_cable_earthwork_lv - costs_cable_lv)
+                    * lines_df.loc[lv_lines].length,
+                    "costs_cable": costs_cable_lv * lines_df.loc[lv_lines].length,
+                    "voltage_level": ["lv"] * len(lv_lines),
+                },
+                index=lv_lines,
+            ),
+        ]
     )
     return costs_lines.loc[lines_df.index]

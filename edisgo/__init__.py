@@ -1,1 +1,1 @@
-from edisgo.edisgo import EDisGo
+from edisgo.edisgo import EDisGo  # noqa: F401
