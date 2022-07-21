@@ -130,8 +130,21 @@ class Electromobility:
         Returns
         -------
         :geopandas:`GeoDataFrame`
-            GeoDataFrame with AGS, charging use case (home, work, public or
-            hpc), user centric weight and geometry.
+            GeoDataFrame with ID as index, AGS, charging use case (home, work, public or
+            hpc), user centric weight and geometry. Columns are:
+
+                index : int
+                    Charging park ID.
+
+                use_case : str
+                    TracBEV use case. Can be "hpc", "home", "public" or "work".
+
+                user_centric_weight : flaot
+                    User centric weight used in distribution of charging demand. Weight
+                    is determined by TracBEV but normalized from 0 .. 1.
+
+                geometry : GeoSeries
+                    Geolocation of charging parks.
 
         """
         try:
