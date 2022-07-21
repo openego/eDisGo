@@ -1960,9 +1960,6 @@ class TimeSeries:
                 if df.isnull().any().any():
                     logger.warning(f"There are null values in {attr}")
 
-                if df.empty:  # Todo: keep this or check in edisgo?
-                    logger.warning(f"{attr} is empty")
-
                 if any(df.index.duplicated()):
                     duplicated_labels = df.index[df.index.duplicated()].values
                     logger.warning(
