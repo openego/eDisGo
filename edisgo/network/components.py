@@ -999,7 +999,9 @@ class PotentialChargingParks(BasicComponent):
             AGS number
 
         """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "ags"]
+        return self._edisgo_obj.electromobility.potential_charging_parks_gdf.at[
+            self._id, "ags"
+        ]
 
     @property
     def use_case(self):
@@ -1013,7 +1015,7 @@ class PotentialChargingParks(BasicComponent):
             Charging use case
 
         """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[
+        return self._edisgo_obj.electromobility.potential_charging_parks_gdf.at[
             self._id, "use_case"
         ]
 
@@ -1049,7 +1051,7 @@ class PotentialChargingParks(BasicComponent):
             User centric weight
 
         """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[
+        return self._edisgo_obj.electromobility.potential_charging_parks_gdf.at[
             self._id, "user_centric_weight"
         ]
 
@@ -1065,7 +1067,7 @@ class PotentialChargingParks(BasicComponent):
             Location of the potential charging park
 
         """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[
+        return self._edisgo_obj.electromobility.potential_charging_parks_gdf.at[
             self._id, "geometry"
         ]
 
@@ -1119,7 +1121,7 @@ class PotentialChargingParks(BasicComponent):
         :pandas:`pandas.DataFrame<DataFrame>`
             DataFrame with AGS, car ID, trip destination, charging use case
             (private or public), netto charging capacity, charging demand,
-            charge start, charge end, grid connection point and charging point
+            charge start, charge end, potential charging park ID and charging point
             ID.
 
         """

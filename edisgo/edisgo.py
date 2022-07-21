@@ -1308,7 +1308,7 @@ class EDisGo:
         simbev_directory: PurePath | str,
         tracbev_directory: PurePath | str,
         import_electromobility_data_kwds=None,
-        allocate_charging_demand_kwds=None
+        allocate_charging_demand_kwds=None,
     ):
         """
         Imports electromobility data and integrates charging points into grid.
@@ -1344,19 +1344,19 @@ class EDisGo:
             :func:`~.io.electromobility_import.import_electromobility`.
 
             gc_to_car_rate_home : float
-                Specifies the minimum rate between possible grid connections
+                Specifies the minimum rate between potential charging parks
                 points for the use case "home" and the total number of cars.
                 Default 0.5.
             gc_to_car_rate_work : float
-                Specifies the minimum rate between possible grid connections
+                Specifies the minimum rate between potential charging parks
                 points for the use case "work" and the total number of cars.
                 Default 0.25.
             gc_to_car_rate_public : float
-                Specifies the minimum rate between possible grid connections
+                Specifies the minimum rate between potential charging parks
                 points for the use case "public" and the total number of cars.
                 Default 0.1.
             gc_to_car_rate_hpc : float
-                Specifies the minimum rate between possible grid connections
+                Specifies the minimum rate between potential charging parks
                 points for the use case "hpc" and the total number of cars.
                 Default 0.005.
             mode_parking_times : str
@@ -1367,9 +1367,6 @@ class EDisGo:
                 Charging processes sub-directory. Default "simbev_run".
             simbev_config_file : str
                 Name of the simbev config file. Default "metadata_simbev_run.json".
-            grid_connections_dir : str
-                Possible grid connections sub-directory.
-                Default "grid_connections".
 
         allocate_charging_demand_kwds :
             These may contain any further attributes you want to specify when calling
@@ -1386,7 +1383,7 @@ class EDisGo:
                 Weighting factor of the generators weight within an LV grid in
                 comparison to the loads weight. Default 0.5.
             distance_weight : float
-                Weighting factor for the distance between a grid connection point
+                Weighting factor for the distance between a potential charging park
                 and its nearest substation in comparison to the combination of
                 the generators and load factors of the LV grids.
                 Default 1 / 3.
@@ -1397,12 +1394,19 @@ class EDisGo:
         """
         if import_electromobility_data_kwds is None:
             import_electromobility_data_kwds = {}
-        import_electromobility(self, simbev_directory, tracbev_directory,
-                               **import_electromobility_data_kwds)
+
+        import_electromobility(
+            self,
+            simbev_directory,
+            tracbev_directory,
+            **import_electromobility_data_kwds,
+        )
 
         if allocate_charging_demand_kwds is None:
             allocate_charging_demand_kwds = {}
+
         distribute_charging_demand(self, **allocate_charging_demand_kwds)
+
         integrate_charging_parks(self)
 
     def charging_strategy(self, strategy="dumb", **kwargs):

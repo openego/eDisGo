@@ -29,7 +29,12 @@ COLUMNS = {
         "charging_park_id",
         "charging_point_id",
     ],
-    "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
+    "potential_charging_parks_gdf": [
+        "id",
+        "use_case",
+        "user_centric_weight",
+        "geometry",
+    ],
     "simbev_config_df": [
         "regio_type",
         "eta_cp",
@@ -114,8 +119,8 @@ class Electromobility:
                     Time step the parking event ends.
 
                 charging_park_id : int
-                    Designated charging park ID from grid_connections_gdf. Is NaN if
-                    the charging demand is not yet distributed.
+                    Designated charging park ID from potential_charging_parks_gdf. Is
+                    NaN if the charging demand is not yet distributed.
 
                 charging_point_id : int
                     Designated charging point ID. Is used to differentiate between
@@ -132,11 +137,11 @@ class Electromobility:
         self._charging_processes_df = df
 
     @property
-    def grid_connections_gdf(self):
+    def potential_charging_parks_gdf(self):
         """
         GeoDataFrame with all
         `TracBEV <https://github.com/rl-institut/tracbev>`_
-        grid connections.
+        potential charging parks.
 
         Returns
         -------
@@ -159,13 +164,13 @@ class Electromobility:
 
         """
         try:
-            return self._grid_connections_gdf
+            return self._potential_charging_parks_gdf
         except Exception:
-            return gpd.GeoDataFrame(columns=COLUMNS["grid_connections_gdf"])
+            return gpd.GeoDataFrame(columns=COLUMNS["potential_charging_parks_gdf"])
 
-    @grid_connections_gdf.setter
-    def grid_connections_gdf(self, gdf):
-        self._grid_connections_gdf = gdf
+    @potential_charging_parks_gdf.setter
+    def potential_charging_parks_gdf(self, gdf):
+        self._potential_charging_parks_gdf = gdf
 
     @property
     def potential_charging_parks(self):
@@ -178,7 +183,7 @@ class Electromobility:
             List of potential charging parks within the AGS.
 
         """
-        for cp_id in self.grid_connections_gdf.index:
+        for cp_id in self.potential_charging_parks_gdf.index:
             yield PotentialChargingParks(id=cp_id, edisgo_obj=self._edisgo_obj)
 
     @property
@@ -317,8 +322,9 @@ class Electromobility:
 
         * 'charging_processes_df' : Attribute :py:attr:`~charging_processes_df`
           is saved to `charging_processes.csv`.
-        * 'grid_connections_gdf' : Attribute :py:attr:`~grid_connections_gdf`
-          is saved to `grid_connections.csv`.
+        * 'potential_charging_parks_gdf' : Attribute
+          :py:attr:`~potential_charging_parks_gdf` is saved to
+          `potential_charging_parks.csv`.
         * 'integrated_charging_parks_df' : Attribute
           :py:attr:`~integrated_charging_parks_df` is saved to
           `integrated_charging_parks.csv`.
@@ -384,7 +390,7 @@ class Electromobility:
                 path = os.path.join(data_path, file)
                 df = pd.read_csv(path, index_col=0)
 
-            if attr == "grid_connections_gdf":
+            if attr == "potential_charging_parks_gdf":
                 epsg = edisgo_obj.topology.grid_district["srid"]
 
                 df = df.assign(geometry=gpd.GeoSeries.from_wkt(df["geometry"]))
@@ -396,7 +402,7 @@ class Electromobility:
 
                 except Exception:
                     logging.warning(
-                        f"Grid connections could not be loaded with "
+                        f"Potential charging parks could not be loaded with "
                         f"EPSG {epsg}. Trying with EPSG 4326 as fallback."
                     )
 
@@ -506,7 +512,7 @@ def _get_matching_dict_of_attributes_and_file_names():
     """
     emob_dict = {
         "charging_processes_df": "charging_processes.csv",
-        "grid_connections_gdf": "grid_connections.csv",
+        "potential_charging_parks_gdf": "potential_charging_parks.csv",
         "integrated_charging_parks_df": "integrated_charging_parks.csv",
         "simbev_config_df": "metadata_simbev_run.csv",
     }

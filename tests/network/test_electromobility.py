@@ -41,9 +41,10 @@ class TestElectromobility:
         assert isinstance(electromobility.eta_charging_points, float)
         assert isinstance(electromobility.simulated_days, int)
         assert isinstance(electromobility.stepsize, int)
-        assert len(electromobility.grid_connections_gdf.columns) == 4
-        # There should be as many grid connections as potential charging parks
-        assert len(electromobility.grid_connections_gdf) == len(
+        assert len(electromobility.potential_charging_parks_gdf.columns) == 4
+        # There should be as many potential charging parks in the DataFrame as in the
+        # generator object
+        assert len(electromobility.potential_charging_parks_gdf) == len(
             list(electromobility.potential_charging_parks)
         )
 
