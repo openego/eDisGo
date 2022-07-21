@@ -33,7 +33,7 @@ class InstallSetup(install):
 
 setup(
     name='eDisGo',
-    version='0.1.1dev',
+    version='0.1.1',
     packages=find_packages(),
     url='https://github.com/openego/eDisGo',
     license='GNU Affero General Public License v3.0',
