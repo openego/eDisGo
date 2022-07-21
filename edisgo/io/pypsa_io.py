@@ -12,7 +12,6 @@ from math import sqrt
 import numpy as np
 import pandas as pd
 
-from networkx import connected_components
 from pypsa import Network as PyPSANetwork
 from pypsa.io import import_series_from_dataframe
 
@@ -339,8 +338,6 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
 
     if kwargs.get("use_seed", False) and pypsa_network.mode == "mv":
         set_seed(edisgo_object, pypsa_network)
-
-    _check_integrity_of_pypsa(pypsa_network)
 
     return pypsa_network
 
@@ -796,122 +793,6 @@ def _buses_voltage_set_point(edisgo_obj, buses, slack_bus, timesteps):
     v_nom.loc[timesteps, slack_bus] = slack_voltage_pu
 
     return v_nom
-
-
-def _check_integrity_of_pypsa(pypsa_network):
-    """
-    Checks whether the provided pypsa network is calculable.
-
-    * Sub-graphs/ Sub-networks: It is ensured the network has no isolated parts
-    * Completeness of time series: It is ensured each component has a time
-      series
-    * Buses available: Each component (load, generator, line, transformer) is
-      connected to a bus. The PyPSA representation is checked for completeness of
-      buses.
-    * Duplicate labels in components DataFrames and components' time series
-      DataFrames
-
-    Parameters
-    ----------
-    pypsa_network : :pypsa:`pypsa.Network<network>`
-        The `PyPSA network
-        <https://www.pypsa.org/doc/components.html#network>`_ container.
-
-    """
-
-    # check for sub-networks
-    subgraphs = list(
-        pypsa_network.graph().subgraph(c)
-        for c in connected_components(pypsa_network.graph())
-    )
-    pypsa_network.determine_network_topology()
-
-    if len(subgraphs) > 1 or len(pypsa_network.sub_networks) > 1:
-        raise ValueError("The pypsa graph has isolated nodes or edges.")
-
-    # check for duplicate labels of components
-    comps_dfs = [
-        pypsa_network.buses,
-        pypsa_network.generators,
-        pypsa_network.loads,
-        pypsa_network.storage_units,
-        pypsa_network.transformers,
-        pypsa_network.lines,
-    ]
-    for comp_type in comps_dfs:
-        if any(comp_type.index.duplicated()):
-            raise ValueError(
-                "Pypsa network has duplicated entries: {}.".format(
-                    comp_type.index.duplicated()
-                )
-            )
-
-    # check consistency of topology and time series data
-    comp_df_dict = {
-        # exclude Slack from check
-        "gens": pypsa_network.generators[pypsa_network.generators.control != "Slack"],
-        "loads": pypsa_network.loads,
-        "storage_units": pypsa_network.storage_units,
-    }
-    comp_ts_dict = {
-        "gens": pypsa_network.generators_t,
-        "loads": pypsa_network.loads_t,
-        "storage_units": pypsa_network.storage_units_t,
-    }
-    for comp_type, ts in comp_ts_dict.items():
-        for i in ["p_set", "q_set"]:
-            missing = comp_df_dict[comp_type].loc[
-                ~comp_df_dict[comp_type].index.isin(ts[i].dropna(axis=1).columns)
-            ]
-            if not missing.empty:
-                raise ValueError(
-                    f"The following components have no '{i}' time "
-                    f"series. Components: {missing.index}"
-                )
-
-    missing = pypsa_network.buses.loc[
-        ~pypsa_network.buses.index.isin(
-            pypsa_network.buses_t["v_mag_pu_set"].columns.tolist()
-        )
-    ]
-    if not missing.empty:
-        raise ValueError(
-            "The following components have no `v_mag_pu_set` time "
-            "series: {}.".format(missing.index)
-        )
-
-    # check for duplicates in p_set and q_set
-    comp_ts = [
-        pypsa_network.loads_t,
-        pypsa_network.generators_t,
-        pypsa_network.storage_units_t,
-    ]
-    for comp in comp_ts:
-        for i in ["p_set", "q_set"]:
-            if any(comp[i].columns.duplicated()):
-                raise ValueError(
-                    "Pypsa timeseries have duplicated entries: {}".format(
-                        comp[i].columns.duplicated()
-                    )
-                )
-
-    if any(pypsa_network.buses_t["v_mag_pu_set"].columns.duplicated()):
-        raise ValueError(
-            "Pypsa timeseries have duplicated entries: {}".format(
-                pypsa_network.buses_t["v_mag_pu_set"].columns.duplicated()
-            )
-        )
-
-    for comp in ["lines", "transformers"]:
-        z = getattr(pypsa_network, comp).apply(
-            lambda x: np.sqrt(np.square(x.r) + np.square(x.x)), axis=1
-        )
-        if not z.empty and (z < 1e-6).any():
-            logger.warning(
-                f"Very small values for impedance of {comp}: "
-                f"{z[z < 1e-6].index.values}. This might cause problems in the power "
-                f"flow."
-            )
 
 
 def process_pfa_results(edisgo, pypsa, timesteps):
