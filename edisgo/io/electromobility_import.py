@@ -46,6 +46,7 @@ COLUMNS = {
         "soc_min",
         "grid_timeseries",
         "grid_timeseries_by_usecase",
+        "days",
     ],
     "matching_demand_and_location": ["charging_park_id", "charging_point_id"],
     "grid_connections_gdf": ["ags", "use_case", "user_centric_weight", "geometry"],

@@ -30,6 +30,17 @@ COLUMNS = {
         "charging_point_id",
     ],
     "grid_connections_gdf": ["id", "use_case", "user_centric_weight", "geometry"],
+    "simbev_config_df": [
+        "regio_type",
+        "eta_cp",
+        "stepsize",
+        "start_date",
+        "end_date",
+        "soc_min",
+        "grid_timeseries",
+        "grid_timeseries_by_usecase",
+        "days",
+    ],
     "potential_charging_parks_df": [
         "lv_grid_id",
         "distance_to_nearest_substation",
@@ -180,16 +191,45 @@ class Electromobility:
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            DataFrame with used random seed, used threads, stepsize in minutes,
-            year, scenarette, simulated days, maximum number of cars per AGS,
-            completed standing times and timeseries per AGS and used ramp up
-            data CSV.
+            DataFrame with used regio type, charging point efficiency, stepsize in
+            minutes, start date, end date, minimum SoC for hpc, grid timeseries setting,
+            grid timeseries by use case setting and the number of simulated days.
+            Columns are:
+
+                regio_type : str
+                    RegioStaR 7 ID used in SimBEV.
+
+                eta_cp : float or int
+                    Charging point efficiency used in SimBEV.
+
+                stepsize : int
+                    Stepsize in minutes the driving profile is simulated for in SimBEV.
+
+                start_date : datetime64
+                    Start date of the SimBEV simulation.
+
+                end_date : datetime64
+                    End date of the SimBEV simulation.
+
+                soc_min : float
+                    Minimum SoC when a HPC event is initialized in SimBEV.
+
+                grid_timeseries : bool
+                    Setting whether a grid timeseries is generated within the SimBEV
+                    simulation.
+
+                grid_timeseries_by_usecase : bool
+                    Setting whether a grid timeseries by use case is generated within
+                    the SimBEV simulation.
+
+                days : int
+                    Timedelta between the end_date and start_date in days.
 
         """
         try:
             return self._simbev_config_df
         except Exception:
-            return pd.DataFrame()
+            return pd.DataFrame(columns=COLUMNS["simbev_config_df"])
 
     @simbev_config_df.setter
     def simbev_config_df(self, df):
@@ -197,6 +237,19 @@ class Electromobility:
 
     @property
     def integrated_charging_parks_df(self):
+        """
+        Mapping DataFrame to map the charging park ID to the internal eDisGo ID.
+
+        The eDisGo ID is determined when integrating components per
+        :func:`~.EDisGo.add_component` or
+        :func:`~.EDisGo.integrate_component_based_on_geolocation` method.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Mapping DataFrame to map the charging park ID to the internal eDisGo ID.
+
+        """
         try:
             return self._integrated_charging_parks_df
         except Exception:
@@ -368,7 +421,28 @@ class Electromobility:
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
             DataFrame with LV Grid ID, distance to nearest substation, distance
-            weight, charging point capacity and charging point weight.
+            weight, charging point capacity and charging point weight. Columns are:
+
+                lv_grid_id : int
+                    ID of nearest lv grid.
+
+                distance_to_nearest_substation : float
+                    Distance to nearest lv grid substation.
+
+                distance_weight : float
+                    Weighting used in grid friendly siting of public charging points.
+                    In the case of distance to nearest substation the weight is higher
+                    the closer the substation is to the charging park. The weight is
+                    normalized between 0 .. 1. A higher weight is more attractive.
+
+                charging_point_capacity : float
+                    Total gross designated charging park capacity in kW.
+
+                charging_point_weight : float
+                    Weighting used in grid friendly siting of public charging points.
+                    In the case of charging points the weight is higher the lower the
+                    designated charging point capacity is. The weight is normalized
+                    between 0 .. 1. A higher weight is more attractive.
 
         """
         try:
