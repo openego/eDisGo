@@ -1324,19 +1324,19 @@ class EDisGo:
             gc_to_car_rate_home : float
                 Specifies the minimum rate between possible grid connections
                 points for the use case "home" and the total number of cars.
-                Default 0.5 .
+                Default 0.5.
             gc_to_car_rate_work : float
                 Specifies the minimum rate between possible grid connections
                 points for the use case "work" and the total number of cars.
-                Default 0.25 .
+                Default 0.25.
             gc_to_car_rate_public : float
                 Specifies the minimum rate between possible grid connections
                 points for the use case "public" and the total number of cars.
-                Default 0.1 .
+                Default 0.1.
             gc_to_car_rate_hpc : float
                 Specifies the minimum rate between possible grid connections
                 points for the use case "hpc" and the total number of cars.
-                Default 0.005 .
+                Default 0.005.
             mode_parking_times : str
                 If the mode_parking_times is set to "frugal" only parking times
                 with any charging demand are imported. Default "frugal".
@@ -1345,7 +1345,7 @@ class EDisGo:
             simbev_config_file : str
                 Name of the simbev config file. Default "metadata_simbev_run.json".
             grid_connections_dir : str
-                Possible grid Connections sub-directory.
+                Possible grid connections sub-directory.
                 Default "grid_connections".
         """
         import_electromobility(self, simbev_directory, tracbev_directory, **kwargs)
@@ -1363,22 +1363,22 @@ class EDisGo:
         kwargs :
             Kwargs may contain any further attributes you want to specify.
 
-            mode Default : str
+            mode : str
                 Distribution mode. If the mode is set to "user_friendly" only the
                 simbev weights are used for the distribution. If the mode is
                 "grid_friendly" also grid conditions are respected.
                 Default "user_friendly".
             generators_weight_factor : float
-                Weighting factor of the generators weight within a lv grid in
-                comparison to the loads weight. Default 0.5 .
+                Weighting factor of the generators weight within an LV grid in
+                comparison to the loads weight. Default 0.5.
             distance_weight : float
                 Weighting factor for the distance between a grid connection point
-                and it's nearest substation in comparison to the combination of
-                the generators and load factors of the lv grids.
-                Default 1 / 3 .
+                and its nearest substation in comparison to the combination of
+                the generators and load factors of the LV grids.
+                Default 1 / 3.
             user_friendly_weight : float
                 Weighting factor of the user friendly weight in comparison to the
-                grid friendly weight. Default 0.5 .
+                grid friendly weight. Default 0.5.
 
         """
         if (

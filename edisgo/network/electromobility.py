@@ -81,7 +81,7 @@ class Electromobility:
     def grid_connections_gdf(self):
         """
         GeoDataFrame with all
-        `SimBEV <https://github.com/rl-institut/simbev>`_
+        `TracBEV <https://github.com/rl-institut/tracbev>`_
         grid connections.
 
         Returns
@@ -103,12 +103,12 @@ class Electromobility:
     @property
     def potential_charging_parks(self):
         """
-        Potential Charging Parks within the AGS.
+        Potential charging parks within the AGS.
 
         Returns
         -------
         list(:class:`~.network.components.PotentialChargingParks`)
-            List of Potential Charging Parks within the AGS.
+            List of potential charging parks within the AGS.
 
         """
         for cp_id in self.grid_connections_gdf.index:
