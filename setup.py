@@ -33,7 +33,7 @@ class InstallSetup(install):
 
 setup(
     name='eDisGo',
-    version='0.1.0',
+    version='0.1.1',
     packages=find_packages(),
     url='https://github.com/openego/eDisGo',
     license='GNU Affero General Public License v3.0',
@@ -58,7 +58,9 @@ setup(
         'egoio >= 0.4.7',
         'matplotlib >= 3.3.0',
         'pypower',
-        'sklearn'
+        'sklearn',
+        'pydot',
+        'Rtree',
     ],
     extras_require={
         'geoplot': ['geopandas >= 0.9.0', 'contextily', 'descartes'],

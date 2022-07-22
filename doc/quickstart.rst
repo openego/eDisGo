@@ -180,7 +180,7 @@ A minimum working example
 
 Following you find short examples on how to use eDisGo. Further details are
 provided in :ref:`usage-details`. Further examples can be found in the
-`examples directory <https://github.com/openego/eDisGo/tree/features/refactoring/examples>`_.
+`examples directory <https://github.com/openego/eDisGo/tree/dev/examples>`_.
 
 All following examples assume you have a ding0 grid topology (directory containing
 csv files, defining the grid topology) in a directory "ding0_example_grid" in
