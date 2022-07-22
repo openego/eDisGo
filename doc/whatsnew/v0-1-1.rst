@@ -1,7 +1,7 @@
 Release v0.1.1
 ================
 
-Release date: July 21, 2022
+Release date: July 22, 2022
 
 This release comes with some minor additions and bug fixes.
 
