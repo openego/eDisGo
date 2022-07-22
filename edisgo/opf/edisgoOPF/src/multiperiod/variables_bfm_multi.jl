@@ -4,9 +4,9 @@ include("variables/storage_variables.jl")
 function add_var_sqr_voltage(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd,bounded::Bool=true)
     """
     adds variable of the squared voltage for all buses to a power model
-    input: 
+    input:
         pm:: GenericPowerModel
-    
+
     """
     if bounded
         var(pm,nw)[:w]=@variable(pm.model,[i in ids(pm,nw,:bus)],basename="w_$(nw)",
@@ -24,11 +24,11 @@ end
 function add_var_power_gen(pm, nw::Int=pm.cnw, cnd::Int=pm.ccnd, bounded::Bool=true)
     """
     adds variable of acitve and reactive power generation for all generator in power model to a power model
-    input: 
+    input:
         pm:: GenericPowerModel
-    
+
     """
-    if bounded 
+    if bounded
         var(pm, nw)[:pg] = @variable(pm.model,
                 [i in ids(pm, nw, :gen)], basename="pg_$(nw)",
                 lowerbound = ref(pm, nw, :gen, i, "pmin", cnd),
@@ -90,9 +90,9 @@ end
 function add_var_power_flow(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd,bounded::Bool=false)
     """
     adds variable of active and reactive power flow for each branch to a power model
-    input: 
+    input:
         pm:: GenericPowerModel
-    
+
     """
     n_branches = length(ref(pm,:branch))
     var(pm, nw)[:p] = @variable(pm.model,
@@ -106,12 +106,12 @@ function add_var_power_flow(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd,bounded::Bool=fa
 end
 
 "variable: squared current magnitude `cm[i]`for `i` in `branch`'s"
-function add_var_sqr_current_magnitude(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd, bounded::Bool=false)  
+function add_var_sqr_current_magnitude(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd, bounded::Bool=false)
     """
     adds variable of squared magnitude of current for each branch to a power model, can be bounded or not
-    input: 
+    input:
         pm:: GenericPowerModel
-    
+
     """
     buses = ref(pm,nw)[:bus]
     branch = ref(pm,nw)[:branch]
@@ -125,7 +125,7 @@ function add_var_sqr_current_magnitude(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd, boun
             #ub[i] = ((b["rate_a"][cnd]*b["tap"][cnd])/(buses[b["f_bus"]]["vmin"][cnd]))^2
             setupperbound(var(pm, nw)[:cm][i],ub[i])
         end
-        
+
     end
 end
 
@@ -133,9 +133,9 @@ end
 function add_var_resistance(pm)
     """
     adds variable of resistance for each branch to a power model - used in case of network expansion
-    input: 
+    input:
         pm:: GenericPowerModel
-    
+
     """
     branch = ref(pm)[:branch]
     r_init = Dict(k => b["br_r"] for (k,b) in branch)
@@ -147,7 +147,7 @@ function add_var_resistance(pm)
     var(pm)[:x]=@variable(pm.model,
         [i in ids(pm, :branch)], basename="x",
         lowerbound=0, upperbound=x_init[i])
-    
+
 
     r = var(pm)[:r]
     x = var(pm)[:x]
@@ -159,16 +159,16 @@ function add_var_resistance(pm)
     x_sqr = var(pm)[:x_sqr] = @variable(pm.model,
         [i in ids(pm,:branch)], basename="x_sqr",
         lowerbound=0, upperbound=x_init[i]^2)
-    @constraint(pm.model,[i in ids(pm,:branch)],x[i]^2==x_sqr[i]) 
+    @constraint(pm.model,[i in ids(pm,:branch)],x[i]^2==x_sqr[i])
 
 end
 
 function add_var_max_current(pm)
     """
     adds variable of maximal current for each branch to a power model - used in case of network expansion
-    input: 
+    input:
         pm:: GenericPowerModel
-    
+
     """
     buses = ref(pm)[:bus]
     branch = ref(pm)[:branch]
@@ -189,14 +189,14 @@ function add_var_storage(pm,nw::Int=pm.cnw,cnd::Int=pm.ccnd)
     var(pm,nw)[:uc] = @variable(pm.model,[i in ids(pm,nw,:storage)],basename="uc_$(nw)",
         lowerbound = 0,
         upperbound = ref(pm,nw,:storage,i,"charge_rating"))
-    
+
     var(pm,nw)[:ud] = @variable(pm.model,[i in ids(pm,nw,:storage)], basename="ud_$(nw)",
         lowerbound = 0,
-        upperbound = ref(pm,nw,:storage,i,"discharge_rating"))  
-    
+        upperbound = ref(pm,nw,:storage,i,"discharge_rating"))
+
     var(pm,nw)[:soc] = @variable(pm.model,[i in ids(pm,nw,:storage)], basename="soc_$(nw)",
         lowerbound = 0,
-        upperbound = ref(pm,nw,:storage,i,"energy_rating"))    
+        upperbound = ref(pm,nw,:storage,i,"energy_rating"))
 end
 
 """
@@ -214,7 +214,7 @@ function set_ub_flows(pm,maxexp,br_list::Array=[])
     if isempty(br_list)
         br_list = [i for i in 1:length(ids(pm,:branch))]
     end
-    
+
     for (i,br) in ref(pm,:branch)
         f_bus = br["f_bus"]
         t_bus = br["t_bus"]
@@ -242,7 +242,7 @@ function set_ub_flows(pm,maxexp,br_list::Array=[])
                 #ub_current_rating = ref(pm,:branch,i)["rate_a"] * lb_voltage
             end
         end
-        
+
         for (nw,network) in nws(pm)
             if haskey(pm.data["clusters"], nw)
                 continue

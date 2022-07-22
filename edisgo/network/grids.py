@@ -1,10 +1,15 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-import pandas as pd
-import networkx as nx
-from networkx.drawing.nx_pydot import graphviz_layout
+
 import matplotlib.pyplot as plt
+import networkx as nx
+import pandas as pd
+
+from networkx.drawing.nx_pydot import graphviz_layout
 
 from edisgo.network.components import Generator, Load, Switch
+from edisgo.tools.geopandas_helper import to_geopandas
 from edisgo.tools.networkx_helper import translate_df_to_graph
 
 
@@ -75,15 +80,31 @@ class Grid(ABC):
         return translate_df_to_graph(self.buses_df, self.lines_df)
 
     @property
+    def geopandas(self):
+        """
+        Returns components as :geopandas:`GeoDataFrame`\\ s
+
+        Returns container with :geopandas:`GeoDataFrame`\\ s containing all
+        georeferenced components within the grid.
+
+        Returns
+        -------
+        :class:`~.tools.geopandas_helper.GeoPandasGridContainer` or \
+            list(:class:`~.tools.geopandas_helper.GeoPandasGridContainer`)
+            Data container with GeoDataFrames containing all georeferenced components
+            within the grid(s).
+
+        """
+        return to_geopandas(self)
+
+    @property
     def station(self):
         """
         DataFrame with form of buses_df with only grid's station's secondary
         side bus information.
 
         """
-        return (
-            self.buses_df.loc[self.transformers_df.iloc[0].bus1].to_frame().T
-        )
+        return self.buses_df.loc[self.transformers_df.iloc[0].bus1].to_frame().T
 
     @property
     def generators_df(self):
@@ -99,9 +120,7 @@ class Grid(ABC):
 
         """
         return self.edisgo_obj.topology.generators_df[
-            self.edisgo_obj.topology.generators_df.bus.isin(
-                self.buses_df.index
-            )
+            self.edisgo_obj.topology.generators_df.bus.isin(self.buses_df.index)
         ]
 
     @property
@@ -145,8 +164,8 @@ class Grid(ABC):
             List of loads within the network.
 
         """
-        for l in self.loads_df.index:
-            yield Load(id=l, edisgo_obj=self.edisgo_obj)
+        for load in self.loads_df.index:
+            yield Load(id=load, edisgo_obj=self.edisgo_obj)
 
     @property
     def storage_units_df(self):
@@ -162,9 +181,7 @@ class Grid(ABC):
 
         """
         return self.edisgo_obj.topology.storage_units_df[
-            self.edisgo_obj.topology.storage_units_df.bus.isin(
-                self.buses_df.index
-            )
+            self.edisgo_obj.topology.storage_units_df.bus.isin(self.buses_df.index)
         ]
 
     @property
@@ -177,14 +194,10 @@ class Grid(ABC):
         :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with all charging points in topology. For more
             information on the dataframe see
-            :attr:`~.network.topology.Topology.charging_points_df`.
+            :attr:`~.network.topology.Topology.loads_df`.
 
         """
-        return self.edisgo_obj.topology.charging_points_df[
-            self.edisgo_obj.topology.charging_points_df.bus.isin(
-                self.buses_df.index
-            )
-        ]
+        return self.loads_df[self.loads_df.type == "charging_point"]
 
     @property
     def switch_disconnectors_df(self):
@@ -203,13 +216,8 @@ class Grid(ABC):
 
         """
         return self.edisgo_obj.topology.switches_df[
-            self.edisgo_obj.topology.switches_df.bus_closed.isin(
-                self.buses_df.index
-            )
-        ][
-            self.edisgo_obj.topology.switches_df.type_info
-            == "Switch Disconnector"
-        ]
+            self.edisgo_obj.topology.switches_df.bus_closed.isin(self.buses_df.index)
+        ][self.edisgo_obj.topology.switches_df.type_info == "Switch Disconnector"]
 
     @property
     def switch_disconnectors(self):
@@ -299,7 +307,7 @@ class Grid(ABC):
         return self.generators_df.groupby(["type"]).sum()["p_nom"]
 
     @property
-    def peak_load(self):
+    def p_set(self):
         """
         Cumulative peak load of loads in the network in MW.
 
@@ -309,10 +317,10 @@ class Grid(ABC):
             Cumulative peak load of loads in the network in MW.
 
         """
-        return self.loads_df.peak_load.sum()
+        return self.loads_df.p_set.sum()
 
     @property
-    def peak_load_per_sector(self):
+    def p_set_per_sector(self):
         """
         Cumulative peak load of loads in the network per sector in MW.
 
@@ -322,7 +330,7 @@ class Grid(ABC):
             Cumulative peak load of loads in the network per sector in MW.
 
         """
-        return self.loads_df.groupby(["sector"]).sum()["peak_load"]
+        return self.loads_df.groupby(["sector"]).sum()["p_set"]
 
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self.id)])
@@ -441,14 +449,17 @@ class LVGrid(Grid):
 
         """
         return self.edisgo_obj.topology.transformers_df[
-            self.edisgo_obj.topology.transformers_df.bus1.isin(
-                self.buses_df.index
-            )
+            self.edisgo_obj.topology.transformers_df.bus1.isin(self.buses_df.index)
         ]
 
-    def draw(self,
-             node_color="black", edge_color="black",
-             colorbar=False, labels=False, filename=None):
+    def draw(
+        self,
+        node_color="black",
+        edge_color="black",
+        colorbar=False,
+        labels=False,
+        filename=None,
+    ):
         """
         Draw LV network.
 
@@ -489,19 +500,21 @@ class LVGrid(Grid):
         # assign edge width + color and node size + color
         top = self.edisgo_obj.topology
         edge_width = [
-            top.get_line_connecting_buses(u, v).s_nom.sum() * 10 for
-            u, v in G.edges()]
+            top.get_line_connecting_buses(u, v).s_nom.sum() * 10 for u, v in G.edges()
+        ]
         if isinstance(edge_color, pd.Series):
             edge_color = [
-                edge_color.loc[
-                    top.get_line_connecting_buses(u, v).index[0]]
-                for u, v in G.edges()]
+                edge_color.loc[top.get_line_connecting_buses(u, v).index[0]]
+                for u, v in G.edges()
+            ]
             edge_color_is_sequence = True
         else:
             edge_color_is_sequence = False
 
-        node_size = [top.get_connected_components_from_bus(v)[
-                        "loads"].peak_load.sum() * 50000 + 10 for v in G]
+        node_size = [
+            top.get_connected_components_from_bus(v)["loads"].p_set.sum() * 50000 + 10
+            for v in G
+        ]
         if isinstance(node_color, pd.Series):
             node_color = [node_color.loc[v] for v in G]
             node_color_is_sequence = True
@@ -511,16 +524,14 @@ class LVGrid(Grid):
         # draw edges and nodes of the graph
         fig, ax = plt.subplots(figsize=(12, 12))
         cm_edges = nx.draw_networkx_edges(
-            G, pos,
+            G,
+            pos,
             width=edge_width,
             edge_color=edge_color,
-            edge_cmap=plt.cm.get_cmap("inferno_r")
+            edge_cmap=plt.cm.get_cmap("inferno_r"),
         )
         cm_nodes = nx.draw_networkx_nodes(
-            G, pos,
-            node_size=node_size,
-            node_color=node_color,
-            cmap="Blues"
+            G, pos, node_size=node_size, node_color=node_color, cmap="Blues"
         )
         if colorbar:
             if edge_color_is_sequence:
@@ -531,13 +542,22 @@ class LVGrid(Grid):
             # ToDo find nicer way to display bus names
             label_options = {"ec": "k", "fc": "white", "alpha": 0.7}
             nx.draw_networkx_labels(
-                G, pos, font_size=8, bbox=label_options,
-                horizontalalignment="right")
+                G,
+                pos,
+                font_size=8,
+                bbox=label_options,
+                horizontalalignment="right",
+            )
 
         if filename is None:
             plt.show()
         else:
-            plt.savefig(filename,
-                        dpi=150, bbox_inches='tight', pad_inches=0.1
-                        )
+            plt.savefig(filename, dpi=150, bbox_inches="tight", pad_inches=0.1)
             plt.close()
+
+    @property
+    def geopandas(self):
+        """
+        TODO: Remove this as soon as LVGrids are georeferenced
+        """
+        raise NotImplementedError("LV Grids are not georeferenced yet.")

@@ -16,7 +16,5 @@ dependencies:
   - conda-forge::pygeos
   - conda-forge::contextily
   - conda-forge::descartes
-  - conda-forge::pypsa
-  - conda-forge::pyomo
   - pip:
       - -e .[full]

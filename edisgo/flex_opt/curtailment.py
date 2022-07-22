@@ -1,14 +1,15 @@
-import pandas as pd
 import logging
+
+import pandas as pd
 
 from pyomo.environ import (
     ConcreteModel,
-    Set,
-    Param,
-    Objective,
     Constraint,
-    minimize,
+    Objective,
+    Param,
+    Set,
     Var,
+    minimize,
 )
 from pyomo.opt import SolverFactory
 
@@ -16,12 +17,7 @@ from edisgo.io import pypsa_io
 
 
 def voltage_based(
-    feedin,
-    generators,
-    curtailment_timeseries,
-    edisgo,
-    curtailment_key,
-    **kwargs
+    feedin, generators, curtailment_timeseries, edisgo, curtailment_key, **kwargs
 ):
     """
     Implements curtailment methodology 'voltage-based'.
@@ -124,17 +120,17 @@ def voltage_based(
     if not combined_analysis:
         allowed_voltage_dev_mv = edisgo.network.config[
             "grid_expansion_allowed_voltage_deviations"
-        ]["mv_feedin_case_max_v_deviation"]
+        ]["mv_feed-in_case_max_v_deviation"]
         allowed_voltage_diff_lv = edisgo.network.config[
             "grid_expansion_allowed_voltage_deviations"
-        ]["lv_feedin_case_max_v_deviation"]
+        ]["lv_feed-in_case_max_v_deviation"]
     else:
         allowed_voltage_dev_mv = edisgo.network.config[
             "grid_expansion_allowed_voltage_deviations"
-        ]["mv_lv_feedin_case_max_v_deviation"]
+        ]["mv_lv_feed-in_case_max_v_deviation"]
         allowed_voltage_diff_lv = edisgo.network.config[
             "grid_expansion_allowed_voltage_deviations"
-        ]["mv_lv_feedin_case_max_v_deviation"]
+        ]["mv_lv_feed-in_case_max_v_deviation"]
 
     # assign allowed voltage deviation to each generator
     if not edisgo.network.pypsa.edisgo_mode:
@@ -142,9 +138,7 @@ def voltage_based(
 
         # get voltages at stations
         grids = list(set(generators.grid))
-        lv_stations = [
-            _.station for _ in grids if "LVStation" in repr(_.station)
-        ]
+        lv_stations = [_.station for _ in grids if "LVStation" in repr(_.station)]
         voltage_lv_stations = edisgo.network.results.v_res(
             nodes_df=lv_stations, level="lv"
         )
@@ -155,23 +149,17 @@ def voltage_based(
 
         # assign allowed voltage deviation
         generators["allowed_voltage_dev"] = generators.voltage_level.apply(
-            lambda _: allowed_voltage_diff_lv
-            if _ == "lv"
-            else allowed_voltage_dev_mv
+            lambda _: allowed_voltage_diff_lv if _ == "lv" else allowed_voltage_dev_mv
         )
 
         # calculate voltage difference from generator node to station
         voltage_gens_diff = pd.DataFrame()
         for gen in voltages_gens.columns:
-            station = (
-                generators[generators.gen_repr == gen].grid.values[0].station
-            )
+            station = generators[generators.gen_repr == gen].grid.values[0].station
             voltage_gens_diff[gen] = (
                 voltages_gens.loc[:, gen]
                 - voltages_stations.loc[:, repr(station)]
-                - generators[
-                    generators.gen_repr == gen
-                ].allowed_voltage_dev.iloc[0]
+                - generators[generators.gen_repr == gen].allowed_voltage_dev.iloc[0]
             )
 
     else:
@@ -179,9 +167,7 @@ def voltage_based(
 
         station = edisgo.network.mv_grid.station
         # get voltages at HV/MV station
-        voltages_station = edisgo.network.results.v_res(
-            nodes_df=[station], level="mv"
-        )
+        voltages_station = edisgo.network.results.v_res(nodes_df=[station], level="mv")
 
         # assign allowed voltage deviation
         generators["allowed_voltage_dev"] = allowed_voltage_dev_mv
@@ -192,9 +178,7 @@ def voltage_based(
             voltage_gens_diff[gen] = (
                 voltages_gens.loc[:, gen]
                 - voltages_station.loc[:, repr(station)]
-                - generators[
-                    generators.gen_repr == gen
-                ].allowed_voltage_dev.iloc[0]
+                - generators[generators.gen_repr == gen].allowed_voltage_dev.iloc[0]
             )
 
     # for every time step check if curtailment can be fulfilled, otherwise
@@ -233,18 +217,19 @@ def voltage_based(
         curtailment = pd.DataFrame()
 
     # set curtailment for other time steps to zero
-    curtailment = curtailment.append(
-        pd.DataFrame(
-            0,
-            columns=feedin.columns,
-            index=curtailment_timeseries[curtailment_timeseries <= 0].index,
-        )
+    curtailment = pd.concat(
+        [
+            curtailment,
+            pd.DataFrame(
+                0,
+                columns=feedin.columns,
+                index=curtailment_timeseries[curtailment_timeseries <= 0].index,
+            ),
+        ]
     )
 
     # check if curtailment target was met
-    _check_curtailment_target(
-        curtailment, curtailment_timeseries, curtailment_key
-    )
+    _check_curtailment_target(curtailment, curtailment_timeseries, curtailment_key)
 
     # assign curtailment to individual generators
     _assign_curtailment(curtailment, edisgo, generators, curtailment_key)
@@ -375,9 +360,7 @@ def _optimize_voltage_based_curtailment(
 
     # total curtailment constraint
     def total_curtailment(model, t):
-        return (
-            sum(model.c[t, g] for g in model.G) == model.total_curtailment[t]
-        )
+        return sum(model.c[t, g] for g in model.G) == model.total_curtailment[t]
 
     model.sum_curtailment = Constraint(model.T, rule=total_curtailment)
 
@@ -395,12 +378,7 @@ def _optimize_voltage_based_curtailment(
 
 
 def feedin_proportional(
-    feedin,
-    generators,
-    curtailment_timeseries,
-    edisgo,
-    curtailment_key,
-    **kwargs
+    feedin, generators, curtailment_timeseries, edisgo, curtailment_key, **kwargs
 ):
     """
     Implements curtailment methodology 'feedin-proportional'.
@@ -444,17 +422,13 @@ def feedin_proportional(
     curtailment.fillna(0, inplace=True)
 
     # check if curtailment target was met
-    _check_curtailment_target(
-        curtailment, curtailment_timeseries, curtailment_key
-    )
+    _check_curtailment_target(curtailment, curtailment_timeseries, curtailment_key)
 
     # assign curtailment to individual generators
     _assign_curtailment(curtailment, edisgo, generators, curtailment_key)
 
 
-def _check_curtailment_target(
-    curtailment, curtailment_target, curtailment_key
-):
+def _check_curtailment_target(curtailment, curtailment_target, curtailment_key):
     """
     Raises an error if curtailment target was not met in any time step.
 
@@ -529,9 +503,7 @@ def _assign_curtailment(curtailment, edisgo, generators, curtailment_key):
         edisgo.network.timeseries._curtailment = gen_object_list
         # list needs to be copied, otherwise it will be extended every time
         # a new key is added to results._curtailment
-        edisgo.network.results._curtailment = {
-            curtailment_key: gen_object_list.copy()
-        }
+        edisgo.network.results._curtailment = {curtailment_key: gen_object_list.copy()}
 
 
 class CurtailmentControl:
@@ -618,18 +590,19 @@ class CurtailmentControl:
             curtailment_method = voltage_based
         else:
             raise ValueError(
-                "{} is not a valid curtailment methodology.".format(
-                    methodology
-                )
+                "{} is not a valid curtailment methodology.".format(methodology)
             )
 
         # check if provided mode is valid
-        if mode and mode is not "mv":
+        if mode and mode != "mv":
             raise ValueError("Provided mode {} is not a valid mode.")
 
         # get all fluctuating generators and their attributes (weather ID,
         # type, etc.)
-        generators = get_gen_info(edisgo.topology, "mvlv", fluctuating=True)
+        # TODO: Function get_gen_info does not exist
+        generators = get_gen_info(  # noqa: F821
+            edisgo.topology, "mvlv", fluctuating=True
+        )
 
         # do analyze to get all voltages at generators and feed-in dataframe
         edisgo.analyze(mode=mode)
@@ -644,21 +617,15 @@ class CurtailmentControl:
         else:
             feedin = edisgo.topology.mv_grid.generators_timeseries()
             for grid in edisgo.topology.mv_grid.lv_grids:
-                feedin = pd.concat(
-                    [feedin, grid.generators_timeseries()], axis=1
-                )
+                feedin = pd.concat([feedin, grid.generators_timeseries()], axis=1)
             feedin.rename(columns=lambda _: repr(_), inplace=True)
             # drop dispatchable generators
-            drop_labels = [
-                _ for _ in feedin.columns if "GeneratorFluctuating" not in _
-            ]
+            drop_labels = [_ for _ in feedin.columns if "GeneratorFluctuating" not in _]
         feedin.drop(labels=drop_labels, axis=1, inplace=True)
 
         if isinstance(curtailment_timeseries, pd.Series):
             # check if curtailment exceeds feed-in
-            self._precheck(
-                curtailment_timeseries, feedin, "all_fluctuating_generators"
-            )
+            self._precheck(curtailment_timeseries, feedin, "all_fluctuating_generators")
 
             # do curtailment
             curtailment_method(
@@ -681,9 +648,7 @@ class CurtailmentControl:
                         & (generators.weather_cell_id == col[1])
                     ]
                 else:
-                    selected_generators = generators.loc[
-                        (generators.type == col)
-                    ]
+                    selected_generators = generators.loc[(generators.type == col)]
 
                 # check if curtailment exceeds feed-in
                 feedin_selected_generators = feedin.loc[
@@ -737,7 +702,7 @@ class CurtailmentControl:
             raise KeyError(message)
         try:
             curtailment_timeseries.loc[network.timeseries.timeindex]
-        except:
+        except Exception:
             message = (
                 "Time index of curtailment time series does not match "
                 "with load and feed-in time series."
@@ -780,9 +745,7 @@ class CurtailmentControl:
                 raise ValueError(message)
         else:
             bad_time_steps = [
-                _
-                for _ in curtailment_timeseries.index
-                if curtailment_timeseries[_] > 0
+                _ for _ in curtailment_timeseries.index if curtailment_timeseries[_] > 0
             ]
             if bad_time_steps:
                 message = (

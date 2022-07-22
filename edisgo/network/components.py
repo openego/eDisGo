@@ -1,16 +1,14 @@
-import os
-import math
 import logging
-from math import acos, tan
-from abc import ABC, abstractmethod
+import math
+import os
 
-from edisgo.tools.geo import find_nearest_bus
-from edisgo.io.electromobility_import import determine_grid_connection_capacity
+from abc import ABC, abstractmethod
+from math import acos, tan
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 class BasicComponent(ABC):
@@ -183,73 +181,6 @@ class Component(BasicComponent):
         return "_".join([self.__class__.__name__, str(self._id)])
 
 
-# ToDo implement if needed
-# class Station(Component):
-#     """Station object (medium or low voltage)
-#
-#     Represents a station, contains transformers.
-#
-#     Attributes
-#     ----------
-#     """
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#
-#         self._transformers = kwargs.get('transformers', None)
-#
-#     @property
-#     def transformers(self):
-#         """:obj:`list` of :class:`Transformer` : Transformers located in
-#         station"""
-#         return self._transformers
-#
-#     @transformers.setter
-#     def transformers(self, transformer):
-#         """
-#         Parameters
-#         ----------
-#         transformer : :obj:`list` of :class:`Transformer`
-#         """
-#         self._transformers = transformer
-#
-#     def add_transformer(self, transformer):
-#         self._transformers.append(transformer)
-#
-#
-# class Transformer(Component):
-#     """Transformer object
-#
-#     Attributes
-#     ----------
-#     _voltage_op : :obj:`float`
-#         Operational voltage
-#     _type : :pandas:`pandas.DataFrame<dataframe>`
-#         Specification of type, refers to  ToDo: ADD CORRECT REF TO (STATIC) DATA
-#     """
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self._mv_grid = kwargs.get('mv_grid', None)
-#         self._voltage_op = kwargs.get('voltage_op', None)
-#         self._type = kwargs.get('type', None)
-#
-#     @property
-#     def mv_grid(self):
-#         return self._mv_grid
-#
-#     @property
-#     def voltage_op(self):
-#         return self._voltage_op
-#
-#     @property
-#     def type(self):
-#         return self._type
-#
-#     def __repr__(self):
-#         return str(self._id)
-
-
 class Load(Component):
     """
     Load object
@@ -275,13 +206,13 @@ class Load(Component):
         return self.topology.loads_df
 
     @property
-    def peak_load(self):
+    def p_set(self):
         """
         Peak load in MW.
 
         Parameters
         -----------
-        peak_load : :obj:`float`
+        p_nom : :obj:`float`
             Peak load in MW.
 
         Returns
@@ -290,12 +221,11 @@ class Load(Component):
             Peak load in MW.
 
         """
-        return self.topology.loads_df.at[self.id, "peak_load"]
+        return self.topology.loads_df.at[self.id, "p_set"]
 
-    @peak_load.setter
-    def peak_load(self, peak_load):
-        # ToDo: Maybe perform type check before setting it.
-        self.topology._loads_df.at[self.id, "peak_load"] = peak_load
+    @p_set.setter
+    def p_set(self, p_set):
+        self.topology._loads_df.at[self.id, "p_set"] = float(p_set)
 
     @property
     def annual_consumption(self):
@@ -424,7 +354,8 @@ class Generator(Component):
             Nominal power of generator in MW.
 
         """
-        # ToDo: Should this change the time series as well? (same for loads, and type setter...)
+        # TODO: Should this change the time series as well?
+        #  (same for loads, and type setter...)
         return self.topology.generators_df.at[self.id, "p_nom"]
 
     @nominal_power.setter
@@ -1008,370 +939,3 @@ class Switch(BasicComponent):
         else:
             return None
         return col
-
-
-# ToDo implement if needed
-# class MVStation(Station):
-#     """MV Station object"""
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#
-#     def __repr__(self, side=None):
-#         repr_base = super().__repr__()
-#
-#         # As we don't consider HV-MV transformers in PFA, we don't have to care
-#         # about primary side bus of MV station. Hence, the general repr()
-#         # currently returned, implicitely refers to the secondary side (MV level)
-#         # if side == 'hv':
-#         #     return '_'.join(['primary', repr_base])
-#         # elif side == 'mv':
-#         #     return '_'.join(['secondary', repr_base])
-#         # else:
-#         #     return repr_base
-#         return repr_base
-#
-#
-# class LVStation(Station):
-#     """LV Station object"""
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self._mv_grid = kwargs.get('mv_grid', None)
-#
-#     @property
-#     def mv_grid(self):
-#         return self._mv_grid
-#
-#     def __repr__(self, side=None):
-#         repr_base = super().__repr__()
-#
-#         if side == 'mv':
-#             return '_'.join(['primary', repr_base])
-#         elif side == 'lv':
-#             return '_'.join(['secondary', repr_base])
-#         else:
-#             return repr_base
-
-# ToDo Implement if necessary
-# class Line(Component):
-#     """
-#     Line object
-#
-#     Parameters
-#     ----------
-#     _type: :pandas:`pandas.Series<Series>`
-#         Equipment specification including R and X for power flow analysis
-#         Columns:
-#
-#         ======== ================== ====== =========
-#         Column   Description        Unit   Data type
-#         ======== ================== ====== =========
-#         name     Name (e.g. NAYY..) -      str
-#         U_n      Nominal voltage    kV     int
-#         I_max_th Max. th. current   A      float
-#         R        Resistance         Ohm/km float
-#         L        Inductance         mH/km  float
-#         C        Capacitance        uF/km  float
-#         Source   Data source        -      str
-#         ============================================
-#
-#     _length: float
-#         Length of the line calculated in linear distance. Unit: m
-#     _quantity: float
-#         Quantity of parallel installed lines.
-#     _kind: String
-#         Specifies whether the line is an underground cable ('cable') or an
-#         overhead line ('line').
-#     """
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self._type = kwargs.get('type', None)
-#         self._length = kwargs.get('length', None)
-#         self._quantity = kwargs.get('quantity', 1)
-#         self._kind = kwargs.get('kind', None)
-#
-#     @property
-#     def geom(self):
-#         """Provide :shapely:`Shapely LineString object<linestrings>` geometry of
-#         :class:`Line`"""
-#         adj_nodes = self._grid._graph.nodes_from_line(self)
-#
-#         return LineString([adj_nodes[0].geom, adj_nodes[1].geom])
-#
-#     @property
-#     def type(self):
-#         return self._type
-#
-#     @type.setter
-#     def type(self, new_type):
-#         self._type = new_type
-#
-#     @property
-#     def length(self):
-#         return self._length
-#
-#     @length.setter
-#     def length(self, new_length):
-#         self._length = new_length
-#
-#     @property
-#     def quantity(self):
-#         return self._quantity
-#
-#     @quantity.setter
-#     def quantity(self, new_quantity):
-#         self._quantity = new_quantity
-
-
-class PotentialChargingParks(BasicComponent):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    @property
-    def voltage_level(self):
-        """
-        Voltage level the component is connected to ('mv' or 'lv').
-
-        Returns
-        --------
-        :obj:`str`
-            Voltage level. Returns 'lv' if component connected to the low
-            voltage and 'mv' if component is connected to the medium voltage.
-
-        """
-        try:
-            return "lv" if self.grid.nominal_voltage < 1 else "mv"
-        except Exception:
-            return None
-
-    @property
-    def grid(self):
-        """
-        Grid component is in.
-
-        Returns
-        --------
-        :class:`~.network.components.Grid`
-            Grid component is in.
-
-        """
-        try:
-            bus = self.topology.charging_points_df.at[self.edisgo_id, "bus"]
-            lv_grid_id = self.topology.buses_df.at[bus, "lv_grid_id"]
-            if math.isnan(lv_grid_id):
-                return self.topology.mv_grid
-            else:
-                return self.topology._grids[
-                    "LVGrid_{}".format(int(lv_grid_id))]
-        except Exception:
-            return None
-
-    @property
-    def ags(self):
-        """
-        8-digit AGS (Amtlicher Gemeindeschlüssel, eng. Community Identification
-        Number) number the potential charging park is in. Number is given as
-        :obj:`int` and leading zeros are therefore missing.
-
-        Returns
-        --------
-        :obj:`int`
-            AGS number
-
-        """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[
-            self._id, "ags"]
-
-    @property
-    def use_case(self):
-        """
-        Charging use case (home, work, public or hpc) of the potential
-        charging park.
-
-        Returns
-        --------
-        :obj:`str`
-            Charging use case
-
-        """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[
-            self._id, "use_case"
-        ]
-
-    @property
-    def designated_charging_point_capacity(self):
-        """
-        Total gross designated charging park capacity.
-        This is not necessarily equal to the connection rating.
-
-        Returns
-        --------
-        :obj:`float`
-            Total gross designated charging park capacity
-
-        """
-        return round(
-            self.charging_processes_df.groupby("charging_point_id")
-            .max()
-            .netto_charging_capacity.sum()
-            / self._edisgo_obj.electromobility.eta_charging_points,
-            1,
-        )
-
-    @property
-    def user_centric_weight(self):
-        """
-        User centric weight of the potential charging park
-        determined by `SimBEV <https://github.com/rl-institut/simbev>`_.
-
-        Returns
-        --------
-        :obj:`float`
-            User centric weight
-
-        """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[
-            self._id, "user_centric_weight"
-        ]
-
-    @property
-    def geometry(self):
-        """
-        Location of the potential charging park as
-        :shapely:`Shapely Point object<points>`.
-
-        Returns
-        --------
-        :shapely:`Shapely Point object<points>`.
-            Location of the potential charging park
-
-        """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[
-            self._id, "geometry"
-        ]
-
-    @property
-    def nearest_substation(self):
-        """
-        Determines the nearest LV Grid, substation and distance.
-
-        Returns
-        --------
-        :obj:`dict`
-            :obj:`int`
-                LV Grid ID
-            :obj:`str`
-                ID of the nearest substation
-            :obj:`float`
-                Distance to nearest substation
-
-        """
-        substations = self._topology.buses_df.loc[
-            self._topology.transformers_df.bus1]
-
-        nearest_substation, distance = find_nearest_bus(
-            self.geometry, substations)
-
-        lv_grid_id = int(self._topology.buses_df.at[
-                             nearest_substation, "lv_grid_id"])
-
-        return {
-            "lv_grid_id": lv_grid_id,
-            "nearest_substation": nearest_substation,
-            "distance": distance,
-        }
-
-    @property
-    def edisgo_id(self):
-        try:
-            return self._edisgo_obj.electromobility.\
-                integrated_charging_parks_df.at[self.id, "edisgo_id"]
-        except Exception:
-            return None
-
-    @property
-    def charging_processes_df(self):
-        """
-        Determines designated charging processes for the potential charging
-        park.
-
-        Returns
-        --------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            DataFrame with AGS, car ID, trip destination, charging use case
-            (private or public), netto charging capacity, charging demand,
-            charge start, charge end, grid connection point and charging point
-            ID.
-
-        """
-        return self._edisgo_obj.electromobility.charging_processes_df.loc[
-            self._edisgo_obj.electromobility.charging_processes_df.
-            charging_park_id == self._id
-        ]
-
-    @property
-    def grid_connection_capacity(self):
-        if self.use_case == "hpc":
-            return self.designated_charging_point_capacity / 10 ** 3
-        else:
-            return determine_grid_connection_capacity(
-                self.designated_charging_point_capacity / 10 ** 3
-            )
-
-    @property
-    def within_grid(self):
-        """
-        Deetermines if the potential charging park lays within the grid
-        district.
-        """
-        return self._edisgo_obj.topology.grid_district["geom"].contains(
-            self.geometry)
-
-    @property
-    def _last_charging_process_and_netto_charging_capacity_per_charging_point(
-            self):
-        return (
-            self.charging_processes_df[
-                ["charging_point_id", "park_end", "netto_charging_capacity"]
-            ]
-            .groupby(by="charging_point_id")
-            .max()
-        )
-
-    @property
-    def _load_and_generator_capacity_weight(self, **kwargs):
-        """
-        Determines grid centric weight regarding load and generator capacity
-        in LV Grid.
-
-        Returns
-        --------
-        :obj:`float`
-            Grid centric weight regarding load and generator capacity in LV
-            Grid
-        """
-        generators_weight_factor = kwargs.get(
-            "generators_weight_factor", 1 / 2)
-        loads_weight_factor = kwargs.get("loads_weight_factor", 1 / 2)
-
-        weights = (loads_weight_factor, generators_weight_factor)
-
-        if not round(sum(weights), 3) == 1:
-            f = 1 / sum(weights)
-            generators_weight_factor *= f
-            loads_weight_factor *= f
-
-        generators_weight_value = self._topology.lv_grids_df.at[
-            self.nearest_substation["lv_grid_id"], "generators_weight"
-        ]
-
-        loads_weight_value = self._topology.lv_grids_df.at[
-            self.nearest_substation["lv_grid_id"], "loads_weight"
-        ]
-
-        return (
-            generators_weight_value * generators_weight_factor
-            + loads_weight_value * loads_weight_factor
-        )

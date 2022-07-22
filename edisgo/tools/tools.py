@@ -1,28 +1,24 @@
 import os
+
+from math import pi, sqrt
+
+import networkx as nx
 import numpy as np
 import pandas as pd
-import networkx as nx
-from math import pi, sqrt
+
 from sqlalchemy import func
 
-from edisgo.flex_opt import exceptions
-from edisgo.flex_opt import check_tech_constraints
+from edisgo.flex_opt import check_tech_constraints, exceptions
 from edisgo.network.grids import LVGrid
 from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
 
-    from egoio.db_tables import climate
-    from egoio.tools.db import connection
+    import geopandas as gpd
 
+    from egoio.db_tables import climate
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
-
-    geopandas = True
-    try:
-        import geopandas as gpd
-    except:
-        geopandas = False
 
 
 def select_worstcase_snapshots(edisgo_obj):
@@ -55,14 +51,13 @@ def select_worstcase_snapshots(edisgo_obj):
 
     timestamp = {
         "min_residual_load": residual_load.idxmin(),
-        "max_residual_load": residual_load.idxmax()}
-    
+        "max_residual_load": residual_load.idxmax(),
+    }
+
     return timestamp
 
 
-def calculate_relative_line_load(
-    edisgo_obj, lines=None, timesteps=None
-):
+def calculate_relative_line_load(edisgo_obj, lines=None, timesteps=None):
     """
     Calculates relative line loading for specified lines and time steps.
 
@@ -77,7 +72,8 @@ def calculate_relative_line_load(
         Line names/representatives of lines to calculate line loading for. If
         None, line loading is calculated for all lines in the network.
         Default: None.
-    timesteps : :pandas:`pandas.Timestamp<Timestamp>` or list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
+    timesteps : :pandas:`pandas.Timestamp<Timestamp>` or \
+        list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
         Specifies time steps to calculate line loading for. If timesteps is
         None, all time steps power flow analysis was conducted for are used.
         Default: None.
@@ -101,20 +97,16 @@ def calculate_relative_line_load(
     else:
         line_indices = edisgo_obj.topology.lines_df.index
 
-    mv_lines_allowed_load = check_tech_constraints.lines_allowed_load(
-        edisgo_obj, "mv")
-    lv_lines_allowed_load = check_tech_constraints.lines_allowed_load(
-        edisgo_obj, "lv")
+    mv_lines_allowed_load = check_tech_constraints.lines_allowed_load(edisgo_obj, "mv")
+    lv_lines_allowed_load = check_tech_constraints.lines_allowed_load(edisgo_obj, "lv")
     lines_allowed_load = pd.concat(
-        [mv_lines_allowed_load, lv_lines_allowed_load],
-        axis=1, sort=False).loc[timesteps, line_indices]
+        [mv_lines_allowed_load, lv_lines_allowed_load], axis=1, sort=False
+    ).loc[timesteps, line_indices]
 
-    return check_tech_constraints.lines_relative_load(
-        edisgo_obj, lines_allowed_load)
+    return check_tech_constraints.lines_relative_load(edisgo_obj, lines_allowed_load)
 
 
-def calculate_line_reactance(line_inductance_per_km, line_length,
-                             num_parallel):
+def calculate_line_reactance(line_inductance_per_km, line_length, num_parallel):
     """
     Calculates line reactance in Ohm.
 
@@ -133,12 +125,10 @@ def calculate_line_reactance(line_inductance_per_km, line_length,
         Reactance in Ohm
 
     """
-    return (line_inductance_per_km / 1e3 * line_length *
-            2 * pi * 50 / num_parallel)
+    return line_inductance_per_km / 1e3 * line_length * 2 * pi * 50 / num_parallel
 
 
-def calculate_line_resistance(line_resistance_per_km, line_length,
-                              num_parallel):
+def calculate_line_resistance(line_resistance_per_km, line_length, num_parallel):
     """
     Calculates line resistance in Ohm.
 
@@ -252,14 +242,13 @@ def select_cable(edisgo_obj, level, apparent_power):
     elif level == "lv":
         available_cables = edisgo_obj.topology.equipment_data["lv_cables"]
     else:
-        raise ValueError("Specified voltage level is not valid. Must "
-                         "either be 'mv' or 'lv'.")
+        raise ValueError(
+            "Specified voltage level is not valid. Must either be 'mv' or 'lv'."
+        )
 
     suitable_cables = available_cables[
         calculate_apparent_power(
-            available_cables["U_n"],
-            available_cables["I_max_th"],
-            cable_count
+            available_cables["U_n"], available_cables["I_max_th"], cable_count
         )
         > apparent_power
     ]
@@ -271,7 +260,8 @@ def select_cable(edisgo_obj, level, apparent_power):
             calculate_apparent_power(
                 available_cables["U_n"],
                 available_cables["I_max_th"],
-                cable_count)
+                cable_count,
+            )
             > apparent_power
         ]
     if suitable_cables.empty:
@@ -303,6 +293,7 @@ def assign_feeder(edisgo_obj, mode="mv_feeder"):
         'mv_feeder' or 'lv_feeder'. Default: 'mv_feeder'.
 
     """
+
     def _assign_to_busses(graph, station):
         # get all buses in network and remove station to get separate subgraphs
         graph_nodes = list(graph.nodes())
@@ -320,27 +311,25 @@ def assign_feeder(edisgo_obj, mode="mv_feeder"):
 
                 # in case of an LV station, assign feeder to all nodes in that
                 # LV network (only applies when mode is 'mv_feeder'
-                if node.split("_")[0] == "BusBar" and node.split("_")[
-                    -1] == "MV":
-                    lvgrid = LVGrid(
-                        id=int(node.split("_")[-2]),
-                        edisgo_obj=edisgo_obj)
+                if node.split("_")[0] == "BusBar" and node.split("_")[-1] == "MV":
+                    lvgrid = LVGrid(id=int(node.split("_")[-2]), edisgo_obj=edisgo_obj)
                     edisgo_obj.topology.buses_df.loc[
-                        lvgrid.buses_df.index, mode] = neighbor
+                        lvgrid.buses_df.index, mode
+                    ] = neighbor
 
     def _assign_to_lines(lines):
         edisgo_obj.topology.lines_df.loc[
-            lines, mode] = edisgo_obj.topology.lines_df.loc[
-                lines].apply(
-                    lambda _: edisgo_obj.topology.buses_df.at[_.bus0, mode],
-                    axis=1)
+            lines, mode
+        ] = edisgo_obj.topology.lines_df.loc[lines].apply(
+            lambda _: edisgo_obj.topology.buses_df.at[_.bus0, mode], axis=1
+        )
         tmp = edisgo_obj.topology.lines_df.loc[lines]
         lines_nan = tmp[tmp.loc[lines, mode].isna()].index
         edisgo_obj.topology.lines_df.loc[
-            lines_nan, mode] = edisgo_obj.topology.lines_df.loc[
-                lines_nan].apply(
-                    lambda _: edisgo_obj.topology.buses_df.at[_.bus1, mode],
-                    axis=1)
+            lines_nan, mode
+        ] = edisgo_obj.topology.lines_df.loc[lines_nan].apply(
+            lambda _: edisgo_obj.topology.buses_df.at[_.bus1, mode], axis=1
+        )
 
     if mode == "mv_feeder":
         graph = edisgo_obj.topology.mv_grid.graph
@@ -358,8 +347,9 @@ def assign_feeder(edisgo_obj, mode="mv_feeder"):
             _assign_to_lines(lines)
 
     else:
-        raise ValueError("Invalid mode. Mode must either be 'mv_feeder' or "
-                         "'lv_feeder'.")
+        raise ValueError(
+            "Invalid mode. Mode must either be 'mv_feeder' or 'lv_feeder'."
+        )
 
 
 def get_path_length_to_station(edisgo_obj):
@@ -384,8 +374,7 @@ def get_path_length_to_station(edisgo_obj):
 
     for bus in edisgo_obj.topology.mv_grid.buses_df.index:
         path = nx.shortest_path(graph, source=mv_station, target=bus)
-        edisgo_obj.topology.buses_df.at[
-            bus, "path_length_to_station"] = len(path) - 1
+        edisgo_obj.topology.buses_df.at[bus, "path_length_to_station"] = len(path) - 1
         if bus.split("_")[0] == "BusBar" and bus.split("_")[-1] == "MV":
             # check if there is an underlying LV grid
             lv_grid_repr = "LVGrid_{}".format(int(bus.split("_")[-2]))
@@ -394,15 +383,14 @@ def get_path_length_to_station(edisgo_obj):
                 lv_graph = lvgrid.graph
                 lv_station = lvgrid.station.index[0]
                 for bus in lvgrid.buses_df.index:
-                    lv_path = nx.shortest_path(lv_graph, source=lv_station,
-                                            target=bus)
+                    lv_path = nx.shortest_path(lv_graph, source=lv_station, target=bus)
                     edisgo_obj.topology.buses_df.at[
-                        bus, "path_length_to_station"] = \
-                        len(path) + len(lv_path)
+                        bus, "path_length_to_station"
+                    ] = len(path) + len(lv_path)
     return edisgo_obj.topology.buses_df.path_length_to_station
 
 
-def assign_voltage_level_to_component(edisgo_obj, df):
+def assign_voltage_level_to_component(df, buses_df):
     """
     Adds column with specification of voltage level component is in.
 
@@ -413,10 +401,13 @@ def assign_voltage_level_to_component(edisgo_obj, df):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.EDisGo`
     df : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with component names in the index. Only required column is
         column 'bus', giving the name of the bus the component is connected to.
+    buses_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with bus information. Bus names are in the index. Only required column
+        is column 'v_nom', giving the nominal voltage of the voltage level the
+        bus is in.
 
     Returns
     --------
@@ -427,9 +418,7 @@ def assign_voltage_level_to_component(edisgo_obj, df):
 
     """
     df["voltage_level"] = df.apply(
-        lambda _: "lv"
-        if edisgo_obj.topology.buses_df.at[_.bus, "v_nom"] < 1
-        else "mv",
+        lambda _: "lv" if buses_df.at[_.bus, "v_nom"] < 1 else "mv",
         axis=1,
     )
     return df
@@ -438,7 +427,7 @@ def assign_voltage_level_to_component(edisgo_obj, df):
 def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
     """
     Get all weather cells that intersect with the grid district.
-    
+
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
@@ -456,18 +445,11 @@ def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
     with session_scope() as session:
         query = session.query(
             table.gid,
-            func.ST_AsText(
-                func.ST_Transform(
-                    table.geom, srid
-                )
-            ).label("geometry")
+            func.ST_AsText(func.ST_Transform(table.geom, srid)).label("geometry"),
         )
-    geom_data = pd.read_sql_query(
-        query.statement, query.session.bind)
-    geom_data.geometry = geom_data.apply(
-        lambda _: wkt_loads(_.geometry), axis=1)
-    geom_data = gpd.GeoDataFrame(
-        geom_data, crs=f"EPSG:{srid}")
+    geom_data = pd.read_sql_query(query.statement, query.session.bind)
+    geom_data.geometry = geom_data.apply(lambda _: wkt_loads(_.geometry), axis=1)
+    geom_data = gpd.GeoDataFrame(geom_data, crs=f"EPSG:{srid}")
 
     # Make sure MV Geometry is MultiPolygon
     mv_geom = edisgo_obj.topology.grid_district["geom"]
@@ -481,178 +463,15 @@ def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
     else:
         raise ValueError(
             f"Grid district geometry is of type {type(mv_geom)}."
-            " Only Shapely Polygon or MultiPolygon are accepted.")
-    mv_geom_gdf = gpd.GeoDataFrame(
-        m, crs=f"EPSG:{srid}", columns=["geometry"])
+            " Only Shapely Polygon or MultiPolygon are accepted."
+        )
+    mv_geom_gdf = gpd.GeoDataFrame(m, crs=f"EPSG:{srid}", columns=["geometry"])
 
-    return set(np.append(gpd.sjoin(
-        geom_data, mv_geom_gdf, how="right", op='intersects').gid.unique(),
-        edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique()))
-
-
-def get_directory_size(start_dir):
-    """
-    Walk over all files and sub-directories within a given directory and
-    calculate the sum of size of all files in the directory.
-    See: https://stackoverflow.com/a/1392549/13491957
-
-    Parameters
-    ----------
-    start_dir : str
-        Start path. Calculates the size of all files within the start path.
-
-    Returns
-    -------
-    int
-        Size of the directory.
-
-    """
-    total_size = 0
-
-    for dirpath, dirnames, filenames in os.walk(start_dir):
-        for f in filenames:
-            fp = os.path.join(dirpath, f)
-            # skip if it is symbolic link
-            if not os.path.islink(fp):
-                total_size += os.path.getsize(fp)
-
-    return total_size
-
-
-def get_files_recursive(path, files=[]):
-    """
-    Recursive function to get all files in a given path and its sub directories
-
-    Parameters
-    ----------
-    path : str
-        Directory to start from.
-    files : list, optional
-        List of files to start with. Default: []
-
-    Returns
-    -------
-
-    """
-    for f in os.listdir(path):
-        file = os.path.join(path, f)
-        if os.path.isdir(file):
-            files = get_files_recursive(file, files)
-        else:
-            files.append(file)
-
-    return files
-
-
-def calculate_impedance_for_parallel_components(parallel_components, pu=False):
-    """
-    Method to calculate parallel impedance and power of parallel elements.
-    """
-    if pu:
-        raise NotImplementedError('Calculation in pu for parallel components not implemented yet.')
-    else:
-        if not (parallel_components.diff().dropna() < 1e-6).all().all():
-            parallel_impedance = \
-                1 / sum([1/complex(comp.r, comp.x) for name, comp in parallel_components.iterrows()])
-            # apply current devider and use minimum
-            s_parallel = min([abs(comp.s_nom / (1 / complex(comp.r, comp.x) /
-                                                sum([1 / complex(comp.r, comp.x)
-                                                     for name, comp in parallel_components.iterrows()])))
-                              for name, comp in parallel_components.iterrows()])
-            return pd.Series({'r': parallel_impedance.real,
-                              'x': parallel_impedance.imag,
-                              's_nom': s_parallel})
-        else:
-            nr_components = len(parallel_components)
-            return pd.Series({'r': parallel_components.iloc[0].r/nr_components,
-                              'x': parallel_components.iloc[0].x/nr_components,
-                              's_nom': parallel_components.iloc[0].s_nom*nr_components})
-
-
-def get_nodal_residual_load(grid, edisgo, **kwargs):
-    """
-    Method to get nodal residual load being the sum of all supply and demand
-    units at that specific bus.
-
-    :param edisgo:
-    :return: pd.DataFrame() with indices being timesteps and column names
-    being the bus names
-    """
-    considered_loads = kwargs.get('considered_loads', None)
-    considered_generators = kwargs.get('considered_generators', None)
-    considered_storage = kwargs.get('considered_storage', None)
-    considered_charging_points = kwargs.get('considered_charging_points', None)
-    nodal_active_load, nodal_reactive_load = \
-        get_timeseries_per_node(grid, edisgo, 'load', considered_loads)
-    nodal_active_generation, nodal_reactive_generation = \
-        get_timeseries_per_node(grid, edisgo, 'generator',
-                                considered_generators)
-    nodal_active_storage, nodal_reactive_storage = \
-        get_timeseries_per_node(grid, edisgo, 'storage_unit',
-                                considered_storage) #Todo: adapt handling, once important
-    nodal_active_charging_points, nodal_reactive_charging_points = \
-        get_timeseries_per_node(grid, edisgo, 'charging_point',
-                                considered_charging_points)
-    nodal_active_power = \
-        nodal_active_generation + nodal_active_storage - nodal_active_load - \
-        nodal_active_charging_points
-    nodal_reactive_power = \
-        nodal_reactive_generation + nodal_reactive_storage - nodal_reactive_load - \
-        nodal_reactive_charging_points
-    return nodal_active_power, nodal_reactive_power, nodal_active_load, nodal_reactive_load, \
-           nodal_active_generation, nodal_reactive_generation, nodal_active_charging_points, \
-           nodal_reactive_charging_points, nodal_active_storage, nodal_reactive_storage
-
-
-def get_timeseries_per_node(grid, edisgo, component, component_names=None):
-    """
-    Helper function to get nodal active and reactive timeseries of the given
-    component
-
-    :param edisgo:
-    :param component: str
-            type of component for which the nodal timeseries are obtained,
-            e.g. 'load'
-    :param component_names: list of str
-            names of component that should be taken into account. For
-            optimisation only use inflexible units.
-    :return: pandas.DataFrame
-    """
-    nodal_active_power_all_buses = \
-        pd.DataFrame(columns=grid.buses_df.index,
-                     index=edisgo.timeseries.timeindex)
-    nodal_reactive_power_all_buses = pd.DataFrame(
-        columns=grid.buses_df.index,
-        index=edisgo.timeseries.timeindex)
-    if component_names is None or len(component_names)>0:
-        bus_component_dict = \
-            getattr(grid, component + 's_df')['bus'].to_dict()
-        if component_names is None:
-            component_names = getattr(grid, component + 's_df').index
-        nodal_active_power = \
-            getattr(edisgo.timeseries, component + 's_active_power')[
-                component_names].rename(columns=bus_component_dict)
-        nodal_reactive_power = \
-            getattr(edisgo.timeseries, component + 's_reactive_power')[
-                component_names].rename(columns=bus_component_dict)
-        nodal_active_power = nodal_active_power.groupby(nodal_active_power.columns,
-                                                        axis=1).sum()
-        nodal_reactive_power = nodal_reactive_power.groupby(
-            nodal_reactive_power.columns, axis=1).sum()
-        nodal_active_power_all_buses[nodal_active_power.columns] = \
-            nodal_active_power
-        nodal_reactive_power_all_buses[nodal_reactive_power.columns] = \
-            nodal_reactive_power
-    nodal_active_power_all_buses.fillna(0, inplace=True)
-    nodal_reactive_power_all_buses.fillna(0, inplace=True)
-    return nodal_active_power_all_buses, nodal_reactive_power_all_buses
-
-
-def convert_impedances_to_mv(edisgo):
-    for lv_grid in edisgo.topology.mv_grid.lv_grids:
-        k = edisgo.topology.mv_grid.nominal_voltage / lv_grid.nominal_voltage
-        edisgo.topology.lines_df.loc[lv_grid.lines_df.index, 'r'] = \
-            edisgo.topology.lines_df.loc[lv_grid.lines_df.index, 'r'] * k**2
-        edisgo.topology.lines_df.loc[lv_grid.lines_df.index, 'x'] = \
-            edisgo.topology.lines_df.loc[lv_grid.lines_df.index, 'x'] * k ** 2
-    return edisgo
+    return set(
+        np.append(
+            gpd.sjoin(
+                geom_data, mv_geom_gdf, how="right", op="intersects"
+            ).gid.unique(),
+            edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique(),
+        )
+    )

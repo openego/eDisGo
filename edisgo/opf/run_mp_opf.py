@@ -1,21 +1,22 @@
-import os
 import json
-import subprocess
 import logging
-import numpy as np
+import os
+import subprocess
+
 from timeit import default_timer as timer
 
-from edisgo.tools.preprocess_pypsa_opf_structure import (
-    preprocess_pypsa_opf_structure,
-    aggregate_fluct_generators,
-)
-from edisgo.tools.powermodels_io import (
-    to_powermodels,
-    convert_storage_series,
-    add_storage_from_edisgo,
-)
+import numpy as np
 
 from edisgo.opf.util.scenario_settings import opf_settings
+from edisgo.tools.powermodels_io import (
+    add_storage_from_edisgo,
+    convert_storage_series,
+    to_powermodels,
+)
+from edisgo.tools.preprocess_pypsa_opf_structure import (
+    aggregate_fluct_generators,
+    preprocess_pypsa_opf_structure,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,8 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
         "time_elapsed": 1.0,
         # storage units are considered
         "storage_units": False,
-        # positioning of storage units, if empty list, all buses are potential positions of storage units and
+        # positioning of storage units, if empty list, all buses are potential positions
+        # of storage units and
         # capacity is optimized
         "storage_buses": [],
         # total storage capacity in the network
@@ -97,7 +99,8 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
         # An overall allowance of curtailment is considered
         "curtailment_allowance": False,
         # Maximal allowed curtailment over entire time horizon,
-        # DEFAULT: "3percent"=> 3% of total RES generation in time horizon may be curtailed, else: Float
+        # DEFAULT: "3percent"=> 3% of total RES generation in time horizon may be
+        # curtailed, else: Float
         "curtailment_total": "3percent",
         "results_path": "opf_solutions"
         # path to where OPF results are stored
@@ -111,7 +114,8 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     logger.debug(scenario_data_dir)
     # solution_dir = os.path.join(opf_dir, "opf_solutions/")
 
-    # set path to edisgoOPF folder for scenario data and julia module relative to this file
+    # set path to edisgoOPF folder for scenario data and julia module relative to this
+    # file
     # abspath = os.path.dirname(os.path.abspath(__file__))
     # opf_dir = os.path.join(abspath, "edisgoOPF/")
     # scenario_data_dir = os.path.join(opf_dir, "edisgo_scenario_data")
@@ -144,9 +148,7 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
         pypsa_mv.lines.loc[:, "s_nom"] = pypsa_mv.lines.loc[:, "s_nom"] * 0.5
     timehorizon = len(pypsa_mv.snapshots)
     # set name of pypsa network
-    pypsa_mv.name = "ding0_{}_t_{}".format(
-        edisgo_network.topology.id, timehorizon
-    )
+    pypsa_mv.name = "ding0_{}_t_{}".format(edisgo_network.topology.id, timehorizon)
 
     # Remap storage bus names to Integers, if any
     if "storage_buses" in kwargs:
@@ -163,15 +165,18 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     logger.debug("preprocessing pypsa structure for opf")
     preprocess_pypsa_opf_structure(edisgo_network, pypsa_mv, hvmv_trafo=False)
     aggregate_fluct_generators(pypsa_mv)
-    # convert pypsa structure to network dictionary and create dictionaries for time series of loads and generators
+    # convert pypsa structure to network dictionary and create dictionaries for time
+    # series of loads and generators
     pm, load_data, gen_data = to_powermodels(pypsa_mv)
     storage_data = convert_storage_series(storage_series)
 
-    # Export eDisGo storage only for operation only as they would interfere with positioning
+    # Export eDisGo storage only for operation only as they would interfere with
+    # positioning
     if settings["storage_operation_only"]:
         add_storage_from_edisgo(edisgo_network, pypsa_mv, pm)
 
-    # dump json files for static network information, timeseries of loads and generators, and opf settings
+    # dump json files for static network information, timeseries of loads and
+    # generators, and opf settings
     with open(
         os.path.join(scenario_data_dir, "{}_static.json".format(pm["name"])),
         "w",
@@ -192,18 +197,14 @@ def run_mp_opf(edisgo_network, timesteps=None, storage_series=[], **kwargs):
     ) as outfile:
         json.dump(storage_data, outfile, default=convert)
     with open(
-        os.path.join(
-            scenario_data_dir, "{}_opf_setting.json".format(pm["name"])
-        ),
+        os.path.join(scenario_data_dir, "{}_opf_setting.json".format(pm["name"])),
         "w",
     ) as outfile:
         json.dump(settings, outfile, default=convert)
 
     logger.info("starting julia process")
     start = timer()
-    solution_dir = kwargs.get(
-        "results_path", os.path.join(opf_dir, "opf_solutions")
-    )
+    solution_dir = kwargs.get("results_path", os.path.join(opf_dir, "opf_solutions"))
     julia_process = subprocess.run(
         [
             "julia",

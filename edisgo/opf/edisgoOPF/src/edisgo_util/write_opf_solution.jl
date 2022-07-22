@@ -1,6 +1,6 @@
 #=
 write_opf_solution:
-- Julia version: 
+- Julia version:
 - Author: RL-INSTITUT\jaap.pedersen
 - Date: 2019-11-13
 =#

@@ -18,18 +18,20 @@ __url__ = "https://github.com/openego/edisgo/blob/master/LICENSE"
 __author__ = "nesnoj, gplssm"
 
 
-import os
-from glob import glob
-import shutil
-import edisgo
-import logging
 import datetime
+import logging
+import os
+import shutil
 
-logger = logging.getLogger("edisgo")
+from glob import glob
+
+import edisgo
+
+logger = logging.getLogger(__name__)
 
 try:
     import configparser as cp
-except:
+except Exception:
     # to be compatible with Python2.7
     import ConfigParser as cp
 
@@ -38,15 +40,11 @@ _loaded = False
 
 # load config dirs
 package_path = edisgo.__path__[0]
-internal_config_file = os.path.join(
-    package_path, "config", "config_system.cfg"
-)
+internal_config_file = os.path.join(package_path, "config", "config_system.cfg")
 try:
     cfg.read(internal_config_file)
-except:
-    logger.exception(
-        "Internal config {} file not found.".format(internal_config_file)
-    )
+except Exception:
+    logger.exception("Internal config {} file not found.".format(internal_config_file))
 
 
 class Config:
@@ -139,9 +137,7 @@ class Config:
                 )
         else:
             for conf in config_files:
-                load_config(
-                    filename="{}.cfg".format(conf), config_dir=config_path
-                )
+                load_config(filename="{}.cfg".format(conf), config_dir=config_path)
 
         config_dict = cfg._sections
 
@@ -151,7 +147,7 @@ class Config:
                 # try str -> float conversion
                 try:
                     config_dict[sec][subsec] = float(val)
-                except:
+                except Exception:
                     pass
 
         # convert to time object
@@ -176,14 +172,12 @@ class Config:
         if key2 is None:
             try:
                 return self._data[key1]
-            except:
-                raise KeyError(
-                    "Config does not contain section {}.".format(key1)
-                )
+            except Exception:
+                raise KeyError("Config does not contain section {}.".format(key1))
         else:
             try:
                 return self._data[key1][key2]
-            except:
+            except Exception:
                 raise KeyError(
                     "Config does not contain value for {} or "
                     "section {}.".format(key2, key1)
@@ -274,13 +268,13 @@ def get(section, key):
         pass
     try:
         return cfg.getfloat(section, key)
-    except:
+    except Exception:
         try:
             return cfg.getint(section, key)
-        except:
+        except Exception:
             try:
                 return cfg.getboolean(section, key)
-            except:
+            except Exception:
                 return cfg.get(section, key)
 
 
@@ -306,9 +300,7 @@ def get_default_config_path():
     if not os.path.isdir(root_path):
         # create it
         logger.info(
-            "eDisGo root path {} not found, I will create it.".format(
-                root_path
-            )
+            "eDisGo root path {} not found, I will create it.".format(root_path)
         )
         make_directory(root_path)
 
@@ -320,9 +312,7 @@ def get_default_config_path():
 
         # copy default config files
         logger.info(
-            "eDisGo config path {} not found, I will create it.".format(
-                config_path
-            )
+            "eDisGo config path {} not found, I will create it.".format(config_path)
         )
 
     # copy default config files if they don't exist
@@ -333,9 +323,7 @@ def get_default_config_path():
         )
         if not os.path.isfile(filename):
             logger.info(
-                "I will create a default config file {} in {}".format(
-                    file, config_path
-                )
+                "I will create a default config file {} in {}".format(file, config_path)
             )
             shutil.copy(file, filename)
     return config_path

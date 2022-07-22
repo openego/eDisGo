@@ -1,15 +1,16 @@
-import pytest
 import os
+
+import pytest
 
 
 def pytest_configure(config):
     pytest.ding0_test_network_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)),
-        "ding0_test_network_1")
+        os.path.realpath(os.path.dirname(__file__)), "ding0_test_network_1"
+    )
 
     pytest.ding0_test_network_2_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)),
-        "ding0_test_network_2")
+        os.path.realpath(os.path.dirname(__file__)), "ding0_test_network_2"
+    )
 
     pytest.ding0_test_network_3_path = os.path.join(
         os.path.realpath(os.path.dirname(__file__)),
