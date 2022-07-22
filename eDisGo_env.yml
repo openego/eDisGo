@@ -3,6 +3,18 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - shapely >=1.5.12, <=1.6.3 
-  - pandas
-
+  - python = 3.8
+  - pip
+  - pandas >= 1.2, < 1.3
+  - conda-forge::fiona
+  - conda-forge::geopy
+  - conda-forge::geopandas
+  - conda-forge::pyproj
+  - conda-forge::shapely
+  - conda-forge::rasterio
+  - conda-forge::geoalchemy2
+  - conda-forge::pygeos
+  - conda-forge::contextily
+  - conda-forge::descartes
+  - pip:
+      - eDisGo[full]

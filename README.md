@@ -1,19 +1,21 @@
 <img align="right" width="200" height="200" src="https://raw.githubusercontent.com/openego/eDisGo/dev/doc/images/edisgo_logo.png">
 
-Overview
-========
+
+# Overview
+
 [![Coverage Status](https://coveralls.io/repos/github/openego/eDisGo/badge.svg?branch=dev)](https://coveralls.io/github/openego/eDisGo?branch=dev)
 [![Tests & coverage](https://github.com/openego/eDisGo/actions/workflows/tests-coverage.yml/badge.svg)](https://github.com/openego/eDisGo/actions/workflows/tests-coverage.yml)
 
+
 # eDisGo
+
 The python package eDisGo serves as a toolbox to evaluate flexibility measures
 as an economic alternative to conventional grid expansion in
 medium and low voltage grids.
 See [documentation](https://edisgo.readthedocs.io/en/dev/) for further information.
 
 
-LICENSE
--------
+# LICENSE
 
 Copyright (C) 2017 Reiner Lemoine Institut gGmbH
 
@@ -29,4 +31,3 @@ details.
 
 You should have received a copy of the GNU General Public License along with
 this program. If not, see https://www.gnu.org/licenses/.
-

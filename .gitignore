@@ -13,6 +13,7 @@
 *.woff
 *.css
 *.pkl
+*.ipynb_checkpoints
 
 # exclude locally built docs
 doc/_html

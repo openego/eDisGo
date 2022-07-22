@@ -25,6 +25,22 @@ edisgo.tools.geo module
     :undoc-members:
     :show-inheritance:
 
+edisgo.tools.geopandas\_helper module
+----------------------------------------
+
+.. automodule:: edisgo.tools.geo
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+edisgo.tools.networkx\_helper module
+----------------------------------------
+
+.. automodule:: edisgo.tools.geo
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 edisgo.tools.plots module
 --------------------------
 
@@ -56,7 +72,6 @@ edisgo.tools.tools module
     :members:
     :undoc-members:
     :show-inheritance:
-
 
 Module contents
 ---------------

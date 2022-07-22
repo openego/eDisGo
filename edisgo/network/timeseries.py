@@ -1,351 +1,1750 @@
+from __future__ import annotations
+
+import itertools
 import logging
-import pandas as pd
-import numpy as np
-import datetime
 import os
 
-from workalendar.europe import Germany
-from demandlib import bdew as bdew, particular_profiles as profiles
-from edisgo.io.timeseries_import import import_feedin_timeseries
-from edisgo.tools.tools import assign_voltage_level_to_component,\
-    drop_duplicated_columns, get_weather_cells_intersecting_with_grid_district
+import numpy as np
+import pandas as pd
 
+from edisgo.flex_opt import q_control
+from edisgo.io import timeseries_import
+from edisgo.tools.tools import (
+    assign_voltage_level_to_component,
+    get_weather_cells_intersecting_with_grid_district,
+)
 
-logger = logging.getLogger("edisgo")
-
-
-def _get_attributes_to_save():
-    """
-    Helper function to specify which TimeSeries attributes to save and restore.
-
-    Is used in functions :attr:`~.network.timeseries.TimeSeries.to_csv`
-    and :attr:`~.network.timeseries.TimeSeries.from_csv`.
-
-    Returns
-    -------
-    list
-        List of TimeSeries attributes to save and restore.
-
-    """
-    return [
-        "loads_active_power", "loads_reactive_power",
-        "generators_active_power", "generators_reactive_power",
-        "charging_points_active_power", "charging_points_reactive_power",
-        "storage_units_active_power", "storage_units_reactive_power"
-    ]
+logger = logging.getLogger(__name__)
 
 
 class TimeSeries:
     """
-    Defines time series for all loads, generators and storage units in network
-    (if set).
+    Holds component-specific active and reactive power time series.
 
-    Can also contain time series for loads (sector-specific), generators
-    (technology-specific), and curtailment (technology-specific).
+    All time series are fixed time series that in case of flexibilities result after
+    application of a heuristic or optimisation. They can be used for power flow
+    calculations.
 
-    Parameters
-    -----------
+    Also holds any raw time series data that was used to generate component-specific
+    time series in attribute `time_series_raw`. See
+    :class:`~.network.timeseries.TimeSeriesRaw` for more information.
+
+    Other Parameters
+    -----------------
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`, optional
         Can be used to define a time range for which to obtain the provided
         time series and run power flow analysis. Default: None.
-    generators_active_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Active power timeseries of all generators in topology. Index of
-        DataFrame has to contain timeindex and column names are names of
-        generators.
-    generators_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Reactive power timeseries of all generators in topology. Format is the
-        same as for generators_active power.
-    loads_active_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Active power timeseries of all loads in topology. Index of DataFrame
-        has to contain timeindex and column names are names of loads.
-    loads_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Reactive power timeseries of all loads in topology. Format is the
-        same as for loads_active power.
-    storage_units_active_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Active power timeseries of all storage units in topology. Index of
-        DataFrame has to contain timeindex and column names are names of
-        storage units.
-    storage_units_reactive_power : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Reactive power timeseries of all storage_units in topology. Format is
-        the same as for storage_units_active power.
-    curtailment : :pandas:`pandas.DataFrame<DataFrame>` or list, optional
-        In the case curtailment is applied to all fluctuating renewables
-        this needs to be a DataFrame with active power curtailment time series.
-        Time series can either be aggregated by technology type or by type
-        and weather cell ID. In the first case columns of the DataFrame are
-        'solar' and 'wind'; in the second case columns need to be a
-        :pandas:`pandas.MultiIndex<multiindex>` with the first level
-        containing the type and the second level the weather cell ID.
-        In the case curtailment is only applied to specific generators, this
-        parameter needs to be a list of all generators that are curtailed.
-        Default: None.
 
-    Notes
-    -----
-    Can also hold the following attributes when specific mode of
-    :meth:`get_component_timeseries` is called: mode, generation_fluctuating,
-    generation_dispatchable, generation_reactive_power, load,
-    load_reactive_power. See description of meth:`get_component_timeseries` for
-    format of these.
+    Attributes
+    -----------
+    time_series_raw : :class:`~.network.timeseries.TimeSeriesRaw`
+        Raw time series. See :class:`~.network.timeseries.TimeSeriesRaw` for  more
+        information.
 
     """
 
     def __init__(self, **kwargs):
 
         self._timeindex = kwargs.get("timeindex", pd.DatetimeIndex([]))
+        self.time_series_raw = TimeSeriesRaw()
+
+    @property
+    def is_worst_case(self) -> bool:
+        """
+        Time series mode.
+
+        Is used to distinguish between normal time series analysis and worst-case
+        analysis. Is determined by checking if the timindex starts before 1971 as the
+        default for worst-case is 1970. Be mindful when creating your own worst-cases.
+
+        Returns
+        -------
+        bool
+            Indicates if current time series is worst-case time series with different
+            assumptions for mv and lv simultaneities.
+        """
+        if len(self.timeindex) > 0:
+            return self.timeindex[0] < pd.Timestamp("1971-01-01")
+        return False
 
     @property
     def timeindex(self):
         """
-        Defines analysed time steps.
+        Time index all time-dependent attributes are indexed by.
 
-        Can be used to define a time range for which to obtain the provided
-        time series and run power flow analysis.
+        Is used as default time steps in e.g. power flow analysis.
 
         Parameters
         -----------
-        ind : timestamp or list(timestamp)
+        ind : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+            Time index all time-dependent attributes are indexed by.
 
         Returns
         -------
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-            See class definition for details.
+            Time index all time-dependent attributes are indexed by.
 
         """
         return self._timeindex
 
     @timeindex.setter
     def timeindex(self, ind):
-        # make iterable
-        if not hasattr(ind, "__len__"):
-            ind = [ind]
-        # make datetime index
-        ind = pd.DatetimeIndex(ind)
-        if len(self._timeindex) > 0:
-            # check if new time index is subset of existing time index
-            if not ind.isin(self._timeindex).all():
-                logger.warning(
-                    "Not all time steps of new time index lie within existing "
-                    "time index. This may cause problems later on."
-                )
+        if len(self._timeindex) > 0 and not ind.isin(self._timeindex).all():
+            logger.warning(
+                "Not all time steps of new time index lie within existing "
+                "time index. This may cause problems later on."
+            )
         self._timeindex = ind
+
+    def _internal_getter(self, attribute):
+        try:
+            return getattr(self, f"_{attribute}").loc[self.timeindex, :]
+        except AttributeError:
+            return pd.DataFrame(index=self.timeindex)
+        except KeyError:
+            logger.warning(
+                f"Timeindex and {attribute} have deviating indices. "
+                "Empty dataframe will be returned."
+            )
+            return pd.DataFrame(index=self.timeindex)
 
     @property
     def generators_active_power(self):
         """
-        Active power time series of all generators in MW.
+        Active power time series of generators in MW.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series of all generators in topology in MW. Index of the
+            dataframe is a time index and column names are names of generators.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+            Active power time series of all generators in topology in MW for time steps
+            given in :py:attr:`~timeindex`. For more information on the dataframe see
+            input parameter `df`.
 
         """
-        try:
-            return self._generators_active_power.loc[self.timeindex, :]
-        except:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("generators_active_power")
 
     @generators_active_power.setter
-    def generators_active_power(self, generators_active_power_ts):
-        self._generators_active_power = generators_active_power_ts
+    def generators_active_power(self, df):
+        self._generators_active_power = df
 
     @property
     def generators_reactive_power(self):
         """
-        Reactive power timeseries of generators in MVA.
+        Reactive power time series of generators in MVA.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series of all generators in topology in MVA. Index of
+            the dataframe is a time index and column names are names of generators.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+            Reactive power time series of all generators in topology in MVA for time
+            steps given in :py:attr:`~timeindex`. For more information on the dataframe
+            see input parameter `df`.
 
         """
-        try:
-            return self._generators_reactive_power.loc[self.timeindex, :]
-        except:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("generators_reactive_power")
 
     @generators_reactive_power.setter
-    def generators_reactive_power(self, generators_reactive_power_ts):
-        self._generators_reactive_power = generators_reactive_power_ts
+    def generators_reactive_power(self, df):
+        self._generators_reactive_power = df
 
     @property
     def loads_active_power(self):
         """
-        Active power timeseries of loads in MW.
+        Active power time series of loads in MW.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series of all loads in topology in MW. Index of the
+            dataframe is a time index and column names are names of loads.
 
         Returns
         -------
-        dict or :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series of all loads in topology in MW for time steps
+            given in :py:attr:`~timeindex`. For more information on the dataframe see
+            input parameter `df`.
 
         """
-        try:
-            return self._loads_active_power.loc[self.timeindex, :]
-        except:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("loads_active_power")
 
     @loads_active_power.setter
-    def loads_active_power(self, loads_active_power_ts):
-        self._loads_active_power = loads_active_power_ts
+    def loads_active_power(self, df):
+        self._loads_active_power = df
 
     @property
     def loads_reactive_power(self):
         """
-        Reactive power timeseries in MVA.
+        Reactive power time series of loads in MVA.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series of all loads in topology in MVA. Index of
+            the dataframe is a time index and column names are names of loads.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+            Reactive power time series of all loads in topology in MVA for time
+            steps given in :py:attr:`~timeindex`. For more information on the dataframe
+            see input parameter `df`.
 
         """
-        try:
-            return self._loads_reactive_power.loc[self.timeindex, :]
-        except:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("loads_reactive_power")
 
     @loads_reactive_power.setter
-    def loads_reactive_power(self, loads_reactive_power_ts):
-        self._loads_reactive_power = loads_reactive_power_ts
+    def loads_reactive_power(self, df):
+        self._loads_reactive_power = df
 
     @property
     def storage_units_active_power(self):
         """
-        Active power timeseries of storage units in MW.
+        Active power time series of storage units in MW.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series of all storage units in topology in MW. Index of
+            the dataframe is a time index and column names are names of storage units.
 
         Returns
         -------
-        dict or :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series of all storage units in topology in MW for time
+            steps given in :py:attr:`~timeindex`. For more information on the dataframe
+            see input parameter `df`.
 
         """
-        try:
-            return self._storage_units_active_power.loc[self.timeindex, :]
-        except:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("storage_units_active_power")
 
     @storage_units_active_power.setter
-    def storage_units_active_power(self, storage_units_active_power_ts):
-        self._storage_units_active_power = storage_units_active_power_ts
+    def storage_units_active_power(self, df):
+        self._storage_units_active_power = df
 
     @property
     def storage_units_reactive_power(self):
         """
-        Reactive power timeseries of storage units in MVA.
+        Reactive power time series of storage units in MVA.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series of all storage units in topology in MVA. Index of
+            the dataframe is a time index and column names are names of storage units.
 
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+            Reactive power time series of all storage units in topology in MVA for time
+            steps given in :py:attr:`~timeindex`. For more information on the dataframe
+            see input parameter `df`.
 
         """
-        try:
-            return self._storage_units_reactive_power.loc[self.timeindex, :]
-        except:
-            return pd.DataFrame(index=self.timeindex)
+        return self._internal_getter("storage_units_reactive_power")
 
     @storage_units_reactive_power.setter
-    def storage_units_reactive_power(self, storage_units_reactive_power_ts):
-        self._storage_units_reactive_power = storage_units_reactive_power_ts
+    def storage_units_reactive_power(self, df):
+        self._storage_units_reactive_power = df
 
-    @property
-    def charging_points_active_power(self):
+    def reset(self):
         """
-        Active power timeseries of charging points in MW.
+        Resets all time series.
+
+        Active and reactive power time series of all loads, generators and storage units
+        are deleted, as well as everything stored in :py:attr:`~time_series_raw`.
+
+        """
+        self.generators_active_power = None
+        self.loads_active_power = None
+        self.storage_units_active_power = None
+        self.generators_reactive_power = None
+        self.loads_reactive_power = None
+        self.storage_units_reactive_power = None
+        self.time_series_raw = TimeSeriesRaw()
+
+    def set_active_power_manual(
+        self, edisgo_object, ts_generators=None, ts_loads=None, ts_storage_units=None
+    ):
+        """
+        Sets given component active power time series.
+
+        If time series for a component were already set before, they are overwritten.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_generators : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series in MW of generators. Index of the data frame is
+            a datetime index. Columns contain generators names of generators to set
+            time series for.
+        ts_loads : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series in MW of loads. Index of the data frame is
+            a datetime index. Columns contain load names of loads to set
+            time series for.
+        ts_storage_units : :pandas:`pandas.DataFrame<DataFrame>`
+            Active power time series in MW of storage units. Index of the data frame is
+            a datetime index. Columns contain storage unit names of storage units to set
+            time series for.
+
+        """
+        self._set_manual(
+            edisgo_object,
+            "active",
+            ts_generators=ts_generators,
+            ts_loads=ts_loads,
+            ts_storage_units=ts_storage_units,
+        )
+
+    def set_reactive_power_manual(
+        self, edisgo_object, ts_generators=None, ts_loads=None, ts_storage_units=None
+    ):
+        """
+        Sets given component reactive power time series.
+
+        If time series for a component were already set before, they are overwritten.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_generators : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series in MVA of generators. Index of the data frame is
+            a datetime index. Columns contain generators names of generators to set
+            time series for.
+        ts_loads : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series in MVA of loads. Index of the data frame is
+            a datetime index. Columns contain load names of loads to set
+            time series for.
+        ts_storage_units : :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series in MVA of storage units. Index of the data frame
+            is a datetime index. Columns contain storage unit names of storage units to
+            set time series for.
+
+        """
+        self._set_manual(
+            edisgo_object,
+            "reactive",
+            ts_generators=ts_generators,
+            ts_loads=ts_loads,
+            ts_storage_units=ts_storage_units,
+        )
+
+    def _set_manual(
+        self,
+        edisgo_object,
+        mode,
+        ts_generators=None,
+        ts_loads=None,
+        ts_storage_units=None,
+    ):
+        """
+        Sets given component time series.
+
+        If time series for a component were already set before, they are overwritten.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        mode : str
+            Defines whether to set active or reactive power time series. Possible
+            options are "active" and "reactive".
+        ts_generators : :pandas:`pandas.DataFrame<DataFrame>`
+            Active or reactive power time series in MW or MVA of generators.
+            Index of the data frame is a datetime index. Columns contain generator
+            names of generators to set time series for.
+        ts_loads : :pandas:`pandas.DataFrame<DataFrame>`
+            Active or reactive power time series in MW or MVA of loads.
+            Index of the data frame is a datetime index. Columns contain load names of
+            loads to set time series for.
+        ts_storage_units : :pandas:`pandas.DataFrame<DataFrame>`
+            Active or reactive power time series in MW or MVA of storage units.
+            Index of the data frame is a datetime index. Columns contain storage unit
+            names of storage units to set time series for.
+
+        """
+        if ts_generators is not None:
+            # check if all generators time series are provided for exist in the network
+            # and only set time series for those that do
+            comps_in_network = _check_if_components_exist(
+                edisgo_object, ts_generators.columns, "generators"
+            )
+            ts_generators = ts_generators.loc[:, comps_in_network]
+
+            # drop generators time series from self.generators_(re)active_power that may
+            # already exist for some of the given generators
+            df_name = f"generators_{mode}_power"
+            drop_component_time_series(
+                obj=self, df_name=df_name, comp_names=ts_generators.columns
+            )
+            # set (re)active power
+            _add_component_time_series(obj=self, df_name=df_name, ts_new=ts_generators)
+
+        if ts_loads is not None:
+            # check if all loads time series are provided for exist in the network
+            # and only set time series for those that do
+            comps_in_network = _check_if_components_exist(
+                edisgo_object, ts_loads.columns, "loads"
+            )
+            ts_loads = ts_loads.loc[:, comps_in_network]
+
+            # drop load time series from self.loads_(re)active_power that may
+            # already exist for some of the given loads
+            df_name = f"loads_{mode}_power"
+            drop_component_time_series(
+                obj=self, df_name=df_name, comp_names=ts_loads.columns
+            )
+            # set (re)active power
+            _add_component_time_series(obj=self, df_name=df_name, ts_new=ts_loads)
+
+        if ts_storage_units is not None:
+            # check if all storage units time series are provided for exist in the
+            # network and only set time series for those that do
+            comps_in_network = _check_if_components_exist(
+                edisgo_object, ts_storage_units.columns, "storage_units"
+            )
+            ts_storage_units = ts_storage_units.loc[:, comps_in_network]
+
+            # drop storage unit time series from self.storage_units_(re)active_power
+            # that may already exist for some of the given storage units
+            df_name = f"storage_units_{mode}_power"
+            drop_component_time_series(
+                obj=self, df_name=df_name, comp_names=ts_storage_units.columns
+            )
+            # set (re)active power
+            _add_component_time_series(
+                obj=self, df_name=df_name, ts_new=ts_storage_units
+            )
+
+    def set_worst_case(
+        self,
+        edisgo_object,
+        cases,
+        generators_names=None,
+        loads_names=None,
+        storage_units_names=None,
+    ):
+        """
+        Sets demand and feed-in of loads, generators and storage units for the
+        specified worst cases.
+
+        Per default time series are set for all loads, generators and storage units
+        in the network.
+
+        Possible worst cases are 'load_case' (heavy load flow case) and 'feed-in_case'
+        (reverse power flow case). Each case is set up once for dimensioning of the MV
+        grid ('load_case_mv'/'feed-in_case_mv') and once for the dimensioning of the LV
+        grid ('load_case_lv'/'feed-in_case_lv'), as different simultaneity factors are
+        assumed for the different voltage levels.
+
+        Assumed simultaneity factors specified in the config section
+        `worst_case_scale_factor` are used to generate active power demand or feed-in.
+        For the reactive power behavior fixed cosphi is assumed. The power factors
+        set in the config section `reactive_power_factor` and the power factor
+        mode, defining whether components behave inductive or capacitive, given
+        in the config section `reactive_power_mode`, are used.
+
+        Component specific information is given below:
+
+        * Generators
+
+            Worst case feed-in time series are distinguished by technology (PV, wind
+            and all other) and whether it is a load or feed-in case.
+            In case of generator worst case time series it is not distinguished by
+            whether it is used to analyse the MV or LV. However, both options are
+            generated as it is distinguished in the case of loads.
+            Worst case scaling factors for generators are specified in
+            the config section `worst_case_scale_factor` through the parameters:
+            'feed-in_case_feed-in_pv', 'feed-in_case_feed-in_wind',
+            'feed-in_case_feed-in_other',
+            'load_case_feed-in_pv', load_case_feed-in_wind', and
+            'load_case_feed-in_other'.
+
+            For reactive power a fixed cosphi is assumed. A different reactive power
+            factor is used for generators in the MV and generators in the LV.
+            The reactive power factors for generators are specified in
+            the config section `reactive_power_factor` through the parameters:
+            'mv_gen' and 'lv_gen'.
+
+        * Conventional loads
+
+            Worst case load time series are distinguished by whether it
+            is a load or feed-in case and whether it used to analyse the MV or LV.
+            Worst case scaling factors for conventional loads are specified in
+            the config section `worst_case_scale_factor` through the parameters:
+            'mv_feed-in_case_load', 'lv_feed-in_case_load', 'mv_load_case_load', and
+            'lv_load_case_load'.
+
+            For reactive power a fixed cosphi is assumed. A different reactive power
+            factor is used for loads in the MV and loads in the LV.
+            The reactive power factors for conventional loads are specified in
+            the config section `reactive_power_factor` through the parameters:
+            'mv_load' and 'lv_load'.
+
+        * Charging points
+
+            Worst case demand time series are distinguished by use case (home charging,
+            work charging, public (slow) charging and HPC), by whether it is a load or
+            feed-in case and by whether it used to analyse the MV or LV.
+            Worst case scaling factors for charging points are specified in
+            the config section `worst_case_scale_factor` through the parameters:
+            'mv_feed-in_case_cp_home', 'mv_feed-in_case_cp_work',
+            'mv_feed-in_case_cp_public', and 'mv_feed-in_case_cp_hpc',
+            'lv_feed-in_case_cp_home', 'lv_feed-in_case_cp_work',
+            'lv_feed-in_case_cp_public', and 'lv_feed-in_case_cp_hpc',
+            'mv_load-in_case_cp_home', 'mv_load-in_case_cp_work',
+            'mv_load-in_case_cp_public', and 'mv_load-in_case_cp_hpc',
+            'lv_load-in_case_cp_home', 'lv_load-in_case_cp_work',
+            'lv_load-in_case_cp_public', and 'lv_load-in_case_cp_hpc'.
+
+            For reactive power a fixed cosphi is assumed. A different reactive power
+            factor is used for charging points in the MV and charging points in the LV.
+            The reactive power factors for charging points are specified in
+            the config section `reactive_power_factor` through the parameters:
+            'mv_cp' and 'lv_cp'.
+
+        * Heat pumps
+
+            Worst case demand time series are distinguished by whether it is a load or
+            feed-in case and by whether it used to analyse the MV or LV.
+            Worst case scaling factors for heat pumps are specified in
+            the config section `worst_case_scale_factor` through the parameters:
+            'mv_feed-in_case_hp', 'lv_feed-in_case_hp', 'mv_load_case_hp', and
+            'lv_load_case_hp'.
+
+            For reactive power a fixed cosphi is assumed. A different reactive power
+            factor is used for heat pumps in the MV and heat pumps in the LV.
+            The reactive power factors for heat pumps are specified in
+            the config section `reactive_power_factor` through the parameters:
+            'mv_hp' and 'lv_hp'.
+
+        * Storage units
+
+            Worst case feed-in time series are distinguished by whether it is a load or
+            feed-in case.
+            In case of storage units worst case time series it is not distinguished by
+            whether it is used to analyse the MV or LV. However, both options are
+            generated as it is distinguished in the case of loads.
+            Worst case scaling factors for storage units are specified in
+            the config section `worst_case_scale_factor` through the parameters:
+            'feed-in_case_storage' and 'load_case_storage'.
+
+            For reactive power a fixed cosphi is assumed. A different reactive power
+            factor is used for storage units in the MV and storage units in the LV.
+            The reactive power factors for storage units are specified in
+            the config section `reactive_power_factor` through the parameters:
+            'mv_storage' and 'lv_storage'.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        cases : list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both.
+        generators_names : list(str)
+            Defines for which generators to set worst case time series. If None,
+            time series are set for all generators. Default: None.
+        loads_names : list(str)
+            Defines for which loads to set worst case time series. If None,
+            time series are set for all loads. Default: None.
+        storage_units_names : list(str)
+            Defines for which storage units to set worst case time series. If None,
+            time series are set for all storage units. Default: None.
+
+        Notes
+        -----
+        Be careful, this function overwrites all previously set time series in the case
+        that these are not worst case time series. If previously set time series are
+        worst case time series is checked using :attr:`is_worst_case`.
+
+        Further, if this function is called for a component whose worst-case time series
+        are already set, they are overwritten, even if previously set time series
+        were set for a different worst-case.
+
+        Also be aware that loads for which type information is not set are handled
+        as conventional loads.
+
+        """
+
+        def _overwrite_time_series(p, q, comp_type):
+            ts_dict = {f"{comp_type}_active_power": p, f"{comp_type}_reactive_power": q}
+            for k, v in ts_dict.items():
+                # drop previously set time series
+                drop_component_time_series(obj=self, df_name=k, comp_names=v.columns)
+                # set time series
+                _add_component_time_series(
+                    obj=self,
+                    df_name=k,
+                    ts_new=v.rename(index=self.timeindex_worst_cases),
+                )
+
+        if self.is_worst_case is False:
+            # reset all time series
+            self.reset()
+
+            # create a mapping from worst case cases to time stamps needed for pypsa
+            worst_cases = [
+                "_".join(case) for case in itertools.product(cases, ["mv", "lv"])
+            ]
+            time_stamps = pd.date_range("1/1/1970", periods=len(worst_cases), freq="H")
+            self.timeindex_worst_cases = pd.Series(time_stamps, index=worst_cases)
+            self.timeindex = time_stamps
+        else:
+            # check if cases previously set are the same as set now or if additional
+            # cases are set
+            if not hasattr(self, "timeindex_worst_cases"):
+                logger.warning(
+                    "Worst case time series were previously set but attribute "
+                    "'TimeSeries.timeindex_worst_cases' was not set, so it is not "
+                    "known which time step corresponds to which case. Additional worst "
+                    "case time series can therefore not be set. Please either set "
+                    "'TimeSeries.timeindex_worst_cases' or use 'TimeSeries.reset()' "
+                    "to reset all time series and set new ones."
+                )
+                return
+            set_cases = [
+                _
+                for _ in ["feed-in_case", "load_case"]
+                if any(_ in element for element in self.timeindex_worst_cases.index)
+            ]
+            new_cases = [_ for _ in cases if _ not in set_cases]
+            if len(new_cases) > 0:
+                worst_cases = [
+                    "_".join(case)
+                    for case in itertools.product(new_cases, ["mv", "lv"])
+                ]
+                time_stamps = pd.date_range(
+                    self.timeindex.max() + pd.Timedelta(1, unit="hours"),
+                    periods=len(worst_cases),
+                    freq="H",
+                )
+                self.timeindex_worst_cases = self.timeindex_worst_cases.append(
+                    pd.Series(time_stamps, index=worst_cases)
+                )
+                self.timeindex = self.timeindex.append(time_stamps)
+
+        if generators_names is None:
+            generators_df = edisgo_object.topology.generators_df
+        else:
+            generators_names = _check_if_components_exist(
+                edisgo_object, generators_names, "generators"
+            )
+            generators_df = edisgo_object.topology.generators_df.loc[
+                generators_names, :
+            ]
+        if not generators_df.empty:
+            # assign voltage level for reactive power
+            df = assign_voltage_level_to_component(
+                generators_df, edisgo_object.topology.buses_df
+            )
+            p, q = self._worst_case_generators(cases, df, edisgo_object.config)
+            _overwrite_time_series(p, q, "generators")
+
+        if loads_names is None:
+            loads_df = edisgo_object.topology.loads_df
+        else:
+            loads_names = _check_if_components_exist(
+                edisgo_object, loads_names, "loads"
+            )
+            loads_df = edisgo_object.topology.loads_df.loc[loads_names, :]
+        if not loads_df.empty:
+            # assign voltage level for reactive power
+            df = assign_voltage_level_to_component(
+                loads_df, edisgo_object.topology.buses_df
+            )
+            # conventional loads
+            df_tmp = df[df.type == "conventional_load"]
+            if not df_tmp.empty:
+                p, q = self._worst_case_conventional_load(
+                    cases, df_tmp, edisgo_object.config
+                )
+                _overwrite_time_series(p, q, "loads")
+            # charging points
+            df_tmp = df[df.type == "charging_point"]
+            if not df_tmp.empty:
+                p, q = self._worst_case_charging_points(
+                    cases, df_tmp, edisgo_object.config
+                )
+                _overwrite_time_series(p, q, "loads")
+            # heat pumps
+            df_tmp = df[df.type == "heat_pump"]
+            if not df_tmp.empty:
+                p, q = self._worst_case_heat_pumps(cases, df_tmp, edisgo_object.config)
+                _overwrite_time_series(p, q, "loads")
+            # check if there are loads without time series remaining and if so, handle
+            # them as conventional loads
+            loads_without_ts = list(
+                set(df.index) - set(self.loads_active_power.columns)
+            )
+            if loads_without_ts:
+                logging.warning(
+                    "There are loads where information on type of load is missing. "
+                    "Handled types are 'conventional_load', 'charging_point', and "
+                    "'heat_pump'. Loads with missing type information are handled as "
+                    "conventional loads. If this is not the wanted behavior, please "
+                    "set type information. This concerns the following "
+                    f"loads: {loads_without_ts}."
+                )
+                p, q = self._worst_case_conventional_load(
+                    cases, df.loc[loads_without_ts, :], edisgo_object.config
+                )
+                _overwrite_time_series(p, q, "loads")
+
+        if storage_units_names is None:
+            storage_units_df = edisgo_object.topology.storage_units_df
+        else:
+            storage_units_names = _check_if_components_exist(
+                edisgo_object, storage_units_names, "storage_units"
+            )
+            storage_units_df = edisgo_object.topology.storage_units_df.loc[
+                storage_units_names, :
+            ]
+        if not storage_units_df.empty:
+            # assign voltage level for reactive power
+            df = assign_voltage_level_to_component(
+                storage_units_df, edisgo_object.topology.buses_df
+            )
+            p, q = self._worst_case_storage_units(cases, df, edisgo_object.config)
+            _overwrite_time_series(p, q, "storage_units")
+
+    def _worst_case_generators(self, cases, df, configs):
+        """
+        Get feed-in of generators for worst case analyses.
+
+        See :py:attr:`~set_worst_case` for further information.
+
+        Parameters
+        ----------
+        cases : list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both.
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information on generators in the format of
+            :attr:`~.network.topology.Topology.generators_df` with additional column
+            "voltage_level".
+        configs : :class:`~.tools.config.Config`
+            Configuration data with assumed simultaneity factors and reactive power
+            behavior.
 
         Returns
         -------
-        dict or :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+        (:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+            Active and reactive power (in MW and MVA, respectively) in each case for
+            each generator. The index of the dataframe contains the case and the columns
+            are the generator names.
 
         """
-        try:
-            return self._charging_points_active_power.loc[self.timeindex, :]
-        except:
-            return pd.DataFrame(index=self.timeindex)
+        # check that all generators have information on nominal power, technology type,
+        # and voltage level they are in
+        df = df.loc[:, ["p_nom", "voltage_level", "type"]]
+        check = df.isnull().any(axis=1)
+        if check.any():
+            raise AttributeError(
+                f"The following generators have missing information on nominal power, "
+                f"technology type or voltage level: {check[check].index.values}."
+            )
 
-    @charging_points_active_power.setter
-    def charging_points_active_power(self, charging_points_active_power_ts):
-        self._charging_points_active_power = charging_points_active_power_ts
+        # active power
+        # get worst case configurations
+        worst_case_scale_factors = configs["worst_case_scale_factor"]
+        # get power scaling factors for different technologies, voltage levels and
+        # feed-in/load case
+        types = ["pv", "wind", "other"]
+        power_scaling = pd.DataFrame(columns=types)
+        for t in types:
+            for case in cases:
+                power_scaling.at[f"{case}_mv", t] = worst_case_scale_factors[
+                    f"{case}_feed-in_{t}"
+                ]
 
-    @property
-    def charging_points_reactive_power(self):
+                power_scaling.at[f"{case}_lv", t] = power_scaling.at[f"{case}_mv", t]
+
+        # calculate active power of generators
+        active_power = pd.concat(
+            [
+                power_scaling.pv.to_frame("p_nom").dot(
+                    df[df.type == "solar"].loc[:, ["p_nom"]].T
+                ),
+                power_scaling.wind.to_frame("p_nom").dot(
+                    df[df.type == "wind"].loc[:, ["p_nom"]].T
+                ),
+                power_scaling.other.to_frame("p_nom").dot(
+                    df[~df.type.isin(["solar", "wind"])].loc[:, ["p_nom"]].T
+                ),
+            ],
+            axis=1,
+        )
+
+        # reactive power
+        # get worst case configurations for each generator
+        power_factor = q_control._fixed_cosphi_default_power_factor(
+            df, "generators", configs
+        )
+        q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
+            df, "generators", configs
+        )
+        # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
+        self.time_series_raw.q_control = pd.concat(
+            [
+                self.time_series_raw.q_control,
+                pd.DataFrame(
+                    index=df.index,
+                    data={
+                        "type": "fixed_cosphi",
+                        "q_sign": q_sign,
+                        "power_factor": power_factor,
+                    },
+                ),
+            ]
+        )
+        # calculate reactive power of generators
+        reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
+        return active_power, reactive_power
+
+    def _worst_case_conventional_load(self, cases, df, configs):
         """
-        Reactive power timeseries of charging points in MVA.
+        Get demand of conventional loads for worst case analyses.
+
+        See :py:attr:`~set_worst_case` for further information.
+
+        Parameters
+        ----------
+        cases : list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both.
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information on conventional loads in the format of
+            :attr:`~.network.topology.Topology.loads_df` with additional column
+            "voltage_level".
+        configs : :class:`~.tools.config.Config`
+            Configuration data with assumed simultaneity factors and reactive power
+            behavior.
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            See class definition for details.
+        (:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+            Active and reactive power (in MW and MVA, respectively) in each case for
+            each load. The index of the dataframe contains the case and the columns
+            are the load names.
 
         """
-        try:
-            return self._charging_points_reactive_power.loc[self.timeindex, :]
-        except:
-            return pd.DataFrame(index=self.timeindex)
+        # check that all loads have information on nominal power (grid connection power)
+        # and voltage level they are in
+        df = df.loc[:, ["p_set", "voltage_level"]]
+        check = df.isnull().any(axis=1)
+        if check.any():
+            raise AttributeError(
+                f"The following loads have missing information on grid connection power"
+                f" or voltage level: {check[check].index.values}."
+            )
 
-    @charging_points_reactive_power.setter
-    def charging_points_reactive_power(self,
-                                       charging_points_reactive_power_ts):
-        self._charging_points_reactive_power = charging_points_reactive_power_ts
+        # active power
+        # get worst case configurations
+        worst_case_scale_factors = configs["worst_case_scale_factor"]
+        # get power scaling factors for different voltage levels and feed-in/load case
+        power_scaling = pd.Series(dtype=float)
+        for case in cases:
+            for voltage_level in ["mv", "lv"]:
+                power_scaling.at[f"{case}_{voltage_level}"] = worst_case_scale_factors[
+                    f"{voltage_level}_{case}_load"
+                ]
 
-    # @property
-    # def curtailment(self):
-    #     """
-    #     Get curtailment time series of dispatchable generators (only active
-    #     power)
-    #
-    #     Parameters
-    #     ----------
-    #     curtailment : list or :pandas:`pandas.DataFrame<DataFrame>`
-    #         See class definition for details.
-    #
-    #     Returns
-    #     -------
-    #     :pandas:`pandas.DataFrame<dataframe>`
-    #         In the case curtailment is applied to all solar and wind generators
-    #         curtailment time series either aggregated by technology type or by
-    #         type and weather cell ID are returnded. In the first case columns
-    #         of the DataFrame are 'solar' and 'wind'; in the second case columns
-    #         need to be a :pandas:`pandas.MultiIndex<multiindex>` with the
-    #         first level containing the type and the second level the weather
-    #         cell ID.
-    #         In the case curtailment is only applied to specific generators,
-    #         curtailment time series of all curtailed generators, specified in
-    #         by the column name are returned.
-    #
-    #     """
-    #     if self._curtailment is not None:
-    #         if isinstance(self._curtailment, pd.DataFrame):
-    #             try:
-    #                 return self._curtailment.loc[[self.timeindex], :]
-    #             except:
-    #                 return self._curtailment.loc[self.timeindex, :]
-    #         elif isinstance(self._curtailment, list):
-    #             try:
-    #                 curtailment = pd.DataFrame()
-    #                 for gen in self._curtailment:
-    #                     curtailment[gen] = gen.curtailment
-    #                 return curtailment
-    #             except:
-    #                 raise
-    #     else:
-    #         return None
-    #
-    # @curtailment.setter
-    # def curtailment(self, curtailment):
-    #     self._curtailment = curtailment
+        # calculate active power of loads
+        active_power = power_scaling.to_frame("p_set").dot(df.loc[:, ["p_set"]].T)
+
+        # reactive power
+        # get worst case configurations for each load
+        power_factor = q_control._fixed_cosphi_default_power_factor(
+            df, "loads", configs
+        )
+        q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
+            df, "loads", configs
+        )
+        # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
+        self.time_series_raw.q_control = pd.concat(
+            [
+                self.time_series_raw.q_control,
+                pd.DataFrame(
+                    index=df.index,
+                    data={
+                        "type": "fixed_cosphi",
+                        "q_sign": q_sign,
+                        "power_factor": power_factor,
+                    },
+                ),
+            ]
+        )
+        # calculate reactive power of loads
+        reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
+        return active_power, reactive_power
+
+    def _worst_case_charging_points(self, cases, df, configs):
+        """
+        Get demand of charging points for worst case analyses.
+
+        See :py:attr:`~set_worst_case` for further information.
+
+        Parameters
+        ----------
+        cases : list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both.
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information on charging points in the format of
+            :attr:`~.network.topology.Topology.loads_df` with additional column
+            "voltage_level".
+        configs : :class:`~.tools.config.Config`
+            Configuration data with assumed simultaneity factors and reactive power
+            behavior.
+
+        Returns
+        -------
+        (:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+            Active and reactive power (in MW and MVA, respectively) in each case for
+            each charging point. The index of the dataframe contains the case and the
+            columns are the charging point names.
+
+        """
+        # check that all charging points have information on nominal power,
+        # sector (use case), and voltage level they are in
+        df = df.loc[:, ["p_set", "voltage_level", "sector"]]
+        check = df.isnull().any(axis=1)
+        if check.any():
+            raise AttributeError(
+                "The following charging points have missing information on nominal "
+                f"power, use case or voltage level: {check[check].index.values}."
+            )
+
+        # check that there is no invalid sector (only "home", "work", "public", and
+        # "hpc" allowed)
+        use_cases = ["home", "work", "public", "hpc"]
+        sectors = df.sector.unique()
+        diff = list(set(sectors) - set(use_cases))
+        if diff:
+            raise AttributeError(
+                "The following charging points have a use case no worst case "
+                "simultaneity factor is defined for: "
+                f"{df[df.sector.isin(diff)].index.values}."
+            )
+
+        # active power
+        # get worst case configurations
+        worst_case_scale_factors = configs["worst_case_scale_factor"]
+        # get power scaling factors for different use cases, voltage levels and
+        # feed-in/load case
+        power_scaling = pd.DataFrame(columns=sectors)
+        for s in sectors:
+            for case in cases:
+                for voltage_level in ["mv", "lv"]:
+                    power_scaling.at[
+                        f"{case}_{voltage_level}", s
+                    ] = worst_case_scale_factors[f"{voltage_level}_{case}_cp_{s}"]
+
+        # calculate active power of charging points
+        active_power = pd.concat(
+            [
+                power_scaling.loc[:, s]
+                .to_frame("p_set")
+                .dot(df[df.sector == s].loc[:, ["p_set"]].T)
+                for s in sectors
+            ],
+            axis=1,
+        )
+
+        # reactive power
+        # get worst case configurations for each charging point
+        power_factor = q_control._fixed_cosphi_default_power_factor(
+            df, "charging_points", configs
+        )
+        q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
+            df, "charging_points", configs
+        )
+        # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
+        self.time_series_raw.q_control = pd.concat(
+            [
+                self.time_series_raw.q_control,
+                pd.DataFrame(
+                    index=df.index,
+                    data={
+                        "type": "fixed_cosphi",
+                        "q_sign": q_sign,
+                        "power_factor": power_factor,
+                    },
+                ),
+            ]
+        )
+        # calculate reactive power of charging points
+        reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
+        return active_power, reactive_power
+
+    def _worst_case_heat_pumps(self, cases, df, configs):
+        """
+        Get demand of heat pumps for worst case analyses.
+
+        See :py:attr:`~set_worst_case` for further information.
+
+        Parameters
+        ----------
+        cases : list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both.
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information on heat pumps in the format of
+            :attr:`~.network.topology.Topology.loads_df` with additional column
+            "voltage_level".
+        configs : :class:`~.tools.config.Config`
+            Configuration data with assumed simultaneity factors and reactive power
+            behavior.
+
+        Returns
+        -------
+        (:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+            Active and reactive power (in MW and MVA, respectively) in each case for
+            each heat pump. The index of the dataframe contains the case and the columns
+            are the heat pump names.
+
+        """
+        # check that all heat pumps have information on nominal power, and voltage level
+        # they are in
+        df = df.loc[:, ["p_set", "voltage_level"]]
+        check = df.isnull().any(axis=1)
+        if check.any():
+            raise AttributeError(
+                f"The following heat pumps have missing information on nominal power or"
+                f" voltage level: {check[check].index.values}."
+            )
+
+        # active power
+        # get worst case configurations
+        worst_case_scale_factors = configs["worst_case_scale_factor"]
+        # get power scaling factors for different voltage levels and feed-in/load case
+        power_scaling = pd.Series()
+        for case in cases:
+            for voltage_level in ["mv", "lv"]:
+                power_scaling.at[f"{case}_{voltage_level}"] = worst_case_scale_factors[
+                    f"{voltage_level}_{case}_hp"
+                ]
+
+        # calculate active power of heat pumps
+        active_power = power_scaling.to_frame("p_set").dot(df.loc[:, ["p_set"]].T)
+
+        # reactive power
+        # get worst case configurations for each heat pump
+        power_factor = q_control._fixed_cosphi_default_power_factor(
+            df, "heat_pumps", configs
+        )
+        q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
+            df, "heat_pumps", configs
+        )
+        # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
+        self.time_series_raw.q_control = pd.concat(
+            [
+                self.time_series_raw.q_control,
+                pd.DataFrame(
+                    index=df.index,
+                    data={
+                        "type": "fixed_cosphi",
+                        "q_sign": q_sign,
+                        "power_factor": power_factor,
+                    },
+                ),
+            ]
+        )
+        # calculate reactive power of heat pumps
+        reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
+        return active_power, reactive_power
+
+    def _worst_case_storage_units(self, cases, df, configs):
+        """
+        Get charging and discharging of storage units for worst case analyses.
+
+        See :py:attr:`~set_worst_case` for further information.
+
+        Parameters
+        ----------
+        cases : list(str)
+            List with worst-cases to generate time series for. Can be
+            'feed-in_case', 'load_case' or both.
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with information on generators in the format of
+            :attr:`~.network.topology.Topology.generators_df` with additional column
+            "voltage_level".
+        configs : :class:`~.tools.config.Config`
+            Configuration data with assumed simultaneity factors and reactive power
+            behavior.
+
+        Returns
+        -------
+        (:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+            Active and reactive power (in MW and MVA, respectively) in each case for
+            each storage. The index of the dataframe contains the case and the columns
+            are the storage names.
+
+        """
+        # check that all storage units have information on nominal power
+        # and voltage level they are in
+        df = df.loc[:, ["p_nom", "voltage_level"]]
+        check = df.isnull().any(axis=1)
+        if check.any():
+            raise AttributeError(
+                "The following storage units have missing information on nominal power"
+                f" or voltage level: {check[check].index.values}."
+            )
+
+        # active power
+        # get worst case configurations
+        worst_case_scale_factors = configs["worst_case_scale_factor"]
+        # get power scaling factors for different voltage levels and feed-in/load case
+        power_scaling = pd.Series()
+        for case in cases:
+            power_scaling.at[f"{case}_mv"] = worst_case_scale_factors[f"{case}_storage"]
+            power_scaling.at[f"{case}_lv"] = power_scaling.at[f"{case}_mv"]
+
+        # calculate active power of loads
+        active_power = power_scaling.to_frame("p_nom").dot(df.loc[:, ["p_nom"]].T)
+
+        # reactive power
+        # get worst case configurations for each load
+        power_factor = q_control._fixed_cosphi_default_power_factor(
+            df, "storage_units", configs
+        )
+        q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
+            df, "storage_units", configs
+        )
+        # write reactive power configuration to TimeSeriesRaw
+        self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
+        self.time_series_raw.q_control = pd.concat(
+            [
+                self.time_series_raw.q_control,
+                pd.DataFrame(
+                    index=df.index,
+                    data={
+                        "type": "fixed_cosphi",
+                        "q_sign": q_sign,
+                        "power_factor": power_factor,
+                    },
+                ),
+            ]
+        )
+        # calculate reactive power of loads
+        reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
+        return active_power, reactive_power
+
+    def predefined_fluctuating_generators_by_technology(
+        self, edisgo_object, ts_generators, generator_names=None
+    ):
+        """
+        Set active power feed-in time series for fluctuating generators by technology.
+
+        In case time series are provided per technology and weather cell ID, active
+        power feed-in time series are also set by technology and weather cell ID.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_generators : str or :pandas:`pandas.DataFrame<dataframe>`
+            Defines which technology-specific or technology and weather cell specific
+            active power time series to use.
+            Possible options are:
+
+            * 'oedb'
+
+                Technology and weather cell specific hourly feed-in time series are
+                obtained from the
+                `OpenEnergy DataBase
+                <https://openenergy-platform.org/dataedit/schemas>`_
+                for the weather year 2011. See
+                :func:`edisgo.io.timeseries_import.import_feedin_timeseries` for more
+                information.
+
+            * :pandas:`pandas.DataFrame<dataframe>`
+
+                DataFrame with self-provided feed-in time series per technology or
+                per technology and weather cell ID normalized to a nominal capacity
+                of 1.
+                In case time series are provided only by technology, columns of the
+                DataFrame contain the technology type as string.
+                In case time series are provided by technology and weather cell ID
+                columns need to be a :pandas:`pandas.MultiIndex<MultiIndex>` with the
+                first level containing the technology as string and the second level
+                the weather cell ID as integer.
+                Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+
+                When importing a ding0 grid and/or using predefined scenarios
+                of the future generator park,
+                each generator has an assigned weather cell ID that identifies the
+                weather data cell from the weather data set used in the research
+                project `open_eGo <https://openegoproject.wordpress.com/>`_ to
+                determine feed-in profiles. The weather cell ID can be retrieved
+                from column `weather_cell_id` in
+                :attr:`~.network.topology.Topology.generators_df` and could be
+                overwritten to use own weather cells.
+
+        generator_names : list(str)
+            Defines for which fluctuating generators to use technology-specific time
+            series. If None, all generators technology (and weather cell) specific time
+            series are provided for are used. In case the time series are retrieved from
+            the oedb, all solar and wind generators are used. Default: None.
+
+        """
+        # in case time series from oedb are used, retrieve oedb time series
+        if isinstance(ts_generators, str) and ts_generators == "oedb":
+            weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
+                edisgo_object
+            )
+            ts_generators = timeseries_import.feedin_oedb(
+                edisgo_object.config, weather_cell_ids, self.timeindex
+            )
+        elif not isinstance(ts_generators, pd.DataFrame):
+            raise ValueError(
+                "'ts_generators' must either be a pandas DataFrame or 'oedb'."
+            )
+
+        # set generator_names if None
+        if generator_names is None:
+            if isinstance(ts_generators.columns, pd.MultiIndex):
+                groups = edisgo_object.topology.generators_df.groupby(
+                    ["type", "weather_cell_id"]
+                ).groups
+                combinations = ts_generators.columns
+                generator_names = np.concatenate(
+                    [groups[_].values for _ in combinations if _ in groups.keys()]
+                )
+            else:
+                technologies = ts_generators.columns.unique()
+                generator_names = edisgo_object.topology.generators_df[
+                    edisgo_object.topology.generators_df.type.isin(technologies)
+                ].index
+        generator_names = _check_if_components_exist(
+            edisgo_object, generator_names, "generators"
+        )
+        generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
+
+        # drop existing time series
+        drop_component_time_series(
+            obj=self, df_name="generators_active_power", comp_names=generator_names
+        )
+
+        # scale time series by nominal power
+        if isinstance(ts_generators.columns, pd.MultiIndex):
+            ts_scaled = generators_df.apply(
+                lambda x: ts_generators[x.type][x.weather_cell_id].T * x.p_nom,
+                axis=1,
+            ).T
+        else:
+            ts_scaled = generators_df.apply(
+                lambda x: ts_generators[x.type].T * x.p_nom,
+                axis=1,
+            ).T
+        if not ts_scaled.empty:
+            self.generators_active_power = pd.concat(
+                [
+                    self.generators_active_power,
+                    ts_scaled,
+                ],
+                axis=1,
+                sort=False,
+            )
+
+        # write to TimeSeriesRaw
+        if not isinstance(ts_generators.columns, pd.MultiIndex):
+            # make columns a multiindex, otherwise columns are not a multiindex anymore
+            # after concatenation and duplicates not correctly identified
+            ts_generators = ts_generators.copy()
+            ts_generators.columns = pd.MultiIndex.from_product(
+                [ts_generators.columns, [None]]
+            )
+        tmp = pd.concat(
+            [
+                self.time_series_raw.fluctuating_generators_active_power_by_technology,
+                ts_generators,
+            ],
+            axis=1,
+        )
+        tmp = tmp.loc[:, ~tmp.columns.duplicated(keep="last")]
+        self.time_series_raw.fluctuating_generators_active_power_by_technology = tmp
+
+    def predefined_dispatchable_generators_by_technology(
+        self, edisgo_object, ts_generators, generator_names=None
+    ):
+        """
+        Set active power feed-in time series for dispatchable generators by technology.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_generators : :pandas:`pandas.DataFrame<dataframe>`
+            DataFrame with self-provided active power time series of each
+            type of dispatchable generator normalized to a nominal capacity of 1.
+            Columns contain the technology type as string, e.g. 'gas', 'coal'.
+            Use 'other' if you don't want to explicitly provide a time series for every
+            possible technology. In the current grid existing generator technologies
+            can be retrieved from column `type` in
+            :attr:`~.network.topology.Topology.generators_df`.
+            Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+        generator_names : list(str)
+            Defines for which dispatchable generators to use technology-specific time
+            series. If None, all dispatchable generators technology-specific time series
+            are provided for are used. In case `ts_generators` contains a column
+            'other', all dispatchable generators in the network (i.e. all but solar and
+            wind generators) are used.
+
+        """
+        if not isinstance(ts_generators, pd.DataFrame):
+            raise ValueError("'ts_generators' must be a pandas DataFrame.")
+
+        # write to TimeSeriesRaw
+        for col in ts_generators:
+            self.time_series_raw.dispatchable_generators_active_power_by_technology[
+                col
+            ] = ts_generators[col]
+
+        # set generator_names if None
+        if generator_names is None:
+            if "other" in ts_generators.columns:
+                generator_names = edisgo_object.topology.generators_df[
+                    ~edisgo_object.topology.generators_df.type.isin(["solar", "wind"])
+                ].index
+            else:
+                generator_names = edisgo_object.topology.generators_df[
+                    edisgo_object.topology.generators_df.type.isin(
+                        ts_generators.columns
+                    )
+                ].index
+        generator_names = _check_if_components_exist(
+            edisgo_object, generator_names, "generators"
+        )
+        generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
+
+        # drop existing time series
+        drop_component_time_series(
+            obj=self, df_name="generators_active_power", comp_names=generator_names
+        )
+
+        # scale time series by nominal power
+        ts_scaled = generators_df.apply(
+            lambda x: ts_generators[x.type] * x.p_nom
+            if x.type in ts_generators.columns
+            else ts_generators["other"] * x.p_nom,
+            axis=1,
+        ).T
+        if not ts_scaled.empty:
+            self.generators_active_power = pd.concat(
+                [
+                    self.generators_active_power,
+                    ts_scaled,
+                ],
+                axis=1,
+                sort=False,
+            )
+
+    def predefined_conventional_loads_by_sector(
+        self, edisgo_object, ts_loads, load_names=None
+    ):
+        """
+        Set active power demand time series for conventional loads by sector.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_loads : str or :pandas:`pandas.DataFrame<DataFrame>`
+            Defines which sector-specific active power time series to use.
+            Possible options are:
+
+            * 'demandlib'
+
+                Time series for the year specified :py:attr:`~timeindex` are
+                generated using standard electric load profiles from the oemof
+                `demandlib <https://github.com/oemof/demandlib/>`_.
+                The demandlib provides sector-specific time series for the sectors
+                'residential', 'retail', 'industrial', and 'agricultural'.
+
+            * :pandas:`pandas.DataFrame<DataFrame>`
+
+                DataFrame with load time series per sector normalized to an annual
+                consumption of 1. Index needs to
+                be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+                Columns contain the sector as string.
+                In the current grid existing load types can be retrieved from column
+                `sector` in :attr:`~.network.topology.Topology.loads_df` (make sure to
+                select `type` 'conventional_load').
+                In ding0 grid the differentiated sectors are 'residential', 'retail',
+                'industrial', and 'agricultural'.
+        load_names : list(str)
+            Defines for which conventional loads to use sector-specific time series.
+            If None, all loads of sectors for which sector-specific time series are
+            provided are used. In case the demandlib is used, all loads of sectors
+            'residential', 'retail', 'industrial', and 'agricultural' are used.
+
+        """
+        # in case time series from demandlib are used, retrieve demandlib time series
+        if isinstance(ts_loads, str) and ts_loads == "demandlib":
+            ts_loads = timeseries_import.load_time_series_demandlib(
+                edisgo_object.config, timeindex=self.timeindex
+            )
+        elif not isinstance(ts_loads, pd.DataFrame):
+            raise ValueError(
+                "'ts_loads' must either be a pandas DataFrame or 'demandlib'."
+            )
+        elif ts_loads.empty:
+            logger.warning("The profile you entered is empty. Method is skipped.")
+            return
+
+        # write to TimeSeriesRaw
+        for col in ts_loads:
+            self.time_series_raw.conventional_loads_active_power_by_sector[
+                col
+            ] = ts_loads[col]
+
+        # set load_names if None
+        if load_names is None:
+            sectors = ts_loads.columns.unique()
+            load_names = edisgo_object.topology.loads_df[
+                edisgo_object.topology.loads_df.sector.isin(sectors)
+            ].index
+        load_names = _check_if_components_exist(edisgo_object, load_names, "loads")
+        loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
+
+        # drop existing time series
+        drop_component_time_series(
+            obj=self, df_name="loads_active_power", comp_names=load_names
+        )
+
+        # scale time series by annual consumption
+        self.loads_active_power = pd.concat(
+            [
+                self.loads_active_power,
+                loads_df.apply(
+                    lambda x: ts_loads[x.sector] * x.annual_consumption,
+                    axis=1,
+                ).T,
+            ],
+            axis=1,
+        )
+
+    def predefined_charging_points_by_use_case(
+        self, edisgo_object, ts_loads, load_names=None
+    ):
+        """
+        Set active power demand time series for charging points by their use case.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_loads : :pandas:`pandas.DataFrame<DataFrame>`
+            DataFrame with self-provided load time series per use case normalized to
+            a nominal power of the charging point of 1.
+            Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+            Columns contain the use case as string.
+            In the current grid existing use case types can be retrieved from column
+            `sector` in :attr:`~.network.topology.Topology.loads_df` (make sure to
+            select `type` 'charging_point').
+            When using charging point input from SimBEV the differentiated use cases are
+            'home', 'work', 'public' and 'hpc'.
+        load_names : list(str)
+            Defines for which charging points to use use-case-specific time series.
+            If None, all charging points of use cases for which use-case-specific time
+            series are provided are used.
+
+        """
+        if not isinstance(ts_loads, pd.DataFrame):
+            raise ValueError("'ts_loads' must be a pandas DataFrame.")
+        elif ts_loads.empty:
+            logger.warning("The profile you entered is empty. Method is skipped.")
+            return
+
+        # write to TimeSeriesRaw
+        for col in ts_loads:
+            self.time_series_raw.charging_points_active_power_by_use_case[
+                col
+            ] = ts_loads[col]
+
+        # set load_names if None
+        if load_names is None:
+            sectors = ts_loads.columns.unique()
+            load_names = edisgo_object.topology.loads_df[
+                edisgo_object.topology.loads_df.sector.isin(sectors)
+            ].index
+        load_names = _check_if_components_exist(edisgo_object, load_names, "loads")
+        loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
+
+        # check if all loads are charging points and throw warning if not
+        if not all(loads_df.type.isin(["charging_point"])):
+            raise Warning(
+                "Not all affected loads are charging points. Please check and"
+                " adapt if necessary."
+            )
+
+        # drop existing time series
+        drop_component_time_series(
+            obj=self, df_name="loads_active_power", comp_names=load_names
+        )
+
+        # scale time series by nominal power
+        self.loads_active_power = pd.concat(
+            [
+                self.loads_active_power,
+                loads_df.apply(
+                    lambda x: ts_loads[x.sector] * x.p_set,
+                    axis=1,
+                ).T,
+            ],
+            axis=1,
+        )
+
+    def fixed_cosphi(
+        self,
+        edisgo_object,
+        generators_parametrisation=None,
+        loads_parametrisation=None,
+        storage_units_parametrisation=None,
+    ):
+        """
+        Sets reactive power of specified components assuming a fixed power factor.
+
+        Overwrites reactive power time series in case they already exist.
+
+        Parameters
+        -----------
+        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or \
+            None
+            Sets fixed cosphi parameters for generators.
+            Possible options are:
+
+            * 'default'
+
+                Default configuration is used for all generators in the grid.
+                To this end, the power factors set in the config section
+                `reactive_power_factor` and the power factor mode, defining whether
+                components behave inductive or capacitive, given in the config section
+                `reactive_power_mode`, are used.
+
+            * :pandas:`pandas.DataFrame<dataframe>`
+
+                DataFrame with fix cosphi parametrisation for specified generators.
+                Columns are:
+
+                    * 'components' : list(str)
+                        List with generators to apply parametrisation for.
+
+                    * 'mode' : str
+                        Defines whether generators behave inductive or capacitive.
+                        Possible options are 'inductive', 'capacitive' or 'default'.
+                        In case of 'default', configuration from config section
+                        `reactive_power_mode` is used.
+
+                    * 'power_factor' : float or str
+                        Defines the fixed cosphi power factor. The power factor can
+                        either be directly provided as float or it can be set to
+                        'default', in which case configuration from config section
+                        `reactive_power_factor` is used.
+
+                Index of the dataframe is ignored.
+
+            * None
+
+                No reactive power time series are set.
+
+            Default: None.
+        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or None
+            Sets fixed cosphi parameters for loads. The same options as for parameter
+            `generators_parametrisation` apply.
+        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` \
+            or None
+            Sets fixed cosphi parameters for storage units. The same options as for
+            parameter `generators_parametrisation` apply.
+
+        Notes
+        ------
+        This function requires active power time series to be previously set.
+
+        """
+
+        def _get_q_sign_and_power_factor_per_component(
+            parametrisation, components_df, type, q_sign_func
+        ):
+            # default configuration
+            if isinstance(parametrisation, str) and parametrisation == "default":
+                # get default parametrisation from config
+                df = assign_voltage_level_to_component(
+                    components_df, edisgo_object.topology.buses_df
+                )
+                components_names = df.index
+                q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
+                    df, type, edisgo_object.config
+                )
+                power_factor = q_control._fixed_cosphi_default_power_factor(
+                    df, type, edisgo_object.config
+                )
+            elif isinstance(parametrisation, pd.DataFrame):
+                # check if all given components exist in network and only use existing
+                components_names = list(
+                    itertools.chain.from_iterable(parametrisation.components)
+                )
+                components_names = _check_if_components_exist(
+                    edisgo_object, components_names, type
+                )
+                # set up series with sign of reactive power and power factors
+                q_sign = pd.Series()
+                power_factor = pd.Series()
+                for index, row in parametrisation.iterrows():
+                    # get only components that exist in the network
+                    comps = [_ for _ in row["components"] if _ in components_names]
+                    if len(comps) > 0:
+                        # get q_sign (default or given)
+                        if row["mode"] == "default":
+                            df = assign_voltage_level_to_component(
+                                components_df.loc[comps, :],
+                                edisgo_object.topology.buses_df,
+                            )
+                            q_sign = pd.concat(
+                                [
+                                    q_sign,
+                                    q_control._fixed_cosphi_default_reactive_power_sign(
+                                        df, type, edisgo_object.config
+                                    ),
+                                ]
+                            )
+                        else:
+                            q_sign = pd.concat(
+                                [
+                                    q_sign,
+                                    pd.Series(q_sign_func(row["mode"]), index=comps),
+                                ]
+                            )
+                        # get power factor (default or given)
+                        if row["power_factor"] == "default":
+                            df = assign_voltage_level_to_component(
+                                components_df.loc[comps, :],
+                                edisgo_object.topology.buses_df,
+                            )
+                            power_factor = pd.concat(
+                                [
+                                    power_factor,
+                                    q_control._fixed_cosphi_default_power_factor(
+                                        df, type, edisgo_object.config
+                                    ),
+                                ]
+                            )
+                        else:
+                            power_factor = pd.concat(
+                                [
+                                    power_factor,
+                                    pd.Series(row["power_factor"], index=comps),
+                                ]
+                            )
+            else:
+                raise ValueError(
+                    f"'{type}_parametrisation' must either be a pandas DataFrame or "
+                    f"'default'."
+                )
+
+            # write reactive power configuration to TimeSeriesRaw
+            # delete existing previous settings
+            self.time_series_raw.q_control.drop(
+                index=self.time_series_raw.q_control.index[
+                    self.time_series_raw.q_control.index.isin(components_names)
+                ],
+                inplace=True,
+            )
+            self.time_series_raw.q_control = pd.concat(
+                [
+                    self.time_series_raw.q_control,
+                    pd.DataFrame(
+                        index=components_names,
+                        data={
+                            "type": "fixed_cosphi",
+                            "q_sign": q_sign,
+                            "power_factor": power_factor,
+                        },
+                    ),
+                ]
+            )
+
+            # drop existing time series
+            drop_component_time_series(
+                obj=self, df_name=f"{type}_reactive_power", comp_names=components_names
+            )
+
+            return q_sign, power_factor
+
+        # set reactive power for generators
+        if (
+            generators_parametrisation is not None
+            and not edisgo_object.topology.generators_df.empty
+        ):
+            q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
+                parametrisation=generators_parametrisation,
+                components_df=edisgo_object.topology.generators_df,
+                type="generators",
+                q_sign_func=q_control.get_q_sign_generator,
+            )
+            # calculate reactive power
+            reactive_power = q_control.fixed_cosphi(
+                self.generators_active_power.loc[:, q_sign.index], q_sign, power_factor
+            )
+            self.generators_reactive_power = pd.concat(
+                [self.generators_reactive_power, reactive_power], axis=1
+            )
+        if (
+            loads_parametrisation is not None
+            and not edisgo_object.topology.loads_df.empty
+        ):
+            q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
+                parametrisation=loads_parametrisation,
+                components_df=edisgo_object.topology.loads_df,
+                type="loads",
+                q_sign_func=q_control.get_q_sign_load,
+            )
+            # calculate reactive power
+            reactive_power = q_control.fixed_cosphi(
+                self.loads_active_power.loc[:, q_sign.index], q_sign, power_factor
+            )
+            self.loads_reactive_power = pd.concat(
+                [self.loads_reactive_power, reactive_power], axis=1
+            )
+        if (
+            storage_units_parametrisation is not None
+            and not edisgo_object.topology.storage_units_df.empty
+        ):
+            q_sign, power_factor = _get_q_sign_and_power_factor_per_component(
+                parametrisation=storage_units_parametrisation,
+                components_df=edisgo_object.topology.storage_units_df,
+                type="storage_units",
+                q_sign_func=q_control.get_q_sign_generator,
+            )
+            # calculate reactive power
+            reactive_power = q_control.fixed_cosphi(
+                self.storage_units_active_power.loc[:, q_sign.index],
+                q_sign,
+                power_factor,
+            )
+            self.storage_units_reactive_power = pd.concat(
+                [self.storage_units_reactive_power, reactive_power], axis=1
+            )
 
     @property
     def residual_load(self):
         """
-        Returns residual load.
+        Returns residual load in network.
 
         Residual load for each time step is calculated from total load
-        (including charging points) minus total generation minus
-        storage active power (discharge is positive).
+        minus total generation minus storage active power (discharge is
+        positive).
         A positive residual load represents a load case while a negative
         residual load here represents a feed-in case.
         Grid losses are not considered.
@@ -353,15 +1752,13 @@ class TimeSeries:
         Returns
         -------
         :pandas:`pandas.Series<Series>`
-
             Series with residual load in MW.
 
         """
         return (
-                self.loads_active_power.sum(axis=1) +
-                self.charging_points_active_power.sum(axis=1) -
-                self.generators_active_power.sum(axis=1) -
-                self.storage_units_active_power.sum(axis=1)
+            self.loads_active_power.sum(axis=1)
+            - self.generators_active_power.sum(axis=1)
+            - self.storage_units_active_power.sum(axis=1)
         )
 
     @property
@@ -385,14 +1782,273 @@ class TimeSeries:
         :pandas:`pandas.Series<Series>`
 
             Series with information on whether time step is handled as load
-            case ('load_case') or feed-in case ('feedin_case') for each time
+            case ('load_case') or feed-in case ('feed-in_case') for each time
             step in :py:attr:`~timeindex`.
 
         """
 
         return self.residual_load.apply(
-            lambda _: "feedin_case" if _ < 0. else "load_case"
+            lambda _: "feed-in_case" if _ < 0.0 else "load_case"
         )
+
+    @property
+    def _attributes(self):
+        return [
+            "loads_active_power",
+            "loads_reactive_power",
+            "generators_active_power",
+            "generators_reactive_power",
+            "storage_units_active_power",
+            "storage_units_reactive_power",
+        ]
+
+    def reduce_memory(
+        self, attr_to_reduce=None, to_type="float32", time_series_raw=True, **kwargs
+    ):
+        """
+        Reduces size of dataframes to save memory.
+
+        See :attr:`EDisGo.reduce_memory` for more information.
+
+        Parameters
+        -----------
+        attr_to_reduce : list(str), optional
+            List of attributes to reduce size for. Per default, all active
+            and reactive power time series of generators, loads, and storage units
+            are reduced.
+        to_type : str, optional
+            Data type to convert time series data to. This is a tradeoff
+            between precision and memory. Default: "float32".
+        time_series_raw : bool, optional
+            If True raw time series data in :py:attr:`~time_series_raw` is reduced
+            as well. Default: True.
+
+        Other Parameters
+        ------------------
+        attr_to_reduce_raw : list(str), optional
+            List of attributes in :class:`~.network.timeseries.TimeSeriesRaw` to reduce
+            size for. See :attr:`~.network.timeseries.TimeSeriesRaw.reduce_memory`
+            for default.
+
+        """
+        if attr_to_reduce is None:
+            attr_to_reduce = self._attributes
+        for attr in attr_to_reduce:
+            setattr(
+                self,
+                attr,
+                getattr(self, attr).apply(lambda _: _.astype(to_type)),
+            )
+        if time_series_raw:
+            self.time_series_raw.reduce_memory(
+                kwargs.get("attr_to_reduce_raw", None), to_type=to_type
+            )
+
+    def to_csv(self, directory, reduce_memory=False, time_series_raw=False, **kwargs):
+        """
+        Saves component time series to csv.
+
+        Saves the following time series to csv files with the same file name
+        (if the time series dataframe is not empty):
+
+        * loads_active_power and loads_reactive_power
+        * generators_active_power and generators_reactive_power
+        * storage_units_active_power and  storage_units_reactive_power
+
+        If parameter `time_series_raw` is set to True, raw time series data is saved
+        to csv as well. See :attr:`~.network.timeseries.TimeSeriesRaw.to_csv`
+        for more information.
+
+        Parameters
+        ----------
+        directory : str
+            Directory to save time series in.
+        reduce_memory : bool, optional
+            If True, size of dataframes is reduced using
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory`.
+            Optional parameters of
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory`
+            can be passed as kwargs to this function. Default: False.
+        time_series_raw : bool, optional
+            If True raw time series data in :py:attr:`~time_series_raw` is saved to csv
+            as well. Per default all raw time series data is then stored in a
+            subdirectory of the specified `directory` called "time_series_raw". Further,
+            if `reduce_memory` is set to True, raw time series data is reduced as well.
+            To change this default behavior please call
+            :attr:`~.network.timeseries.TimeSeriesRaw.to_csv` separately.
+            Default: False.
+
+        Other Parameters
+        ------------------
+        kwargs :
+            Kwargs may contain arguments of
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory`.
+
+        """
+        if reduce_memory is True:
+            self.reduce_memory(**kwargs)
+
+        os.makedirs(directory, exist_ok=True)
+
+        for attr in self._attributes:
+            if not getattr(self, attr).empty:
+                getattr(self, attr).to_csv(os.path.join(directory, f"{attr}.csv"))
+
+        if time_series_raw:
+            self.time_series_raw.to_csv(
+                directory=os.path.join(directory, "time_series_raw"),
+                reduce_memory=reduce_memory,
+            )
+
+    def from_csv(self, directory, time_series_raw=False, **kwargs):
+        """
+        Restores time series from csv files.
+
+        See :func:`~to_csv` for more information on which time series can be saved and
+        thus restored.
+
+        Parameters
+        ----------
+        directory : str
+            Directory time series are saved in.
+        time_series_raw : bool, optional
+            If True raw time series data is as well read in (see
+            :attr:`~.network.timeseries.TimeSeriesRaw.from_csv` for further
+            information). Directory data is restored from can be specified through
+            kwargs.
+            Default: False.
+
+        Other Parameters
+        ------------------
+        directory_raw : str, optional
+            Directory to read raw time series data from. Per default this is a
+            subdirectory of the specified `directory` called "time_series_raw".
+
+        """
+        timeindex = None
+        for attr in self._attributes:
+            path = os.path.join(directory, f"{attr}.csv")
+            if os.path.exists(path):
+                setattr(
+                    self,
+                    attr,
+                    pd.read_csv(path, index_col=0, parse_dates=True),
+                )
+                if timeindex is None:
+                    timeindex = getattr(self, f"_{attr}").index
+        if timeindex is None:
+            timeindex = pd.DatetimeIndex([])
+        self._timeindex = timeindex
+
+        if time_series_raw:
+            self.time_series_raw.from_csv(
+                directory=kwargs.get(
+                    "directory_raw", os.path.join(directory, "time_series_raw")
+                )
+            )
+
+    def check_integrity(self):
+        """
+        Check for NaN, duplicated indices or columns and if time series is empty.
+        """
+        if len(self.timeindex) == 0:
+            logger.warning("No time index set. Empty time series will be returned.")
+        else:
+            for attr in self._attributes:
+                df = getattr(self, attr)
+
+                if df.isnull().any().any():
+                    logger.warning(f"There are null values in {attr}")
+
+                if any(df.index.duplicated()):
+                    duplicated_labels = df.index[df.index.duplicated()].values
+                    logger.warning(
+                        f"{attr} has duplicated indices: {duplicated_labels}"
+                    )
+
+                if any(df.columns.duplicated()):
+                    duplicated_labels = df.columns[df.columns.duplicated()].values
+                    logger.warning(
+                        f"{attr} has duplicated columns: {duplicated_labels}"
+                    )
+
+
+class TimeSeriesRaw:
+    """
+    Holds raw time series data, e.g. sector-specific demand and standing times of EV.
+
+    Normalised time series are e.g. sector-specific demand time series or
+    technology-specific feed-in time series. Time series needed for
+    flexibilities are e.g. heat time series or curtailment time series.
+
+    Attributes
+    ------------
+    q_control : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with information on applied reactive power control or in case of
+        conventional loads assumed reactive power behavior. Index of the dataframe are
+        the component names as in index of
+        :attr:`~.network.topology.Topology.generators_df`,
+        :attr:`~.network.topology.Topology.loads_df`, and
+        :attr:`~.network.topology.Topology.storage_units_df`. Columns are
+        "type" with the type of Q-control applied (can be "fixed_cosphi", "cosphi(P)",
+        or "Q(V)"),
+        "power_factor" with the (maximum) power factor,
+        "q_sign" giving the sign of the reactive power (only applicable to
+        "fixed_cosphi"),
+        "parametrisation" with the parametrisation of the
+        respective Q-control (only applicable to "cosphi(P)" and "Q(V)").
+    fluctuating_generators_active_power_by_technology : \
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with feed-in time series per technology or technology and
+        weather cell ID normalized to a nominal capacity of 1.
+        Columns can either just contain the technology type as string or
+        be a :pandas:`pandas.MultiIndex<MultiIndex>` with the
+        first level containing the technology as string and the second level
+        the weather cell ID as integer.
+        Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+    dispatchable_generators_active_power_by_technology : \
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with feed-in time series per technology normalized to a nominal
+        capacity of 1.
+        Columns contain the technology type as string.
+        Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+    conventional_loads_active_power_by_sector : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with load time series of each type of conventional load
+        normalized to an annual consumption of 1. Index needs to
+        be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+        Columns represent load type. In ding0 grids the
+        differentiated sectors are 'residential', 'retail', 'industrial', and
+        'agricultural'.
+    charging_points_active_power_by_use_case : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with charging demand time series per use case normalized to a nominal
+        capacity of 1.
+        Columns contain the use case as string.
+        Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+
+    """
+
+    def __init__(self):
+        self.q_control = pd.DataFrame(
+            columns=["type", "q_sign", "power_factor", "parametrisation"]
+        )
+        self.fluctuating_generators_active_power_by_technology = pd.DataFrame(
+            dtype=float
+        )
+        self.dispatchable_generators_active_power_by_technology = pd.DataFrame(
+            dtype=float
+        )
+        self.conventional_loads_active_power_by_sector = pd.DataFrame(dtype=float)
+        self.charging_points_active_power_by_use_case = pd.DataFrame(dtype=float)
+
+    @property
+    def _attributes(self):
+        return [
+            "q_control",
+            "fluctuating_generators_active_power_by_technology",
+            "dispatchable_generators_active_power_by_technology",
+            "conventional_loads_active_power_by_sector",
+            "charging_points_active_power_by_use_case",
+        ]
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
         """
@@ -413,33 +2069,22 @@ class TimeSeries:
 
         """
         if attr_to_reduce is None:
-            attr_to_reduce = [
-                "generators_active_power", "generators_reactive_power",
-                "loads_active_power", "loads_reactive_power",
-                "charging_points_active_power",
-                "charging_points_reactive_power",
-                "storage_units_active_power", "storage_units_reactive_power"
-            ]
+            attr_to_reduce = self._attributes
+        # remove attributes that do not contain only floats
+        if "q_control" in attr_to_reduce:
+            attr_to_reduce.remove("q_control")
         for attr in attr_to_reduce:
-            setattr(
-                self,
-                attr,
-                getattr(self, attr).apply(
-                    lambda _: _.astype(to_type)
+            if hasattr(self, attr) and getattr(self, attr) is not None:
+                setattr(
+                    self, attr, getattr(self, attr).apply(lambda _: _.astype(to_type))
                 )
-            )
 
     def to_csv(self, directory, reduce_memory=False, **kwargs):
         """
-        Saves component time series to csv.
+        Saves time series to csv.
 
-        Saves the following time series to csv files with the same file name
-        (if the time series dataframe is not empty):
-
-        * loads_active_power and loads_reactive_power
-        * generators_active_power and generators_reactive_power
-        * charging_points_active_power and charging_points_reactive_power
-        * storage_units_active_power and  storage_units_reactive_power
+        Saves all attributes that are set to csv files with the same file name.
+        See class definition for possible attributes.
 
         Parameters
         ----------
@@ -447,29 +2092,26 @@ class TimeSeries:
             Directory to save time series in.
         reduce_memory : bool, optional
             If True, size of dataframes is reduced using
-            :attr:`~.network.timeseries.TimeSeries.reduce_memory`. Optional
-            parameters of :attr:`~.network.timeseries.TimeSeries.reduce_memory`
+            :attr:`~.network.timeseries.TimeSeriesRaw.reduce_memory`. Optional
+            parameters of
+            :attr:`~.network.timeseries.TimeSeriesRaw.reduce_memory`
             can be passed as kwargs to this function. Default: False.
 
         Other Parameters
         ------------------
         kwargs :
             Kwargs may contain optional arguments of
-            :attr:`~.network.timeseries.TimeSeries.reduce_memory`.
+            :attr:`~.network.timeseries.TimeSeriesRaw.reduce_memory`.
 
         """
-        save_attributes = _get_attributes_to_save()
-
         if reduce_memory is True:
             self.reduce_memory(**kwargs)
 
         os.makedirs(directory, exist_ok=True)
 
-        for attr in save_attributes:
-            if not getattr(self, attr).empty:
-                getattr(self, attr).to_csv(
-                    os.path.join(directory, "{}.csv".format(attr))
-                )
+        for attr in self._attributes:
+            if hasattr(self, attr) and not getattr(self, attr).empty:
+                getattr(self, attr).to_csv(os.path.join(directory, f"{attr}.csv"))
 
     def from_csv(self, directory):
         """
@@ -485,1526 +2127,110 @@ class TimeSeries:
 
         """
         timeindex = None
-        for attr in _get_attributes_to_save():
-            path = os.path.join(
-                directory,
-                '{}.csv'.format(attr)
-            )
+        for attr in self._attributes:
+            path = os.path.join(directory, f"{attr}.csv")
             if os.path.exists(path):
                 setattr(
                     self,
                     attr,
-                    pd.read_csv(path, index_col=0, parse_dates=True)
+                    pd.read_csv(path, index_col=0, parse_dates=True),
                 )
                 if timeindex is None:
-                    timeindex = getattr(
-                        self,
-                        "_{}".format(attr)
-                    ).index
+                    timeindex = getattr(self, f"{attr}").index
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
         self._timeindex = timeindex
 
 
-def get_component_timeseries(edisgo_obj, **kwargs):
+def drop_component_time_series(obj, df_name, comp_names):
     """
-    Sets up TimeSeries Object.
+    Drop component time series.
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.EDisGo`
-        The eDisGo data container
-    mode : :obj:`str`, optional
-        Mode must be set in case of worst-case analyses and can either be
-        'worst-case' (both feed-in and load case), 'worst-case-feedin' (only
-        feed-in case) or 'worst-case-load' (only load case). All other
-        parameters except of `config-data` will be ignored. Default: None.
-        Mode can also be set to manual in order to give standard timeseries,
-        that are not obtained from oedb or demandlib.
-    timeseries_generation_fluctuating : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
-        Parameter used to obtain time series for active power feed-in of
-        fluctuating renewables wind and solar.
-        Possible options are:
-
-        * 'oedb'
-          Time series for 2011 are obtained from the OpenEnergy DataBase.
-        * :pandas:`pandas.DataFrame<dataframe>`
-          DataFrame with time series, normalized with corresponding capacity.
-          Time series can either be aggregated by technology type or by type
-          and weather cell ID. In the first case columns of the DataFrame are
-          'solar' and 'wind'; in the second case columns need to be a
-          :pandas:`pandas.MultiIndex<multiindex>` with the first level
-          containing the type and the second level the weather cell ID.
-
-        Default: None.
-    timeseries_generation_dispatchable : :pandas:`pandas.DataFrame<dataframe>`, optional
-        DataFrame with time series for active power of each (aggregated)
-        type of dispatchable generator normalized with corresponding capacity.
-        Columns represent generator type:
-
-        * 'gas'
-        * 'coal'
-        * 'biomass'
-        * 'other'
-        * ...
-
-        Use 'other' if you don't want to explicitly provide every possible
-        type. Default: None.
-    timeseries_generation_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
-        DataFrame with time series of normalized reactive power (normalized by
-        the rated nominal active power) per technology and weather cell. Index
-        needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-        Columns represent generator type and can be a MultiIndex column
-        containing the weather cell ID in the second level. If the technology
-        doesn't contain weather cell information i.e. if it is other than solar
-        and wind generation, this second level can be left as an empty string ''.
-
-        Default: None.
-    timeseries_load : :obj:`str` or :pandas:`pandas.DataFrame<dataframe>`, optional
-        Parameter used to obtain time series of active power of (cumulative)
-        loads.
-        Possible options are:
-
-        * 'demandlib'
-          Time series are generated using the oemof demandlib.
-        * :pandas:`pandas.DataFrame<dataframe>`
-          DataFrame with load time series of each (cumulative) type of load
-          normalized with corresponding annual energy demand.
-          Columns represent load type:
-
-          * 'residential'
-          * 'retail'
-          * 'industrial'
-          * 'agricultural'
-
-        Default: None.
-    timeseries_load_reactive_power : :pandas:`pandas.DataFrame<dataframe>`, optional
-        Parameter to get the time series of the reactive power of loads. It should be a
-        DataFrame with time series of normalized reactive power (normalized by
-        annual energy demand) per load sector. Index needs to be a
-        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-        Columns represent load type:
-
-          * 'residential'
-          * 'retail'
-          * 'industrial'
-          * 'agricultural'
-
-        Default: None.
-    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-        Can be used to define a time range for which to obtain load time series
-        and feed-in time series of fluctuating renewables or to define time
-        ranges of the given time series that will be used in the analysis.
-
-    """
-    mode = kwargs.get("mode", None)
-    timeindex = kwargs.get("timeindex", edisgo_obj.timeseries.timeindex)
-    # reset TimeSeries
-    edisgo_obj.timeseries = TimeSeries(
-        timeindex=timeindex)
-    edisgo_obj.timeseries.mode = mode
-    if mode:
-        if "worst-case" in mode:
-            modes = _get_worst_case_modes(mode)
-            # set random timeindex
-            edisgo_obj.timeseries.timeindex = pd.date_range(
-                "1/1/1970", periods=len(modes), freq="H"
-            )
-            _worst_case_generation(edisgo_obj=edisgo_obj, modes=modes)
-            _worst_case_load(edisgo_obj=edisgo_obj, modes=modes)
-            _worst_case_storage(edisgo_obj=edisgo_obj, modes=modes)
-
-        elif mode == "manual":
-            if kwargs.get("loads_active_power", None) is not None:
-                edisgo_obj.timeseries.loads_active_power = kwargs.get(
-                    "loads_active_power")
-            if kwargs.get("loads_reactive_power", None) is not None:
-                edisgo_obj.timeseries.loads_reactive_power = kwargs.get(
-                    "loads_reactive_power")
-
-            if kwargs.get("generators_active_power", None) is not None:
-                edisgo_obj.timeseries.generators_active_power = kwargs.get(
-                    "generators_active_power")
-            if kwargs.get("generators_reactive_power", None) is not None:
-                edisgo_obj.timeseries.generators_reactive_power = kwargs.get(
-                    "generators_reactive_power")
-
-            if kwargs.get("storage_units_active_power", None) is not None:
-                edisgo_obj.timeseries.storage_units_active_power = kwargs.get(
-                    "storage_units_active_power")
-            if kwargs.get("storage_units_reactive_power", None) is not None:
-                edisgo_obj.timeseries.storage_units_reactive_power = \
-                    kwargs.get("storage_units_reactive_power")
-
-            if kwargs.get("charging_points_active_power", None) is not None:
-                edisgo_obj.timeseries.charging_points_active_power = \
-                    kwargs.get("charging_points_active_power")
-            if kwargs.get("charging_points_reactive_power", None) is not None:
-                edisgo_obj.timeseries.charging_points_reactive_power = \
-                    kwargs.get("charging_points_reactive_power")
-        else:
-            raise ValueError("{} is not a valid mode.".format(mode))
-    else:
-        config_data = edisgo_obj.config
-
-        weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
-            edisgo_obj)
-
-        # feed-in time series of fluctuating renewables
-        ts = kwargs.get("timeseries_generation_fluctuating", None)
-        if isinstance(ts, pd.DataFrame):
-            edisgo_obj.timeseries.generation_fluctuating = ts
-        elif isinstance(ts, str) and ts == "oedb":
-            edisgo_obj.timeseries.generation_fluctuating = \
-                import_feedin_timeseries(
-                    config_data, weather_cell_ids, kwargs.get(
-                        "timeindex", None))
-        else:
-            raise ValueError(
-                "Your input for "
-                '"timeseries_generation_fluctuating" is not '
-                "valid.".format(mode)
-            )
-        # feed-in time series for dispatchable generators
-        ts = kwargs.get("timeseries_generation_dispatchable", None)
-        if isinstance(ts, pd.DataFrame):
-            edisgo_obj.timeseries.generation_dispatchable = ts
-        else:
-            # check if there are any dispatchable generators, and
-            # throw error if there are
-            gens = edisgo_obj.topology.generators_df
-            if not (gens.type.isin(["solar", "wind"])).all():
-                raise ValueError(
-                    'Your input for "timeseries_generation_dispatchable" '
-                    "is not valid.".format(mode)
-                )
-        # reactive power time series for all generators
-        ts = kwargs.get("timeseries_generation_reactive_power", None)
-        if isinstance(ts, pd.DataFrame):
-            edisgo_obj.timeseries.generation_reactive_power = ts
-        # set time index
-        if kwargs.get("timeindex", None) is not None:
-            edisgo_obj.timeseries.timeindex = kwargs.get("timeindex")
-        else:
-            edisgo_obj.timeseries.timeindex = (
-                edisgo_obj.timeseries.generation_fluctuating.index
-            )
-
-        # load time series
-        ts = kwargs.get("timeseries_load", None)
-        if isinstance(ts, pd.DataFrame):
-            edisgo_obj.timeseries.load = ts
-        elif ts == "demandlib":
-            edisgo_obj.timeseries.load = import_load_timeseries(
-                config_data, ts, year=edisgo_obj.timeseries.timeindex[0].year
-            )
-        else:
-            raise ValueError(
-                'Your input for "timeseries_load" is not '
-                "valid.".format(mode)
-            )
-        # reactive power timeseries for loads
-        ts = kwargs.get("timeseries_load_reactive_power", None)
-        if isinstance(ts, pd.DataFrame):
-            edisgo_obj.timeseries.load_reactive_power = ts
-
-        # create generator active and reactive power timeseries
-        _generation_from_timeseries(edisgo_obj=edisgo_obj)
-
-        # create load active and reactive power timeseries
-        _load_from_timeseries(edisgo_obj=edisgo_obj)
-
-        # create storage active and reactive power timeseries
-        _storage_from_timeseries(
-            edisgo_obj=edisgo_obj,
-            ts_active_power=kwargs.get("timeseries_storage_units", None),
-            ts_reactive_power=kwargs.get(
-                "timeseries_storage_units_reactive_power", None
-            ),
-        )
-
-        # check if time series for the set time index can be obtained
-        _check_timeindex(edisgo_obj=edisgo_obj)
-
-
-def _load_from_timeseries(edisgo_obj, load_names=None):
-    """
-    Set active and reactive load time series for specified loads by sector.
-
-    If loads are not specified, sets time series of all existing loads.
-    In case reactive power time series are not provided, a fixed power factor
-    as specified in config file 'config_timeseries' in section
-    'reactive_power_factor' is assumed.
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    load_names : list(str)
-
-    """
-    # get all requested loads and drop existing timeseries
-    if load_names is None:
-        load_names = edisgo_obj.topology.loads_df.index
-    loads = edisgo_obj.topology.loads_df.loc[load_names]
-    _drop_existing_component_timeseries(
-        edisgo_obj=edisgo_obj, comp_type="loads", comp_names=load_names
-    )
-    # set active power
-    edisgo_obj.timeseries.loads_active_power = pd.concat(
-        [edisgo_obj.timeseries.loads_active_power,
-         loads.apply(
-             lambda x: edisgo_obj.timeseries.load[x.sector]
-             * x.annual_consumption
-             if x.sector in edisgo_obj.timeseries.load.columns
-             else edisgo_obj.timeseries.load['other']
-             * x.annual_consumption,
-             axis=1).T
-         ],
-        axis=1
-    )
-
-    # if reactive power is given as attribute set with inserted timeseries
-    if hasattr(edisgo_obj.timeseries, "load_reactive_power"):
-        edisgo_obj.timeseries.loads_reactive_power = pd.concat(
-            [edisgo_obj.timeseries.loads_reactive_power,
-             loads.apply(
-                 lambda x: edisgo_obj.timeseries.load_reactive_power[x.sector]
-                 * x.annual_consumption
-                 if x.sector in
-                    edisgo_obj.timeseries.load_reactive_power.columns
-                 else edisgo_obj.timeseries.load_reactive_power['other']
-                 * x.annual_consumption,
-                 axis=1
-             )
-             ],
-            axis=1
-        )
-    # set default reactive load
-    else:
-        _set_reactive_power_time_series_for_fixed_cosphi_using_config(
-            edisgo_obj=edisgo_obj,
-            df=loads,
-            component_type="loads"
-        )
-
-
-def _generation_from_timeseries(edisgo_obj, generator_names=None):
-    def _timeseries_fluctuating():
-        if isinstance(
-            edisgo_obj.timeseries.generation_fluctuating.columns, pd.MultiIndex
-        ):
-            return gens_fluctuating.apply(
-                lambda x: edisgo_obj.timeseries.generation_fluctuating[x.type][
-                    x.weather_cell_id
-                ].T
-                * x.p_nom,
-                axis=1,
-            ).T
-        else:
-            return gens_fluctuating.apply(
-                lambda x: edisgo_obj.timeseries.generation_fluctuating[
-                    x.type
-                ].T
-                * x.p_nom,
-                axis=1,
-            ).T
-
-    def _timeseries_dispatchable():
-        return gens_dispatchable.apply(
-            lambda x: edisgo_obj.timeseries.generation_dispatchable[x.type]
-            * x.p_nom
-            if x.type in edisgo_obj.timeseries.generation_dispatchable.columns
-            else edisgo_obj.timeseries.generation_dispatchable["other"]
-            * x.p_nom,
-            axis=1,
-        ).T
-
-    if generator_names is None:
-        generator_names = edisgo_obj.topology.generators_df.index
-    # get all generators
-    gens = edisgo_obj.topology.generators_df.loc[generator_names]
-    # drop existing timeseries
-    _drop_existing_component_timeseries(
-        edisgo_obj, "generators", generator_names
-    )
-    # handling of fluctuating generators
-    gens_fluctuating = gens[gens.type.isin(["solar", "wind"])]
-    gens_dispatchable = gens[~gens.index.isin(gens_fluctuating.index)]
-    if gens_dispatchable.empty and gens_fluctuating.empty:
-        logger.debug("No generators provided to add timeseries for.")
-        return
-    if not gens_dispatchable.empty:
-        edisgo_obj.timeseries.generators_active_power = pd.concat(
-            [
-                edisgo_obj.timeseries.generators_active_power,
-                _timeseries_dispatchable(),
-            ],
-            axis=1,
-            sort=False
-        )
-    if not gens_fluctuating.empty:
-        edisgo_obj.timeseries.generators_active_power = pd.concat(
-            [
-                edisgo_obj.timeseries.generators_active_power,
-                _timeseries_fluctuating(),
-            ],
-            axis=1,
-            sort=False
-        )
-
-    # set reactive power if given as attribute
-    if (
-        hasattr(edisgo_obj.timeseries, "generation_reactive_power")
-        and gens.index.isin(
-            edisgo_obj.timeseries.generation_reactive_power.columns
-        ).all()
-    ):
-
-        edisgo_obj.timeseries.generators_reactive_power = pd.concat(
-            [edisgo_obj.timeseries.generators_reactive_power,
-             edisgo_obj.timeseries.generation_reactive_power.loc[:, gens.index]
-             ],
-            axis=1
-        )
-    # set default reactive power by cos_phi
-    else:
-        logger.debug("Reactive power calculated by cos(phi).")
-        _set_reactive_power_time_series_for_fixed_cosphi_using_config(
-            edisgo_obj=edisgo_obj,
-            df=gens,
-            component_type="generators"
-        )
-
-
-def _storage_from_timeseries(
-    edisgo_obj, ts_active_power, ts_reactive_power, name_storage_units=None
-):
-    """
-    Sets up storage timeseries for mode=None in get_component_timeseries.
-    Timeseries with the right timeindex and columns with storage unit names
-    have to be provided.
-
-    Overwrites active and reactive power time series of storage units
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    ts_active_power: :pandas:`pandas.DataFrame<dataframe>`
-        Timeseries of active power with index=timeindex,
-        columns=name_storage_units
-    ts_reactive_power: :pandas:`pandas.DataFrame<dataframe>`
-        Timeseries of active power with index=timeindex,
-        columns=name_storage_units
-    name_storage_units: str or list of str
-        Names of storage units to add timeseries for. Default None, timeseries
-        for all storage units of edisgo_obj are set then.
-    """
-    if name_storage_units is None:
-        name_storage_units = edisgo_obj.topology.storage_units_df.index
-    storage_units_df = edisgo_obj.topology.storage_units_df.loc[
-        name_storage_units
-    ]
-    _drop_existing_component_timeseries(
-        edisgo_obj, "storage_units", name_storage_units
-    )
-
-    if len(storage_units_df) == 0:
-        edisgo_obj.timeseries.storage_units_active_power = pd.DataFrame(
-            {}, index=edisgo_obj.timeseries.timeindex
-        )
-        edisgo_obj.timeseries.storage_units_reactive_power = pd.DataFrame(
-            {}, index=edisgo_obj.timeseries.timeindex
-        )
-    elif ts_active_power is None:
-        # Todo: move up to check at the start
-        raise ValueError("No timeseries for storage units provided.")
-    else:
-        try:
-            # check if indices and columns are correct
-            if (
-                ts_active_power.index == edisgo_obj.timeseries.timeindex
-            ).all():
-                edisgo_obj.timeseries.storage_units_active_power = drop_duplicated_columns(
-                    pd.concat(
-                        [edisgo_obj.timeseries.storage_units_active_power,
-                         ts_active_power.loc[:, name_storage_units]
-                         ],
-                        axis=1
-                    )
-                )
-                # check if reactive power is given
-                if (
-                    ts_reactive_power is not None
-                    and (
-                        ts_active_power.index
-                        == edisgo_obj.timeseries.timeindex
-                    ).all()
-                ):
-                    edisgo_obj.timeseries.storage_units_reactive_power = drop_duplicated_columns(
-                        pd.concat(
-                            [edisgo_obj.timeseries.storage_units_reactive_power,
-                             ts_reactive_power.loc[:, name_storage_units]
-                             ],
-                            axis=1
-                        )
-                    )
-                else:
-                    _set_reactive_power_time_series_for_fixed_cosphi_using_config(
-                        edisgo_obj=edisgo_obj,
-                        df=storage_units_df,
-                        component_type="storage_units"
-                    )
-            else:
-                raise ValueError(
-                    "Index of provided storage active power "
-                    "timeseries does not match timeindex of "
-                    "TimeSeries class."
-                )
-        except ValueError:
-            raise ValueError(
-                "Columns or indices of inserted storage "
-                "timeseries do not match topology and "
-                "timeindex."
-            )
-
-
-def _worst_case_generation(edisgo_obj, modes, generator_names=None):
-    """
-    Define worst case generation time series for fluctuating and
-    dispatchable generators.
-
-    Overwrites active and reactive power time series of generators
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    modes : list
-        List with worst-cases to generate time series for. Can be
-        'feedin_case', 'load_case' or both.
-    generator_names: str or list of str
-        Names of generators to add timeseries for. Default None, timeseries
-        for all generators of edisgo_obj are set then.
-    """
-    if generator_names is None:
-        generator_names = edisgo_obj.topology.generators_df.index
-
-    gens_df = edisgo_obj.topology.generators_df.loc[
-        generator_names, ["bus", "type", "p_nom"]
-    ]
-
-    # check that all generators have bus, type, nominal power
-    check_gens = gens_df.isnull().any(axis=1)
-    if check_gens.any():
-        raise AttributeError(
-            "The following generators have either missing bus, type or "
-            "nominal power: {}.".format(check_gens[check_gens].index.values)
-        )
-
-    # active power
-    # get worst case configurations
-    worst_case_scale_factors = edisgo_obj.config["worst_case_scale_factor"]
-
-    # get worst case scaling factors for different generator types and
-    # feed-in/load case
-    worst_case_ts = pd.DataFrame(
-        {
-            "solar": [
-                worst_case_scale_factors["{}_feedin_pv".format(mode)]
-                for mode in modes
-            ],
-            "wind": [
-                worst_case_scale_factors["{}_feedin_wind".format(mode)]
-                for mode in modes
-            ],
-            "other": [
-                worst_case_scale_factors["{}_feedin_other".format(mode)]
-                for mode in modes
-            ],
-        },
-        index=edisgo_obj.timeseries.timeindex,
-    )
-
-    gen_ts = pd.DataFrame(
-        index=edisgo_obj.timeseries.timeindex,
-        columns=gens_df.index,
-        dtype="float64",
-    )
-    # assign normalized active power time series to solar generators
-    cols_pv = gen_ts[gens_df.index[gens_df.type == "solar"]].columns
-    if len(cols_pv) > 0:
-        gen_ts[cols_pv] = pd.concat(
-            [worst_case_ts.loc[:, ["solar"]]] * len(cols_pv), axis=1, sort=True
-        )
-    # assign normalized active power time series to wind generators
-    cols_wind = gen_ts[gens_df.index[gens_df.type == "wind"]].columns
-    if len(cols_wind) > 0:
-        gen_ts[cols_wind] = pd.concat(
-            [worst_case_ts.loc[:, ["wind"]]] * len(cols_wind), axis=1,
-            sort=True
-        )
-    # assign normalized active power time series to other generators
-    cols = gen_ts.columns[~gen_ts.columns.isin(cols_pv.append(cols_wind))]
-    if len(cols) > 0:
-        gen_ts[cols] = pd.concat(
-            [worst_case_ts.loc[:, ["other"]]] * len(cols), axis=1, sort=True
-        )
-
-    # drop existing timeseries
-    _drop_existing_component_timeseries(
-        edisgo_obj, "generators", generator_names
-    )
-
-    # multiply normalized time series by nominal power of generator
-    edisgo_obj.timeseries.generators_active_power = pd.concat(
-        [edisgo_obj.timeseries.generators_active_power,
-         gen_ts.mul(gens_df.p_nom)],
-        axis=1
-    )
-
-    # calculate reactive power
-    _set_reactive_power_time_series_for_fixed_cosphi_using_config(
-        edisgo_obj=edisgo_obj,
-        df=gens_df,
-        component_type="generators"
-    )
-
-
-def _worst_case_load(edisgo_obj, modes, load_names=None):
-    """
-    Define worst case load time series for each sector.
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    modes : list
-        List with worst-cases to generate time series for. Can be
-        'feedin_case', 'load_case' or both.
-    load_names: str or list of str
-        Names of loads to add timeseries for. Default None, timeseries
-        for all loads of edisgo_obj are set then.
-
-    """
-
-    voltage_levels = ["mv", "lv"]
-
-    if load_names is None:
-        load_names = edisgo_obj.topology.loads_df.index
-    loads_df = edisgo_obj.topology.loads_df.loc[
-        load_names, ["bus", "sector", "peak_load"]
-    ]
-
-    # check that all loads have bus, sector, annual consumption
-    check_loads = loads_df.isnull().any(axis=1)
-    if check_loads.any():
-        raise AttributeError(
-            "The following loads have either missing bus, sector or "
-            "annual consumption: {}.".format(
-                check_loads[check_loads].index.values
-            )
-        )
-
-    # assign voltage level to loads
-    if loads_df.empty:
-        return
-    loads_df["voltage_level"] = loads_df.apply(
-        lambda _: "lv"
-        if edisgo_obj.topology.buses_df.at[_.bus, "v_nom"] < 1
-        else "mv",
-        axis=1,
-    )
-
-    # active power
-    # get worst case configurations
-    worst_case_scale_factors = edisgo_obj.config["worst_case_scale_factor"]
-
-    # get power scaling factors for different voltage levels and feed-in/
-    # load case
-    power_scaling = {}
-    for voltage_level in voltage_levels:
-        power_scaling[voltage_level] = [
-            worst_case_scale_factors["{}_{}_load".format(voltage_level, mode)]
-            for mode in modes
-        ]
-
-    # assign power scaling factor to each load
-    power_scaling_df = pd.DataFrame(
-        data=np.transpose(
-            [
-                power_scaling[loads_df.at[col, "voltage_level"]]
-                for col in loads_df.index
-            ]
-        ),
-        index=edisgo_obj.timeseries.timeindex,
-        columns=loads_df.index,
-    )
-
-    # drop existing timeseries
-    _drop_existing_component_timeseries(
-        edisgo_obj=edisgo_obj, comp_type="loads", comp_names=load_names
-    )
-
-    # calculate active power of loads
-    edisgo_obj.timeseries.loads_active_power = pd.concat(
-        [edisgo_obj.timeseries.loads_active_power,
-         (power_scaling_df * loads_df.loc[:, "peak_load"])
-         ],
-        axis=1
-    )
-
-    _set_reactive_power_time_series_for_fixed_cosphi_using_config(
-        edisgo_obj=edisgo_obj,
-        df=loads_df,
-        component_type="loads"
-    )
-
-
-def _worst_case_storage(edisgo_obj, modes, storage_names=None):
-    """
-    Define worst case storage unit time series.
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    modes : list
-        List with worst-cases to generate time series for. Can be
-        'feedin_case', 'load_case' or both.
-    storage_names: str or list of str
-        Names of storage units to add timeseries for. Default None,
-        timeseries for all storage units of edisgo_obj are set then.
-
-    """
-    if len(edisgo_obj.topology.storage_units_df) == 0:
-        edisgo_obj.timeseries.storage_units_active_power = pd.DataFrame(
-            {}, index=edisgo_obj.timeseries.timeindex
-        )
-        edisgo_obj.timeseries.storage_units_reactive_power = pd.DataFrame(
-            {}, index=edisgo_obj.timeseries.timeindex
-        )
-    else:
-        if storage_names is None:
-            storage_names = edisgo_obj.topology.storage_units_df.index
-        storage_df = edisgo_obj.topology.storage_units_df.loc[
-            storage_names, ["bus", "p_nom"]
-        ]
-
-        # check that all storage units have bus, nominal power
-        check_storage = storage_df.isnull().any(axis=1)
-        if check_storage.any():
-            raise AttributeError(
-                "The following storage units have either missing bus or "
-                "nominal power: {}.".format(
-                    check_storage[check_storage].index.values
-                )
-            )
-
-        # active power
-        # get worst case configurations
-        worst_case_scale_factors = edisgo_obj.config["worst_case_scale_factor"]
-
-        # get worst case scaling factors for feed-in/load case
-        worst_case_ts = pd.DataFrame(
-            np.transpose(
-                [
-                    [
-                        worst_case_scale_factors["{}_storage".format(mode)]
-                        for mode in modes
-                    ]
-                ]
-                * len(storage_df)
-            ),
-            index=edisgo_obj.timeseries.timeindex,
-            columns=storage_df.index,
-        )
-        edisgo_obj.timeseries.storage_units_active_power = drop_duplicated_columns(
-            pd.concat(
-                [edisgo_obj.timeseries.storage_units_active_power,
-                (worst_case_ts * storage_df.p_nom)
-                 ],
-                axis=1
-            ),
-            keep="last",
-        )
-
-        _set_reactive_power_time_series_for_fixed_cosphi_using_config(
-            edisgo_obj=edisgo_obj,
-            df=storage_df,
-            component_type="storage_units"
-        )
-
-
-def _check_timeindex(edisgo_obj):
-    """
-    Check function to check if all feed-in and load time series contain
-    values for the specified time index.
-
-    """
-    try:
-        assert edisgo_obj.timeseries.timeindex.isin(
-            edisgo_obj.timeseries.generators_reactive_power.index
-        ).all()
-        assert edisgo_obj.timeseries.timeindex.isin(
-            edisgo_obj.timeseries.generators_active_power.index
-        ).all()
-        assert edisgo_obj.timeseries.timeindex.isin(
-            edisgo_obj.timeseries.loads_reactive_power.index
-        ).all()
-        assert edisgo_obj.timeseries.timeindex.isin(
-            edisgo_obj.timeseries.loads_active_power.index
-        ).all()
-        assert edisgo_obj.timeseries.timeindex.isin(
-            edisgo_obj.timeseries.storage_units_reactive_power.index
-        ).all()
-        assert edisgo_obj.timeseries.timeindex.isin(
-            edisgo_obj.timeseries.storage_units_active_power.index
-        ).all()
-    except:
-        message = (
-            "Time index of feed-in and load time series does " "not match."
-        )
-        logging.error(message)
-        raise KeyError(message)
-
-
-def add_loads_timeseries(edisgo_obj, load_names, **kwargs):
-    """
-    Define load time series for active and reactive power. For more information
-    on required and optional parameters see description of
-    :func:`get_component_timeseries`. The mode initially set within
-    get_component_timeseries is used here to set new timeseries. If a different
-    mode is required, change edisgo_obj.timeseries.mode to the desired mode and
-    provide respective parameters.
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    load_names: str or list of str
-        Names of loads to add timeseries for. Default None, timeseries
-        for all loads of edisgo_obj are set then.
-
-    """
-    # If timeseries have not yet been filled, it is not
-    # necessary to add timeseries
-    if not hasattr(edisgo_obj.timeseries, "mode"):
-        logger.debug(
-            "Timeseries have not been set yet. Please call"
-            "get_component_timeseries to create "
-            "timeseries."
-        )
-        return
-    # turn single name to list
-    if isinstance(load_names, str):
-        load_names = [load_names]
-    # append timeseries of respective mode
-    if edisgo_obj.timeseries.mode:
-        if "worst-case" in edisgo_obj.timeseries.mode:
-            modes = _get_worst_case_modes(edisgo_obj.timeseries.mode)
-            # set random timeindex
-            _worst_case_load(
-                edisgo_obj=edisgo_obj, modes=modes, load_names=load_names
-            )
-        elif edisgo_obj.timeseries.mode == "manual":
-            loads_active_power = kwargs.get("loads_active_power", None)
-            if loads_active_power is not None:
-                check_timeseries_for_index_and_cols(
-                    edisgo_obj, loads_active_power, load_names
-                )
-            loads_reactive_power = kwargs.get("loads_reactive_power", None)
-            if loads_reactive_power is not None:
-                check_timeseries_for_index_and_cols(
-                    edisgo_obj, loads_reactive_power, load_names
-                )
-            _drop_existing_component_timeseries(
-                edisgo_obj=edisgo_obj, comp_type="loads", comp_names=load_names
-            )
-            # add new load timeseries
-            edisgo_obj.timeseries.loads_active_power = pd.concat(
-                [edisgo_obj.timeseries.loads_active_power,
-                 loads_active_power.loc[:, load_names]
-                 ],
-                axis=1
-            )
-            edisgo_obj.timeseries.loads_reactive_power = pd.concat(
-                [edisgo_obj.timeseries.loads_reactive_power,
-                 loads_reactive_power.loc[:, load_names]
-                 ],
-                axis=1
-            )
-        else:
-            raise ValueError(
-                "{} is not a valid mode.".format(edisgo_obj.timeseries.mode)
-            )
-    else:
-        # create load active and reactive power timeseries
-        _load_from_timeseries(
-            edisgo_obj=edisgo_obj, load_names=load_names)
-
-
-def add_generators_timeseries(edisgo_obj, generator_names, **kwargs):
-    """
-    Define generator time series for active and reactive power. For more
-    information on required and optional parameters see description of
-    :func:`get_component_timeseries`.The mode initially set within
-    get_component_timeseries is used here to set new timeseries. If a different
-    mode is required, change edisgo_obj.timeseries.mode to the desired mode and
-    provide respective parameters.
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    generator_names: str or list of str
-        Names of generators to add timeseries for.
-
-    Other Parameters
-    -----------------
-    generators_active_power: :pandas:`pandas.DataFrame<DataFrame>`
-        Active power time series in MW.
-    generators_reactive_power: :pandas:`pandas.DataFrame<DataFrame>`
-        Reactive power time series in MW.
-
-    """
-    # If timeseries have not been set yet, it is not
-    # necessary to add timeseries
-    if not hasattr(edisgo_obj.timeseries, "mode"):
-        logger.debug(
-            "Timeseries have not been set yet. Please call "
-            "get_component_timeseries to create "
-            "timeseries."
-        )
-        return
-    # turn single name to list
-    if isinstance(generator_names, str):
-        generator_names = [generator_names]
-    # append timeseries of respective mode
-    if edisgo_obj.timeseries.mode:
-        if "worst-case" in edisgo_obj.timeseries.mode:
-            modes = _get_worst_case_modes(edisgo_obj.timeseries.mode)
-            # set random timeindex
-            _worst_case_generation(
-                edisgo_obj=edisgo_obj,
-                modes=modes,
-                generator_names=generator_names,
-            )
-        elif edisgo_obj.timeseries.mode == "manual":
-            # check inserted timeseries and drop existing generators
-            gens_active_power = kwargs.get("generators_active_power", None)
-            if gens_active_power is not None:
-                check_timeseries_for_index_and_cols(
-                    edisgo_obj, gens_active_power, generator_names
-                )
-            gens_reactive_power = kwargs.get("generators_reactive_power", None)
-            if gens_reactive_power is not None:
-                check_timeseries_for_index_and_cols(
-                    edisgo_obj, gens_reactive_power, generator_names
-                )
-            _drop_existing_component_timeseries(
-                edisgo_obj, "generators", generator_names
-            )
-            # add new timeseries
-            edisgo_obj.timeseries.generators_active_power = pd.concat(
-                [edisgo_obj.timeseries.generators_active_power,
-                 gens_active_power.loc[:, generator_names]
-                 ],
-                axis=1
-            )
-            edisgo_obj.timeseries.generators_reactive_power = pd.concat(
-                [edisgo_obj.timeseries.generators_reactive_power,
-                 gens_reactive_power.loc[:, generator_names]
-                 ],
-                axis=1
-            )
-        else:
-            raise ValueError(
-                "{} is not a valid mode.".format(edisgo_obj.timeseries.mode)
-            )
-    else:
-        ts_dispatchable = kwargs.get(
-            "timeseries_generation_dispatchable", None
-        )
-        if ts_dispatchable is not None:
-            if hasattr(edisgo_obj.timeseries, "generation_dispatchable"):
-                edisgo_obj.timeseries.generation_dispatchable = drop_duplicated_columns(
-                    pd.concat(
-                        [edisgo_obj.timeseries.generation_dispatchable,
-                         ts_dispatchable
-                         ],
-                        axis=1
-                    ),
-                    keep="last",
-                )
-            else:
-                edisgo_obj.timeseries.generation_dispatchable = ts_dispatchable
-
-        ts_reactive_power = kwargs.get("generation_reactive_power", None)
-        if ts_reactive_power is not None:
-            if hasattr(edisgo_obj.timeseries, "generation_reactive_power"):
-                edisgo_obj.timeseries.generation_reactive_power = drop_duplicated_columns(
-                    pd.concat(
-                        [edisgo_obj.timeseries.generation_reactive_power,
-                         ts_reactive_power
-                         ],
-                        axis=1
-                    ),
-                    keep="last",
-                )
-            else:
-                edisgo_obj.timeseries.generation_reactive_power = (
-                    ts_reactive_power
-                )
-        # create load active and reactive power timeseries
-        _generation_from_timeseries(
-            edisgo_obj=edisgo_obj, generator_names=generator_names
-        )
-
-
-def add_charging_points_timeseries(edisgo_obj, charging_point_names, **kwargs):
-    """
-    Define generator time series for active and reactive power.
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    charging_point_names: str or list of str
-        Names of charging points to add timeseries for.
-
-    Other Parameters
-    -----------------
-    ts_active_power: :pandas:`pandas.DataFrame<DataFrame>`
-        Active power time series in MW.
-    ts_reactive_power: :pandas:`pandas.DataFrame<DataFrame>`
-        Reactive power time series in MW.
-
-    """
-    # TODO: only provision of time series is implemented, worst_case etc.
-    #  is missing
-    ts_active_power = kwargs.get(
-        "ts_active_power", None
-    )
-    if ts_active_power is not None:
-        check_timeseries_for_index_and_cols(
-            edisgo_obj, ts_active_power, charging_point_names
-        )
-    ts_reactive_power = kwargs.get(
-        "ts_reactive_power", None
-    )
-    if ts_reactive_power is not None:
-        check_timeseries_for_index_and_cols(
-            edisgo_obj,
-            ts_reactive_power,
-            charging_point_names,
-        )
-    _drop_existing_component_timeseries(
-        edisgo_obj, "charging_points", charging_point_names
-    )
-    # add new timeseries
-    edisgo_obj.timeseries.charging_points_active_power = \
-        pd.concat([edisgo_obj.timeseries.charging_points_active_power,
-                   ts_active_power],
-                  axis=1, sort=False
-                  )
-    edisgo_obj.timeseries.charging_points_reactive_power = \
-        pd.concat([edisgo_obj.timeseries.charging_points_reactive_power,
-                   ts_reactive_power],
-                  axis=1, sort=False
-                  )
-
-
-def add_storage_units_timeseries(edisgo_obj, storage_unit_names, **kwargs):
-    """
-    Define storage unit time series for active and reactive power. For more
-    information on required and optional parameters see description of
-    :func:`get_component_timeseries`. The mode initially set within
-    get_component_timeseries is used here to set new timeseries. If a different
-    mode is required, change edisgo_obj.timeseries.mode to the desired mode and
-    provide respective parameters.
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    storage_unit_names: str or list of str
-        Names of storage units to add timeseries for. Default None, timeseries
-        for all storage units of edisgo_obj are set then.
-
-    """
-    # if timeseries have not been set yet, it is not
-    # necessary to add timeseries
-    if not hasattr(edisgo_obj.timeseries, "mode"):
-        logger.debug(
-            "Timeseries have not been set yet. Please call"
-            "get_components_timeseries to create timeseries."
-        )
-        return
-    # turn single name to list
-    if isinstance(storage_unit_names, str):
-        storage_unit_names = [storage_unit_names]
-    # append timeseries of respective mode
-    if edisgo_obj.timeseries.mode:
-        if "worst-case" in edisgo_obj.timeseries.mode:
-            modes = _get_worst_case_modes(edisgo_obj.timeseries.mode)
-            # set random timeindex
-            _worst_case_storage(
-                edisgo_obj=edisgo_obj,
-                modes=modes,
-                storage_names=storage_unit_names,
-            )
-        elif edisgo_obj.timeseries.mode == "manual":
-            storage_units_active_power = kwargs.get(
-                "storage_units_active_power", None
-            )
-            if storage_units_active_power is not None:
-                check_timeseries_for_index_and_cols(
-                    edisgo_obj, storage_units_active_power, storage_unit_names
-                )
-            storage_units_reactive_power = kwargs.get(
-                "storage_units_reactive_power", None
-            )
-            if storage_units_reactive_power is not None:
-                check_timeseries_for_index_and_cols(
-                    edisgo_obj,
-                    storage_units_reactive_power,
-                    storage_unit_names,
-                )
-            _drop_existing_component_timeseries(
-                edisgo_obj, "storage_units", storage_unit_names
-            )
-            # add new storage timeseries
-            edisgo_obj.timeseries.storage_units_active_power = pd.concat(
-                [edisgo_obj.timeseries.storage_units_active_power,
-                 storage_units_active_power.loc[:, storage_unit_names]
-                 ],
-                axis=1
-            )
-            edisgo_obj.timeseries.storage_units_reactive_power = pd.concat(
-                [edisgo_obj.timeseries.storage_units_reactive_power,
-                 storage_units_reactive_power.loc[:, storage_unit_names]
-                 ],
-                axis=1
-            )
-        else:
-            raise ValueError(
-                "{} is not a valid mode.".format(edisgo_obj.timeseries.mode)
-            )
-    else:
-        # create load active and reactive power timeseries
-        _storage_from_timeseries(
-            edisgo_obj=edisgo_obj,
-            name_storage_units=storage_unit_names,
-            ts_active_power=kwargs.get("timeseries_storage_units", None),
-            ts_reactive_power=kwargs.get(
-                "timeseries_storage_units_reactive_power", None
-            ),
-        )
-
-
-def _drop_existing_component_timeseries(edisgo_obj, comp_type, comp_names):
-    """
-    Drop columns of active and reactive power timeseries of 'comp_type'
-    components with names 'comp_names'.
-
-    Parameters
-    ----------
-    edisgo_obj: :class:`~.self.edisgo.EDisGo`
-        The eDisGo model overall container
-    comp_type: str
-        Specification of component type, either 'loads', 'generators' or
-        'storage_units'
-    comp_names: list of str
-        List of names of components that are to be dropped
+    obj : obj
+        Object with attr `df_name` to remove columns from. Can e.g. be
+        :class:`~.network.timeseries.TimeSeries`.
+    df_name : str
+        Name of attribute of given object holding the dataframe to remove columns from.
+        Can e.g. be "generators_active_power" if time series should be removed from
+        :attr:`~.network.timeseries.TimeSeries.generators_active_power`.
+    comp_names: str or list(str)
+        Names of components to drop.
 
     """
     if isinstance(comp_names, str):
         comp_names = [comp_names]
-    # drop existing timeseries of component
+    # drop existing time series of component
     setattr(
-        edisgo_obj.timeseries,
-        comp_type + "_active_power",
-        getattr(edisgo_obj.timeseries, comp_type + "_active_power").drop(
-            getattr(
-                edisgo_obj.timeseries, comp_type + "_active_power"
-            ).columns[
-                getattr(
-                    edisgo_obj.timeseries, comp_type + "_active_power"
-                ).columns.isin(comp_names)
-            ],
-            axis=1,
-        ),
-    )
-    setattr(
-        edisgo_obj.timeseries,
-        comp_type + "_reactive_power",
-        getattr(edisgo_obj.timeseries, comp_type + "_reactive_power").drop(
-            getattr(
-                edisgo_obj.timeseries, comp_type + "_reactive_power"
-            ).columns[
-                getattr(
-                    edisgo_obj.timeseries, comp_type + "_reactive_power"
-                ).columns.isin(comp_names)
+        obj,
+        df_name,
+        getattr(obj, df_name).drop(
+            getattr(obj, df_name).columns[
+                getattr(obj, df_name).columns.isin(comp_names)
             ],
             axis=1,
         ),
     )
 
 
-def check_timeseries_for_index_and_cols(
-    edisgo_obj, timeseries, component_names
-):
+def _add_component_time_series(obj, df_name, ts_new):
     """
-    Checks index and column names of inserted timeseries to make sure, they
-    have the right format.
+    Add component time series.
 
     Parameters
     ----------
-    timeseries:  :pandas:`pandas.DataFrame<dataframe>`
-        inserted timeseries
-    component_names: list of str
-        names of components of which timeseries are to be added
-    """
-    if (~edisgo_obj.timeseries.timeindex.isin(timeseries.index)).any():
-        raise ValueError(
-            "Inserted timeseries for the following "
-            "components have the a wrong time index: "
-            "{}. Values are missing.".format(component_names)
-        )
-    if any(comp not in timeseries.columns for comp in component_names):
-        raise ValueError(
-            "Columns of inserted timeseries are not the same "
-            "as names of components to be added. Timeseries "
-            "for the following components were tried to be "
-            "added: {}".format(component_names)
-        )
-
-
-def import_load_timeseries(config_data, data_source, year=2018):
-    """
-    Import load time series
-
-    Parameters
-    ----------
-    config_data : dict
-        Dictionary containing config data from config files.
-    data_source : str
-        Specify type of data source. Available data sources are
-
-         * 'demandlib'
-            Determine a load time series with the use of the demandlib.
-            This calculates standard load profiles for 4 different sectors.
-
-    mv_grid_id : :obj:`str`
-        MV grid ID as used in oedb. Provide this if `data_source` is 'oedb'.
-        Default: None.
-    year : int
-        Year for which to generate load time series. Provide this if
-        `data_source` is 'demandlib'. Default: None.
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<dataframe>`
-        Load time series
+    obj : obj
+        Object with attr `df_name` to add columns to. Can e.g. be
+        :class:`~.network.timeseries.TimeSeries`.
+    df_name : str
+        Name of attribute of given object holding the dataframe to add columns to.
+        Can e.g. be "generators_active_power" if time series should be added to
+        :attr:`~.network.timeseries.TimeSeries.generators_active_power`.
+    ts_new : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with new time series to add to existing time series dataframe.
 
     """
-
-    def _load_timeseries_demandlib(config_data, year):
-        """
-        Get normalized sectoral load time series
-
-        Time series are normalized to 1 MWh consumption per year
-
-        Todo: Move to io.
-        ToDo: Update docstring.
-
-        Parameters
-        ----------
-        config_data : dict
-            Dictionary containing config data from config files.
-        year : int
-            Year for which to generate load time series.
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            Load time series
-
-        """
-
-        sectoral_consumption = {"h0": 1, "g0": 1, "i0": 1, "l0": 1}
-
-        cal = Germany()
-        holidays = dict(cal.holidays(year))
-
-        e_slp = bdew.ElecSlp(year, holidays=holidays)
-
-        # multiply given annual demand with timeseries
-        elec_demand = e_slp.get_profile(sectoral_consumption)
-
-        # Add the slp for the industrial group
-        ilp = profiles.IndustrialLoadProfile(
-            e_slp.date_time_index, holidays=holidays
-        )
-
-        # Beginning and end of workday, weekdays and weekend days, and scaling
-        # factors by default
-        elec_demand["i0"] = ilp.simple_profile(
-            sectoral_consumption["i0"],
-            am=datetime.time(
-                config_data["demandlib"]["day_start"].hour,
-                config_data["demandlib"]["day_start"].minute,
-                0,
-            ),
-            pm=datetime.time(
-                config_data["demandlib"]["day_end"].hour,
-                config_data["demandlib"]["day_end"].minute,
-                0,
-            ),
-            profile_factors={
-                "week": {
-                    "day": config_data["demandlib"]["week_day"],
-                    "night": config_data["demandlib"]["week_night"],
-                },
-                "weekend": {
-                    "day": config_data["demandlib"]["weekend_day"],
-                    "night": config_data["demandlib"]["weekend_night"],
-                },
-            },
-        )
-
-        # Resample 15-minute values to hourly values and sum across sectors
-        elec_demand = elec_demand.resample("H").mean()
-
-        return elec_demand
-
-    if data_source == "demandlib":
-        try:
-            float(year)
-            if year > datetime.date.today().year:
-                raise TypeError
-        except TypeError:
-            year = datetime.date.today().year - 1
-            logger.warning(
-                "No valid year inserted. Year set to previous year."
-            )
-        load = _load_timeseries_demandlib(config_data, year)
-        load.rename(
-            columns={
-                "g0": "retail",
-                "h0": "residential",
-                "l0": "agricultural",
-                "i0": "industrial",
-            },
-            inplace=True,
-        )
-    else:
-        raise NotImplementedError
-    return load
-
-
-def _get_worst_case_modes(mode):
-    """
-    Returns list of modes to be handled in worst case analysis.
-
-    Parameters
-    ----------
-    mode: str
-        string containing 'worst-case' and specifies case
-
-    Returns
-    -------
-    modes: list of str
-        list which can contains 'feedin-case', 'load_case' or both
-    """
-    if mode == "worst-case":
-        modes = ["feedin_case", "load_case"]
-    elif mode == "worst-case-feedin" or mode == "worst-case-load":
-        modes = ["{}_case".format(mode.split("-")[-1])]
-    else:
-        raise ValueError("{} is not a valid mode.".format(mode))
-    return modes
-
-def _get_q_sign_generator(reactive_power_mode):
-    """
-    Get the sign of reactive power in generator sign convention.
-
-    In the generator sign convention the reactive power is negative in
-    inductive operation (`reactive_power_mode` is 'inductive') and positive
-    in capacitive operation (`reactive_power_mode` is 'capacitive').
-
-    Parameters
-    ----------
-    reactive_power_mode : str
-        Possible options are 'inductive' and 'capacitive'.
-
-    Returns
-    --------
-    int
-        Sign of reactive power in generator sign convention.
-
-    """
-    if reactive_power_mode.lower() == "inductive":
-        return -1
-    elif reactive_power_mode.lower() == "capacitive":
-        return 1
-    else:
-        raise ValueError(
-            "reactive_power_mode must either be 'capacitive' "
-            "or 'inductive' but is {}.".format(reactive_power_mode)
-        )
-
-
-def _get_q_sign_load(reactive_power_mode):
-    """
-    Get the sign of reactive power in load sign convention.
-
-    In the load sign convention the reactive power is positive in
-    inductive operation (`reactive_power_mode` is 'inductive') and negative
-    in capacitive operation (`reactive_power_mode` is 'capacitive').
-
-    Parameters
-    ----------
-    reactive_power_mode : str
-        Possible options are 'inductive' and 'capacitive'.
-
-    Returns
-    --------
-    int
-        Sign of reactive power in load sign convention.
-
-    """
-    if reactive_power_mode.lower() == "inductive":
-        return 1
-    elif reactive_power_mode.lower() == "capacitive":
-        return -1
-    else:
-        raise ValueError(
-            "reactive_power_mode must either be 'capacitive' "
-            "or 'inductive' but is {}.".format(reactive_power_mode)
-        )
-
-
-def fixed_cosphi(active_power, q_sign, power_factor):
-    """
-    Calculates reactive power for a fixed cosphi operation.
-
-    Parameters
-    ----------
-    active_power : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with active power time series. Columns of the dataframe are
-        names of the components and index of the dataframe are the time steps
-        reactive power is calculated for.
-    q_sign : :pandas:`pandas.Series<Series>` or int
-        `q_sign` defines whether the reactive power is positive or
-        negative and must either be -1 or +1. In case `q_sign` is given as a
-        series, the index must contain the same component names as given in
-        columns of parameter `active_power`.
-    power_factor : :pandas:`pandas.Series<Series>` or float
-        Ratio of real to apparent power.
-        In case `power_factor` is given as a series, the index must contain the
-        same component names as given in columns of parameter `active_power`.
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with the same format as the `active_power` dataframe,
-        containing the reactive power.
-
-    """
-    return active_power * q_sign * np.tan(np.arccos(power_factor))
-
-
-def _set_reactive_power_time_series_for_fixed_cosphi_using_config(
-        edisgo_obj, df, component_type):
-    """
-    Calculates reactive power in Mvar for a fixed cosphi operation.
-
-    This function adds the calculated reactive power time series to the
-    :class:`~.network.timeseries.TimeSeries` object. For
-    `component_type`='generators' time series is added to
-    :attr:`~.network.timeseries.TimeSeries.generators_reactive_power`, for
-    `component_type`='storage_units' time series is added to
-    :attr:`~.network.timeseries.TimeSeries.storage_units_reactive_power` and
-    for `component_type`='loads' time series is added to
-    :attr:`~.network.timeseries.TimeSeries.loads_reactive_power`.
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    df : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with component names (in the index) of all components
-        reactive power needs to be calculated for. Only required column is
-        column 'bus', giving the name of the bus the component is connected to.
-        All components must have the same `component_type`.
-    component_type : str
-        Specifies whether to calculate reactive power for generators, storage
-        units or loads. The component type determines the power factor and
-        power mode used. Possible options are 'generators', 'storage_units' and
-        'loads'.
-
-    Notes
-    -----
-    Reactive power is determined based on reactive power factors and reactive
-    power modes defined in the config file 'config_timeseries' in sections
-    'reactive_power_factor' and 'reactive_power_mode'. Both are distinguished
-    between the voltage level the components are in (medium or low voltage).
-
-    """
-    if df.empty:
-        return
-
-    # assign voltage level to generators
-    df = assign_voltage_level_to_component(edisgo_obj, df)
-
-    # get default configurations
-    reactive_power_mode = edisgo_obj.config["reactive_power_mode"]
-    reactive_power_factor = edisgo_obj.config["reactive_power_factor"]
-    voltage_levels = df.voltage_level.unique()
-
-    # write series with sign of reactive power and power factor
-    # for each component
-    q_sign = pd.Series(index=df.index)
-    power_factor = pd.Series(index=df.index)
-    if component_type in ["generators", "storage_units"]:
-        get_q_sign = _get_q_sign_generator
-    elif component_type == "loads":
-        get_q_sign = _get_q_sign_load
-    else:
-        raise ValueError(
-            "Given 'component_type' is not valid. Valid options are "
-            "'generators','storage_units' and 'loads'.")
-    for voltage_level in voltage_levels:
-        cols = df.index[df.voltage_level == voltage_level]
-        if len(cols) > 0:
-            q_sign[cols] = get_q_sign(
-                reactive_power_mode[
-                    "{}_gen".format(voltage_level)
-                ]
-            )
-            power_factor[cols] = reactive_power_factor[
-                "{}_gen".format(voltage_level)
-            ]
-
-    # calculate reactive power time series and append to TimeSeries object
-    reactive_power_df = drop_duplicated_columns(
+    setattr(
+        obj,
+        df_name,
         pd.concat(
-            [getattr(edisgo_obj.timeseries,
-                     component_type + "_reactive_power"),
-             fixed_cosphi(
-                 getattr(edisgo_obj.timeseries,
-                         component_type + "_active_power").loc[:, df.index],
-                 q_sign,
-                 power_factor
-             )],
-            axis=1
+            [getattr(obj, df_name), ts_new],
+            axis=1,
         ),
-        keep="last"
     )
 
-    setattr(
-        edisgo_obj.timeseries,
-        component_type + "_reactive_power",
-        reactive_power_df
-    )
+
+def _check_if_components_exist(edisgo_object, component_names, component_type):
+    """
+    Checks if all provided components exist in the network.
+
+    Raises warning if there any provided components that are not in the network.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    component_names : list(str)
+        Names of components for which time series are added.
+    component_type : str
+        The component type for which time series are added.
+        Possible options are 'generators', 'storage_units', 'loads'.
+
+    Returns
+    --------
+    set(str)
+        Returns a set of all provided components that are in the network.
+
+    """
+    comps_in_network = getattr(edisgo_object.topology, f"{component_type}_df").index
+
+    comps_not_in_network = list(set(component_names) - set(comps_in_network))
+
+    if comps_not_in_network:
+        logging.warning(
+            f"Some of the provided {component_type} are not in the network. This "
+            f"concerns the following components: {comps_not_in_network}."
+        )
+
+        return set(component_names) - set(comps_not_in_network)
+    return component_names

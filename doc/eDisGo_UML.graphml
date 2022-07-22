@@ -109,7 +109,7 @@ reinforce()</y:MethodLabel>
           <y:UML clipContent="true" constraint="" omitDetails="false" stereotype="" use3DEffect="true">
             <y:AttributeLabel>voltage_nom: int
 geom: shapely.Polygon
-peak_load: float
+p_nom: float
 peak_generation: float
 grid_district: dict</y:AttributeLabel>
             <y:MethodLabel>connect_generators()</y:MethodLabel>

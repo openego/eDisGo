@@ -13,7 +13,7 @@ function writeSol(m::Model,filename::String, set_obj::Bool=false)
     f = open(fname,"w")
     @printf(f, "solution status: optimal\n")
     if set_obj
-        @printf(f,"objective value: %s\n",getvalue(m.obj))   
+        @printf(f,"objective value: %s\n",getvalue(m.obj))
     else
         @printf(f,"objective value: \n")#%s\n",getvalue(m.obj))
     end

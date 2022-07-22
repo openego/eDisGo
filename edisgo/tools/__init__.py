@@ -1,6 +1,8 @@
 import os
-from sqlalchemy.orm import sessionmaker
+
 from contextlib import contextmanager
+
+from sqlalchemy.orm import sessionmaker
 
 if "READTHEDOCS" not in os.environ:
     from egoio.tools.db import connection
@@ -14,7 +16,7 @@ def session_scope():
     session = Session()
     try:
         yield session
-    except:
+    except Exception:
         session.rollback()
         raise
     finally:

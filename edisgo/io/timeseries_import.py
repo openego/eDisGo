@@ -1,49 +1,55 @@
+import datetime
 import os
+
 import pandas as pd
+
+from demandlib import bdew as bdew
+from demandlib import particular_profiles as profiles
+from workalendar.europe import Germany
+
 from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import model_draft, supply
 
 
-def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
+def feedin_oedb(config_data, weather_cell_ids, timeindex):
     """
-    Import RES feed-in time series data and process
-
-    ToDo: Update docstring.
+    Import feed-in time series data for wind and solar power plants from the
+    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
 
     Parameters
     ----------
-    config_data : dict
-        Dictionary containing config data from config files.
+    config_data : :class:`~.tools.config.Config`
+        Configuration data from config files, relevant for information of
+        which data base table to retrieve feed-in data for.
     weather_cell_ids : :obj:`list`
         List of weather cell id's (integers) to obtain feed-in data for.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Feed-in data is currently only provided for weather year 2011. If
+        timeindex contains a different year, the data is reindexed.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        DataFrame with time series for active power feed-in, normalized to
-        a capacity of 1 MW.
+        DataFrame with hourly time series for active power feed-in per
+        generator type (wind or solar, in column level 0) and weather cell
+        (in column level 1), normalized to a capacity of 1 MW.
 
     """
 
     def _retrieve_timeseries_from_oedb(session, timeindex):
-        """Retrieve time series from oedb
-
-        """
-        # ToDo: add option to retrieve subset of time series
+        """Retrieve time series from oedb"""
+        # ToDo: add option to retrieve subset of time series instead of whole
+        #  year
         # ToDo: find the reference power class for mvgrid/w_id and insert
         #  instead of 4
         feedin_sqla = (
-            session.query(
-                orm_feedin.w_id, orm_feedin.source, orm_feedin.feedin
-            )
+            session.query(orm_feedin.w_id, orm_feedin.source, orm_feedin.feedin)
             .filter(orm_feedin.w_id.in_(weather_cell_ids))
             .filter(orm_feedin.power_class.in_([0, 4]))
             .filter(orm_feedin_version)
-            .filter(
-                orm_feedin.weather_year.in_(timeindex.year.unique().values)
-            )
+            .filter(orm_feedin.weather_year.in_(timeindex.year.unique().values))
         )
 
         feedin = pd.read_sql_query(
@@ -58,9 +64,7 @@ def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
     else:
         orm_feedin_name = config_data["versioned"]["res_feedin_data"]
         orm_feedin = supply.__getattribute__(orm_feedin_name)
-        orm_feedin_version = (
-            orm_feedin.version == config_data["versioned"]["version"]
-        )
+        orm_feedin_version = orm_feedin.version == config_data["versioned"]["version"]
 
     if timeindex is None:
         timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
@@ -87,8 +91,7 @@ def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
 
     # rename 'wind_onshore' and 'wind_offshore' to 'wind'
     new_level = [
-        _ if _ not in ["wind_onshore"] else "wind"
-        for _ in feedin.columns.levels[0]
+        _ if _ not in ["wind_onshore"] else "wind" for _ in feedin.columns.levels[0]
     ]
     feedin.columns.set_levels(new_level, level=0, inplace=True)
 
@@ -96,3 +99,87 @@ def import_feedin_timeseries(config_data, weather_cell_ids, timeindex):
     feedin.columns.rename("weather_cell_id", level=1, inplace=True)
 
     return feedin.loc[timeindex]
+
+
+def load_time_series_demandlib(config_data, timeindex):
+    """
+    Get normalized sectoral electricity load time series using the
+    `demandlib <https://github.com/oemof/demandlib/>`_.
+
+    Resulting electricity load profiles hold time series of hourly conventional
+    electricity demand for the sectors residential, retail, agricultural
+    and industrial. Time series are normalized to a consumption of 1 MWh per
+    year.
+
+    Parameters
+    ----------
+    config_data : :class:`~.tools.config.Config`
+        Configuration data from config files, relevant for industrial load
+        profiles.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Timesteps for which to generate load time series.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with conventional electricity load time series for sectors
+        residential, retail, agricultural and industrial.
+        Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`. Columns
+        hold the sector type.
+
+    """
+    year = timeindex[0].year
+
+    sectoral_consumption = {"h0": 1, "g0": 1, "i0": 1, "l0": 1}
+
+    cal = Germany()
+    holidays = dict(cal.holidays(year))
+
+    e_slp = bdew.ElecSlp(year, holidays=holidays)
+
+    # multiply given annual demand with timeseries
+    elec_demand = e_slp.get_profile(sectoral_consumption)
+
+    # Add the slp for the industrial group
+    ilp = profiles.IndustrialLoadProfile(e_slp.date_time_index, holidays=holidays)
+
+    # Beginning and end of workday, weekdays and weekend days, and scaling
+    # factors by default
+    elec_demand["i0"] = ilp.simple_profile(
+        sectoral_consumption["i0"],
+        am=datetime.time(
+            config_data["demandlib"]["day_start"].hour,
+            config_data["demandlib"]["day_start"].minute,
+            0,
+        ),
+        pm=datetime.time(
+            config_data["demandlib"]["day_end"].hour,
+            config_data["demandlib"]["day_end"].minute,
+            0,
+        ),
+        profile_factors={
+            "week": {
+                "day": config_data["demandlib"]["week_day"],
+                "night": config_data["demandlib"]["week_night"],
+            },
+            "weekend": {
+                "day": config_data["demandlib"]["weekend_day"],
+                "night": config_data["demandlib"]["weekend_night"],
+            },
+        },
+    )
+
+    # Resample 15-minute values to hourly values and sum across sectors
+    elec_demand = elec_demand.resample("H").mean()
+
+    elec_demand.rename(
+        columns={
+            "g0": "retail",
+            "h0": "residential",
+            "l0": "agricultural",
+            "i0": "industrial",
+        },
+        inplace=True,
+    )
+
+    return elec_demand.loc[timeindex]

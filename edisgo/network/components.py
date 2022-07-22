@@ -1,13 +1,14 @@
-import os
-import math
 import logging
-from math import acos, tan
+import math
+import os
+
 from abc import ABC, abstractmethod
+from math import acos, tan
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 class BasicComponent(ABC):
@@ -156,9 +157,7 @@ class Component(BasicComponent):
         if math.isnan(grid.lv_grid_id):
             return self.topology.mv_grid
         else:
-            return self.topology._grids[
-                "LVGrid_{}".format(int(grid.lv_grid_id))
-            ]
+            return self.topology._grids["LVGrid_{}".format(int(grid.lv_grid_id))]
 
     @property
     def geom(self):
@@ -180,73 +179,6 @@ class Component(BasicComponent):
 
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self._id)])
-
-
-# ToDo implement if needed
-# class Station(Component):
-#     """Station object (medium or low voltage)
-#
-#     Represents a station, contains transformers.
-#
-#     Attributes
-#     ----------
-#     """
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#
-#         self._transformers = kwargs.get('transformers', None)
-#
-#     @property
-#     def transformers(self):
-#         """:obj:`list` of :class:`Transformer` : Transformers located in
-#         station"""
-#         return self._transformers
-#
-#     @transformers.setter
-#     def transformers(self, transformer):
-#         """
-#         Parameters
-#         ----------
-#         transformer : :obj:`list` of :class:`Transformer`
-#         """
-#         self._transformers = transformer
-#
-#     def add_transformer(self, transformer):
-#         self._transformers.append(transformer)
-#
-#
-# class Transformer(Component):
-#     """Transformer object
-#
-#     Attributes
-#     ----------
-#     _voltage_op : :obj:`float`
-#         Operational voltage
-#     _type : :pandas:`pandas.DataFrame<dataframe>`
-#         Specification of type, refers to  ToDo: ADD CORRECT REF TO (STATIC) DATA
-#     """
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self._mv_grid = kwargs.get('mv_grid', None)
-#         self._voltage_op = kwargs.get('voltage_op', None)
-#         self._type = kwargs.get('type', None)
-#
-#     @property
-#     def mv_grid(self):
-#         return self._mv_grid
-#
-#     @property
-#     def voltage_op(self):
-#         return self._voltage_op
-#
-#     @property
-#     def type(self):
-#         return self._type
-#
-#     def __repr__(self):
-#         return str(self._id)
 
 
 class Load(Component):
@@ -274,13 +206,13 @@ class Load(Component):
         return self.topology.loads_df
 
     @property
-    def peak_load(self):
+    def p_set(self):
         """
         Peak load in MW.
 
         Parameters
         -----------
-        peak_load : :obj:`float`
+        p_nom : :obj:`float`
             Peak load in MW.
 
         Returns
@@ -289,12 +221,11 @@ class Load(Component):
             Peak load in MW.
 
         """
-        return self.topology.loads_df.at[self.id, "peak_load"]
+        return self.topology.loads_df.at[self.id, "p_set"]
 
-    @peak_load.setter
-    def peak_load(self, peak_load):
-        # ToDo: Maybe perform type check before setting it.
-        self.topology._loads_df.at[self.id, "peak_load"] = peak_load
+    @p_set.setter
+    def p_set(self, p_set):
+        self.topology._loads_df.at[self.id, "p_set"] = float(p_set)
 
     @property
     def annual_consumption(self):
@@ -312,15 +243,11 @@ class Load(Component):
             Annual consumption of load in MWh.
 
         """
-        return self.topology.loads_df.at[
-            self.id, "annual_consumption"
-        ]
+        return self.topology.loads_df.at[self.id, "annual_consumption"]
 
     @annual_consumption.setter
     def annual_consumption(self, annual_consumption):
-        self.topology._loads_df.at[
-            self.id, "annual_consumption"
-        ] = annual_consumption
+        self.topology._loads_df.at[self.id, "annual_consumption"] = annual_consumption
 
     @property
     def sector(self):
@@ -427,15 +354,14 @@ class Generator(Component):
             Nominal power of generator in MW.
 
         """
-        # ToDo: Should this change the time series as well? (same for loads, and type setter...)
+        # TODO: Should this change the time series as well?
+        #  (same for loads, and type setter...)
         return self.topology.generators_df.at[self.id, "p_nom"]
 
     @nominal_power.setter
     def nominal_power(self, nominal_power):
         # ToDo: Maybe perform type check before setting it.
-        self.topology._generators_df.at[
-            self.id, "p_nom"
-        ] = nominal_power
+        self.topology._generators_df.at[self.id, "p_nom"] = nominal_power
 
     @property
     def type(self):
@@ -482,9 +408,7 @@ class Generator(Component):
 
     @subtype.setter
     def subtype(self, subtype):
-        self.topology._generators_df.at[
-            self.id, "subtype"
-        ] = subtype
+        self.topology._generators_df.at[self.id, "subtype"] = subtype
 
     @property
     def active_power_timeseries(self):
@@ -497,9 +421,7 @@ class Generator(Component):
             Active power time series of generator in MW.
 
         """
-        return self.edisgo_obj.timeseries.generators_active_power.loc[
-            :, self.id
-        ]
+        return self.edisgo_obj.timeseries.generators_active_power.loc[:, self.id]
 
     @property
     def reactive_power_timeseries(self):
@@ -512,9 +434,7 @@ class Generator(Component):
             Reactive power time series of generator in Mvar.
 
         """
-        return self.edisgo_obj.timeseries.generators_reactive_power.loc[
-            :, self.id
-        ]
+        return self.edisgo_obj.timeseries.generators_reactive_power.loc[:, self.id]
 
     @property
     def weather_cell_id(self):
@@ -535,15 +455,11 @@ class Generator(Component):
             Weather cell ID of generator.
 
         """
-        return self.topology.generators_df.at[
-            self.id, "weather_cell_id"
-        ]
+        return self.topology.generators_df.at[self.id, "weather_cell_id"]
 
     @weather_cell_id.setter
     def weather_cell_id(self, weather_cell_id):
-        self.topology._generators_df.at[
-            self.id, "weather_cell_id"
-        ] = weather_cell_id
+        self.topology._generators_df.at[self.id, "weather_cell_id"] = weather_cell_id
 
     def _set_bus(self, bus):
         # check if bus is valid
@@ -629,13 +545,9 @@ class Storage(Component):
             return self._timeseries
         else:
             self._timeseries["q"] = (
-                abs(self._timeseries.p)
-                * self.q_sign
-                * tan(acos(self.power_factor))
+                abs(self._timeseries.p) * self.q_sign * tan(acos(self.power_factor))
             )
-            return self._timeseries.loc[
-                self.grid.edisgo_obj.timeseries.timeindex, :
-            ]
+            return self._timeseries.loc[self.grid.edisgo_obj.timeseries.timeindex, :]
 
     @property
     def nominal_power(self):
@@ -946,9 +858,7 @@ class Switch(BasicComponent):
             elif col_closed is not None and col_open is None:
                 self._state = "closed"
             else:
-                raise AttributeError(
-                    "State of switch could not be determined."
-                )
+                raise AttributeError("State of switch could not be determined.")
         return self._state
 
     @property
@@ -975,15 +885,11 @@ class Switch(BasicComponent):
             Grid switch is in.
 
         """
-        grid = self.topology.buses_df.loc[
-            self.bus_closed, ["mv_grid_id", "lv_grid_id"]
-        ]
+        grid = self.topology.buses_df.loc[self.bus_closed, ["mv_grid_id", "lv_grid_id"]]
         if math.isnan(grid.lv_grid_id):
             return self.topology.mv_grid
         else:
-            return self.topology._grids[
-                "LVGrid_{}".format(int(grid.lv_grid_id))
-            ]
+            return self.topology._grids["LVGrid_{}".format(int(grid.lv_grid_id))]
 
     def open(self):
         """
@@ -994,9 +900,7 @@ class Switch(BasicComponent):
             self._state = "open"
             col = self._get_bus_column(self.bus_closed)
             if col is not None:
-                self.topology.lines_df.at[
-                    self.branch, col
-                ] = self.bus_open
+                self.topology.lines_df.at[self.branch, col] = self.bus_open
             else:
                 raise AttributeError(
                     "Could not open switch {}. Specified branch {} of switch "
@@ -1014,9 +918,7 @@ class Switch(BasicComponent):
             self._state = "closed"
             col = self._get_bus_column(self.bus_open)
             if col is not None:
-                self.topology.lines_df.at[
-                    self.branch, col
-                ] = self.bus_closed
+                self.topology.lines_df.at[self.branch, col] = self.bus_closed
             else:
                 raise AttributeError(
                     "Could not close switch {}. Specified branch {} of switch "
@@ -1037,118 +939,3 @@ class Switch(BasicComponent):
         else:
             return None
         return col
-
-
-# ToDo implement if needed
-# class MVStation(Station):
-#     """MV Station object"""
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#
-#     def __repr__(self, side=None):
-#         repr_base = super().__repr__()
-#
-#         # As we don't consider HV-MV transformers in PFA, we don't have to care
-#         # about primary side bus of MV station. Hence, the general repr()
-#         # currently returned, implicitely refers to the secondary side (MV level)
-#         # if side == 'hv':
-#         #     return '_'.join(['primary', repr_base])
-#         # elif side == 'mv':
-#         #     return '_'.join(['secondary', repr_base])
-#         # else:
-#         #     return repr_base
-#         return repr_base
-#
-#
-# class LVStation(Station):
-#     """LV Station object"""
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self._mv_grid = kwargs.get('mv_grid', None)
-#
-#     @property
-#     def mv_grid(self):
-#         return self._mv_grid
-#
-#     def __repr__(self, side=None):
-#         repr_base = super().__repr__()
-#
-#         if side == 'mv':
-#             return '_'.join(['primary', repr_base])
-#         elif side == 'lv':
-#             return '_'.join(['secondary', repr_base])
-#         else:
-#             return repr_base
-
-# ToDo Implement if necessary
-# class Line(Component):
-#     """
-#     Line object
-#
-#     Parameters
-#     ----------
-#     _type: :pandas:`pandas.Series<Series>`
-#         Equipment specification including R and X for power flow analysis
-#         Columns:
-#
-#         ======== ================== ====== =========
-#         Column   Description        Unit   Data type
-#         ======== ================== ====== =========
-#         name     Name (e.g. NAYY..) -      str
-#         U_n      Nominal voltage    kV     int
-#         I_max_th Max. th. current   A      float
-#         R        Resistance         Ohm/km float
-#         L        Inductance         mH/km  float
-#         C        Capacitance        uF/km  float
-#         Source   Data source        -      str
-#         ============================================
-#
-#     _length: float
-#         Length of the line calculated in linear distance. Unit: m
-#     _quantity: float
-#         Quantity of parallel installed lines.
-#     _kind: String
-#         Specifies whether the line is an underground cable ('cable') or an
-#         overhead line ('line').
-#     """
-#
-#     def __init__(self, **kwargs):
-#         super().__init__(**kwargs)
-#         self._type = kwargs.get('type', None)
-#         self._length = kwargs.get('length', None)
-#         self._quantity = kwargs.get('quantity', 1)
-#         self._kind = kwargs.get('kind', None)
-#
-#     @property
-#     def geom(self):
-#         """Provide :shapely:`Shapely LineString object<linestrings>` geometry of
-#         :class:`Line`"""
-#         adj_nodes = self._grid._graph.nodes_from_line(self)
-#
-#         return LineString([adj_nodes[0].geom, adj_nodes[1].geom])
-#
-#     @property
-#     def type(self):
-#         return self._type
-#
-#     @type.setter
-#     def type(self, new_type):
-#         self._type = new_type
-#
-#     @property
-#     def length(self):
-#         return self._length
-#
-#     @length.setter
-#     def length(self, new_length):
-#         self._length = new_length
-#
-#     @property
-#     def quantity(self):
-#         return self._quantity
-#
-#     @quantity.setter
-#     def quantity(self, new_quantity):
-#         self._quantity = new_quantity

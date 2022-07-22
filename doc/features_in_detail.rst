@@ -7,11 +7,12 @@ Power flow analysis
 -------------------
 
 In order to analyse voltages and line loadings a non-linear power flow analysis (PF) using pypsa is conducted.
-All loads and generators are modelled as PQ nodes; the slack is modelled as a PV node with a set voltage of 1\,p.u.
-and positioned at the substation's secondary side.
+All loads and generators are modelled as PQ nodes. The slack is positioned at the substation's secondary side.
 
 Multi period optimal power flow
 ---------------------------------
+
+.. warning:: The non-linear optimal power flow is currently not maintained and might not work out of the box!
 
 .. todo:: Add
 
@@ -43,22 +44,22 @@ solved is shown in figure :ref:`grid_expansion_measures_fig` and further explain
 
    Grid expansion measures
 
-:py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid` offers a few additional options. It is e.g. possible to conduct grid 
+:py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid` offers a few additional options. It is e.g. possible to conduct grid
 reinforcement measures on a copy
 of the graph so that the original grid topology is not changed. It is also possible to only identify necessary
 reinforcement measures for two worst-case snapshots in order to save computing time and to set combined or separate
 allowed voltage deviation limits for MV and LV.
-See documentation of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid` for more information. 
+See documentation of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid` for more information.
 
 
 
 Identification of overloading and voltage issues
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Identification of overloading and voltage issues is conducted in 
+Identification of overloading and voltage issues is conducted in
 :py:mod:`~edisgo.flex_opt.check_tech_constraints`.
 
-Voltage issues are determined based on allowed voltage deviations set in the config file 
+Voltage issues are determined based on allowed voltage deviations set in the config file
 :ref:`config_grid_expansion` in section `grid_expansion_allowed_voltage_deviations`. It is possible
 to set one allowed voltage deviation that is used for MV and LV or define separate allowed voltage deviations.
 Which allowed voltage deviation is used is defined through the parameter *combined_analysis* of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid`.
@@ -68,22 +69,22 @@ may currently lead to problems if voltage deviation in MV grid is already close 
 Overloading is determined based on allowed load factors that are also defined in the config file
 :ref:`config_grid_expansion` in section `grid_expansion_load_factors`.
 
-Allowed voltage deviations as well as load factors are in most cases different for load and feed-in case. 
-Load and feed-in case are commonly used worst-cases for grid expansion analyses. 
+Allowed voltage deviations as well as load factors are in most cases different for load and feed-in case.
+Load and feed-in case are commonly used worst-cases for grid expansion analyses.
 Load case defines a situation where all loads in the grid have a high demand while feed-in by generators is low
-or zero. In this case power is flowing from the high-voltage grid to the distribution grid. 
+or zero. In this case power is flowing from the high-voltage grid to the distribution grid.
 In the feed-in case there is a high generator feed-in and a small energy demand leading to a reversed power flow.
 Load and generation assumptions for the two worst-cases are definded in the config file
 :ref:`config_timeseries` in section `worst_case_scale_factor` (scale factors describe actual power
 to nominal power ratio of generators and loads).
 
 When conducting grid reinforcement based on given time series instead of worst-case assumptions, load and feed-in
-case also need to be definded to determine allowed voltage deviations and load factors. 
+case also need to be definded to determine allowed voltage deviations and load factors.
 Therefore, the two cases are identified based on the generation and load time series of all loads and generators
 in the grid and defined as follows:
 
-* Load case: positive ( :math:`\sum load` - :math:`\sum generation` ) 
-* Feed-in case: negative ( :math:`\sum load` - :math:`\sum generation` ) -> reverse power flow at HV/MV substation 
+* Load case: positive ( :math:`\sum load` - :math:`\sum generation` )
+* Feed-in case: negative ( :math:`\sum load` - :math:`\sum generation` ) -> reverse power flow at HV/MV substation
 
 Grid losses are not taken into account. See :meth:`~edisgo.network.timeseries.TimeSeries.timesteps_load_feedin_case` for more
 details and implementation.
@@ -97,7 +98,7 @@ Check line load
     :ref:`mv_cables_table` and :ref:`mv_lines_table`) to calculate the allowed
     line load of each LV and MV line. If the line load calculated in the power flow analysis exceeds the allowed line
     load, the line is reinforced (see :ref:`grid-expansion-measure-line-load-label`).
-  
+
 
 Check station load
 """"""""""""""""""""
@@ -122,7 +123,7 @@ Check line and station voltage deviation
 Grid expansion measures
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Reinforcement measures are conducted in :py:mod:`~edisgo.flex_opt.reinforce_measures`. Whereas overloading issues can usually be solved in one step, except for 
+Reinforcement measures are conducted in :py:mod:`~edisgo.flex_opt.reinforce_measures`. Whereas overloading issues can usually be solved in one step, except for
 some cases where the lowered grid impedance through reinforcement measures leads to new issues, voltage issues can only be solved iteratively. This means that after each reinforcement
 step a power flow analysis is conducted and the voltage rechecked. An upper limit for how many iteration steps should be performed is set in order to avoid endless iteration. By
 default it is set to 10 but can be changed using the parameter *max_while_iterations* of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid`.
@@ -139,7 +140,7 @@ Reinforce lines due to overloading issues
 
 Reinforce stations due to overloading issues
 """""""""""""""""""""""""""""""""""""""""""""""""""""
- 
+
   Reinforcement of HV/MV and MV/LV stations due to overloading is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_hv_mv_station_overloading` and
   :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_mv_lv_station_overloading`, respectively.
   In a first step a parallel transformer of the same type as the existing transformer is installed. If there is more than one transformer in the station the smallest transformer
@@ -151,9 +152,9 @@ Reinforce MV/LV stations due to voltage issues
 """""""""""""""""""""""""""""""""""""""""""""""""""""
 
   Reinforcement of MV/LV stations due to voltage issues is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_mv_lv_station_voltage_issues`.
-  To solve voltage issues, a parallel standard transformer is installed. 
+  To solve voltage issues, a parallel standard transformer is installed.
 
-  After each station with voltage issues is reinforced, a power flow analysis is conducted and the voltage rechecked. If there are still voltage issues 
+  After each station with voltage issues is reinforced, a power flow analysis is conducted and the voltage rechecked. If there are still voltage issues
   the process of installing
   a parallel standard transformer and conducting a power flow analysis is repeated until voltage issues are solved or until the maximum number of allowed iterations is reached.
 
@@ -163,10 +164,10 @@ Reinforce lines due to voltage
 """""""""""""""""""""""""""""""""""""""""""""""""""""
 
   Reinforcement of lines due to voltage issues is conducted in :py:func:`~edisgo.flex_opt.reinforce_measures.reinforce_lines_voltage_issues`.
-  In the case of several voltage issues the path to the node with the highest voltage deviation is reinforced first. Therefore, the line between the secondary side of the station and the 
+  In the case of several voltage issues the path to the node with the highest voltage deviation is reinforced first. Therefore, the line between the secondary side of the station and the
   node with the highest voltage deviation is disconnected at a distribution substation after 2/3 of the path length. If there is no distribution substation where the line can be
   disconnected, the node is directly connected to the busbar. If the node is already directly connected to the busbar a parallel standard line is installed.
- 
+
   Only one voltage problem for each feeder is considered at a time since each measure effects the voltage of each node in that feeder.
 
   After each feeder with voltage problems has been considered, a power flow analysis is conducted and the voltage rechecked. The process of solving voltage issues is repeated until voltage issues are solved
@@ -177,11 +178,11 @@ Grid expansion costs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Total grid expansion costs are the sum of costs for each added transformer and line.
-Costs for lines and transformers are only distinguished by the voltage level they are installed in 
-and not by the different types. 
+Costs for lines and transformers are only distinguished by the voltage level they are installed in
+and not by the different types.
 In the case of lines it is further taken into account wether the line is installed in a rural or an urban area, whereas rural areas
 are areas with a population density smaller or equal to 500 people per km² and urban areas are defined as areas
-with a population density higher than 500 people per km² [DENA]_. 
+with a population density higher than 500 people per km² [DENA]_.
 The population density is calculated by the population and area of the grid district the line is in (See :class:`~.grid.grids.Grid`).
 
 Costs for lines of aggregated loads and generators are not considered in the costs calculation since grids of
@@ -194,10 +195,10 @@ Curtailment
 
 .. warning:: The curtailment methods are not yet adapted to the refactored code and therefore currently do not work.
 
-eDisGo right now provides two curtailment methodologies called 'feedin-proportional' and 'voltage-based', that are implemented in 
-:py:mod:`~edisgo.flex_opt.curtailment`. 
-Both methods are intended to take a given curtailment target obtained from an optimization of the EHV and HV grids using 
-`eTraGo <https://github.com/openego/eTraGo>`_ and allocate it to the generation units in the grids. Curtailment targets can be specified for all 
+eDisGo right now provides two curtailment methodologies called 'feedin-proportional' and 'voltage-based', that are implemented in
+:py:mod:`~edisgo.flex_opt.curtailment`.
+Both methods are intended to take a given curtailment target obtained from an optimization of the EHV and HV grids using
+`eTraGo <https://github.com/openego/eTraGo>`_ and allocate it to the generation units in the grids. Curtailment targets can be specified for all
 wind and solar generators,
 by generator type (solar or wind) or by generator type in a given weather cell.
 It is also possible to curtail specific generators internally, though a user friendly implementation is still in the works.
@@ -267,11 +268,15 @@ Storage integration
 
 .. warning:: The storage integration methods described below are not yet adapted to the refactored code and therefore currently do not work.
 
-Besides the possibility to connect a storage with a given operation to any node in the grid, eDisGo provides a methodology that takes
-a given storage capacity and allocates it to multiple smaller storages such that it reduces line overloading and voltage deviations.
-The methodology is implemented in :py:func:`~edisgo.flex_opt.storage_positioning.one_storage_per_feeder`. As the above described
-curtailment allocation methodologies it is intended to be used in combination with `eTraGo <https://github.com/openego/eTraGo>`_ where
-storage capacity and operation is optimized. 
+Besides the possibility to connect a storage with a given operation to any node in the
+grid, eDisGo provides a methodology that takes
+a given storage capacity and allocates it to multiple smaller storage units such that it
+reduces line overloading and voltage deviations.
+The methodology is implemented in :py:func:`~edisgo.flex_opt.storage_positioning.one_storage_per_feeder`.
+As the above described
+curtailment allocation methodologies it is intended to be used in combination
+with `eTraGo <https://github.com/openego/eTraGo>`_ where
+storage capacity and operation is optimized.
 
 For each feeder with load or voltage issues it is checked if integrating a
 storage will reduce peaks in the feeder, starting with the feeder with

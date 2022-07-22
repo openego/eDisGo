@@ -1,17 +1,18 @@
-from matplotlib import pyplot as plt
 import numpy as np
+
+from matplotlib import pyplot as plt
 
 
 def plot_line_expansion(edisgo_obj, timesteps):
 
     pypsa_plot = edisgo_obj.to_pypsa(mode="mv", timesteps=timesteps)
     bus_index = pypsa_plot.buses.index
-    pypsa_plot.buses.x.loc[
+    pypsa_plot.buses.x.loc[bus_index] = edisgo_obj.topology.mv_grid.buses_df.x.loc[
         bus_index
-    ] = edisgo_obj.topology.mv_grid.buses_df.x.loc[bus_index]
-    pypsa_plot.buses.y.loc[
+    ]
+    pypsa_plot.buses.y.loc[bus_index] = edisgo_obj.topology.mv_grid.buses_df.y.loc[
         bus_index
-    ] = edisgo_obj.topology.mv_grid.buses_df.y.loc[bus_index]
+    ]
     line_colors = edisgo_obj.opf_results.lines.squeeze()
     fig = plt.figure(figsize=(12, 8))
     ax = plt.gca()
