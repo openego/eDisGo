@@ -10,6 +10,7 @@ from networkx.algorithms.shortest_paths.weighted import (
 )
 
 from edisgo.network.grids import LVGrid, MVGrid
+from edisgo.tools import geo
 
 logger = logging.getLogger(__name__)
 
@@ -704,90 +705,497 @@ def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_
     return lines_changes
 
 
-def add_parallel_line_over_half_length_of_string(edisgo_obj, grid, crit_lines):
-    standard_line = edisgo_obj.config["grid_expansion_standard_equipment"]["mv_line"]
+def split_feeder_at_half_length(edisgo_obj, grid, crit_lines):
+    # ToDo: Type hinting
 
-    station_node = grid.transformers_df.bus1.iloc[0]
+    """
 
-    voltage_level = "mv"
+    The critical string load is remedied by the following methods:
+    1-Find the point at the half-length of the feeder
+    2-If the half-length of the feeder is the first node that comes from the main
+    station,reinforce the lines by adding parallel lines since the first node
+    directly is connected to the main station.
+    3- Otherwise, find the next LV station comes after the mid-point of the
+    feeder and split the line from this point so that it is to be connected to
+    the main station.
+    4-Find the preceding LV station of the newly disconnected LV station and
+    remove the linebetween these two LV stations to create 2 independent feeders.
+    5- If grid: LV, do not count in the nodes in the building
 
-    relevant_lines = edisgo_obj.topology.lines_df.loc[
-        crit_lines[crit_lines.voltage_level == voltage_level].index
+    Parameters
+    ----------
+    edisgo_obj:class:`~.EDisGo`
+    grid: class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
+    crit_lines:  Dataframe containing over-loaded lines, their maximum relative
+        over-loading (maximum calculated current over allowed current) and the
+        corresponding time step.
+        Index of the data frame is the names of the over-loaded lines.
+        Columns are 'max_rel_overload' containing the maximum relative
+        over-loading as float, 'time_index' containing the corresponding
+        time-step the over-loading occurred in as
+        :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
+        the voltage level the line is in (either 'mv' or 'lv').
+
+
+    Returns
+    -------
+    dict
+
+    Dictionary with the name of lines as keys and the corresponding number of
+    lines added as values.
+
+    Notes
+    -----
+    In this method, the division is done according to the longest route (not the feeder
+    has more load)
+
+    """
+
+    # TODO: to be integrated in the future outside of functions
+    def get_weight(u, v, data):
+        return data["length"]
+
+    if isinstance(grid, LVGrid):
+
+        standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
+            "lv_line"
+        ]
+        voltage_level = "lv"
+        G = grid.graph
+        station_node = list(G.nodes)[0]  # main station
+        # ToDo:implement the method in crit_lines_feeder to relevant lines
+        # find all the lv lines that have overloading issues in lines_df
+        relevant_lines = edisgo_obj.topology.lines_df.loc[
+            crit_lines[crit_lines.voltage_level == voltage_level].index
+        ]
+
+        # find the most critical lines connected to different LV feeder in MV/LV station
+        crit_lines_feeder = relevant_lines[
+            relevant_lines["bus0"].str.contains("LV")
+            & relevant_lines["bus0"].str.contains(repr(grid).split("_")[1])
+        ]
+
+    elif isinstance(grid, MVGrid):
+
+        standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
+            "mv_line"
+        ]
+        voltage_level = "mv"
+        G = grid.graph
+        # Todo: the overlading can occur not only between the main node and
+        #  its next node
+        station_node = grid.transformers_df.bus1.iat[0]
+
+        # find all the mv lines that have overloading issues in lines_df
+        relevant_lines = edisgo_obj.topology.lines_df.loc[
+            crit_lines[crit_lines.voltage_level == voltage_level].index
+        ]
+
+        # find the most critical lines connected to different LV feeder in MV/LV station
+        crit_lines_feeder = relevant_lines[relevant_lines["bus0"] == station_node]
+
+        # find the closed and open sides of switches
+        switch_df = edisgo_obj.topology.switches_df.loc[
+            :, "bus_closed":"bus_open"
+        ].values
+        switches = [node for nodes in switch_df for node in nodes]
+
+    else:
+        raise ValueError(f"Grid Type {type(grid)} is not supported.")
+
+    if isinstance(grid, LVGrid):
+        nodes = G
+    else:
+        nodes = switches
+
+    paths = {}
+    nodes_feeder = {}
+    for node in nodes:
+        # paths for the open and closed sides of CBs
+        path = nx.shortest_path(G, station_node, node)
+        for first_node in crit_lines_feeder.bus1.values:
+            if first_node in path:
+                paths[node] = path
+                nodes_feeder.setdefault(path[1], []).append(
+                    node
+                )  # key:first_node values:nodes in the critical feeder
+
+    lines_changes = {}
+
+    for node_list in nodes_feeder.values():
+
+        farthest_node = node_list[-1]
+
+        path_length_dict_tmp = dijkstra_shortest_path_length(
+            G, station_node, get_weight, target=farthest_node
+        )
+        path = paths[farthest_node]
+
+        node_1_2 = next(
+            j
+            for j in path
+            if path_length_dict_tmp[j] >= path_length_dict_tmp[farthest_node] * 1 / 2
+        )
+
+        # if LVGrid: check if node_1_2 is outside of a house
+        # and if not find next BranchTee outside the house
+        if isinstance(grid, LVGrid):
+            while (
+                ~np.isnan(grid.buses_df.loc[node_1_2].in_building)
+                and grid.buses_df.loc[node_1_2].in_building
+            ):
+                node_1_2 = path[path.index(node_1_2) - 1]
+                # break if node is station
+                if node_1_2 is path[0]:
+                    logger.error("Could not reinforce overloading issue.")
+                    break
+
+        # if MVGrid: check if node_1_2 is LV station and if not find
+        # next LV station
+        else:
+            while node_1_2 not in edisgo_obj.topology.transformers_df.bus0.values:
+                try:
+                    # try to find LVStation behind node_1_2
+                    node_1_2 = path[path.index(node_1_2) + 1]
+                except IndexError:
+                    # if no LVStation between node_1_2 and node with
+                    # voltage problem, connect node
+                    # directly toMVStation
+                    node_1_2 = farthest_node
+                    break
+
+        # if node_1_2 is a representative (meaning it is already
+        # directly connected to the station), line cannot be
+        # disconnected and must therefore be reinforced
+        # todo:add paralell line to all other lines in case
+        if node_1_2 in nodes_feeder.keys():
+            crit_line_name = G.get_edge_data(station_node, node_1_2)["branch_name"]
+            crit_line = edisgo_obj.topology.lines_df.loc[crit_line_name]
+
+            # if critical line is already a standard line install one
+            # more parallel line
+            if crit_line.type_info == standard_line:
+                edisgo_obj.topology.update_number_of_parallel_lines(
+                    pd.Series(
+                        index=[crit_line_name],
+                        data=[
+                            edisgo_obj.topology._lines_df.at[
+                                crit_line_name, "num_parallel"
+                            ]
+                            + 1
+                        ],
+                    )
+                )
+                lines_changes[crit_line_name] = 1
+
+            # if critical line is not yet a standard line replace old
+            # line by a standard line
+            else:
+                # number of parallel standard lines could be calculated
+                # following [2] p.103; for now number of parallel
+                # standard lines is iterated
+                edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
+                lines_changes[crit_line_name] = 1
+
+            # if node_1_2 is not a representative, disconnect line
+        else:
+            # get line between node_1_2 and predecessor node (that is
+            # closer to the station)
+            pred_node = path[path.index(node_1_2) - 1]
+            crit_line_name = G.get_edge_data(node_1_2, pred_node)["branch_name"]
+            if grid.lines_df.at[crit_line_name, "bus0"] == pred_node:
+                edisgo_obj.topology._lines_df.at[crit_line_name, "bus0"] = station_node
+            elif grid.lines_df.at[crit_line_name, "bus1"] == pred_node:
+                edisgo_obj.topology._lines_df.at[crit_line_name, "bus1"] = station_node
+
+            else:
+
+                raise ValueError("Bus not in line buses. " "Please check.")
+
+            # change line length and type
+
+            edisgo_obj.topology._lines_df.at[
+                crit_line_name, "length"
+            ] = path_length_dict_tmp[node_1_2]
+            edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
+            lines_changes[crit_line_name] = 1
+
+    if not lines_changes:
+        logger.debug(
+            f"==> {len(lines_changes)} line(s) was/were reinforced due to loading "
+            "issues."
+        )
+    return lines_changes
+
+
+def add_substation_at_half_length(edisgo_obj, grid, crit_lines):
+    """
+
+    *This method can be implemented only to LV grids
+
+    The critical string load in LV grid is remedied by the splitting the feeder
+    at the half-length and adding a new MV/LV station
+
+    1-Find the points at the half-length of the feeders
+    2-Add new MV/LV station with standard transformer into the MV grid at this point
+    3-The distance between the existing station (eg. Busbar_mvgd_460_lvgd_131525_MV)
+    and newly added MV/LV station (eg. Busbar_mvgd_460_lvgd_131525_sep1_MV),is equal
+    to the length between the mid point of the feeder in the LV grid
+     nd preceding node of this point (eg. BranchTee_mvgd_460_lvgd_131525_5)
+
+
+    Parameters
+    ----------
+    edisgo_obj:class:`~.EDisGo`
+    grid: class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
+    crit_lines:  Dataframe containing over-loaded lines, their maximum relative
+        over-loading (maximum calculated current over allowed current) and the
+        corresponding time step.
+        Index of the data frame is the names of the over-loaded lines.
+        Columns are 'max_rel_overload' containing the maximum relative
+        over-loading as float, 'time_index' containing the corresponding
+        time-step the over-loading occurred in as
+        :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
+        the voltage level the line is in (either 'mv' or 'lv').
+
+
+    Returns
+    -------
+    #todo: changes
+
+    Notes
+    -----
+    In this method, the seperation is done according to the longest route
+    (not the feeder has more load)
+    !! The name of the nodes moved to the new LV grid and the names of the
+    lines, buses, etc.connected to these nodes can remain the same.
+    """
+
+    # todo:Typehinting
+    # todo:Test
+    # todo:Logging
+    # todo:If the half-lengths of the feeders is the first node that comes from the
+    #  main station
+    # todo: if there are still overloaded lines in the grid, reinforce...
+    # todo: if the mid point is a node
+
+    def create_busbar_name(lv_station_busbar_name, lv_grid_id):
+        """
+        create a LV and MV busbar name with same grid_id but added sep1 that implies
+        the seperation
+
+        Parameters
+        ----------
+        lv_station_busbar_name :eg 'BusBar_mvgd_460_lvgd_131573_LV'
+        lv_grid_id : eg. 131573
+
+        Returns
+        New lv_busbar and mv_busbar name
+        """
+        lv_station_busbar_name = lv_station_busbar_name.split("_")
+        grid_id_ind = lv_station_busbar_name.index(str(lv_grid_id)) + 1
+        lv_station_busbar_name.insert(grid_id_ind, "sep1")
+        lv_busbar = lv_station_busbar_name
+        lv_busbar = "_".join([str(_) for _ in lv_busbar])
+        mv_busbar = lv_station_busbar_name
+        mv_busbar[-1] = "MV"
+        mv_busbar = "_".join([str(_) for _ in mv_busbar])
+
+        return lv_busbar, mv_busbar
+
+    def add_standard_transformer(
+        grid, new_station_name_lv, new_station_name_mv, lv_grid_id, edisgo_obj
+    ):
+
+        """
+
+        Parameters
+        ----------
+        new_station_name_lv :  the lv busbar name of the created MV/LV station
+            eg.BusBar_mvgd_460_lvgd_131525_sep1_LV
+        new_station_name_mv : the mv busbar name of the created MV/LV station
+            eg.BusBar_mvgd_460_lvgd_131525_sep1_MV
+        lv_grid_id:131525
+
+        Returns
+        New tranformer dataframe
+
+        """
+
+        standard_transformer = edisgo_obj.topology.equipment_data[
+            "lv_transformers"
+        ].loc[
+            edisgo_obj.config["grid_expansion_standard_equipment"]["mv_lv_transformer"]
+        ]
+        new_transformer = grid.transformers_df.iloc[0]
+        new_transformer_name = new_transformer.name.split("_")
+        grid_id_ind = new_transformer_name.index(str(lv_grid_id)) + 1
+        new_transformer_name.insert(grid_id_ind, "sep_1")
+
+        new_transformer.s_nom = standard_transformer.S_nom
+        new_transformer.type_info = standard_transformer.name
+        new_transformer.r_pu = standard_transformer.r_pu
+        new_transformer.x_pu = standard_transformer.x_pu
+        new_transformer.name = "_".join([str(_) for _ in new_transformer_name])
+        new_transformer.bus0 = new_station_name_mv
+        new_transformer.bus1 = new_station_name_lv
+
+        new_transformer_df = new_transformer.to_frame().T
+
+        # toDo:drop duplicates
+        edisgo_obj.topology.transformers_df = pd.concat(
+            [edisgo_obj.topology.transformers_df, new_transformer_df]
+        )
+        return new_transformer_df
+
+    top_edisgo = edisgo_obj.topology
+    G = grid.graph
+    station_node = grid.transformers_df.bus1.iat[0]
+    lv_grid_id = repr(grid).split("_")[1]
+    relevant_lines = top_edisgo.lines_df.loc[
+        crit_lines[crit_lines.voltage_level == "lv"].index
     ]
 
-    # find the most critical lines connected to different MV feeder in HV/MV station
-    crit_nodes_feeder = relevant_lines[relevant_lines["bus0"] == station_node]
+    relevant_lines = relevant_lines[relevant_lines["bus0"].str.contains(lv_grid_id)]
 
-    # find the closed and open sides of switches
-    switch_df = edisgo_obj.topology.switches_df.loc[:, "bus_closed":"bus_open"].values
-    switches = [node for nodes in switch_df for node in nodes]
+    crit_lines_feeder = relevant_lines[relevant_lines["bus0"] == station_node]
 
-    graph = grid.graph
     paths = {}
     nodes_feeder = {}
 
-    for node in switches:
+    for node in G:
 
-        # paths for the open and closed sides of CBs
-        path = nx.shortest_path(graph, station_node, node)
-        for crit_node in crit_nodes_feeder.bus1.values:
-            if crit_node in path:
+        path = nx.shortest_path(G, station_node, node)
+
+        for first_node in crit_lines_feeder.bus1.values:
+            if first_node in path:
                 paths[node] = path
-                nodes_feeder.setdefault(path[1], []).append(node)
+                nodes_feeder.setdefault(path[1], []).append(
+                    node
+                )  # key:first_node values:nodes in the critical feeder
 
-    lines_changes = {}
-    for farthest_node in nodes_feeder.values():
+    nodes_moved = []
+    node_halflength = []
+
+    for node_list in nodes_feeder.values():
+
+        farthest_node = node_list[-1]
 
         def get_weight(u, v, data):
             return data["length"]
 
         path_length_dict_tmp = dijkstra_shortest_path_length(
-            graph, station_node, get_weight, target=farthest_node
+            G, station_node, get_weight, target=farthest_node
         )
-        path = paths[farthest_node[0]]
+        path = paths[farthest_node]
+
         node_1_2 = next(
             j
             for j in path
-            if path_length_dict_tmp[j] >= path_length_dict_tmp[farthest_node[0]] * 1 / 2
+            if path_length_dict_tmp[j] >= path_length_dict_tmp[farthest_node] * 1 / 2
+        )
+        node_halflength.append(node_1_2)
+
+        # store all the following nodes of node_1_2 that will be connected
+        # to the new station
+
+        # Todo: if there is no following node of node1_2
+        # find the nodes to be removed. keys: node_1_2 values: nodes to be
+        # moved to the new station
+        nodes_to_be_moved = path[path.index(node_1_2) + 1 :]
+
+        for node in nodes_to_be_moved:
+            nodes_moved.append(node)
+
+    if not crit_lines_feeder.empty:
+        # Create the busbar name of primary and secondary side of new MV/LV station
+        new_lv_busbar = create_busbar_name(station_node, lv_grid_id)[0]
+        new_mv_busbar = create_busbar_name(station_node, lv_grid_id)[1]
+
+        # Create a New MV/LV station in the topology
+        # ADD MV and LV bus
+        # For the time being, the new station is located at the same
+        # coordinates as the existing station
+
+        v_nom_lv = top_edisgo.buses_df[
+            top_edisgo.buses_df.index.str.contains("LV")
+        ].v_nom[0]
+        v_nom_mv = top_edisgo.buses_df[
+            top_edisgo.buses_df.index.str.contains("MV")
+        ].v_nom[0]
+        x_bus = top_edisgo.buses_df.loc[station_node, "x"]
+        y_bus = top_edisgo.buses_df.loc[station_node, "y"]
+        new_lv_grid_id = lv_grid_id + "_" + "sep1"
+        building_bus = top_edisgo.buses_df.loc[station_node, "in_building"]
+
+        # addd lv busbar
+        top_edisgo.add_bus(
+            new_lv_busbar,
+            v_nom_lv,
+            x=x_bus,
+            y=y_bus,
+            lv_grid_id=new_lv_grid_id,
+            in_building=building_bus,
+        )
+        # add  mv busbar
+        top_edisgo.add_bus(
+            new_mv_busbar, v_nom_mv, x=x_bus, y=y_bus, in_building=building_bus
         )
 
-        # if MVGrid: check if node_1_2 is LV station and if not find
-        # next LV station
-        while node_1_2 not in edisgo_obj.topology.transformers_df.bus0.values:
-            try:
-                # try to find LVStation behind node_1_2
-                node_1_2 = path[path.index(node_1_2) + 1]
-            except IndexError:
-                # if no LVStation between node_1_2 and node with
-                # voltage problem, connect node directly to
-                # MVStation
-                node_1_2 = farthest_node[0]
-                break
+        # ADD a LINE between existing and new station
 
-        # get line between node_1_2 and predecessor node (that is
-        # closer to the station)
-        pred_node = path[path.index(node_1_2) - 1]
-        crit_line_name = graph.get_edge_data(node_1_2, pred_node)["branch_name"]
-        if grid.lines_df.at[crit_line_name, "bus0"] == pred_node:
-            edisgo_obj.topology._lines_df.at[crit_line_name, "bus0"] = station_node
-        elif grid.lines_df.at[crit_line_name, "bus1"] == pred_node:
-            edisgo_obj.topology._lines_df.at[crit_line_name, "bus1"] = station_node
+        # find the MV side of the station_node to connect the MV side of
+        # the new station to MV side of current station
 
-        else:
+        existing_node_mv_busbar = top_edisgo.transformers_df[
+            top_edisgo.transformers_df.bus1 == station_node
+        ].bus0[0]
 
-            raise ValueError("Bus not in line buses. " "Please check.")
+        standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
+            "mv_line"
+        ]  # the new line type is standard Mv line
 
-        # change line length and type
-
-        edisgo_obj.topology._lines_df.at[
-            crit_line_name, "length"
-        ] = path_length_dict_tmp[node_1_2]
-        edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
-        lines_changes[crit_line_name] = 1
-
-        if not lines_changes:
-            logger.debug(
-                f"==> {len(lines_changes)} line(s) was/were reinforced due to loading "
-                "issues."
+        # Change the coordinates based on the length
+        # todo:Length is specified. Random coordinates are to be found according to
+        #  length
+        max_length = 0
+        for node in node_halflength:
+            length = geo.calc_geo_dist_vincenty(
+                top_edisgo, station_node, node, branch_detour_factor=1.3
             )
-    return lines_changes
+            if length >= max_length:
+                max_length = length
+
+        top_edisgo.add_line(
+            bus0=existing_node_mv_busbar,
+            bus1=new_mv_busbar,
+            length=max_length,
+            type_info=standard_line,
+        )
+
+        # ADD TRANSFORMER
+        add_standard_transformer(
+            grid, new_lv_busbar, new_mv_busbar, lv_grid_id, edisgo_obj
+        )
+
+        # Create new LV grid in the topology
+        lv_grid = LVGrid(id=new_lv_grid_id, edisgo_obj=edisgo_obj)
+        top_edisgo.mv_grid._lv_grids.append(lv_grid)
+        top_edisgo._grids[str(lv_grid)] = lv_grid
+
+        # Change the grid ids of the nodes that are to be moved to the new LV grid
+        for node in nodes_moved:
+            top_edisgo.buses_df.loc[node, "lv_grid_id"] = new_lv_grid_id
+
+        # todo: logger
+        # relocate the nodes come from the half-length point of the feeder from the
+        # existing grid to newly created grid
+        for node in nodes_moved:
+            if top_edisgo.lines_df.bus1.isin([node]).any():
+                line_series = top_edisgo.lines_df[top_edisgo.lines_df.bus1 == node]
+
+                if line_series.bus0[0] in node_halflength:
+                    bus0 = line_series.bus0[0]
+                    top_edisgo.lines_df.loc[
+                        top_edisgo.lines_df.bus0 == bus0, "bus0"
+                    ] = new_lv_busbar
