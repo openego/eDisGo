@@ -958,7 +958,7 @@ class Topology:
         except KeyError:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(buses)
+                "buses_df.".format(", ".join(buses))
             )
         load_ids = kwargs.pop("load_ids", None)
         sectors = kwargs.get("sectors", None)
@@ -1059,7 +1059,7 @@ class Topology:
             load_ids = None
         return self.add_loads(
             buses=[bus],
-            peak_sets=[p_set],
+            p_sets=[p_set],
             types=[type],
             annual_consumptions=[kwargs.get("annual_consumption", None)],
             sectors=sectors,
@@ -1107,7 +1107,7 @@ class Topology:
         except KeyError:
             raise ValueError(
                 "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(buses)
+                "buses_df.".format(", ".join(buses))
             )
 
         generator_ids = kwargs.pop("generator_ids", None)
@@ -1205,6 +1205,7 @@ class Topology:
             generator_types=[generator_type],
             controls=[control],
             generator_ids=generator_ids,
+            **kwargs
         )[0]
 
     def add_storage_unit(self, bus, p_nom, control="PQ", **kwargs):
