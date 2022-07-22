@@ -1568,31 +1568,39 @@ class TimeSeries:
             None
             Sets fixed cosphi parameters for generators. Possible options are:
 
-            * 'default' Default configuration is used for all generators in the grid.
-              To this end, the power factors set in the config section
-              `reactive_power_factor` and the power factor mode, defining whether
-              components behave inductive or capacitive, given in the config section
-              `reactive_power_mode`, are used.
+            * 'default'
+
+                Default configuration is used for all generators in the grid.
+                To this end, the power factors set in the config section
+                `reactive_power_factor` and the power factor mode, defining whether
+                components behave inductive or capacitive, given in the config section
+                `reactive_power_mode`, are used.
+
             * :pandas:`pandas.DataFrame<dataframe>`
-              DataFrame with fix cosphi parametrisation for specified generators.
-              Columns are:
 
-              * 'components' : list(str)
-                List with generators to apply parametrisation for.
-              * 'mode' : str
-                Defines whether generators behave inductive or capacitive.
-                Possible options are 'inductive', 'capacitive' or 'default'.
-                In case of 'default', configuration from config section
-                `reactive_power_mode` is used.
-              * 'power_factor' : float or str
-                Defines the fixed cosphi power factor. The power factor can
-                either be directly provided as float or it can be set to
-                'default', in which case configuration from config section
-                `reactive_power_factor` is used.
+                DataFrame with fix cosphi parametrisation for specified generators.
+                Columns are:
 
-              Index of the dataframe is ignored.
+                    * 'components' : list(str)
+                        List with generators to apply parametrisation for.
+
+                    * 'mode' : str
+                        Defines whether generators behave inductive or capacitive.
+                        Possible options are 'inductive', 'capacitive' or 'default'.
+                        In case of 'default', configuration from config section
+                        `reactive_power_mode` is used.
+
+                    * 'power_factor' : float or str
+                        Defines the fixed cosphi power factor. The power factor can
+                        either be directly provided as float or it can be set to
+                        'default', in which case configuration from config section
+                        `reactive_power_factor` is used.
+
+                Index of the dataframe is ignored.
+
             * None
-              No reactive power time series are set.
+
+                No reactive power time series are set.
 
             Default: None.
         loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or None

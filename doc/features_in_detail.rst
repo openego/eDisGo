@@ -12,6 +12,8 @@ All loads and generators are modelled as PQ nodes. The slack is positioned at th
 Multi period optimal power flow
 ---------------------------------
 
+.. warning:: The non-linear optimal power flow is currently not maintained and might not work out of the box!
+
 .. todo:: Add
 
 .. _grid_expansion_methodology:

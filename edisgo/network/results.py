@@ -9,7 +9,7 @@ import pandas as pd
 
 from edisgo.tools.tools import get_files_recursive
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def _get_matching_dict_of_attributes_and_file_names():

@@ -336,11 +336,6 @@ Battery storage systems
 
 Battery storage systems can be integrated into the grid as an alternative to
 classical grid expansion.
-The storage integration heuristic described in section
-:ref:`storage-integration-label` is not available at the moment. Instead, you
-may either integrate a storage unit at a specified bus manually or use the
-optimal power flow to optimally distribute a given storage capacity in the grid.
-
 Here are two small examples on how to integrate a storage unit manually. In the
 first one, the EDisGo object is set up for a worst-case analysis, wherefore no
 time series needs to be provided for the storage unit, as worst-case definition
@@ -409,7 +404,12 @@ a time series for the storage unit needs to be provided.
             index=edisgo.timeseries.timeindex)
     )
 
-Following is an example on how to use the OPF to find the optimal storage
+To optimise storage positioning and operation eDisGo provides the options to use a
+heuristic (described in section :ref:`storage-integration-label`) or an optimal power
+flow approach. However, the storage integration heuristic is not yet adapted to the
+refactored code and therefore not available, and the OPF is not maintained and may therefore
+not work out of the box.
+Following you find an example on how to use the OPF to find the optimal storage
 positions in the grid with regard to grid expansion costs. Storage operation
 is optimized at the same time. The example uses the same EDisGo instance as
 above. A total storage capacity of 10 MW is distributed in the grid. `storage_buses`
@@ -431,12 +431,16 @@ Curtailment
 -----------
 
 The curtailment function is used to spatially distribute the power that is to be curtailed.
-The two heuristics `feedin-proportional` and `voltage-based`, in detail explained
-in section :ref:`curtailment_in_detail-label`, are currently not available.
-Instead you may use the optimal power flow to find the optimal generator
+To optimise which generators should be curtailed eDisGo provides the options to use a
+heuristics (heuristics `feedin-proportional` and `voltage-based`, in detail explained
+in section :ref:`curtailment_in_detail-label`) or an optimal power
+flow approach. However, the heuristics are not yet adapted to the
+refactored code and therefore not available, and the OPF is not maintained and may therefore
+not work out of the box.
+
+In the following example the optimal power flow is used to find the optimal generator
 curtailment with regard to minimizing grid expansion costs for given
-curtailment requirements. The following example again uses the EDisGo object
-from above.
+curtailment requirements. It uses the EDisGo object from above.
 
 .. code-block:: python
 
@@ -449,6 +453,8 @@ from above.
 
 Plots
 ----------------
+
+.. todo:: Add plotly plot option
 
 EDisGo provides a bunch of predefined plots to e.g. plot the MV grid topology,
 line loading and node voltages in the MV grid or as a histograms.
