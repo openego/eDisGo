@@ -196,7 +196,7 @@ class Topology:
                 if voltage_level == "lv" and i == "transformers":
                     name = f"{voltage_level}_{i}"
 
-                    data[name]["r_pu"] = data[name]["P_k"] / data[name]["S_nom"])
+                    data[name]["r_pu"] = data[name]["P_k"] / data[name]["S_nom"]
 
                     data[name]["x_pu"] = np.sqrt(
                         (data[name]["u_kr"] / 100) ** 2 - data[name]["r_pu"] ** 2
