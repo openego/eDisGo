@@ -2652,13 +2652,9 @@ class Topology:
 
     def check_integrity(self):
         """
-        Check imported data integrity. Checks for duplicated labels and not
-        connected components.
+        Check imported data integrity.
 
-        Parameters
-        ----------
-        self: class:`~.network.topology.Topology`
-            topology class containing mv and lv grids
+        Checks for duplicated labels and isolated components.
 
         """
         # check for duplicate labels (of components)
@@ -2738,6 +2734,31 @@ class Topology:
             logger.warning(
                 f"The following buses are isolated: {', '.join(missing.values)}."
             )
+
+        # check for subgraphs
+        subgraphs = list(
+            self.to_graph().subgraph(c)
+            for c in nx.connected_components(self.to_graph())
+        )
+        if len(subgraphs) > 1:
+            logger.warning("The network has isolated nodes or edges.")
+
+        # check impedance
+        for branch_component in ["lines", "transformers"]:
+            if branch_component == "lines":
+                z = getattr(self, branch_component + "_df").apply(
+                    lambda x: np.sqrt(np.square(x.r) + np.square(x.x)), axis=1
+                )
+            else:
+                z = getattr(self, branch_component + "_df").apply(
+                    lambda x: np.sqrt(np.square(x.r_pu) + np.square(x.x_pu)), axis=1
+                )
+            if not z.empty and (z < 1e-6).any():
+                logger.warning(
+                    f"Very small values for impedance of {branch_component}: "
+                    f"{z[z < 1e-6].index.values}. This might cause problems in the "
+                    f"power flow."
+                )
 
     def __repr__(self):
         return f"Network topology {self.id}"

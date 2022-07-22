@@ -434,7 +434,7 @@ class TestTimeSeries:
             exp,
             check_dtype=False,
         )
-        pf = -tan(acos(0.98))
+        pf = tan(acos(1.0))
         assert_series_equal(
             self.edisgo.timeseries.loads_reactive_power.loc[:, comp],
             exp * pf,
@@ -1049,7 +1049,7 @@ class TestTimeSeries:
             index=index,
         )
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False)
-        pf = -tan(acos(0.98))
+        pf = tan(acos(1.0))
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
         comp = "HP2"  # lv
@@ -1060,7 +1060,7 @@ class TestTimeSeries:
             index=index,
         )
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False)
-        pf = -tan(acos(0.98))
+        pf = tan(acos(1.0))
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
         # check TimeSeriesRaw
@@ -1089,7 +1089,7 @@ class TestTimeSeries:
             index=index,
         )
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False)
-        pf = -tan(acos(0.98))
+        pf = tan(acos(1.0))
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
         # check TimeSeriesRaw
@@ -1118,7 +1118,7 @@ class TestTimeSeries:
             index=index,
         )
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False)
-        pf = -tan(acos(0.98))
+        pf = tan(acos(1.0))
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
         # check TimeSeriesRaw
@@ -2162,16 +2162,11 @@ class TestTimeSeries:
         ]
         # check warning empty timeindex
         self.edisgo.timeseries.check_integrity()
-        assert "No timeindex set. Empty timeseries will be returned." in caplog.text
-        caplog.clear()
-        # check warning empty timeseries
-        index = pd.date_range("1/1/2018", periods=3, freq="H")
-        self.edisgo.timeseries.timeindex = index
-        self.edisgo.timeseries.check_integrity()
-        for attr in attrs:
-            assert "{} is empty".format(attr) in caplog.text
+        assert "No time index set. Empty time series will be returned." in caplog.text
         caplog.clear()
         # add timeseries
+        index = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.timeseries.timeindex = index
         for attr in attrs:
             tmp = attr.split("_")
             if len(tmp) == 3:
