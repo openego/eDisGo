@@ -26,11 +26,11 @@ The toolbox currently includes:
   to determine grid expansion needs and costs based on measures most commonly
   taken by German distribution grid operators
 * Multiperiod optimal power flow based on julia package PowerModels.jl optimizing
-  storage positioning and/or operation
+  storage positioning and/or operation (Currently not maintained)
   as well as generator dispatch with regard to minimizing grid expansion costs
 * Temporal complexity reduction
-* Heuristic for grid-supportive generator curtailment
-* Heuristic grid-supportive battery storage integration
+* Heuristic for grid-supportive generator curtailment (Currently not maintained)
+* Heuristic grid-supportive battery storage integration (Currently not maintained)
 
 Currently, a method to optimize the flexibility that can be provided by electric
 vehicles through controlled charging is being implemented.
