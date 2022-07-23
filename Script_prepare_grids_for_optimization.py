@@ -6,7 +6,7 @@ import traceback
 
 from edisgo.edisgo import import_edisgo_from_files
 from edisgo.tools.complexity_reduction import remove_1m_lines_from_edisgo, extract_feeders_nx
-from edisgo.network.timeseries import _get_attributes_to_save
+from edisgo.network.timeseries import TimeSeries
 from edisgo.network.topology import Topology
 from edisgo.network.electromobility import get_energy_bands_for_optimization
 from edisgo.opf.lopf import import_flexibility_bands
@@ -114,7 +114,7 @@ def extract_extreme_weeks_parallel(grid_id):
     if not (timeindex.isin(edisgo.timeseries.timeindex)).all():
         raise ValueError("Edisgo object does not contain the given extreme weeks")
     # adapt timeseries
-    attributes = _get_attributes_to_save()
+    attributes = TimeSeries()._attributes
     edisgo.timeseries.timeindex = timeindex
     for attr in attributes:
         if not getattr(edisgo.timeseries, attr).empty:
@@ -140,7 +140,7 @@ def extract_extreme_weeks_ladina(grid_id, adapt_edisgo=False, adapt_bands=True):
         if not (timeindex.isin(edisgo.timeseries.timeindex)).all():
             raise ValueError("Edisgo object does not contain the given extreme weeks")
         # adapt timeseries
-        attributes = _get_attributes_to_save()
+        attributes = TimeSeries()._attributes
         edisgo.timeseries.timeindex = timeindex
         for attr in attributes:
             if not getattr(edisgo.timeseries, attr).empty:
