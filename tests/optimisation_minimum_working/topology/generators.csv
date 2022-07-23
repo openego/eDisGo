@@ -1,0 +1,3 @@
+name,bus,control,p_nom,q_nom,subtype,type,weather_cell_id
+Solar_1,Bus 3,PQ,0.04,0.0,PV,solar,1129073
+Generator_slack,Bus 1,Slack,0.0,,,,

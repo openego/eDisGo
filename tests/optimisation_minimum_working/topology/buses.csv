@@ -1,0 +1,6 @@
+name,x,y,mv_grid_id,lv_grid_id,v_nom,in_building
+Bus 1,11.4545,53.5965,1,,20,False
+Bus 2,11.4549,53.5875,1,,20,False
+Bus 3,11.4545,53.5865,1,,20,False
+Bus 4,11.4549,53.5775,1,,20,False
+Bus 5,11.4549,53.5775,1,1,0.4,False
