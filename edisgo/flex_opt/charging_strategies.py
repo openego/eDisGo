@@ -71,7 +71,7 @@ def integrate_charging_parks(edisgo_obj, comp_type="ChargingPoint"):
 
     # integrate ChargingPoints and save the names of the eDisGo ID
     edisgo_ids = [
-        EDisGo.integrate_component(
+        EDisGo.integrate_component_based_on_geolocation(
             edisgo_obj,
             comp_type=comp_type,
             geolocation=cp.geometry,

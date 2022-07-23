@@ -9,8 +9,10 @@ import pandas as pd
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
+from edisgo.io.electromobility_import import import_simbev_electromobility
 from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.network import timeseries
+from edisgo.network.electromobility import Electromobility
 from edisgo.network.results import Results
 from edisgo.network.topology import Topology
 from edisgo.opf.results.opf_result_class import OPFResults
@@ -109,6 +111,10 @@ class EDisGo:
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
+
+        # instantiate electromobility object and load charging processes and sites
+        self.electromobility = Electromobility(edisgo_obj=self)
+        self.import_simbev_electromobility(path=kwargs.get("simbev_data", None))
 
         # set up results and time series container
         self.results = Results(self)
@@ -478,6 +484,11 @@ class EDisGo:
             )
         else:
             raise ValueError("'control' must be 'fixed_cosphi'.")
+
+    def import_simbev_electromobility(self, path):
+
+        if path is not None:
+            import_simbev_electromobility(path, self)
 
     def to_pypsa(
         self, mode=None, timesteps=None, check_edisgo_integrity=False, **kwargs
