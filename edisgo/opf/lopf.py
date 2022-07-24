@@ -66,6 +66,9 @@ def prepare_time_invariant_parameters(
         parameters["slack"],
     ) = setup_grid_object(edisgo)
     parameters["downstream_nodes_matrix"] = downstream_nodes_matrix
+    parameters["optimize_ev_charging"] = optimize_ev_charging
+    parameters["optimize_storage"] = optimize_storage
+    parameters["optimize_hp"] = optimize_hp
     if optimize_storage:
         parameters["optimized_storage_units"] = kwargs.get(
             "flexible_storage_units", parameters["grid_object"].storage_units_df.index
@@ -81,14 +84,23 @@ def prepare_time_invariant_parameters(
         parameters["inflexible_charging_points"] = parameters[
             "grid_object"
         ].charging_points_df.index.drop(parameters["optimized_charging_points"])
+    else:
+        parameters["optimized_charging_points"] = []
     if optimize_hp:
         parameters["optimized_heat_pumps"] = kwargs.get(
             "optimized_heat_pumps", parameters["grid_object"].heat_pumps_df.index
         )
-        # Todo: change to loads_df.loc[parameters["grid_object"].loads_df.sector ==
+        # Todo: change to loads_df.loc[parameters["grid_object"].loads_df.type ==
         #  "heat_pump"].index
         parameters["cop"] = kwargs.get("cop")
         parameters["heat_demand"] = kwargs.get("heat_demand")
+    else:
+        parameters["optimized_heat_pumps"] = []
+    # save non flexible loads
+    # Todo: add other flexible loads once relevant
+    parameters["inflexible_loads"] = parameters["grid_object"].loads_df.index.drop(
+            parameters["optimized_charging_points"]).drop(
+        parameters["optimized_heat_pumps"])
     # extract residual load of non optimised components
     parameters[
         "res_load_inflexible_units"
@@ -98,12 +110,7 @@ def prepare_time_invariant_parameters(
         relevant_storage_units=parameters.get(
             "inflexible_storage_units", parameters["grid_object"].storage_units_df.index
         ),
-        relevant_charging_points=parameters.get(
-            "inflexible_charging_points",
-            parameters["grid_object"].charging_points_df.index,
-        ),
-        relevant_loads=parameters["grid_object"].loads_df.index
-        # Todo: when HPs become normal loads add .drop(parameters["flexible_hps"])
+        relevant_loads=parameters["inflexible_loads"]
     )
     # get nodal active and reactive powers of non optimised components
     # Todo: add handling of storage and hp once become relevant
@@ -114,8 +121,6 @@ def prepare_time_invariant_parameters(
         nodal_reactive_load,
         nodal_active_generation,
         nodal_reactive_generation,
-        nodal_active_charging_points,
-        nodal_reactive_charging_points,
         nodal_active_storage,
         nodal_reactive_storage,
     ) = get_nodal_residual_load(
@@ -124,16 +129,11 @@ def prepare_time_invariant_parameters(
         considered_storage=parameters.get(
             "inflexible_storage_units", parameters["grid_object"].storage_units_df.index
         ),
-        considered_charging_points=parameters.get(
-            "inflexible_charging_points",
-            parameters["grid_object"].charging_points_df.index,
-        ),
+        considered_loads=parameters["inflexible_loads"],
     )
     parameters["nodal_active_power"] = nodal_active_power.T
     parameters["nodal_reactive_power"] = nodal_reactive_power.T
-    parameters["nodal_active_load"] = (
-        nodal_active_load.T + nodal_active_charging_points.T
-    )
+    parameters["nodal_active_load"] = nodal_active_load.T
     parameters["nodal_reactive_load"] = nodal_reactive_load.T
     parameters["nodal_active_feedin"] = nodal_active_generation.T
     parameters["nodal_reactive_feedin"] = nodal_reactive_generation.T
@@ -199,9 +199,6 @@ def prepare_time_invariant_parameters(
 def setup_model(
     timeinvariant_parameters,
     timesteps,
-    optimize_storage=True,
-    optimize_ev_charging=True,
-    optimize_hp=True,
     objective="curtailment",
     **kwargs,
 ):
@@ -264,7 +261,7 @@ def setup_model(
     if not any(char.isdigit() for char in model.time_increment):
         model.time_increment = "1" + model.time_increment
 
-    if optimize_storage:
+    if timeinvariant_parameters["optimize_storage"]:
         model.storage_set = pm.Set(initialize=grid_object.storage_units_df.index)
         model.optimized_storage_set = pm.Set(
             initialize=timeinvariant_parameters["optimized_storage_units"]
@@ -288,7 +285,7 @@ def setup_model(
 
     # DEFINE VARIABLES
 
-    if optimize_storage:
+    if timeinvariant_parameters["optimize_storage"]:
         model.soc = pm.Var(
             model.optimized_storage_set,
             model.time_set,
@@ -306,7 +303,7 @@ def setup_model(
             ),
         )
 
-    if optimize_ev_charging:
+    if timeinvariant_parameters["optimize_ev_charging"]:
         print("Setup model: Adding EV model.")
         model = add_ev_model_bands(
             model=model,
@@ -319,7 +316,7 @@ def setup_model(
             charging_start=kwargs.get("charging_start_ev", None),
         )
 
-    if optimize_hp:
+    if timeinvariant_parameters["optimize_hp"]:
         print("Setup model: Adding HP model.")
         model = add_heat_pump_model(
             model=model,
@@ -353,7 +350,7 @@ def setup_model(
 
     # DEFINE CONSTRAINTS
 
-    if optimize_storage:
+    if timeinvariant_parameters["optimize_storage"]:
         model.BatteryCharging = pm.Constraint(
             model.storage_set, model.time_non_zero, rule=soc
         )
@@ -632,12 +629,8 @@ def add_ev_model_bands(
     Todo: add docstrings
     """
     # Sets and parameters
-    model.charging_points_set = pm.Set(initialize=grid_object.charging_points_df.index)
     model.flexible_charging_points_set = pm.Set(
         initialize=timeinvariant_parameters["optimized_charging_points"]
-    )
-    model.inflexible_charging_points_set = (
-        model.charging_points_set - model.flexible_charging_points_set
     )
     model.upper_ev_power = timeinvariant_parameters["ev_flex_bands"]["upper_power"]
     model.upper_ev_energy = timeinvariant_parameters["ev_flex_bands"]["upper_energy"]
@@ -1056,7 +1049,7 @@ def optimize(model, solver, load_solutions=True, mode=None):
         # Extract results
         time_dict = {t: model.timeindex[t].value for t in model.time_set}
         result_dict = {}
-        if hasattr(model, "storage_set"):
+        if hasattr(model, "optimized_storage_set"):
             result_dict["x_charge"] = (
                 pd.Series(model.charging.extract_values())
                 .unstack()
@@ -1311,7 +1304,7 @@ def get_underlying_elements(parameters):
             .divide(s_nom)
             .apply(np.square)
         ).apply(np.sqrt)
-        if "optimized_storage_units" in parameters:
+        if parameters["optimize_storage"]:
             downstream_elements.loc[branch, "flexible_storage"] = (
                 parameters["grid_object"]
                 .storage_units_df.loc[
@@ -1326,7 +1319,7 @@ def get_underlying_elements(parameters):
             )
         else:
             downstream_elements.loc[branch, "flexible_storage"] = []
-        if "optimized_charging_points" in parameters:
+        if parameters["optimize_ev_charging"]:
             downstream_elements.loc[branch, "flexible_ev"] = (
                 parameters["grid_object"]
                 .charging_points_df.loc[
@@ -1341,7 +1334,7 @@ def get_underlying_elements(parameters):
             )
         else:
             downstream_elements.loc[branch, "flexible_ev"] = []
-        if "optimized_heat_pumps" in parameters:
+        if parameters["optimize_hp"]:
             downstream_elements.loc[branch, "flexible_hp"] = (
                 parameters["grid_object"]
                 .heat_pumps_df.loc[
@@ -1383,7 +1376,6 @@ def get_residual_load_of_not_optimized_components(
     grid,
     edisgo,
     relevant_storage_units=None,
-    relevant_charging_points=None,
     relevant_generators=None,
     relevant_loads=None,
 ):
@@ -1409,28 +1401,11 @@ def get_residual_load_of_not_optimized_components(
         relevant_generators = grid.generators_df.index
     if relevant_storage_units is None:
         relevant_storage_units = grid.storage_units_df.index
-    if relevant_charging_points is None:
-        relevant_charging_points = grid.charging_points_df.index
-    # Todo: add hps once integrated to eDisGo
 
-    if edisgo.timeseries.charging_points_active_power.empty:
-        return (
-            edisgo.timeseries.generators_active_power[relevant_generators].sum(axis=1)
+    return (edisgo.timeseries.generators_active_power[relevant_generators].sum(axis=1)
             + edisgo.timeseries.storage_units_active_power[relevant_storage_units].sum(
-                axis=1
-            )
+                axis=1)
             - edisgo.timeseries.loads_active_power[relevant_loads].sum(axis=1)
-        ).loc[edisgo.timeseries.timeindex]
-    else:
-        return (
-            edisgo.timeseries.generators_active_power[relevant_generators].sum(axis=1)
-            + edisgo.timeseries.storage_units_active_power[relevant_storage_units].sum(
-                axis=1
-            )
-            - edisgo.timeseries.loads_active_power[relevant_loads].sum(axis=1)
-            - edisgo.timeseries.charging_points_active_power[
-                relevant_charging_points
-            ].sum(axis=1)
         ).loc[edisgo.timeseries.timeindex]
 
 
@@ -1883,11 +1858,11 @@ def aggregated_power(model, time):
     """
     Todo: add docstring
     """
-    if hasattr(model, "storage_set"):
+    if hasattr(model, "optimized_storage_set"):
         relevant_storage_units = model.optimized_storage_set
     else:
         relevant_storage_units = []
-    if hasattr(model, "charging_points_set"):
+    if hasattr(model, "flexible_charging_points_set"):
         relevant_charging_points = model.flexible_charging_points_set
     else:
         relevant_charging_points = []
@@ -1903,11 +1878,11 @@ def load_factor_min(model, time):
     :param time:
     :return:
     """
-    if hasattr(model, "storage_set"):
+    if hasattr(model, "optimized_storage_set"):
         relevant_storage_units = model.optimized_storage_set
     else:
         relevant_storage_units = []
-    if hasattr(model, "charging_points_set"):
+    if hasattr(model, "flexible_charging_points_set"):
         relevant_charging_points = model.flexible_charging_points_set
     else:
         relevant_charging_points = []
@@ -1926,11 +1901,11 @@ def load_factor_max(model, time):
     :param time:
     :return:
     """
-    if hasattr(model, "storage_set"):
+    if hasattr(model, "optimized_storage_set"):
         relevant_storage_units = model.optimized_storage_set
     else:
         relevant_storage_units = []
-    if hasattr(model, "charging_points_set"):
+    if hasattr(model, "flexible_charging_points_set"):
         relevant_charging_points = model.flexible_charging_points_set
     else:
         relevant_charging_points = []
@@ -1972,7 +1947,7 @@ def minimize_curtailment(model):
     """
     slack_charging, slack_energy = extract_slack_charging(model)
     ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
-    if hasattr(model, "charging_points_set"):
+    if hasattr(model, "flexible_charging_points_set"):
         return (
             sum(
                 model.curtailment_load[bus, time]
@@ -2042,15 +2017,15 @@ def maximize_energy_level(model):
 
 
 def grid_residual_load(model, time):
-    if hasattr(model, "storage_set"):
+    if hasattr(model, "optimized_storage_set"):
         relevant_storage_units = model.optimized_storage_set
     else:
         relevant_storage_units = []
-    if hasattr(model, "charging_points_set"):
+    if hasattr(model, "flexible_charging_points_set"):
         relevant_charging_points = model.flexible_charging_points_set
     else:
         relevant_charging_points = []
-    if hasattr(model, "heat_pumps_set"):
+    if hasattr(model, "flexible_heat_pumps_set"):
         relevant_heat_pumps = model.flexible_heat_pumps_set
     else:
         relevant_heat_pumps = []

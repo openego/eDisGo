@@ -7,15 +7,16 @@ import edisgo.opf.lopf as opt
 from edisgo.edisgo import import_edisgo_from_files
 from edisgo.network.electromobility import (Electromobility,
                                             get_energy_bands_for_optimization)
-from edisgo.network.timeseries import get_component_timeseries
 from Script_prepare_grids_for_optimization import \
     get_downstream_nodes_matrix_iterative
 
-grid_dir = "minimum_working"
-opt_ev = False
+par_dir = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+grid_dir = os.path.join(par_dir, "tests", "optimisation_minimum_working")
+opt_ev = True
 opt_stor = False
 save_res = False
-opt_hp = True
+opt_hp = False
 
 if os.path.isfile("x_charge_ev_pre.csv"):
     ts_pre = pd.read_csv("x_charge_ev_pre.csv", index_col=0, parse_dates=True)
@@ -26,12 +27,13 @@ timeindex = pd.date_range("2011-01-01", periods=8760, freq="h")
 storage_ts = pd.DataFrame({"Storage 1": 8760 * [0]}, index=timeindex)
 
 edisgo = import_edisgo_from_files(grid_dir)
-get_component_timeseries(
-    edisgo,
-    timeseries_load="demandlib",
-    timeseries_generation_fluctuating="oedb",
-    timeseries_storage_units=storage_ts,
+edisgo.timeseries.timeindex = timeindex
+edisgo.set_time_series_active_power_predefined(
+    fluctuating_generators_ts="oedb",
+    conventional_loads_ts="demandlib"
 )
+edisgo.set_time_series_manual(storage_units_p=storage_ts)
+edisgo.set_time_series_reactive_power_control()
 timesteps = edisgo.timeseries.timeindex[7 * 24 : 2 * 24 * 7]
 
 if opt_ev:
@@ -44,7 +46,8 @@ if opt_ev:
     Electromobility(edisgo_obj=edisgo)
     edisgo.electromobility.charging_processes_df = charging_events
     cp = edisgo.add_component(
-        "ChargingPoint", bus="Bus 2", p_nom=0.011, use_case="home", add_ts=False
+        "load", bus="Bus 2", type="charging_point",
+        p_set=0.011, sector="home", add_ts=False
     )
     edisgo.electromobility.integrated_charging_parks_df = pd.DataFrame(
         index=[cp_id], columns=["edisgo_id"], data=cp
@@ -57,19 +60,23 @@ else:
     energy_bands = {}
 
 if opt_hp:
-    hp_name = "HP 1"
+    hp_name = edisgo.add_component(
+        "load", bus="Bus 3", type="heat_pump",
+        p_set=0.003, sector="flexible", add_ts=False
+    )
     heat_demand = (
-        pd.read_csv("minimum_working/hp_heat_2011.csv", index_col=0)
+        pd.read_csv(os.path.join(grid_dir, "hp_heat_2011.csv"), index_col=0)
         .set_index(timeindex)
         .rename(columns={"0": hp_name})
     )
-    cop = pd.read_csv("minimum_working/COP_2011.csv").set_index(timeindex)
+    cop = pd.read_csv(os.path.join(grid_dir, "COP_2011.csv")).set_index(timeindex)
     heat_pump_df = pd.DataFrame(
         index=[hp_name],
         columns=["bus", "p_nom", "capacity_tes"],
-        data={"bus": "Bus 3", "p_nom": 0.003, "capacity_tes": 0.05},
+        data={"bus": "Bus 3", "p_set": 0.003, "capacity_tes": 0.05},
     )
     edisgo.topology.heat_pumps_df = heat_pump_df
+
 else:
     cop = None
     heat_demand = None
@@ -89,9 +96,6 @@ model = opt.setup_model(
     parameters,
     timesteps=timesteps,
     objective="residual_load",
-    optimize_storage=False,
-    optimize_ev_charging=opt_ev,
-    optimize_hp=opt_hp,
     heat_demand=heat_demand,
     cop=cop,
 )

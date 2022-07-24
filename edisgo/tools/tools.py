@@ -513,7 +513,6 @@ def get_nodal_residual_load(grid, edisgo, **kwargs):
     considered_loads = kwargs.get('considered_loads', None)
     considered_generators = kwargs.get('considered_generators', None)
     considered_storage = kwargs.get('considered_storage', None)
-    considered_charging_points = kwargs.get('considered_charging_points', None)
     nodal_active_load, nodal_reactive_load = \
         get_timeseries_per_node(grid, edisgo, 'load', considered_loads)
     nodal_active_generation, nodal_reactive_generation = \
@@ -522,18 +521,14 @@ def get_nodal_residual_load(grid, edisgo, **kwargs):
     nodal_active_storage, nodal_reactive_storage = \
         get_timeseries_per_node(grid, edisgo, 'storage_unit',
                                 considered_storage) #Todo: adapt handling, once important
-    nodal_active_charging_points, nodal_reactive_charging_points = \
-        get_timeseries_per_node(grid, edisgo, 'charging_point',
-                                considered_charging_points)
     nodal_active_power = \
-        nodal_active_generation + nodal_active_storage - nodal_active_load - \
-        nodal_active_charging_points
+        nodal_active_generation + nodal_active_storage - nodal_active_load
     nodal_reactive_power = \
-        nodal_reactive_generation + nodal_reactive_storage - nodal_reactive_load - \
-        nodal_reactive_charging_points
-    return nodal_active_power, nodal_reactive_power, nodal_active_load, nodal_reactive_load, \
-           nodal_active_generation, nodal_reactive_generation, nodal_active_charging_points, \
-           nodal_reactive_charging_points, nodal_active_storage, nodal_reactive_storage
+        nodal_reactive_generation + nodal_reactive_storage - nodal_reactive_load
+    return nodal_active_power, nodal_reactive_power, \
+           nodal_active_load, nodal_reactive_load, \
+           nodal_active_generation, nodal_reactive_generation, \
+           nodal_active_storage, nodal_reactive_storage
 
 
 def get_timeseries_per_node(grid, edisgo, component, component_names=None):

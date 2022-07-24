@@ -393,7 +393,7 @@ def get_energy_bands_for_optimization(edisgo_obj, use_case, t_max=372 * 4 * 24):
 
     # get all relevant charging points
     cps = edisgo_obj.topology.charging_points_df.loc[
-        edisgo_obj.topology.charging_points_df.use_case == use_case
+        edisgo_obj.topology.charging_points_df.sector == use_case
     ]
     # set up bands
     tmp_idx = range(t_max)

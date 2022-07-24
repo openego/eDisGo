@@ -1,2 +1,2 @@
-name,bus,peak_load,annual_consumption,sector,pLoad,qLoad
-Load 1,Bus 2,0.007239095747877756,112.24636253578433,residential,0.006,0.0023710000000000003
+name,bus,p_set,annual_consumption,sector,pLoad,qLoad,type
+Load 1,Bus 2,0.007239095747877756,112.24636253578433,residential,0.006,0.0023710000000000003, conventional_load
