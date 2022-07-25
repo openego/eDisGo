@@ -2597,6 +2597,35 @@ class Topology:
             Set True if data is archived in a zip archive. Default: False
 
         """
+
+        def _get_matching_dict_of_attributes_and_file_names():
+            """
+            Helper function that matches attribute names to file names.
+
+            Is used in function :attr:`~.network.topology.Topology.from_csv` to set
+            which attribute of :class:`~.network.topology.Topology` is saved under
+            which file name.
+
+            Returns
+            -------
+            dict
+                Dictionary matching attribute names and file names with attribute
+                names as keys and corresponding file names as values.
+
+            """
+            return {
+                "buses_df": "buses.csv",
+                "lines_df": "lines.csv",
+                "loads_df": "loads.csv",
+                "generators_df": "generators.csv",
+                "charging_points_df": "charging_points.csv",
+                "storage_units_df": "storage_units.csv",
+                "transformers_df": "transformers.csv",
+                "transformers_hvmv_df": "transformers_hvmv.csv",
+                "switches_df": "switches.csv",
+                "network": "network.csv",
+            }
+
         # get all attributes and corresponding file names
         attrs = _get_matching_dict_of_attributes_and_file_names()
 
@@ -2905,31 +2934,3 @@ class Topology:
         return f"Network topology {self.id}"
         return f"Network topology {self.id}"
 
-
-def _get_matching_dict_of_attributes_and_file_names():
-    """
-    Helper function that matches attribute names to file names.
-
-    Is used in function :attr:`~.network.topology.Topology.from_csv` to set
-    which attribute of :class:`~.network.topology.Topology` is saved under
-    which file name.
-
-    Returns
-    -------
-    dict
-        Dictionary matching attribute names and file names with attribute
-        names as keys and corresponding file names as values.
-
-    """
-    return {
-        "buses_df": "buses.csv",
-        "lines_df": "lines.csv",
-        "loads_df": "loads.csv",
-        "generators_df": "generators.csv",
-        "charging_points_df": "charging_points.csv",
-        "storage_units_df": "storage_units.csv",
-        "transformers_df": "transformers.csv",
-        "transformers_hvmv_df": "transformers_hvmv.csv",
-        "switches_df": "switches.csv",
-        "network": "network.csv",
-    }
