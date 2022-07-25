@@ -680,6 +680,11 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
             for i in range(len(grid_friendly_weights))
         ]
 
+    else:
+        raise ValueError(
+            "Provided mode is not valid, needs to be 'user_friendly' or "
+            "'grid_friendly'."
+        )
     return pd.DataFrame(weights)
 
 
