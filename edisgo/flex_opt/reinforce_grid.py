@@ -180,17 +180,22 @@ def reinforce_grid(
     logger.debug("==> Check station load.")
 
     overloaded_mv_station = (
-        pd.DataFrame(dtype=float) if mode == "lv" else checks.hv_mv_station_load(edisgo_reinforce)
+        pd.DataFrame(dtype=float)
+        if mode == "lv"
+        else checks.hv_mv_station_load(edisgo_reinforce)
     )
 
     overloaded_lv_stations = (
-        pd.DataFrame(dtype=float) if mode == "mv" else checks.mv_lv_station_load(edisgo_reinforce)
+        pd.DataFrame(dtype=float)
+        if mode == "mv"
+        else checks.mv_lv_station_load(edisgo_reinforce)
     )
-
     logger.debug("==> Check line load.")
 
     crit_lines = (
-        pd.DataFrame(dtype=float) if mode == "lv" else checks.mv_line_load(edisgo_reinforce)
+        pd.DataFrame(dtype=float)
+        if mode == "lv"
+        else checks.mv_line_load(edisgo_reinforce)
     )
 
     if not mode or mode == "lv":
@@ -256,7 +261,9 @@ def reinforce_grid(
         logger.debug("==> Recheck line load.")
 
         crit_lines = (
-            pd.DataFrame(dtype=float) if mode == "lv" else checks.mv_line_load(edisgo_reinforce)
+            pd.DataFrame(dtype=float)
+            if mode == "lv"
+            else checks.mv_line_load(edisgo_reinforce)
         )
 
         if not mode or mode == "lv":
@@ -464,7 +471,9 @@ def reinforce_grid(
     logger.debug("==> Recheck station load.")
 
     overloaded_mv_station = (
-        pd.DataFrame(dtype=float) if mode == "lv" else checks.hv_mv_station_load(edisgo_reinforce)
+        pd.DataFrame(dtype=float)
+        if mode == "lv"
+        else checks.hv_mv_station_load(edisgo_reinforce)
     )
 
     if mode != "mv":
@@ -473,7 +482,9 @@ def reinforce_grid(
     logger.debug("==> Recheck line load.")
 
     crit_lines = (
-        pd.DataFrame(dtype=float) if mode == "lv" else checks.mv_line_load(edisgo_reinforce)
+        pd.DataFrame(dtype=float)
+        if mode == "lv"
+        else checks.mv_line_load(edisgo_reinforce)
     )
 
     if not mode or mode == "lv":
@@ -539,7 +550,9 @@ def reinforce_grid(
         logger.debug("==> Recheck line load.")
 
         crit_lines = (
-            pd.DataFrame(dtype=float) if mode == "lv" else checks.mv_line_load(edisgo_reinforce)
+            pd.DataFrame(dtype=float)
+            if mode == "lv"
+            else checks.mv_line_load(edisgo_reinforce)
         )
 
         if not mode or mode == "lv":

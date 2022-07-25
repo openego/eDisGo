@@ -1,0 +1,234 @@
+,bus,control,geom,geom_em,id,la_id,mvlv_subst_id,p_nom,subst_id,subtype,type,voltage_level,weather_cell_id
+Generator_mvgd_2534_solar_roof_mounted_507500,Bus_mvgd_2534_gen_507500,PQ,,,507500.0,,,0.45953999999999995,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_solar_roof_mounted_507504,Bus_mvgd_2534_gen_507504,PQ,,,507504.0,,,0.3786000000000001,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_solar_roof_mounted_507552,Bus_mvgd_2534_gen_507552,PQ,,,507552.0,,,0.31411,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_solar_ground_mounted_507566,Bus_mvgd_2534_gen_507566,PQ,,,507566.0,,,2.452,,solar_ground_mounted,solar,,1133076.0
+Generator_mvgd_2534_solar_roof_mounted_1582706,Bus_mvgd_2534_gen_1582706,PQ,,,1582706.0,,,0.4992,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_solar_roof_mounted_1601071,Bus_mvgd_2534_gen_1601071,PQ,,,1601071.0,,,0.332,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20542_solar_roof_mounted_507462,Bus_mvgd_2534_lvgd_20542_gen_507462,PQ,,,507462.0,,,0.01387,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20542_solar_roof_mounted_507518,Bus_mvgd_2534_lvgd_20542_gen_507518,PQ,,,507518.0,,,0.0039900000000000005,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20542_solar_roof_mounted_507528,Bus_mvgd_2534_lvgd_20542_gen_507528,PQ,,,507528.0,,,0.005379999999999999,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20542_solar_roof_mounted_507534,Bus_mvgd_2534_lvgd_20542_gen_507534,PQ,,,507534.0,,,0.01056,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20543_solar_roof_mounted_507484,BranchTee_mvgd_2534_lvgd_20543_78,PQ,,,507484.0,,,0.021240000000000002,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20543_solar_roof_mounted_507485,Bus_mvgd_2534_lvgd_20543_gen_507485,PQ,,,507485.0,,,0.155,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20543_solar_roof_mounted_507494,BranchTee_mvgd_2534_lvgd_20543_4,PQ,,,507494.0,,,0.04152,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20543_solar_roof_mounted_507513,BranchTee_mvgd_2534_lvgd_20543_20,PQ,,,507513.0,,,0.01591,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20543_solar_roof_mounted_507520,BranchTee_mvgd_2534_lvgd_20543_8,PQ,,,507520.0,,,0.04488,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20544_solar_roof_mounted_507471,BranchTee_mvgd_2534_lvgd_20544_18,PQ,,,507471.0,,,0.0094,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20544_solar_roof_mounted_507487,BranchTee_mvgd_2534_lvgd_20544_22,PQ,,,507487.0,,,0.0183,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20544_solar_roof_mounted_507490,BranchTee_mvgd_2534_lvgd_20544_20,PQ,,,507490.0,,,0.026910000000000003,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20544_solar_roof_mounted_507495,BranchTee_mvgd_2534_lvgd_20544_22,PQ,,,507495.0,,,0.02988,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20545_solar_roof_mounted_507429,BranchTee_mvgd_2534_lvgd_20545_12,PQ,,,507429.0,,,0.004843999999999999,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20545_solar_roof_mounted_507467,BranchTee_mvgd_2534_lvgd_20545_2,PQ,,,507467.0,,,0.0437,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20545_solar_roof_mounted_507591,BranchTee_mvgd_2534_lvgd_20545_10,PQ,,,507591.0,,,0.0051,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20546_solar_roof_mounted_507426,Bus_mvgd_2534_lvgd_20546_gen_507426,PQ,,,507426.0,,,0.00528,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20546_solar_ground_mounted_507428,Bus_mvgd_2534_lvgd_20546_gen_507428,PQ,,,507428.0,,,0.0016,,solar_ground_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20546_solar_roof_mounted_507466,Bus_mvgd_2534_lvgd_20546_gen_507466,PQ,,,507466.0,,,0.00612,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20546_solar_roof_mounted_507483,Bus_mvgd_2534_lvgd_20546_gen_507483,PQ,,,507483.0,,,0.0036,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20546_solar_roof_mounted_507548,Bus_mvgd_2534_lvgd_20546_gen_507548,PQ,,,507548.0,,,0.01026,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20546_solar_roof_mounted_507565,Bus_mvgd_2534_lvgd_20546_gen_507565,PQ,,,507565.0,,,0.0216,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20547_solar_roof_mounted_507431,BranchTee_mvgd_2534_lvgd_20547_74,PQ,,,507431.0,,,0.0007,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20547_solar_roof_mounted_507460,BranchTee_mvgd_2534_lvgd_20547_2,PQ,,,507460.0,,,0.0324,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20547_solar_roof_mounted_507463,BranchTee_mvgd_2534_lvgd_20547_150,PQ,,,507463.0,,,0.00396,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20547_solar_roof_mounted_507468,BranchTee_mvgd_2534_lvgd_20547_236,PQ,,,507468.0,,,0.00864,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20547_solar_roof_mounted_507486,BranchTee_mvgd_2534_lvgd_20547_130,PQ,,,507486.0,,,0.02134,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20547_solar_roof_mounted_507489,BranchTee_mvgd_2534_lvgd_20547_4,PQ,,,507489.0,,,0.0308,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20547_solar_roof_mounted_507501,Bus_mvgd_2534_lvgd_20547_gen_507501,PQ,,,507501.0,,,0.20077,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20547_solar_roof_mounted_507549,BranchTee_mvgd_2534_lvgd_20547_258,PQ,,,507549.0,,,0.0037,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20547_solar_roof_mounted_507576,BranchTee_mvgd_2534_lvgd_20547_216,PQ,,,507576.0,,,0.00299,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20548_solar_roof_mounted_507438,BranchTee_mvgd_2534_lvgd_20548_18,PQ,,,507438.0,,,0.0037799999999999995,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20548_solar_roof_mounted_507479,BranchTee_mvgd_2534_lvgd_20548_16,PQ,,,507479.0,,,0.03682,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20548_solar_roof_mounted_507511,BranchTee_mvgd_2534_lvgd_20548_18,PQ,,,507511.0,,,0.0189,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20548_solar_roof_mounted_507571,BranchTee_mvgd_2534_lvgd_20548_18,PQ,,,507571.0,,,0.0108,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20548_solar_roof_mounted_507578,BranchTee_mvgd_2534_lvgd_20548_18,PQ,,,507578.0,,,0.0091,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20548_solar_roof_mounted_507592,BranchTee_mvgd_2534_lvgd_20548_18,PQ,,,507592.0,,,0.0053,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20549_solar_roof_mounted_507492,Bus_mvgd_2534_lvgd_20549_gen_507492,PQ,,,507492.0,,,0.16968,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20549_solar_roof_mounted_507526,BranchTee_mvgd_2534_lvgd_20549_18,PQ,,,507526.0,,,0.006840000000000001,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20549_solar_roof_mounted_507579,BranchTee_mvgd_2534_lvgd_20549_8,PQ,,,507579.0,,,0.04386,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20551_solar_roof_mounted_507459,BranchTee_mvgd_2534_lvgd_20551_36,PQ,,,507459.0,,,0.004,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20551_solar_roof_mounted_507488,Bus_mvgd_2534_lvgd_20551_gen_507488,PQ,,,507488.0,,,0.0314,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20551_solar_roof_mounted_507521,BranchTee_mvgd_2534_lvgd_20551_52,PQ,,,507521.0,,,0.00418,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20551_solar_roof_mounted_507574,BranchTee_mvgd_2534_lvgd_20551_74,PQ,,,507574.0,,,0.006,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20552_solar_roof_mounted_507444,BranchTee_mvgd_2534_lvgd_20552_24,PQ,,,507444.0,,,0.02411,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20552_solar_roof_mounted_507502,BranchTee_mvgd_2534_lvgd_20552_18,PQ,,,507502.0,,,0.0078,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20552_solar_roof_mounted_1599645,BranchTee_mvgd_2534_lvgd_20552_20,PQ,,,1599645.0,,,0.0052,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20553_solar_roof_mounted_507505,BranchTee_mvgd_2534_lvgd_20553_18,PQ,,,507505.0,,,0.0288,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20553_solar_roof_mounted_507522,BranchTee_mvgd_2534_lvgd_20553_22,PQ,,,507522.0,,,0.0132,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20554_solar_roof_mounted_507436,Bus_mvgd_2534_lvgd_20554_gen_507436,PQ,,,507436.0,,,0.01155,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20554_solar_roof_mounted_507458,Bus_mvgd_2534_lvgd_20554_gen_507458,PQ,,,507458.0,,,0.005520000000000001,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20554_solar_roof_mounted_507474,Bus_mvgd_2534_lvgd_20554_gen_507474,PQ,,,507474.0,,,0.0027600000000000003,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20554_solar_roof_mounted_507514,Bus_mvgd_2534_lvgd_20554_gen_507514,PQ,,,507514.0,,,0.00561,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20554_solar_roof_mounted_507545,Bus_mvgd_2534_lvgd_20554_gen_507545,PQ,,,507545.0,,,0.0078,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20555_solar_roof_mounted_507532,BranchTee_mvgd_2534_lvgd_20555_26,PQ,,,507532.0,,,0.008740000000000001,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20555_solar_roof_mounted_507573,Bus_mvgd_2534_lvgd_20555_gen_507573,PQ,,,507573.0,,,0.18666,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20557_solar_roof_mounted_507435,BranchTee_mvgd_2534_lvgd_20557_20,PQ,,,507435.0,,,0.024419999999999997,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20557_solar_roof_mounted_507519,BranchTee_mvgd_2534_lvgd_20557_16,PQ,,,507519.0,,,0.0035700000000000003,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20557_solar_roof_mounted_507557,BranchTee_mvgd_2534_lvgd_20557_18,PQ,,,507557.0,,,0.006860000000000001,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20558_solar_roof_mounted_507430,Bus_mvgd_2534_lvgd_20558_gen_507430,PQ,,,507430.0,,,0.003,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20558_solar_roof_mounted_507543,Bus_mvgd_2534_lvgd_20558_gen_507543,PQ,,,507543.0,,,0.02098,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20559_solar_roof_mounted_507432,BranchTee_mvgd_2534_lvgd_20559_36,PQ,,,507432.0,,,0.00625,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20559_solar_roof_mounted_507476,Bus_mvgd_2534_lvgd_20559_gen_507476,PQ,,,507476.0,,,0.1728,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20559_solar_roof_mounted_507480,BranchTee_mvgd_2534_lvgd_20559_10,PQ,,,507480.0,,,0.03234,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20559_solar_roof_mounted_507510,BranchTee_mvgd_2534_lvgd_20559_2,PQ,,,507510.0,,,0.05206,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20559_solar_roof_mounted_507541,BranchTee_mvgd_2534_lvgd_20559_16,PQ,,,507541.0,,,0.031,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20559_solar_roof_mounted_507547,BranchTee_mvgd_2534_lvgd_20559_26,PQ,,,507547.0,,,0.00782,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20559_solar_roof_mounted_507551,BranchTee_mvgd_2534_lvgd_20559_40,PQ,,,507551.0,,,0.0041,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20560_solar_roof_mounted_507441,BranchTee_mvgd_2534_lvgd_20560_34,PQ,,,507441.0,,,0.00238,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20560_solar_roof_mounted_507533,BranchTee_mvgd_2534_lvgd_20560_34,PQ,,,507533.0,,,0.006540000000000001,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20560_solar_roof_mounted_507562,BranchTee_mvgd_2534_lvgd_20560_34,PQ,,,507562.0,,,0.0081,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20560_solar_roof_mounted_507580,BranchTee_mvgd_2534_lvgd_20560_34,PQ,,,507580.0,,,0.00612,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20561_solar_roof_mounted_507445,BranchTee_mvgd_2534_lvgd_20561_20,PQ,,,507445.0,,,0.0112,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20561_solar_roof_mounted_507586,BranchTee_mvgd_2534_lvgd_20561_14,PQ,,,507586.0,,,0.0035,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20561_solar_roof_mounted_1577606,BranchTee_mvgd_2534_lvgd_20561_18,PQ,,,1577606.0,,,0.00462,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20563_solar_roof_mounted_507481,BranchTee_mvgd_2534_lvgd_20563_78,PQ,,,507481.0,,,0.03,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20563_solar_roof_mounted_507509,BranchTee_mvgd_2534_lvgd_20563_38,PQ,,,507509.0,,,0.013680000000000001,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20564_solar_roof_mounted_507448,BranchTee_mvgd_2534_lvgd_20564_74,PQ,,,507448.0,,,0.02814,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20564_solar_roof_mounted_507491,Bus_mvgd_2534_lvgd_20564_gen_507491,PQ,,,507491.0,,,0.032130000000000006,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20564_solar_roof_mounted_507493,BranchTee_mvgd_2534_lvgd_20564_150,PQ,,,507493.0,,,0.021,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20564_solar_roof_mounted_507497,Bus_mvgd_2534_lvgd_20564_gen_507497,PQ,,,507497.0,,,0.04152,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20564_solar_roof_mounted_507553,BranchTee_mvgd_2534_lvgd_20564_234,PQ,,,507553.0,,,0.004,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20565_solar_roof_mounted_507536,Bus_mvgd_2534_lvgd_20565_gen_507536,PQ,,,507536.0,,,0.1779,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20565_solar_roof_mounted_507593,BranchTee_mvgd_2534_lvgd_20565_74,PQ,,,507593.0,,,0.00462,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20566_solar_roof_mounted_507537,Bus_mvgd_2534_lvgd_20566_gen_507537,PQ,,,507537.0,,,0.177895,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20566_solar_roof_mounted_507560,BranchTee_mvgd_2534_lvgd_20566_74,PQ,,,507560.0,,,0.00683,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20567_solar_roof_mounted_507451,BranchTee_mvgd_2534_lvgd_20567_74,PQ,,,507451.0,,,0.01291,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20567_solar_roof_mounted_507570,BranchTee_mvgd_2534_lvgd_20567_150,PQ,,,507570.0,,,0.004,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20567_solar_roof_mounted_507588,BranchTee_mvgd_2534_lvgd_20567_234,PQ,,,507588.0,,,0.0071400000000000005,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20568_solar_roof_mounted_507442,BranchTee_mvgd_2534_lvgd_20568_74,PQ,,,507442.0,,,0.00396,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20568_solar_roof_mounted_507590,BranchTee_mvgd_2534_lvgd_20568_150,PQ,,,507590.0,,,0.00594,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20569_solar_roof_mounted_507434,BranchTee_mvgd_2534_lvgd_20569_150,PQ,,,507434.0,,,0.0197,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20569_solar_roof_mounted_507440,BranchTee_mvgd_2534_lvgd_20569_234,PQ,,,507440.0,,,0.00385,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20569_solar_roof_mounted_507461,BranchTee_mvgd_2534_lvgd_20569_130,PQ,,,507461.0,,,0.01296,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20569_solar_roof_mounted_507499,BranchTee_mvgd_2534_lvgd_20569_256,PQ,,,507499.0,,,0.0041,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20569_solar_roof_mounted_507508,Bus_mvgd_2534_lvgd_20569_gen_507508,PQ,,,507508.0,,,0.1188,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20569_solar_roof_mounted_507535,BranchTee_mvgd_2534_lvgd_20569_214,PQ,,,507535.0,,,0.00513,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20569_solar_roof_mounted_507587,BranchTee_mvgd_2534_lvgd_20569_60,PQ,,,507587.0,,,0.00575,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20569_solar_roof_mounted_1569692,BranchTee_mvgd_2534_lvgd_20569_74,PQ,,,1569692.0,,,0.0053,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20570_solar_roof_mounted_507472,BranchTee_mvgd_2534_lvgd_20570_74,PQ,,,507472.0,,,0.00592,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20570_solar_roof_mounted_507482,Bus_mvgd_2534_lvgd_20570_gen_507482,PQ,,,507482.0,,,0.033600000000000005,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20570_solar_roof_mounted_507506,BranchTee_mvgd_2534_lvgd_20570_150,PQ,,,507506.0,,,0.0278,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20570_solar_roof_mounted_507555,Bus_mvgd_2534_lvgd_20570_gen_507555,PQ,,,507555.0,,,0.0528,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20571_solar_roof_mounted_507470,BranchTee_mvgd_2534_lvgd_20571_74,PQ,,,507470.0,,,0.0027,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20571_solar_roof_mounted_507529,BranchTee_mvgd_2534_lvgd_20571_150,PQ,,,507529.0,,,0.010459999999999999,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20571_solar_roof_mounted_507572,BranchTee_mvgd_2534_lvgd_20571_234,PQ,,,507572.0,,,0.005719999999999999,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20572_solar_roof_mounted_507439,BranchTee_mvgd_2534_lvgd_20572_74,PQ,,,507439.0,,,0.0030800000000000003,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20572_solar_roof_mounted_507447,Bus_mvgd_2534_lvgd_20572_gen_507447,PQ,,,507447.0,,,0.030660000000000003,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20572_solar_roof_mounted_507464,BranchTee_mvgd_2534_lvgd_20572_150,PQ,,,507464.0,,,0.0299,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20572_solar_roof_mounted_507478,BranchTee_mvgd_2534_lvgd_20572_234,PQ,,,507478.0,,,0.00414,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20572_solar_roof_mounted_507515,BranchTee_mvgd_2534_lvgd_20572_130,PQ,,,507515.0,,,0.00864,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20572_solar_roof_mounted_507531,BranchTee_mvgd_2534_lvgd_20572_256,PQ,,,507531.0,,,0.0041,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20573_solar_roof_mounted_507581,BranchTee_mvgd_2534_lvgd_20573_150,PQ,,,507581.0,,,0.0072,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20573_solar_roof_mounted_507582,BranchTee_mvgd_2534_lvgd_20573_234,PQ,,,507582.0,,,0.00306,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20573_solar_roof_mounted_1596100,BranchTee_mvgd_2534_lvgd_20573_74,PQ,,,1596100.0,,,0.00364,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20573_solar_roof_mounted_1605075,Bus_mvgd_2534_lvgd_20573_gen_1605075,PQ,,,1605075.0,,,0.29952,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20574_solar_roof_mounted_507454,BranchTee_mvgd_2534_lvgd_20574_74,PQ,,,507454.0,,,0.007359999999999999,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20574_solar_roof_mounted_507465,BranchTee_mvgd_2534_lvgd_20574_150,PQ,,,507465.0,,,0.00252,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20574_solar_roof_mounted_507477,BranchTee_mvgd_2534_lvgd_20574_234,PQ,,,507477.0,,,0.00528,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20574_solar_roof_mounted_507546,BranchTee_mvgd_2534_lvgd_20574_130,PQ,,,507546.0,,,0.00719,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20574_solar_roof_mounted_507561,BranchTee_mvgd_2534_lvgd_20574_256,PQ,,,507561.0,,,0.0048,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20575_solar_roof_mounted_507475,BranchTee_mvgd_2534_lvgd_20575_74,PQ,,,507475.0,,,0.01032,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20575_solar_roof_mounted_507496,Bus_mvgd_2534_lvgd_20575_gen_507496,PQ,,,507496.0,,,0.03737,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20575_solar_roof_mounted_507569,BranchTee_mvgd_2534_lvgd_20575_150,PQ,,,507569.0,,,0.0035700000000000003,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20576_solar_roof_mounted_507443,BranchTee_mvgd_2534_lvgd_20576_74,PQ,,,507443.0,,,0.0175,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20576_solar_roof_mounted_507556,BranchTee_mvgd_2534_lvgd_20576_150,PQ,,,507556.0,,,0.00588,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20576_solar_roof_mounted_507559,BranchTee_mvgd_2534_lvgd_20576_234,PQ,,,507559.0,,,0.00234,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20576_solar_roof_mounted_1605088,Bus_mvgd_2534_lvgd_20576_gen_1605088,PQ,,,1605088.0,,,0.27552,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20577_solar_roof_mounted_507564,BranchTee_mvgd_2534_lvgd_20577_196,PQ,,,507564.0,,,0.0053,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20578_solar_roof_mounted_507449,BranchTee_mvgd_2534_lvgd_20578_72,PQ,,,507449.0,,,0.0021000000000000003,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20578_solar_roof_mounted_507457,BranchTee_mvgd_2534_lvgd_20578_40,PQ,,,507457.0,,,0.00528,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20578_solar_roof_mounted_507469,BranchTee_mvgd_2534_lvgd_20578_14,PQ,,,507469.0,,,0.008190000000000001,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20578_solar_roof_mounted_507523,Bus_mvgd_2534_lvgd_20578_gen_507523,PQ,,,507523.0,,,0.096,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20578_solar_roof_mounted_507544,BranchTee_mvgd_2534_lvgd_20578_50,PQ,,,507544.0,,,0.01824,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20578_solar_roof_mounted_507554,BranchTee_mvgd_2534_lvgd_20578_68,PQ,,,507554.0,,,0.009275,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20578_solar_roof_mounted_507575,BranchTee_mvgd_2534_lvgd_20578_90,PQ,,,507575.0,,,0.0075,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20579_solar_roof_mounted_507427,Bus_mvgd_2534_lvgd_20579_gen_507427,PQ,,,507427.0,,,0.0443,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20579_solar_roof_mounted_507568,BranchTee_mvgd_2534_lvgd_20579_74,PQ,,,507568.0,,,0.010709999999999999,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20580_solar_roof_mounted_507450,BranchTee_mvgd_2534_lvgd_20580_74,PQ,,,507450.0,,,0.00864,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20580_solar_roof_mounted_507503,BranchTee_mvgd_2534_lvgd_20580_150,PQ,,,507503.0,,,0.028999999999999998,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20581_solar_roof_mounted_507425,BranchTee_mvgd_2534_lvgd_20581_74,PQ,,,507425.0,,,0.00264,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20581_solar_roof_mounted_507517,BranchTee_mvgd_2534_lvgd_20581_150,PQ,,,507517.0,,,0.00634,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20581_solar_roof_mounted_507530,BranchTee_mvgd_2534_lvgd_20581_236,PQ,,,507530.0,,,0.00532,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20581_solar_roof_mounted_507540,BranchTee_mvgd_2534_lvgd_20581_130,PQ,,,507540.0,,,0.0071400000000000005,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20581_solar_roof_mounted_507550,BranchTee_mvgd_2534_lvgd_20581_258,PQ,,,507550.0,,,0.00277,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20582_solar_roof_mounted_507456,Bus_mvgd_2534_lvgd_20582_gen_507456,PQ,,,507456.0,,,0.007379999999999999,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20583_solar_roof_mounted_507433,BranchTee_mvgd_2534_lvgd_20583_66,PQ,,,507433.0,,,0.00972,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20583_solar_roof_mounted_507437,BranchTee_mvgd_2534_lvgd_20583_66,PQ,,,507437.0,,,0.00312,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20583_solar_roof_mounted_507446,BranchTee_mvgd_2534_lvgd_20583_66,PQ,,,507446.0,,,0.007019999999999999,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20584_solar_roof_mounted_507452,BranchTee_mvgd_2534_lvgd_20584_68,PQ,,,507452.0,,,0.01763,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20584_solar_roof_mounted_507473,BranchTee_mvgd_2534_lvgd_20584_66,PQ,,,507473.0,,,0.007520000000000001,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20584_solar_roof_mounted_507498,BranchTee_mvgd_2534_lvgd_20584_66,PQ,,,507498.0,,,0.013319999999999999,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20585_solar_roof_mounted_507539,BranchTee_mvgd_2534_lvgd_20585_6,PQ,,,507539.0,,,0.006540000000000001,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_20585_solar_roof_mounted_507542,BranchTee_mvgd_2534_lvgd_20585_4,PQ,,,507542.0,,,0.027000000000000003,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_485299_solar_roof_mounted_507507,BranchTee_mvgd_2534_lvgd_485299_26,PQ,,,507507.0,,,0.02496,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_485299_solar_roof_mounted_507538,BranchTee_mvgd_2534_lvgd_485299_26,PQ,,,507538.0,,,0.00418,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_21198_solar_roof_mounted_507567,BranchTee_mvgd_2534_lvgd_21198_34,PQ,,,507567.0,,,0.02069,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_449287_solar_roof_mounted_507527,Bus_mvgd_2534_lvgd_449287_gen_507527,PQ,,,507527.0,,,0.00722,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_449287_solar_roof_mounted_507589,Bus_mvgd_2534_lvgd_449287_gen_507589,PQ,,,507589.0,,,0.00594,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_21752_solar_roof_mounted_507455,BranchTee_mvgd_2534_lvgd_21752_10,PQ,,,507455.0,,,0.0062,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_21752_solar_roof_mounted_507512,BranchTee_mvgd_2534_lvgd_21752_10,PQ,,,507512.0,,,0.013319999999999999,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_21752_solar_roof_mounted_507525,BranchTee_mvgd_2534_lvgd_21752_10,PQ,,,507525.0,,,0.0074,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_21752_solar_roof_mounted_507577,BranchTee_mvgd_2534_lvgd_21752_10,PQ,,,507577.0,,,0.00625,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_27952_solar_roof_mounted_507524,BranchTee_mvgd_2534_lvgd_27952_2,PQ,,,507524.0,,,0.018090000000000002,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_29106_solar_roof_mounted_507563,BranchTee_mvgd_2534_lvgd_29106_46,PQ,,,507563.0,,,0.0030800000000000003,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_29106_solar_roof_mounted_507583,BranchTee_mvgd_2534_lvgd_29106_44,PQ,,,507583.0,,,0.004,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_489468_solar_roof_mounted_507453,BranchTee_mvgd_2534_lvgd_489468_66,PQ,,,507453.0,,,0.0203,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_489468_solar_roof_mounted_507516,BranchTee_mvgd_2534_lvgd_489468_56,PQ,,,507516.0,,,0.00504,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_489468_solar_roof_mounted_507558,BranchTee_mvgd_2534_lvgd_489468_90,PQ,,,507558.0,,,0.0039,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_489468_solar_roof_mounted_507584,BranchTee_mvgd_2534_lvgd_489468_58,PQ,,,507584.0,,,0.00312,,solar_roof_mounted,solar,,1133076.0
+Generator_mvgd_2534_lvgd_489468_solar_roof_mounted_507585,BranchTee_mvgd_2534_lvgd_489468_68,PQ,,,507585.0,,,0.0035,,solar_roof_mounted,solar,,1133076.0
+Generator_MVGrid_2534_gas_1609549,Bus_Generator_1609549,PQ,POINT(11.643922790944 48.2289732306377),POINT(11.6156053276743 48.2549354100257),,24333.0,29106.0,0.37207,2534,gas,gas,5,1133076.0
+Generator_MVGrid_2534_solar_2556127,Bus_Generator_2556127,PQ,POINT(11.6402552515504 48.2482989242359),POINT(11.6402552515504 48.2482989278208),,,,1.41,2534,solar,solar,5,1133076.0
+Generator_LVGrid_20557_solar_2556073,BranchTee_mvgd_2534_lvgd_20557_18,PQ,POINT(11.621979849542 48.2539166000137),POINT(11.6402552515504 48.2482989278208),,19287,20557,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20543_solar_2556074,BranchTee_mvgd_2534_lvgd_20543_58,PQ,POINT(11.6063749589757 48.2500950614114),POINT(11.6402552515504 48.2482989278208),,19287,20543,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20564_solar_2556075,BranchTee_mvgd_2534_lvgd_20564_218,PQ,POINT(11.6458961372975 48.2441136793577),POINT(11.6402552515504 48.2482989278208),,19287,20564,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20565_solar_2556076,BranchTee_mvgd_2534_lvgd_20565_182,PQ,POINT(11.6400163368206 48.2496006534381),POINT(11.6402552515504 48.2482989278208),,19287,20565,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20567_solar_2556077,BranchTee_mvgd_2534_lvgd_20567_40,PQ,POINT(11.6513074669141 48.2449328195651),POINT(11.6402552515504 48.2482989278208),,19287,20567,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20556_solar_2556078,BranchTee_mvgd_2534_lvgd_20556_28,PQ,POINT(11.6192019392437 48.2512576265669),POINT(11.6402552515504 48.2482989278208),,19287,20556,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20549_solar_2556079,BranchTee_mvgd_2534_lvgd_20549_22,PQ,POINT(11.6092522865259 48.2559025772059),POINT(11.6402552515504 48.2482989278208),,19287,20549,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20570_solar_2556080,BranchTee_mvgd_2534_lvgd_20570_214,PQ,POINT(11.6502553472384 48.2539477275055),POINT(11.6402552515504 48.2482989278208),,19287,20570,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20578_solar_2556081,BranchTee_mvgd_2534_lvgd_20578_44,PQ,POINT(11.6600237841498 48.2439022244859),POINT(11.6402552515504 48.2482989278208),,19287,20578,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20562_solar_2556082,BranchTee_mvgd_2534_lvgd_20562_24,PQ,POINT(11.6285928144221 48.2502196447497),POINT(11.6402552515504 48.2482989278208),,19287,20562,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20569_solar_2556083,BranchTee_mvgd_2534_lvgd_20569_122,PQ,POINT(11.6521564613279 48.2503196375731),POINT(11.6402552515504 48.2482989278208),,19287,20569,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20574_solar_2556084,BranchTee_mvgd_2534_lvgd_20574_184,PQ,POINT(11.6541749475756 48.2502894253982),POINT(11.6402552515504 48.2482989278208),,19287,20574,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20544_solar_2556085,BranchTee_mvgd_2534_lvgd_20544_20,PQ,POINT(11.6044277783044 48.252373132915),POINT(11.6402552515504 48.2482989278208),,19287,20544,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20564_solar_2556086,BranchTee_mvgd_2534_lvgd_20564_198,PQ,POINT(11.6439071180309 48.2450432233332),POINT(11.6402552515504 48.2482989278208),,19287,20564,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20565_solar_2556087,BranchTee_mvgd_2534_lvgd_20565_32,PQ,POINT(11.644696838333 48.2486311371802),POINT(11.6402552515504 48.2482989278208),,19287,20565,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20542_solar_2556088,BranchTee_mvgd_2534_lvgd_20542_7,PQ,POINT(11.6026229271431 48.2591486253993),POINT(11.6402552515504 48.2482989278208),,19287,20542,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20545_solar_2556089,BranchTee_mvgd_2534_lvgd_20545_12,PQ,POINT(11.6065463580951 48.2554920127047),POINT(11.6402552515504 48.2482989278208),,19287,20545,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20554_solar_2556090,BranchTee_mvgd_2534_lvgd_20554_11,PQ,POINT(11.6139052501992 48.254034875435),POINT(11.6402552515504 48.2482989278208),,19287,20554,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_21198_solar_2556091,BranchTee_mvgd_2534_lvgd_21198_26,PQ,POINT(11.6430152935925 48.2383070976025),POINT(11.6402552515504 48.2482989278208),,19859,21198,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20568_solar_2556092,BranchTee_mvgd_2534_lvgd_20568_32,PQ,POINT(11.65209771039 48.2485206792809),POINT(11.6402552515504 48.2482989278208),,19287,20568,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20544_solar_2556093,BranchTee_mvgd_2534_lvgd_20544_18,PQ,POINT(11.6064749361471 48.2532432846075),POINT(11.6402552515504 48.2482989278208),,19287,20544,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20578_solar_2556094,BranchTee_mvgd_2534_lvgd_20578_96,PQ,POINT(11.6573770082543 48.2452918600575),POINT(11.6402552515504 48.2482989278208),,19287,20578,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20547_solar_2556095,BranchTee_mvgd_2534_lvgd_20547_148,PQ,POINT(11.6130315810015 48.2477482708336),POINT(11.6402552515504 48.2482989278208),,19287,20547,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_489468_solar_2556096,BranchTee_mvgd_2534_lvgd_489468_64,PQ,POINT(11.6394625285411 48.2325104128043),POINT(11.6402552515504 48.2482989278208),,24333,489468,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20581_solar_2556097,BranchTee_mvgd_2534_lvgd_20581_176,PQ,POINT(11.6597641574505 48.2565050057794),POINT(11.6402552515504 48.2482989278208),,19287,20581,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_449293_solar_2556098,BranchTee_mvgd_2534_lvgd_449293_2,PQ,POINT(11.6037576789459 48.231234953592),POINT(11.6402552515504 48.2482989278208),,23929,449293,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20552_solar_2556099,BranchTee_mvgd_2534_lvgd_20552_20,PQ,POINT(11.6137187277639 48.2481881883994),POINT(11.6402552515504 48.2482989278208),,19287,20552,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20571_solar_2556100,BranchTee_mvgd_2534_lvgd_20571_184,PQ,POINT(11.6539102874917 48.2421941070469),POINT(11.6402552515504 48.2482989278208),,19287,20571,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_21752_solar_2556101,Bus_Generator_2556101,PQ,POINT(11.6655769636444 48.2694662949),POINT(11.6402552515504 48.2482989278208),,20353,21752,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20554_solar_2556102,Bus_mvgd_2534_lvgd_20554_loa_6,PQ,POINT(11.6159670084862 48.2553545942634),POINT(11.6402552515504 48.2482989278208),,19287,20554,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20579_solar_2556103,BranchTee_mvgd_2534_lvgd_20579_208,PQ,POINT(11.6608884532392 48.2497387136905),POINT(11.6402552515504 48.2482989278208),,19287,20579,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20583_solar_2556104,Bus_Generator_2556104,PQ,POINT(11.6740738519514 48.2616885794842),POINT(11.6402552515504 48.2482989278208),,19287,20583,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20571_solar_2556105,BranchTee_mvgd_2534_lvgd_20571_208,PQ,POINT(11.6531934849144 48.2408549570718),POINT(11.6402552515504 48.2482989278208),,19287,20571,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20563_solar_2556106,BranchTee_mvgd_2534_lvgd_20563_66,PQ,POINT(11.6359939476844 48.2501102653206),POINT(11.6402552515504 48.2482989278208),,19287,20563,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_485299_solar_2556107,Bus_Generator_2556107,PQ,POINT(11.6639199818163 48.2600421531328),POINT(11.6402552515504 48.2482989278208),,19287,485299,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20572_solar_2556108,BranchTee_mvgd_2534_lvgd_20572_34,PQ,POINT(11.654027900908 48.245792030001),POINT(11.6402552515504 48.2482989278208),,19287,20572,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_21752_solar_2556109,Bus_Generator_2556109,PQ,POINT(11.6662945135789 48.2708053456061),POINT(11.6402552515504 48.2482989278208),,20353,21752,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20556_solar_2556110,BranchTee_mvgd_2534_lvgd_20556_58,PQ,POINT(11.6191875435471 48.2508078822181),POINT(11.6402552515504 48.2482989278208),,19287,20556,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20569_solar_2556111,BranchTee_mvgd_2534_lvgd_20569_4,PQ,POINT(11.6502113293687 48.2525985102062),POINT(11.6402552515504 48.2482989278208),,19287,20569,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20568_solar_2556112,BranchTee_mvgd_2534_lvgd_20568_154,PQ,POINT(11.6473880679444 48.248591028041),POINT(11.6402552515504 48.2482989278208),,19287,20568,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20555_solar_2556113,BranchTee_mvgd_2534_lvgd_20555_30,PQ,POINT(11.6211195904168 48.2480798062517),POINT(11.6402552515504 48.2482989278208),,19287,20555,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20554_solar_2556114,Bus_mvgd_2534_lvgd_20554_loa_4,PQ,POINT(11.6152510191461 48.2540152038488),POINT(11.6402552515504 48.2482989278208),,19287,20554,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20545_solar_2556115,BranchTee_mvgd_2534_lvgd_20545_10,PQ,POINT(11.6079207631031 48.2563719208755),POINT(11.6402552515504 48.2482989278208),,19287,20545,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20546_solar_2556116,BusBar_mvgd_2534_lvgd_20546_LV,PQ,POINT(11.6046703299648 48.2600188073147),POINT(11.6402552515504 48.2482989278208),,19287,20546,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20584_solar_2556117,BranchTee_mvgd_2534_lvgd_20584_68,PQ,POINT(11.6714414038103 48.2635282760364),POINT(11.6402552515504 48.2482989278208),,19287,20584,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_485299_solar_2556118,Bus_Generator_2556118,PQ,POINT(11.6672551072385 48.2590919488982),POINT(11.6402552515504 48.2482989278208),,19287,485299,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20560_solar_2556119,Bus_Generator_2556119,PQ,POINT(11.6279489291489 48.2511290498991),POINT(11.6402552515504 48.2482989278208),,19287,20560,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20578_solar_2556120,BranchTee_mvgd_2534_lvgd_20578_80,PQ,POINT(11.6607112881385 48.2443418494233),POINT(11.6402552515504 48.2482989278208),,19287,20578,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_27952_solar_2556121,BranchTee_mvgd_2534_lvgd_27952_2,PQ,POINT(11.6405016183114 48.223045771632),POINT(11.6402552515504 48.2482989278208),,23809,27952,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20563_solar_2556122,BranchTee_mvgd_2534_lvgd_20563_82,PQ,POINT(11.6367395336677 48.2523490052135),POINT(11.6402552515504 48.2482989278208),,19287,20563,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20577_solar_2556123,BranchTee_mvgd_2534_lvgd_20577_48,PQ,POINT(11.6593215432239 48.2430128554716),POINT(11.6402552515504 48.2482989278208),,19287,20577,0.013,2534,solar,solar,7,1133076
+Generator_LVGrid_20560_solar_2556124,Bus_Generator_2556124,PQ,POINT(11.6253153531849 48.2529676585446),POINT(11.6402552515504 48.2482989278208),,19287,20560,0.205,2534,solar,solar,6,1133076
+Generator_LVGrid_20559_solar_2556125,Bus_Generator_2556125,PQ,POINT(11.6258725767086 48.2493598090162),POINT(11.6402552515504 48.2482989278208),,19287,20559,0.205,2534,solar,solar,6,1133076
+Generator_LVGrid_20556_solar_2556126,Bus_Generator_2556126,PQ,POINT(11.6185290921888 48.2512674883929),POINT(11.6402552515504 48.2482989278208),,19287,20556,0.205,2534,solar,solar,6,1133076

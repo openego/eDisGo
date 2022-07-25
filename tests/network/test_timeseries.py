@@ -2224,6 +2224,98 @@ class TestTimeSeries:
                 caplog.clear()
                 setattr(self.edisgo.timeseries, attr, ts_tmp)
 
+    def test_drop_component_time_series(self):
+
+        time_series_obj = timeseries.TimeSeries()
+
+        # check that no error is raised in case of empty dataframe
+        time_series_obj.drop_component_time_series(
+            "loads_active_power", "Load1"
+        )
+
+        # add dummy time series
+        time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
+        df = pd.DataFrame(
+            data={
+                "load_1": [1.23, 2.0, 5.0, 6.0],
+                "load_2": [3.0, 4.0, 7.0, 8.0],
+            },
+            index=time_series_obj.timeindex,
+        )
+        time_series_obj.loads_active_power = df
+
+        # check with dropping one existing load and one non-existing load
+        time_series_obj.drop_component_time_series(
+            "loads_active_power", ["Load1", "load_1"]
+        )
+        assert time_series_obj.loads_active_power.shape == (4, 1)
+        assert "load_1" not in time_series_obj.loads_active_power.columns
+
+        # check with dropping all existing loads
+        time_series_obj.drop_component_time_series(
+            "loads_active_power", ["load_2"]
+        )
+        assert time_series_obj.loads_active_power.empty
+
+    def test_add_component_time_series(self):
+
+        time_series_obj = timeseries.TimeSeries()
+        time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
+
+        df = pd.DataFrame(
+            data={
+                "load_1": [1.23, 2.0, 5.0, 6.0],
+                "load_2": [3.0, 4.0, 7.0, 8.0],
+            },
+            index=time_series_obj.timeindex,
+        )
+
+        # check with matching time index
+        time_series_obj.add_component_time_series("loads_active_power", df)
+        assert time_series_obj.loads_active_power.shape == (4, 2)
+        assert "load_1" in time_series_obj.loads_active_power.columns
+
+        # check with time indexes that do not match
+        df = pd.DataFrame(
+            data={
+                "load_3": [5.0, 6.0],
+                "load_4": [7.0, 8.0],
+            },
+            index=time_series_obj.timeindex[0:2],
+        )
+        time_series_obj.add_component_time_series(
+            "loads_active_power", df.iloc[:2]
+        )
+        assert time_series_obj.loads_active_power.shape == (4, 4)
+        assert "load_3" in time_series_obj.loads_active_power.columns
+
+    def test_check_if_components_exist(self):
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+
+        # check all components exist
+        component_names = edisgo_obj.timeseries._check_if_components_exist(
+            edisgo_obj,
+            ["GeneratorFluctuating_15", "GeneratorFluctuating_24"],
+            "generators",
+        )
+        assert len(component_names) == 2
+        assert "GeneratorFluctuating_15" in component_names
+
+        # check no components exist
+        component_names = edisgo_obj.timeseries._check_if_components_exist(
+            edisgo_obj, ["Storage_3"], "storage_units"
+        )
+        assert len(component_names) == 0
+
+        # check some components exist
+        component_names = edisgo_obj.timeseries._check_if_components_exist(
+            edisgo_obj,
+            ["Load_residential_LVGrid_5_3", "Load_residential_LVGrid_5"],
+            "loads",
+        )
+        assert len(component_names) == 1
+        assert "Load_residential_LVGrid_5_3" in component_names
+
 
 class TestTimeSeriesRaw:
     @pytest.fixture(autouse=True)
@@ -2341,97 +2433,3 @@ class TestTimeSeriesRaw:
         )
 
         shutil.rmtree(save_dir)
-
-
-class TestTimeSeriesHelperFunctions:
-    def test_drop_component_time_series(self):
-
-        time_series_obj = timeseries.TimeSeries()
-
-        # check that no error is raised in case of empty dataframe
-        timeseries.drop_component_time_series(
-            time_series_obj, "loads_active_power", "Load1"
-        )
-
-        # add dummy time series
-        time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
-        df = pd.DataFrame(
-            data={
-                "load_1": [1.23, 2.0, 5.0, 6.0],
-                "load_2": [3.0, 4.0, 7.0, 8.0],
-            },
-            index=time_series_obj.timeindex,
-        )
-        time_series_obj.loads_active_power = df
-
-        # check with dropping one existing load and one non-existing load
-        timeseries.drop_component_time_series(
-            time_series_obj, "loads_active_power", ["Load1", "load_1"]
-        )
-        assert time_series_obj.loads_active_power.shape == (4, 1)
-        assert "load_1" not in time_series_obj.loads_active_power.columns
-
-        # check with dropping all existing loads
-        timeseries.drop_component_time_series(
-            time_series_obj, "loads_active_power", ["load_2"]
-        )
-        assert time_series_obj.loads_active_power.empty
-
-    def test_add_component_time_series(self):
-
-        time_series_obj = timeseries.TimeSeries()
-        time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
-
-        df = pd.DataFrame(
-            data={
-                "load_1": [1.23, 2.0, 5.0, 6.0],
-                "load_2": [3.0, 4.0, 7.0, 8.0],
-            },
-            index=time_series_obj.timeindex,
-        )
-
-        # check with matching time index
-        timeseries._add_component_time_series(time_series_obj, "loads_active_power", df)
-        assert time_series_obj.loads_active_power.shape == (4, 2)
-        assert "load_1" in time_series_obj.loads_active_power.columns
-
-        # check with time indexes that do not match
-        df = pd.DataFrame(
-            data={
-                "load_3": [5.0, 6.0],
-                "load_4": [7.0, 8.0],
-            },
-            index=time_series_obj.timeindex[0:2],
-        )
-        timeseries._add_component_time_series(
-            time_series_obj, "loads_active_power", df.iloc[:2]
-        )
-        assert time_series_obj.loads_active_power.shape == (4, 4)
-        assert "load_3" in time_series_obj.loads_active_power.columns
-
-    def test_check_if_components_exist(self):
-        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-
-        # check all components exist
-        component_names = timeseries._check_if_components_exist(
-            edisgo_obj,
-            ["GeneratorFluctuating_15", "GeneratorFluctuating_24"],
-            "generators",
-        )
-        assert len(component_names) == 2
-        assert "GeneratorFluctuating_15" in component_names
-
-        # check no components exist
-        component_names = timeseries._check_if_components_exist(
-            edisgo_obj, ["Storage_3"], "storage_units"
-        )
-        assert len(component_names) == 0
-
-        # check some components exist
-        component_names = timeseries._check_if_components_exist(
-            edisgo_obj,
-            ["Load_residential_LVGrid_5_3", "Load_residential_LVGrid_5"],
-            "loads",
-        )
-        assert len(component_names) == 1
-        assert "Load_residential_LVGrid_5_3" in component_names
