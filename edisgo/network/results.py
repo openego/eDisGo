@@ -818,7 +818,8 @@ class Results:
 
         Returns
         -------
-        bool: True if equality check is successful, False otherwise.
+        bool
+            True if equality check is successful, False otherwise.
 
         """
 

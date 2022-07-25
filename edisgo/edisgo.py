@@ -742,18 +742,18 @@ class EDisGo:
                 from the linear power flow.
             * 'iteration'
                 Power flow analysis is conducted by reducing all power values of
-                generators and loads to a fraction, e.g. 10%, solve the load flow and
-                use it as a seed for the power at 20%, iteratively up to 100%.
+                generators and loads to a fraction, e.g. 10%, solving the load flow and
+                using it as a seed for the power at 20%, iteratively up to 100%.
 
         range_start : float, optional
             Specifies the minimum fraction that power values are set to when using
             troubleshooting_mode 'iteration'. Must be between 0 and 1.
-            Default 0.1.
+            Default: 0.1.
 
         range_num : int, optional
             Specifies the number of fraction samples to generate when using
             troubleshooting_mode 'iteration'. Must be non-negative.
-            Default 10.
+            Default: 10.
 
         Other Parameters
         -----------------
