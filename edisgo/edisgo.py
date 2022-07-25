@@ -1312,8 +1312,12 @@ class EDisGo:
         Imports electromobility data and integrates charging points into grid.
 
         So far, this function requires electromobility data from
-        `SimBEV <https://github.com/rl-institut/simbev>`_ and
-        `TracBEV <https://github.com/rl-institut/tracbev>`_ to be stored in the
+        `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
+        `<3083c5a https://github.com/rl-institut/simbev/commit/
+        86076c936940365587c9fba98a5b774e13083c5a>`_) and
+        `TracBEV <https://github.com/rl-institut/tracbev>`_ (required version:
+        `14d864c <https://github.com/rl-institut/tracbev/commit/
+        03e335655770a377166c05293a966052314d864c>`_) to be stored in the
         directories specified through the parameters `simbev_directory` and
         `tracbev_directory`. SimBEV provides data on standing times, charging demand,
         etc. per vehicle, whereas TracBEV provides potential charging point locations.
