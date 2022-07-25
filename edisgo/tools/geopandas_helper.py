@@ -164,12 +164,12 @@ class GeoPandasGridContainer:
 
 def to_geopandas(grid_obj: Grid):
     """
-    Translates all DataFrames with geolocations within a Grid class to GeoDataFrames
+    Translates all DataFrames with geolocations within a Grid class to GeoDataFrames.
 
     Parameters
     ----------
     grid_obj : :class:`~.network.grids.Grid`
-        Grid object to transform
+        Grid object to transform.
 
     Returns
     -------

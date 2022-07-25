@@ -141,7 +141,7 @@ class TestQControl:
         assert pf.shape == (3,)
         assert np.isclose(
             pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
-            [0.98, 0.98, 0.98],
+            [1.0, 1.0, 1.0],
         ).all()
 
         # test for component_type="storage_units"
@@ -206,7 +206,7 @@ class TestQControl:
         assert pf.shape == (3,)
         assert np.isclose(
             pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
-            [-1.0, -1.0, -1.0],
+            [1.0, 1.0, 1.0],
         ).all()
 
         # test for component_type="storage_units"

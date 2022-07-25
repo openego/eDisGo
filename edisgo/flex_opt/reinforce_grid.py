@@ -190,7 +190,6 @@ def reinforce_grid(
         if mode == "mv"
         else checks.mv_lv_station_load(edisgo_reinforce)
     )
-
     logger.debug("==> Check line load.")
 
     crit_lines = (

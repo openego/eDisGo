@@ -61,6 +61,8 @@ we would be happy if you let us know about your experience!
 Requirements for edisgoOPF package
 ----------------------------------
 
+.. warning:: The non-linear optimal power flow is currently not maintained and might not work out of the box!
+
 To use the multiperiod optimal power flow that is provided in the julia package
 edisgoOPF in eDisGo you additionally need to install julia version 1.1.1.
 Download julia from

@@ -43,15 +43,40 @@ class TestElectromobility:
         assert isinstance(electromobility.eta_charging_points, float)
         assert isinstance(electromobility.simulated_days, int)
         assert isinstance(electromobility.stepsize, int)
-        assert len(electromobility.grid_connections_gdf.columns) == 4
-        # There should be as many grid connections as potential charging parks
-        assert len(electromobility.grid_connections_gdf) == len(
+        assert len(electromobility.potential_charging_parks_gdf.columns) == 4
+        # There should be as many potential charging parks in the DataFrame as in the
+        # generator object
+        assert len(electromobility.potential_charging_parks_gdf) == len(
             list(electromobility.potential_charging_parks)
         )
 
     def test_distribute_charging_demand(self):
 
+        # test user friendly
         distribute_charging_demand(self.edisgo_obj)
+
+        electromobility = self.edisgo_obj.electromobility
+
+        total_charging_demand_at_charging_parks = sum(
+            cp.charging_processes_df.chargingdemand_kWh.sum()
+            for cp in list(electromobility.potential_charging_parks)
+            if cp.designated_charging_point_capacity > 0
+        )
+
+        total_charging_demand = (
+            electromobility.charging_processes_df.chargingdemand_kWh.sum()
+        )
+
+        assert round(total_charging_demand_at_charging_parks, 0) == round(
+            total_charging_demand, 0
+        )
+
+        # test grid friendly
+        self.edisgo_obj = import_edisgo_from_files(
+            self.ding0_path, import_topology=True, import_timeseries=True
+        )
+        import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
+        distribute_charging_demand(self.edisgo_obj, mode="grid_friendly")
 
         electromobility = self.edisgo_obj.electromobility
 
@@ -98,20 +123,11 @@ class TestElectromobility:
             == len(integrated_charging_parks)
             == len(electromobility.integrated_charging_parks_df)
         )
-        assert len(integrated_charging_parks) == len(
-            ts.charging_points_active_power(self.edisgo_obj).columns
-        )
-        assert len(integrated_charging_parks) == len(
-            ts.charging_points_reactive_power(self.edisgo_obj).columns
-        )
 
         edisgo_ids_cp = sorted(cp.edisgo_id for cp in integrated_charging_parks)
-        edisgo_ids_ts = sorted(
-            ts.charging_points_active_power(self.edisgo_obj).columns.tolist()
-        )
         edisgo_ids_topology = sorted(topology.charging_points_df.index.tolist())
 
-        assert edisgo_ids_cp == edisgo_ids_ts == edisgo_ids_topology
+        assert edisgo_ids_cp == edisgo_ids_topology
 
     def test_charging_strategy(self):
         charging_demand_lst = []

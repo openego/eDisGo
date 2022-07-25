@@ -1,10 +1,12 @@
 import logging
 import math
+import os
 
 from abc import ABC, abstractmethod
 from math import acos, tan
 
-from shapely.geometry import Point
+if "READTHEDOCS" not in os.environ:
+    from shapely.geometry import Point
 
 from edisgo.io.electromobility_import import determine_grid_connection_capacity
 from edisgo.tools.geo import find_nearest_bus
@@ -993,25 +995,26 @@ class PotentialChargingParks(BasicComponent):
 
         Returns
         --------
-        :obj:`int`
+        int
             AGS number
 
         """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[self._id, "ags"]
+        return self._edisgo_obj.electromobility.potential_charging_parks_gdf.at[
+            self._id, "ags"
+        ]
 
     @property
     def use_case(self):
         """
-        Charging use case (home, work, public or hpc) of the potential
-        charging park.
+        Charging use case (home, work, public or hpc) of the potential charging park.
 
         Returns
         --------
-        :obj:`str`
+        str
             Charging use case
 
         """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[
+        return self._edisgo_obj.electromobility.potential_charging_parks_gdf.at[
             self._id, "use_case"
         ]
 
@@ -1019,11 +1022,12 @@ class PotentialChargingParks(BasicComponent):
     def designated_charging_point_capacity(self):
         """
         Total gross designated charging park capacity.
+
         This is not necessarily equal to the connection rating.
 
         Returns
         --------
-        :obj:`float`
+        float
             Total gross designated charging park capacity
 
         """
@@ -1043,11 +1047,11 @@ class PotentialChargingParks(BasicComponent):
 
         Returns
         --------
-        :obj:`float`
+        float
             User centric weight
 
         """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[
+        return self._edisgo_obj.electromobility.potential_charging_parks_gdf.at[
             self._id, "user_centric_weight"
         ]
 
@@ -1060,10 +1064,10 @@ class PotentialChargingParks(BasicComponent):
         Returns
         --------
         :shapely:`Shapely Point object<points>`.
-            Location of the potential charging park
+            Location of the potential charging park.
 
         """
-        return self._edisgo_obj.electromobility.grid_connections_gdf.at[
+        return self._edisgo_obj.electromobility.potential_charging_parks_gdf.at[
             self._id, "geometry"
         ]
 
@@ -1085,6 +1089,8 @@ class PotentialChargingParks(BasicComponent):
         """
         substations = self._topology.buses_df.loc[self._topology.transformers_df.bus1]
 
+        if self.geometry.y > 90:
+            print("break")
         nearest_substation, distance = find_nearest_bus(self.geometry, substations)
 
         lv_grid_id = int(self._topology.buses_df.at[nearest_substation, "lv_grid_id"])
@@ -1107,15 +1113,14 @@ class PotentialChargingParks(BasicComponent):
     @property
     def charging_processes_df(self):
         """
-        Determines designated charging processes for the potential charging
-        park.
+        Determines designated charging processes for the potential charging park.
 
         Returns
         --------
         :pandas:`pandas.DataFrame<DataFrame>`
             DataFrame with AGS, car ID, trip destination, charging use case
             (private or public), netto charging capacity, charging demand,
-            charge start, charge end, grid connection point and charging point
+            charge start, charge end, potential charging park ID and charging point
             ID.
 
         """
@@ -1136,8 +1141,8 @@ class PotentialChargingParks(BasicComponent):
     @property
     def within_grid(self):
         """
-        Deetermines if the potential charging park lays within the grid
-        district.
+        Determines if the potential charging park is located within the grid district.
+
         """
         return self._edisgo_obj.topology.grid_district["geom"].contains(self.geometry)
 
@@ -1155,39 +1160,4 @@ class PotentialChargingParks(BasicComponent):
             ]
             .groupby(by="charging_point_id")
             .max()
-        )
-
-    @property
-    def _load_and_generator_capacity_weight(self, **kwargs):
-        """
-        Determines grid centric weight regarding load and generator capacity
-        in LV Grid.
-
-        Returns
-        --------
-        :obj:`float`
-            Grid centric weight regarding load and generator capacity in LV
-            Grid
-        """
-        generators_weight_factor = kwargs.get("generators_weight_factor", 1 / 2)
-        loads_weight_factor = kwargs.get("loads_weight_factor", 1 / 2)
-
-        weights = (loads_weight_factor, generators_weight_factor)
-
-        if not round(sum(weights), 3) == 1:
-            f = 1 / sum(weights)
-            generators_weight_factor *= f
-            loads_weight_factor *= f
-
-        generators_weight_value = self._topology.lv_grids_df.at[
-            self.nearest_substation["lv_grid_id"], "generators_weight"
-        ]
-
-        loads_weight_value = self._topology.lv_grids_df.at[
-            self.nearest_substation["lv_grid_id"], "loads_weight"
-        ]
-
-        return (
-            generators_weight_value * generators_weight_factor
-            + loads_weight_value * loads_weight_factor
         )

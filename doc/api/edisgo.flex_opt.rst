@@ -1,9 +1,6 @@
 edisgo.flex\_opt package
 ========================
 
-Submodules
-----------
-
 edisgo.flex\_opt.charging\_strategies module
 --------------------------------------------
 
@@ -28,14 +25,6 @@ edisgo.flex\_opt.costs module
    :undoc-members:
    :show-inheritance:
 
-edisgo.flex\_opt.curtailment module
------------------------------------
-
-.. automodule:: edisgo.flex_opt.curtailment
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 edisgo.flex\_opt.exceptions module
 ----------------------------------
 
@@ -45,7 +34,7 @@ edisgo.flex\_opt.exceptions module
    :show-inheritance:
 
 edisgo.flex\_opt.q\_control module
-----------------------------------
+-----------------------------------
 
 .. automodule:: edisgo.flex_opt.q_control
    :members:
@@ -64,22 +53,6 @@ edisgo.flex\_opt.reinforce\_measures module
 -------------------------------------------
 
 .. automodule:: edisgo.flex_opt.reinforce_measures
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-edisgo.flex\_opt.storage\_positioning module
---------------------------------------------
-
-.. automodule:: edisgo.flex_opt.storage_positioning
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
----------------
-
-.. automodule:: edisgo.flex_opt
    :members:
    :undoc-members:
    :show-inheritance:
