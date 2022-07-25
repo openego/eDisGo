@@ -420,7 +420,7 @@ class TimeSeries:
         if ts_generators is not None:
             # check if all generators time series are provided for exist in the network
             # and only set time series for those that do
-            comps_in_network = _check_if_components_exist(
+            comps_in_network = self._check_if_components_exist(
                 edisgo_object, ts_generators.columns, "generators"
             )
             ts_generators = ts_generators.loc[:, comps_in_network]
@@ -428,16 +428,16 @@ class TimeSeries:
             # drop generators time series from self.generators_(re)active_power that may
             # already exist for some of the given generators
             df_name = f"generators_{mode}_power"
-            drop_component_time_series(
-                obj=self, df_name=df_name, comp_names=ts_generators.columns
+            self.drop_component_time_series(
+                df_name=df_name, comp_names=ts_generators.columns
             )
             # set (re)active power
-            _add_component_time_series(obj=self, df_name=df_name, ts_new=ts_generators)
+            self.add_component_time_series(df_name=df_name, ts_new=ts_generators)
 
         if ts_loads is not None:
             # check if all loads time series are provided for exist in the network
             # and only set time series for those that do
-            comps_in_network = _check_if_components_exist(
+            comps_in_network = self._check_if_components_exist(
                 edisgo_object, ts_loads.columns, "loads"
             )
             ts_loads = ts_loads.loc[:, comps_in_network]
@@ -445,16 +445,16 @@ class TimeSeries:
             # drop load time series from self.loads_(re)active_power that may
             # already exist for some of the given loads
             df_name = f"loads_{mode}_power"
-            drop_component_time_series(
-                obj=self, df_name=df_name, comp_names=ts_loads.columns
+            self.drop_component_time_series(
+                df_name=df_name, comp_names=ts_loads.columns
             )
             # set (re)active power
-            _add_component_time_series(obj=self, df_name=df_name, ts_new=ts_loads)
+            self.add_component_time_series(df_name=df_name, ts_new=ts_loads)
 
         if ts_storage_units is not None:
             # check if all storage units time series are provided for exist in the
             # network and only set time series for those that do
-            comps_in_network = _check_if_components_exist(
+            comps_in_network = self._check_if_components_exist(
                 edisgo_object, ts_storage_units.columns, "storage_units"
             )
             ts_storage_units = ts_storage_units.loc[:, comps_in_network]
@@ -462,12 +462,12 @@ class TimeSeries:
             # drop storage unit time series from self.storage_units_(re)active_power
             # that may already exist for some of the given storage units
             df_name = f"storage_units_{mode}_power"
-            drop_component_time_series(
-                obj=self, df_name=df_name, comp_names=ts_storage_units.columns
+            self.drop_component_time_series(
+                df_name=df_name, comp_names=ts_storage_units.columns
             )
             # set (re)active power
-            _add_component_time_series(
-                obj=self, df_name=df_name, ts_new=ts_storage_units
+            self.add_component_time_series(
+                df_name=df_name, ts_new=ts_storage_units
             )
 
     def set_worst_case(
@@ -624,10 +624,10 @@ class TimeSeries:
             ts_dict = {f"{comp_type}_active_power": p, f"{comp_type}_reactive_power": q}
             for k, v in ts_dict.items():
                 # drop previously set time series
-                drop_component_time_series(obj=self, df_name=k, comp_names=v.columns)
+                self.drop_component_time_series(
+                    df_name=k, comp_names=v.columns)
                 # set time series
-                _add_component_time_series(
-                    obj=self,
+                self.add_component_time_series(
                     df_name=k,
                     ts_new=v.rename(index=self.timeindex_worst_cases),
                 )
@@ -680,7 +680,7 @@ class TimeSeries:
         if generators_names is None:
             generators_df = edisgo_object.topology.generators_df
         else:
-            generators_names = _check_if_components_exist(
+            generators_names = self._check_if_components_exist(
                 edisgo_object, generators_names, "generators"
             )
             generators_df = edisgo_object.topology.generators_df.loc[
@@ -697,7 +697,7 @@ class TimeSeries:
         if loads_names is None:
             loads_df = edisgo_object.topology.loads_df
         else:
-            loads_names = _check_if_components_exist(
+            loads_names = self._check_if_components_exist(
                 edisgo_object, loads_names, "loads"
             )
             loads_df = edisgo_object.topology.loads_df.loc[loads_names, :]
@@ -747,7 +747,7 @@ class TimeSeries:
         if storage_units_names is None:
             storage_units_df = edisgo_object.topology.storage_units_df
         else:
-            storage_units_names = _check_if_components_exist(
+            storage_units_names = self._check_if_components_exist(
                 edisgo_object, storage_units_names, "storage_units"
             )
             storage_units_df = edisgo_object.topology.storage_units_df.loc[
@@ -1273,14 +1273,14 @@ class TimeSeries:
                 generator_names = edisgo_object.topology.generators_df[
                     edisgo_object.topology.generators_df.type.isin(technologies)
                 ].index
-        generator_names = _check_if_components_exist(
+        generator_names = self._check_if_components_exist(
             edisgo_object, generator_names, "generators"
         )
         generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
 
         # drop existing time series
-        drop_component_time_series(
-            obj=self, df_name="generators_active_power", comp_names=generator_names
+        self.drop_component_time_series(
+            df_name="generators_active_power", comp_names=generator_names
         )
 
         # scale time series by nominal power
@@ -1369,14 +1369,14 @@ class TimeSeries:
                         ts_generators.columns
                     )
                 ].index
-        generator_names = _check_if_components_exist(
+        generator_names = self._check_if_components_exist(
             edisgo_object, generator_names, "generators"
         )
         generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
 
         # drop existing time series
-        drop_component_time_series(
-            obj=self, df_name="generators_active_power", comp_names=generator_names
+        self.drop_component_time_series(
+            df_name="generators_active_power", comp_names=generator_names
         )
 
         # scale time series by nominal power
@@ -1460,12 +1460,12 @@ class TimeSeries:
             load_names = edisgo_object.topology.loads_df[
                 edisgo_object.topology.loads_df.sector.isin(sectors)
             ].index
-        load_names = _check_if_components_exist(edisgo_object, load_names, "loads")
+        load_names = self._check_if_components_exist(edisgo_object, load_names, "loads")
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
 
         # drop existing time series
-        drop_component_time_series(
-            obj=self, df_name="loads_active_power", comp_names=load_names
+        self.drop_component_time_series(
+            df_name="loads_active_power", comp_names=load_names
         )
 
         # scale time series by annual consumption
@@ -1523,7 +1523,7 @@ class TimeSeries:
             load_names = edisgo_object.topology.loads_df[
                 edisgo_object.topology.loads_df.sector.isin(sectors)
             ].index
-        load_names = _check_if_components_exist(edisgo_object, load_names, "loads")
+        load_names = self._check_if_components_exist(edisgo_object, load_names, "loads")
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
 
         # check if all loads are charging points and throw warning if not
@@ -1534,8 +1534,8 @@ class TimeSeries:
             )
 
         # drop existing time series
-        drop_component_time_series(
-            obj=self, df_name="loads_active_power", comp_names=load_names
+        self.drop_component_time_series(
+            df_name="loads_active_power", comp_names=load_names
         )
 
         # scale time series by nominal power
@@ -1638,7 +1638,7 @@ class TimeSeries:
                 components_names = list(
                     itertools.chain.from_iterable(parametrisation.components)
                 )
-                components_names = _check_if_components_exist(
+                components_names = self._check_if_components_exist(
                     edisgo_object, components_names, type
                 )
                 # set up series with sign of reactive power and power factors
@@ -1719,8 +1719,8 @@ class TimeSeries:
             )
 
             # drop existing time series
-            drop_component_time_series(
-                obj=self, df_name=f"{type}_reactive_power", comp_names=components_names
+            self.drop_component_time_series(
+                df_name=f"{type}_reactive_power", comp_names=components_names
             )
 
             return q_sign, power_factor
@@ -2061,6 +2061,92 @@ class TimeSeries:
                         f"{attr} has duplicated columns: {duplicated_labels}"
                     )
 
+    def drop_component_time_series(self, df_name, comp_names):
+        """
+        Drop component time series.
+
+        Parameters
+        ----------
+        df_name : str
+            Name of attribute of given object holding the dataframe to remove columns
+            from. Can e.g. be "generators_active_power" if time series should be removed
+            from :attr:`~.network.timeseries.TimeSeries.generators_active_power`.
+        comp_names: str or list(str)
+            Names of components to drop.
+
+        """
+        if isinstance(comp_names, str):
+            comp_names = [comp_names]
+        # drop existing time series of component
+        setattr(
+            self,
+            df_name,
+            getattr(self, df_name).drop(
+                getattr(self, df_name).columns[
+                    getattr(self, df_name).columns.isin(comp_names)
+                ],
+                axis=1,
+            ),
+        )
+
+    def add_component_time_series(self, df_name, ts_new):
+        """
+        Add component time series.
+
+        Parameters
+        ----------
+        df_name : str
+            Name of attribute of given object holding the dataframe to add columns to.
+            Can e.g. be "generators_active_power" if time series should be added to
+            :attr:`~.network.timeseries.TimeSeries.generators_active_power`.
+        ts_new : :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with new time series to add to existing time series dataframe.
+
+        """
+        setattr(
+            self,
+            df_name,
+            pd.concat(
+                [getattr(self, df_name), ts_new],
+                axis=1,
+            ),
+        )
+
+    def _check_if_components_exist(
+            self, edisgo_object, component_names, component_type):
+        """
+        Checks if all provided components exist in the network.
+
+        Raises warning if there any provided components that are not in the network.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        component_names : list(str)
+            Names of components for which time series are added.
+        component_type : str
+            The component type for which time series are added.
+            Possible options are 'generators', 'storage_units', 'loads'.
+
+        Returns
+        --------
+        set(str)
+            Returns a set of all provided components that are in the network.
+
+        """
+        comps_in_network = getattr(edisgo_object.topology, f"{component_type}_df").index
+
+        comps_not_in_network = list(set(component_names) - set(comps_in_network))
+
+        if comps_not_in_network:
+            logging.warning(
+                f"Some of the provided {component_type} are not in the network. This "
+                f"concerns the following components: {comps_not_in_network}."
+            )
+
+            return set(component_names) - set(comps_not_in_network)
+        return component_names
+
 
 class TimeSeriesRaw:
     """
@@ -2229,97 +2315,3 @@ class TimeSeriesRaw:
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
         self._timeindex = timeindex
-
-
-def drop_component_time_series(obj, df_name, comp_names):
-    """
-    Drop component time series.
-
-    Parameters
-    ----------
-    obj : obj
-        Object with attr `df_name` to remove columns from. Can e.g. be
-        :class:`~.network.timeseries.TimeSeries`.
-    df_name : str
-        Name of attribute of given object holding the dataframe to remove columns from.
-        Can e.g. be "generators_active_power" if time series should be removed from
-        :attr:`~.network.timeseries.TimeSeries.generators_active_power`.
-    comp_names: str or list(str)
-        Names of components to drop.
-
-    """
-    if isinstance(comp_names, str):
-        comp_names = [comp_names]
-    # drop existing time series of component
-    setattr(
-        obj,
-        df_name,
-        getattr(obj, df_name).drop(
-            getattr(obj, df_name).columns[
-                getattr(obj, df_name).columns.isin(comp_names)
-            ],
-            axis=1,
-        ),
-    )
-
-
-def _add_component_time_series(obj, df_name, ts_new):
-    """
-    Add component time series.
-
-    Parameters
-    ----------
-    obj : obj
-        Object with attr `df_name` to add columns to. Can e.g. be
-        :class:`~.network.timeseries.TimeSeries`.
-    df_name : str
-        Name of attribute of given object holding the dataframe to add columns to.
-        Can e.g. be "generators_active_power" if time series should be added to
-        :attr:`~.network.timeseries.TimeSeries.generators_active_power`.
-    ts_new : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with new time series to add to existing time series dataframe.
-
-    """
-    setattr(
-        obj,
-        df_name,
-        pd.concat(
-            [getattr(obj, df_name), ts_new],
-            axis=1,
-        ),
-    )
-
-
-def _check_if_components_exist(edisgo_object, component_names, component_type):
-    """
-    Checks if all provided components exist in the network.
-
-    Raises warning if there any provided components that are not in the network.
-
-    Parameters
-    ----------
-    edisgo_object : :class:`~.EDisGo`
-    component_names : list(str)
-        Names of components for which time series are added.
-    component_type : str
-        The component type for which time series are added.
-        Possible options are 'generators', 'storage_units', 'loads'.
-
-    Returns
-    --------
-    set(str)
-        Returns a set of all provided components that are in the network.
-
-    """
-    comps_in_network = getattr(edisgo_object.topology, f"{component_type}_df").index
-
-    comps_not_in_network = list(set(component_names) - set(comps_in_network))
-
-    if comps_not_in_network:
-        logging.warning(
-            f"Some of the provided {component_type} are not in the network. This "
-            f"concerns the following components: {comps_not_in_network}."
-        )
-
-        return set(component_names) - set(comps_not_in_network)
-    return component_names
