@@ -995,7 +995,7 @@ class PotentialChargingParks(BasicComponent):
 
         Returns
         --------
-        :obj:`int`
+        int
             AGS number
 
         """
@@ -1006,12 +1006,11 @@ class PotentialChargingParks(BasicComponent):
     @property
     def use_case(self):
         """
-        Charging use case (home, work, public or hpc) of the potential
-        charging park.
+        Charging use case (home, work, public or hpc) of the potential charging park.
 
         Returns
         --------
-        :obj:`str`
+        str
             Charging use case
 
         """
@@ -1023,11 +1022,12 @@ class PotentialChargingParks(BasicComponent):
     def designated_charging_point_capacity(self):
         """
         Total gross designated charging park capacity.
+
         This is not necessarily equal to the connection rating.
 
         Returns
         --------
-        :obj:`float`
+        float
             Total gross designated charging park capacity
 
         """
@@ -1047,7 +1047,7 @@ class PotentialChargingParks(BasicComponent):
 
         Returns
         --------
-        :obj:`float`
+        float
             User centric weight
 
         """
@@ -1064,7 +1064,7 @@ class PotentialChargingParks(BasicComponent):
         Returns
         --------
         :shapely:`Shapely Point object<points>`.
-            Location of the potential charging park
+            Location of the potential charging park.
 
         """
         return self._edisgo_obj.electromobility.potential_charging_parks_gdf.at[
@@ -1113,8 +1113,7 @@ class PotentialChargingParks(BasicComponent):
     @property
     def charging_processes_df(self):
         """
-        Determines designated charging processes for the potential charging
-        park.
+        Determines designated charging processes for the potential charging park.
 
         Returns
         --------
@@ -1142,8 +1141,8 @@ class PotentialChargingParks(BasicComponent):
     @property
     def within_grid(self):
         """
-        Deetermines if the potential charging park lays within the grid
-        district.
+        Determines if the potential charging park is located within the grid district.
+
         """
         return self._edisgo_obj.topology.grid_district["geom"].contains(self.geometry)
 

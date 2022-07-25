@@ -2492,7 +2492,7 @@ class Topology:
 
     def to_geopandas(self, mode: str = "mv"):
         """
-        Returns components as :geopandas:`GeoDataFrame`\\ s
+        Returns components as :geopandas:`GeoDataFrame`\\ s.
 
         Returns container with :geopandas:`GeoDataFrame`\\ s containing all
         georeferenced components within the grid.
