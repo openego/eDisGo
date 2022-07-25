@@ -1027,8 +1027,9 @@ def determine_grid_connection_capacity(
 
 def integrate_charging_parks(edisgo_obj):
     """
-    Integrates all designated charging parks into the grid. The charging demand
-    is not integrated here, but an empty dummy timeseries is generated.
+    Integrates all designated charging parks into the grid.
+
+    The charging time series at each charging park are not set in this function.
 
     Parameters
     ----------

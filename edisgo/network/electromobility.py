@@ -65,7 +65,12 @@ COLUMNS = {
 
 class Electromobility:
     """
-    Electromobility base class
+    Data container for all electromobility data.
+
+    This class holds data on charging processes (how long cars are parking at a
+    charging station, how much they need to charge, etc.) necessary to apply different
+    charging strategies, as well as information on potential charging sites and
+    integrated charging parks.
 
     """
 
@@ -245,7 +250,7 @@ class Electromobility:
         """
         Mapping DataFrame to map the charging park ID to the internal eDisGo ID.
 
-        The eDisGo ID is determined when integrating components per
+        The eDisGo ID is determined when integrating components using
         :func:`~.EDisGo.add_component` or
         :func:`~.EDisGo.integrate_component_based_on_geolocation` method.
 

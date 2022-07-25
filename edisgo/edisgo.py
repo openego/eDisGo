@@ -1406,38 +1406,63 @@ class EDisGo:
 
         integrate_charging_parks(self)
 
-    def charging_strategy(self, strategy="dumb", **kwargs):
+    def apply_charging_strategy(self, strategy="dumb", **kwargs):
         """
-        Calculates the timeseries per charging park for a given charging strategy.
+        Applies charging strategy to set EV charging time series at charging parks.
+
+        This function requires that standing times, charging demand, etc. at
+        charging parks were previously set using
+        :attr:`~.edisgo.EDisGo.import_electromobility`.
+
+        It is assumed that only 'private' charging processes at 'home' or at 'work' can
+        be flexibilized. 'public' charging processes will always be 'dumb'.
+
+        The charging time series at each charging parks are written to
+        :attr:`~.network.timeseries.TimeSeries.loads_active_power`. Reactive power
+        in :attr:`~.network.timeseries.TimeSeries.loads_reactive_power` is
+        set to 0 Mvar.
 
         Parameters
         ----------
         strategy : str
-            The charging strategy. Default "dumb". Only "private" charging
-            processes at "home" or at "work" can be flexibilized. "public" charging
-            processes will always be "dumb". For now the following charging
+            Defines the charging strategy to apply. The following charging
             strategies are valid:
-            * "dumb": The cars are charged directly after arrival with the
-            maximum possible charging capacity.
-            * "reduced": The cars are charged directly after arrival with the
-            minimum possible charging capacity. The minimum possible charging
-            capacity is determined by the parking time and the
-            minimum_charging_capacity_factor.
-            * "residual": The cars are charged when the residual load in the MV
-            grid is at it's lowest (high generation and low consumption).
-            Charging processes with a low flexibility band are given priority.
-        kwargs :
-            timestamp_share_threshold : float
-                Percental threshold of the time required at a time step for charging
-                the vehicle. If the time requirement is below this limit, then the
-                charging process is not mapped into the time series. If, however, it is
-                above this limit, the time step is mapped to 100% into the time series.
-                This prevents differences between the charging strategies and creates a
-                compromise between the simultaneity of charging processes and an
-                artificial increase in the charging demand. Default 0.2
-            minimum_charging_capacity_factor : float
-                Technical percental minimum charging capacity per charging point.
-                Default 0.1
+
+            * 'dumb'
+
+                The cars are charged directly after arrival with the
+                maximum possible charging capacity.
+
+            * 'reduced'
+
+                The cars are charged directly after arrival with the
+                minimum possible charging power. The minimum possible charging
+                power is determined by the parking time and the parameter
+                `minimum_charging_capacity_factor`.
+
+            * 'residual'
+
+                The cars are charged when the residual load in the MV
+                grid is lowest (high generation and low consumption).
+                Charging processes with a low flexibility are given priority.
+
+            Default: 'dumb'.
+
+        Other Parameters
+        ------------------
+        timestamp_share_threshold : float
+            Percental threshold of the time required at a time step for charging
+            the vehicle. If the time requirement is below this limit, then the
+            charging process is not mapped into the time series. If, however, it is
+            above this limit, the time step is mapped to 100% into the time series.
+            This prevents differences between the charging strategies and creates a
+            compromise between the simultaneity of charging processes and an
+            artificial increase in the charging demand. Default: 0.2.
+        minimum_charging_capacity_factor : float
+            Technical minimum charging power of charging points in p.u. used in case of
+            charging strategy 'reduced'. E.g. for a charging point with a nominal
+            capacity of 22 kW and a minimum_charging_capacity_factor of 0.1 this would
+            result in a minimum charging power of 2.2 kW. Default: 0.1.
 
         """
         charging_strategy(self, strategy=strategy, **kwargs)
