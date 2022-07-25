@@ -1143,7 +1143,70 @@ class EDisGo:
         Components can be lines or buses as well as generators, loads, or storage units.
         If drop_ts is set to True, time series of elements are deleted as well.
 
-        Be aware that by aggregating components you lose some information
+        Parameters
+        ----------
+        comp_type : str
+            Type of removed component.  Can be 'bus', 'line', 'load', 'generator', or
+            'storage_unit'.
+        comp_name : str
+            Name of component to be removed.
+        drop_ts : bool
+            Indicator if time series for component are removed as well. Defaults
+            to True.
+
+        """
+        # Todo: change into remove_components, when add_component is changed into
+        #    add_components, to allow removal of several components at a time
+
+        if comp_type == "bus":
+            self.topology.remove_bus(comp_name)
+
+        elif comp_type == "line":
+            self.topology.remove_line(comp_name)
+
+        elif comp_type == "load":
+            self.topology.remove_load(comp_name)
+            if drop_ts:
+                for ts in ["active_power", "reactive_power"]:
+                    self.timeseries.drop_component_time_series(
+                        df_name=f"loads_{ts}", comp_names=comp_name
+                    )
+
+        elif comp_type == "generator":
+            self.topology.remove_generator(comp_name)
+            if drop_ts:
+                for ts in ["active_power", "reactive_power"]:
+                    self.timeseries.drop_component_time_series(
+                        df_name=f"generators_{ts}",
+                        comp_names=comp_name,
+                    )
+
+        elif comp_type == "storage_unit":
+            self.topology.remove_storage_unit(comp_name)
+            if drop_ts:
+                for ts in ["active_power", "reactive_power"]:
+                    self.timeseries.drop_component_time_series(
+                        df_name=f"storage_units_{ts}",
+                        comp_names=comp_name,
+                    )
+
+        else:
+            raise ValueError("Component type is not correct.")
+
+    def aggregate_components(
+        self,
+        aggregate_generators_by_cols=None,
+        aggregate_loads_by_cols=None,
+    ):
+        """
+        Aggregates generators and loads at the same bus.
+
+        By default all generators respectively loads at the same bus are aggregated.
+        You can specify further columns to consider in the aggregation, such as the
+        generator type or the load sector. Make sure to always include the bus in the
+        list of columns to aggregate by, as otherwise the topology would change.
+
+        Be aware that by aggregating components you loose some information
         e.g. on load sector or charging point use case.
 
         Parameters
