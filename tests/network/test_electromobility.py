@@ -50,7 +50,31 @@ class TestElectromobility:
 
     def test_distribute_charging_demand(self):
 
+        # test user friendly
         distribute_charging_demand(self.edisgo_obj)
+
+        electromobility = self.edisgo_obj.electromobility
+
+        total_charging_demand_at_charging_parks = sum(
+            cp.charging_processes_df.chargingdemand_kWh.sum()
+            for cp in list(electromobility.potential_charging_parks)
+            if cp.designated_charging_point_capacity > 0
+        )
+
+        total_charging_demand = (
+            electromobility.charging_processes_df.chargingdemand_kWh.sum()
+        )
+
+        assert round(total_charging_demand_at_charging_parks, 0) == round(
+            total_charging_demand, 0
+        )
+
+        # test grid friendly
+        self.edisgo_obj = import_edisgo_from_files(
+            self.ding0_path, import_topology=True, import_timeseries=True
+        )
+        import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
+        distribute_charging_demand(self.edisgo_obj, mode="grid_friendly")
 
         electromobility = self.edisgo_obj.electromobility
 
