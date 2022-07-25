@@ -35,10 +35,18 @@ class Grid(ABC):
 
     @property
     def id(self):
+        """
+        ID of the grid.
+
+        """
         return self._id
 
     @property
     def edisgo_obj(self):
+        """
+        EDisGo object the grid is stored in.
+
+        """
         return self._edisgo_obj
 
     @property
