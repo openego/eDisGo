@@ -97,20 +97,11 @@ class TestElectromobility:
             == len(integrated_charging_parks)
             == len(electromobility.integrated_charging_parks_df)
         )
-        assert len(integrated_charging_parks) == len(
-            ts.charging_points_active_power(self.edisgo_obj).columns
-        )
-        assert len(integrated_charging_parks) == len(
-            ts.charging_points_reactive_power(self.edisgo_obj).columns
-        )
 
         edisgo_ids_cp = sorted(cp.edisgo_id for cp in integrated_charging_parks)
-        edisgo_ids_ts = sorted(
-            ts.charging_points_active_power(self.edisgo_obj).columns.tolist()
-        )
         edisgo_ids_topology = sorted(topology.charging_points_df.index.tolist())
 
-        assert edisgo_ids_cp == edisgo_ids_ts == edisgo_ids_topology
+        assert edisgo_ids_cp == edisgo_ids_topology
 
     def test_charging_strategy(self):
         charging_demand_lst = []

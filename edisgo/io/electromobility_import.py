@@ -1047,11 +1047,6 @@ def integrate_charging_parks(edisgo_obj):
 
     charging_park_ids = [_.id for _ in designated_charging_parks]
 
-    dummy_timeseries = pd.Series(
-        [0.0] * len(edisgo_obj.timeseries.timeindex),
-        index=edisgo_obj.timeseries.timeindex,
-    )
-
     comp_type = "charging_point"
 
     # integrate ChargingPoints and save the names of the eDisGo ID
@@ -1060,9 +1055,7 @@ def integrate_charging_parks(edisgo_obj):
             comp_type=comp_type,
             geolocation=cp.geometry,
             sector=cp.use_case,
-            add_ts=True,
-            ts_active_power=dummy_timeseries,
-            ts_reactive_power=dummy_timeseries,
+            add_ts=False,
             p_set=cp.grid_connection_capacity,
         )
         for cp in designated_charging_parks
