@@ -11,7 +11,7 @@ features can be used.
 The fundamental data structure
 ------------------------------
 
-It's worth to understand how the fundamental data structure of eDisGo is
+It's worth understanding how the fundamental data structure of eDisGo is
 designed in order to make use of its entire features.
 
 The class :class:`~.EDisGo` serves as the top-level API for
@@ -20,7 +20,12 @@ capacity, grid reinforcement and flexibility measures. It also provides
 access to all relevant data.
 Grid data is stored in the :class:`~.network.topology.Topology` class.
 Time series data can be found in the :class:`~.network.timeseries.TimeSeries`
-class. Results data holding results e.g. from the power flow analysis and grid
+class.
+The class :class:`~.network.electromobility.Electromobility` holds data on charging
+processes (how long cars are parking at a charging station, how much they need to charge,
+etc.) necessary to apply different charging strategies, as well as information on
+potential charging sites and integrated charging parks.
+Results data holding results e.g. from the power flow analysis and grid
 expansion is stored in the :class:`~.network.results.Results` class.
 Configuration data from the config files (see :ref:`default_configs`) is stored
 in the :class:`~.tools.config.Config` class.
@@ -35,6 +40,9 @@ code examples `edisgo` constitues an :class:`~.EDisGo` object.
 
     # Access TimeSeries data container object
     edisgo.timeseries
+
+    # Access Electromobility data container object
+    edisgo.electromobility
 
     # Access Results data container object
     edisgo.results
@@ -250,8 +258,13 @@ Heuristic
 
 Use this mode to use heuristics to set time series. So far, only heuristics for
 electric vehicle charging are implemented.
+The charging strategies can be invoked as follows:
 
-.. todo:: Add more details once the charging strategies are merged.
+.. code-block:: python
+
+    edisgo.apply_charging_strategy()
+
+See :attr:`~.edisgo.EDisGo.apply_charging_strategy` for more information.
 
 Reactive power time series
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -330,6 +343,11 @@ Costs for the grid expansion measures can be obtained as follows:
 
 Further information on the grid reinforcement methodology can be found in section
 :ref:`grid_expansion_methodology`.
+
+Electromobility
+-----------------
+
+.. todo:: Add
 
 Battery storage systems
 ------------------------

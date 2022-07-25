@@ -30,15 +30,13 @@ if TYPE_CHECKING:
     from edisgo.network.grids import Grid
 
 if "READTHEDOCS" not in os.environ:
+
+    import geopandas as gpd
+
     from egoio.db_tables.grid import EgoDpMvGriddistrict
     from egoio.db_tables.model_draft import EgoGridMvGriddistrict
     from geoalchemy2 import shape
 
-    geopandas = True
-    try:
-        import geopandas as gpd
-    except Exception:
-        geopandas = False
     contextily = True
     try:
         import contextily as ctx
@@ -544,21 +542,21 @@ def mv_grid_topology(
             if bus in edisgo_obj.topology.transformers_df.bus0.values:
                 try:
                     bus_colors[bus] = costs_lv_stations.loc[bus, "total_costs"]
-                    bus_sizes[bus] = 100
+                    bus_sizes[bus] = 100.0
                 except Exception:
-                    bus_colors[bus] = 0
-                    bus_sizes[bus] = 0
+                    bus_colors[bus] = 0.0
+                    bus_sizes[bus] = 0.0
             # MVStation handeling
             elif bus in edisgo_obj.topology.transformers_hvmv_df.bus1.values:
                 try:
                     bus_colors[bus] = costs_mv_station.loc[bus, "total_costs"]
-                    bus_sizes[bus] = 100
+                    bus_sizes[bus] = 100.0
                 except Exception:
-                    bus_colors[bus] = 0
-                    bus_sizes[bus] = 0
+                    bus_colors[bus] = 0.0
+                    bus_sizes[bus] = 0.0
             else:
-                bus_colors[bus] = 0
-                bus_sizes[bus] = 0
+                bus_colors[bus] = 0.0
+                bus_sizes[bus] = 0.0
 
         return bus_sizes, bus_colors
 
@@ -666,7 +664,7 @@ def mv_grid_topology(
     ax = plt.gca()
 
     # plot network district
-    if grid_district_geom and geopandas:
+    if grid_district_geom:
         try:
             projection = 3857 if contextily and background_map else 4326
             crs = {
@@ -859,7 +857,7 @@ def mv_grid_topology(
     if filename is None:
         plt.show()
     else:
-        plt.savefig(filename)
+        plt.savefig(filename, bbox_inches="tight")
         plt.close()
 
 

@@ -7,10 +7,13 @@ Changes
 -------
 
 * added pre-commit hooks (flake8, black, isort, pyupgrade) `#229 <https://github.com/openego/eDisGo/pull/229>`_
+* added issue and pull request templates `#220 <https://github.com/openego/eDisGo/issues/220>`_
 * added Windows installation yml and documentation
 * added integrity checks of eDisGo object `#231 <https://github.com/openego/eDisGo/issues/231>`_
+* added functionality to save to and load from zip archive `#216 <https://github.com/openego/eDisGo/pull/216>`_
 * added option to not raise error in case power flow did not converge `#207 <https://github.com/openego/eDisGo/issues/207>`_
 * added pyplot `#214 <https://github.com/openego/eDisGo/pull/214>`_
+* added functionality to create geopandas dataframes `#224 <https://github.com/openego/eDisGo/issues/224>`_
 * added tests
 * major refactoring of loads and time series
 
@@ -21,5 +24,8 @@ Changes
   * added simultaneity factors for heat pumps and electric vehicles
   * grid reinforcement now considers separate simultaneity factors for dimensioning of LV and MV `#252 <https://github.com/openego/eDisGo/pull/252>`_
 
-
+* added interface to electromobility data from tools SimBEV and TracBEV (SimBEV provides data on
+  standing times, charging demand, etc. per vehicle, whereas TracBEV provides potential charging point locations)
+  `#174 <https://github.com/openego/eDisGo/issues/174>`_ and
+  `#191 <https://github.com/openego/eDisGo/pull/191>`_
 

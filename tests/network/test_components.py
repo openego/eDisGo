@@ -7,6 +7,7 @@ from edisgo.network.components import Generator, Load, Switch
 
 class TestComponents:
     # ToDo add tests for storages_df
+    # ToDo add tests for PotentialChargingParks
 
     @classmethod
     def setup_class(self):

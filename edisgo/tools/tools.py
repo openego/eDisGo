@@ -475,3 +475,61 @@ def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
             edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique(),
         )
     )
+
+
+def get_directory_size(start_dir):
+    """
+    Calculates the size of all files within the start path.
+
+    Walks through all files and sub-directories within a given directory and
+    calculate the sum of size of all files in the directory.
+    See: https://stackoverflow.com/a/1392549/13491957
+
+    Parameters
+    ----------
+    start_dir : str
+        Start path.
+
+    Returns
+    -------
+    int
+        Size of the directory.
+
+    """
+    total_size = 0
+
+    for dirpath, dirnames, filenames in os.walk(start_dir):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            # skip if it is symbolic link
+            if not os.path.islink(fp):
+                total_size += os.path.getsize(fp)
+
+    return total_size
+
+
+def get_files_recursive(path, files=None):
+    """
+    Recursive function to get all files in a given path and its sub directories.
+
+    Parameters
+    ----------
+    path : str
+        Directory to start from.
+    files : list, optional
+        List of files to start with. Default: None.
+
+    Returns
+    -------
+
+    """
+    if files is None:
+        files = []
+    for f in os.listdir(path):
+        file = os.path.join(path, f)
+        if os.path.isdir(file):
+            files = get_files_recursive(file, files)
+        else:
+            files.append(file)
+
+    return files
