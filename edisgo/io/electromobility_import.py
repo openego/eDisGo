@@ -108,7 +108,9 @@ def import_electromobility(
     **kwargs,
 ):
     """
-    Import electromobility data from SimBEV and TracBEV.
+    Import electromobility data from
+    `SimBEV <https://github.com/rl-institut/simbev>`_ and
+    `TracBEV <https://github.com/rl-institut/tracbev>`_.
 
     Parameters
     ----------
