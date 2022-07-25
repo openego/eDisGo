@@ -76,11 +76,11 @@ def charging_strategy(
         if cp.grid is not None
     ]
 
-    # Reset possible old timeseries as these influence "residual" charging
-    ts = pd.Series(data=0, index=edisgo_obj.timeseries.timeindex)
-
-    for cp in charging_parks:
-        _overwrite_timeseries(edisgo_obj, cp.edisgo_id, ts)
+    # Delete possible old time series as these influence "residual" charging
+    edisgo_obj.timeseries.drop_component_time_series(
+        "loads_active_power",
+        edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values
+    )
 
     eta_cp = edisgo_obj.electromobility.eta_charging_points
 
@@ -128,8 +128,9 @@ def charging_strategy(
             ].itertuples():
                 dummy_ts[start : start + stop] += cap
 
-            _overwrite_timeseries(
-                edisgo_obj, cp.edisgo_id, pd.Series(data=dummy_ts, index=timeindex)
+            edisgo_obj.timeseries.add_component_time_series(
+                "loads_active_power",
+                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex)
             )
 
     elif strategy == "reduced":
@@ -165,8 +166,9 @@ def charging_strategy(
                 else:
                     dummy_ts[start : start + stop_reduced] += cap_reduced
 
-            _overwrite_timeseries(
-                edisgo_obj, cp.edisgo_id, pd.Series(data=dummy_ts, index=timeindex)
+            edisgo_obj.timeseries.add_component_time_series(
+                "loads_active_power",
+                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex)
             )
 
     elif strategy == "residual":
@@ -270,14 +272,27 @@ def charging_strategy(
                     f"time steps {idx}, while the time series consists of "
                     f"{maximum_ts} time steps."
                 )
-
-        for count, col in enumerate(dummy_ts.columns):
-            _overwrite_timeseries(
-                edisgo_obj, charging_parks[count].edisgo_id, dummy_ts[col]
+        edisgo_obj.timeseries.add_component_time_series(
+            "loads_active_power",
+            dummy_ts.rename(
+                columns={
+                    cp_id: edisgo_obj.electromobility.integrated_charging_parks_df.at[
+                        cp_id, "edisgo_id"] for cp_id in dummy_ts.columns}
             )
+        )
 
     else:
         raise ValueError(f"Strategy {strategy} has not yet been implemented.")
+
+    # set reactive power time series to 0 Mvar
+    edisgo_obj.timeseries.add_component_time_series(
+        "loads_reactive_power",
+        pd.DataFrame(
+            data=0.,
+            index=edisgo_obj.timeseries.timeindex,
+            columns=edisgo_obj.electromobility.integrated_charging_parks_df.
+                edisgo_id.values)
+    )
 
     logging.info(f"Charging strategy {strategy} completed.")
 
@@ -400,21 +415,3 @@ def harmonize_charging_processes_df(
         )
 
     return df
-
-
-def _overwrite_timeseries(edisgo_obj, edisgo_id, ts):
-    """
-    Overwrites the dummy timeseries for the Charging Point
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    edisgo_id : str
-        eDisGo ID of the Charging Point
-    ts : :pandas:`pandas.Series<Series>`
-        New timeseries
-
-    """
-    edisgo_obj.timeseries._loads_active_power.loc[:, edisgo_id] = ts.loc[
-        edisgo_obj.timeseries.timeindex
-    ]
