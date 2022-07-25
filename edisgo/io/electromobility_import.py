@@ -526,24 +526,26 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
 
 def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
     """
-    Get weights per potential charging point for a given set of grid
-    connection indices.
+    Get weights per potential charging point for a given set of grid connection indices.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
     potential_charging_park_indices : list
         List of potential charging parks indices
+
+    Other Parameters
+    -----------------
     mode : str
         Only use user friendly weights ("user_friendly") or combine with
-        grid friendly weights ("grid_friendly"). Default "user_friendly"
+        grid friendly weights ("grid_friendly"). Default: "user_friendly".
     user_friendly_weight : float
-        Weight of user friendly weight if mode "grid_friendly". Default 0.5
+        Weight of user friendly weight if mode "grid_friendly". Default: 0.5.
     distance_weight: float
         Grid friendly weight is a combination of the installed capacity of
         generators and loads within a LV grid and the distance towards the
         nearest substation. This parameter sets the weight for the distance
-        parameter. Default 1/3
+        parameter. Default: 1/3.
 
     Returns
     -------
