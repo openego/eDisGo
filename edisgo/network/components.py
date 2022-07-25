@@ -1161,38 +1161,3 @@ class PotentialChargingParks(BasicComponent):
             .groupby(by="charging_point_id")
             .max()
         )
-
-    @property
-    def _load_and_generator_capacity_weight(self, **kwargs):
-        """
-        Determines grid centric weight regarding load and generator capacity
-        in LV Grid.
-
-        Returns
-        --------
-        :obj:`float`
-            Grid centric weight regarding load and generator capacity in LV
-            Grid
-        """
-        generators_weight_factor = kwargs.get("generators_weight_factor", 1 / 2)
-        loads_weight_factor = kwargs.get("loads_weight_factor", 1 / 2)
-
-        weights = (loads_weight_factor, generators_weight_factor)
-
-        if not round(sum(weights), 3) == 1:
-            f = 1 / sum(weights)
-            generators_weight_factor *= f
-            loads_weight_factor *= f
-
-        generators_weight_value = self._topology.lv_grids_df.at[
-            self.nearest_substation["lv_grid_id"], "generators_weight"
-        ]
-
-        loads_weight_value = self._topology.lv_grids_df.at[
-            self.nearest_substation["lv_grid_id"], "loads_weight"
-        ]
-
-        return (
-            generators_weight_value * generators_weight_factor
-            + loads_weight_value * loads_weight_factor
-        )

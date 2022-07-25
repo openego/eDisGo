@@ -551,6 +551,75 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
         DataFrame with numeric weights
 
     """
+    def _get_lv_grid_weights():
+
+        """
+        DataFrame containing technical data of lv grids.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Columns of the DataFrame are:
+                peak_generation_capacity : float
+                    Cumulative peak generation capacity of generators in the network in
+                    MW.
+
+                p_set : float
+                    Cumulative peak load of loads in the network in MW.
+
+                substation_capacity : float
+                    Cumulative capacity of transformers to overlaying network.
+
+                generators_weight : float
+                    Weighting used in grid friendly siting of public charging points.
+                    In the case of generators the weight is defined by dividing the
+                    peak_generation_capacity by substation_capacity and norming the
+                    results from 0 .. 1. A higher weight is more attractive.
+
+                loads_weight : float
+                    Weighting used in grid friendly siting of public charging points.
+                    In the case of loads the weight is defined by dividing the
+                    p_set by substation_capacity and norming the results from 0 .. 1.
+                    The result is then substracted from 1 as the higher the p_set is
+                    in relation to the substation_capacity the less attractive this lv
+                    grid is for new loads from a grid perspective. A higher weight is
+                    more attractive.
+
+        """
+        lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
+
+        lv_grids_df = pd.DataFrame(
+            index=[_._id for _ in lv_grids],
+            columns=["peak_generation_capacity", "substation_capacity",
+                     "generators_weight", "p_set", "loads_weight"]
+        )
+
+        lv_grids_df.peak_generation_capacity = [
+            _.peak_generation_capacity for _ in lv_grids
+        ]
+
+        lv_grids_df.substation_capacity = [
+            _.transformers_df.s_nom.sum() for _ in lv_grids
+        ]
+
+        min_max_scaler = preprocessing.MinMaxScaler()
+        lv_grids_df.generators_weight = lv_grids_df.peak_generation_capacity.divide(
+            lv_grids_df.substation_capacity
+        )
+        lv_grids_df.generators_weight = min_max_scaler.fit_transform(
+            lv_grids_df.generators_weight.values.reshape(-1, 1)
+        )
+
+        lv_grids_df.p_set = [_.p_set for _ in lv_grids]
+
+        lv_grids_df.loads_weight = lv_grids_df.p_set.divide(
+            lv_grids_df.substation_capacity
+        )
+        lv_grids_df.loads_weight = 1 - min_max_scaler.fit_transform(
+            lv_grids_df.loads_weight.values.reshape(-1, 1)
+        )
+        return lv_grids_df
+
     mode = kwargs.get("mode", "user_friendly")
 
     if mode == "user_friendly":
@@ -570,7 +639,7 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
             if _.id in potential_charging_park_indices
         ]
 
-        lv_grids_df = edisgo_obj.topology.lv_grids_df
+        lv_grids_df = _get_lv_grid_weights()
 
         generators_weight_factor = kwargs.get("generators_weight_factor", 0.5)
         loads_weight_factor = 1 - generators_weight_factor

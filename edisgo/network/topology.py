@@ -11,8 +11,6 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from sklearn import preprocessing
-
 import edisgo
 
 from edisgo.network.components import Switch
@@ -57,15 +55,6 @@ COLUMNS = {
     ],
     "buses_df": ["v_nom", "x", "y", "mv_grid_id", "lv_grid_id", "in_building"],
     "switches_df": ["bus_open", "bus_closed", "branch", "type_info"],
-    "lv_grids_df": [
-        "peak_generation_capacity",
-        "p_set",
-        "installed_charging_point_capacity",
-        "substation_capacity",
-        "generators_weight",
-        "loads_weight",
-        "installed_charging_point_weight",
-    ],
 }
 
 
@@ -642,103 +631,6 @@ class Topology:
     @mv_grid.setter
     def mv_grid(self, mv_grid):
         self._mv_grid = mv_grid
-
-    @property
-    def lv_grids_df(self):
-        """
-        DataFrame containing technical data of lv grids.
-
-        Returns
-        --------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            Columns of the DataFrame are:
-                peak_generation_capacity : float
-                    Cumulative peak generation capacity of generators in the network in
-                    MW.
-
-                p_set : float
-                    Cumulative peak load of loads in the network in MW.
-
-                installed_charging_point_capacity : float
-                    Connected charging points within the network.
-
-                substation_capacity : float
-                    Cumulative capacity of transformers to overlaying network.
-
-                generators_weight : float
-                    Weighting used in grid friendly siting of public charging points.
-                    In the case of generators the weight is defined by dividing the
-                    peak_generation_capacity by substation_capacity and norming the
-                    results from 0 .. 1. A higher weight is more attractive.
-
-                loads_weight : float
-                    Weighting used in grid friendly siting of public charging points.
-                    In the case of loads the weight is defined by dividing the
-                    p_set by substation_capacity and norming the results from 0 .. 1.
-                    The result is then substracted from 1 as the higher the p_set is
-                    in relation to the substation_capacity the less attractive this lv
-                    grid is for new loads from a grid perspective. A higher weight is
-                    more attractive.
-
-                installed_charging_point_weight : float
-                    Weighting used in grid friendly siting of public charging points.
-                    In the case of charging points the weight is defined by dividing the
-                    installed_charging_point_capacity by substation_capacity and norming
-                    the results from 0 .. 1. The result is then substracted from 1 as
-                    the higher the installed_charging_point_capacity is in relation to
-                    the substation_capacity the less attractive this lv grid is for new
-                    loads from a grid perspective. A higher weight is more attractive.
-
-        """
-        lv_grids_df = pd.DataFrame(
-            index=[_._id for _ in self.mv_grid.lv_grids], columns=COLUMNS["lv_grids_df"]
-        )
-
-        lv_grids = list(self.mv_grid.lv_grids)
-
-        lv_grids_df.peak_generation_capacity = [
-            _.peak_generation_capacity for _ in lv_grids
-        ]
-
-        lv_grids_df.p_set = [_.p_set for _ in lv_grids]
-
-        lv_grids_df.installed_charging_point_capacity = [
-            _.charging_points_df.p_set.sum() for _ in lv_grids
-        ]
-
-        lv_grids_df.substation_capacity = [
-            _.transformers_df.s_nom.sum() for _ in lv_grids
-        ]
-
-        min_max_scaler = preprocessing.MinMaxScaler()
-
-        lv_grids_df.generators_weight = lv_grids_df.peak_generation_capacity.divide(
-            lv_grids_df.substation_capacity
-        )
-
-        lv_grids_df.generators_weight = min_max_scaler.fit_transform(
-            lv_grids_df.generators_weight.values.reshape(-1, 1)
-        )
-
-        lv_grids_df.loads_weight = lv_grids_df.p_set.divide(
-            lv_grids_df.substation_capacity
-        )
-
-        lv_grids_df.loads_weight = 1 - min_max_scaler.fit_transform(
-            lv_grids_df.loads_weight.values.reshape(-1, 1)
-        )
-
-        lv_grids_df.installed_charging_point_weight = (
-            lv_grids_df.installed_charging_point_capacity.divide(
-                lv_grids_df.substation_capacity
-            )
-        )
-
-        lv_grids_df.installed_charging_point_weight = 1 - min_max_scaler.fit_transform(
-            lv_grids_df.installed_charging_point_weight.values.reshape(-1, 1)
-        )
-
-        return lv_grids_df
 
     @property
     def grid_district(self):
