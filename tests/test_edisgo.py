@@ -348,12 +348,15 @@ class TestEDisGo:
         assert self.edisgo.results.equality_check(results_analyze)
 
         # test non convergence
-        try:
+        msg = "Power flow analysis did not converge for the"
+        with pytest.raises(ValueError, match=msg):
             self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5)
-        except ValueError:
-            pass
-        else:
-            raise AssertionError("ValueError was not raised")
+
+        caplog.clear()
+        self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5,
+                            range_num=2, raise_not_converged=False)
+        assert ("Current fraction in iterative process: 5.0." in caplog.text)
+        assert ("Current fraction in iterative process: 1.0." in caplog.text)
 
     def test_reinforce(self):
         self.setup_worst_case_time_series()
