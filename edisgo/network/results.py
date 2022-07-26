@@ -9,7 +9,7 @@ import pandas as pd
 
 from edisgo.tools.tools import get_files_recursive
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 def _get_matching_dict_of_attributes_and_file_names():
@@ -807,21 +807,19 @@ class Results:
         for attr in attr_to_reduce:
             setattr(self, attr, getattr(self, attr).astype(to_type))
 
-    # ToDo : Method to check if results dataframes are similar
-    def similarity_check(self, results_analyze):
+    def equality_check(self, results_obj):
         """
-        Checks if results of analyze function in troubleshooting mode (either 'lpf'
-        or 'iteration') are equal to results of analyze function when not in
-        troubleshooting mode.
+        Checks the equality of two results objects.
 
         Parameters
         ----------
-        results_analyze : :class:~.network.results.Results
-        Contains the results of analyze function with default settings.
+        results_obj : :class:~.network.results.Results
+            Contains the results of analyze function with default settings.
 
         Returns
         -------
-        bool: True if similarity check is successful, False otherwise.
+        bool
+            True if equality check is successful, False otherwise.
 
         """
 
@@ -837,14 +835,12 @@ class Results:
             for attr in attr_to_check:
                 pd.testing.assert_frame_equal(
                     getattr(self, attr),
-                    getattr(results_analyze, attr),
+                    getattr(results_obj, attr),
                     check_freq=False,
                 )
-            result = True
+            return True
         except AssertionError:
-            result = False
-
-        return result
+            return False
 
     def to_csv(
         self, directory, parameters=None, reduce_memory=False, save_seed=False, **kwargs

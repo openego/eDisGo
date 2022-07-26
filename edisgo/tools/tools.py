@@ -14,15 +14,11 @@ from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
 
+    import geopandas as gpd
+
     from egoio.db_tables import climate
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
-
-    geopandas = True
-    try:
-        import geopandas as gpd
-    except Exception:
-        geopandas = False
 
 
 def select_worstcase_snapshots(edisgo_obj):
@@ -483,14 +479,16 @@ def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
 
 def get_directory_size(start_dir):
     """
-    Walk over all files and sub-directories within a given directory and
+    Calculates the size of all files within the start path.
+
+    Walks through all files and sub-directories within a given directory and
     calculate the sum of size of all files in the directory.
     See: https://stackoverflow.com/a/1392549/13491957
 
     Parameters
     ----------
     start_dir : str
-        Start path. Calculates the size of all files within the start path.
+        Start path.
 
     Returns
     -------
@@ -510,21 +508,23 @@ def get_directory_size(start_dir):
     return total_size
 
 
-def get_files_recursive(path, files=[]):
+def get_files_recursive(path, files=None):
     """
-    Recursive function to get all files in a given path and its sub directories
+    Recursive function to get all files in a given path and its sub directories.
 
     Parameters
     ----------
     path : str
         Directory to start from.
     files : list, optional
-        List of files to start with. Default: []
+        List of files to start with. Default: None.
 
     Returns
     -------
 
     """
+    if files is None:
+        files = []
     for f in os.listdir(path):
         file = os.path.join(path, f)
         if os.path.isdir(file):

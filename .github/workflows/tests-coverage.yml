@@ -25,7 +25,6 @@ jobs:
     - name: Run coverage
       run: |
         coverage run --source=edisgo -m pytest --runslow -vv
-      #continue-on-error: true
     - name: Run coveralls
       run: |
         coveralls

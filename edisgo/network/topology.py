@@ -11,11 +11,8 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
-from sklearn import preprocessing
-
 import edisgo
 
-from edisgo.io.ding0_import import _validate_ding0_grid_import
 from edisgo.network.components import Switch
 from edisgo.network.grids import LVGrid, MVGrid
 from edisgo.tools import geo, networkx_helper
@@ -58,15 +55,6 @@ COLUMNS = {
     ],
     "buses_df": ["v_nom", "x", "y", "mv_grid_id", "lv_grid_id", "in_building"],
     "switches_df": ["bus_open", "bus_closed", "branch", "type_info"],
-    "lv_grids_df": [
-        "peak_generation_capacity",
-        "p_set",
-        "installed_charging_point_capacity",
-        "substation_capacity",
-        "generators_weight",
-        "loads_weight",
-        "installed_charging_point_weight",
-    ],
 }
 
 
@@ -643,58 +631,6 @@ class Topology:
     @mv_grid.setter
     def mv_grid(self, mv_grid):
         self._mv_grid = mv_grid
-
-    @property
-    def lv_grids_df(self):
-        lv_grids_df = pd.DataFrame(
-            index=[_._id for _ in self.mv_grid.lv_grids], columns=COLUMNS["lv_grids_df"]
-        )
-
-        lv_grids = list(self.mv_grid.lv_grids)
-
-        lv_grids_df.peak_generation_capacity = [
-            _.peak_generation_capacity for _ in lv_grids
-        ]
-
-        lv_grids_df.p_set = [_.p_set for _ in lv_grids]
-
-        lv_grids_df.installed_charging_point_capacity = [
-            _.charging_points_df.p_set.sum() for _ in lv_grids
-        ]
-
-        lv_grids_df.substation_capacity = [
-            _.transformers_df.s_nom.sum() for _ in lv_grids
-        ]
-
-        min_max_scaler = preprocessing.MinMaxScaler()
-
-        lv_grids_df.generators_weight = lv_grids_df.peak_generation_capacity.divide(
-            lv_grids_df.substation_capacity
-        )
-
-        lv_grids_df.generators_weight = min_max_scaler.fit_transform(
-            lv_grids_df.generators_weight.values.reshape(-1, 1)
-        )
-
-        lv_grids_df.loads_weight = lv_grids_df.p_set.divide(
-            lv_grids_df.substation_capacity
-        )
-
-        lv_grids_df.loads_weight = 1 - min_max_scaler.fit_transform(
-            lv_grids_df.loads_weight.values.reshape(-1, 1)
-        )
-
-        lv_grids_df.installed_charging_point_weight = (
-            lv_grids_df.installed_charging_point_capacity.divide(
-                lv_grids_df.substation_capacity
-            )
-        )
-
-        lv_grids_df.installed_charging_point_weight = 1 - min_max_scaler.fit_transform(
-            lv_grids_df.installed_charging_point_weight.values.reshape(-1, 1)
-        )
-
-        return lv_grids_df
 
     @property
     def grid_district(self):
@@ -2055,7 +1991,7 @@ class Topology:
 
             # if substation ID (= LV grid ID) is given and it matches an
             # existing LV grid ID (i.e. it is no aggregated LV grid), set grid
-            # to connect component to to specified grid (in case the component
+            # to connect component to specified grid (in case the component
             # has no geometry it is connected to the grid's station)
             if comp_data["mvlv_subst_id"] in lv_grid_ids:
 
@@ -2410,16 +2346,45 @@ class Topology:
             transformers are represented by nodes.
 
         """
-        graph = networkx_helper.translate_df_to_graph(
+        return networkx_helper.translate_df_to_graph(
             self.buses_df,
             self.lines_df,
             self.transformers_df,
         )
-        return graph
 
     def to_geopandas(self, mode: str = "mv"):
         """
         Returns components as :geopandas:`GeoDataFrame`\\ s
+
+        Returns container with :geopandas:`GeoDataFrame`\\ s containing all
+        georeferenced components within the grid.
+
+        Parameters
+        ----------
+        mode : str
+            Return mode. If mode is "mv" the mv components are returned. If mode is "lv"
+            a generator with a container per lv grid is returned. Default: "mv"
+
+        Returns
+        -------
+        :class:`~.tools.geopandas_helper.GeoPandasGridContainer` or \
+            list(:class:`~.tools.geopandas_helper.GeoPandasGridContainer`)
+            Data container with GeoDataFrames containing all georeferenced components
+            within the grid(s).
+
+        """
+        if mode == "mv":
+            return self.mv_grid.geopandas
+        elif mode == "lv":
+            raise NotImplementedError("LV Grids are not georeferenced yet.")
+            # for lv_grid in self.mv_grid.lv_grids:
+            #     yield lv_grid.geopandas
+        else:
+            raise ValueError(f"{mode} is not valid. See docstring for more info.")
+
+    def to_geopandas(self, mode: str = "mv"):
+        """
+        Returns components as :geopandas:`GeoDataFrame`\\ s.
 
         Returns container with :geopandas:`GeoDataFrame`\\ s containing all
         georeferenced components within the grid.
@@ -2524,6 +2489,35 @@ class Topology:
             Set True if data is archived in a zip archive. Default: False
 
         """
+
+        def _get_matching_dict_of_attributes_and_file_names():
+            """
+            Helper function that matches attribute names to file names.
+
+            Is used in function :attr:`~.network.topology.Topology.from_csv` to set
+            which attribute of :class:`~.network.topology.Topology` is saved under
+            which file name.
+
+            Returns
+            -------
+            dict
+                Dictionary matching attribute names and file names with attribute
+                names as keys and corresponding file names as values.
+
+            """
+            return {
+                "buses_df": "buses.csv",
+                "lines_df": "lines.csv",
+                "loads_df": "loads.csv",
+                "generators_df": "generators.csv",
+                "charging_points_df": "charging_points.csv",
+                "storage_units_df": "storage_units.csv",
+                "transformers_df": "transformers.csv",
+                "transformers_hvmv_df": "transformers_hvmv.csv",
+                "switches_df": "switches.csv",
+                "network": "network.csv",
+            }
+
         # get all attributes and corresponding file names
         attrs = _get_matching_dict_of_attributes_and_file_names()
 
@@ -2604,39 +2598,118 @@ class Topology:
             # make sure to destroy ZipFile Class to close any open connections
             zip.close()
 
-        # validate import
-        _validate_ding0_grid_import(edisgo_obj.topology)
+        # Check data integrity
+        self.check_integrity()
+
+    def check_integrity(self):
+        """
+        Check imported data integrity.
+
+        Checks for duplicated labels and isolated components.
+
+        """
+        # check for duplicate labels (of components)
+        duplicated_labels = []
+        duplicated_comps = []
+
+        for comp in [
+            "buses",
+            "generators",
+            "loads",
+            "transformers",
+            "lines",
+            "switches",
+        ]:
+            df = getattr(self, f"{comp}_df")
+            if any(df.index.duplicated()):
+                duplicated_comps.append(comp)
+                duplicated_labels.append(df.index[df.index.duplicated()].values)
+
+        if duplicated_labels:
+            logger.warning(
+                "{labels} have duplicate entry in one of the following components' "
+                "dataframes: {comps}.".format(
+                    labels=", ".join(
+                        np.concatenate([list.tolist() for list in duplicated_labels])
+                    ),
+                    comps=", ".join(duplicated_comps),
+                )
+            )
+
+        # check for isolated or not defined buses
+        buses = []
+
+        for nodal_component in [
+            "loads",
+            "generators",
+            "storage_units",
+        ]:
+            df = getattr(self, f"{nodal_component}_df")
+            missing = df.index[~df.bus.isin(self.buses_df.index)]
+            buses.append(df.bus.values)
+
+            if len(missing) > 0:
+                logger.warning(
+                    f"The following {nodal_component} have buses which are not defined:"
+                    f" {', '.join(missing.values)}."
+                )
+
+        for branch_component in ["lines", "transformers"]:
+            df = getattr(self, f"{branch_component}_df")
+
+            for attr in ["bus0", "bus1"]:
+                buses.append(df[attr].values)
+                missing = df.index[~df[attr].isin(self.buses_df.index)]
+
+                if len(missing) > 0:
+                    logger.warning(
+                        f"The following {branch_component} have {attr} which are not "
+                        f"defined: {', '.join(missing.values)}."
+                    )
+
+        for attr in ["bus_open", "bus_closed"]:
+            missing = self.switches_df.index[
+                ~self.switches_df[attr].isin(self.buses_df.index)
+            ]
+            buses.append(self.switches_df[attr].values)
+
+            if len(missing) > 0:
+                logger.warning(
+                    f"The following switches have {attr} which are not defined: "
+                    f"{', '.join(missing.values)}."
+                )
+
+        all_buses = np.unique(np.concatenate(buses, axis=None))
+        missing = self.buses_df.index[~self.buses_df.index.isin(all_buses)]
+        if len(missing) > 0:
+            logger.warning(
+                f"The following buses are isolated: {', '.join(missing.values)}."
+            )
+
+        # check for subgraphs
+        subgraphs = list(
+            self.to_graph().subgraph(c)
+            for c in nx.connected_components(self.to_graph())
+        )
+        if len(subgraphs) > 1:
+            logger.warning("The network has isolated nodes or edges.")
+
+        # check impedance
+        for branch_component in ["lines", "transformers"]:
+            if branch_component == "lines":
+                z = getattr(self, branch_component + "_df").apply(
+                    lambda x: np.sqrt(np.square(x.r) + np.square(x.x)), axis=1
+                )
+            else:
+                z = getattr(self, branch_component + "_df").apply(
+                    lambda x: np.sqrt(np.square(x.r_pu) + np.square(x.x_pu)), axis=1
+                )
+            if not z.empty and (z < 1e-6).any():
+                logger.warning(
+                    f"Very small values for impedance of {branch_component}: "
+                    f"{z[z < 1e-6].index.values}. This might cause problems in the "
+                    f"power flow."
+                )
 
     def __repr__(self):
-        return "Network topology " + str(self.id)
-
-
-def _get_matching_dict_of_attributes_and_file_names():
-    """
-    Helper function that matches attribute names to file names.
-
-    Is used in function :attr:`~.network.topology.Topology.from_csv` to set
-    which attribute of :class:`~.network.topology.Topology` is saved under
-    which file name.
-
-    Returns
-    -------
-    dict
-        Dictionary matching attribute names and file names with attribute
-        names as keys and corresponding file names as values.
-
-    """
-    topo_dict = {
-        "buses_df": "buses.csv",
-        "lines_df": "lines.csv",
-        "loads_df": "loads.csv",
-        "generators_df": "generators.csv",
-        "charging_points_df": "charging_points.csv",
-        "storage_units_df": "storage_units.csv",
-        "transformers_df": "transformers.csv",
-        "transformers_hvmv_df": "transformers_hvmv.csv",
-        "switches_df": "switches.csv",
-        "network": "network.csv",
-    }
-
-    return topo_dict
+        return f"Network topology {self.id}"

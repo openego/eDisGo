@@ -31,15 +31,12 @@ if TYPE_CHECKING:
 
 if "READTHEDOCS" not in os.environ:
 
+    import geopandas as gpd
+
     from egoio.db_tables.grid import EgoDpMvGriddistrict
     from egoio.db_tables.model_draft import EgoGridMvGriddistrict
     from geoalchemy2 import shape
 
-    geopandas = True
-    try:
-        import geopandas as gpd
-    except Exception:
-        geopandas = False
     contextily = True
     try:
         import contextily as ctx
@@ -667,7 +664,7 @@ def mv_grid_topology(
     ax = plt.gca()
 
     # plot network district
-    if grid_district_geom and geopandas:
+    if grid_district_geom:
         try:
             projection = 3857 if contextily and background_map else 4326
             crs = {
@@ -750,16 +747,17 @@ def mv_grid_topology(
 
     # storage_units
     if node_color == "expansion_costs":
-        ax.scatter(
-            pypsa_plot.buses.loc[
-                edisgo_obj.topology.storage_units_df.loc[:, "bus"], "x"
-            ],
-            pypsa_plot.buses.loc[
-                edisgo_obj.topology.storage_units_df.loc[:, "bus"], "y"
-            ],
-            c="orangered",
-            s=edisgo_obj.topology.storage_units_df.loc[:, "p_nom"] * 1000 / 3,
-        )
+        if not edisgo_obj.topology.storage_units_df.empty:
+            ax.scatter(
+                pypsa_plot.buses.loc[
+                    edisgo_obj.topology.storage_units_df.loc[:, "bus"], "x"
+                ],
+                pypsa_plot.buses.loc[
+                    edisgo_obj.topology.storage_units_df.loc[:, "bus"], "y"
+                ],
+                c="orangered",
+                s=edisgo_obj.topology.storage_units_df.loc[:, "p_nom"] * 1000 / 3,
+            )
     # add legend for storage size and line capacity
     if (
         node_color == "storage_integration" or node_color == "expansion_costs"

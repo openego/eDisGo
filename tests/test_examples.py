@@ -15,5 +15,5 @@ class TestExamples:
         assert total_costs > 0.0
 
         # Delete saved grid and results data
-        edisgo_path = os.path.join(os.path.expanduser("~"), ".eDisGo")
+        edisgo_path = os.path.join(os.path.expanduser("~"), ".edisgo")
         shutil.rmtree(os.path.join(edisgo_path, "ding0_example_grid"))
