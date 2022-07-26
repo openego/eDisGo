@@ -2587,18 +2587,6 @@ class Topology:
                 # set up medium voltage grid
                 setattr(self, "mv_grid", MVGrid(edisgo_obj=edisgo_obj, id=df.index[0]))
 
-                self._grids = {}
-                self._grids[str(self.mv_grid)] = self.mv_grid
-
-                # set up low voltage grids
-                lv_grid_ids = self.buses_df.lv_grid_id.dropna().sort_values().unique()
-
-                for lv_grid_id in lv_grid_ids:
-                    lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_obj)
-
-                    self.mv_grid._lv_grids.append(lv_grid)
-                    self._grids[str(lv_grid)] = lv_grid
-
                 continue
 
             # set attribute

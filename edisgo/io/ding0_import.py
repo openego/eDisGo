@@ -114,21 +114,9 @@ def import_ding0_grid(path, edisgo_obj):
         "srid": grid.srid,
     }
 
-    edisgo_obj.topology._grids = {}
-
     # set up medium voltage grid
     mv_grid_id = list(set(grid.buses.mv_grid_id))[0]
     edisgo_obj.topology.mv_grid = MVGrid(id=mv_grid_id, edisgo_obj=edisgo_obj)
-    edisgo_obj.topology._grids[
-        str(edisgo_obj.topology.mv_grid)
-    ] = edisgo_obj.topology.mv_grid
-
-    # set up low voltage grids
-    lv_grid_ids = set(grid.buses.lv_grid_id.dropna())
-    for lv_grid_id in lv_grid_ids:
-        lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=edisgo_obj)
-        edisgo_obj.topology.mv_grid._lv_grids.append(lv_grid)
-        edisgo_obj.topology._grids[str(lv_grid)] = lv_grid
 
     # Check data integrity
     edisgo_obj.topology.check_integrity()
