@@ -173,7 +173,10 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
 
     transformers_changes = {"added": {}, "removed": {}}
     for grid_name in critical_stations.index:
-        grid = edisgo_obj.topology._grids[grid_name]
+        if "MV" in grid_name:
+            grid = edisgo_obj.topology.mv_grid
+        else:
+            grid = edisgo_obj.topology.get_lv_grid(grid_name)
         # list of maximum power of each transformer in the station
         s_max_per_trafo = grid.transformers_df.s_nom
         # missing capacity
@@ -308,8 +311,11 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         raise KeyError("Standard MV/LV transformer is not in equipment list.")
 
     transformers_changes = {"added": {}}
-    for grid_repr in critical_stations.keys():
-        grid = edisgo_obj.topology._grids[grid_repr]
+    for grid_name in critical_stations.keys():
+        if "MV" in grid_name:
+            grid = edisgo_obj.topology.mv_grid
+        else:
+            grid = edisgo_obj.topology.get_lv_grid(grid_name)
         # get any transformer to get attributes for new transformer from
         duplicated_transformer = grid.transformers_df.iloc[[0]]
         # change transformer parameters
@@ -328,7 +334,7 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
                 duplicated_transformer,
             ]
         )
-        transformers_changes["added"][grid_repr] = duplicated_transformer.index.tolist()
+        transformers_changes["added"][grid_name] = duplicated_transformer.index.tolist()
 
     if transformers_changes["added"]:
         logger.debug(
