@@ -826,7 +826,7 @@ class EDisGo:
                         setattr(obj1, attr, getattr(obj2, attr) * fraction)
                 # run power flow analysis
                 pf_results = pypsa_network.pf(timesteps, use_seed=True)
-                logging.info(
+                logging.warning(
                     "Current fraction in iterative process: {}.".format(fraction)
                 )
                 # get converged and not converged time steps
