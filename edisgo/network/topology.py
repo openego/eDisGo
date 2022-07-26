@@ -629,18 +629,41 @@ class Topology:
     @property
     def lv_grids(self):
         """
-        Dictionary with low voltage grids in network.
+        Yields generator object with all low voltage grids in network.
 
         Returns
         --------
-        dict
-            Dictionary with LV grid representative as key and corresponding
-            :class:`~.network.grids.LVGrid` object as value.
+        :class:`~.network.grids.LVGrid`
+            Yields generator object with :class:`~.network.grids.LVGrid` object.
+
+        """
+        for lv_grid_id in self.buses_df.lv_grid_id.dropna().unique():
+            yield self.get_lv_grid(int(lv_grid_id))
+
+    def get_lv_grid(self, name):
+        """
+        Returns :class:`~.network.grids.LVGrid` object for given LV grid ID or name.
+
+        Parameters
+        -----------
+        name : int or str
+            LV grid ID as integer or LV grid name (string representation) as string
+            of the LV grid object that should be returned.
+
+        Returns
+        --------
+        :class:`~.network.grids.LVGrid`
+            LV grid object with the given LV grid ID or LV grid name (string
+            representation).
 
         """
         edisgo_obj = self.mv_grid.edisgo_obj
-        return {int(_): LVGrid(id=int(_), edisgo_obj=edisgo_obj)
-                for _ in self.buses_df.lv_grid_id.dropna().sort_values().unique()}
+        if isinstance(name, int):
+            return LVGrid(id=name, edisgo_obj=edisgo_obj)
+        elif isinstance(name, str):
+            return LVGrid(id=int(name.split("_")[-1]), edisgo_obj=edisgo_obj)
+        else:
+            logging.warning("`name` must be integer or string.")
 
     @property
     def grid_district(self):

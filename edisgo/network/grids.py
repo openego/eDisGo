@@ -358,17 +358,12 @@ class MVGrid(Grid):
     @property
     def lv_grids(self):
         """
-        Underlying LV grids.
-
-        Parameters
-        ----------
-        lv_grids : list(:class:`~.network.grids.LVGrid`)
+        Yields generator object with all underlying low voltage grids.
 
         Returns
-        -------
-        list generator
-            Generator object of underlying LV grids of type
-            :class:`~.network.grids.LVGrid`.
+        --------
+        :class:`~.network.grids.LVGrid`
+            Yields generator object with :class:`~.network.grids.LVGrid` object.
 
         """
         return self.edisgo_obj.topology.lv_grids

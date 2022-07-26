@@ -31,6 +31,30 @@ class TestTopology:
         self.topology = Topology()
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
 
+    def test_lv_grids(self):
+        lv_grids = list(self.topology.lv_grids)
+        assert len(lv_grids) == 10
+        assert isinstance(lv_grids[0], LVGrid)
+
+    def test_get_lv_grid(self, caplog):
+        # test integer input
+        name = 1
+        lv_grid = self.topology.get_lv_grid(name)
+        assert isinstance(lv_grid, LVGrid)
+        assert lv_grid.id == name
+
+        # test string input
+        name = "LVGrid_2"
+        lv_grid = self.topology.get_lv_grid(name)
+        assert isinstance(lv_grid, LVGrid)
+        assert str(lv_grid) == name
+
+        # test invalid input
+        name = 1.
+        lv_grid = self.topology.get_lv_grid(name)
+        assert lv_grid is None
+        assert ("`name` must be integer or string." in caplog.text)
+
     def test_rings(self):
         """Test rings getter."""
 
