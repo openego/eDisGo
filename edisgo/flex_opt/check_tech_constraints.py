@@ -123,8 +123,9 @@ def lines_allowed_load(edisgo_obj, voltage_level):
         lines_df = edisgo_obj.topology.lines_df[
             ~edisgo_obj.topology.lines_df.index.isin(mv_grid.lines_df.index)
         ]
-        if len(list(mv_grid.lv_grids)) > 0:
-            nominal_voltage = list(mv_grid.lv_grids)[0].nominal_voltage
+        lv_grids = list(edisgo_obj.topology.lv_grids.values())
+        if len(lv_grids) > 0:
+            nominal_voltage = lv_grids[0].nominal_voltage
         else:
             nominal_voltage = np.NaN
     elif voltage_level == "mv":
@@ -332,7 +333,7 @@ def mv_lv_station_load(edisgo_obj):
     """
 
     crit_stations = pd.DataFrame(dtype=float)
-    for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
+    for lv_grid in edisgo_obj.topology.lv_grids.values():
         crit_stations = pd.concat(
             [
                 crit_stations,
@@ -506,10 +507,10 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    mode : None or :obj:`str`
+    mode : None or str
         If None voltage at all buses in LV networks is checked. If mode is set
         to 'stations' only voltage at bus bar is checked. Default: None.
-    voltage_levels : :obj:`str`
+    voltage_levels : str
         Specifies which allowed voltage deviations to use. Possible options
         are:
 
@@ -524,7 +525,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
 
     Returns
     -------
-    :obj:`dict`
+    dict
         Dictionary with representative of :class:`~.network.grids.LVGrid` as
         key and a :pandas:`pandas.DataFrame<DataFrame>` with voltage
         deviations from allowed lower or upper voltage limits, sorted
@@ -553,7 +554,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
             "'lv'.".format(voltage_levels)
         )
 
-    for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
+    for lv_grid_id, lv_grid in edisgo_obj.topology.lv_grids.items():
 
         if mode:
             if mode == "stations":
@@ -577,7 +578,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
         )
 
         if not crit_buses_grid.empty:
-            crit_buses[repr(lv_grid)] = crit_buses_grid
+            crit_buses[str(lv_grid)] = crit_buses_grid
 
     if crit_buses:
         if mode == "stations":
