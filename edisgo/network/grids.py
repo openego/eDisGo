@@ -371,12 +371,7 @@ class MVGrid(Grid):
             :class:`~.network.grids.LVGrid`.
 
         """
-        for lv_grid in self._lv_grids:
-            yield lv_grid
-
-    @lv_grids.setter
-    def lv_grids(self, lv_grids):
-        self._lv_grids = lv_grids
+        return self.edisgo_obj.topology.lv_grids
 
     @property
     def buses_df(self):

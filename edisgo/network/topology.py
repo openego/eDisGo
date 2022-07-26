@@ -73,12 +73,6 @@ class Topology:
         The default is None in which case the equipment data provided by
         eDisGo is used.
 
-    Attributes
-    -----------
-    _grids : dict
-        Dictionary containing all grids (keys are grid representatives and
-        values the grid objects)
-
     """
 
     def __init__(self, **kwargs):
@@ -631,6 +625,22 @@ class Topology:
     @mv_grid.setter
     def mv_grid(self, mv_grid):
         self._mv_grid = mv_grid
+
+    @property
+    def lv_grids(self):
+        """
+        Dictionary with low voltage grids in network.
+
+        Returns
+        --------
+        dict
+            Dictionary with LV grid representative as key and corresponding
+            :class:`~.network.grids.LVGrid` object as value.
+
+        """
+        edisgo_obj = self.mv_grid.edisgo_obj
+        return {int(_): LVGrid(id=int(_), edisgo_obj=edisgo_obj)
+                for _ in self.buses_df.lv_grid_id.dropna().sort_values().unique()}
 
     @property
     def grid_district(self):
