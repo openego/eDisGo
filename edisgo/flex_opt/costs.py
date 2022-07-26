@@ -113,12 +113,8 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
 
     # costs for transformers
     if not equipment_changes.empty:
-        grid_repr = (
-                [f"LVGrid_{int(id)}" for id
-                 in edisgo_obj.topology.buses_df.lv_grid_id.dropna().unique()] +
-                [f"MVGrid_{int(edisgo_obj.topology.mv_grid.id)}"])
         transformers = equipment_changes[
-            equipment_changes.index.isin(grid_repr)
+            equipment_changes.index.isin(edisgo_obj.topology._grids_repr)
         ]
         added_transformers = transformers[transformers["change"] == "added"]
         removed_transformers = transformers[transformers["change"] == "removed"]
