@@ -123,7 +123,7 @@ def lines_allowed_load(edisgo_obj, voltage_level):
         lines_df = edisgo_obj.topology.lines_df[
             ~edisgo_obj.topology.lines_df.index.isin(mv_grid.lines_df.index)
         ]
-        lv_grids = list(edisgo_obj.topology.lv_grids.values())
+        lv_grids = list(edisgo_obj.topology.lv_grids)
         if len(lv_grids) > 0:
             nominal_voltage = lv_grids[0].nominal_voltage
         else:
@@ -333,7 +333,7 @@ def mv_lv_station_load(edisgo_obj):
     """
 
     crit_stations = pd.DataFrame(dtype=float)
-    for lv_grid in edisgo_obj.topology.lv_grids.values():
+    for lv_grid in edisgo_obj.topology.lv_grids:
         crit_stations = pd.concat(
             [
                 crit_stations,
@@ -554,7 +554,7 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
             "'lv'.".format(voltage_levels)
         )
 
-    for lv_grid_id, lv_grid in edisgo_obj.topology.lv_grids.items():
+    for lv_grid in edisgo_obj.topology.lv_grids:
 
         if mode:
             if mode == "stations":

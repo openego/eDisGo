@@ -291,7 +291,7 @@ class TestCheckTechConstraints:
     def test__lv_allowed_voltage_limits(self):
 
         # get LVGrid_1 object
-        lv_grid = self.edisgo.topology.lv_grids[1]
+        lv_grid = self.edisgo.topology.get_lv_grid(1)
         # set voltage at stations' secondary side to known value
         self.edisgo.results._v_res.loc[
             self.timesteps[2], "BusBar_MVGrid_1_LVGrid_1_LV"
