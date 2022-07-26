@@ -1386,7 +1386,7 @@ class EDisGo:
 
         So far, this function requires electromobility data from
         `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
-        `<3083c5a https://github.com/rl-institut/simbev/commit/
+        `3083c5a <https://github.com/rl-institut/simbev/commit/
         86076c936940365587c9fba98a5b774e13083c5a>`_) and
         `TracBEV <https://github.com/rl-institut/tracbev>`_ (required version:
         `14d864c <https://github.com/rl-institut/tracbev/commit/

@@ -69,6 +69,7 @@ examples_requirements = [
 ]
 dev_requirements = [
     "pytest",
+    "jupyter_contrib_nbextensions",
     "sphinx_rtd_theme",
     "sphinx-autodoc-typehints",
     "pre-commit",
