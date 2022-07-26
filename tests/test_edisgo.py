@@ -143,7 +143,7 @@ class TestEDisGo:
         edisgo.import_generators("nep2035")
         assert len(edisgo.topology.generators_df) == 1636
 
-    def test_analyze(self):
+    def test_analyze(self, caplog):
         self.setup_worst_case_time_series()
 
         # test mode None and timesteps None (default)
@@ -169,7 +169,13 @@ class TestEDisGo:
         assert self.edisgo.results.v_res.shape == (4, 140)
         assert self.edisgo.results.similarity_check(results_analyze)
 
-        # ToDo: test non convergence
+        # test non convergence
+        try:
+            self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError("ValueError was not raised")
 
     def test_reinforce(self):
         self.setup_worst_case_time_series()

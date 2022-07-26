@@ -692,6 +692,32 @@ class EDisGo:
         [1] https://pypsa.readthedocs.io/en/latest/troubleshooting.html
 
         """
+
+        def _check_convergence():
+            # get converged and not converged time steps
+            timesteps_converged = pf_results["converged"][
+                pf_results["converged"]["0"]
+            ].index
+            timesteps_not_converged = pf_results["converged"][
+                ~pf_results["converged"]["0"]
+            ].index
+
+            if raise_not_converged and len(timesteps_not_converged) > 0:
+                raise ValueError(
+                    "Power flow analysis did not converge for the "
+                    "following {} time steps: {}.".format(
+                        len(timesteps_not_converged), timesteps_not_converged
+                    )
+                )
+            elif len(timesteps_not_converged) > 0:
+                logger.warning(
+                    "Power flow analysis did not converge for the "
+                    "following {} time steps: {}.".format(
+                        len(timesteps_not_converged), timesteps_not_converged
+                    )
+                )
+            return timesteps_converged, timesteps_not_converged
+
         if timesteps is None:
             timesteps = self.timeseries.timeindex
         # check if timesteps is array-like, otherwise convert to list
@@ -705,6 +731,8 @@ class EDisGo:
             pypsa_network.lpf()
             # run power flow analysis
             pf_results = pypsa_network.pf(use_seed=True)
+            # get converged and not converged time steps
+            timesteps_converged, timesteps_not_converged = _check_convergence()
         elif troubleshooting_mode == "iteration":
             pypsa_network_copy = pypsa_network.copy()
             for fraction in np.linspace(range_start, 1, range_num):
@@ -719,34 +747,18 @@ class EDisGo:
                         setattr(obj1, attr, getattr(obj2, attr) * fraction)
                 # run power flow analysis
                 pf_results = pypsa_network.pf(use_seed=True)
+                logging.info(
+                    "Current fraction in iterative process: {}.".format(fraction)
+                )
+                # get converged and not converged time steps
+                timesteps_converged, timesteps_not_converged = _check_convergence()
         else:
             # run power flow analysis
             pf_results = pypsa_network.pf(
                 timesteps, use_seed=kwargs.get("use_seed", False)
             )
-
-        # get converged and not converged time steps
-        timesteps_converged = pf_results["converged"][
-            pf_results["converged"]["0"]
-        ].index
-        timesteps_not_converged = pf_results["converged"][
-            ~pf_results["converged"]["0"]
-        ].index
-
-        if raise_not_converged and len(timesteps_not_converged) > 0:
-            raise ValueError(
-                "Power flow analysis did not converge for the "
-                "following {} time steps: {}.".format(
-                    len(timesteps_not_converged), timesteps_not_converged
-                )
-            )
-        elif len(timesteps_not_converged) > 0:
-            logger.warning(
-                "Power flow analysis did not converge for the "
-                "following {} time steps: {}.".format(
-                    len(timesteps_not_converged), timesteps_not_converged
-                )
-            )
+            # get converged and not converged time steps
+            timesteps_converged, timesteps_not_converged = _check_convergence()
 
         # handle converged time steps
         pypsa_io.process_pfa_results(self, pypsa_network, timesteps_converged)
