@@ -640,6 +640,22 @@ class Topology:
         for lv_grid_id in self.buses_df.lv_grid_id.dropna().unique():
             yield self.get_lv_grid(int(lv_grid_id))
 
+    @property
+    def _grids_repr(self):
+        """
+        Returns a list with all grid names, including MV grid and underlying LV grids.
+
+        Returns
+        --------
+        list(str)
+            List with all grid names (string representatives), including MV grid
+            and underlying LV grids.
+
+        """
+        return ([f"LVGrid_{int(id)}" for id
+                 in self.buses_df.lv_grid_id.dropna().unique()] +
+                [f"MVGrid_{int(self.mv_grid.id)}"])
+
     def get_lv_grid(self, name):
         """
         Returns :class:`~.network.grids.LVGrid` object for given LV grid ID or name.

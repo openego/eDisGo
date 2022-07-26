@@ -36,6 +36,12 @@ class TestTopology:
         assert len(lv_grids) == 10
         assert isinstance(lv_grids[0], LVGrid)
 
+    def test__grids_repr(self):
+        grids_repr = self.topology._grids_repr
+        assert len(grids_repr) == 11
+        assert isinstance(grids_repr[0], str)
+        assert "LVGrid_1" in grids_repr
+
     def test_get_lv_grid(self, caplog):
         # test integer input
         name = 1
