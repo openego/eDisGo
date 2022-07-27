@@ -14,7 +14,7 @@ Please delete options that are not relevant.
 
 # Checklist:
 
-- [ ] New and adjusted code is formated using the `pre-commit` hooks
+- [ ] New and adjusted code is formatted using the `pre-commit` hooks
 - [ ] New and adjusted code includes type hinting now
 - [ ] I have commented my code, particularly in hard-to-understand areas
 - [ ] I have made corresponding changes to the documentation
