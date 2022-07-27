@@ -807,6 +807,41 @@ class Results:
         for attr in attr_to_reduce:
             setattr(self, attr, getattr(self, attr).astype(to_type))
 
+    def equality_check(self, results_obj):
+        """
+        Checks the equality of two results objects.
+
+        Parameters
+        ----------
+        results_obj : :class:~.network.results.Results
+            Contains the results of analyze function with default settings.
+
+        Returns
+        -------
+        bool
+            True if equality check is successful, False otherwise.
+
+        """
+
+        attr_to_check = [
+            "pfa_p",
+            "pfa_q",
+            "pfa_v_ang_seed",
+            "pfa_v_mag_pu_seed",
+            "v_res",
+            "i_res",
+        ]
+        try:
+            for attr in attr_to_check:
+                pd.testing.assert_frame_equal(
+                    getattr(self, attr),
+                    getattr(results_obj, attr),
+                    check_freq=False,
+                )
+            return True
+        except AssertionError:
+            return False
+
     def to_csv(
         self, directory, parameters=None, reduce_memory=False, save_seed=False, **kwargs
     ):
