@@ -124,12 +124,12 @@ class Component(BasicComponent):
 
         Parameters
         -----------
-        bus : :obj:`str`
+        bus : str
             ID of bus to connect component to.
 
         Returns
         --------
-        :obj:`str`
+        str
             Bus component is connected to.
 
         """
@@ -160,7 +160,7 @@ class Component(BasicComponent):
         if math.isnan(grid.lv_grid_id):
             return self.topology.mv_grid
         else:
-            return self.topology._grids["LVGrid_{}".format(int(grid.lv_grid_id))]
+            return self.topology.get_lv_grid(int(grid.lv_grid_id))
 
     @property
     def geom(self):
@@ -310,8 +310,6 @@ class Load(Component):
         # check if bus is valid
         if bus in self.topology.buses_df.index:
             self.topology._loads_df.at[self.id, "bus"] = bus
-            # reset topology
-            self._grid = None
         else:
             raise AttributeError("Given bus ID does not exist.")
 
@@ -348,12 +346,12 @@ class Generator(Component):
 
         Parameters
         -----------
-        nominal_power : :obj:`float`
+        nominal_power : float
             Nominal power of generator in MW.
 
         Returns
         --------
-        :obj:`float`
+        float
             Nominal power of generator in MW.
 
         """
@@ -468,8 +466,6 @@ class Generator(Component):
         # check if bus is valid
         if bus in self.topology.buses_df.index:
             self.topology._generators_df.at[self.id, "bus"] = bus
-            # reset topology
-            self._grid = None
         else:
             raise AttributeError("Given bus ID does not exist.")
 
@@ -478,272 +474,84 @@ class Storage(Component):
     """
     Storage object
 
-    ToDo: adapt to refactored code!
-
-    Describes a single storage instance in the eDisGo network. Includes technical
-    parameters such as :attr:`Storage.efficiency_in` or
-    :attr:`Storage.standing_loss` as well as its time series of operation
-    :meth:`Storage.timeseries`.
-
     """
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        raise NotImplementedError
-
-        self._timeseries = kwargs.get("timeseries", None)
-        self._nominal_power = kwargs.get("nominal_power", None)
-        self._power_factor = kwargs.get("power_factor", None)
-        self._reactive_power_mode = kwargs.get("reactive_power_mode", None)
-
-        self._max_hours = kwargs.get("max_hours", None)
-        self._soc_initial = kwargs.get("soc_initial", None)
-        self._efficiency_in = kwargs.get("efficiency_in", None)
-        self._efficiency_out = kwargs.get("efficiency_out", None)
-        self._standing_loss = kwargs.get("standing_loss", None)
-        self._operation = kwargs.get("operation", None)
-        self._reactive_power_mode = kwargs.get("reactive_power_mode", None)
-        self._q_sign = None
-
     @property
     def _network_component_df(self):
         """
-        Dataframe in :class:`~.network.topology.Topology` containing all switches.
+        Dataframe in :class:`~.network.topology.Topology` containing all storage units.
 
-        For switches this is :attr:`~.network.topology.Topology.switches_df`.
+        For storage units this is :attr:`~.network.topology.Topology.storage_units_df`.
 
         Returns
         --------
         :pandas:`pandas.DataFrame<dataframe>`
-            See :attr:`~.network.topology.Topology.switches_df` for more
+            See :attr:`~.network.topology.Topology.storage_units_df` for more
             information.
 
         """
-        return self.topology.switches_df
-
-    @property
-    def timeseries(self):
-        """
-        Time series of storage operation
-
-        Parameters
-        ----------
-        ts : :pandas:`pandas.DataFrame<dataframe>`
-            DataFrame containing active power the storage is charged (negative)
-            and discharged (positive) with (on the topology side) in kW in column
-            'p' and reactive power in kvar in column 'q'. When 'q' is positive,
-            reactive power is supplied (behaving as a capacitor) and when 'q'
-            is negative reactive power is consumed (behaving as an inductor).
-
-        Returns
-        -------
-        :pandas:`pandas.DataFrame<dataframe>`
-            See parameter `timeseries`.
-
-        """
-        # check if time series for reactive power is given, otherwise
-        # calculate it
-        if "q" in self._timeseries.columns:
-            return self._timeseries
-        else:
-            self._timeseries["q"] = (
-                abs(self._timeseries.p) * self.q_sign * tan(acos(self.power_factor))
-            )
-            return self._timeseries.loc[self.grid.edisgo_obj.timeseries.timeindex, :]
+        return self.topology.storage_units_df
 
     @property
     def nominal_power(self):
         """
-        Nominal charging and discharging power of storage instance in kW.
+        Nominal power of storage unit in MW.
+
+        Parameters
+        -----------
+        nominal_power : float
+            Nominal power of storage unit in MW.
 
         Returns
-        -------
+        --------
         float
-            Storage nominal power
+            Nominal power of storage unit in MW.
 
         """
-        return self._nominal_power
+        # TODO: Should this change the time series as well?
+        #  (same for loads, and type setter...)
+        return self.topology.storage_units_df.at[self.id, "p_nom"]
+
+    @nominal_power.setter
+    def nominal_power(self, nominal_power):
+        # ToDo: Maybe perform type check before setting it.
+        self.topology._storage_units_df.at[self.id, "p_nom"] = nominal_power
 
     @property
-    def max_hours(self):
+    def active_power_timeseries(self):
         """
-        Maximum state of charge capacity in terms of hours at full discharging
-        power `nominal_power`.
+        Active power time series of storage unit in MW.
 
         Returns
-        -------
-        float
-            Hours storage can be discharged for at nominal power
+        --------
+        :pandas:`pandas.Series<Series>`
+            Active power time series of storage unit in MW.
 
         """
-        return self._max_hours
+        return self.edisgo_obj.timeseries.storage_units_active_power.loc[:, self.id]
 
     @property
-    def nominal_capacity(self):
+    def reactive_power_timeseries(self):
         """
-        Nominal storage capacity in kWh.
+        Reactive power time series of storage unit in Mvar.
 
         Returns
-        -------
-        float
-            Storage nominal capacity
+        --------
+        :pandas:`pandas.Series<Series>`
+            Reactive power time series of storage unit in Mvar.
 
         """
-        return self._max_hours * self._nominal_power
+        return self.edisgo_obj.timeseries.storage_units_reactive_power.loc[:, self.id]
 
-    @property
-    def soc_initial(self):
-        """Initial state of charge in kWh.
-
-        Returns
-        -------
-        float
-            Initial state of charge
-
-        """
-        return self._soc_initial
-
-    @property
-    def efficiency_in(self):
-        """Storage charging efficiency in per unit.
-
-        Returns
-        -------
-        float
-            Charging efficiency in range of 0..1
-
-        """
-        return self._efficiency_in
-
-    @property
-    def efficiency_out(self):
-        """Storage discharging efficiency in per unit.
-
-        Returns
-        -------
-        float
-            Discharging efficiency in range of 0..1
-
-        """
-        return self._efficiency_out
-
-    @property
-    def standing_loss(self):
-        """Standing losses of storage in %/100 / h
-
-        Losses relative to SoC per hour. The unit is pu (%/100%). Hence, it
-        ranges from 0..1.
-
-        Returns
-        -------
-        float
-            Standing losses in pu.
-
-        """
-        return self._standing_loss
-
-    @property
-    def operation(self):
-        """
-        Storage operation definition
-
-        Returns
-        -------
-        :obj:`str`
-
-        """
-        self._operation
-
-    # @property
-    # def power_factor(self):
-    #     """
-    #     Power factor of storage
-    #
-    #     If power factor is not set it is retrieved from the topology config
-    #     object depending on the topology level the storage is in.
-    #
-    #     Returns
-    #     --------
-    #     :obj:`float` : Power factor
-    #         Ratio of real power to apparent power.
-    #
-    #     """
-    #     if self._power_factor is None:
-    #         if isinstance(self.topology, MVGrid):
-    #             self._power_factor = self.topology.topology.config[
-    #                 'reactive_power_factor']['mv_storage']
-    #         elif isinstance(self.topology, LVGrid):
-    #             self._power_factor = self.topology.topology.config[
-    #                 'reactive_power_factor']['lv_storage']
-    #     return self._power_factor
-    #
-    # @power_factor.setter
-    # def power_factor(self, power_factor):
-    #     self._power_factor = power_factor
-
-    # @property
-    # def reactive_power_mode(self):
-    #     """
-    #     Power factor mode of storage.
-    #
-    #     If the power factor is set, then it is necessary to know whether
-    #     it is leading or lagging. In other words this information is necessary
-    #     to make the storage behave in an inductive or capacitive manner.
-    #     Essentially this changes the sign of the reactive power Q.
-    #
-    #     The convention used here in a storage is that:
-    #     - when `reactive_power_mode` is 'capacitive' then Q is positive
-    #     - when `reactive_power_mode` is 'inductive' then Q is negative
-    #
-    #     In the case that this attribute is not set, it is retrieved from the
-    #     topology config object depending on the voltage level the storage
-    #     is in.
-    #
-    #     Returns
-    #     -------
-    #     :obj: `str` : Power factor mode
-    #         Either 'inductive' or 'capacitive'
-    #
-    #     """
-    #     if self._reactive_power_mode is None:
-    #         if isinstance(self.topology, MVGrid):
-    #             self._reactive_power_mode = self.topology.topology.config[
-    #                 'reactive_power_mode']['mv_storage']
-    #         elif isinstance(self.topology, LVGrid):
-    #             self._reactive_power_mode = self.topology.topology.config[
-    #                 'reactive_power_mode']['lv_storage']
-    #
-    #     return self._reactive_power_mode
-
-    # @reactive_power_mode.setter
-    # def reactive_power_mode(self, reactive_power_mode):
-    #     """
-    #     Set the power factor mode of the generator.
-    #     Should be either 'inductive' or 'capacitive'
-    #     """
-    #     self._reactive_power_mode = reactive_power_mode
-
-    @property
-    def q_sign(self):
-        """
-        Get the sign reactive power based on the
-        :attr: `_reactive_power_mode`
-
-        Returns
-        -------
-        :obj: `int` : +1 or -1
-        """
-        if self.reactive_power_mode.lower() == "inductive":
-            return -1
-        elif self.reactive_power_mode.lower() == "capacitive":
-            return 1
+    def _set_bus(self, bus):
+        # check if bus is valid
+        if bus in self.topology.buses_df.index:
+            self.topology._storage_units_df.at[self.id, "bus"] = bus
         else:
-            raise ValueError(
-                "Unknown value {} in reactive_power_mode".format(
-                    self.reactive_power_mode
-                )
-            )
+            raise AttributeError("Given bus ID does not exist.")
 
     def __repr__(self):
         return str(self._id)
@@ -892,7 +700,7 @@ class Switch(BasicComponent):
         if math.isnan(grid.lv_grid_id):
             return self.topology.mv_grid
         else:
-            return self.topology._grids["LVGrid_{}".format(int(grid.lv_grid_id))]
+            return self.topology.get_lv_grid(int(grid.lv_grid_id))
 
     def open(self):
         """
@@ -982,7 +790,7 @@ class PotentialChargingParks(BasicComponent):
             if math.isnan(lv_grid_id):
                 return self.topology.mv_grid
             else:
-                return self.topology._grids[f"LVGrid_{int(lv_grid_id)}"]
+                return self.topology.get_lv_grid(int(lv_grid_id))
         except Exception:
             return None
 
