@@ -23,6 +23,7 @@ from edisgo.io.electromobility_import import (
 from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.network import timeseries
 from edisgo.network.electromobility import Electromobility
+from edisgo.network.heat import HeatPump
 from edisgo.network.results import Results
 from edisgo.network.topology import Topology
 from edisgo.opf.results.opf_result_class import OPFResults
@@ -122,15 +123,16 @@ class EDisGo:
         self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
 
-        # instantiate electromobility object and load charging processes and sites
-        self.electromobility = Electromobility(edisgo_obj=self)
-
         # set up results and time series container
         self.results = Results(self)
         self.opf_results = OPFResults()
         self.timeseries = timeseries.TimeSeries(
             timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
         )
+
+        # instantiate electromobility and heat pump object
+        self.electromobility = Electromobility(edisgo_obj=self)
+        self.heat_pump = HeatPump()
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
@@ -1837,45 +1839,51 @@ class EDisGo:
         save_timeseries=True,
         save_results=True,
         save_electromobility=True,
+        save_heatpump=True,
         **kwargs,
     ):
         """
         Saves EDisGo object to csv.
 
-        It can be chosen if results, topology and timeseries should be saved.
-        For each one, a separate directory is created.
+        It can be chosen if results, topology, time series, electromobility
+        and heat pump data should be saved. For each one, a separate directory
+        is created. It can further be chosen, if time series should be reduced to
+        a smaller data type.
 
         Parameters
         ----------
         directory : str
             Main directory to save EDisGo object to.
         save_topology : bool, optional
-            Indicates whether to save :class:`~.network.topology.Topology`.
+            Indicates whether to save data in :class:`~.network.topology.Topology`.
             Per default it is saved. See
             :attr:`~.network.topology.Topology.to_csv` for more information.
         save_timeseries : bool, optional
-            Indicates whether to save :class:`~.network.timeseries.Timeseries`.
+            Indicates whether to save data in :class:`~.network.timeseries.Timeseries`.
             Per default it is saved. See
             :attr:`~.network.timeseries.Timeseries.to_csv` for more
             information.
         save_results : bool, optional
-            Indicates whether to save :class:`~.network.results.Results`
+            Indicates whether to save data in :class:`~.network.results.Results`
             object. Per default it is saved. See
             :attr:`~.network.results.Results.to_csv` for more information.
         save_electromobility : bool, optional
-            Indicates whether to save
+            Indicates whether to save data in
             :class:`~.network.electromobility.Electromobility`. Per default it is saved.
             See :attr:`~.network.electromobility.Electromobility.to_csv` for more
             information.
+        save_heatpump : bool, optional
+            Indicates whether to save data in
+            :class:`~.network.heat.HeatPump`. Per default it is saved.
+            See :attr:`~.network.heat.HeatPump.to_csv` for more information.
 
         Other Parameters
         ------------------
         reduce_memory : bool, optional
             If True, size of dataframes containing time series in
-            :class:`~.network.results.Results` and
-            :class:`~.network.timeseries.TimeSeries`
-            is reduced. See :attr:`~.network.results.Results.reduce_memory`
-            and :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
+            :class:`~.network.results.Results`, :class:`~.network.timeseries.TimeSeries`
+            and :class:`~.network.heat.HeatPump`
+            is reduced. See respective classes `reduce_memory` functions for more
             information. Type to convert to can be specified by providing
             `to_type` as keyword argument. Further parameters of reduce_memory
             functions cannot be passed here. Call these functions directly to
@@ -1883,12 +1891,15 @@ class EDisGo:
         to_type : str, optional
             Data type to convert time series data to. This is a tradeoff
             between precision and memory. Default: "float32".
+        parameters : None or dict
+            Result class parameters to save to csv. See
+            :attr:`~.network.results.Results.to_csv` for further information.
         archive : bool, optional
             Save storage capacity by archiving the results in an archive. The
             archiving takes place after the generation of the CSVs and
             therefore temporarily the storage needs are higher. Default: False.
         archive_type : str, optional
-            Set archive type. Default "zip"
+            Set archive type. Default "zip".
         drop_unarchived : bool, optional
             Drop the unarchived data if parameter archive is set to True.
             Default: True.
@@ -1916,6 +1927,13 @@ class EDisGo:
 
         if save_electromobility:
             self.electromobility.to_csv(os.path.join(directory, "electromobility"))
+
+        if save_heatpump:
+            self.heat_pump.to_csv(
+                os.path.join(directory, "heat_pump"),
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32"),
+            )
 
         if kwargs.get("archive", False):
             archive_type = kwargs.get("archive_type", "zip")
