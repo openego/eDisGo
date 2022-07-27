@@ -536,7 +536,7 @@ class EDisGo:
             * 'lv'
 
                 Single LV network topology including the MV/LV transformer is exported.
-                The LV grid to export is specified through the parameter `lv_grid_name`.
+                The LV grid to export is specified through the parameter `lv_grid_id`.
                 The slack is positioned at the secondary side of the MV/LV station.
 
         timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
@@ -561,8 +561,9 @@ class EDisGo:
             analyses as initial guess in case of PQ buses. PV buses currently do
             not occur and are therefore currently not supported.
             Default: False.
-        lv_grid_name : str
-            String representative of LV grid to export in case mode is 'lv'.
+        lv_grid_id : int or str
+            ID (e.g. 1) or name (string representation, e.g. "LVGrid_1") of LV grid
+            to export in case mode is 'lv'.
         aggregate_loads : str
             Mode for load aggregation in LV grids in case mode is 'mv' or 'mvlv'.
             Can be 'sectoral' aggregating the loads sector-wise, 'all' aggregating all
@@ -716,9 +717,11 @@ class EDisGo:
 
             * 'lv'
 
-                Power flow analysis is conducted for one LV grid only. Name of the LV
-                grid to conduct power flow analysis for needs to be provided through
-                keyword argument 'lv_grid_name' as string.
+                Power flow analysis is conducted for one LV grid only. ID or name of
+                the LV grid to conduct power flow analysis for needs to be provided
+                through keyword argument 'lv_grid_id' as integer or string.
+                See parameter `lv_grid_id` in :attr:`~.edisgo.EDisGo.to_pypsa` for more
+                information.
                 The slack is positioned at the secondary side of the MV/LV station.
 
         timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \

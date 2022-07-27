@@ -111,14 +111,16 @@ A list of all LV grids can be retrieved through:
     # (Note that MVGrid.lv_grids returns a generator object that must first be
     #  converted to a list in order to view the LVGrid objects)
     list(edisgo.topology.mv_grid.lv_grids)
+    # the following yields the same
+    list(edisgo.topology.lv_grids)
 
 Access to a single LV grid's components can be obtained analog to shown above for
 the whole topology and the MV grid:
 
 .. code-block:: python
 
-    # Get single LV grid
-    lv_grid = list(edisgo.topology.mv_grid.lv_grids)[0]
+    # Get single LV grid by providing its ID (e.g. 1) or name (e.g. "LVGrid_1")
+    lv_grid = edisgo.topology.get_lv_grid("LVGrid_402945")
 
     # Access all buses in that LV grid
     lv_grid.buses_df

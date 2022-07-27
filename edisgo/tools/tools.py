@@ -312,7 +312,7 @@ def assign_feeder(edisgo_obj, mode="mv_feeder"):
                 # in case of an LV station, assign feeder to all nodes in that
                 # LV network (only applies when mode is 'mv_feeder'
                 if node.split("_")[0] == "BusBar" and node.split("_")[-1] == "MV":
-                    lvgrid = LVGrid(id=int(node.split("_")[-2]), edisgo_obj=edisgo_obj)
+                    lvgrid = edisgo_obj.topology.get_lv_grid(int(node.split("_")[-2]))
                     edisgo_obj.topology.buses_df.loc[
                         lvgrid.buses_df.index, mode
                     ] = neighbor
@@ -377,9 +377,9 @@ def get_path_length_to_station(edisgo_obj):
         edisgo_obj.topology.buses_df.at[bus, "path_length_to_station"] = len(path) - 1
         if bus.split("_")[0] == "BusBar" and bus.split("_")[-1] == "MV":
             # check if there is an underlying LV grid
-            lv_grid_repr = "LVGrid_{}".format(int(bus.split("_")[-2]))
-            if lv_grid_repr in edisgo_obj.topology._grids.keys():
-                lvgrid = edisgo_obj.topology._grids[lv_grid_repr]
+            lv_grid_id = int(bus.split("_")[-2])
+            if lv_grid_id in edisgo_obj.topology._lv_grid_ids:
+                lvgrid = edisgo_obj.topology.get_lv_grid(lv_grid_id)
                 lv_graph = lvgrid.graph
                 lv_station = lvgrid.station.index[0]
                 for bus in lvgrid.buses_df.index:

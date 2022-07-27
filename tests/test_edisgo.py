@@ -334,7 +334,7 @@ class TestEDisGo:
         assert self.edisgo.results.v_res.shape == (1, 31)
 
         # test mode "lv"
-        self.edisgo.analyze(mode="lv", lv_grid_name="LVGrid_1")
+        self.edisgo.analyze(mode="lv", lv_grid_id=1)
         assert self.edisgo.results.v_res.shape == (4, 15)
 
         # test troubleshooting_mode "lpf"
