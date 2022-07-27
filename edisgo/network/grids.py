@@ -404,7 +404,6 @@ class MVGrid(Grid):
         Draw MV network.
 
         """
-        # ToDo call EDisGoReimport.plot_mv_grid_topology
         raise NotImplementedError
 
 

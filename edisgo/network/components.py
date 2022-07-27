@@ -145,12 +145,12 @@ class Component(BasicComponent):
     @property
     def grid(self):
         """
-        Grid component is in.
+        Grid the component is in.
 
         Returns
         --------
         :class:`~.network.components.Grid`
-            Grid component is in.
+            Grid object the component is in.
 
         """
         grid = self.topology.buses_df.loc[

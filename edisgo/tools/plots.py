@@ -1219,11 +1219,10 @@ def chosen_graph(
 
     Returns
     -------
-    :networkx:`networkx.Graph<network.Graph>`
-        networkx graph of the selected grid
-    :class:`~.network.grids.Grid` or bool
-        Grid to use as root node. See :py:func:`~edisgo.tools.plots.draw_plotly` for
-        more information.
+    (:networkx:`networkx.Graph<network.Graph>`, :class:`~.network.grids.Grid` or bool)
+        Tuple with the first entry being the networkx graph of the selected grid and
+        the second entry the grid to use as root node. See
+        :py:func:`~edisgo.tools.plots.draw_plotly` for more information.
 
     """
     mv_grid = edisgo_obj.topology.mv_grid
