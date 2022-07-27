@@ -234,11 +234,13 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
             # get geom of 1 random MV and 1 random LV generator and transform
             sample_mv_geno_geom_shp = transform(
                 projection,
-                wkt_loads(generators_res_mv["geom"].dropna().sample(n=1).values[0]),
+                wkt_loads(generators_res_mv["geom"].dropna().sample(
+                    n=1, random_state=42).values[0]),
             )
             sample_lv_geno_geom_shp = transform(
                 projection,
-                wkt_loads(generators_res_lv["geom"].dropna().sample(n=1).values[0]),
+                wkt_loads(generators_res_lv["geom"].dropna().sample(
+                    n=1, random_state=42).values[0]),
             )
 
             # get geom of MV grid district
