@@ -1,5 +1,6 @@
 import logging
 import os
+import numpy as np
 import random
 
 import pandas as pd
@@ -374,7 +375,7 @@ def _update_grids(
         Index of the dataframe are the generator IDs.
         Columns are the same as in `imported_generators_mv` plus:
 
-            * mvlv_subst_id : int
+            * mvlv_subst_id : int or float
                 ID of MV-LV substation in grid = grid, the generator will be
                 connected to.
 
@@ -647,9 +648,10 @@ def _update_grids(
 
     # check if new generators can be allocated to an existing LV grid
     if not imported_generators_lv.empty:
-        grid_ids = [_.id for _ in edisgo_object.topology._grids.values()]
+        grid_ids = edisgo_object.topology._lv_grid_ids
         if not any(
-            [_ in grid_ids for _ in list(imported_generators_lv["mvlv_subst_id"])]
+            [int(_) in grid_ids for _ in list(imported_generators_lv["mvlv_subst_id"])
+             if not np.isnan(_)]
         ):
             logger.warning(
                 "None of the imported LV generators can be allocated "
