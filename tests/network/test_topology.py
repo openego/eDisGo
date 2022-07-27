@@ -1116,7 +1116,7 @@ class TestTopologyWithEdisgoObject:
                 "GeneratorFluctuating_2", "weather_cell_id"
             ],
             "voltage_level": 6,
-            "mvlv_subst_id": 10,
+            "mvlv_subst_id": 10.,
         }
 
         comp_name = self.edisgo.topology.connect_to_lv(self.edisgo, test_gen)
@@ -1167,7 +1167,7 @@ class TestTopologyWithEdisgoObject:
         new_bus = self.edisgo.topology.generators_df.at[comp_name, "bus"]
         assert self.edisgo.topology.buses_df.at[new_bus, "v_nom"] == 0.4
         lv_grid_id = self.edisgo.topology.buses_df.at[new_bus, "lv_grid_id"]
-        lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=self.edisgo)
+        lv_grid = self.edisgo.topology.get_lv_grid(int(lv_grid_id))
         assert new_bus == lv_grid.station.index[0]
         # check new generator
         assert self.edisgo.topology.generators_df.at[comp_name, "p_nom"] == 0.3
@@ -1205,7 +1205,7 @@ class TestTopologyWithEdisgoObject:
         new_bus = self.edisgo.topology.generators_df.at[comp_name, "bus"]
         assert self.edisgo.topology.buses_df.at[new_bus, "v_nom"] == 0.4
         lv_grid_id = self.edisgo.topology.buses_df.at[new_bus, "lv_grid_id"]
-        lv_grid = LVGrid(id=lv_grid_id, edisgo_obj=self.edisgo)
+        lv_grid = self.edisgo.topology.get_lv_grid(int(lv_grid_id))
         assert new_bus == lv_grid.station.index[0]
         # check new generator
         assert self.edisgo.topology.generators_df.at[comp_name, "p_nom"] == 0.3
@@ -1251,7 +1251,7 @@ class TestTopologyWithEdisgoObject:
         assert "Bus_Generator_3456" in list(
             new_line_df.loc[new_line_df.index[0], ["bus0", "bus1"]]
         )
-        lv_grid = LVGrid(id=6, edisgo_obj=self.edisgo)
+        lv_grid = self.edisgo.topology.get_lv_grid(6)
         assert lv_grid.station.index[0] in list(
             new_line_df.loc[new_line_df.index[0], ["bus0", "bus1"]]
         )
@@ -1348,7 +1348,7 @@ class TestTopologyWithEdisgoObject:
             "geom": geom,
             "sector": "home",
             "voltage_level": 7,
-            "mvlv_subst_id": 3,
+            "mvlv_subst_id": 3.,
         }
 
         comp_name = self.edisgo.topology.connect_to_lv(

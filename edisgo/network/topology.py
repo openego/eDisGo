@@ -1029,13 +1029,13 @@ class Topology:
 
         # generate load name and check uniqueness
         if bus_s.lv_grid_id is not None and not np.isnan(bus_s.lv_grid_id):
-            grid_name = "LVGrid_" + str(int(bus_s.lv_grid_id))
+            grid = self.get_lv_grid(int(bus_s.lv_grid_id))
         else:
-            grid_name = "MVGrid_" + str(int(bus_s.mv_grid_id))
+            grid = self.mv_grid
 
         type_name = "_".join([val.capitalize() for val in type.split("_")])
 
-        tmp = f"{type_name}_{grid_name}"
+        tmp = f"{type_name}_{str(grid)}"
 
         if kwargs.get("sector", None) is not None:
             tmp = tmp + "_" + kwargs.get("sector")
@@ -1043,10 +1043,7 @@ class Topology:
         load_id = kwargs.pop("load_id", None)
 
         if load_id is None:
-            type_df = self._grids[grid_name].loads_df.loc[
-                self._grids[grid_name].loads_df.type == type
-            ]
-
+            type_df = grid.loads_df.loc[grid.loads_df.type == type]
             load_id = len(type_df) + 1
 
         load_name = f"{tmp}_{load_id}"
@@ -1079,7 +1076,7 @@ class Topology:
         for col in new_df.columns:
             new_df[col] = pd.to_numeric(new_df[col], errors="ignore")
 
-        self._loads_df = pd.concat(
+        self.loads_df = pd.concat(
             [
                 self.loads_df,
                 new_df,
@@ -1134,10 +1131,10 @@ class Topology:
 
         # generate generator name and check uniqueness
         if not np.isnan(bus_s.lv_grid_id) and bus_s.lv_grid_id is not None:
-            tmp = f"LVGrid_{int(bus_s.lv_grid_id)}"
+            grid = self.get_lv_grid(int(bus_s.lv_grid_id))
         else:
-            tmp = f"MVGrid_{int(bus_s.mv_grid_id)}"
-        tmp = f"{tmp}_{generator_type}"
+            grid = self.mv_grid
+        tmp = f"{str(grid)}_{generator_type}"
         generator_id = kwargs.pop("generator_id", None)
         if generator_id is not None:
             tmp = f"{tmp}_{generator_id}"
@@ -1207,16 +1204,16 @@ class Topology:
 
         # generate storage name and check uniqueness
         if not np.isnan(bus_s.lv_grid_id) and bus_s.lv_grid_id is not None:
-            grid_name = f"LVGrid_{int(bus_s.lv_grid_id)}"
+            grid = self.get_lv_grid(int(bus_s.lv_grid_id))
         else:
-            grid_name = f"MVGrid_{int(bus_s.mv_grid_id)}"
-        storage_id = len(self._grids[grid_name].storage_units_df) + 1
-        storage_name = f"StorageUnit_{grid_name}_{storage_id}"
+            grid = self.mv_grid
+        storage_id = len(grid.storage_units_df) + 1
+        storage_name = f"StorageUnit_{str(grid)}_{storage_id}"
         if storage_name in self.storage_units_df.index:
-            storage_name = f"StorageUnit_{grid_name}_{storage_id + 1}"
+            storage_name = f"StorageUnit_{str(grid)}_{storage_id + 1}"
             while storage_name in self.storage_units_df.index:
                 random.seed(a=storage_name)
-                storage_name = f"StorageUnit_{grid_name}_{random.randint(10**8, 10**9)}"
+                storage_name = f"StorageUnit_{str(grid)}_{random.randint(10**8, 10**9)}"
 
         # create new storage unit dataframe
         data = {"bus": bus, "p_nom": p_nom, "control": control}
@@ -2034,11 +2031,8 @@ class Topology:
                 # ToDo: Seed shouldn't depend on number of charging points, but
                 #  there is currently no better solution
                 random.seed(a=len(self.charging_points_df))
-            lv_grid_id = random.choice(lv_grid_ids)
-            return LVGrid(id=lv_grid_id, edisgo_obj=edisgo_object)
-
-        # get list of LV grid IDs
-        lv_grid_ids = [_.id for _ in self.mv_grid.lv_grids]
+            lv_grid_id = random.choice(self._lv_grid_ids)
+            return self.get_lv_grid(lv_grid_id)
 
         if comp_type == "generator":
             add_func = self.add_generator
@@ -2048,16 +2042,17 @@ class Topology:
         else:
             logger.error(f"Component type {comp_type} is not a valid option.")
 
-        if comp_data["mvlv_subst_id"]:
+        if comp_data["mvlv_subst_id"] is not None and not np.isnan(
+                comp_data["mvlv_subst_id"]):
 
             # if substation ID (= LV grid ID) is given and it matches an
             # existing LV grid ID (i.e. it is no aggregated LV grid), set grid
             # to connect component to specified grid (in case the component
             # has no geometry it is connected to the grid's station)
-            if comp_data["mvlv_subst_id"] in lv_grid_ids:
+            if int(comp_data["mvlv_subst_id"]) in self._lv_grid_ids:
 
                 # get LV grid
-                lv_grid = self._grids[f"LVGrid_{int(comp_data['mvlv_subst_id'])}"]
+                lv_grid = self.get_lv_grid(int(comp_data["mvlv_subst_id"]))
 
             # if substation ID (= LV grid ID) is given but it does not match an
             # existing LV grid ID a random LV grid to connect in is chosen
