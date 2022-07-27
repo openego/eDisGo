@@ -2,6 +2,8 @@ import logging
 import os
 import shutil
 
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -220,7 +222,6 @@ class TestEDisGo:
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
 
     def test_set_time_series_reactive_power_control(self):
-
         # set active power time series for fixed cosphi
         timeindex = pd.date_range("1/1/1970", periods=3, freq="H")
         self.edisgo.set_timeindex(timeindex)
@@ -287,7 +288,6 @@ class TestEDisGo:
         ).all()
 
     def test_to_pypsa(self):
-
         self.setup_worst_case_time_series()
 
         # test mode None and timesteps None (default)
@@ -321,12 +321,12 @@ class TestEDisGo:
         edisgo.import_generators("nep2035")
         assert len(edisgo.topology.generators_df) == 1636
 
-    def test_analyze(self):
-
+    def test_analyze(self, caplog):
         self.setup_worst_case_time_series()
 
         # test mode None and timesteps None (default)
         self.edisgo.analyze()
+        results_analyze = deepcopy(self.edisgo.results)
         assert self.edisgo.results.v_res.shape == (4, 140)
 
         # test mode "mv" and timesteps given
@@ -337,7 +337,26 @@ class TestEDisGo:
         self.edisgo.analyze(mode="lv", lv_grid_id=1)
         assert self.edisgo.results.v_res.shape == (4, 15)
 
-        # ToDo: test non convergence
+        # test troubleshooting_mode "lpf"
+        self.edisgo.analyze(troubleshooting_mode="lpf")
+        assert self.edisgo.results.v_res.shape == (4, 140)
+        assert self.edisgo.results.equality_check(results_analyze)
+
+        # test mode None and troubleshooting_mode "iteration"
+        self.edisgo.analyze(troubleshooting_mode="iteration")
+        assert self.edisgo.results.v_res.shape == (4, 140)
+        assert self.edisgo.results.equality_check(results_analyze)
+
+        # test non convergence
+        msg = "Power flow analysis did not converge for the"
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5)
+
+        caplog.clear()
+        self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5,
+                            range_num=2, raise_not_converged=False)
+        assert ("Current fraction in iterative process: 5.0." in caplog.text)
+        assert ("Current fraction in iterative process: 1.0." in caplog.text)
 
     def test_reinforce(self):
         self.setup_worst_case_time_series()
@@ -348,7 +367,6 @@ class TestEDisGo:
         # Todo: test other relevant values
 
     def test_add_component(self, caplog):
-
         self.setup_worst_case_time_series()
         index = self.edisgo.timeseries.timeindex
         dummy_ts = pd.Series(data=[0.1, 0.2, 0.1, 0.2], index=index)
@@ -490,7 +508,6 @@ class TestEDisGo:
         assert self.edisgo.topology.storage_units_df.loc[storage_name, "p_nom"] == 3.1
 
     def test_integrate_component(self):
-
         self.setup_worst_case_time_series()
 
         num_gens = len(self.edisgo.topology.generators_df)
@@ -605,7 +622,6 @@ class TestEDisGo:
         ).all()
 
     def test_remove_component(self):
-
         self.setup_worst_case_time_series()
 
         # Test remove bus (where bus cannot be removed, because load is still connected)
@@ -649,7 +665,6 @@ class TestEDisGo:
         assert load_name not in self.edisgo.timeseries.loads_reactive_power.columns
 
     def test_aggregate_components(self):
-
         self.setup_worst_case_time_series()
 
         # ##### test without any aggregation
@@ -1089,7 +1104,6 @@ class TestEDisGo:
         shutil.rmtree(os.path.join(save_dir, "electromobility"))
 
     def test_reduce_memory(self):
-
         self.setup_worst_case_time_series()
         self.edisgo.analyze()
 
