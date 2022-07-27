@@ -353,8 +353,6 @@ class MVGrid(Grid):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self._lv_grids = kwargs.get("lv_grids", [])
-
     @property
     def lv_grids(self):
         """
