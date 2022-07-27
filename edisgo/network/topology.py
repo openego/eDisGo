@@ -637,8 +637,21 @@ class Topology:
             Yields generator object with :class:`~.network.grids.LVGrid` object.
 
         """
-        for lv_grid_id in self.buses_df.lv_grid_id.dropna().unique():
-            yield self.get_lv_grid(int(lv_grid_id))
+        for lv_grid_id in self._lv_grid_ids:
+            yield self.get_lv_grid(lv_grid_id)
+
+    @property
+    def _lv_grid_ids(self):
+        """
+        Returns a list with all LV grid IDs.
+
+        Returns
+        --------
+        list(int)
+            List with all LV grid IDs as integers.
+
+        """
+        return [int(_) for _ in self.buses_df.lv_grid_id.dropna().unique()]
 
     @property
     def _grids_repr(self):
@@ -652,8 +665,7 @@ class Topology:
             and underlying LV grids.
 
         """
-        return ([f"LVGrid_{int(id)}" for id
-                 in self.buses_df.lv_grid_id.dropna().unique()] +
+        return ([f"LVGrid_{id}" for id in self._lv_grid_ids] +
                 [f"MVGrid_{int(self.mv_grid.id)}"])
 
     def get_lv_grid(self, name):
