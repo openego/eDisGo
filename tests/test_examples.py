@@ -7,7 +7,7 @@ from examples import example_grid_reinforcement
 
 
 class TestExamples:
-    @pytest.mark.slow
+    #@pytest.mark.slow
     def test_grid_reinforcement_example(self):
         total_costs = example_grid_reinforcement.run_example()
         # ToDo: total costs are for some reason not deterministic, check why!!
@@ -15,5 +15,5 @@ class TestExamples:
         assert total_costs > 0.0
 
         # Delete saved grid and results data
-        edisgo_path = os.path.join(os.path.expanduser("~"), ".eDisGo")
+        edisgo_path = os.path.join(os.path.expanduser("~"), ".edisgo")
         shutil.rmtree(os.path.join(edisgo_path, "ding0_example_grid"))
