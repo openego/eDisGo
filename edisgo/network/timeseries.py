@@ -1851,7 +1851,7 @@ class TimeSeries:
         """
         Reduces size of dataframes to save memory.
 
-        See :attr:`EDisGo.reduce_memory` for more information.
+        See :attr:`~.edisgo.EDisGo.reduce_memory` for more information.
 
         Parameters
         -----------
@@ -2229,15 +2229,18 @@ class TimeSeriesRaw:
         """
         Reduces size of dataframes to save memory.
 
-        See :attr:`EDisGo.reduce_memory` for more information.
+        See :attr:`~.edisgo.EDisGo.reduce_memory` for more information.
 
         Parameters
         -----------
         attr_to_reduce : list(str), optional
             List of attributes to reduce size for. Attributes need to be
-            dataframes containing only time series. Per default, all active
-            and reactive power time series of generators, loads, storage units
-            and charging points are reduced.
+            dataframes containing only time series. Per default the following attributes
+            are reduced if they exist: q_control,
+            fluctuating_generators_active_power_by_technology,
+            dispatchable_generators_active_power_by_technology,
+            conventional_loads_active_power_by_sector,
+            charging_points_active_power_by_use_case.
         to_type : str, optional
             Data type to convert time series data to. This is a tradeoff
             between precision and memory. Default: "float32".
