@@ -11,7 +11,7 @@ features can be used.
 The fundamental data structure
 ------------------------------
 
-It's worth to understand how the fundamental data structure of eDisGo is
+It's worth understanding how the fundamental data structure of eDisGo is
 designed in order to make use of its entire features.
 
 The class :class:`~.EDisGo` serves as the top-level API for
@@ -20,7 +20,12 @@ capacity, grid reinforcement and flexibility measures. It also provides
 access to all relevant data.
 Grid data is stored in the :class:`~.network.topology.Topology` class.
 Time series data can be found in the :class:`~.network.timeseries.TimeSeries`
-class. Results data holding results e.g. from the power flow analysis and grid
+class.
+The class :class:`~.network.electromobility.Electromobility` holds data on charging
+processes (how long cars are parking at a charging station, how much they need to charge,
+etc.) necessary to apply different charging strategies, as well as information on
+potential charging sites and integrated charging parks.
+Results data holding results e.g. from the power flow analysis and grid
 expansion is stored in the :class:`~.network.results.Results` class.
 Configuration data from the config files (see :ref:`default_configs`) is stored
 in the :class:`~.tools.config.Config` class.
@@ -35,6 +40,9 @@ code examples `edisgo` constitues an :class:`~.EDisGo` object.
 
     # Access TimeSeries data container object
     edisgo.timeseries
+
+    # Access Electromobility data container object
+    edisgo.electromobility
 
     # Access Results data container object
     edisgo.results
@@ -103,14 +111,16 @@ A list of all LV grids can be retrieved through:
     # (Note that MVGrid.lv_grids returns a generator object that must first be
     #  converted to a list in order to view the LVGrid objects)
     list(edisgo.topology.mv_grid.lv_grids)
+    # the following yields the same
+    list(edisgo.topology.lv_grids)
 
 Access to a single LV grid's components can be obtained analog to shown above for
 the whole topology and the MV grid:
 
 .. code-block:: python
 
-    # Get single LV grid
-    lv_grid = list(edisgo.topology.mv_grid.lv_grids)[0]
+    # Get single LV grid by providing its ID (e.g. 1) or name (e.g. "LVGrid_1")
+    lv_grid = edisgo.topology.get_lv_grid("LVGrid_402945")
 
     # Access all buses in that LV grid
     lv_grid.buses_df
@@ -151,8 +161,145 @@ of the whole topology or each single grid can be retrieved as follows:
 The returned graph is a :networkx:`networkx.Graph<network.Graph>`, where lines are represented
 by edges in the graph, and buses and transformers are represented by nodes.
 
-Identify grid issues
---------------------
+Component time series
+------------------------
+
+There are various options how to set active and reactive power time series. First, options
+for setting active power time series are explained, followed by options for setting
+reactive power time series.
+You can also check out the :ref:`edisgo-mwe` section to get a quick start.
+
+Active power time series
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are various options how to set active time series:
+
+* "manual": providing your own time series
+* "worst-case": using simultaneity factors from config files
+* "predefined": using predefined profiles, e.g. standard load profiles
+* "optimised": using the LOPF to optimise e.g. vehicle charging
+* "heuristic": using heuristics
+
+.. _active_power_manual:
+
+Manual
+.......
+
+Use this mode to provide your own time series for specific components.
+It can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_manual()
+
+See :attr:`~.edisgo.EDisGo.set_time_series_manual` for more information.
+
+When using this mode make sure to previously set the time index. This can either be done
+upon initialisation of the EDisGo object by providing the input parameter 'timeindex' or
+by using the function :attr:`~.edisgo.EDisGo.set_timeindex`.
+
+Worst-case
+...........
+
+Use this mode to set feed-in and load in heavy load flow case (here called "load_case")
+and/or reverse power flow case (here called "feed-in_case") using simultaneity factors
+used in conventional grid planning.
+It can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_worst_case_analysis()
+
+See :attr:`~.edisgo.EDisGo.set_time_series_worst_case_analysis` for more information.
+
+When using this mode a fictitious time index starting 1/1/1970 00:00 is automatically set.
+This is done because pypsa needs time indeces. To find out which time index corresponds
+to which case check out:
+
+.. code-block:: python
+
+    edisgo.timeseries.timeindex_worst_cases
+
+Predefined
+.............
+
+Use this mode if you want to set time series by component type.
+You may either provide your own time series or use ones provided through the
+OpenEnergy DataBase or other python tools.
+This mode can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_active_power_predefined()
+
+For the following components you can use existing time series:
+
+* Fluctuating generators: Feed-in time series for solar and wind power plants can be
+  retrieved from the `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+* Conventional loads: Standard load profiles for the different sectors residential,
+  commercial, agricultural and industrial are generated using the oemof
+  `demandlib <https://github.com/oemof/demandlib/>`_.
+
+For all other components you need to provide your own time series. Time series for
+heat pumps cannot be set using this mode.
+See :attr:`~.edisgo.EDisGo.set_time_series_active_power_predefined` for more information.
+
+When using this mode make sure to previously set the time index. This can either be done
+upon initialisation of the EDisGo object by providing the input parameter 'timeindex' or
+by using the function :attr:`~.edisgo.EDisGo.set_timeindex`.
+
+Optimised
+..........
+
+Use this mode to optimise flexibilities, e.g. charging of electric vehicles.
+
+.. todo:: Add more details once the optimisation is merged.
+
+Heuristic
+..........
+
+Use this mode to use heuristics to set time series. So far, only heuristics for
+electric vehicle charging are implemented.
+The charging strategies can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.apply_charging_strategy()
+
+See :attr:`~.edisgo.EDisGo.apply_charging_strategy` for more information.
+
+Reactive power time series
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are so far two options how to set reactive power time series:
+
+* "manual": providing your own time series
+* "fixed :math:`cos\varphi`": using a fixed power factor
+
+It is perspectively planned to also provide reactive power controls Q(U) and
+:math:`cos\varphi(P)`.
+
+Manual
+.......
+
+See active power :ref:`active_power_manual` mode documentation.
+
+Fixed :math:`cos\varphi`
+................................
+
+Use this mode to set reactive power time series using fixed power factors.
+It can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_reactive_power_control()
+
+See :attr:`~.edisgo.EDisGo.set_time_series_reactive_power_control` for more information.
+
+When using this mode make sure to previously set active power time series.
+
+Identifying grid issues
+-------------------------
 
 As detailed in :ref:`edisgo-mwe`, once you set up your scenario by instantiating an
 :class:`~.EDisGo` object, you are ready for a grid analysis and identifying grid
@@ -199,16 +346,16 @@ Costs for the grid expansion measures can be obtained as follows:
 Further information on the grid reinforcement methodology can be found in section
 :ref:`grid_expansion_methodology`.
 
+Electromobility
+-----------------
+
+.. todo:: Add
+
 Battery storage systems
 ------------------------
 
 Battery storage systems can be integrated into the grid as an alternative to
 classical grid expansion.
-The storage integration heuristic described in section
-:ref:`storage-integration-label` is not available at the moment. Instead, you
-may either integrate a storage unit at a specified bus manually or use the
-optimal power flow to optimally distribute a given storage capacity in the grid.
-
 Here are two small examples on how to integrate a storage unit manually. In the
 first one, the EDisGo object is set up for a worst-case analysis, wherefore no
 time series needs to be provided for the storage unit, as worst-case definition
@@ -277,7 +424,12 @@ a time series for the storage unit needs to be provided.
             index=edisgo.timeseries.timeindex)
     )
 
-Following is an example on how to use the OPF to find the optimal storage
+To optimise storage positioning and operation eDisGo provides the options to use a
+heuristic (described in section :ref:`storage-integration-label`) or an optimal power
+flow approach. However, the storage integration heuristic is not yet adapted to the
+refactored code and therefore not available, and the OPF is not maintained and may therefore
+not work out of the box.
+Following you find an example on how to use the OPF to find the optimal storage
 positions in the grid with regard to grid expansion costs. Storage operation
 is optimized at the same time. The example uses the same EDisGo instance as
 above. A total storage capacity of 10 MW is distributed in the grid. `storage_buses`
@@ -299,12 +451,16 @@ Curtailment
 -----------
 
 The curtailment function is used to spatially distribute the power that is to be curtailed.
-The two heuristics `feedin-proportional` and `voltage-based`, in detail explained
-in section :ref:`curtailment_in_detail-label`, are currently not available.
-Instead you may use the optimal power flow to find the optimal generator
+To optimise which generators should be curtailed eDisGo provides the options to use a
+heuristics (heuristics `feedin-proportional` and `voltage-based`, in detail explained
+in section :ref:`curtailment_in_detail-label`) or an optimal power
+flow approach. However, the heuristics are not yet adapted to the
+refactored code and therefore not available, and the OPF is not maintained and may therefore
+not work out of the box.
+
+In the following example the optimal power flow is used to find the optimal generator
 curtailment with regard to minimizing grid expansion costs for given
-curtailment requirements. The following example again uses the EDisGo object
-from above.
+curtailment requirements. It uses the EDisGo object from above.
 
 .. code-block:: python
 
@@ -317,6 +473,8 @@ from above.
 
 Plots
 ----------------
+
+.. todo:: Add plotly plot option
 
 EDisGo provides a bunch of predefined plots to e.g. plot the MV grid topology,
 line loading and node voltages in the MV grid or as a histograms.

@@ -14,11 +14,23 @@ class TestPypsaIO:
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
         timeindex = self.edisgo.timeseries.timeindex
-        pypsa_network = pypsa_io.to_pypsa(self.edisgo, timeindex)
+
+        # test mode None
+        pypsa_network = pypsa_io.to_pypsa(self.edisgo, timesteps=timeindex)
         slack_df = pypsa_network.generators[pypsa_network.generators.control == "Slack"]
         assert len(slack_df) == 1
         assert slack_df.bus.values[0] == "Bus_MVStation_1"
         # ToDo: Check further things
+
+        # test mode "lv" and single time step
+        lv_grid = self.edisgo.topology.get_lv_grid(1)
+        pypsa_network = pypsa_io.to_pypsa(
+            self.edisgo, timesteps=timeindex[0], mode="lv", lv_grid_id=lv_grid.id)
+        slack_df = pypsa_network.generators[pypsa_network.generators.control == "Slack"]
+        assert len(slack_df) == 1
+        assert slack_df.bus.values[0] == lv_grid.station.index[0]
+        assert len(pypsa_network.buses) == 15
+        # ToDo: Check further things and parameter options
 
     def test_append_lv_components(self):
         lv_components = {

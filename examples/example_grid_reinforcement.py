@@ -11,8 +11,8 @@ To determine topology expansion needs worst-case scenarios
 (heavy load flow and reverse power flow) used in conventional grid expansion
 planning are set up.
 
-The example automatically downloads an example ding0 grid to the current
-working directory in case it does not yet exist. If you want more information
+The example automatically downloads an example ding0 grid to the edisgo directory
+in the user's home directory in case it does not yet exist. If you want more information
 on how to get more ding0 grids, see the ding0 documentation or the Quickstart
 section of the eDisGo documentation.
 
@@ -39,7 +39,7 @@ logger.setLevel(logging.DEBUG)
 
 def run_example():
     # Specify path to directory containing ding0 grid csv files
-    edisgo_path = os.path.join(os.path.expanduser("~"), ".eDisGo")
+    edisgo_path = os.path.join(os.path.expanduser("~"), ".edisgo")
     dingo_grid_path = os.path.join(edisgo_path, "ding0_example_grid")
     # Download example grid data in case it does not yet exist
     if not os.path.isdir(dingo_grid_path):
@@ -57,7 +57,7 @@ def run_example():
         ]
         base_path = (
             "https://raw.githubusercontent.com/openego/eDisGo/"
-            "dev/tests/ding0_test_network_2/"
+            "dev/tests/data/ding0_test_network_2/"
         )
         for f in file_list:
             file = os.path.join(dingo_grid_path, f)

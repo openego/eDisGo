@@ -204,11 +204,11 @@ def find_nearest_bus(point, bus_target):
         Tuple that contains the name of the nearest bus and its distance.
 
     """
-
     bus_target["dist"] = [
         geodesic((point.y, point.x), (y, x)).km
         for (x, y) in zip(bus_target["x"], bus_target["y"])
     ]
+
     return bus_target["dist"].idxmin(), bus_target["dist"].min()
 
 

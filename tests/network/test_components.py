@@ -2,11 +2,11 @@ import pandas as pd
 import pytest
 
 from edisgo import EDisGo
-from edisgo.network.components import Generator, Load, Switch
+from edisgo.network.components import Generator, Load, Storage, Switch
 
 
 class TestComponents:
-    # ToDo add tests for storages_df
+
     # ToDo add tests for PotentialChargingParks
 
     @classmethod
@@ -25,7 +25,7 @@ class TestComponents:
         assert load.annual_consumption == 238
         assert load.sector == "agricultural"
         assert load.bus == "Bus_BranchTee_LVGrid_1_2"
-        assert load.grid == self.edisgo_obj.topology._grids["LVGrid_1"]
+        assert str(load.grid) == "LVGrid_1"
         assert load.voltage_level == "lv"
         assert load.geom is None
         assert isinstance(load.active_power_timeseries, pd.Series)
@@ -78,13 +78,36 @@ class TestComponents:
         assert gen.weather_cell_id == 2
         gen.bus = "Bus_BranchTee_LVGrid_1_5"
         assert gen.bus == "Bus_BranchTee_LVGrid_1_5"
-        assert gen.grid == self.edisgo_obj.topology._grids["LVGrid_1"]
+        assert str(gen.grid) == "LVGrid_1"
         assert gen.voltage_level == "lv"
         msg = "Given bus ID does not exist."
         with pytest.raises(AttributeError, match=msg):
             gen.bus = "None"
-        # TODO: add test for active_power_timeseries and reactive_power_timeseries once
-        #  implemented
+
+    def test_storage_class(self):
+        """Test Storage class getter, setter, methods"""
+
+        gen = Storage(id="Storage_1", edisgo_obj=self.edisgo_obj)
+        assert gen.id == "Storage_1"
+        assert gen.bus == "Bus_MVStation_1"
+        assert gen.grid == self.edisgo_obj.topology.mv_grid
+        assert gen.voltage_level == "mv"
+        assert pytest.approx(gen.geom.x, abs=1e-10) == 7.94859122759009
+        assert pytest.approx(gen.geom.y, abs=1e-10) == 48.0844553685898
+        assert gen.nominal_power == 0.4
+        assert isinstance(gen.active_power_timeseries, pd.Series)
+        assert isinstance(gen.reactive_power_timeseries, pd.Series)
+
+        # test setter
+        gen.nominal_power = 4
+        assert gen.nominal_power == 4
+        gen.bus = "Bus_BranchTee_LVGrid_1_5"
+        assert gen.bus == "Bus_BranchTee_LVGrid_1_5"
+        assert str(gen.grid) == "LVGrid_1"
+        assert gen.voltage_level == "lv"
+        msg = "Given bus ID does not exist."
+        with pytest.raises(AttributeError, match=msg):
+            gen.bus = "None"
 
     def test_switch_class(self):
         """Test Switch class"""

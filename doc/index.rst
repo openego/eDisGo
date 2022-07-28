@@ -19,18 +19,22 @@ The toolbox currently includes:
     feed-in time series of fluctuating renewables and scenarios for future
     power plant park of Germany
   * `demandlib <https://github.com/oemof/demandlib>`_ for electrical load time series
+  * `SimBEV <https://github.com/rl-institut/simbev>`_ and
+    `TracBEV <https://github.com/rl-institut/tracbev>`_ for charging demand data of electric
+    vehicles, respectively potential charging point locations
 
 * Static, non-linear power flow analysis using `PyPSA <https://pypsa.org>`_ for
   grid issue identification
 * Automatic grid reinforcement methodology solving overloading and voltage issues
   to determine grid expansion needs and costs based on measures most commonly
   taken by German distribution grid operators
+* Implementation of different charging strategies of electric vehicles
 * Multiperiod optimal power flow based on julia package PowerModels.jl optimizing
-  storage positioning and/or operation
+  storage positioning and/or operation (Currently not maintained)
   as well as generator dispatch with regard to minimizing grid expansion costs
 * Temporal complexity reduction
-* Heuristic for grid-supportive generator curtailment
-* Heuristic grid-supportive battery storage integration
+* Heuristic for grid-supportive generator curtailment (Currently not maintained)
+* Heuristic grid-supportive battery storage integration (Currently not maintained)
 
 Currently, a method to optimize the flexibility that can be provided by electric
 vehicles through controlled charging is being implemented.

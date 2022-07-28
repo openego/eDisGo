@@ -91,7 +91,7 @@ extlinks = {
     ),
     "shapely": ("https://shapely.readthedocs.io/en/latest/manual.html#%s", "shapely."),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "Ding0"),
-    "pypsa": ("https://pypsa.org/doc/components.html#%s", "pypsa"),
+    "pypsa": ("https://pypsa.readthedocs.io/en/latest/components.html#%s", "pypsa"),
     "plotly": ("https://plotly.com/python-api-reference/generated/#%s.html", "plotly"),
 }
 # Add any paths that contain templates here, relative to this directory.
@@ -118,7 +118,7 @@ author = "open_eGo-Team"
 # built documents.
 #
 # The short X.Y version.
-version = "0.1.0"
+version = "0.1.1"
 # The full version, including alpha/beta/rc tags.
 release = version
 
@@ -127,7 +127,7 @@ release = version
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "English"
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:

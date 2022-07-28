@@ -7,12 +7,14 @@ import os
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
 
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 
 from numpy.random import default_rng
 from sklearn import preprocessing
+
+if "READTHEDOCS" not in os.environ:
+    import geopandas as gpd
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -44,9 +46,15 @@ COLUMNS = {
         "soc_min",
         "grid_timeseries",
         "grid_timeseries_by_usecase",
+        "days",
     ],
     "matching_demand_and_location": ["charging_park_id", "charging_point_id"],
-    "grid_connections_gdf": ["ags", "use_case", "user_centric_weight", "geometry"],
+    "potential_charging_parks_gdf": [
+        "ags",
+        "use_case",
+        "user_centric_weight",
+        "geometry",
+    ],
     "available_charging_points_df": [
         "park_end_timesteps",
         "nominal_charging_capacity_kW",
@@ -76,14 +84,14 @@ DTYPES = {
         "grid_timeseries": bool,
         "grid_timeseries_by_usecase": bool,
     },
-    "grid_connections_gdf": {
+    "potential_charging_parks_gdf": {
         "ags": np.uint32,
         "use_case": str,
         "user_centric_weight": np.float64,
     },
 }
 
-KEEP_COLS = {"grid_connections_gdf": ["user_centric_weight", "geometry"]}
+KEEP_COLS = {"potential_charging_parks_gdf": ["user_centric_weight", "geometry"]}
 
 USECASES = ["hpc", "public", "home", "work"]
 
@@ -100,32 +108,34 @@ def import_electromobility(
     **kwargs,
 ):
     """
-    Import electromobility data from SimBEV and TracBEV.
+    Import electromobility data from
+    `SimBEV <https://github.com/rl-institut/simbev>`_ and
+    `TracBEV <https://github.com/rl-institut/tracbev>`_.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
     simbev_directory : str or pathlib.PurePath
-            SimBEV directory holding SimBEV data.
+        SimBEV directory holding SimBEV data.
     tracbev_directory : str or pathlib.PurePath
         TracBEV directory holding TracBEV data.
     kwargs :
         Kwargs may contain any further attributes you want to specify.
 
         gc_to_car_rate_home : float
-            Specifies the minimum rate between possible grid connections
+            Specifies the minimum rate between potential charging parks
             points for the use case "home" and the total number of cars.
             Default 0.5 .
         gc_to_car_rate_work : float
-            Specifies the minimum rate between possible grid connections
+            Specifies the minimum rate between potential charging parks
             points for the use case "work" and the total number of cars.
             Default 0.25 .
         gc_to_car_rate_public : float
-            Specifies the minimum rate between possible grid connections
+            Specifies the minimum rate between potential charging parks
             points for the use case "public" and the total number of cars.
             Default 0.1 .
         gc_to_car_rate_hpc : float
-            Specifies the minimum rate between possible grid connections
+            Specifies the minimum rate between potential charging parks
             points for the use case "hpc" and the total number of cars.
             Default 0.005 .
         mode_parking_times : str
@@ -151,10 +161,12 @@ def import_electromobility(
         simbev_config_file=kwargs.pop("simbev_config_file", "metadata_simbev_run.json"),
     )
 
-    edisgo_obj.electromobility.grid_connections_gdf = read_gpkg_grid_connections(
-        tracbev_directory,
-        edisgo_obj,
-        **kwargs,
+    edisgo_obj.electromobility.potential_charging_parks_gdf = (
+        read_gpkg_potential_charging_parks(
+            tracbev_directory,
+            edisgo_obj,
+            **kwargs,
+        )
     )
 
 
@@ -178,7 +190,7 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
     :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with AGS, car ID, trip destination, charging use case
         (private or public), netto charging capacity, charging demand,
-        charge start, charge end, grid connection point and charging point
+        charge start, charge end, potential charging park ID and charging point
         ID.
 
     """
@@ -298,10 +310,10 @@ def read_simbev_config_df(
         return pd.DataFrame(data=data, index=index, columns=["value"])
 
 
-def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
+def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
     """
     Get GeoDataFrame with all
-    `SimBEV <https://github.com/rl-institut/simbev>`_ grid connections.
+    `TracBEV <https://github.com/rl-institut/tracbev>`_ potential charging parks.
 
     Parameters
     ----------
@@ -318,7 +330,7 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
     """
     files = [f for f in os.listdir(path) if f.endswith(".gpkg")]
 
-    grid_connections_gdf_list = []
+    potential_charging_parks_gdf_list = []
 
     if isinstance(path, str):
         path = Path(path)
@@ -326,13 +338,22 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
     for f in files:
         gdf = gpd.read_file(path / f)
 
-        if "potential" in gdf.columns:
-            gdf = gdf.rename(columns={"potential": "user_centric_weight"})
-        elif "charge_spots" in gdf.columns:
-            gdf = gdf.rename(columns={"charge_spots": "user_centric_weight"})
+        if "undefined" in gdf.crs.name.lower():
+            gdf = gdf.set_crs(epsg=3035, allow_override=True).to_crs(
+                epsg=edisgo_obj.topology.grid_district["srid"]
+            )
+        else:
+            gdf = gdf.to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
+
+        gdf = gdf.rename(
+            columns={
+                "charge_spots": "user_centric_weight",
+                "potential": "user_centric_weight",
+            }
+        )
 
         # drop unnecessary columns
-        gdf = gdf[KEEP_COLS["grid_connections_gdf"]]
+        gdf = gdf[KEEP_COLS["potential_charging_parks_gdf"]]
 
         # add ags and use case info as well as normalize weights 0..1
         gdf = gdf.assign(
@@ -343,17 +364,17 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
             use_case=f.split(".")[0].split("_")[-2],
         )
 
-        grid_connections_gdf_list.append(gdf)
+        potential_charging_parks_gdf_list.append(gdf)
 
-    grid_connections_gdf = gpd.GeoDataFrame(
+    potential_charging_parks_gdf = gpd.GeoDataFrame(
         pd.concat(
-            grid_connections_gdf_list,
+            potential_charging_parks_gdf_list,
             ignore_index=True,
         ),
-        crs=grid_connections_gdf_list[0].crs,
-    ).astype(DTYPES["grid_connections_gdf"])
+        crs=potential_charging_parks_gdf_list[0].crs,
+    ).astype(DTYPES["potential_charging_parks_gdf"])
 
-    # ensure minimum number of grid connections per car
+    # ensure minimum number of potential charging parks per car
     num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
 
     for use_case in USECASES:
@@ -366,23 +387,23 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
         elif use_case == "hpc":
             gc_to_car_rate = kwargs.get("gc_to_car_rate_hpc", 0.005)
 
-        use_case_gdf = grid_connections_gdf.loc[
-            grid_connections_gdf.use_case == use_case
+        use_case_gdf = potential_charging_parks_gdf.loc[
+            potential_charging_parks_gdf.use_case == use_case
         ]
 
         num_gcs = len(use_case_gdf)
 
         # if simbev doesn't provide possible grid cnnections choose a
-        # random public grid connections and duplicate
+        # random public potential charging park and duplicate
         if num_gcs == 0:
             logger.warning(
-                f"There are no possible grid connections for use case {use_case}. "
-                f"Therefore 10 % of public grid connections are duplicated randomly and"
-                f" assigned to use case {use_case}."
+                f"There are no potential charging parks for use case {use_case}. "
+                f"Therefore 10 % of public potential charging parks are duplicated "
+                f"randomly and assigned to use case {use_case}."
             )
 
-            public_gcs = grid_connections_gdf.loc[
-                grid_connections_gdf.use_case == "public"
+            public_gcs = potential_charging_parks_gdf.loc[
+                potential_charging_parks_gdf.use_case == "public"
             ]
 
             random_gcs = public_gcs.sample(
@@ -390,35 +411,41 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
                 random_state=edisgo_obj.topology.mv_grid.id,
             ).assign(use_case=use_case)
 
-            grid_connections_gdf = pd.concat(
-                [
-                    grid_connections_gdf,
-                    random_gcs,
-                ],
-                ignore_index=True,
+            potential_charging_parks_gdf = gpd.GeoDataFrame(
+                pd.concat(
+                    [
+                        potential_charging_parks_gdf,
+                        random_gcs,
+                    ],
+                    ignore_index=True,
+                ),
+                crs=potential_charging_parks_gdf.crs,
             )
 
         # escape zero division
         actual_gc_to_car_rate = np.Infinity if num_cars == 0 else num_gcs / num_cars
 
-        # duplicate grid connections until desired quantity is ensured
+        # duplicate potential charging parks until desired quantity is ensured
         max_it = 50
         n = 0
 
         while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
             logger.info(
-                f"Duplicating potential grid connections to meet the desired grid "
+                f"Duplicating potential charging parks to meet the desired grid "
                 f"connections to cars rate of {gc_to_car_rate*100:.2f} %. Iteration: "
                 f"{n+1}."
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
-                grid_connections_gdf = pd.concat(
-                    [
-                        grid_connections_gdf,
-                        use_case_gdf,
-                    ],
-                    ignore_index=True,
+                potential_charging_parks_gdf = gpd.GeoDataFrame(
+                    pd.concat(
+                        [
+                            potential_charging_parks_gdf,
+                            use_case_gdf,
+                        ],
+                        ignore_index=True,
+                    ),
+                    crs=potential_charging_parks_gdf.crs,
                 )
 
             else:
@@ -431,16 +458,19 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
                     n=extra_gcs, random_state=edisgo_obj.topology.mv_grid.id
                 )
 
-                grid_connections_gdf = pd.concat(
-                    [
-                        grid_connections_gdf,
-                        extra_gdf,
-                    ],
-                    ignore_index=True,
+                potential_charging_parks_gdf = gpd.GeoDataFrame(
+                    pd.concat(
+                        [
+                            potential_charging_parks_gdf,
+                            extra_gdf,
+                        ],
+                        ignore_index=True,
+                    ),
+                    crs=potential_charging_parks_gdf.crs,
                 )
 
-            use_case_gdf = grid_connections_gdf.loc[
-                grid_connections_gdf.use_case == use_case
+            use_case_gdf = potential_charging_parks_gdf.loc[
+                potential_charging_parks_gdf.use_case == use_case
             ]
 
             num_gcs = len(use_case_gdf)
@@ -450,14 +480,14 @@ def read_gpkg_grid_connections(path, edisgo_obj, **kwargs):
             n += 1
 
     # sort GeoDataFrame
-    grid_connections_gdf = grid_connections_gdf.sort_values(
+    potential_charging_parks_gdf = potential_charging_parks_gdf.sort_values(
         by=["use_case", "ags", "user_centric_weight"], ascending=[True, True, False]
     ).reset_index(drop=True)
 
-    # in case of polygons use the centroid as grid connection point
+    # in case of polygons use the centroid as potential charging parks point
     # and set crs to match edisgo object
-    return grid_connections_gdf.assign(
-        geometry=grid_connections_gdf.geometry.representative_point()
+    return potential_charging_parks_gdf.assign(
+        geometry=potential_charging_parks_gdf.geometry.representative_point()
     ).to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
 
 
@@ -471,22 +501,22 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
     kwargs :
         Kwargs may contain any further attributes you want to specify.
 
-        mode Default : str
+        mode : str
             Distribution mode. If the mode is set to "user_friendly" only the
             simbev weights are used for the distribution. If the mode is
             "grid_friendly" also grid conditions are respected.
             Default "user_friendly".
         generators_weight_factor : float
-            Weighting factor of the generators weight within a lv grid in
-            comparison to the loads weight. Default 0.5 .
+            Weighting factor of the generators weight within an LV grid in
+            comparison to the loads weight. Default 0.5.
         distance_weight : float
-            Weighting factor for the distance between a grid connection point
-            and it's nearest substation in comparison to the combination of
-            the generators and load factors of the lv grids.
-            Default 1 / 3 .
+            Weighting factor for the distance between a potential charging park
+            and its nearest substation in comparison to the combination of
+            the generators and load factors of the LV grids.
+            Default 1 / 3.
         user_friendly_weight : float
             Weighting factor of the user friendly weight in comparison to the
-            grid friendly weight. Default 0.5 .
+            grid friendly weight. Default 0.5.
 
     """
     distribute_private_charging_demand(edisgo_obj)
@@ -494,26 +524,28 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
     distribute_public_charging_demand(edisgo_obj, **kwargs)
 
 
-def get_weights_df(edisgo_obj, grid_connections_indices, **kwargs):
+def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
     """
-    Get weights per potential charging point for a given set of grid
-    connection indices.
+    Get weights per potential charging point for a given set of grid connection indices.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    grid_connections_indices : list
-        List of grid connection indices
+    potential_charging_park_indices : list
+        List of potential charging parks indices
+
+    Other Parameters
+    -----------------
     mode : str
         Only use user friendly weights ("user_friendly") or combine with
-        grid friendly weights ("grid_friendly"). Default "user_friendly"
+        grid friendly weights ("grid_friendly"). Default: "user_friendly".
     user_friendly_weight : float
-        Weight of user friendly weight if mode "grid_friendly". Default 0.5
+        Weight of user friendly weight if mode "grid_friendly". Default: 0.5.
     distance_weight: float
         Grid friendly weight is a combination of the installed capacity of
         generators and loads within a LV grid and the distance towards the
         nearest substation. This parameter sets the weight for the distance
-        parameter. Default 1/3
+        parameter. Default: 1/3.
 
     Returns
     -------
@@ -521,13 +553,82 @@ def get_weights_df(edisgo_obj, grid_connections_indices, **kwargs):
         DataFrame with numeric weights
 
     """
+    def _get_lv_grid_weights():
+
+        """
+        DataFrame containing technical data of LV grids.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Columns of the DataFrame are:
+                peak_generation_capacity : float
+                    Cumulative peak generation capacity of generators in the network in
+                    MW.
+
+                p_set : float
+                    Cumulative peak load of loads in the network in MW.
+
+                substation_capacity : float
+                    Cumulative capacity of transformers to overlaying network.
+
+                generators_weight : float
+                    Weighting used in grid friendly siting of public charging points.
+                    In the case of generators the weight is defined by dividing the
+                    peak_generation_capacity by substation_capacity and norming the
+                    results from 0 .. 1. A higher weight is more attractive.
+
+                loads_weight : float
+                    Weighting used in grid friendly siting of public charging points.
+                    In the case of loads the weight is defined by dividing the
+                    p_set by substation_capacity and norming the results from 0 .. 1.
+                    The result is then substracted from 1 as the higher the p_set is
+                    in relation to the substation_capacity the less attractive this LV
+                    grid is for new loads from a grid perspective. A higher weight is
+                    more attractive.
+
+        """
+        lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
+
+        lv_grids_df = pd.DataFrame(
+            index=[_._id for _ in lv_grids],
+            columns=["peak_generation_capacity", "substation_capacity",
+                     "generators_weight", "p_set", "loads_weight"]
+        )
+
+        lv_grids_df.peak_generation_capacity = [
+            _.peak_generation_capacity for _ in lv_grids
+        ]
+
+        lv_grids_df.substation_capacity = [
+            _.transformers_df.s_nom.sum() for _ in lv_grids
+        ]
+
+        min_max_scaler = preprocessing.MinMaxScaler()
+        lv_grids_df.generators_weight = lv_grids_df.peak_generation_capacity.divide(
+            lv_grids_df.substation_capacity
+        )
+        lv_grids_df.generators_weight = min_max_scaler.fit_transform(
+            lv_grids_df.generators_weight.values.reshape(-1, 1)
+        )
+
+        lv_grids_df.p_set = [_.p_set for _ in lv_grids]
+
+        lv_grids_df.loads_weight = lv_grids_df.p_set.divide(
+            lv_grids_df.substation_capacity
+        )
+        lv_grids_df.loads_weight = 1 - min_max_scaler.fit_transform(
+            lv_grids_df.loads_weight.values.reshape(-1, 1)
+        )
+        return lv_grids_df
+
     mode = kwargs.get("mode", "user_friendly")
 
     if mode == "user_friendly":
         weights = [
             _.user_centric_weight
             for _ in edisgo_obj.electromobility.potential_charging_parks
-            if _.id in grid_connections_indices
+            if _.id in potential_charging_park_indices
         ]
     elif mode == "grid_friendly":
         potential_charging_parks = list(
@@ -537,10 +638,10 @@ def get_weights_df(edisgo_obj, grid_connections_indices, **kwargs):
         user_friendly_weights = [
             _.user_centric_weight
             for _ in potential_charging_parks
-            if _.id in grid_connections_indices
+            if _.id in potential_charging_park_indices
         ]
 
-        lv_grids_df = edisgo_obj.topology.lv_grids_df
+        lv_grids_df = _get_lv_grid_weights()
 
         generators_weight_factor = kwargs.get("generators_weight_factor", 0.5)
         loads_weight_factor = 1 - generators_weight_factor
@@ -581,12 +682,17 @@ def get_weights_df(edisgo_obj, grid_connections_indices, **kwargs):
             for i in range(len(grid_friendly_weights))
         ]
 
+    else:
+        raise ValueError(
+            "Provided mode is not valid, needs to be 'user_friendly' or "
+            "'grid_friendly'."
+        )
     return pd.DataFrame(weights)
 
 
 def normalize(weights_df):
     """
-    Normalize a given DataFrame so that it's sum equals 1 and return a
+    Normalize a given DataFrame so that its sum equals 1 and return a
     flattened Array.
 
     Parameters
@@ -607,7 +713,7 @@ def normalize(weights_df):
 
 
 def combine_weights(
-    grid_connections_indices, designated_charging_point_capacity_df, weights_df
+    potential_charging_park_indices, designated_charging_point_capacity_df, weights_df
 ):
     """
     Add designated charging capacity weights into the initial weights and
@@ -615,8 +721,8 @@ def combine_weights(
 
     Parameters
     ----------
-    grid_connections_indices : list
-        List of grid connection indices
+    potential_charging_park_indices : list
+        List of potential charging parks indices
     designated_charging_point_capacity_df :
         :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with designated charging point capacity per potential
@@ -630,7 +736,9 @@ def combine_weights(
         Array with normalized weights
 
     """
-    capacity_df = designated_charging_point_capacity_df.loc[grid_connections_indices]
+    capacity_df = designated_charging_point_capacity_df.loc[
+        potential_charging_park_indices
+    ]
 
     capacity_weights = (
         1
@@ -639,7 +747,7 @@ def combine_weights(
         )
     ).flatten()
 
-    user_df = weights_df.loc[grid_connections_indices]
+    user_df = weights_df.loc[potential_charging_park_indices]
 
     user_df[0] += capacity_weights
 
@@ -648,7 +756,7 @@ def combine_weights(
 
 def weighted_random_choice(
     edisgo_obj,
-    grid_connections_indices,
+    potential_charging_park_indices,
     car_id,
     destination,
     charging_point_id,
@@ -662,8 +770,8 @@ def weighted_random_choice(
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    grid_connections_indices : list
-        List of grid connection indices
+    potential_charging_park_indices : list
+        List of potential charging parks indices
     car_id : int
         Car ID
     destination : str
@@ -686,7 +794,7 @@ def weighted_random_choice(
         rng = default_rng(seed=charging_point_id)
 
     charging_park_id = rng.choice(
-        a=grid_connections_indices,
+        a=potential_charging_park_indices,
         p=normalized_weights,
     )
 
@@ -706,7 +814,7 @@ def weighted_random_choice(
 
 def distribute_private_charging_demand(edisgo_obj):
     """
-    Distributes all private charging processes. Each car gets it's own
+    Distributes all private charging processes. Each car gets its own
     private charging point if a charging process takes place.
 
     Parameters
@@ -720,13 +828,16 @@ def distribute_private_charging_demand(edisgo_obj):
         rng = None
 
     private_charging_df = edisgo_obj.electromobility.charging_processes_df.loc[
-        edisgo_obj.electromobility.charging_processes_df.use_case.isin(["home", "work"])
+        (edisgo_obj.electromobility.charging_processes_df.chargingdemand_kWh > 0)
+        & edisgo_obj.electromobility.charging_processes_df.use_case.isin(
+            ["home", "work"]
+        )
     ]
 
     charging_point_id = 0
 
     user_centric_weights_df = get_weights_df(
-        edisgo_obj, edisgo_obj.electromobility.grid_connections_gdf.index
+        edisgo_obj, edisgo_obj.electromobility.potential_charging_parks_gdf.index
     )
 
     designated_charging_point_capacity_df = pd.DataFrame(
@@ -743,22 +854,23 @@ def distribute_private_charging_demand(edisgo_obj):
         use_case = PRIVATE_DESTINATIONS[destination]
 
         if use_case == "work":
-            grid_connections_indices = (
-                edisgo_obj.electromobility.grid_connections_gdf.loc[
-                    edisgo_obj.electromobility.grid_connections_gdf.use_case == use_case
+            potential_charging_park_indices = (
+                edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
+                    edisgo_obj.electromobility.potential_charging_parks_gdf.use_case
+                    == use_case
                 ].index
             )
 
             for car_id in private_charging_destination_df.car_id.sort_values().unique():
                 weights = combine_weights(
-                    grid_connections_indices,
+                    potential_charging_park_indices,
                     designated_charging_point_capacity_df,
                     user_centric_weights_df,
                 )
 
                 charging_park_id = weighted_random_choice(
                     edisgo_obj,
-                    grid_connections_indices,
+                    potential_charging_park_indices,
                     car_id,
                     destination,
                     charging_point_id,
@@ -786,26 +898,30 @@ def distribute_private_charging_demand(edisgo_obj):
                     private_charging_destination_df.ags == ags
                 ]
 
-                grid_connections_indices = (
-                    edisgo_obj.electromobility.grid_connections_gdf.loc[
-                        (edisgo_obj.electromobility.grid_connections_gdf.ags == ags)
+                # fmt: off
+                potential_charging_park_indices = edisgo_obj.electromobility.\
+                    potential_charging_parks_gdf.loc[
+                        (
+                            edisgo_obj.electromobility.potential_charging_parks_gdf.ags
+                            == ags
+                        )
                         & (
-                            edisgo_obj.electromobility.grid_connections_gdf.use_case
-                            == use_case
+                            edisgo_obj.electromobility.potential_charging_parks_gdf.
+                            use_case == use_case
                         )
                     ].index
-                )
+                # fmt: on
 
                 for car_id in private_charging_ags_df.car_id.sort_values().unique():
                     weights = combine_weights(
-                        grid_connections_indices,
+                        potential_charging_park_indices,
                         designated_charging_point_capacity_df,
                         user_centric_weights_df,
                     )
 
                     weighted_random_choice(
                         edisgo_obj,
-                        grid_connections_indices,
+                        potential_charging_park_indices,
                         car_id,
                         destination,
                         charging_point_id,
@@ -831,7 +947,7 @@ def distribute_private_charging_demand(edisgo_obj):
 def distribute_public_charging_demand(edisgo_obj, **kwargs):
     """
     Distributes all public charging processes. For each process it is
-    checked if a matching charging point is existing to minimize the
+    checked if a matching charging point exists to minimize the
     number of charging points.
 
     Parameters
@@ -840,7 +956,8 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
 
     """
     public_charging_df = edisgo_obj.electromobility.charging_processes_df.loc[
-        edisgo_obj.electromobility.charging_processes_df.use_case.isin(
+        (edisgo_obj.electromobility.charging_processes_df.chargingdemand_kWh > 0)
+        & edisgo_obj.electromobility.charging_processes_df.use_case.isin(
             ["public", "hpc"]
         )
     ].sort_values(
@@ -858,7 +975,9 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
     )
 
     grid_and_user_centric_weights_df = get_weights_df(
-        edisgo_obj, edisgo_obj.electromobility.grid_connections_gdf.index, **kwargs
+        edisgo_obj,
+        edisgo_obj.electromobility.potential_charging_parks_gdf.index,
+        **kwargs,
     )
 
     designated_charging_point_capacity_df = pd.DataFrame(
@@ -892,7 +1011,7 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
         ]
 
         if len(matching_charging_points_df) > 0:
-            grid_connections_indices = matching_charging_points_df.index
+            potential_charging_park_indices = matching_charging_points_df.index
 
             weights = normalize(
                 grid_and_user_centric_weights_df.loc[
@@ -901,7 +1020,7 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
             )
 
             charging_point_s = matching_charging_points_df.loc[
-                rng.choice(a=grid_connections_indices, p=weights)
+                rng.choice(a=potential_charging_park_indices, p=weights)
             ]
 
             edisgo_obj.electromobility.charging_processes_df.at[
@@ -917,23 +1036,23 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
             ] = park_end_timesteps
 
         else:
-            grid_connections_indices = (
-                edisgo_obj.electromobility.grid_connections_gdf.loc[
+            potential_charging_park_indices = (
+                edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
                     (
-                        edisgo_obj.electromobility.grid_connections_gdf.use_case
+                        edisgo_obj.electromobility.potential_charging_parks_gdf.use_case
                         == use_case
                     )
                 ].index
             )
 
             weights = combine_weights(
-                grid_connections_indices,
+                potential_charging_park_indices,
                 designated_charging_point_capacity_df,
                 grid_and_user_centric_weights_df,
             )
 
             charging_park_id = rng.choice(
-                a=grid_connections_indices,
+                a=potential_charging_park_indices,
                 p=weights,
             )
 
@@ -986,15 +1105,16 @@ def determine_grid_connection_capacity(
 
 def integrate_charging_parks(edisgo_obj):
     """
-    Integrates all designated charging parks into the grid. The charging demand
-    is not integrated here, but an empty dummy timeseries is generated.
+    Integrates all designated charging parks into the grid.
+
+    The charging time series at each charging park are not set in this function.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
 
     """
-    charging_parks = edisgo_obj.electromobility.potential_charging_parks
+    charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
 
     # Only integrate charging parks with designated charging points
     designated_charging_parks = [
@@ -1005,11 +1125,6 @@ def integrate_charging_parks(edisgo_obj):
 
     charging_park_ids = [_.id for _ in designated_charging_parks]
 
-    dummy_timeseries = pd.Series(
-        [0.0] * len(edisgo_obj.timeseries.timeindex),
-        index=edisgo_obj.timeseries.timeindex,
-    )
-
     comp_type = "charging_point"
 
     # integrate ChargingPoints and save the names of the eDisGo ID
@@ -1018,9 +1133,7 @@ def integrate_charging_parks(edisgo_obj):
             comp_type=comp_type,
             geolocation=cp.geometry,
             sector=cp.use_case,
-            add_ts=True,
-            ts_active_power=dummy_timeseries,
-            ts_reactive_power=dummy_timeseries,
+            add_ts=False,
             p_set=cp.grid_connection_capacity,
         )
         for cp in designated_charging_parks

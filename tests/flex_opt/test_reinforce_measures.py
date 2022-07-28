@@ -290,7 +290,7 @@ class TestReinforceMeasures:
             index=["Bus_BranchTee_LVGrid_5_2", "Bus_BranchTee_LVGrid_5_5"],
         )
 
-        grid = self.edisgo.topology._grids["LVGrid_5"]
+        grid = self.edisgo.topology.get_lv_grid("LVGrid_5")
         lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
             self.edisgo, grid, crit_nodes
         )

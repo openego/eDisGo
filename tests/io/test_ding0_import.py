@@ -32,9 +32,8 @@ class TestImportFromDing0:
 
         # grids
         assert isinstance(self.topology.mv_grid, MVGrid)
-        assert len(self.topology._grids) == 11
-        lv_grid = [_ for _ in self.topology.mv_grid.lv_grids if _.id == 3][0]
-        assert isinstance(lv_grid, LVGrid)
+        lv_grid = self.topology.get_lv_grid(3)
+        assert len(lv_grid.buses_df) == 9
 
     def test_path_error(self):
         """Test catching error when path to network does not exist."""

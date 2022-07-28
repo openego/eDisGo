@@ -35,10 +35,18 @@ class Grid(ABC):
 
     @property
     def id(self):
+        """
+        ID of the grid.
+
+        """
         return self._id
 
     @property
     def edisgo_obj(self):
+        """
+        EDisGo object the grid is stored in.
+
+        """
         return self._edisgo_obj
 
     @property
@@ -345,30 +353,18 @@ class MVGrid(Grid):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self._lv_grids = kwargs.get("lv_grids", [])
-
     @property
     def lv_grids(self):
         """
-        Underlying LV grids.
-
-        Parameters
-        ----------
-        lv_grids : list(:class:`~.network.grids.LVGrid`)
+        Yields generator object with all underlying low voltage grids.
 
         Returns
-        -------
-        list generator
-            Generator object of underlying LV grids of type
-            :class:`~.network.grids.LVGrid`.
+        --------
+        :class:`~.network.grids.LVGrid`
+            Yields generator object with :class:`~.network.grids.LVGrid` object.
 
         """
-        for lv_grid in self._lv_grids:
-            yield lv_grid
-
-    @lv_grids.setter
-    def lv_grids(self, lv_grids):
-        self._lv_grids = lv_grids
+        return self.edisgo_obj.topology.lv_grids
 
     @property
     def buses_df(self):
@@ -406,7 +402,6 @@ class MVGrid(Grid):
         Draw MV network.
 
         """
-        # ToDo call EDisGoReimport.plot_mv_grid_topology
         raise NotImplementedError
 
 

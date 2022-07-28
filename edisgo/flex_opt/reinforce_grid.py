@@ -190,7 +190,6 @@ def reinforce_grid(
         if mode == "mv"
         else checks.mv_lv_station_load(edisgo_reinforce)
     )
-
     logger.debug("==> Check line load.")
 
     crit_lines = (
@@ -430,7 +429,7 @@ def reinforce_grid(
                 # reinforce lines
                 lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
                     edisgo_reinforce,
-                    edisgo_reinforce.topology._grids[grid],
+                    edisgo_reinforce.topology.get_lv_grid(grid),
                     crit_nodes[grid],
                 )
                 # write changed lines to results.equipment_changes
