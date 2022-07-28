@@ -2619,9 +2619,11 @@ class Topology:
 
     def check_integrity(self):
         """
-        Check imported data integrity.
+        Check data integrity.
 
-        Checks for duplicated labels and isolated components.
+        Checks for duplicated labels and isolated components. Further checks for very
+        small impedances that can cause stability problems in the power flow calculation
+        and large line lengths that might be implausible.
 
         """
         # check for duplicate labels (of components)
@@ -2726,6 +2728,16 @@ class Topology:
                     f"{z[z < 1e-6].index.values}. This might cause problems in the "
                     f"power flow."
                 )
+
+        # check line length
+        if (self.lines_df.length > 10.0).any():
+            max_length = max(self.lines_df.length)
+            logger.warning(
+                f"There are lines with very large line lengths (largest line length "
+                f"{max_length} km). This might be due to grid integration of a "
+                f"component that is outside the grid district or whose coordinates "
+                f"are in a different reference system."
+            )
 
     def __repr__(self):
         return f"Network topology {self.id}"
