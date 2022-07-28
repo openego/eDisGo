@@ -2229,9 +2229,7 @@ class TestTimeSeries:
         time_series_obj = timeseries.TimeSeries()
 
         # check that no error is raised in case of empty dataframe
-        time_series_obj.drop_component_time_series(
-            "loads_active_power", "Load1"
-        )
+        time_series_obj.drop_component_time_series("loads_active_power", "Load1")
 
         # add dummy time series
         time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
@@ -2252,9 +2250,7 @@ class TestTimeSeries:
         assert "load_1" not in time_series_obj.loads_active_power.columns
 
         # check with dropping all existing loads
-        time_series_obj.drop_component_time_series(
-            "loads_active_power", ["load_2"]
-        )
+        time_series_obj.drop_component_time_series("loads_active_power", ["load_2"])
         assert time_series_obj.loads_active_power.empty
 
     def test_add_component_time_series(self):
@@ -2283,9 +2279,7 @@ class TestTimeSeries:
             },
             index=time_series_obj.timeindex[0:2],
         )
-        time_series_obj.add_component_time_series(
-            "loads_active_power", df.iloc[:2]
-        )
+        time_series_obj.add_component_time_series("loads_active_power", df.iloc[:2])
         assert time_series_obj.loads_active_power.shape == (4, 4)
         assert "load_3" in time_series_obj.loads_active_power.columns
 

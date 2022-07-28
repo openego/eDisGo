@@ -4,7 +4,7 @@ import pandas as pd
 
 from pypsa import Network as PyPSANetwork
 
-from edisgo.network.grids import LVGrid, MVGrid
+from edisgo.network.grids import MVGrid
 
 if "READTHEDOCS" not in os.environ:
     from shapely.wkt import loads as wkt_loads

@@ -100,8 +100,6 @@ class TestElectromobility:
 
         electromobility = self.edisgo_obj.electromobility
 
-        ts = self.edisgo_obj.timeseries
-
         topology = self.edisgo_obj.topology
 
         designated_charging_parks_with_charging_points = len(
