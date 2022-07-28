@@ -4,6 +4,8 @@ from zipfile import ZipFile
 
 import pandas as pd
 
+# from edisgo.io import timeseries_import
+
 
 class HeatPump:
     """
@@ -116,6 +118,121 @@ class HeatPump:
     @thermal_storage_units_df.setter
     def thermal_storage_units_df(self, df):
         self._thermal_storage_units_df = df
+
+    def get_cop(self, edisgo_object, ts_cop, heat_pump_names=None):
+        """
+        Get COP time series for heat pumps.
+
+        Heat pumps need to already be integrated into the grid.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_cop : str or :pandas:`pandas.DataFrame<dataframe>`
+            Defines option used to set COP time series.
+            Possible options are:
+
+            * 'oedb'
+
+                Not yet implemented!
+                Weather cell specific hourly COP time series are obtained from the
+                `OpenEnergy DataBase
+                <https://openenergy-platform.org/dataedit/schemas>`_
+                for the weather year 2011. See
+                :func:`edisgo.io.timeseries_import.cop_oedb` for more information.
+                Using information on which weather cell each heat pump is in, the
+                weather cell specific time series are mapped to each heat pump.
+
+            * :pandas:`pandas.DataFrame<dataframe>`
+
+                DataFrame with self-provided COP time series per heat pump.
+                See :py:attr:`~cop_df` on information on the required dataframe format.
+
+        heat_pump_names : list(str) or None
+            Defines for which heat pumps to get COP time series for in case `ts_cop` is
+            'oedb'. If None, all heat pumps in
+            :attr:`~.network.topology.Topology.loads_df` (type is 'heat_pump') are
+            used. Default: None.
+
+        """
+
+        # in case time series from oedb are used, retrieve oedb time series
+        if isinstance(ts_cop, str) and ts_cop == "oedb":
+            raise NotImplementedError
+            # # get COP per weather cell
+            # ts_cop_per_weather_cell = timeseries_import.cop_oedb(
+            #     edisgo_object.config, weather_cell_ids,
+            #     edisgo_object.timeseries.timeindex
+            # )
+            # # get weather cells per heat pump and assign COP to each heat pump
+            # if heat_pump_names is None:
+            #     heat_pump_names = edisgo_object.topology.loads_df[
+            #         edisgo_object.topology.loads_df.type == "heat_pump"]
+
+        elif isinstance(ts_cop, pd.DataFrame):
+            self.cop_df = ts_cop
+        else:
+            raise ValueError("'ts_cop' must either be a pandas DataFrame or 'oedb'.")
+
+    def get_heat_demand(self, edisgo_object, ts_heat_demand, heat_pump_names=None):
+        """
+        Get heat demand time series for buildings with heat pumps.
+
+        Heat pumps need to already be integrated into the grid.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_heat_demand : str or :pandas:`pandas.DataFrame<dataframe>`
+            Defines option used to set heat demand time series.
+            Possible options are:
+
+            * 'oedb'
+
+                Not yet implemented!
+                Heat demand time series are obtained from the `OpenEnergy DataBase
+                <https://openenergy-platform.org/dataedit/schemas>`_
+                for the weather year 2011. See
+                :func:`edisgo.io.timeseries_import.heat_demand_oedb` for more
+                information.
+
+            * :pandas:`pandas.DataFrame<dataframe>`
+
+                DataFrame with self-provided heat demand time series per building with
+                heat pump. See :py:attr:`~heat_demand_df` on information on the required
+                dataframe format.
+
+        heat_pump_names : list(str) or None
+            Defines for which heat pumps to get heat demand time series for in
+            case `ts_heat_demand` is 'oedb'. If None, all heat pumps in
+            :attr:`~.network.topology.Topology.loads_df` (type is 'heat_pump') are
+            used. Default: None.
+
+        """
+
+        # in case time series from oedb are used, retrieve oedb time series
+        if isinstance(ts_heat_demand, str) and ts_heat_demand == "oedb":
+            raise NotImplementedError
+            #
+            # if heat_pump_names is None:
+            #     heat_pump_names = edisgo_object.topology.loads_df[
+            #         edisgo_object.topology.loads_df.type == "heat_pump"
+            #         ]
+            # # get building ID each heat pump is in
+            #
+            # # get heat demand per building
+            # self.heat_demand_df = timeseries_import.heat_demand_oedb(
+            #     edisgo_object.config,
+            #     building_ids,
+            #     edisgo_object.timeseries.timeindex,
+            # )
+
+        elif isinstance(ts_heat_demand, pd.DataFrame):
+            self.heat_demand_df = ts_heat_demand
+        else:
+            raise ValueError(
+                "'ts_heat_demand' must either be a pandas DataFrame or 'oedb'."
+            )
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
         """
