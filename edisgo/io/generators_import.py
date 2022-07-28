@@ -1,8 +1,8 @@
 import logging
 import os
-import numpy as np
 import random
 
+import numpy as np
 import pandas as pd
 
 from sqlalchemy import func
@@ -234,13 +234,21 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
             # get geom of 1 random MV and 1 random LV generator and transform
             sample_mv_geno_geom_shp = transform(
                 projection,
-                wkt_loads(generators_res_mv["geom"].dropna().sample(
-                    n=1, random_state=42).values[0]),
+                wkt_loads(
+                    generators_res_mv["geom"]
+                    .dropna()
+                    .sample(n=1, random_state=42)
+                    .values[0]
+                ),
             )
             sample_lv_geno_geom_shp = transform(
                 projection,
-                wkt_loads(generators_res_lv["geom"].dropna().sample(
-                    n=1, random_state=42).values[0]),
+                wkt_loads(
+                    generators_res_lv["geom"]
+                    .dropna()
+                    .sample(n=1, random_state=42)
+                    .values[0]
+                ),
             )
 
             # get geom of MV grid district
@@ -652,8 +660,11 @@ def _update_grids(
     if not imported_generators_lv.empty:
         grid_ids = edisgo_object.topology._lv_grid_ids
         if not any(
-            [int(_) in grid_ids for _ in list(imported_generators_lv["mvlv_subst_id"])
-             if not np.isnan(_)]
+            [
+                int(_) in grid_ids
+                for _ in list(imported_generators_lv["mvlv_subst_id"])
+                if not np.isnan(_)
+            ]
         ):
             logger.warning(
                 "None of the imported LV generators can be allocated "

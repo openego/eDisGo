@@ -665,8 +665,9 @@ class Topology:
             and underlying LV grids.
 
         """
-        return ([f"LVGrid_{id}" for id in self._lv_grid_ids] +
-                [f"MVGrid_{int(self.mv_grid.id)}"])
+        return [f"LVGrid_{id}" for id in self._lv_grid_ids] + [
+            f"MVGrid_{int(self.mv_grid.id)}"
+        ]
 
     def get_lv_grid(self, name):
         """
@@ -2043,7 +2044,8 @@ class Topology:
             logger.error(f"Component type {comp_type} is not a valid option.")
 
         if comp_data["mvlv_subst_id"] is not None and not np.isnan(
-                comp_data["mvlv_subst_id"]):
+            comp_data["mvlv_subst_id"]
+        ):
 
             # if substation ID (= LV grid ID) is given and it matches an
             # existing LV grid ID (i.e. it is no aggregated LV grid), set grid
@@ -2407,36 +2409,6 @@ class Topology:
             self.lines_df,
             self.transformers_df,
         )
-
-    def to_geopandas(self, mode: str = "mv"):
-        """
-        Returns components as :geopandas:`GeoDataFrame`\\ s
-
-        Returns container with :geopandas:`GeoDataFrame`\\ s containing all
-        georeferenced components within the grid.
-
-        Parameters
-        ----------
-        mode : str
-            Return mode. If mode is "mv" the mv components are returned. If mode is "lv"
-            a generator with a container per lv grid is returned. Default: "mv"
-
-        Returns
-        -------
-        :class:`~.tools.geopandas_helper.GeoPandasGridContainer` or \
-            list(:class:`~.tools.geopandas_helper.GeoPandasGridContainer`)
-            Data container with GeoDataFrames containing all georeferenced components
-            within the grid(s).
-
-        """
-        if mode == "mv":
-            return self.mv_grid.geopandas
-        elif mode == "lv":
-            raise NotImplementedError("LV Grids are not georeferenced yet.")
-            # for lv_grid in self.mv_grid.lv_grids:
-            #     yield lv_grid.geopandas
-        else:
-            raise ValueError(f"{mode} is not valid. See docstring for more info.")
 
     def to_geopandas(self, mode: str = "mv"):
         """

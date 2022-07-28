@@ -353,10 +353,14 @@ class TestEDisGo:
             self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5)
 
         caplog.clear()
-        self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5,
-                            range_num=2, raise_not_converged=False)
-        assert ("Current fraction in iterative process: 5.0." in caplog.text)
-        assert ("Current fraction in iterative process: 1.0." in caplog.text)
+        self.edisgo.analyze(
+            troubleshooting_mode="iteration",
+            range_start=5,
+            range_num=2,
+            raise_not_converged=False,
+        )
+        assert "Current fraction in iterative process: 5.0." in caplog.text
+        assert "Current fraction in iterative process: 1.0." in caplog.text
 
     def test_reinforce(self):
         self.setup_worst_case_time_series()

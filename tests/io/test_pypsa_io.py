@@ -25,7 +25,8 @@ class TestPypsaIO:
         # test mode "lv" and single time step
         lv_grid = self.edisgo.topology.get_lv_grid(1)
         pypsa_network = pypsa_io.to_pypsa(
-            self.edisgo, timesteps=timeindex[0], mode="lv", lv_grid_id=lv_grid.id)
+            self.edisgo, timesteps=timeindex[0], mode="lv", lv_grid_id=lv_grid.id
+        )
         slack_df = pypsa_network.generators[pypsa_network.generators.control == "Slack"]
         assert len(slack_df) == 1
         assert slack_df.bus.values[0] == lv_grid.station.index[0]
