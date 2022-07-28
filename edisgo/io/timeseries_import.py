@@ -248,6 +248,8 @@ def heat_demand_oedb(config_data, building_ids, timeindex=None):
 
     """
     raise NotImplementedError
+    # ToDo Also include large heat pumps for district heating that don't have
+    #  a building ID
 
     # if timeindex is None:
     #     timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")

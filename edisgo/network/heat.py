@@ -213,6 +213,8 @@ class HeatPump:
         # in case time series from oedb are used, retrieve oedb time series
         if isinstance(ts_heat_demand, str) and ts_heat_demand == "oedb":
             raise NotImplementedError
+            # ToDo Also include large heat pumps for district heating that don't have
+            #  a building ID
             #
             # if heat_pump_names is None:
             #     heat_pump_names = edisgo_object.topology.loads_df[
