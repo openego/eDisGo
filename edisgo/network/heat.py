@@ -1,8 +1,8 @@
-import logging
 import os
-import pandas as pd
 
 from zipfile import ZipFile
+
+import pandas as pd
 
 
 class HeatPump:
@@ -78,20 +78,20 @@ class HeatPump:
         self._heat_demand_df = df
 
     @property
-    def heat_storage_units_df(self):
+    def thermal_storage_units_df(self):
         """
-        DataFrame with heat pump's heat storage information.
+        DataFrame with heat pump's thermal storage information.
 
         Parameters
         -----------
         df : :pandas:`pandas.DataFrame<DataFrame>`
-            DataFrame with heat storage information.
+            DataFrame with thermal storage information.
             Index of the dataframe are names of heat pumps as in
             :attr:`~.network.topology.Topology.loads_df`.
             Columns of the dataframe are:
 
             capacity : float
-                Heat storage capacity in MWh.
+                Thermal storage capacity in MWh.
 
             efficiency : float
                 Charging and discharging efficiency in p.u..
@@ -102,24 +102,22 @@ class HeatPump:
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            DataFrame with heat storage information.
+            DataFrame with thermal storage information.
             For more information on the dataframe see input parameter `df`.
 
         """
         try:
-            return self._heat_storage_units_df
+            return self._thermal_storage_units_df
         except Exception:
             return pd.DataFrame(
                 columns=["capacity", "efficiency", "state_of_charge_initial"]
             )
 
-    @heat_storage_units_df.setter
-    def heat_storage_units_df(self, df):
-        self._heat_storage_units_df = df
+    @thermal_storage_units_df.setter
+    def thermal_storage_units_df(self, df):
+        self._thermal_storage_units_df = df
 
-    def reduce_memory(
-        self, attr_to_reduce=None, to_type="float32"
-    ):
+    def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
         """
         Reduces size of dataframes to save memory.
 
@@ -129,14 +127,17 @@ class HeatPump:
         -----------
         attr_to_reduce : list(str), optional
             List of attributes to reduce size for. Per default, the following attributes
-            are reduced if they exist: cop_df, heat_demand_df, heat_storage_units_df.
+            are reduced if they exist: cop_df, heat_demand_df.
         to_type : str, optional
             Data type to convert time series data to. This is a tradeoff
             between precision and memory. Default: "float32".
 
         """
         if attr_to_reduce is None:
-            attr_to_reduce = self._get_matching_dict_of_attributes_and_file_names.keys()
+            attr_to_reduce = list(
+                self._get_matching_dict_of_attributes_and_file_names().keys()
+            )
+            attr_to_reduce.remove("thermal_storage_units_df")
         for attr in attr_to_reduce:
             setattr(
                 self,
@@ -162,7 +163,7 @@ class HeatPump:
         return {
             "cop_df": "cop.csv",
             "heat_demand_df": "heat_demand.csv",
-            "heat_storage_units_df": "heat_storage_units.csv",
+            "thermal_storage_units_df": "thermal_storage_units.csv",
         }
 
     def to_csv(self, directory, reduce_memory=False, **kwargs):
@@ -177,10 +178,10 @@ class HeatPump:
         * 'heat_demand_df'
 
             Attribute :py:attr:`~heat_demand_df` is saved to `heat_demand.csv`.
-        * 'heat_storage_units_df'
+        * 'thermal_storage_units_df'
 
-            Attribute :py:attr:`~heat_storage_units_df` is saved to
-            `heat_storage_units.csv`.
+            Attribute :py:attr:`~thermal_storage_units_df` is saved to
+            `thermal_storage_units.csv`.
 
         Parameters
         ----------
@@ -249,10 +250,10 @@ class HeatPump:
             if from_zip_archive:
                 # open zip file to make it readable for pandas
                 with zip.open(file) as f:
-                    df = pd.read_csv(f, index_col=0)
+                    df = pd.read_csv(f, index_col=0, parse_dates=True)
             else:
                 path = os.path.join(data_path, file)
-                df = pd.read_csv(path, index_col=0)
+                df = pd.read_csv(path, index_col=0, parse_dates=True)
 
             setattr(self, attr, df)
 
