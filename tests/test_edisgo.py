@@ -353,10 +353,14 @@ class TestEDisGo:
             self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5)
 
         caplog.clear()
-        self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5,
-                            range_num=2, raise_not_converged=False)
-        assert ("Current fraction in iterative process: 5.0." in caplog.text)
-        assert ("Current fraction in iterative process: 1.0." in caplog.text)
+        self.edisgo.analyze(
+            troubleshooting_mode="iteration",
+            range_start=5,
+            range_num=2,
+            raise_not_converged=False,
+        )
+        assert "Current fraction in iterative process: 5.0." in caplog.text
+        assert "Current fraction in iterative process: 1.0." in caplog.text
 
     def test_reinforce(self):
         self.setup_worst_case_time_series()
@@ -1094,14 +1098,15 @@ class TestEDisGo:
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
         self.edisgo.save(save_dir)
 
-        # check that results, topology and timeseries directory are created
+        # check that directories are created
         dirs_in_save_dir = os.listdir(save_dir)
-        assert len(dirs_in_save_dir) == 4
+        assert len(dirs_in_save_dir) == 5
         # Todo: check anything else?
         shutil.rmtree(os.path.join(save_dir, "results"))
         shutil.rmtree(os.path.join(save_dir, "topology"))
         shutil.rmtree(os.path.join(save_dir, "timeseries"))
         shutil.rmtree(os.path.join(save_dir, "electromobility"))
+        shutil.rmtree(os.path.join(save_dir, "heat_pump"))
 
     def test_reduce_memory(self):
         self.setup_worst_case_time_series()
