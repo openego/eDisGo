@@ -20,6 +20,7 @@ from pyproj import Transformer
 from pypsa import Network as PyPSANetwork
 
 from edisgo.tools import session_scope, tools
+from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates_graph
 
 if TYPE_CHECKING:
     from numbers import Number
@@ -900,6 +901,7 @@ def draw_plotly(
     G: Graph | None = None,
     line_color: str = "relative_loading",
     node_color: str = "voltage_deviation",
+    timestep: str = "min",
     grid: bool | Grid = False,
 ) -> BaseFigure:
     """
@@ -932,6 +934,16 @@ def draw_plotly(
         * 'voltage_deviation' (default)
           Node color is set according to voltage deviation from 1 p.u..
 
+    timestep : str or None
+        Defines whereby to choose node colors (and implicitly size). Possible
+        options are:
+
+        * 'max_abs' (default)
+          Node color as well as size is set according to the number of direct neighbors.
+        * 'min'
+        * 'max'
+        * 'Timestep'
+
     grid : :class:`~.network.grids.Grid` or bool
         Grid to use as root node. If a grid is given the transforer station is used
         as root. If False the root is set to the coordinates x=0 and y=0. Else the
@@ -956,16 +968,28 @@ def draw_plotly(
     if hasattr(grid, "transformers_df"):
         node_root = grid.transformers_df.bus1.iat[0]
         x_root, y_root = G.nodes[node_root]["pos"]
-
     elif not grid:
         x_root = 0
         y_root = 0
-
     else:
         node_root = edisgo_obj.topology.transformers_hvmv_df.bus1.iat[0]
         x_root, y_root = G.nodes[node_root]["pos"]
 
     x_root, y_root = transformer_4326_to_3035.transform(x_root, y_root)
+
+    s_res_view = edisgo_obj.results.s_res.T.index.isin(
+        [edge[2]["branch_name"] for edge in G.edges.data()]
+    )
+    v_res_view = edisgo_obj.results.v_res.T.index.isin([node for node in G.nodes])
+    if timestep == "min":
+        s_res = edisgo_obj.results.s_res.T.loc[s_res_view].T.min()
+        v_res = edisgo_obj.results.v_res.T.loc[v_res_view].T.min()
+    elif timestep == "max":
+        s_res = edisgo_obj.results.s_res.T.loc[s_res_view].T.max()
+        v_res = edisgo_obj.results.v_res.T.loc[v_res_view].T.max()
+    else:
+        s_res = edisgo_obj.results.s_res.T.loc[s_res_view, timestep]
+        v_res = edisgo_obj.results.v_res.T.loc[v_res_view, timestep]
 
     # line text
     middle_node_x = []
@@ -984,8 +1008,7 @@ def draw_plotly(
 
         text = str(branch_name)
         try:
-            loading = edisgo_obj.results.s_res.T.loc[branch_name].max()
-            text += "<br>" + "Loading = " + str(loading)
+            text += "<br>" + "Loading = " + str(s_res.loc[branch_name])
         except KeyError:
             logger.debug(
                 f"Could not find loading for branch {branch_name}", exc_info=True
@@ -1018,11 +1041,8 @@ def draw_plotly(
 
     # line plot
     if line_color == "loading":
-        s_res_view = edisgo_obj.results.s_res.T.index.isin(
-            [edge[2]["branch_name"] for edge in G.edges.data()]
-        )
-        color_min = edisgo_obj.results.s_res.T.loc[s_res_view].T.min().max()
-        color_max = edisgo_obj.results.s_res.T.loc[s_res_view].T.max().max()
+        color_min = s_res.T.min()
+        color_max = s_res.T.max()
 
     elif line_color == "relative_loading":
         color_min = 0
@@ -1037,16 +1057,16 @@ def draw_plotly(
         edge_x = [x0 - x_root, x1 - x_root, None]
         edge_y = [y0 - y_root, y1 - y_root, None]
 
+        branch_name = edge[2]["branch_name"]
+
         if line_color == "reinforce":
-            if edisgo_obj.results.grid_expansion_costs.index.isin(
-                [edge[2]["branch_name"]]
-            ).any():
+            if edisgo_obj.results.grid_expansion_costs.index.isin([branch_name]).any():
                 color = "lightgreen"
             else:
                 color = "black"
 
         elif line_color == "loading":
-            loading = edisgo_obj.results.s_res.T.loc[edge[2]["branch_name"]].max()
+            loading = s_res.loc[branch_name]
             color = color_map_color(
                 loading,
                 vmin=color_min,
@@ -1054,8 +1074,8 @@ def draw_plotly(
             )
 
         elif line_color == "relative_loading":
-            loading = edisgo_obj.results.s_res.T.loc[edge[2]["branch_name"]].max()
-            s_nom = edisgo_obj.topology.lines_df.s_nom.loc[edge[2]["branch_name"]]
+            loading = s_res.loc[branch_name]
+            s_nom = edisgo_obj.topology.lines_df.s_nom.loc[branch_name]
             color = color_map_color(
                 loading / s_nom,
                 vmin=color_min,
@@ -1090,14 +1110,7 @@ def draw_plotly(
         colors = []
 
         for node in G.nodes():
-            v_res = edisgo_obj.results.v_res.T.loc[node]
-            v_min = v_res.min()
-            v_max = v_res.max()
-
-            if abs(v_min - 1) > abs(v_max - 1):
-                color = v_min - 1
-            else:
-                color = v_max - 1
+            color = v_res.loc[node] - 1
 
             colors.append(color)
 
@@ -1127,16 +1140,15 @@ def draw_plotly(
                 edisgo_obj.topology.loads_df.bus == node
             ].p_set.sum()
             text += "<br>" + "peak_load = " + str(peak_load)
+
             p_nom = edisgo_obj.topology.generators_df.loc[
                 edisgo_obj.topology.generators_df.bus == node
             ].p_nom.sum()
             text += "<br>" + "p_nom_gen = " + str(p_nom)
-            v_min = edisgo_obj.results.v_res.T.loc[node].min()
-            v_max = edisgo_obj.results.v_res.T.loc[node].max()
-            if abs(v_min - 1) > abs(v_max - 1):
-                text += "<br>" + "v = " + str(v_min)
-            else:
-                text += "<br>" + "v = " + str(v_max)
+
+            v = v_res.loc[node]
+            text += "<br>" + "v = " + str(v)
+
         except KeyError:
             logger.debug(f"Failed to add text for node {node}.", exc_info=True)
             text = text
@@ -1291,6 +1303,26 @@ def dash_plot(
     if node_plot_modes is None:
         node_plot_modes = ["adjacencies", "voltage_deviation"]
 
+    if edisgo_obj_1.timeseries.is_worst_case:
+        timestep_labels = [
+            "min",
+            "max",
+        ] + edisgo_obj_1.timeseries.timeindex_worst_cases.index.to_list()
+    else:
+        timestep_labels = [
+            "min",
+            "max",
+        ] + edisgo_obj_1.timeseries.timeindex.values.to_list()
+
+    timestep_values = ["min", "max"] + edisgo_obj_1.timeseries.timeindex.to_list()
+    timestep_option = list()
+    for i in range(0, len(timestep_labels)):
+        timestep_option.append(
+            {"label": timestep_labels[i], "value": timestep_values[i]}
+        )
+
+    padding = 0
+
     app = JupyterDash(__name__)
 
     if isinstance(edisgo_objects, dict) and len(edisgo_objects) > 1:
@@ -1298,36 +1330,145 @@ def dash_plot(
             [
                 html.Div(
                     [
-                        dcc.Dropdown(
-                            id="dropdown_edisgo_object_1",
-                            options=[
-                                {"label": i, "value": i} for i in edisgo_name_list
+                        html.Div(
+                            [
+                                html.Label("Edisgo objects"),
                             ],
-                            value=edisgo_name_list[0],
+                            style={"padding": padding, "flex": 1},
                         ),
-                        dcc.Dropdown(
-                            id="dropdown_edisgo_object_2",
-                            options=[
-                                {"label": i, "value": i} for i in edisgo_name_list
+                        html.Div(
+                            [],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                    ],
+                    style={
+                        "display": "flex",
+                        "flex-direction": "row",
+                        "padding": 0,
+                        "flex": 1,
+                    },
+                ),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                dcc.Dropdown(
+                                    id="dropdown_edisgo_object_1",
+                                    options=[
+                                        {"label": i, "value": i}
+                                        for i in edisgo_name_list
+                                    ],
+                                    value=edisgo_name_list[0],
+                                ),
                             ],
-                            value=edisgo_name_list[1],
+                            style={"padding": padding, "flex": 1},
                         ),
+                        html.Div(
+                            [
+                                dcc.Dropdown(
+                                    id="dropdown_edisgo_object_2",
+                                    options=[
+                                        {"label": i, "value": i}
+                                        for i in edisgo_name_list
+                                    ],
+                                    value=edisgo_name_list[1],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                    ],
+                    style={
+                        "display": "flex",
+                        "flex-direction": "row",
+                        "padding": 0,
+                        "flex": 1,
+                    },
+                ),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.Label("Grid"),
+                                dcc.Dropdown(
+                                    id="dropdown_grid",
+                                    options=[
+                                        {"label": i, "value": i} for i in grid_name_list
+                                    ],
+                                    value=grid_name_list[1],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Pseudo coordinates"),
+                                dcc.RadioItems(
+                                    id="radioitems_pseudo_coordinates",
+                                    options=[
+                                        {"label": "False", "value": False},
+                                        {"label": "True", "value": True},
+                                    ],
+                                    value=False,
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                    ],
+                    style={
+                        "display": "flex",
+                        "flex-direction": "row",
+                        "padding": 0,
+                        "flex": 1,
+                    },
+                ),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.Label("Line plot mode"),
+                                dcc.Dropdown(
+                                    id="dropdown_line_plot_mode",
+                                    options=[
+                                        {"label": i, "value": i}
+                                        for i in line_plot_modes
+                                    ],
+                                    value=line_plot_modes[0],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Node plot mode"),
+                                dcc.Dropdown(
+                                    id="dropdown_node_plot_mode",
+                                    options=[
+                                        {"label": i, "value": i}
+                                        for i in node_plot_modes
+                                    ],
+                                    value=node_plot_modes[0],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                    ],
+                    style={
+                        "display": "flex",
+                        "flex-direction": "row",
+                        "padding": 0,
+                        "flex": 1,
+                    },
+                ),
+                html.Div(
+                    [
+                        html.Label("Timestep"),
                         dcc.Dropdown(
-                            id="dropdown_grid",
-                            options=[{"label": i, "value": i} for i in grid_name_list],
-                            value=grid_name_list[1],
+                            id="timestep",
+                            options=timestep_option,
+                            value=timestep_option[0]["value"],
                         ),
-                        dcc.Dropdown(
-                            id="dropdown_line_plot_mode",
-                            options=[{"label": i, "value": i} for i in line_plot_modes],
-                            value=line_plot_modes[0],
-                        ),
-                        dcc.Dropdown(
-                            id="dropdown_node_plot_mode",
-                            options=[{"label": i, "value": i} for i in node_plot_modes],
-                            value=node_plot_modes[0],
-                        ),
-                    ]
+                    ],
+                    style={"padding": padding, "flex": 1},
                 ),
                 html.Div(
                     [
@@ -1348,6 +1489,8 @@ def dash_plot(
             Input("dropdown_edisgo_object_2", "value"),
             Input("dropdown_line_plot_mode", "value"),
             Input("dropdown_node_plot_mode", "value"),
+            Input("radioitems_pseudo_coordinates", "value"),
+            Input("timestep", "value"),
         )
         def update_figure(
             selected_grid,
@@ -1355,24 +1498,32 @@ def dash_plot(
             selected_edisgo_object_2,
             selected_line_plot_mode,
             selected_node_plot_mode,
+            pseudo_coordinates,
+            selected_timestep,
         ):
             edisgo_obj = edisgo_objects[selected_edisgo_object_1]
             (G, grid) = chosen_graph(edisgo_obj, selected_grid)
+            if pseudo_coordinates:
+                G = make_pseudo_coordinates_graph(G)
             fig_1 = draw_plotly(
-                edisgo_obj,
-                G,
-                selected_line_plot_mode,
-                selected_node_plot_mode,
+                edisgo_obj=edisgo_obj,
+                G=G,
+                line_color=selected_line_plot_mode,
+                node_color=selected_node_plot_mode,
+                timestep=selected_timestep,
                 grid=grid,
             )
 
             edisgo_obj = edisgo_objects[selected_edisgo_object_2]
             (G, grid) = chosen_graph(edisgo_obj, selected_grid)
+            if pseudo_coordinates:
+                G = make_pseudo_coordinates_graph(G)
             fig_2 = draw_plotly(
-                edisgo_obj,
-                G,
-                selected_line_plot_mode,
-                selected_node_plot_mode,
+                edisgo_obj=edisgo_obj,
+                G=G,
+                line_color=selected_line_plot_mode,
+                node_color=selected_node_plot_mode,
+                timestep=selected_timestep,
                 grid=grid,
             )
 
@@ -1383,22 +1534,89 @@ def dash_plot(
             [
                 html.Div(
                     [
-                        dcc.Dropdown(
-                            id="dropdown_grid",
-                            options=[{"label": i, "value": i} for i in grid_name_list],
-                            value=grid_name_list[1],
+                        html.Div(
+                            [
+                                html.Label("Grid"),
+                                dcc.Dropdown(
+                                    id="dropdown_grid",
+                                    options=[
+                                        {"label": i, "value": i} for i in grid_name_list
+                                    ],
+                                    value=grid_name_list[1],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
                         ),
-                        dcc.Dropdown(
-                            id="dropdown_line_plot_mode",
-                            options=[{"label": i, "value": i} for i in line_plot_modes],
-                            value=line_plot_modes[0],
+                        html.Div(
+                            [
+                                html.Label("Pseudo coordinates"),
+                                dcc.RadioItems(
+                                    id="radioitems_pseudo_coordinates",
+                                    options=[
+                                        {"label": "False", "value": False},
+                                        {"label": "True", "value": True},
+                                    ],
+                                    value=False,
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
                         ),
-                        dcc.Dropdown(
-                            id="dropdown_node_plot_mode",
-                            options=[{"label": i, "value": i} for i in node_plot_modes],
-                            value=node_plot_modes[0],
+                    ],
+                    style={
+                        "display": "flex",
+                        "flex-direction": "row",
+                        "padding": 0,
+                        "flex": 1,
+                    },
+                ),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.Label("Line plot mode"),
+                                dcc.Dropdown(
+                                    id="dropdown_line_plot_mode",
+                                    options=[
+                                        {"label": i, "value": i}
+                                        for i in line_plot_modes
+                                    ],
+                                    value=line_plot_modes[0],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
                         ),
-                    ]
+                        html.Div(
+                            [
+                                html.Label("Node plot mode"),
+                                dcc.Dropdown(
+                                    id="dropdown_node_plot_mode",
+                                    options=[
+                                        {"label": i, "value": i}
+                                        for i in node_plot_modes
+                                    ],
+                                    value=node_plot_modes[0],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                    ],
+                    style={
+                        "display": "flex",
+                        "flex-direction": "row",
+                        "padding": 0,
+                        "flex": 1,
+                    },
+                ),
+                html.Div(
+                    [
+                        html.Label("Timestep"),
+                        dcc.Dropdown(
+                            id="timestep",
+                            options=timestep_option,
+                            value=timestep_option[0]["value"],
+                        ),
+                    ],
+                    style={"padding": padding, "flex": 1},
                 ),
                 html.Div(
                     [html.Div([dcc.Graph(id="fig")], style={"flex": "auto"})],
@@ -1413,18 +1631,28 @@ def dash_plot(
             Input("dropdown_grid", "value"),
             Input("dropdown_line_plot_mode", "value"),
             Input("dropdown_node_plot_mode", "value"),
+            Input("radioitems_pseudo_coordinates", "value"),
+            Input("timestep", "value"),
         )
         def update_figure(
-            selected_grid, selected_line_plot_mode, selected_node_plot_mode
+            selected_grid,
+            selected_line_plot_mode,
+            selected_node_plot_mode,
+            pseudo_coordinates,
+            selected_timestep,
         ):
             (G, grid) = chosen_graph(edisgo_obj_1, selected_grid)
+            if pseudo_coordinates:
+                G = make_pseudo_coordinates_graph(G)
             fig = draw_plotly(
-                edisgo_obj_1,
-                G,
-                selected_line_plot_mode,
-                selected_node_plot_mode,
+                edisgo_obj=edisgo_obj_1,
+                G=G,
+                line_color=selected_line_plot_mode,
+                node_color=selected_node_plot_mode,
+                timestep=selected_timestep,
                 grid=grid,
             )
+
             return fig
 
     return app
