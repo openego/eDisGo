@@ -1101,12 +1101,16 @@ class EDisGo:
         """
         Adds single component to topology based on geolocation.
 
-        Currently components can be generators or charging points.
+        Currently components can be generators, charging points and heat pumps.
+
+        See :attr:`~.network.topology.Topology.connect_to_mv` and
+        :attr:`~.network.topology.Topology.connect_to_lv` for more information.
 
         Parameters
         ----------
         comp_type : str
-            Type of added component. Can be 'generator' or 'charging_point'.
+            Type of added component. Can be 'generator', 'charging_point' or
+            'heat_pump'.
         geolocation : :shapely:`shapely.Point<Point>` or tuple
             Geolocation of the new component. In case of tuple, the geolocation
             must be given in the form (longitude, latitude).
@@ -1114,7 +1118,7 @@ class EDisGo:
             Specifies the voltage level the new component is integrated in.
             Possible options are 4 (MV busbar), 5 (MV grid), 6 (LV busbar) or
             7 (LV grid). If no voltage level is provided the voltage level
-            is determined based on the nominal power `p_nom` (given as kwarg)
+            is determined based on the nominal power `p_nom` or `p_set` (given as kwarg)
             as follows:
 
             * voltage level 4 (MV busbar): nominal power between 4.5 MW and
@@ -1148,9 +1152,9 @@ class EDisGo:
         kwargs :
             Attributes of added component.
             See :attr:`~.network.topology.Topology.add_generator` respectively
-            :attr:`~.network.topology.Topology.add_charging_point` methods
+            :attr:`~.network.topology.Topology.add_load` methods
             for more information on required and optional parameters of
-            generators and charging points.
+            generators respectively charging points and heat pumps.
 
         """
         supported_voltage_levels = {4, 5, 6, 7}
