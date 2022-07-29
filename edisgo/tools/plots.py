@@ -1312,7 +1312,6 @@ def chosen_graph(
 
     """
     mv_grid = edisgo_obj.topology.mv_grid
-    lv_grid_name_list = list(map(str, edisgo_obj.topology.mv_grid.lv_grids))
 
     if selected_grid == "Grid":
         G = edisgo_obj.to_graph()
@@ -1364,7 +1363,11 @@ def dash_plot(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
         edisgo_name_list = ["edisgo_obj"]
         edisgo_obj_1 = edisgo_objects
 
-    grid_name_list = ["Grid"] + edisgo_obj_1.topology._grids_repr
+    mv_grid = edisgo_obj_1.topology.mv_grid
+
+    lv_grid_name_list = list(map(str, mv_grid.lv_grids))
+
+    grid_name_list = ["Grid", str(mv_grid)] + lv_grid_name_list
 
     line_plot_modes = ["reinforce", "loading", "relative_loading"]
     node_plot_modes = ["adjacencies", "voltage_deviation"]
