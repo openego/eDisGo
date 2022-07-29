@@ -2145,7 +2145,7 @@ class TimeSeries:
             return set(component_names) - set(comps_not_in_network)
         return component_names
 
-    def resample_timeseries(self, method: str = "ffill"):
+    def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
         """
         Returns timeseries resampled from hourly resolution to 15 minute resolution.
 
@@ -2166,6 +2166,12 @@ class TimeSeries:
             * 'interpolate': Fill NaN values using an interpolation method. See
             https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.interpolate.html
 
+        freq : str, optional
+            Frequency that timeseries is resampled to. Can be any frequency up to one
+            hour. Offset aliases can be found here:
+            https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases
+            15 minutes is the default.
+
         """
         attrs = self._attributes
         df_dict = {}
@@ -2182,7 +2188,7 @@ class TimeSeries:
         index = pd.date_range(
             self.timeindex[0],
             self.timeindex[-1] + pd.Timedelta("1h"),
-            freq="15min",
+            freq=freq,
             closed="left",
         )
         self._timeindex = index
@@ -2192,18 +2198,14 @@ class TimeSeries:
                 setattr(
                     self,
                     attr,
-                    df_dict[attr].resample("15min", closed="left").interpolate(),
+                    df_dict[attr].resample(freq, closed="left").interpolate(),
                 )
         elif method == "ffill":
             for attr in attrs:
-                setattr(
-                    self, attr, df_dict[attr].resample("15min", closed="left").ffill()
-                )
+                setattr(self, attr, df_dict[attr].resample(freq, closed="left").ffill())
         else:
             for attr in attrs:
-                setattr(
-                    self, attr, df_dict[attr].resample("15min", closed="left").bfill()
-                )
+                setattr(self, attr, df_dict[attr].resample(freq, closed="left").bfill())
 
 
 class TimeSeriesRaw:
