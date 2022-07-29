@@ -982,27 +982,6 @@ def draw_plotly(
         if node_color in ["voltage_deviation"]:
             raise ValueError("No results to show. -> Run power flow.")
 
-    fig = go.Figure(
-        layout=go.Layout(
-            height=500,
-            showlegend=False,
-            hovermode="closest",
-            margin=dict(b=20, l=5, r=5, t=40),
-            xaxis=dict(
-                showgrid=True,
-                zeroline=True,
-                showticklabels=True,
-            ),
-            yaxis=dict(
-                showgrid=True,
-                zeroline=True,
-                showticklabels=True,
-                scaleanchor="x",
-                scaleratio=1,
-            ),
-        ),
-    )
-
     if G is None:
         G = edisgo_obj.topology.mv_grid.graph
 
@@ -1068,7 +1047,7 @@ def draw_plotly(
 
         middle_node_text.append(text)
 
-    middle_node_scatter = go.Scattergl(
+    middle_node_scatter = go.Scatter(
         x=middle_node_x,
         y=middle_node_y,
         text=middle_node_text,
@@ -1081,7 +1060,7 @@ def draw_plotly(
         ),
         showlegend=False,
     )
-    fig.add_trace(middle_node_scatter)
+    data = [middle_node_scatter]
 
     # line plot
     showscale = True
@@ -1156,7 +1135,7 @@ def draw_plotly(
         else:
             color = "black"
 
-        edge_scatter = go.Scattergl(
+        edge_scatter = go.Scatter(
             mode="lines",
             x=edge_x,
             y=edge_y,
@@ -1168,9 +1147,9 @@ def draw_plotly(
                 color=color,
             ),
         )
-        fig.add_trace(edge_scatter)
+        data.append(edge_scatter)
 
-    colorbar_edge_scatter = go.Scattergl(
+    colorbar_edge_scatter = go.Scatter(
         mode="markers",
         x=[None],
         y=[None],
@@ -1190,7 +1169,7 @@ def draw_plotly(
         colorbar_edge_scatter.marker.colorbar.ticktext = ["added", "changed"]
         colorbar_edge_scatter.marker.colorbar.tickvals = [0, 1]
 
-    fig.add_trace(colorbar_edge_scatter)
+    data.append(colorbar_edge_scatter)
 
     # node plot
     node_x = []
@@ -1267,7 +1246,7 @@ def draw_plotly(
 
         node_text.append(text)
 
-    node_scatter = go.Scattergl(
+    node_scatter = go.Scatter(
         x=node_x,
         y=node_y,
         mode="markers",
@@ -1283,7 +1262,29 @@ def draw_plotly(
             colorbar=colorbar,
         ),
     )
-    fig.add_trace(node_scatter)
+    data.append(node_scatter)
+
+    fig = go.Figure(
+        data=data,
+        layout=go.Layout(
+            height=500,
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(
+                showgrid=True,
+                zeroline=True,
+                showticklabels=True,
+            ),
+            yaxis=dict(
+                showgrid=True,
+                zeroline=True,
+                showticklabels=True,
+                scaleanchor="x",
+                scaleratio=1,
+            ),
+        ),
+    )
 
     return fig
 
