@@ -21,6 +21,7 @@ from edisgo.io.electromobility_import import (
     integrate_charging_parks,
 )
 from edisgo.io.generators_import import oedb as import_generators_oedb
+from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.network import timeseries
 from edisgo.network.electromobility import Electromobility
 from edisgo.network.heat import HeatPump
@@ -1564,6 +1565,70 @@ class EDisGo:
 
         """
         charging_strategy(self, strategy=strategy, **kwargs)
+
+    def import_heat_pumps(self, scenario=None, **kwargs):
+        """
+        Gets heat pump capacities for specified scenario from oedb and integrates them
+        into the grid.
+
+        Besides heat pump capacity the heat pump's COP and heat demand to be served
+        are as well retrieved.
+
+        Currently, the only supported data source is scenario data generated
+        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        between two scenarios: 'eGon2035' and 'eGon100RE'.
+
+        The data is retrieved from the
+        `open energy platform <https://openenergy-platform.org/>`_.
+
+        # ToDo Add information on scenarios and from which tables data is retrieved.
+
+        The following steps are conducted in this function:
+
+            * Spatially disaggregated data on heat pump capacities in individual and
+              district heating are obtained from the database for the specified
+              scenario.
+            * Heat pumps are integrated into the grid (added to
+              :attr:`~.network.topology.Topology.loads_df`).
+
+              * Grid connection points of heat pumps for individual heating are
+                determined based on the corresponding building ID.
+              * Grid connection points of heat pumps for district heating are determined
+                based on their geolocation and installed capacity.
+                See :attr:`~.network.topology.Topology.connect_to_mv` and
+                :attr:`~.network.topology.Topology.connect_to_lv` for more information.
+            * COP and heat demand for each heat pump are retrieved from the database
+              and stored in the :class:`~.network.heat.HeatPump` class that can be
+              accessed through :attr:`~.edisgo.EDisGo.heat_pump`.
+
+        Be aware that this function does not yield electricity load time series for the
+        heat pumps. The actual time series are determined through applying an
+        operation strategy or optimising heat pump dispatch.
+
+        After the heat pumps are integrated there may be grid issues due to the
+        additional load. These are not solved automatically. If you want to
+        have a stable grid without grid issues you can invoke the automatic
+        grid expansion through the function :attr:`~.EDisGo.reinforce`.
+
+        Parameters
+        ----------
+        scenario : str
+            Scenario for which to retrieve heat pump data. Possible options
+            are 'eGon2035' and 'eGon100RE'.
+
+        Other Parameters
+        ----------------
+        kwargs :
+            See :func:`edisgo.io.heat_pump_import.oedb`.
+
+        """
+        integrated_heat_pumps = import_heat_pumps_oedb(
+            edisgo_object=self, scenario=scenario, **kwargs
+        )
+        self.heat_pump.get_heat_demand(
+            self, "oedb", heat_pump_names=integrated_heat_pumps
+        )
+        self.heat_pump.get_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
