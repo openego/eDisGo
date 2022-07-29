@@ -12,6 +12,9 @@ import numpy as np
 import pandas as pd
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
+from edisgo.flex_opt.heat_pump_operation import (
+    operating_strategy as hp_operating_strategy,
+)
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
@@ -1629,6 +1632,50 @@ class EDisGo:
             self, "oedb", heat_pump_names=integrated_heat_pumps
         )
         self.heat_pump.set_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
+
+    def apply_heat_pump_operating_strategy(
+        self, strategy="uncontrolled", heat_pump_names=None, **kwargs
+    ):
+        """
+        Applies operating strategy to set electrical load time series of heat pumps.
+
+        This function requires that COP and heat demand time series, and depending on
+        the operating strategy also information on thermal storage units,
+        were previously set in :attr:`~.edisgo.EDisGo.heat_pump`. COP and heat demand
+        information is automatically set when using
+        :attr:`~.edisgo.EDisGo.import_heat_pumps`. When not using this function it can
+        be manually set using :attr:`~.network.heat.HeatPump.set_cop` and
+        :attr:`~.network.heat.HeatPump.set_heat_demand`.
+
+        The electrical load time series of each heat pump are written to
+        :attr:`~.network.timeseries.TimeSeries.loads_active_power`. Reactive power
+        in :attr:`~.network.timeseries.TimeSeries.loads_reactive_power` is
+        set to 0 Mvar.
+
+        Parameters
+        ----------
+        strategy : str
+            Defines the operating strategy to apply. The following strategies are valid:
+
+            * 'uncontrolled'
+
+                The heat demand is directly served by the heat pump without buffering
+                heat using a thermal storage. The electrical load of the heat pump is
+                determined as follows:
+
+                .. math::
+
+                    P_{el} = P_{th} / COP
+
+            Default: 'uncontrolled'.
+
+        heat_pump_names : list(str) or None
+            Defines for which heat pumps to apply operating strategy. If None, all heat
+            pumps for which COP information in :attr:`~.edisgo.EDisGo.heat_pump` is
+            given are used. Default: None.
+
+        """
+        hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
