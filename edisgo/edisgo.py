@@ -105,12 +105,23 @@ class EDisGo:
     Attributes
     ----------
     topology : :class:`~.network.topology.Topology`
-        The topology is a container object holding the topology of the grids.
+        The topology is a container object holding the topology of the grids including
+        buses, lines, transformers, switches and components connected to the grid
+        including generators, loads and storage units.
     timeseries : :class:`~.network.timeseries.TimeSeries`
-        Container for component time series.
+        Container for active and reactive power time series of generators, loads and
+        storage units.
     results : :class:`~.network.results.Results`
         This is a container holding all calculation results from power flow
-        analyses, curtailment, storage integration, etc.
+        analyses and grid reinforcement.
+    electromobility : :class:`~.network.electromobility.Electromobility`
+        This class holds data on charging processes (how long cars are parking at a
+        charging station, how much they need to charge, etc.) necessary to apply
+        different charging strategies, as well as information on potential charging
+        sites and integrated charging parks.
+    heat_pump : :class:`~.network.heat.HeatPump`
+        This is a container holding heat pump data such as COP, heat demand to be
+        served and heat storage information.
 
     """
 
