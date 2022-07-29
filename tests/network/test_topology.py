@@ -1062,7 +1062,7 @@ class TestTopologyWithEdisgoObject:
         test_cp = {
             "geom": geom,
             "p_set": 2.5,
-            "sector": "fast",
+            "sector": "hpc",
             "number": 10,
             "voltage_level": 4,
         }
@@ -1433,7 +1433,7 @@ class TestTopologyWithEdisgoObject:
 
         # check bus
         bus = self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
-        assert bus == "Bus_BranchTee_LVGrid_3_1"
+        assert bus == "BusBar_MVGrid_1_LVGrid_3_LV"
         assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 3
         # check new charging point
         assert self.edisgo.topology.charging_points_df.at[comp_name, "number"] == 2
