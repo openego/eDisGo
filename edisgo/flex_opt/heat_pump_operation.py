@@ -31,12 +31,6 @@ def operating_strategy(
     if heat_pump_names is None:
         heat_pump_names = edisgo_obj.heat_pump.cop_df.columns
 
-    # Delete possible old time series
-    edisgo_obj.timeseries.drop_component_time_series(
-        "loads_active_power",
-        heat_pump_names,
-    )
-
     if strategy == "uncontrolled":
         ts = (
             edisgo_obj.heat_pump.heat_demand_df.loc[:, heat_pump_names]

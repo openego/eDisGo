@@ -1438,6 +1438,111 @@ class TestTopologyWithEdisgoObject:
         # check new charging point
         assert self.edisgo.topology.charging_points_df.at[comp_name, "number"] == 2
 
+        # ######### Heat Pump #############
+
+        # test voltage level 7 - use case home (and there are residential
+        # loads to add charging point to)
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        cp_before = self.edisgo.topology.charging_points_df
+
+        # add charging point
+        test_cp = {
+            "p_set": 0.01,
+            "geom": geom,
+            "sector": "home",
+            "voltage_level": 7,
+            "mvlv_subst_id": 3.0,
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_cp, comp_type="charging_point"
+        )
+
+        # check that number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check that number of charging points increased
+        assert len(cp_before) + 1 == len(self.edisgo.topology.charging_points_df)
+
+        # check bus
+        bus = self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
+        assert bus == "Bus_BranchTee_LVGrid_3_6"
+        assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 3
+        # check new charging point
+        assert self.edisgo.topology.charging_points_df.at[comp_name, "p_set"] == 0.01
+
+        # test voltage level 7 - use case work (connected to agricultural load)
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        cp_before = self.edisgo.topology.charging_points_df
+
+        # add charging point
+        test_cp = {
+            "p_set": 0.02,
+            "number": 2,
+            "geom": geom,
+            "sector": "work",
+            "voltage_level": 7,
+            "mvlv_subst_id": 3,
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_cp, comp_type="charging_point"
+        )
+
+        # check that number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check that number of charging points increased
+        assert len(cp_before) + 1 == len(self.edisgo.topology.charging_points_df)
+
+        # check bus
+        bus = self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
+        assert bus == "Bus_BranchTee_LVGrid_3_2"
+        assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 3
+        # check new charging point
+        assert self.edisgo.topology.charging_points_df.at[comp_name, "number"] == 2
+
+        # test voltage level 7 - use case public (connected somewhere in the
+        # LV grid (to bus not in_building))
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        cp_before = self.edisgo.topology.charging_points_df
+
+        # add charging point
+        test_cp = {
+            "p_set": 0.02,
+            "number": 2,
+            "geom": geom,
+            "sector": "public",
+            "voltage_level": 7,
+            "mvlv_subst_id": 3,
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_cp, comp_type="charging_point"
+        )
+
+        # check that number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check that number of charging points increased
+        assert len(cp_before) + 1 == len(self.edisgo.topology.charging_points_df)
+
+        # check bus
+        bus = self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
+        assert bus == "BusBar_MVGrid_1_LVGrid_3_LV"
+        assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 3
+        # check new charging point
+        assert self.edisgo.topology.charging_points_df.at[comp_name, "number"] == 2
+
     def test_check_integrity(self, caplog):
         """Test of validation of grids."""
         comps_dict = {
