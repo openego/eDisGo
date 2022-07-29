@@ -2060,7 +2060,7 @@ class TimeSeries:
 
     def drop_component_time_series(self, df_name, comp_names):
         """
-        Drop component time series.
+        Drops component time series if they exist.
 
         Parameters
         ----------
@@ -2088,7 +2088,12 @@ class TimeSeries:
 
     def add_component_time_series(self, df_name, ts_new):
         """
-        Add component time series.
+        Add component time series by concatenating existing and provided dataframe.
+
+        This function does not check whether components time series are provided for
+        already have a time series assigned to them.
+        Call :attr:`~.network.timeseries.TimeSeries.drop_component_time_series` before
+        to make sure there won't be any duplicate entries.
 
         Parameters
         ----------
