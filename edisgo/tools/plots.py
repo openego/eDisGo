@@ -867,7 +867,7 @@ def color_map_color(
     vmin: Number,
     vmax: Number,
     cmap_name: str = "coolwarm",
-):
+) -> str:
     """
     Get matching color for a value on a matplotlib color map.
 
@@ -910,10 +910,12 @@ def draw_plotly(
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+
     G : :networkx:`networkx.Graph<network.Graph>`, optional
         Graph representation of the grid as networkx Ordered Graph, where lines are
         represented by edges in the graph, and buses and transformers are represented by
         nodes. If no graph is given the mv grid graph of the edisgo object is used.
+
     line_color : str
         Defines whereby to choose line colors (and implicitly size). Possible
         options are:
@@ -934,18 +936,19 @@ def draw_plotly(
         * 'voltage_deviation' (default)
           Node color is set according to voltage deviation from 1 p.u..
 
-    timestep : str or None
-        Defines whereby to choose node colors (and implicitly size). Possible
-        options are:
+    timestep : str or :pandas:`pandas.Timestamp<Timestamp>`
+        Defines which values are shown for the load of the lines and the voltage of the
+        nodes:
 
-        * 'max_abs' (default)
-          Node color as well as size is set according to the number of direct neighbors.
-        * 'min'
+        * 'min' (default)
+          Minimal line load and minimal node voltage of all time steps.
         * 'max'
-        * 'Timestep'
+          Maximal line load and minimal node voltage of all time steps.
+        * 'timestep'
+          Line load and node voltage for the selected time step.
 
     grid : :class:`~.network.grids.Grid` or bool
-        Grid to use as root node. If a grid is given the transforer station is used
+        Grid to use as root node. If a grid is given the transformer station is used
         as root. If False the root is set to the coordinates x=0 and y=0. Else the
         coordinates from the hv-mv-station of the mv grid are used. Default: False
 
@@ -955,16 +958,49 @@ def draw_plotly(
         Plotly figure with branches and nodes.
 
     """
-    # initialization
+    # initialization coordinate transformation
     transformer_4326_to_3035 = Transformer.from_crs(
         "EPSG:4326",
         "EPSG:3035",
         always_xy=True,
     )
 
+    def get_coordinates_for_edge(edge):
+        x0, y0 = G.nodes[edge[0]]["pos"]
+        x1, y1 = G.nodes[edge[1]]["pos"]
+        x0, y0 = transformer_4326_to_3035.transform(x0, y0)
+        x1, y1 = transformer_4326_to_3035.transform(x1, y1)
+        return x0, y0, x1, y1
+
+    line_color_options = ["loading", "relative_loading", "reinforce"]
+    if line_color not in line_color_options:
+        raise KeyError(f"Line colors need to be one of {line_color_options}")
+
+    fig = go.Figure(
+        layout=go.Layout(
+            height=500,
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            xaxis=dict(
+                showgrid=True,
+                zeroline=True,
+                showticklabels=True,
+            ),
+            yaxis=dict(
+                showgrid=True,
+                zeroline=True,
+                showticklabels=True,
+                scaleanchor="x",
+                scaleratio=1,
+            ),
+        ),
+    )
+
     if G is None:
         G = edisgo_obj.topology.mv_grid.graph
 
+    # Center transformer coordinates on (0,0).
     if hasattr(grid, "transformers_df"):
         node_root = grid.transformers_df.bus1.iat[0]
         x_root, y_root = G.nodes[node_root]["pos"]
@@ -977,6 +1013,7 @@ def draw_plotly(
 
     x_root, y_root = transformer_4326_to_3035.transform(x_root, y_root)
 
+    # Select the values for loads and nodes.
     s_res_view = edisgo_obj.results.s_res.T.index.isin(
         [edge[2]["branch_name"] for edge in G.edges.data()]
     )
@@ -997,10 +1034,7 @@ def draw_plotly(
     middle_node_text = []
 
     for edge in G.edges(data=True):
-        x0, y0 = G.nodes[edge[0]]["pos"]
-        x1, y1 = G.nodes[edge[1]]["pos"]
-        x0, y0 = transformer_4326_to_3035.transform(x0, y0)
-        x1, y1 = transformer_4326_to_3035.transform(x1, y1)
+        x0, y0, x1, y1 = get_coordinates_for_edge(edge)
         middle_node_x.append((x0 - x_root + x1 - x_root) / 2)
         middle_node_y.append((y0 - y_root + y1 - y_root) / 2)
 
@@ -1028,41 +1062,69 @@ def draw_plotly(
 
         middle_node_text.append(text)
 
-    middle_node_trace = go.Scatter(
+    middle_node_scatter = go.Scattergl(
         x=middle_node_x,
         y=middle_node_y,
         text=middle_node_text,
         mode="markers",
         hoverinfo="text",
-        marker=dict(opacity=0.0, size=10, color="white"),
+        marker=dict(
+            opacity=0.0,
+            size=10,
+            color="white",
+        ),
+        showlegend=False,
     )
-
-    data = [middle_node_trace]
+    fig.add_trace(middle_node_scatter)
 
     # line plot
+    showscale = True
     if line_color == "loading":
         color_min = s_res.T.min()
         color_max = s_res.T.max()
-
+        colorscale = "YlOrRd"
     elif line_color == "relative_loading":
         color_min = 0
         color_max = 1
+        colorscale = "YlOrRd"
+    elif line_color == "reinforce":
+        color_min = 0
+        color_max = 1
+        colorscale = [[0, "green"], [1, "red"]]
+    else:
+        showscale = False
 
     for edge in G.edges(data=True):
-        x0, y0 = G.nodes[edge[0]]["pos"]
-        x1, y1 = G.nodes[edge[1]]["pos"]
-        x0, y0 = transformer_4326_to_3035.transform(x0, y0)
-        x1, y1 = transformer_4326_to_3035.transform(x1, y1)
-
+        x0, y0, x1, y1 = get_coordinates_for_edge(edge)
         edge_x = [x0 - x_root, x1 - x_root, None]
         edge_y = [y0 - y_root, y1 - y_root, None]
 
         branch_name = edge[2]["branch_name"]
 
         if line_color == "reinforce":
-            if edisgo_obj.results.grid_expansion_costs.index.isin([branch_name]).any():
-                color = "lightgreen"
-            else:
+            try:
+                # Possible distinction between added parallel lines and changed lines
+                if (
+                    edisgo_obj.results.equipment_changes.index[
+                        edisgo_obj.results.equipment_changes["change"] == "added"
+                    ]
+                    .isin([branch_name])
+                    .any()
+                ):
+                    color = "green"
+                # Changed lines
+                elif (
+                    edisgo_obj.results.equipment_changes.index[
+                        edisgo_obj.results.equipment_changes["change"] == "changed"
+                    ]
+                    .isin([branch_name])
+                    .any()
+                ):
+
+                    color = "red"
+                else:
+                    color = "black"
+            except Exception:
                 color = "black"
 
         elif line_color == "loading":
@@ -1071,6 +1133,7 @@ def draw_plotly(
                 loading,
                 vmin=color_min,
                 vmax=color_max,
+                cmap_name=colorscale,
             )
 
         elif line_color == "relative_loading":
@@ -1080,21 +1143,48 @@ def draw_plotly(
                 loading / s_nom,
                 vmin=color_min,
                 vmax=color_max,
+                cmap_name=colorscale,
             )
             if loading > s_nom:
                 color = "green"
         else:
             color = "black"
 
-        edge_trace = go.Scatter(
+        edge_scatter = go.Scattergl(
+            mode="lines",
             x=edge_x,
             y=edge_y,
             hoverinfo="none",
-            opacity=0.4,
-            mode="lines",
-            line=dict(width=2, color=color),
+            opacity=0.5,
+            showlegend=False,
+            line=dict(
+                width=2,
+                color=color,
+            ),
         )
-        data.append(edge_trace)
+        fig.add_trace(edge_scatter)
+
+    colorbar_edge_scatter = go.Scattergl(
+        mode="markers",
+        x=[None],
+        y=[None],
+        marker=dict(
+            colorbar=dict(
+                title="Lines", xanchor="left", titleside="right", x=1.17, thickness=15
+            ),
+            colorscale=colorscale,
+            cmax=color_max,
+            cmin=color_min,
+            showscale=showscale,
+        ),
+    )
+
+    if line_color == "reinforce":
+        colorbar_edge_scatter.marker.colorbar.tickmode = "array"
+        colorbar_edge_scatter.marker.colorbar.ticktext = ["added", "changed"]
+        colorbar_edge_scatter.marker.colorbar.tickvals = [0, 1]
+
+    fig.add_trace(colorbar_edge_scatter)
 
     # node plot
     node_x = []
@@ -1107,12 +1197,10 @@ def draw_plotly(
         node_y.append(y - y_root)
 
     if node_color == "voltage_deviation":
-        colors = []
-
+        node_colors = []
         for node in G.nodes():
             color = v_res.loc[node] - 1
-
-            colors.append(color)
+            node_colors.append(color)
 
         colorbar = dict(
             thickness=15,
@@ -1124,7 +1212,7 @@ def draw_plotly(
         cmid = 0
 
     else:
-        colors = [len(adjacencies[1]) for adjacencies in G.adjacency()]
+        node_colors = [len(adjacencies[1]) for adjacencies in G.adjacency()]
         colorscale = "YlGnBu"
         cmid = None
 
@@ -1173,7 +1261,7 @@ def draw_plotly(
 
         node_text.append(text)
 
-    node_trace = go.Scatter(
+    node_scatter = go.Scattergl(
         x=node_x,
         y=node_y,
         mode="markers",
@@ -1182,31 +1270,14 @@ def draw_plotly(
         marker=dict(
             showscale=True,
             colorscale=colorscale,
-            reversescale=True,
-            color=colors,
+            color=node_colors,
             size=8,
             cmid=cmid,
             line_width=2,
             colorbar=colorbar,
         ),
     )
-
-    data.append(node_trace)
-
-    fig = go.Figure(
-        data=data,
-        layout=go.Layout(
-            height=500,
-            titlefont_size=16,
-            showlegend=False,
-            hovermode="closest",
-            margin=dict(b=20, l=5, r=5, t=40),
-            xaxis=dict(showgrid=True, zeroline=True, showticklabels=True),
-            yaxis=dict(showgrid=True, zeroline=True, showticklabels=True),
-        ),
-    )
-
-    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    fig.add_trace(node_scatter)
 
     return fig
 
@@ -1225,7 +1296,6 @@ def chosen_graph(
         Grid name. Can be either 'Grid' to select the MV grid with all LV grids or
         the name of the MV grid to select only the MV grid or the name of one of the
         LV grids of the eDisGo object to select a specific LV grid.
-
     Returns
     -------
     (:networkx:`networkx.Graph<network.Graph>`, :class:`~.network.grids.Grid` or bool)
@@ -1235,6 +1305,7 @@ def chosen_graph(
 
     """
     mv_grid = edisgo_obj.topology.mv_grid
+    lv_grid_name_list = list(map(str, edisgo_obj.topology.mv_grid.lv_grids))
 
     if selected_grid == "Grid":
         G = edisgo_obj.to_graph()
@@ -1256,15 +1327,9 @@ def chosen_graph(
     return G, grid
 
 
-def dash_plot(
-    edisgo_objects: EDisGo | dict[str, EDisGo],
-    line_plot_modes: list[str] | None = None,
-    node_plot_modes: list[str] | None = None,
-) -> JupyterDash:
+def dash_plot(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
     """
     Generates a jupyter dash app from given eDisGo object(s).
-
-    TODO: The app doesn't display two seperate colorbars for line and bus values atm
 
     Parameters
     ----------
@@ -1272,16 +1337,6 @@ def dash_plot(
         eDisGo objects to show in plotly dash app. In the case of multiple edisgo
         objects pass a dictionary with the eDisGo objects as values and the respective
         eDisGo object names as keys.
-    line_plot_modes : list(str), optional
-        List of line plot modes to display in plotly dash app. See
-        :py:func:`~edisgo.tools.plots.draw_plotly` for more information. If None is
-        passed the modes 'reinforce', 'loading' and 'relative_loading' will be used.
-        Default: None
-    node_plot_modes : list(str), optional
-        List of line plot modes to display in plotly dash app. See
-        :py:func:`~edisgo.tools.plots.draw_plotly` for more information. If None is
-        passed the modes 'adjacencies' and 'voltage_deviation' will be used.
-        Default: None
 
     Returns
     -------
@@ -1292,16 +1347,20 @@ def dash_plot(
     if isinstance(edisgo_objects, dict):
         edisgo_name_list = list(edisgo_objects.keys())
         edisgo_obj_1 = list(edisgo_objects.values())[0]
+
+        edisgo_obj_1_mv_grid_name = str(edisgo_obj_1.topology.mv_grid)
+        for edisgo_obj in edisgo_objects.values():
+            if edisgo_obj_1_mv_grid_name != str(edisgo_obj.topology.mv_grid):
+                raise ValueError("edisgo_objects are not matching")
+
     else:
         edisgo_name_list = ["edisgo_obj"]
         edisgo_obj_1 = edisgo_objects
 
     grid_name_list = ["Grid"] + edisgo_obj_1.topology._grids_repr
 
-    if line_plot_modes is None:
-        line_plot_modes = ["reinforce", "loading", "relative_loading"]
-    if node_plot_modes is None:
-        node_plot_modes = ["adjacencies", "voltage_deviation"]
+    line_plot_modes = ["reinforce", "loading", "relative_loading"]
+    node_plot_modes = ["adjacencies", "voltage_deviation"]
 
     if edisgo_obj_1.timeseries.is_worst_case:
         timestep_labels = [
@@ -1656,3 +1715,24 @@ def dash_plot(
             return fig
 
     return app
+
+
+def show_dash_plot(
+    edisgo_objects: EDisGo | dict[str, EDisGo],
+    debug: bool = False,
+):
+    """
+    Shows the generated jupyter dash app from given eDisGo object(s).
+
+    Parameters
+    ----------
+    edisgo_objects : :class:`~.EDisGo` or dict[str, :class:`~.EDisGo`]
+        eDisGo objects to show in plotly dash app. In the case of multiple edisgo
+        objects pass a dictionary with the eDisGo objects as values and the respective
+        eDisGo object names as keys.
+
+    debug: bool
+        Enables debugging of the jupyter dash app.
+    """
+    app = dash_plot(edisgo_objects)
+    app.run_server(mode="inline", debug=debug, height=700)
