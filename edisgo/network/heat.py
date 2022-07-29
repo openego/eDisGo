@@ -119,7 +119,7 @@ class HeatPump:
     def thermal_storage_units_df(self, df):
         self._thermal_storage_units_df = df
 
-    def get_cop(self, edisgo_object, ts_cop, heat_pump_names=None):
+    def set_cop(self, edisgo_object, ts_cop, heat_pump_names=None):
         """
         Get COP time series for heat pumps.
 
@@ -174,7 +174,7 @@ class HeatPump:
         else:
             raise ValueError("'ts_cop' must either be a pandas DataFrame or 'oedb'.")
 
-    def get_heat_demand(self, edisgo_object, ts_heat_demand, heat_pump_names=None):
+    def set_heat_demand(self, edisgo_object, ts_heat_demand, heat_pump_names=None):
         """
         Get heat demand time series for buildings with heat pumps.
 

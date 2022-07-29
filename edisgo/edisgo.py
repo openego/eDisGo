@@ -1625,10 +1625,10 @@ class EDisGo:
         integrated_heat_pumps = import_heat_pumps_oedb(
             edisgo_object=self, scenario=scenario, **kwargs
         )
-        self.heat_pump.get_heat_demand(
+        self.heat_pump.set_heat_demand(
             self, "oedb", heat_pump_names=integrated_heat_pumps
         )
-        self.heat_pump.get_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
+        self.heat_pump.set_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
