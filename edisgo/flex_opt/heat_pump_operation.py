@@ -29,7 +29,7 @@ def operating_strategy(
 
     """
     if heat_pump_names is None:
-        heat_pump_names = edisgo_obj.heat_pump.cop_df.index
+        heat_pump_names = edisgo_obj.heat_pump.cop_df.columns
 
     # Delete possible old time series
     edisgo_obj.timeseries.drop_component_time_series(
