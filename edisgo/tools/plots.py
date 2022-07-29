@@ -976,6 +976,12 @@ def draw_plotly(
     if line_color not in line_color_options:
         raise KeyError(f"Line colors need to be one of {line_color_options}")
 
+    if edisgo_obj.results.s_res.empty and edisgo_obj.results.v_res.empty:
+        if line_color in ["loading", "relative_loading"]:
+            raise ValueError("No results to show. -> Run power flow.")
+        if node_color in ["voltage_deviation"]:
+            raise ValueError("No results to show. -> Run power flow.")
+
     fig = go.Figure(
         layout=go.Layout(
             height=500,
