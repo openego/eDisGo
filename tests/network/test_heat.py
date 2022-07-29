@@ -2,6 +2,7 @@ import os
 import shutil
 
 import pandas as pd
+import pytest
 
 from edisgo.network.heat import HeatPump
 
@@ -33,7 +34,7 @@ class TestHeatPump:
             index=["hp1", "hp2"],
         )
 
-    # @pytest.fixture(autouse=True)
+    @pytest.fixture(autouse=True)
     def setup_heat_pump(self):
         self.heatpump = HeatPump()
         self.heatpump.cop_df = self.cop
@@ -41,8 +42,6 @@ class TestHeatPump:
         self.heatpump.thermal_storage_units_df = self.tes
 
     def test_reduce_memory(self):
-
-        self.setup_heat_pump()
 
         # check with default value
         assert (self.heatpump.cop_df.dtypes == "float64").all()
@@ -64,8 +63,6 @@ class TestHeatPump:
         self.heatpump.reduce_memory()
 
     def test_to_csv(self):
-
-        self.setup_heat_pump()
 
         # test with default values
         save_dir = os.path.join(os.getcwd(), "heat_pump_csv")
@@ -89,8 +86,6 @@ class TestHeatPump:
         shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-
-        self.setup_heat_pump()
 
         # write to csv
         save_dir = os.path.join(os.getcwd(), "heat_pump_csv")
