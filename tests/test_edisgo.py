@@ -552,7 +552,7 @@ class TestEDisGo:
         # Point, with time series
         num_cps = len(self.edisgo.topology.charging_points_df)
 
-        comp_data = {"p_set": 4, "sector": "fast"}
+        comp_data = {"p_set": 4, "sector": "hpc"}
         dummy_ts = pd.Series(
             data=[0.1, 0.2, 0.1, 0.2], index=self.edisgo.timeseries.timeindex
         )
@@ -568,7 +568,7 @@ class TestEDisGo:
         )
 
         assert len(self.edisgo.topology.charging_points_df) == num_cps + 1
-        assert self.edisgo.topology.charging_points_df.at[comp_name, "sector"] == "fast"
+        assert self.edisgo.topology.charging_points_df.at[comp_name, "sector"] == "hpc"
         # check voltage level
         assert (
             self.edisgo.topology.buses_df.at[
@@ -599,7 +599,7 @@ class TestEDisGo:
 
         # test charging point integration by nominal power, geom as shapely
         # Point, with time series
-        comp_data = {"number": 13, "p_set": 0.04, "sector": "fast"}
+        comp_data = {"number": 13, "p_set": 0.04, "sector": "hpc"}
         comp_name = self.edisgo.integrate_component_based_on_geolocation(
             comp_type="charging_point",
             geolocation=geom,
@@ -613,7 +613,7 @@ class TestEDisGo:
         # check bus
         assert (
             self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
-            == "Bus_BranchTee_LVGrid_1_3"
+            == "Bus_BranchTee_LVGrid_1_11"
         )
         # check time series
         assert (
@@ -1098,14 +1098,15 @@ class TestEDisGo:
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
         self.edisgo.save(save_dir)
 
-        # check that results, topology and timeseries directory are created
+        # check that directories are created
         dirs_in_save_dir = os.listdir(save_dir)
-        assert len(dirs_in_save_dir) == 4
+        assert len(dirs_in_save_dir) == 5
         # Todo: check anything else?
         shutil.rmtree(os.path.join(save_dir, "results"))
         shutil.rmtree(os.path.join(save_dir, "topology"))
         shutil.rmtree(os.path.join(save_dir, "timeseries"))
         shutil.rmtree(os.path.join(save_dir, "electromobility"))
+        shutil.rmtree(os.path.join(save_dir, "heat_pump"))
 
     def test_reduce_memory(self):
         self.setup_worst_case_time_series()

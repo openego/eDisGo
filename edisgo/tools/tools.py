@@ -533,29 +533,52 @@ def get_files_recursive(path, files=None):
 
     return files
 
+
 def calculate_impedance_for_parallel_components(parallel_components, pu=False):
     """
     Method to calculate parallel impedance and power of parallel elements.
     """
     if pu:
-        raise NotImplementedError('Calculation in pu for parallel components not implemented yet.')
+        raise NotImplementedError(
+            "Calculation in pu for parallel components not implemented yet."
+        )
     else:
         if not (parallel_components.diff().dropna() < 1e-6).all().all():
-            parallel_impedance = \
-                1 / sum([1/complex(comp.r, comp.x) for name, comp in parallel_components.iterrows()])
+            parallel_impedance = 1 / sum(
+                1 / complex(comp.r, comp.x)
+                for name, comp in parallel_components.iterrows()
+            )
             # apply current devider and use minimum
-            s_parallel = min([abs(comp.s_nom / (1 / complex(comp.r, comp.x) /
-                                                sum([1 / complex(comp.r, comp.x)
-                                                     for name, comp in parallel_components.iterrows()])))
-                              for name, comp in parallel_components.iterrows()])
-            return pd.Series({'r': parallel_impedance.real,
-                              'x': parallel_impedance.imag,
-                              's_nom': s_parallel})
+            s_parallel = min(
+                abs(
+                    comp.s_nom
+                    / (
+                        1
+                        / complex(comp.r, comp.x)
+                        / sum(
+                            1 / complex(comp.r, comp.x)
+                            for name, comp in parallel_components.iterrows()
+                        )
+                    )
+                )
+                for name, comp in parallel_components.iterrows()
+            )
+            return pd.Series(
+                {
+                    "r": parallel_impedance.real,
+                    "x": parallel_impedance.imag,
+                    "s_nom": s_parallel,
+                }
+            )
         else:
             nr_components = len(parallel_components)
-            return pd.Series({'r': parallel_components.iloc[0].r/nr_components,
-                              'x': parallel_components.iloc[0].x/nr_components,
-                              's_nom': parallel_components.iloc[0].s_nom*nr_components})
+            return pd.Series(
+                {
+                    "r": parallel_components.iloc[0].r / nr_components,
+                    "x": parallel_components.iloc[0].x / nr_components,
+                    "s_nom": parallel_components.iloc[0].s_nom * nr_components,
+                }
+            )
 
 
 def get_nodal_residual_load(grid, edisgo, **kwargs):
@@ -567,25 +590,34 @@ def get_nodal_residual_load(grid, edisgo, **kwargs):
     :return: pd.DataFrame() with indices being timesteps and column names
     being the bus names
     """
-    considered_loads = kwargs.get('considered_loads', None)
-    considered_generators = kwargs.get('considered_generators', None)
-    considered_storage = kwargs.get('considered_storage', None)
-    nodal_active_load, nodal_reactive_load = \
-        get_timeseries_per_node(grid, edisgo, 'load', considered_loads)
-    nodal_active_generation, nodal_reactive_generation = \
-        get_timeseries_per_node(grid, edisgo, 'generator',
-                                considered_generators)
-    nodal_active_storage, nodal_reactive_storage = \
-        get_timeseries_per_node(grid, edisgo, 'storage_unit',
-                                considered_storage) #Todo: adapt handling, once important
-    nodal_active_power = \
+    considered_loads = kwargs.get("considered_loads", None)
+    considered_generators = kwargs.get("considered_generators", None)
+    considered_storage = kwargs.get("considered_storage", None)
+    nodal_active_load, nodal_reactive_load = get_timeseries_per_node(
+        grid, edisgo, "load", considered_loads
+    )
+    nodal_active_generation, nodal_reactive_generation = get_timeseries_per_node(
+        grid, edisgo, "generator", considered_generators
+    )
+    nodal_active_storage, nodal_reactive_storage = get_timeseries_per_node(
+        grid, edisgo, "storage_unit", considered_storage
+    )  # Todo: adapt handling, once important
+    nodal_active_power = (
         nodal_active_generation + nodal_active_storage - nodal_active_load
-    nodal_reactive_power = \
+    )
+    nodal_reactive_power = (
         nodal_reactive_generation + nodal_reactive_storage - nodal_reactive_load
-    return nodal_active_power, nodal_reactive_power, \
-           nodal_active_load, nodal_reactive_load, \
-           nodal_active_generation, nodal_reactive_generation, \
-           nodal_active_storage, nodal_reactive_storage
+    )
+    return (
+        nodal_active_power,
+        nodal_reactive_power,
+        nodal_active_load,
+        nodal_reactive_load,
+        nodal_active_generation,
+        nodal_reactive_generation,
+        nodal_active_storage,
+        nodal_reactive_storage,
+    )
 
 
 def get_timeseries_per_node(grid, edisgo, component, component_names=None):
@@ -602,31 +634,32 @@ def get_timeseries_per_node(grid, edisgo, component, component_names=None):
             optimisation only use inflexible units.
     :return: pandas.DataFrame
     """
-    nodal_active_power_all_buses = \
-        pd.DataFrame(columns=grid.buses_df.index,
-                     index=edisgo.timeseries.timeindex)
+    nodal_active_power_all_buses = pd.DataFrame(
+        columns=grid.buses_df.index, index=edisgo.timeseries.timeindex
+    )
     nodal_reactive_power_all_buses = pd.DataFrame(
-        columns=grid.buses_df.index,
-        index=edisgo.timeseries.timeindex)
-    if component_names is None or len(component_names)>0:
-        bus_component_dict = \
-            getattr(grid, component + 's_df')['bus'].to_dict()
+        columns=grid.buses_df.index, index=edisgo.timeseries.timeindex
+    )
+    if component_names is None or len(component_names) > 0:
+        bus_component_dict = getattr(grid, component + "s_df")["bus"].to_dict()
         if component_names is None:
-            component_names = getattr(grid, component + 's_df').index
-        nodal_active_power = \
-            getattr(edisgo.timeseries, component + 's_active_power')[
-                component_names].rename(columns=bus_component_dict)
-        nodal_reactive_power = \
-            getattr(edisgo.timeseries, component + 's_reactive_power')[
-                component_names].rename(columns=bus_component_dict)
-        nodal_active_power = nodal_active_power.groupby(nodal_active_power.columns,
-                                                        axis=1).sum()
+            component_names = getattr(grid, component + "s_df").index
+        nodal_active_power = getattr(edisgo.timeseries, component + "s_active_power")[
+            component_names
+        ].rename(columns=bus_component_dict)
+        nodal_reactive_power = getattr(
+            edisgo.timeseries, component + "s_reactive_power"
+        )[component_names].rename(columns=bus_component_dict)
+        nodal_active_power = nodal_active_power.groupby(
+            nodal_active_power.columns, axis=1
+        ).sum()
         nodal_reactive_power = nodal_reactive_power.groupby(
-            nodal_reactive_power.columns, axis=1).sum()
-        nodal_active_power_all_buses[nodal_active_power.columns] = \
-            nodal_active_power
-        nodal_reactive_power_all_buses[nodal_reactive_power.columns] = \
-            nodal_reactive_power
+            nodal_reactive_power.columns, axis=1
+        ).sum()
+        nodal_active_power_all_buses[nodal_active_power.columns] = nodal_active_power
+        nodal_reactive_power_all_buses[
+            nodal_reactive_power.columns
+        ] = nodal_reactive_power
     nodal_active_power_all_buses.fillna(0, inplace=True)
     nodal_reactive_power_all_buses.fillna(0, inplace=True)
     return nodal_active_power_all_buses, nodal_reactive_power_all_buses
@@ -635,8 +668,10 @@ def get_timeseries_per_node(grid, edisgo, component, component_names=None):
 def convert_impedances_to_mv(edisgo):
     for lv_grid in edisgo.topology.mv_grid.lv_grids:
         k = edisgo.topology.mv_grid.nominal_voltage / lv_grid.nominal_voltage
-        edisgo.topology.lines_df.loc[lv_grid.lines_df.index, 'r'] = \
-            edisgo.topology.lines_df.loc[lv_grid.lines_df.index, 'r'] * k**2
-        edisgo.topology.lines_df.loc[lv_grid.lines_df.index, 'x'] = \
-            edisgo.topology.lines_df.loc[lv_grid.lines_df.index, 'x'] * k ** 2
+        edisgo.topology.lines_df.loc[lv_grid.lines_df.index, "r"] = (
+            edisgo.topology.lines_df.loc[lv_grid.lines_df.index, "r"] * k**2
+        )
+        edisgo.topology.lines_df.loc[lv_grid.lines_df.index, "x"] = (
+            edisgo.topology.lines_df.loc[lv_grid.lines_df.index, "x"] * k**2
+        )
     return edisgo

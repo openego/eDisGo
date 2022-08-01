@@ -22,8 +22,8 @@ def feedin_oedb(config_data, weather_cell_ids, timeindex):
     ----------
     config_data : :class:`~.tools.config.Config`
         Configuration data from config files, relevant for information of
-        which data base table to retrieve feed-in data for.
-    weather_cell_ids : :obj:`list`
+        which data base table to retrieve feed-in data from.
+    weather_cell_ids : list(int)
         List of weather cell id's (integers) to obtain feed-in data for.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
         Feed-in data is currently only provided for weather year 2011. If
@@ -183,3 +183,81 @@ def load_time_series_demandlib(config_data, timeindex):
     )
 
     return elec_demand.loc[timeindex]
+
+
+def cop_oedb(config_data, weather_cell_ids=None, timeindex=None):
+    """
+    Get COP (coefficient of performance) time series data from the
+    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+
+    Parameters
+    ----------
+    config_data : :class:`~.tools.config.Config`
+        Configuration data from config files, relevant for information of
+        which data base table to retrieve COP data from.
+    weather_cell_ids : list(int)
+        List of weather cell id's (integers) to obtain COP data for.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        COP data is only provided for the weather year 2011. If
+        timeindex contains a different year, the data is reindexed.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with hourly COP time series in p.u. per weather cell.
+
+    """
+    raise NotImplementedError
+
+    # if timeindex is None:
+    #     timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
+    #
+    # if weather_cell_ids is None:
+    #     # get weather cells in grid district
+    #     pass
+    #
+    # with session_scope() as session:
+    #     # get cop from database
+    #     cop = pd.DataFrame()
+    #
+    # cop.sort_index(axis=0, inplace=True)
+    #
+    # return cop
+
+
+def heat_demand_oedb(config_data, building_ids, timeindex=None):
+    """
+    Get heat demand time series data from the
+    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+
+    Parameters
+    ----------
+    config_data : :class:`~.tools.config.Config`
+        Configuration data from config files, relevant for information of
+        which data base table to retrieve data from.
+    building_ids : list(int)
+        List of building IDs to obtain heat demand for.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Heat demand data is only provided for the weather year 2011. If
+        timeindex contains a different year, the data is reindexed.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with hourly heat demand time series in MW per building ID.
+
+    """
+    raise NotImplementedError
+    # ToDo Also include large heat pumps for district heating that don't have
+    #  a building ID
+
+    # if timeindex is None:
+    #     timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
+    #
+    # with session_scope() as session:
+    #     # get heat demand from database
+    #     heat_demand = pd.DataFrame()
+    #
+    # heat_demand.sort_index(axis=0, inplace=True)
+    #
+    # return heat_demand
