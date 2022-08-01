@@ -1,7 +1,12 @@
-import pandas as pd
 import numpy as np
-from edisgo.flex_opt.check_tech_constraints import lines_allowed_load, \
-    lines_relative_load, _mv_allowed_voltage_limits, _lv_allowed_voltage_limits
+import pandas as pd
+
+from edisgo.flex_opt.check_tech_constraints import (
+    _lv_allowed_voltage_limits,
+    _mv_allowed_voltage_limits,
+    lines_allowed_load,
+    lines_relative_load,
+)
 
 
 def relative_load(edisgo_obj):
@@ -36,11 +41,19 @@ def relative_load(edisgo_obj):
     if any(lv_lines.isin(edisgo_obj.results.i_res.columns)):
         lv_lines_allowed_load = lines_allowed_load(edisgo_obj, "lv")
         allowed_load_lines = pd.concat(
-            [allowed_load_lines,
-             lv_lines_allowed_load.loc[:, edisgo_obj.results.i_res.columns[
-                                              edisgo_obj.results.i_res.columns.isin(
-                                                  lv_lines_allowed_load.columns)]]],
-            axis=1)
+            [
+                allowed_load_lines,
+                lv_lines_allowed_load.loc[
+                    :,
+                    edisgo_obj.results.i_res.columns[
+                        edisgo_obj.results.i_res.columns.isin(
+                            lv_lines_allowed_load.columns
+                        )
+                    ],
+                ],
+            ],
+            axis=1,
+        )
 
     # calculated relative load for lines
     rel_load = lines_relative_load(edisgo_obj, allowed_load_lines)
@@ -49,7 +62,8 @@ def relative_load(edisgo_obj):
     # check if power flow was conducted for stations
     if not edisgo_obj.results.s_res.empty:
         if not edisgo_obj.results.s_res.loc[
-           :, edisgo_obj.results.s_res.columns.str.contains("Transformer")].empty:
+            :, edisgo_obj.results.s_res.columns.str.contains("Transformer")
+        ].empty:
 
             load_factor = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
                 lambda _: edisgo_obj.config["grid_expansion_load_factors"][
@@ -69,8 +83,9 @@ def relative_load(edisgo_obj):
                     # get maximum allowed apparent power of station in each time
                     # step
                     s_station_allowed = sum(transformers_df.s_nom) * load_factor
-                    rel_load["mvlv_station_{}".format(grid)] = \
+                    rel_load["mvlv_station_{}".format(grid)] = (
                         s_station_pfa / s_station_allowed
+                    )
 
     # HV-MV station
     # check if power flow was conducted for MV
@@ -88,8 +103,9 @@ def relative_load(edisgo_obj):
             ]
         )
         s_station_allowed = s_station * load_factor
-        rel_load["hvmv_station_{}".format(edisgo_obj.topology.mv_grid)] = \
+        rel_load["hvmv_station_{}".format(edisgo_obj.topology.mv_grid)] = (
             s_station_pfa / s_station_allowed
+        )
 
     return rel_load
 
@@ -107,16 +123,16 @@ def voltage_diff_stations(edisgo_obj):
 
     v_allowed_per_case = {}
     v_allowed_per_case["feedin_case_upper"] = (
-            voltage_base
-            + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "mv_lv_station_feedin_case_max_v_deviation"
-            ]
+        voltage_base
+        + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+            "mv_lv_station_feedin_case_max_v_deviation"
+        ]
     )
     v_allowed_per_case["load_case_lower"] = (
-            voltage_base
-            - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "mv_lv_station_load_case_max_v_deviation"
-            ]
+        voltage_base
+        - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+            "mv_lv_station_load_case_max_v_deviation"
+        ]
     )
 
     timeindex = voltage_base.index
@@ -148,28 +164,24 @@ def voltage_diff_stations(edisgo_obj):
         )
 
     # rename columns to secondary side
-    rename_dict = {primary_sides[g]: secondary_sides[g] for g in
-                   edisgo_obj.topology.mv_grid.lv_grids}
+    rename_dict = {
+        primary_sides[g]: secondary_sides[g]
+        for g in edisgo_obj.topology.mv_grid.lv_grids
+    }
     v_dev_allowed_upper_all.rename(columns=rename_dict, inplace=True)
     v_dev_allowed_lower_all.rename(columns=rename_dict, inplace=True)
 
-    v_mag_pu_pfa_all = edisgo_obj.results.v_res.loc[:,
-                       v_dev_allowed_upper_all.columns]
+    v_mag_pu_pfa_all = edisgo_obj.results.v_res.loc[:, v_dev_allowed_upper_all.columns]
 
-    overvoltage = v_mag_pu_pfa_all[
-        v_mag_pu_pfa_all > v_dev_allowed_upper_all
-        ]
-    undervoltage = v_mag_pu_pfa_all[
-        v_mag_pu_pfa_all < v_dev_allowed_lower_all
-        ]
+    overvoltage = v_mag_pu_pfa_all[v_mag_pu_pfa_all > v_dev_allowed_upper_all]
+    undervoltage = v_mag_pu_pfa_all[v_mag_pu_pfa_all < v_dev_allowed_lower_all]
 
     # overvoltage diff (positive)
     overvoltage_diff = overvoltage - v_dev_allowed_upper_all
     # undervoltage diff (negative)
     undervoltage_diff = undervoltage - v_dev_allowed_lower_all
 
-    voltage_difference_all = overvoltage_diff.fillna(
-        0) + undervoltage_diff.fillna(0)
+    voltage_difference_all = overvoltage_diff.fillna(0) + undervoltage_diff.fillna(0)
 
     return voltage_difference_all
 
@@ -201,10 +213,12 @@ def voltage_diff(edisgo_obj):
     mv_buses = edisgo_obj.topology.mv_grid.buses_df.index
     if any(mv_buses.isin(edisgo_obj.results.v_res.columns)):
         v_dev_allowed_upper, v_dev_allowed_lower = _mv_allowed_voltage_limits(
-            edisgo_obj, voltage_levels="mv")
+            edisgo_obj, voltage_levels="mv"
+        )
 
         v_mag_pu_pfa = edisgo_obj.results.v_res.loc[
-                       :, edisgo_obj.topology.mv_grid.buses_df.index]
+            :, edisgo_obj.topology.mv_grid.buses_df.index
+        ]
 
         v_dev_allowed_upper_format = np.tile(
             (v_dev_allowed_upper.loc[v_mag_pu_pfa.index]).values,
@@ -214,19 +228,14 @@ def voltage_diff(edisgo_obj):
             (v_dev_allowed_lower.loc[v_mag_pu_pfa.index]).values,
             (v_mag_pu_pfa.shape[1], 1),
         )
-        overvoltage = v_mag_pu_pfa.T[
-            v_mag_pu_pfa.T > v_dev_allowed_upper_format
-        ]
-        undervoltage = v_mag_pu_pfa.T[
-            v_mag_pu_pfa.T < v_dev_allowed_lower_format
-        ]
+        overvoltage = v_mag_pu_pfa.T[v_mag_pu_pfa.T > v_dev_allowed_upper_format]
+        undervoltage = v_mag_pu_pfa.T[v_mag_pu_pfa.T < v_dev_allowed_lower_format]
 
         # overvoltage diff (positive)
         overvoltage_diff = overvoltage - v_dev_allowed_upper_format
         # undervoltage diff (negative)
         undervoltage_diff = undervoltage - v_dev_allowed_lower_format
-        voltage_difference = (overvoltage_diff.fillna(0) +
-                              undervoltage_diff.fillna(0))
+        voltage_difference = overvoltage_diff.fillna(0) + undervoltage_diff.fillna(0)
         voltage_difference = voltage_difference.T
     else:
         voltage_difference = pd.DataFrame()
@@ -235,13 +244,12 @@ def voltage_diff(edisgo_obj):
     # check if power flow was conducted for stations
     if not edisgo_obj.results.s_res.empty:
         if not edisgo_obj.results.s_res.loc[
-               :,
-               edisgo_obj.results.s_res.columns.str.contains("Transformer")].empty:
+            :, edisgo_obj.results.s_res.columns.str.contains("Transformer")
+        ].empty:
 
             voltage_difference_stations = voltage_diff_stations(edisgo_obj)
             voltage_difference = pd.concat(
-                [voltage_difference, voltage_difference_stations],
-                sort=False, axis=1
+                [voltage_difference, voltage_difference_stations], sort=False, axis=1
             )
 
     # LV buses
@@ -254,15 +262,13 @@ def voltage_diff(edisgo_obj):
         for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
 
             # check if grid was included in power flow
-            if any(lv_grid.lines_df.index.isin(
-                    edisgo_obj.results.s_res.columns)):
+            if any(lv_grid.lines_df.index.isin(edisgo_obj.results.s_res.columns)):
 
-                v_dev_allowed_upper, v_dev_allowed_lower = \
-                    _lv_allowed_voltage_limits(
-                        edisgo_obj, lv_grid, mode=None)
+                v_dev_allowed_upper, v_dev_allowed_lower = _lv_allowed_voltage_limits(
+                    edisgo_obj, lv_grid, mode=None
+                )
 
-                v_mag_pu_pfa = edisgo_obj.results.v_res.loc[
-                               :, lv_grid.buses_df.index]
+                v_mag_pu_pfa = edisgo_obj.results.v_res.loc[:, lv_grid.buses_df.index]
 
                 v_dev_allowed_upper_format = np.tile(
                     (v_dev_allowed_upper.loc[v_mag_pu_pfa.index]).values,
@@ -274,23 +280,29 @@ def voltage_diff(edisgo_obj):
                 )
                 overvoltage = v_mag_pu_pfa.T[
                     v_mag_pu_pfa.T > v_dev_allowed_upper_format
-                    ]
+                ]
                 undervoltage = v_mag_pu_pfa.T[
                     v_mag_pu_pfa.T < v_dev_allowed_lower_format
-                    ]
+                ]
 
                 # overvoltage diff (positive)
                 overvoltage_diff = overvoltage - v_dev_allowed_upper_format
                 # undervoltage diff (negative)
                 undervoltage_diff = undervoltage - v_dev_allowed_lower_format
-                voltage_difference_lv_grid = (
-                        overvoltage_diff.fillna(0) +
-                        undervoltage_diff.fillna(0)
-                )
+                voltage_difference_lv_grid = overvoltage_diff.fillna(
+                    0
+                ) + undervoltage_diff.fillna(0)
                 voltage_difference = pd.concat(
-                    [voltage_difference,
-                     voltage_difference_lv_grid[~voltage_difference_lv_grid.T.columns.isin(voltage_difference.columns)].T],
-                    sort=False, axis=1
+                    [
+                        voltage_difference,
+                        voltage_difference_lv_grid[
+                            ~voltage_difference_lv_grid.T.columns.isin(
+                                voltage_difference.columns
+                            )
+                        ].T,
+                    ],
+                    sort=False,
+                    axis=1,
                 )
 
     return voltage_difference

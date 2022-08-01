@@ -1,7 +1,7 @@
-import multiprocessing as mp
 import os
 
 import pandas as pd
+
 from shapely import wkt
 
 from edisgo.edisgo import EDisGo, import_edisgo_from_files
@@ -110,8 +110,10 @@ def adapt_loads_to_remove_hps(grid_id):
     edisgo.topology._loads_df = edisgo_ding0.topology.loads_df
     edisgo.topology._generators_df = edisgo.topology.generators_df.loc[
         edisgo.topology.generators_df.index.isin(
-            edisgo_ding0.topology.generators_df.index)
-        & edisgo.topology.generators_df.type.isin(["wind", "solar"])]
+            edisgo_ding0.topology.generators_df.index
+        )
+        & edisgo.topology.generators_df.type.isin(["wind", "solar"])
+    ]
     edisgo.topology._generators_df.p_nom = edisgo_ding0.topology.generators_df.loc[
         edisgo.topology._generators_df.index, "p_nom"
     ]
@@ -119,7 +121,7 @@ def adapt_loads_to_remove_hps(grid_id):
         edisgo, timeseries_load="demandlib", timeseries_generation_fluctuating="oedb"
     )
     # reinforce to have stable grid
-    #edisgo.reinforce()
+    # edisgo.reinforce()
     save_dir = r"H:\no_HP\{}".format(grid_id)
     edisgo.save(save_dir)
 
@@ -128,46 +130,66 @@ def add_generators_and_cps_no_hp(grid_id):
     edisgo_dir = r"H:\no_HP\{}".format(grid_id)
     edisgo = import_edisgo_from_files(edisgo_dir, import_timeseries=True)
     edisgo_orig_dir_topology = r"H:\Grids\{}\dumb".format(grid_id)
-    edisgo_orig_topology = import_edisgo_from_files(edisgo_orig_dir_topology,
-                                                    import_electromobility=True)
+    edisgo_orig_topology = import_edisgo_from_files(
+        edisgo_orig_dir_topology, import_electromobility=True
+    )
     edisgo.electromobility = edisgo_orig_topology.electromobility
-    mapping = \
-        pd.read_csv(server_dir + r"\{}\dumb\topology_orig\mapping.csv".format(grid_id),
-                    index_col=0)
-    edisgo_orig_dir_timeseries = r"C:\Users\aheider\Documents\Grids\{}\dumb".format(grid_id)
-    edisgo_orig_timeseries = import_edisgo_from_files(edisgo_orig_dir_timeseries,
-                                                      import_timeseries=True)
+    mapping = pd.read_csv(
+        server_dir + r"\{}\dumb\topology_orig\mapping.csv".format(grid_id), index_col=0
+    )
+    edisgo_orig_dir_timeseries = r"C:\Users\aheider\Documents\Grids\{}\dumb".format(
+        grid_id
+    )
+    edisgo_orig_timeseries = import_edisgo_from_files(
+        edisgo_orig_dir_timeseries, import_timeseries=True
+    )
     for attr in ["generators_df", "charging_points_df"]:
         setattr(edisgo.topology, attr, getattr(edisgo_orig_topology.topology, attr))
-    for attr in ["generators_active_power", "generators_reactive_power",
-                 "charging_points_active_power", "charging_points_reactive_power"]:
-        setattr(edisgo.timeseries, attr,
-                getattr(edisgo_orig_timeseries.timeseries, attr))
+    for attr in [
+        "generators_active_power",
+        "generators_reactive_power",
+        "charging_points_active_power",
+        "charging_points_reactive_power",
+    ]:
+        setattr(
+            edisgo.timeseries, attr, getattr(edisgo_orig_timeseries.timeseries, attr)
+        )
     problematic_cps = edisgo.topology.charging_points_df.loc[
-        ~edisgo.topology.charging_points_df.bus.isin(edisgo.topology.buses_df.index)]
-    edisgo.timeseries.charging_points_active_power = \
+        ~edisgo.topology.charging_points_df.bus.isin(edisgo.topology.buses_df.index)
+    ]
+    edisgo.timeseries.charging_points_active_power = (
         edisgo.timeseries.charging_points_active_power.rename(
-            columns=mapping['0'].to_dict())
-    edisgo.timeseries.charging_points_reactive_power = \
+            columns=mapping["0"].to_dict()
+        )
+    )
+    edisgo.timeseries.charging_points_reactive_power = (
         edisgo.timeseries.charging_points_reactive_power.rename(
-            columns=mapping['0'].to_dict())
-    mapping_dict = reintegrate_charging(problematic_cps, edisgo,
-                                        edisgo.timeseries.charging_points_active_power)
-    pd.Series(mapping_dict).to_csv(
-        edisgo_dir + r"\mapping.csv")
+            columns=mapping["0"].to_dict()
+        )
+    )
+    mapping_dict = reintegrate_charging(
+        problematic_cps, edisgo, edisgo.timeseries.charging_points_active_power
+    )
+    pd.Series(mapping_dict).to_csv(edisgo_dir + r"\mapping.csv")
     edisgo.analyze(timesteps=edisgo.timeseries.timeindex[0])
     edisgo.save(edisgo_dir, archive=True, save_results=False)
 
 
 def check_ev_timeseries_for_maximum_powers(grid_id):
     timeseries_dir = server_dir + r"\{}\dumb\timeseries".format(grid_id)
-    ts_charging = pd.read_csv(timeseries_dir + "/charging_points_active_power.csv",
-                              index_col=0, parse_dates=True)
+    ts_charging = pd.read_csv(
+        timeseries_dir + "/charging_points_active_power.csv",
+        index_col=0,
+        parse_dates=True,
+    )
     topology_dir = server_dir + r"\{}\dumb\topology".format(grid_id)
     cps = pd.read_csv(topology_dir + "/charging_points.csv", index_col=0)
     problematic_cps = cps.loc[cps.p_nom < ts_charging[cps.index].max()]
-    print("The following charging points exceed their limits: {}".format(
-        problematic_cps.index))
+    print(
+        "The following charging points exceed their limits: {}".format(
+            problematic_cps.index
+        )
+    )
     return problematic_cps
 
 
@@ -177,8 +199,11 @@ def adapt_problematic_charging(grid_id):
     Todo: apply to original grids
     """
     print("Adapting charging for grid {}".format(grid_id))
-    edisgo = import_edisgo_from_files(server_dir + r"\{}\dumb".format(grid_id),
-                                      import_timeseries=True, import_electromobility=True)
+    edisgo = import_edisgo_from_files(
+        server_dir + r"\{}\dumb".format(grid_id),
+        import_timeseries=True,
+        import_electromobility=True,
+    )
     # Save current topology
     edisgo.topology.to_csv(server_dir + r"\{}\dumb\topology_orig".format(grid_id))
     cps = edisgo.topology.charging_points_df
@@ -186,11 +211,13 @@ def adapt_problematic_charging(grid_id):
     problematic_cps = cps.loc[cps.p_nom < ts_charging[cps.index].max()]
     mapping_dict = reintegrate_charging(problematic_cps, edisgo, ts_charging)
     # save results
-    pd.Series(mapping_dict).to_csv(server_dir + r"\{}\dumb\topology_orig\mapping.csv".format(grid_id))
-    # check integrity of pypsa network
-    pypsa_network = edisgo.to_pypsa()
+    pd.Series(mapping_dict).to_csv(
+        server_dir + r"\{}\dumb\topology_orig\mapping.csv".format(grid_id)
+    )
     # rename elements in electromobility object
-    edisgo.electromobility.integrated_charging_parks_df.replace(mapping_dict,inplace=True)
+    edisgo.electromobility.integrated_charging_parks_df.replace(
+        mapping_dict, inplace=True
+    )
     # Todo: Handle potential charging parks
     edisgo.save(server_dir + r"\{}\dumb".format(grid_id))
     print("All charging points adapted.")
@@ -202,9 +229,11 @@ def reintegrate_charging(cps, edisgo, ts_charging, mode_p_nom="ts"):
     changed_cps = {}
     mapping_dict = {}
     for cp_name in cps.index:
-        changed_cps[cp_name] = {"topology": cps.loc[cp_name],
-                                "active_power": ts_charging[cp_name],
-                                "reactive_power": edisgo.timeseries.charging_points_reactive_power[cp_name]}
+        changed_cps[cp_name] = {
+            "topology": cps.loc[cp_name],
+            "active_power": ts_charging[cp_name],
+            "reactive_power": edisgo.timeseries.charging_points_reactive_power[cp_name],
+        }
         edisgo.remove_component(comp_type, cp_name)
     # edisgo.analyze()
     for cp_name, cp in changed_cps.items():
@@ -212,13 +241,15 @@ def reintegrate_charging(cps, edisgo, ts_charging, mode_p_nom="ts"):
             p_nom = cp["active_power"].max()
         else:
             p_nom = cp["topology"].p_nom
-        new_name = edisgo.integrate_component(comp_type=comp_type,
-                                              geolocation=wkt.loads(cp["topology"].geom),
-                                              use_case=cp["topology"].use_case,
-                                              add_ts=True,
-                                              ts_active_power=cp["active_power"],
-                                              ts_reactive_power=cp["reactive_power"],
-                                              p_nom=p_nom)
+        new_name = edisgo.integrate_component(
+            comp_type=comp_type,
+            geolocation=wkt.loads(cp["topology"].geom),
+            use_case=cp["topology"].use_case,
+            add_ts=True,
+            ts_active_power=cp["active_power"],
+            ts_reactive_power=cp["reactive_power"],
+            p_nom=p_nom,
+        )
         changed_cps[cp_name]["edisgo_id"] = new_name
         mapping_dict[cp_name] = new_name
     return mapping_dict
