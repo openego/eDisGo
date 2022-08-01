@@ -194,12 +194,13 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
 
         pypsa_network.mode = "lv"
 
-        lv_grid_name = kwargs.get("lv_grid_name", None)
-        if not lv_grid_name:
+        lv_grid_id = kwargs.get("lv_grid_id", None)
+        if not lv_grid_id:
             raise ValueError(
-                "For exporting lv grids, name of lv_grid has to be provided."
+                "For exporting LV grids, ID or name of LV grid has to be provided"
+                "using parameter `lv_grid_id`."
             )
-        grid_object = edisgo_object.topology._grids[lv_grid_name]
+        grid_object = edisgo_object.topology.get_lv_grid(lv_grid_id)
         buses_df = grid_object.buses_df.loc[:, ["v_nom"]]
         slack_df = _set_slack(grid_object)
 
@@ -795,7 +796,7 @@ def _buses_voltage_set_point(edisgo_obj, buses, slack_bus, timesteps):
     return v_nom
 
 
-def process_pfa_results(edisgo, pypsa, timesteps):
+def process_pfa_results(edisgo, pypsa, timesteps, dtype="float"):
     """
     Passing power flow results from PyPSA to :class:`~.network.results.Results`.
 
@@ -837,14 +838,18 @@ def process_pfa_results(edisgo, pypsa, timesteps):
             abs(pypsa.generators_t["q"].sum(axis=1) - pypsa.loads_t["q"].sum(axis=1))
         ),
     }
-    edisgo.results.grid_losses = pd.DataFrame(grid_losses).reindex(index=timesteps)
+    edisgo.results.grid_losses = pd.DataFrame(grid_losses, dtype=dtype).reindex(
+        index=timesteps
+    )
 
     # get slack results in MW and Mvar
     pfa_slack = {
         "p": (pypsa.generators_t["p"]["Generator_slack"]),
         "q": (pypsa.generators_t["q"]["Generator_slack"]),
     }
-    edisgo.results.pfa_slack = pd.DataFrame(pfa_slack).reindex(index=timesteps)
+    edisgo.results.pfa_slack = pd.DataFrame(pfa_slack, dtype=dtype).reindex(
+        index=timesteps
+    )
 
     # get P and Q of lines and transformers in MW and Mvar
     q0 = pd.concat(
@@ -871,8 +876,8 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     s0 = np.hypot(p0, q0)
     s1 = np.hypot(p1, q1)
     # choose P and Q from line ending with max(s0,s1)
-    edisgo.results.pfa_p = p0.where(s0 > s1, p1)
-    edisgo.results.pfa_q = q0.where(s0 > s1, q1)
+    edisgo.results.pfa_p = p0.where(s0 > s1, p1).astype(dtype)
+    edisgo.results.pfa_q = q0.where(s0 > s1, q1).astype(dtype)
 
     # calculate line currents in kA
     lines_bus0 = pypsa.lines["bus0"].to_dict()
@@ -884,7 +889,9 @@ def process_pfa_results(edisgo, pypsa, timesteps):
     edisgo.results._i_res = current.reindex(index=timesteps)
 
     # get voltage results in kV
-    edisgo.results._v_res = pypsa.buses_t["v_mag_pu"].reindex(index=timesteps)
+    edisgo.results._v_res = (
+        pypsa.buses_t["v_mag_pu"].reindex(index=timesteps).astype(dtype)
+    )
 
     # save seeds
     edisgo.results.pfa_v_mag_pu_seed = pd.concat(

@@ -2,6 +2,8 @@ import logging
 import os
 import shutil
 
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -11,6 +13,7 @@ from pandas.util.testing import assert_frame_equal
 from shapely.geometry import Point
 
 from edisgo import EDisGo
+from edisgo.edisgo import import_edisgo_from_files
 
 
 class TestEDisGo:
@@ -219,7 +222,6 @@ class TestEDisGo:
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
 
     def test_set_time_series_reactive_power_control(self):
-
         # set active power time series for fixed cosphi
         timeindex = pd.date_range("1/1/1970", periods=3, freq="H")
         self.edisgo.set_timeindex(timeindex)
@@ -286,7 +288,6 @@ class TestEDisGo:
         ).all()
 
     def test_to_pypsa(self):
-
         self.setup_worst_case_time_series()
 
         # test mode None and timesteps None (default)
@@ -320,12 +321,12 @@ class TestEDisGo:
         edisgo.import_generators("nep2035")
         assert len(edisgo.topology.generators_df) == 1636
 
-    def test_analyze(self):
-
+    def test_analyze(self, caplog):
         self.setup_worst_case_time_series()
 
         # test mode None and timesteps None (default)
         self.edisgo.analyze()
+        results_analyze = deepcopy(self.edisgo.results)
         assert self.edisgo.results.v_res.shape == (4, 140)
 
         # test mode "mv" and timesteps given
@@ -333,10 +334,33 @@ class TestEDisGo:
         assert self.edisgo.results.v_res.shape == (1, 31)
 
         # test mode "lv"
-        self.edisgo.analyze(mode="lv", lv_grid_name="LVGrid_1")
+        self.edisgo.analyze(mode="lv", lv_grid_id=1)
         assert self.edisgo.results.v_res.shape == (4, 15)
 
-        # ToDo: test non convergence
+        # test troubleshooting_mode "lpf"
+        self.edisgo.analyze(troubleshooting_mode="lpf")
+        assert self.edisgo.results.v_res.shape == (4, 140)
+        assert self.edisgo.results.equality_check(results_analyze)
+
+        # test mode None and troubleshooting_mode "iteration"
+        self.edisgo.analyze(troubleshooting_mode="iteration")
+        assert self.edisgo.results.v_res.shape == (4, 140)
+        assert self.edisgo.results.equality_check(results_analyze)
+
+        # test non convergence
+        msg = "Power flow analysis did not converge for the"
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5)
+
+        caplog.clear()
+        self.edisgo.analyze(
+            troubleshooting_mode="iteration",
+            range_start=5,
+            range_num=2,
+            raise_not_converged=False,
+        )
+        assert "Current fraction in iterative process: 5.0." in caplog.text
+        assert "Current fraction in iterative process: 1.0." in caplog.text
 
     def test_reinforce(self):
         self.setup_worst_case_time_series()
@@ -347,7 +371,6 @@ class TestEDisGo:
         # Todo: test other relevant values
 
     def test_add_component(self, caplog):
-
         self.setup_worst_case_time_series()
         index = self.edisgo.timeseries.timeindex
         dummy_ts = pd.Series(data=[0.1, 0.2, 0.1, 0.2], index=index)
@@ -489,7 +512,6 @@ class TestEDisGo:
         assert self.edisgo.topology.storage_units_df.loc[storage_name, "p_nom"] == 3.1
 
     def test_integrate_component(self):
-
         self.setup_worst_case_time_series()
 
         num_gens = len(self.edisgo.topology.generators_df)
@@ -604,7 +626,6 @@ class TestEDisGo:
         ).all()
 
     def test_remove_component(self):
-
         self.setup_worst_case_time_series()
 
         # Test remove bus (where bus cannot be removed, because load is still connected)
@@ -648,7 +669,6 @@ class TestEDisGo:
         assert load_name not in self.edisgo.timeseries.loads_reactive_power.columns
 
     def test_aggregate_components(self):
-
         self.setup_worst_case_time_series()
 
         # ##### test without any aggregation
@@ -898,6 +918,113 @@ class TestEDisGo:
         # test that analyze does not fail
         self.edisgo.analyze()
 
+    def test_import_electromobility(self):
+        self.edisgo = import_edisgo_from_files(
+            pytest.ding0_test_network_3_path, import_timeseries=True
+        )
+        # test with default parameters
+        simbev_path = pytest.simbev_example_scenario_path
+        tracbev_path = pytest.tracbev_example_scenario_path
+        self.edisgo.import_electromobility(simbev_path, tracbev_path)
+
+        assert len(self.edisgo.electromobility.charging_processes_df) == 45
+        assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 452
+        assert self.edisgo.electromobility.eta_charging_points == 0.9
+
+        total_charging_demand_at_charging_parks = sum(
+            cp.charging_processes_df.chargingdemand_kWh.sum()
+            for cp in list(self.edisgo.electromobility.potential_charging_parks)
+            if cp.designated_charging_point_capacity > 0
+        )
+        total_charging_demand = (
+            self.edisgo.electromobility.charging_processes_df.chargingdemand_kWh.sum()
+        )
+        assert np.isclose(
+            total_charging_demand_at_charging_parks, total_charging_demand
+        )
+
+        # fmt: off
+        charging_park_ids = (
+            self.edisgo.electromobility.charging_processes_df.charging_park_id.
+            sort_values().unique()
+        )
+        potential_charging_parks_with_capacity = np.sort(
+            [
+                cp.id
+                for cp in list(self.edisgo.electromobility.potential_charging_parks)
+                if cp.designated_charging_point_capacity > 0.0
+            ]
+        )
+        # fmt: on
+
+        assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
+
+        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 14
+
+        # fmt: off
+        assert set(
+            self.edisgo.electromobility.integrated_charging_parks_df.edisgo_id.
+            sort_values().values
+        ) == set(
+            self.edisgo.topology.loads_df[
+                self.edisgo.topology.loads_df.type == "charging_point"
+            ]
+            .index.sort_values()
+            .values
+        )
+        # fmt: on
+
+        # test with kwargs
+        self.edisgo = import_edisgo_from_files(
+            pytest.ding0_test_network_3_path, import_timeseries=True
+        )
+        self.edisgo.import_electromobility(
+            simbev_path,
+            tracbev_path,
+            {"mode_parking_times": "not_frugal"},
+            {"mode": "grid_friendly"},
+        )
+
+        assert len(self.edisgo.electromobility.charging_processes_df) == 345
+        assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 452
+        assert self.edisgo.electromobility.simulated_days == 7
+
+        assert np.isclose(
+            total_charging_demand,
+            self.edisgo.electromobility.charging_processes_df.chargingdemand_kWh.sum(),
+        )
+
+        # fmt: off
+        charging_park_ids = (
+            self.edisgo.electromobility.charging_processes_df.charging_park_id.dropna(
+            ).unique()
+        )
+        # fmt: on
+
+        potential_charging_parks_with_capacity = np.sort(
+            [
+                cp.id
+                for cp in list(self.edisgo.electromobility.potential_charging_parks)
+                if cp.designated_charging_point_capacity > 0.0
+            ]
+        )
+        assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
+
+        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 14
+
+        # fmt: off
+        assert set(
+            self.edisgo.electromobility.integrated_charging_parks_df.edisgo_id.
+            sort_values().values
+        ) == set(
+            self.edisgo.topology.loads_df[
+                self.edisgo.topology.loads_df.type == "charging_point"
+            ]
+            .index.sort_values()
+            .values
+        )
+        # fmt: on
+
     def test_plot_mv_grid_topology(self):
         plt.ion()
         self.edisgo.plot_mv_grid_topology(technologies=True)
@@ -973,14 +1100,14 @@ class TestEDisGo:
 
         # check that results, topology and timeseries directory are created
         dirs_in_save_dir = os.listdir(save_dir)
-        assert len(dirs_in_save_dir) == 3
+        assert len(dirs_in_save_dir) == 4
         # Todo: check anything else?
         shutil.rmtree(os.path.join(save_dir, "results"))
         shutil.rmtree(os.path.join(save_dir, "topology"))
         shutil.rmtree(os.path.join(save_dir, "timeseries"))
+        shutil.rmtree(os.path.join(save_dir, "electromobility"))
 
     def test_reduce_memory(self):
-
         self.setup_worst_case_time_series()
         self.edisgo.analyze()
 

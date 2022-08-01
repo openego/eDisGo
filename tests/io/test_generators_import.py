@@ -47,7 +47,7 @@ class TestGeneratorsImport:
                 "subtype": ["solar", "solar", "roof"],
                 "weather_cell_id": [1122075, 1122075, 1122074],
                 "voltage_level": [6, 6, 6],
-                "mvlv_subst_id": [None, None, 6],
+                "mvlv_subst_id": [None, None, 6.0],
             },
             index=[13, 14, 456],
         )
@@ -154,7 +154,7 @@ class TestGeneratorsImport:
                 "subtype": ["solar", "solar", "hydro", "wind"],
                 "weather_cell_id": [1122075, 1122075, 1122074, 1122074],
                 "voltage_level": [6, 6, 6, 7],
-                "mvlv_subst_id": [None, None, 6, 2],
+                "mvlv_subst_id": [None, None, 6.0, 2],
             },
             index=[13, 145, 456, 654],
         )

@@ -20,8 +20,9 @@ class TestGrids:
         # test getter
         assert mv_grid.id == 1
         assert mv_grid.nominal_voltage == 20
-        assert len(list(mv_grid.lv_grids)) == 10
-        assert isinstance(list(mv_grid.lv_grids)[0], LVGrid)
+        lv_grids = list(mv_grid.lv_grids)
+        assert len(lv_grids) == 10
+        assert isinstance(lv_grids[0], LVGrid)
 
         assert len(mv_grid.buses_df.index) == 31
         assert "Bus_BranchTee_MVGrid_1_7" in mv_grid.buses_df.index
@@ -50,7 +51,7 @@ class TestGrids:
 
     def test_lv_grid(self):
         """Test LVGrid class getter, setter, methods"""
-        lv_grid = [_ for _ in self.topology.mv_grid.lv_grids if _.id == 3][0]
+        lv_grid = self.topology.get_lv_grid(3)
 
         assert isinstance(lv_grid, LVGrid)
         assert lv_grid.id == 3

@@ -11,7 +11,7 @@ features can be used.
 The fundamental data structure
 ------------------------------
 
-It's worth to understand how the fundamental data structure of eDisGo is
+It's worth understanding how the fundamental data structure of eDisGo is
 designed in order to make use of its entire features.
 
 The class :class:`~.EDisGo` serves as the top-level API for
@@ -20,7 +20,12 @@ capacity, grid reinforcement and flexibility measures. It also provides
 access to all relevant data.
 Grid data is stored in the :class:`~.network.topology.Topology` class.
 Time series data can be found in the :class:`~.network.timeseries.TimeSeries`
-class. Results data holding results e.g. from the power flow analysis and grid
+class.
+The class :class:`~.network.electromobility.Electromobility` holds data on charging
+processes (how long cars are parking at a charging station, how much they need to charge,
+etc.) necessary to apply different charging strategies, as well as information on
+potential charging sites and integrated charging parks.
+Results data holding results e.g. from the power flow analysis and grid
 expansion is stored in the :class:`~.network.results.Results` class.
 Configuration data from the config files (see :ref:`default_configs`) is stored
 in the :class:`~.tools.config.Config` class.
@@ -35,6 +40,9 @@ code examples `edisgo` constitues an :class:`~.EDisGo` object.
 
     # Access TimeSeries data container object
     edisgo.timeseries
+
+    # Access Electromobility data container object
+    edisgo.electromobility
 
     # Access Results data container object
     edisgo.results
@@ -103,14 +111,16 @@ A list of all LV grids can be retrieved through:
     # (Note that MVGrid.lv_grids returns a generator object that must first be
     #  converted to a list in order to view the LVGrid objects)
     list(edisgo.topology.mv_grid.lv_grids)
+    # the following yields the same
+    list(edisgo.topology.lv_grids)
 
 Access to a single LV grid's components can be obtained analog to shown above for
 the whole topology and the MV grid:
 
 .. code-block:: python
 
-    # Get single LV grid
-    lv_grid = list(edisgo.topology.mv_grid.lv_grids)[0]
+    # Get single LV grid by providing its ID (e.g. 1) or name (e.g. "LVGrid_1")
+    lv_grid = edisgo.topology.get_lv_grid("LVGrid_402945")
 
     # Access all buses in that LV grid
     lv_grid.buses_df
@@ -250,8 +260,13 @@ Heuristic
 
 Use this mode to use heuristics to set time series. So far, only heuristics for
 electric vehicle charging are implemented.
+The charging strategies can be invoked as follows:
 
-.. todo:: Add more details once the charging strategies are merged.
+.. code-block:: python
+
+    edisgo.apply_charging_strategy()
+
+See :attr:`~.edisgo.EDisGo.apply_charging_strategy` for more information.
 
 Reactive power time series
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -331,16 +346,16 @@ Costs for the grid expansion measures can be obtained as follows:
 Further information on the grid reinforcement methodology can be found in section
 :ref:`grid_expansion_methodology`.
 
+Electromobility
+-----------------
+
+.. todo:: Add
+
 Battery storage systems
 ------------------------
 
 Battery storage systems can be integrated into the grid as an alternative to
 classical grid expansion.
-The storage integration heuristic described in section
-:ref:`storage-integration-label` is not available at the moment. Instead, you
-may either integrate a storage unit at a specified bus manually or use the
-optimal power flow to optimally distribute a given storage capacity in the grid.
-
 Here are two small examples on how to integrate a storage unit manually. In the
 first one, the EDisGo object is set up for a worst-case analysis, wherefore no
 time series needs to be provided for the storage unit, as worst-case definition
@@ -409,7 +424,12 @@ a time series for the storage unit needs to be provided.
             index=edisgo.timeseries.timeindex)
     )
 
-Following is an example on how to use the OPF to find the optimal storage
+To optimise storage positioning and operation eDisGo provides the options to use a
+heuristic (described in section :ref:`storage-integration-label`) or an optimal power
+flow approach. However, the storage integration heuristic is not yet adapted to the
+refactored code and therefore not available, and the OPF is not maintained and may therefore
+not work out of the box.
+Following you find an example on how to use the OPF to find the optimal storage
 positions in the grid with regard to grid expansion costs. Storage operation
 is optimized at the same time. The example uses the same EDisGo instance as
 above. A total storage capacity of 10 MW is distributed in the grid. `storage_buses`
@@ -431,12 +451,16 @@ Curtailment
 -----------
 
 The curtailment function is used to spatially distribute the power that is to be curtailed.
-The two heuristics `feedin-proportional` and `voltage-based`, in detail explained
-in section :ref:`curtailment_in_detail-label`, are currently not available.
-Instead you may use the optimal power flow to find the optimal generator
+To optimise which generators should be curtailed eDisGo provides the options to use a
+heuristics (heuristics `feedin-proportional` and `voltage-based`, in detail explained
+in section :ref:`curtailment_in_detail-label`) or an optimal power
+flow approach. However, the heuristics are not yet adapted to the
+refactored code and therefore not available, and the OPF is not maintained and may therefore
+not work out of the box.
+
+In the following example the optimal power flow is used to find the optimal generator
 curtailment with regard to minimizing grid expansion costs for given
-curtailment requirements. The following example again uses the EDisGo object
-from above.
+curtailment requirements. It uses the EDisGo object from above.
 
 .. code-block:: python
 
@@ -449,6 +473,8 @@ from above.
 
 Plots
 ----------------
+
+.. todo:: Add plotly plot option
 
 EDisGo provides a bunch of predefined plots to e.g. plot the MV grid topology,
 line loading and node voltages in the MV grid or as a histograms.
