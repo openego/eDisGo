@@ -553,6 +553,7 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
         DataFrame with numeric weights
 
     """
+
     def _get_lv_grid_weights():
 
         """
@@ -592,8 +593,13 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
 
         lv_grids_df = pd.DataFrame(
             index=[_._id for _ in lv_grids],
-            columns=["peak_generation_capacity", "substation_capacity",
-                     "generators_weight", "p_set", "loads_weight"]
+            columns=[
+                "peak_generation_capacity",
+                "substation_capacity",
+                "generators_weight",
+                "p_set",
+                "loads_weight",
+            ],
         )
 
         lv_grids_df.peak_generation_capacity = [

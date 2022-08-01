@@ -466,9 +466,7 @@ class TimeSeries:
                 df_name=df_name, comp_names=ts_storage_units.columns
             )
             # set (re)active power
-            self.add_component_time_series(
-                df_name=df_name, ts_new=ts_storage_units
-            )
+            self.add_component_time_series(df_name=df_name, ts_new=ts_storage_units)
 
     def set_worst_case(
         self,
@@ -624,8 +622,7 @@ class TimeSeries:
             ts_dict = {f"{comp_type}_active_power": p, f"{comp_type}_reactive_power": q}
             for k, v in ts_dict.items():
                 # drop previously set time series
-                self.drop_component_time_series(
-                    df_name=k, comp_names=v.columns)
+                self.drop_component_time_series(df_name=k, comp_names=v.columns)
                 # set time series
                 self.add_component_time_series(
                     df_name=k,
@@ -2113,7 +2110,8 @@ class TimeSeries:
         )
 
     def _check_if_components_exist(
-            self, edisgo_object, component_names, component_type):
+        self, edisgo_object, component_names, component_type
+    ):
         """
         Checks if all provided components exist in the network.
 

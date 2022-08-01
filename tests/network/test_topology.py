@@ -62,10 +62,10 @@ class TestTopology:
         assert str(lv_grid) == name
 
         # test invalid input
-        name = 1.
+        name = 1.0
         lv_grid = self.topology.get_lv_grid(name)
         assert lv_grid is None
-        assert ("`name` must be integer or string." in caplog.text)
+        assert "`name` must be integer or string." in caplog.text
 
     def test_rings(self):
         """Test rings getter."""
@@ -1116,7 +1116,7 @@ class TestTopologyWithEdisgoObject:
                 "GeneratorFluctuating_2", "weather_cell_id"
             ],
             "voltage_level": 6,
-            "mvlv_subst_id": 10.,
+            "mvlv_subst_id": 10.0,
         }
 
         comp_name = self.edisgo.topology.connect_to_lv(self.edisgo, test_gen)
@@ -1348,7 +1348,7 @@ class TestTopologyWithEdisgoObject:
             "geom": geom,
             "sector": "home",
             "voltage_level": 7,
-            "mvlv_subst_id": 3.,
+            "mvlv_subst_id": 3.0,
         }
 
         comp_name = self.edisgo.topology.connect_to_lv(

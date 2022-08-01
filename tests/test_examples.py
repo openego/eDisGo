@@ -1,9 +1,9 @@
-import nbformat
 import os
 import shutil
 import subprocess
 import tempfile
 
+import nbformat
 import pytest
 
 from examples import example_grid_reinforcement
@@ -38,7 +38,7 @@ class TestExamples:
                 "--to",
                 "notebook",
                 "--execute",
-                "--ExecutePreprocessor.timeout=60"
+                "--ExecutePreprocessor.timeout=60",
             ]
             subprocess.check_call(args)
 
@@ -58,8 +58,8 @@ class TestExamples:
     @pytest.mark.slow
     def test_plot_example_ipynb(self):
         examples_dir_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
-            "examples")
+            os.path.dirname(os.path.dirname(__file__)), "examples"
+        )
         nb, errors = self._notebook_run(
             os.path.join(examples_dir_path, "plot_example.ipynb")
         )

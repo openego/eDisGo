@@ -9,7 +9,6 @@ import pandas as pd
 from sqlalchemy import func
 
 from edisgo.flex_opt import check_tech_constraints, exceptions
-from edisgo.network.grids import LVGrid
 from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
