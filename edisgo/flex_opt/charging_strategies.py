@@ -82,6 +82,11 @@ def charging_strategy(
         edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values,
     )
 
+    edisgo_obj.timeseries.drop_component_time_series(
+        "loads_reactive_power",
+        edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values,
+    )
+
     eta_cp = edisgo_obj.electromobility.eta_charging_points
 
     len_ts = int(
