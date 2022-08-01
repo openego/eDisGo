@@ -372,19 +372,11 @@ class TestTimeSeries:
             name=comp,
             index=timeindex,
         )
-        assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
-        pf = -tan(acos(0.9))
         assert_series_equal(
             self.edisgo.timeseries.generators_active_power.loc[:, comp],
             exp,
             check_dtype=False,
         )
-
-        gen = "GeneratorFluctuating_2"  # wind, mv
-        exp = pd.Series(
-            data=[1 * 2.3, 0 * 2.3], name=gen, index=self.timeseries.timeindex
-        )
-        assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
         pf = -tan(acos(0.9))
         assert_series_equal(
             self.edisgo.timeseries.generators_reactive_power.loc[:, comp],
@@ -399,8 +391,6 @@ class TestTimeSeries:
             name=comp,
             index=timeindex,
         )
-        assert_series_equal(self.timeseries.generators_active_power.loc[:, gen], exp)
-        pf = -tan(acos(0.9))
         assert_series_equal(
             self.edisgo.timeseries.loads_active_power.loc[:, comp],
             exp,

@@ -1737,8 +1737,9 @@ class Topology:
         """
         Removes line with given name from topology.
 
-        Line is only removed, if it does not result in isolated buses. A warning is
-        raised in that case.
+        Line is only removed, if it does not result in isolated buses or if parameter
+        `force_remove` is set to True. A warning is raised in case a save removal is
+        not possible.
 
         Parameters
         ----------
@@ -1748,24 +1749,18 @@ class Topology:
         Other Parameters
         -----------------
         force_remove : bool
-            If True, can force line to be removed even though resulting topology
-            has isolated components. Default: False.
+            If True, line is removed even though it may result in a topology with
+            isolated components. Default: False.
 
         """
         force_remove = kwargs.get("force_remove", False)
-
-        # backup buses of line and check if buses can be removed as well
-        bus0 = self.lines_df.at[name, "bus0"]
-        remove_bus0 = self._check_bus_for_removal(bus0)
-        bus1 = self.lines_df.at[name, "bus1"]
-        remove_bus1 = self._check_bus_for_removal(bus1)
-
         if not force_remove:
-            if not (remove_bus1 or remove_bus0):
-                raise AssertionError(
-                    f"Removal of line {name} would create isolated  node. Remove all "
+            if not self._check_line_for_removal(name):
+                warnings.warn(
+                    f"Removal of line {name} would create isolated node. Remove all "
                     "connected elements first to remove bus."
                 )
+                return
         else:
             logger.debug(
                 f"Line {name} is forced to be removed even though it creates isolated "
@@ -1773,6 +1768,12 @@ class Topology:
                 f"remove connected components and isolated bus first to avoid this "
                 f"warning."
             )
+
+        # backup buses of line and check if buses can be removed as well
+        bus0 = self.lines_df.at[name, "bus0"]
+        remove_bus0 = self._check_bus_for_removal(bus0)
+        bus1 = self.lines_df.at[name, "bus1"]
+        remove_bus1 = self._check_bus_for_removal(bus1)
 
         # drop line
         self._lines_df.drop(name, inplace=True)

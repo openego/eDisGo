@@ -428,15 +428,9 @@ class TestPypsaIO:
             pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus]
             == self.edisgo.results.pfa_v_mag_pu_seed.loc[timeindex[0], mv_bus]
         )
-        assert np.isclose(
-            pypsa_network.buses_t.v_mag_pu.loc[timeindex[0], mv_bus], 1.00657
-        )
         assert (
             pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus]
             == self.edisgo.results.pfa_v_ang_seed.loc[timeindex[0], mv_bus]
-        )
-        assert np.isclose(
-            pypsa_network.buses_t.v_ang.loc[timeindex[0], mv_bus], 0.0195367
         )
         # run power flow to check if it converges
         pypsa_network.pf(use_seed=True)
