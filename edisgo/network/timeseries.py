@@ -2147,8 +2147,9 @@ class TimeSeries:
 
     def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
         """
-        Returns timeseries resampled from hourly resolution to 15 minute resolution.
-        #ToDo: Adjust docstring
+        Returns timeseries resampled to a desired resolution. Both up- and down-
+        sampling methods are available.
+
         Parameters
         ----------
         method : str, optional
@@ -2167,8 +2168,7 @@ class TimeSeries:
             https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.interpolate.html
 
         freq : str, optional
-            Frequency that timeseries is resampled to. Can be any frequency up to one
-            hour. Offset aliases can be found here:
+            Frequency that timeseries is resampled to. Offset aliases can be found here:
             https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases
             15 minutes is the default.
 
@@ -2179,9 +2179,7 @@ class TimeSeries:
         for attr in attrs:
             df_dict[attr] = getattr(self, attr)
             if pd.Timedelta(freq) < freq_orig:  # up-sampling
-                new_dates = pd.DatetimeIndex(
-                    [df_dict[attr].index[-1] + freq_orig]  # pd.DateOffset(hours=1)
-                )
+                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1] + freq_orig])
             else:  # down-sampling
                 new_dates = pd.DatetimeIndex([df_dict[attr].index[-1]])
             df_dict[attr] = (
@@ -2221,8 +2219,10 @@ class TimeSeries:
                     setattr(
                         self, attr, df_dict[attr].resample(freq, closed="left").bfill()
                     )
-            else:  # ToDo: Logger Warning: method not implemented
-                print(" ")
+            else:
+                raise NotImplementedError(
+                    'Resampling method "{}" is not implemented.'.format(method)
+                )
         else:  # down-sampling
             for attr in attrs:
                 setattr(
