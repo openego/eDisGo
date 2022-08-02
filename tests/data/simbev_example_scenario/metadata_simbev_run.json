@@ -1,8 +1,8 @@
 {
     "simBEV_version": "0.1.3",
     "scenario": "default_single",
-    "timestamp_start": "2022-05-17_083117",
-    "timestamp_end": "2022-05-17_083117",
+    "timestamp_start": "2022-08-02_094200",
+    "timestamp_end": "2022-08-02_094205",
     "config": {
         "region_mode": {
             "region_mode": "single"
@@ -18,12 +18,12 @@
             "grid_timeseries_by_usecase": "false"
         },
         "rampup_ev": {
-            "bev_mini": "2",
-            "bev_medium": "3",
-            "bev_luxury": "1",
-            "phev_mini": "1",
-            "phev_medium": "2",
-            "phev_luxury": "1"
+            "bev_mini": "20",
+            "bev_medium": "30",
+            "bev_luxury": "10",
+            "phev_mini": "10",
+            "phev_medium": "20",
+            "phev_luxury": "10"
         },
         "tech_data_cc_slow": {
             "bev_mini": "22",
@@ -170,11 +170,11 @@
         }
     },
     "car_amount": {
-        "bev_mini": 2,
-        "bev_medium": 3,
-        "bev_luxury": 1,
-        "phev_mini": 1,
-        "phev_medium": 2,
-        "phev_luxury": 1
+        "bev_mini": 20,
+        "bev_medium": 30,
+        "bev_luxury": 10,
+        "phev_mini": 10,
+        "phev_medium": 20,
+        "phev_luxury": 10
     }
 }
