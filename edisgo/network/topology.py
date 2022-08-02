@@ -2807,7 +2807,6 @@ class Topology:
                 "lines_df": "lines.csv",
                 "loads_df": "loads.csv",
                 "generators_df": "generators.csv",
-                "charging_points_df": "charging_points.csv",
                 "storage_units_df": "storage_units.csv",
                 "transformers_df": "transformers.csv",
                 "transformers_hvmv_df": "transformers_hvmv.csv",
