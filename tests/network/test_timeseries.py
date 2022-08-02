@@ -2329,6 +2329,12 @@ class TestTimeSeries:
         assert (
             self.edisgo.timeseries.generators_active_power.mean() == mean_value_orig
         ).unique()
+        # Same tests for down-sampling
+        self.edisgo.timeseries.resample_timeseries(freq="2h")
+        assert len(self.edisgo.timeseries.timeindex) == 0.5 * len_timeindex_orig
+        assert (
+            self.edisgo.timeseries.generators_active_power.mean() == mean_value_orig
+        ).unique()
 
 
 class TestTimeSeriesRaw:

@@ -2148,7 +2148,7 @@ class TimeSeries:
     def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
         """
         Returns timeseries resampled from hourly resolution to 15 minute resolution.
-
+        #ToDo: Adjust docstring
         Parameters
         ----------
         method : str, optional
@@ -2174,27 +2174,36 @@ class TimeSeries:
 
         """
         attrs = self._attributes
+        freq_orig = self.timeindex[1] - self.timeindex[0]
         df_dict = {}
         for attr in attrs:
             df_dict[attr] = getattr(self, attr)
-            new_dates = pd.DatetimeIndex(
-                [
-                    df_dict[attr].index[-1] + pd.DateOffset(hours=1)
-                ]  # ToDo: For downsampling the Offset has to be adjusted
-            )
+            if pd.Timedelta(freq) < freq_orig:  # up-sampling
+                new_dates = pd.DatetimeIndex(
+                    [df_dict[attr].index[-1] + freq_orig]  # pd.DateOffset(hours=1)
+                )
+            else:  # down-sampling
+                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1]])
             df_dict[attr] = (
                 df_dict[attr]
                 .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
                 .ffill()
             )
-        index = pd.date_range(
-            self.timeindex[0],
-            self.timeindex[-1] + pd.Timedelta("1h"),
-            freq=freq,
-            closed="left",
-        )
+        if pd.Timedelta(freq) < freq_orig:  # up-sampling
+            index = pd.date_range(
+                self.timeindex[0],
+                self.timeindex[-1] + freq_orig,
+                freq=freq,
+                closed="left",
+            )
+        else:  # down-sampling
+            index = pd.date_range(
+                self.timeindex[0],
+                self.timeindex[-1],
+                freq=freq,
+            )
         self._timeindex = index
-        if pd.Timedelta(index[1] - index[0]) < pd.Timedelta("1h"):
+        if pd.Timedelta(freq) < freq_orig:  # up-sampling
             if method == "interpolate":
                 for attr in attrs:
                     setattr(
@@ -2207,19 +2216,20 @@ class TimeSeries:
                     setattr(
                         self, attr, df_dict[attr].resample(freq, closed="left").ffill()
                     )
-            else:
+            elif method == "bfill":
                 for attr in attrs:
                     setattr(
                         self, attr, df_dict[attr].resample(freq, closed="left").bfill()
                     )
-        else:
+            else:  # ToDo: Logger Warning: method not implemented
+                print(" ")
+        else:  # down-sampling
             for attr in attrs:
                 setattr(
                     self,
                     attr,
                     df_dict[attr].resample(freq).mean(),
                 )
-        print(" ")
 
 
 class TimeSeriesRaw:
