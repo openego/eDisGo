@@ -91,13 +91,15 @@ def prepare_time_invariant_parameters(
     else:
         parameters["optimized_charging_points"] = []
     if optimize_hp:
+        parameters["heat_pumps"] = parameters["grid_object"].loads_df.loc[
+                parameters["grid_object"].loads_df.type == "heat_pump"]
         parameters["optimized_heat_pumps"] = kwargs.get(
-            "optimized_heat_pumps", parameters["grid_object"].heat_pumps_df.index
+            "optimized_heat_pumps", parameters["heat_pumps"].index
         )
-        # Todo: change to loads_df.loc[parameters["grid_object"].loads_df.type ==
-        #  "heat_pump"].index
-        parameters["cop"] = kwargs.get("cop")
-        parameters["heat_demand"] = kwargs.get("heat_demand")
+        # Todo: change to heat_pumps_df.index once exists
+        parameters["cop"] = edisgo.heat_pump.cop
+        parameters["heat_demand"] = edisgo.heat_pump.heat_demand
+        parameters["tes"] = edisgo.heat_pump.tes
     else:
         parameters["optimized_heat_pumps"] = []
     # save non flexible loads
@@ -327,9 +329,6 @@ def setup_model(
         model = add_heat_pump_model(
             model=model,
             timeinvariant_parameters=timeinvariant_parameters,
-            grid_object=grid_object,
-            cop=kwargs.get("cop"),
-            heat_demand=kwargs.get("heat_demand"),
             energy_level_start=kwargs.get("energy_level_start_hp", None),
             energy_level_end=kwargs.get("energy_level_end_hp", None),
             energy_level_beginning=kwargs.get("energy_level_beginning_hp", None),
@@ -849,9 +848,6 @@ def get_attrs_rolling_horizon(comp_type, model):
 def add_heat_pump_model(
     model,
     timeinvariant_parameters,
-    grid_object,
-    cop,
-    heat_demand,
     energy_level_start=None,
     energy_level_end=None,
     energy_level_beginning=None,
@@ -859,7 +855,7 @@ def add_heat_pump_model(
 ):
     def energy_balance_hp_tes(model, hp, time):
         return (
-            model.charging_hp[hp, time] * model.cop_hp[time]
+            model.charging_hp[hp, time] * model.cop_hp[hp, time]
             == model.heat_demand_hp[hp, time] + model.charging_tes[hp, time]
         )
 
@@ -875,12 +871,17 @@ def add_heat_pump_model(
         initialize=timeinvariant_parameters["optimized_heat_pumps"]
     )
     # save fix parameters
-    model.tech_data_hps = grid_object.heat_pumps_df
-    model.cop = cop
+    model.heat_pumps = timeinvariant_parameters["heat_pumps"]
+    model.tes = timeinvariant_parameters["tes"]
+    model.cop = timeinvariant_parameters["cop"]
     model.cop_hp = pm.Param(
-        model.time_set, initialize=set_cop_hp, mutable=True, within=pm.Any
+        model.flexible_heat_pumps_set,
+        model.time_set,
+        initialize=set_cop_hp,
+        mutable=True,
+        within=pm.Any
     )
-    model.heat_demand = heat_demand
+    model.heat_demand = timeinvariant_parameters["heat_demand"]
     model.heat_demand_hp = pm.Param(
         model.flexible_heat_pumps_set,
         model.time_set,
@@ -892,13 +893,13 @@ def add_heat_pump_model(
     model.energy_level_tes = pm.Var(
         model.flexible_heat_pumps_set,
         model.time_set,
-        bounds=lambda m, hp, t: (0, m.tech_data_hps.loc[hp, "capacity_tes"]),
+        bounds=lambda m, hp, t: (0, m.tes.loc[hp, "capacity"]),
     )
     model.charging_tes = pm.Var(model.flexible_heat_pumps_set, model.time_set)
     model.charging_hp = pm.Var(
         model.flexible_heat_pumps_set,
         model.time_set,
-        bounds=lambda m, hp, t: (0, m.tech_data_hps.loc[hp, "p_nom"]),
+        bounds=lambda m, hp, t: (0, m.heat_pumps.loc[hp, "p_set"]),
     )
     # add constraints
     model.EnergyBalanceHPTES = pm.Constraint(
@@ -1009,11 +1010,12 @@ def update_model(
                 indexer = len(timesteps) - 1
             else:
                 indexer = t
-            model.cop_hp[t].set_value(set_cop_hp(model, indexer))
+
             for hp in model.flexible_heat_pumps_set:
                 model.heat_demand_hp[hp, t].set_value(
                     set_heat_demand(model, hp, indexer)
                 )
+                model.cop_hp[hp, t].set_value(set_cop_hp(model, hp, indexer))
         model = update_rolling_horizon("hp", kwargs, model)
 
     if optimize_storage:
@@ -1390,13 +1392,14 @@ def get_underlying_elements(parameters):
         else:
             downstream_elements.loc[branch, "flexible_ev"] = []
         if parameters["optimize_hp"]:
+            hps = parameters["grid_object"].loads_df.loc[
+                parameters["grid_object"].loads_df.type == "heat_pump"]
             downstream_elements.loc[branch, "flexible_hp"] = (
-                parameters["grid_object"]
-                .heat_pumps_df.loc[
-                    parameters["grid_object"].heat_pumps_df.index.isin(
+                hps.loc[
+                    hps.index.isin(
                         parameters["optimized_heat_pumps"]
                     )
-                    & parameters["grid_object"].heat_pumps_df.bus.isin(relevant_buses)
+                    & hps.bus.isin(relevant_buses)
                 ]
                 .index.values
             )
@@ -1478,8 +1481,8 @@ def set_power_band_ev(model, cp, time):
     return model.upper_ev_power.loc[model.timeindex[time], cp]
 
 
-def set_cop_hp(model, time):
-    return model.cop.loc[model.timeindex[time], "COP 2011"]
+def set_cop_hp(model, hp, time):
+    return model.cop.loc[model.timeindex[time], hp]
 
 
 def set_heat_demand(model, hp, time):
@@ -1744,9 +1747,9 @@ def upper_bound_curtailment_hp(model, bus, time):
     -------
     Constraint for optimisation
     """
-    relevant_heat_pumps = model.grid.heat_pumps_df.loc[
-        model.grid.heat_pumps_df.index.isin(model.flexible_heat_pumps_set)
-        & model.grid.heat_pumps_df.bus.isin([bus])
+    relevant_heat_pumps = model.grid.loads_df.loc[
+        model.grid.loads_df.index.isin(model.flexible_heat_pumps_set)
+        & model.grid.loads_df.bus.isin([bus])
     ].index.values
     if len(relevant_heat_pumps) < 1:
         return model.curtailment_hp[bus, time] <= 0
@@ -1809,7 +1812,7 @@ def fixed_energy_level_ev(model, charging_point, time):
 def fixed_energy_level_tes(model, hp, time):
     return (
         model.energy_level_tes[hp, time]
-        == model.tech_data_hps.loc[hp, "capacity_tes"] / 2
+        == model.tes.loc[hp, "capacity"] * model.tes.loc[hp, "state_of_charge_initial"]
     )
 
 

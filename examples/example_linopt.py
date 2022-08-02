@@ -19,7 +19,7 @@ grid_dir = os.path.join(par_dir, "tests", "optimisation_minimum_working")
 opt_ev = True
 opt_stor = False
 save_res = False
-opt_hp = False
+opt_hp = True
 
 if os.path.isfile("x_charge_ev_pre.csv"):
     ts_pre = pd.read_csv("x_charge_ev_pre.csv", index_col=0, parse_dates=True)
@@ -59,8 +59,8 @@ if opt_ev:
         index=[cp_id], columns=["edisgo_id"], data=cp
     )
     edisgo.electromobility.simbev_config_df = pd.DataFrame(
-        index=["eta_CP", "stepsize"], columns=["value"], data=[0.9, 60]
-    )
+        index=["eta_cp", "stepsize"], columns=[0], data=[0.9, 60]
+    ).T
     energy_bands = get_energy_bands_for_optimization(edisgo_obj=edisgo, use_case="home")
 else:
     energy_bands = {}
@@ -74,22 +74,24 @@ if opt_hp:
         sector="flexible",
         add_ts=False,
     )
-    heat_demand = (
+
+    edisgo.heat_pump.heat_demand = (
         pd.read_csv(os.path.join(grid_dir, "hp_heat_2011.csv"), index_col=0)
         .set_index(timeindex)
         .rename(columns={"0": hp_name})
     )
-    cop = pd.read_csv(os.path.join(grid_dir, "COP_2011.csv")).set_index(timeindex)
-    heat_pump_df = pd.DataFrame(
-        index=[hp_name],
-        columns=["bus", "p_nom", "capacity_tes"],
-        data={"bus": "Bus 3", "p_set": 0.003, "capacity_tes": 0.05},
-    )
-    edisgo.topology.heat_pumps_df = heat_pump_df
-
-else:
-    cop = None
-    heat_demand = None
+    edisgo.heat_pump.cop = \
+        pd.read_csv(os.path.join(grid_dir, "COP_2011.csv")).set_index(timeindex).rename(
+            columns={"COP 2011": hp_name}
+        )
+    edisgo.heat_pump.tes = pd.DataFrame(
+            data={
+                "capacity": [0.05],
+                "efficiency": [1.0],
+                "state_of_charge_initial": [0.5],
+            },
+            index=[hp_name],
+        )
 
 
 downstream_node_matrix = get_downstream_nodes_matrix_iterative(edisgo.topology)
@@ -106,12 +108,10 @@ model = opt.setup_model(
     parameters,
     timesteps=timesteps,
     objective="residual_load",
-    heat_demand=heat_demand,
-    cop=cop,
 )
 
 results = opt.optimize(model, "gurobi")
-if opt_ev:
+if opt_ev and not opt_hp:
     results["x_charge_ev"].plot()
     plt.show()
     if not ts_pre.empty:
