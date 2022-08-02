@@ -2145,6 +2145,82 @@ class TimeSeries:
             return set(component_names) - set(comps_not_in_network)
         return component_names
 
+    def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
+        """
+        Returns timeseries resampled from hourly resolution to 15 minute resolution.
+
+        Parameters
+        ----------
+        method : str, optional
+            Method to choose from to fill missing values when upsampling. Possible
+            options are:
+
+            * 'ffill': propagate last valid observation forward to next valid
+            observation. See
+            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.ffill.html
+            'ffill' is the Default.
+
+            * 'bfill': use next valid observation to fill gap. See
+            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.bfill.html
+
+            * 'interpolate': Fill NaN values using an interpolation method. See
+            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.interpolate.html
+
+        freq : str, optional
+            Frequency that timeseries is resampled to. Can be any frequency up to one
+            hour. Offset aliases can be found here:
+            https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases
+            15 minutes is the default.
+
+        """
+        attrs = self._attributes
+        df_dict = {}
+        for attr in attrs:
+            df_dict[attr] = getattr(self, attr)
+            new_dates = pd.DatetimeIndex(
+                [
+                    df_dict[attr].index[-1] + pd.DateOffset(hours=1)
+                ]  # ToDo: For downsampling the Offset has to be adjusted
+            )
+            df_dict[attr] = (
+                df_dict[attr]
+                .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
+                .ffill()
+            )
+        index = pd.date_range(
+            self.timeindex[0],
+            self.timeindex[-1] + pd.Timedelta("1h"),
+            freq=freq,
+            closed="left",
+        )
+        self._timeindex = index
+        if pd.Timedelta(index[1] - index[0]) < pd.Timedelta("1h"):
+            if method == "interpolate":
+                for attr in attrs:
+                    setattr(
+                        self,
+                        attr,
+                        df_dict[attr].resample(freq, closed="left").interpolate(),
+                    )
+            elif method == "ffill":
+                for attr in attrs:
+                    setattr(
+                        self, attr, df_dict[attr].resample(freq, closed="left").ffill()
+                    )
+            else:
+                for attr in attrs:
+                    setattr(
+                        self, attr, df_dict[attr].resample(freq, closed="left").bfill()
+                    )
+        else:
+            for attr in attrs:
+                setattr(
+                    self,
+                    attr,
+                    df_dict[attr].resample(freq).mean(),
+                )
+        print(" ")
+
 
 class TimeSeriesRaw:
     """
