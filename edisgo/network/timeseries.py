@@ -2179,9 +2179,7 @@ class TimeSeries:
         for attr in attrs:
             df_dict[attr] = getattr(self, attr)
             if pd.Timedelta(freq) < freq_orig:  # up-sampling
-                new_dates = pd.DatetimeIndex(
-                    [df_dict[attr].index[-1] + freq_orig]  # pd.DateOffset(hours=1)
-                )
+                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1] + freq_orig])
             else:  # down-sampling
                 new_dates = pd.DatetimeIndex([df_dict[attr].index[-1]])
             df_dict[attr] = (
