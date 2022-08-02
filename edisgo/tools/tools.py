@@ -6,6 +6,7 @@ import networkx as nx
 import numpy as np
 import pandas as pd
 
+from shapely.geometry import MultiPoint, Point
 from sqlalchemy import func
 
 from edisgo.flex_opt import check_tech_constraints, exceptions
@@ -675,3 +676,21 @@ def convert_impedances_to_mv(edisgo):
             edisgo.topology.lines_df.loc[lv_grid.lines_df.index, "x"] * k**2
         )
     return edisgo
+
+
+def get_grid_district_polygon(buses_df):
+    """
+    Created on Mon Dec 28 14:09:45 2020
+
+    @author: Sebastian.Tews
+    """
+
+    def import_point_list():
+        geo_list = [Point(xy) for xy in zip(buses_df["x"], buses_df["y"])]
+        return geo_list
+
+    point_list = import_point_list()
+
+    # Get hull of Geopoints
+    hull = MultiPoint(point_list).convex_hull
+    return hull
