@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 from edisgo import EDisGo
@@ -28,3 +29,6 @@ class TestPseudoCoordinates:
         ]
         assert round(coordinates[0], 5) == round(7.943307, 5)
         assert round(coordinates[1], 5) == round(48.080396, 5)
+
+        assert self.edisgo_root.topology.buses_df.x.isin([np.NaN]).any()
+        assert not edisgo_pseudo_coordinates.topology.buses_df.x.isin([np.NaN]).any()

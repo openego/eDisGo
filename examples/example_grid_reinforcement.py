@@ -11,8 +11,8 @@ To determine topology expansion needs worst-case scenarios
 (heavy load flow and reverse power flow) used in conventional grid expansion
 planning are set up.
 
-The example automatically downloads an example ding0 grid to the current
-working directory in case it does not yet exist. If you want more information
+The example automatically downloads an example ding0 grid to the edisgo directory
+in the user's home directory in case it does not yet exist. If you want more information
 on how to get more ding0 grids, see the ding0 documentation or the Quickstart
 section of the eDisGo documentation.
 

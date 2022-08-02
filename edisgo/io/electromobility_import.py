@@ -507,12 +507,12 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
             "grid_friendly" also grid conditions are respected.
             Default "user_friendly".
         generators_weight_factor : float
-            Weighting factor of the generators weight within a lv grid in
+            Weighting factor of the generators weight within an LV grid in
             comparison to the loads weight. Default 0.5.
         distance_weight : float
             Weighting factor for the distance between a potential charging park
-            and it's nearest substation in comparison to the combination of
-            the generators and load factors of the lv grids.
+            and its nearest substation in comparison to the combination of
+            the generators and load factors of the LV grids.
             Default 1 / 3.
         user_friendly_weight : float
             Weighting factor of the user friendly weight in comparison to the
@@ -553,10 +553,11 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
         DataFrame with numeric weights
 
     """
+
     def _get_lv_grid_weights():
 
         """
-        DataFrame containing technical data of lv grids.
+        DataFrame containing technical data of LV grids.
 
         Returns
         --------
@@ -583,7 +584,7 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
                     In the case of loads the weight is defined by dividing the
                     p_set by substation_capacity and norming the results from 0 .. 1.
                     The result is then substracted from 1 as the higher the p_set is
-                    in relation to the substation_capacity the less attractive this lv
+                    in relation to the substation_capacity the less attractive this LV
                     grid is for new loads from a grid perspective. A higher weight is
                     more attractive.
 
@@ -592,8 +593,13 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
 
         lv_grids_df = pd.DataFrame(
             index=[_._id for _ in lv_grids],
-            columns=["peak_generation_capacity", "substation_capacity",
-                     "generators_weight", "p_set", "loads_weight"]
+            columns=[
+                "peak_generation_capacity",
+                "substation_capacity",
+                "generators_weight",
+                "p_set",
+                "loads_weight",
+            ],
         )
 
         lv_grids_df.peak_generation_capacity = [
