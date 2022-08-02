@@ -2178,7 +2178,9 @@ class TimeSeries:
         for attr in attrs:
             df_dict[attr] = getattr(self, attr)
             new_dates = pd.DatetimeIndex(
-                [df_dict[attr].index[-1] + pd.DateOffset(hours=1)]
+                [
+                    df_dict[attr].index[-1] + pd.DateOffset(hours=1)
+                ]  # ToDo: For downsampling the Offset has to be adjusted
             )
             df_dict[attr] = (
                 df_dict[attr]
@@ -2192,20 +2194,32 @@ class TimeSeries:
             closed="left",
         )
         self._timeindex = index
-
-        if method == "interpolate":
+        if pd.Timedelta(index[1] - index[0]) < pd.Timedelta("1h"):
+            if method == "interpolate":
+                for attr in attrs:
+                    setattr(
+                        self,
+                        attr,
+                        df_dict[attr].resample(freq, closed="left").interpolate(),
+                    )
+            elif method == "ffill":
+                for attr in attrs:
+                    setattr(
+                        self, attr, df_dict[attr].resample(freq, closed="left").ffill()
+                    )
+            else:
+                for attr in attrs:
+                    setattr(
+                        self, attr, df_dict[attr].resample(freq, closed="left").bfill()
+                    )
+        else:
             for attr in attrs:
                 setattr(
                     self,
                     attr,
-                    df_dict[attr].resample(freq, closed="left").interpolate(),
+                    df_dict[attr].resample(freq).mean(),
                 )
-        elif method == "ffill":
-            for attr in attrs:
-                setattr(self, attr, df_dict[attr].resample(freq, closed="left").ffill())
-        else:
-            for attr in attrs:
-                setattr(self, attr, df_dict[attr].resample(freq, closed="left").bfill())
+        print(" ")
 
 
 class TimeSeriesRaw:
