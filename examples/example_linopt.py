@@ -80,18 +80,19 @@ if opt_hp:
         .set_index(timeindex)
         .rename(columns={"0": hp_name})
     )
-    edisgo.heat_pump.cop = \
-        pd.read_csv(os.path.join(grid_dir, "COP_2011.csv")).set_index(timeindex).rename(
-            columns={"COP 2011": hp_name}
-        )
+    edisgo.heat_pump.cop = (
+        pd.read_csv(os.path.join(grid_dir, "COP_2011.csv"))
+        .set_index(timeindex)
+        .rename(columns={"COP 2011": hp_name})
+    )
     edisgo.heat_pump.tes = pd.DataFrame(
-            data={
-                "capacity": [0.05],
-                "efficiency": [1.0],
-                "state_of_charge_initial": [0.5],
-            },
-            index=[hp_name],
-        )
+        data={
+            "capacity": [0.05],
+            "efficiency": [1.0],
+            "state_of_charge_initial": [0.5],
+        },
+        index=[hp_name],
+    )
 
 
 downstream_node_matrix = get_downstream_nodes_matrix_iterative(edisgo.topology)
@@ -120,4 +121,5 @@ if opt_ev and not opt_hp:
         pd.testing.assert_frame_equal(ts_pre, results["x_charge_ev"])
     if save_res:
         results["x_charge_ev"].to_csv("x_charge_ev_pre.csv")
+
 print("SUCCESS")
