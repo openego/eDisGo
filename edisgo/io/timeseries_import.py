@@ -15,7 +15,8 @@ if "READTHEDOCS" not in os.environ:
 
 def feedin_oedb(config_data, weather_cell_ids, timeindex):
     """
-    Import feed-in time series data for wind and solar power plants from oedb.
+    Import feed-in time series data for wind and solar power plants from the
+    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
 
     Parameters
     ----------
@@ -100,7 +101,7 @@ def feedin_oedb(config_data, weather_cell_ids, timeindex):
     return feedin.loc[timeindex]
 
 
-def load_time_series_demandlib(config_data, year):
+def load_time_series_demandlib(config_data, timeindex):
     """
     Get normalized sectoral electricity load time series using the
     `demandlib <https://github.com/oemof/demandlib/>`_.
@@ -115,8 +116,8 @@ def load_time_series_demandlib(config_data, year):
     config_data : :class:`~.tools.config.Config`
         Configuration data from config files, relevant for industrial load
         profiles.
-    year : int
-        Year for which to generate load time series.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Timesteps for which to generate load time series.
 
     Returns
     -------
@@ -127,6 +128,7 @@ def load_time_series_demandlib(config_data, year):
         hold the sector type.
 
     """
+    year = timeindex[0].year
 
     sectoral_consumption = {"h0": 1, "g0": 1, "i0": 1, "l0": 1}
 
@@ -180,4 +182,4 @@ def load_time_series_demandlib(config_data, year):
         inplace=True,
     )
 
-    return elec_demand
+    return elec_demand.loc[timeindex]

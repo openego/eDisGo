@@ -1,14 +1,28 @@
+from __future__ import annotations
+
 import logging
 import os
 import pickle
+import shutil
 
+from numbers import Number
+from pathlib import PurePath
+
+import numpy as np
 import pandas as pd
 
+from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
+from edisgo.io.electromobility_import import (
+    distribute_charging_demand,
+    import_electromobility,
+    integrate_charging_parks,
+)
 from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.network import timeseries
+from edisgo.network.electromobility import Electromobility
 from edisgo.network.results import Results
 from edisgo.network.topology import Topology
 from edisgo.opf.results.opf_result_class import OPFResults
@@ -107,6 +121,9 @@ class EDisGo:
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
+
+        # instantiate electromobility object and load charging processes and sites
+        self.electromobility = Electromobility(edisgo_obj=self)
 
         # set up results and time series container
         self.results = Results(self)
@@ -209,6 +226,15 @@ class EDisGo:
             is a datetime index. Columns contain storage unit names of storage units to
             set time series for. Default: None.
 
+        Notes
+        ------
+        This function raises a warning in case a time index was not previously set.
+        You can set the time index upon initialisation of the EDisGo object by
+        providing the input parameter 'timeindex' or using the function
+        :attr:`~.edisgo.EDisGo.set_timeindex`.
+        Also make sure that the time steps for which time series are provided include
+        the set time index.
+
         """
         # check if time index is already set, otherwise raise warning
         if self.timeseries.timeindex.empty:
@@ -231,7 +257,13 @@ class EDisGo:
             ts_storage_units=storage_units_q,
         )
 
-    def set_time_series_worst_case_analysis(self, cases=None):
+    def set_time_series_worst_case_analysis(
+        self,
+        cases=None,
+        generators_names=None,
+        loads_names=None,
+        storage_units_names=None,
+    ):
         """
         Sets demand and feed-in of all loads, generators and storage units for the
         specified worst cases.
@@ -244,6 +276,15 @@ class EDisGo:
             List with worst-cases to generate time series for. Can be
             'feed-in_case', 'load_case' or both. Defaults to None in which case both
             'feed-in_case' and 'load_case' are set up.
+        generators_names : list(str)
+            Defines for which generators to set worst case time series. If None,
+            time series are set for all generators. Default: None.
+        loads_names : list(str)
+            Defines for which loads to set worst case time series. If None,
+            time series are set for all loads. Default: None.
+        storage_units_names : list(str)
+            Defines for which storage units to set worst case time series. If None,
+            time series are set for all storage units. Default: None.
 
         """
         if cases is None:
@@ -251,7 +292,9 @@ class EDisGo:
         if isinstance(cases, str):
             cases = [cases]
 
-        self.timeseries.set_worst_case(self, cases)
+        self.timeseries.set_worst_case(
+            self, cases, generators_names, loads_names, storage_units_names
+        )
 
     def set_time_series_active_power_predefined(
         self,
@@ -327,6 +370,15 @@ class EDisGo:
             :func:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
             for more information. Default: None.
 
+        Notes
+        ------
+        This function raises a warning in case a time index was not previously set.
+        You can set the time index upon initialisation of the EDisGo object by
+        providing the input parameter 'timeindex' or using the function
+        :attr:`~.edisgo.EDisGo.set_timeindex`.
+        Also make sure that the time steps for which time series are provided include
+        the set time index.
+
         """
         if self.timeseries.timeindex.empty:
             logger.warning(
@@ -337,6 +389,7 @@ class EDisGo:
                 "EDisGo object by providing the input parameter 'timeindex' or using "
                 "the function EDisGo.set_timeindex()."
             )
+            return
         if fluctuating_generators_ts is not None:
             self.timeseries.predefined_fluctuating_generators_by_technology(
                 self, fluctuating_generators_ts, fluctuating_generators_names
@@ -362,6 +415,8 @@ class EDisGo:
         storage_units_parametrisation="default",
     ):
         """
+        Set reactive power time series of components.
+
         Parameters
         -----------
         control : str
@@ -381,6 +436,53 @@ class EDisGo:
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
 
+        Notes
+        ------
+        Be careful to set parametrisation of other component types to None if you only
+        want to set reactive power of certain components. See example below for further
+        information.
+
+        Examples
+        --------
+        To only set reactive power time series of one generator using default
+        configurations you can do the following:
+
+        >>> self.set_time_series_reactive_power_control(
+        >>>     generators_parametrisation=pd.DataFrame(
+        >>>        {
+        >>>            "components": [["Generator_1"]],
+        >>>            "mode": ["default"],
+        >>>            "power_factor": ["default"],
+        >>>        },
+        >>>        index=[1],
+        >>>     ),
+        >>>     loads_parametrisation=None,
+        >>>     storage_units_parametrisation=None
+        >>> )
+
+        In the example above, `loads_parametrisation` and
+        `storage_units_parametrisation` need to be set to None, otherwise already
+        existing time series would be overwritten.
+
+        To only change configuration of one load and for all other components use
+        default configurations you can do the following:
+
+        >>> self.set_time_series_reactive_power_control(
+        >>>     loads_parametrisation=pd.DataFrame(
+        >>>        {
+        >>>            "components": [["Load_1"],
+        >>>                           self.topology.loads_df.index.drop(["Load_1"])],
+        >>>            "mode": ["capacitive", "default"],
+        >>>            "power_factor": [0.98, "default"],
+        >>>        },
+        >>>        index=[1, 2],
+        >>>     )
+        >>> )
+
+        In the example above, `generators_parametrisation` and
+        `storage_units_parametrisation` do not need to be set as default configurations
+        are per default used for all generators and storage units anyways.
+
         """
         if control == "fixed_cosphi":
             self.timeseries.fixed_cosphi(
@@ -392,64 +494,103 @@ class EDisGo:
         else:
             raise ValueError("'control' must be 'fixed_cosphi'.")
 
-    def to_pypsa(self, **kwargs):
+    def to_pypsa(
+        self, mode=None, timesteps=None, check_edisgo_integrity=False, **kwargs
+    ):
         """
-        Convert to PyPSA :pypsa:`pypsa.Network<network>` representation.
+        Convert grid to :pypsa:`PyPSA.Network<network>` representation.
+
+        You can choose between translation of the MV and all underlying LV grids
+        (mode=None (default)), the MV network only (mode='mv' or mode='mvlv') or a
+        single LV network (mode='lv').
 
         Parameters
-        ----------
-        kwargs :
-            See :func:`~.io.pypsa_io.to_pypsa` for further information.
-
-        Other Parameters
-        -----------------
+        -----------
         mode : str
             Determines network levels that are translated to
-            `PyPSA network representation
-            <https://www.pypsa.org/doc/components.html#network>`_. Specify
+            :pypsa:`PyPSA.Network<network>`.
+            Possible options are:
 
-            * None to export MV and LV network levels. None is the default.
-            * 'mv' to export MV network level only. This includes cumulative load
-              and generation from underlying LV network aggregated at respective LV
-              station's primary side.
-            * 'mvlv' to export MV network level only. This includes cumulative load
-              and generation from underlying LV network aggregated at respective LV
-              station's secondary side.
-            * 'lv' to export specified LV network only.
+            * None
+
+                MV and underlying LV networks are exported. This is the default.
+
+            * 'mv'
+
+                Only MV network is exported. MV/LV transformers are not exported in
+                this mode. Loads, generators and storage units in underlying LV grids
+                are connected to the respective MV/LV station's primary side. Per
+                default, they are all connected separately, but you can also choose to
+                aggregate them. See parameters `aggregate_loads`, `aggregate_generators`
+                and `aggregate_storages` for more information.
+
+            * 'mvlv'
+
+                This mode works similar as mode 'mv', with the difference that MV/LV
+                transformers are as well exported and LV components connected to the
+                respective MV/LV station's secondary side. Per default, all components
+                are connected separately, but you can also choose to aggregate them.
+                See parameters `aggregate_loads`, `aggregate_generators`
+                and `aggregate_storages` for more information.
+
+            * 'lv'
+
+                Single LV network topology including the MV/LV transformer is exported.
+                The LV grid to export is specified through the parameter `lv_grid_id`.
+                The slack is positioned at the secondary side of the MV/LV station.
+
+        timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+            :pandas:`pandas.Timestamp<Timestamp>`
+            Specifies which time steps to export to pypsa representation to e.g.
+            later on use in power flow analysis. It defaults to None in which case
+            all time steps in :attr:`~.network.timeseries.TimeSeries.timeindex`
+            are used.
+            Default: None.
+        check_edisgo_integrity : bool
+            Check integrity of edisgo object before translating to pypsa. This option is
+            meant to help the identification of possible sources of errors if the power
+            flow calculations fail. See :attr:`~.edisgo.EDisGo.check_integrity` for
+            more information.
+
+        Other Parameters
+        -------------------
+        use_seed : bool
+            Use a seed for the initial guess for the Newton-Raphson algorithm.
+            Only available when MV level is included in the power flow analysis.
+            If True, uses voltage magnitude results of previous power flow
+            analyses as initial guess in case of PQ buses. PV buses currently do
+            not occur and are therefore currently not supported.
+            Default: False.
+        lv_grid_id : int or str
+            ID (e.g. 1) or name (string representation, e.g. "LVGrid_1") of LV grid
+            to export in case mode is 'lv'.
+        aggregate_loads : str
+            Mode for load aggregation in LV grids in case mode is 'mv' or 'mvlv'.
+            Can be 'sectoral' aggregating the loads sector-wise, 'all' aggregating all
+            loads into one or None, not aggregating loads but appending them to the
+            station one by one. Default: None.
+        aggregate_generators : str
+            Mode for generator aggregation in LV grids in case mode is 'mv' or 'mvlv'.
+            Can be 'type' aggregating generators per generator type, 'curtailable'
+            aggregating 'solar' and 'wind' generators into one and all other generators
+            into another one, or None, where no aggregation is undertaken
+            and generators are added to the station one by one. Default: None.
+        aggregate_storages : str
+            Mode for storage unit aggregation in LV grids in case mode is 'mv' or
+            'mvlv'. Can be 'all' where all storage units in an LV grid are aggregated to
+            one storage unit or None, in which case no aggregation is conducted and
+            storage units are added to the station. Default: None.
 
         Returns
         -------
-        :pypsa:`pypsa.Network<network>`
-            PyPSA network representation.
+        :pypsa:`PyPSA.Network<network>`
+            :pypsa:`PyPSA.Network<network>` representation.
 
         """
-        timesteps = kwargs.pop("timesteps", None)
-        mode = kwargs.get("mode", None)
-
-        if timesteps is None:
-            timesteps = self.timeseries.timeindex
-        # check if timesteps is array-like, otherwise convert to list
-        if not hasattr(timesteps, "__len__"):
-            timesteps = [timesteps]
-        # export grid
-        # ToDo: Move to pypsa_io.to_pypsa
-        if not mode:
-            return pypsa_io.to_pypsa(self, timesteps, **kwargs)
-        elif "mv" in mode:
-            return pypsa_io.to_pypsa(self.topology.mv_grid, timesteps, **kwargs)
-        elif mode == "lv":
-            lv_grid_name = kwargs.get("lv_grid_name", None)
-            if not lv_grid_name:
-                raise ValueError(
-                    "For exporting lv grids, name of lv_grid has to be provided."
-                )
-            return pypsa_io.to_pypsa(
-                self.topology._grids[lv_grid_name],
-                mode=mode,
-                timesteps=timesteps,
-            )
-        else:
-            raise ValueError("The entered mode is not a valid option.")
+        # possibly execute consistency check
+        if check_edisgo_integrity or logger.level == logging.DEBUG:
+            self.check_integrity()
+        return pypsa_io.to_pypsa(self, mode, timesteps, **kwargs)
 
     def to_graph(self):
         """
@@ -524,12 +665,22 @@ class EDisGo:
             edisgo_object=self, generator_scenario=generator_scenario, **kwargs
         )
 
-    def analyze(self, mode=None, timesteps=None, raise_not_converged=True, **kwargs):
+    def analyze(
+        self,
+        mode: str | None = None,
+        timesteps: pd.Timestamp | pd.DatetimeIndex | None = None,
+        raise_not_converged: bool = True,
+        troubleshooting_mode: str | None = None,
+        range_start: Number = 0.1,
+        range_num: int = 10,
+        **kwargs,
+    ):
         """
         Conducts a static, non-linear power flow analysis.
 
         Conducts a static, non-linear power flow analysis using
-        `PyPSA <https://www.pypsa.org/doc/power_flow.html#full-non-linear-power-flow>`_
+        `PyPSA <https://pypsa.readthedocs.io/en/latest/power_flow.html#\
+        full-non-linear-power-flow>`_
         and writes results (active, reactive and apparent power as well as
         current on lines and voltages at buses) to :class:`~.network.results.Results`
         (e.g. :attr:`~.network.results.Results.v_res` for voltages).
@@ -542,49 +693,113 @@ class EDisGo:
 
             * None (default)
 
-                Power flow analysis is conducted for the whole network including MV and
-                LV level.
+                Power flow analysis is conducted for the whole network including MV grid
+                and underlying LV grids.
 
             * 'mv'
 
-                Power flow analysis is conducted for the MV level only. LV loads and
-                generators are aggregated at the respective MV/LV stations' primary
-                side.
+                Power flow analysis is conducted for the MV level only. LV loads,
+                generators and storage units are aggregated at the respective MV/LV
+                stations' primary side. Per default, they are all connected separately,
+                but you can also choose to aggregate them. See parameters
+                `aggregate_loads`, `aggregate_generators` and `aggregate_storages`
+                in :attr:`~.edisgo.EDisGo.to_pypsa` for more information.
 
             * 'mvlv'
 
                 Power flow analysis is conducted for the MV level only. In contrast to
-                mode 'mv' LV loads and generators are in this case aggregated at the
-                respective MV/LV stations' secondary side.
+                mode 'mv' LV loads, generators and storage units are in this case
+                aggregated at the respective MV/LV stations' secondary side. Per
+                default, they are all connected separately, but you can also choose to
+                aggregate them. See parameters `aggregate_loads`, `aggregate_generators`
+                and `aggregate_storages` in :attr:`~.edisgo.EDisGo.to_pypsa` for more
+                information.
 
             * 'lv'
 
-                Power flow analysis is conducted for one LV grid only. Name of the LV
-                grid to conduct power flow analysis for needs to be provided through
-                keyword argument 'lv_grid_name' as string.
+                Power flow analysis is conducted for one LV grid only. ID or name of
+                the LV grid to conduct power flow analysis for needs to be provided
+                through keyword argument 'lv_grid_id' as integer or string.
+                See parameter `lv_grid_id` in :attr:`~.edisgo.EDisGo.to_pypsa` for more
+                information.
+                The slack is positioned at the secondary side of the MV/LV station.
 
         timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
             :pandas:`pandas.Timestamp<Timestamp>`
             Timesteps specifies for which time steps to conduct the power flow
             analysis. It defaults to None in which case all time steps in
-            :attr:`~.network.timeseries.TimeSeries.timeindex` are
-            used.
+            :attr:`~.network.timeseries.TimeSeries.timeindex` are used.
         raise_not_converged : bool
             If True, an error is raised in case power flow analysis did not converge
-            for all time steps. I
+            for all time steps.
             Default: True.
+
+        troubleshooting_mode : str or None
+            Two optional troubleshooting methods in case of nonconvergence of nonlinear
+            power flow (cf. [1])
+
+            * None (default)
+                Power flow analysis is conducted using nonlinear power flow method.
+            * 'lpf'
+                Non-linear power flow initial guess is seeded with the voltage angles
+                from the linear power flow.
+            * 'iteration'
+                Power flow analysis is conducted by reducing all power values of
+                generators and loads to a fraction, e.g. 10%, solving the load flow and
+                using it as a seed for the power at 20%, iteratively up to 100%.
+
+        range_start : float, optional
+            Specifies the minimum fraction that power values are set to when using
+            troubleshooting_mode 'iteration'. Must be between 0 and 1.
+            Default: 0.1.
+
+        range_num : int, optional
+            Specifies the number of fraction samples to generate when using
+            troubleshooting_mode 'iteration'. Must be non-negative.
+            Default: 10.
+
+        Other Parameters
+        -----------------
+        kwargs : dict
+            Possible other parameters comprise all other parameters that can be set in
+            :func:`edisgo.io.pypsa_io.to_pypsa`.
 
         Returns
         --------
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
             Returns the time steps for which power flow analysis did not converge.
 
-        Other Parameters
-        -----------------
-        Possible other parameters comprise all other parameters that can be set in
-        :attr:`~.io.pypsa_io.to_pypsa`.
+        References
+        --------
+        [1] https://pypsa.readthedocs.io/en/latest/troubleshooting.html
 
         """
+
+        def _check_convergence():
+            # get converged and not converged time steps
+            timesteps_converged = pf_results["converged"][
+                pf_results["converged"]["0"]
+            ].index
+            timesteps_not_converged = pf_results["converged"][
+                ~pf_results["converged"]["0"]
+            ].index
+
+            if raise_not_converged and len(timesteps_not_converged) > 0:
+                raise ValueError(
+                    "Power flow analysis did not converge for the "
+                    "following {} time steps: {}.".format(
+                        len(timesteps_not_converged), timesteps_not_converged
+                    )
+                )
+            elif len(timesteps_not_converged) > 0:
+                logger.warning(
+                    "Power flow analysis did not converge for the "
+                    "following {} time steps: {}.".format(
+                        len(timesteps_not_converged), timesteps_not_converged
+                    )
+                )
+            return timesteps_converged, timesteps_not_converged
+
         if timesteps is None:
             timesteps = self.timeseries.timeindex
         # check if timesteps is array-like, otherwise convert to list
@@ -593,47 +808,114 @@ class EDisGo:
 
         pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps, **kwargs)
 
-        # run power flow analysis
-        pf_results = pypsa_network.pf(timesteps, use_seed=kwargs.get("use_seed", False))
-
-        # get converged and not converged time steps
-        timesteps_converged = pf_results["converged"][
-            pf_results["converged"]["0"]
-        ].index
-        timesteps_not_converged = pf_results["converged"][
-            ~pf_results["converged"]["0"]
-        ].index
-
-        if raise_not_converged and len(timesteps_not_converged) > 0:
-            raise ValueError(
-                "Power flow analysis did not converge for the following time steps: "
-                f'{timesteps[~pf_results["converged"]["0"]].tolist()}.'
+        if troubleshooting_mode == "lpf":
+            # run linear power flow analysis
+            pypsa_network.lpf()
+            # run power flow analysis
+            pf_results = pypsa_network.pf(timesteps, use_seed=True)
+            # get converged and not converged time steps
+            timesteps_converged, timesteps_not_converged = _check_convergence()
+        elif troubleshooting_mode == "iteration":
+            pypsa_network_copy = pypsa_network.copy()
+            for fraction in np.linspace(range_start, 1, range_num):
+                # Reduce power values of generators, loads and storages to fraction of
+                # original value
+                for obj1, obj2 in [
+                    (pypsa_network.generators_t, pypsa_network_copy.generators_t),
+                    (pypsa_network.loads_t, pypsa_network_copy.loads_t),
+                    (pypsa_network.storage_units_t, pypsa_network_copy.storage_units_t),
+                ]:
+                    for attr in ["p_set", "q_set"]:
+                        setattr(obj1, attr, getattr(obj2, attr) * fraction)
+                # run power flow analysis
+                pf_results = pypsa_network.pf(timesteps, use_seed=True)
+                logging.warning(
+                    "Current fraction in iterative process: {}.".format(fraction)
+                )
+                # get converged and not converged time steps
+                timesteps_converged, timesteps_not_converged = _check_convergence()
+        else:
+            # run power flow analysis
+            pf_results = pypsa_network.pf(
+                timesteps, use_seed=kwargs.get("use_seed", False)
             )
+            # get converged and not converged time steps
+            timesteps_converged, timesteps_not_converged = _check_convergence()
 
         # handle converged time steps
         pypsa_io.process_pfa_results(self, pypsa_network, timesteps_converged)
 
         return timesteps_not_converged
 
-    def reinforce(self, **kwargs):
+    def reinforce(
+        self,
+        timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
+        copy_grid: bool = False,
+        max_while_iterations: int = 20,
+        combined_analysis: bool = False,
+        mode: str | None = None,
+        **kwargs,
+    ) -> Results:
         """
         Reinforces the network and calculates network expansion costs.
 
+        If the :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case` is
+        True input for `timesteps_pfa` and `mode` are overwritten and therefore
+        ignored.
+
         See :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid` for more
-        information.
+        information on input parameters and methodology.
+
+        Other Parameters
+        -----------------
+        is_worst_case : bool
+            Is used to overwrite the return value from
+            :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case`. If True
+            reinforcement is calculated for worst-case MV and LV cases separately.
 
         """
+        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
+
+            logger.info(
+                "Running reinforcement in worst-case mode by differentiating between mv"
+                " and lv load and feed-in cases."
+            )
+
+            timeindex_worst_cases = self.timeseries.timeindex_worst_cases
+            timesteps_pfa = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("mv")
+                ]
+            )
+            mode = "mv"
+
+            reinforce_grid(
+                self,
+                max_while_iterations=max_while_iterations,
+                copy_grid=copy_grid,
+                timesteps_pfa=timesteps_pfa,
+                combined_analysis=combined_analysis,
+                mode=mode,
+            )
+
+            timesteps_pfa = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("lv")
+                ]
+            )
+            mode = "lv"
+
         results = reinforce_grid(
             self,
-            max_while_iterations=kwargs.get("max_while_iterations", 10),
-            copy_grid=kwargs.get("copy_grid", False),
-            timesteps_pfa=kwargs.get("timesteps_pfa", None),
-            combined_analysis=kwargs.get("combined_analysis", False),
-            mode=kwargs.get("mode", None),
+            max_while_iterations=max_while_iterations,
+            copy_grid=copy_grid,
+            timesteps_pfa=timesteps_pfa,
+            combined_analysis=combined_analysis,
+            mode=mode,
         )
 
         # add measure to Results object
-        if not kwargs.get("copy_grid", False):
+        if not copy_grid:
             self.results.measures = "grid_expansion"
 
         return results
@@ -663,7 +945,6 @@ class EDisGo:
     def add_component(
         self,
         comp_type,
-        add_ts=True,
         ts_active_power=None,
         ts_reactive_power=None,
         **kwargs,
@@ -680,29 +961,105 @@ class EDisGo:
         comp_type : str
             Type of added component. Can be 'bus', 'line', 'load', 'generator', or
             'storage_unit'.
-        add_ts : bool
-            Indicator if time series for component are added as well. If True, active
-            and reactive power time series need to be provided through parameters
-            `ts_active_power` and `ts_reactive_power`. Default: True.
-        ts_active_power : :pandas:`pandas.Series<series>`
-            Active power time series of added component. Index of the series
-            must contain all time steps in
+        ts_active_power : :pandas:`pandas.Series<series>` or None
+            Active power time series of added component.
+            Index of the series must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
             Values are active power per time step in MW.
-        ts_reactive_power : :pandas:`pandas.Series<series>`
-            Reactive power time series of added component. Index of the series
-            must contain all time steps in
-            :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are reactive power per time step in MVA.
+            Defaults to None in which case no time series is set.
+        ts_reactive_power : :pandas:`pandas.Series<series>` or str or None
+            Possible options are:
+
+            * :pandas:`pandas.Series<series>`
+
+                Reactive power time series of added component. Index of the series must
+                contain all time steps in
+                :attr:`~.network.timeseries.TimeSeries.timeindex`. Values are reactive
+                power per time step in MVA.
+
+            * "default"
+
+                Reactive power time series is determined based on assumptions on fixed
+                power factor of the component. To this end, the power factors set in the
+                config section `reactive_power_factor` and the power factor mode,
+                defining whether components behave inductive or capacitive, given in the
+                config section `reactive_power_mode`, are used.
+                This option requires you to provide an active power time series. In case
+                it was not provided, reactive power cannot be set and a warning is
+                raised.
+
+            * None
+
+                No reactive power time series is set.
+
+            Default: None
         **kwargs: dict
             Attributes of added component. See respective functions for required
             entries.
+
+            * 'bus' : :attr:`~.network.topology.Topology.add_bus`
+
+            * 'line' : :attr:`~.network.topology.Topology.add_line`
+
+            * 'load' : :attr:`~.network.topology.Topology.add_load`
+
+            * 'generator' : :attr:`~.network.topology.Topology.add_generator`
+
+            * 'storage_unit' : :attr:`~.network.topology.Topology.add_storage_unit`
 
         """
         # ToDo: Add option to add transformer.
         # Todo: change into add_components to allow adding of several components
         #    at a time, change topology.add_load etc. to add_loads, where
         #    lists of parameters can be inserted
+
+        def _get_q_default_df(comp_name):
+            return pd.DataFrame(
+                {
+                    "components": [[comp_name]],
+                    "mode": ["default"],
+                    "power_factor": ["default"],
+                },
+                index=["comp"],
+            )
+
+        def _set_timeseries():
+            if ts_active_power is not None:
+                self.set_time_series_manual(
+                    **{f"{comp_type}s_p": pd.DataFrame({comp_name: ts_active_power})}
+                )
+            if ts_reactive_power is not None:
+                if isinstance(ts_reactive_power, pd.Series):
+                    self.set_time_series_manual(
+                        **{
+                            f"{comp_type}s_q": pd.DataFrame(
+                                {comp_name: ts_reactive_power}
+                            )
+                        }
+                    )
+                elif ts_reactive_power == "default":
+                    if ts_active_power is None:
+                        logging.warning(
+                            f"Default reactive power time series of {comp_name} cannot "
+                            "be set as active power time series was not provided."
+                        )
+                    else:
+                        other_comps = [
+                            _
+                            for _ in ["generator", "load", "storage_unit"]
+                            if _ != comp_type
+                        ]
+                        parameter_dict = {
+                            f"{t}s_parametrisation": None for t in other_comps
+                        }
+                        parameter_dict.update(
+                            {
+                                f"{comp_type}s_parametrisation": _get_q_default_df(
+                                    comp_name
+                                )
+                            }
+                        )
+                        self.set_time_series_reactive_power_control(**parameter_dict)
 
         if comp_type == "bus":
             comp_name = self.topology.add_bus(**kwargs)
@@ -712,27 +1069,15 @@ class EDisGo:
 
         elif comp_type == "generator":
             comp_name = self.topology.add_generator(**kwargs)
-            if add_ts:
-                self.set_time_series_manual(
-                    generators_p=pd.DataFrame({comp_name: ts_active_power}),
-                    generators_q=pd.DataFrame({comp_name: ts_reactive_power}),
-                )
+            _set_timeseries()
 
         elif comp_type == "storage_unit":
             comp_name = self.topology.add_storage_unit(**kwargs)
-            if add_ts:
-                self.set_time_series_manual(
-                    storage_units_p=pd.DataFrame({comp_name: ts_active_power}),
-                    storage_units_q=pd.DataFrame({comp_name: ts_reactive_power}),
-                )
+            _set_timeseries()
 
         elif comp_type == "load":
             comp_name = self.topology.add_load(**kwargs)
-            if add_ts:
-                self.set_time_series_manual(
-                    loads_p=pd.DataFrame({comp_name: ts_active_power}),
-                    loads_q=pd.DataFrame({comp_name: ts_reactive_power}),
-                )
+            _set_timeseries()
 
         else:
             raise ValueError(
@@ -741,7 +1086,7 @@ class EDisGo:
             )
         return comp_name
 
-    def integrate_component(
+    def integrate_component_based_on_geolocation(
         self,
         comp_type,
         geolocation,
@@ -785,14 +1130,14 @@ class EDisGo:
             Active power time series of added component. Index of the series
             must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are active power per time step in MW. Currently, if you want
+            Values are active power per time step in MW. If you want
             to add time series (if `add_ts` is True), you must provide a
             time series. It is not automatically retrieved.
         ts_reactive_power : :pandas:`pandas.Series<Series>`, optional
             Reactive power time series of added component. Index of the series
             must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
-            Values are reactive power per time step in MVA. Currently, if you
+            Values are reactive power per time step in MVA. If you
             want to add time series (if `add_ts` is True), you must provide a
             time series. It is not automatically retrieved.
 
@@ -808,20 +1153,26 @@ class EDisGo:
         """
         supported_voltage_levels = {4, 5, 6, 7}
         p_nom = kwargs.get("p_nom", None)
+        p_set = kwargs.get("p_set", None)
+
+        p = p_nom if p_set is None else p_set
+
+        kwargs["p"] = p
+
         if voltage_level not in supported_voltage_levels:
-            if p_nom is None:
+            if p is None:
                 raise ValueError(
                     "Neither appropriate voltage level nor nominal power "
                     "were supplied."
                 )
             # Determine voltage level manually from nominal power
-            if 4.5 < p_nom <= 17.5:
+            if 4.5 < p <= 17.5:
                 voltage_level = 4
-            elif 0.3 < p_nom <= 4.5:
+            elif 0.3 < p <= 4.5:
                 voltage_level = 5
-            elif 0.1 < p_nom <= 0.3:
+            elif 0.1 < p <= 0.3:
                 voltage_level = 6
-            elif 0 < p_nom <= 0.1:
+            elif 0 < p <= 0.1:
                 voltage_level = 7
             else:
                 raise ValueError("Unsupported voltage level")
@@ -894,16 +1245,15 @@ class EDisGo:
             self.topology.remove_load(comp_name)
             if drop_ts:
                 for ts in ["active_power", "reactive_power"]:
-                    timeseries.drop_component_time_series(
-                        obj=self.timeseries, df_name=f"loads_{ts}", comp_names=comp_name
+                    self.timeseries.drop_component_time_series(
+                        df_name=f"loads_{ts}", comp_names=comp_name
                     )
 
         elif comp_type == "generator":
             self.topology.remove_generator(comp_name)
             if drop_ts:
                 for ts in ["active_power", "reactive_power"]:
-                    timeseries.drop_component_time_series(
-                        obj=self.timeseries,
+                    self.timeseries.drop_component_time_series(
                         df_name=f"generators_{ts}",
                         comp_names=comp_name,
                     )
@@ -912,8 +1262,7 @@ class EDisGo:
             self.topology.remove_storage_unit(comp_name)
             if drop_ts:
                 for ts in ["active_power", "reactive_power"]:
-                    timeseries.drop_component_time_series(
-                        obj=self.timeseries,
+                    self.timeseries.drop_component_time_series(
                         df_name=f"storage_units_{ts}",
                         comp_names=comp_name,
                     )
@@ -1027,6 +1376,177 @@ class EDisGo:
             self.timeseries.loads_reactive_power = _aggregate_time_series(
                 "loads_reactive_power", loads_groupby.groups, naming
             )
+
+    def import_electromobility(
+        self,
+        simbev_directory: PurePath | str,
+        tracbev_directory: PurePath | str,
+        import_electromobility_data_kwds=None,
+        allocate_charging_demand_kwds=None,
+    ):
+        """
+        Imports electromobility data and integrates charging points into grid.
+
+        So far, this function requires electromobility data from
+        `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
+        `3083c5a <https://github.com/rl-institut/simbev/commit/
+        86076c936940365587c9fba98a5b774e13083c5a>`_) and
+        `TracBEV <https://github.com/rl-institut/tracbev>`_ (required version:
+        `14d864c <https://github.com/rl-institut/tracbev/commit/
+        03e335655770a377166c05293a966052314d864c>`_) to be stored in the
+        directories specified through the parameters `simbev_directory` and
+        `tracbev_directory`. SimBEV provides data on standing times, charging demand,
+        etc. per vehicle, whereas TracBEV provides potential charging point locations.
+
+        After electromobility data is loaded, the charging demand from SimBEV is
+        allocated to potential charging points from TracBEV. Afterwards,
+        all potential charging points with charging demand allocated to them are
+        integrated into the grid.
+
+        Be aware that this function does not yield charging time series per charging
+        point but only charging processes (see
+        :attr:`~.network.electromobility.Electromobility.charging_processes_df` for
+        more information). The actual charging time series are determined through
+        applying a charging strategy using the function
+        :attr:`~.edisgo.EDisGo.charging_strategy`.
+
+        Parameters
+        ----------
+        simbev_directory : str
+            SimBEV directory holding SimBEV data.
+        tracbev_directory : str
+            TracBEV directory holding TracBEV data.
+        import_electromobility_data_kwds : dict
+            These may contain any further attributes you want to specify when calling
+            the function to import electromobility data from SimBEV and TracBEV using
+            :func:`~.io.electromobility_import.import_electromobility`.
+
+            gc_to_car_rate_home : float
+                Specifies the minimum rate between potential charging parks
+                points for the use case "home" and the total number of cars.
+                Default 0.5.
+            gc_to_car_rate_work : float
+                Specifies the minimum rate between potential charging parks
+                points for the use case "work" and the total number of cars.
+                Default 0.25.
+            gc_to_car_rate_public : float
+                Specifies the minimum rate between potential charging parks
+                points for the use case "public" and the total number of cars.
+                Default 0.1.
+            gc_to_car_rate_hpc : float
+                Specifies the minimum rate between potential charging parks
+                points for the use case "hpc" and the total number of cars.
+                Default 0.005.
+            mode_parking_times : str
+                If the mode_parking_times is set to "frugal" only parking times
+                with any charging demand are imported. Any other input will lead
+                to all parking and driving events being imported. Default "frugal".
+            charging_processes_dir : str
+                Charging processes sub-directory. Default "simbev_run".
+            simbev_config_file : str
+                Name of the simbev config file. Default "metadata_simbev_run.json".
+
+        allocate_charging_demand_kwds :
+            These may contain any further attributes you want to specify when calling
+            the function that allocates charging processes from SimBEV to potential
+            charging points from TracBEV using
+            :func:`~.io.electromobility_import.distribute_charging_demand`.
+
+            mode : str
+                Distribution mode. If the mode is set to "user_friendly" only the
+                simbev weights are used for the distribution. If the mode is
+                "grid_friendly" also grid conditions are respected.
+                Default "user_friendly".
+            generators_weight_factor : float
+                Weighting factor of the generators weight within an LV grid in
+                comparison to the loads weight. Default 0.5.
+            distance_weight : float
+                Weighting factor for the distance between a potential charging park
+                and its nearest substation in comparison to the combination of
+                the generators and load factors of the LV grids.
+                Default 1 / 3.
+            user_friendly_weight : float
+                Weighting factor of the user friendly weight in comparison to the
+                grid friendly weight. Default 0.5.
+
+        """
+        if import_electromobility_data_kwds is None:
+            import_electromobility_data_kwds = {}
+
+        import_electromobility(
+            self,
+            simbev_directory,
+            tracbev_directory,
+            **import_electromobility_data_kwds,
+        )
+
+        if allocate_charging_demand_kwds is None:
+            allocate_charging_demand_kwds = {}
+
+        distribute_charging_demand(self, **allocate_charging_demand_kwds)
+
+        integrate_charging_parks(self)
+
+    def apply_charging_strategy(self, strategy="dumb", **kwargs):
+        """
+        Applies charging strategy to set EV charging time series at charging parks.
+
+        This function requires that standing times, charging demand, etc. at
+        charging parks were previously set using
+        :attr:`~.edisgo.EDisGo.import_electromobility`.
+
+        It is assumed that only 'private' charging processes at 'home' or at 'work' can
+        be flexibilized. 'public' charging processes will always be 'dumb'.
+
+        The charging time series at each charging parks are written to
+        :attr:`~.network.timeseries.TimeSeries.loads_active_power`. Reactive power
+        in :attr:`~.network.timeseries.TimeSeries.loads_reactive_power` is
+        set to 0 Mvar.
+
+        Parameters
+        ----------
+        strategy : str
+            Defines the charging strategy to apply. The following charging
+            strategies are valid:
+
+            * 'dumb'
+
+                The cars are charged directly after arrival with the
+                maximum possible charging capacity.
+
+            * 'reduced'
+
+                The cars are charged directly after arrival with the
+                minimum possible charging power. The minimum possible charging
+                power is determined by the parking time and the parameter
+                `minimum_charging_capacity_factor`.
+
+            * 'residual'
+
+                The cars are charged when the residual load in the MV
+                grid is lowest (high generation and low consumption).
+                Charging processes with a low flexibility are given priority.
+
+            Default: 'dumb'.
+
+        Other Parameters
+        ------------------
+        timestamp_share_threshold : float
+            Percental threshold of the time required at a time step for charging
+            the vehicle. If the time requirement is below this limit, then the
+            charging process is not mapped into the time series. If, however, it is
+            above this limit, the time step is mapped to 100% into the time series.
+            This prevents differences between the charging strategies and creates a
+            compromise between the simultaneity of charging processes and an
+            artificial increase in the charging demand. Default: 0.2.
+        minimum_charging_capacity_factor : float
+            Technical minimum charging power of charging points in p.u. used in case of
+            charging strategy 'reduced'. E.g. for a charging point with a nominal
+            capacity of 22 kW and a minimum_charging_capacity_factor of 0.1 this would
+            result in a minimum charging power of 2.2 kW. Default: 0.1.
+
+        """
+        charging_strategy(self, strategy=strategy, **kwargs)
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
@@ -1313,9 +1833,10 @@ class EDisGo:
     def save(
         self,
         directory,
-        save_results=True,
         save_topology=True,
         save_timeseries=True,
+        save_results=True,
+        save_electromobility=True,
         **kwargs,
     ):
         """
@@ -1328,10 +1849,6 @@ class EDisGo:
         ----------
         directory : str
             Main directory to save EDisGo object to.
-        save_results : bool, optional
-            Indicates whether to save :class:`~.network.results.Results`
-            object. Per default it is saved. See
-            :attr:`~.network.results.Results.to_csv` for more information.
         save_topology : bool, optional
             Indicates whether to save :class:`~.network.topology.Topology`.
             Per default it is saved. See
@@ -1340,6 +1857,15 @@ class EDisGo:
             Indicates whether to save :class:`~.network.timeseries.Timeseries`.
             Per default it is saved. See
             :attr:`~.network.timeseries.Timeseries.to_csv` for more
+            information.
+        save_results : bool, optional
+            Indicates whether to save :class:`~.network.results.Results`
+            object. Per default it is saved. See
+            :attr:`~.network.results.Results.to_csv` for more information.
+        save_electromobility : bool, optional
+            Indicates whether to save
+            :class:`~.network.electromobility.Electromobility`. Per default it is saved.
+            See :attr:`~.network.electromobility.Electromobility.to_csv` for more
             information.
 
         Other Parameters
@@ -1357,9 +1883,29 @@ class EDisGo:
         to_type : str, optional
             Data type to convert time series data to. This is a tradeoff
             between precision and memory. Default: "float32".
+        archive : bool, optional
+            Save storage capacity by archiving the results in an archive. The
+            archiving takes place after the generation of the CSVs and
+            therefore temporarily the storage needs are higher. Default: False.
+        archive_type : str, optional
+            Set archive type. Default "zip"
+        drop_unarchived : bool, optional
+            Drop the unarchived data if parameter archive is set to True.
+            Default: True.
 
         """
         os.makedirs(directory, exist_ok=True)
+
+        if save_topology:
+            self.topology.to_csv(os.path.join(directory, "topology"))
+
+        if save_timeseries:
+            self.timeseries.to_csv(
+                os.path.join(directory, "timeseries"),
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32"),
+            )
+
         if save_results:
             self.results.to_csv(
                 os.path.join(directory, "results"),
@@ -1367,13 +1913,28 @@ class EDisGo:
                 to_type=kwargs.get("to_type", "float32"),
                 parameters=kwargs.get("parameters", None),
             )
-        if save_topology:
-            self.topology.to_csv(os.path.join(directory, "topology"))
-        if save_timeseries:
-            self.timeseries.to_csv(
-                os.path.join(directory, "timeseries"),
-                reduce_memory=kwargs.get("reduce_memory", False),
-                to_type=kwargs.get("to_type", "float32"),
+
+        if save_electromobility:
+            self.electromobility.to_csv(os.path.join(directory, "electromobility"))
+
+        if kwargs.get("archive", False):
+            archive_type = kwargs.get("archive_type", "zip")
+            shutil.make_archive(directory, archive_type, directory)
+
+            dir_size = tools.get_directory_size(directory)
+            zip_size = os.path.getsize(directory + ".zip")
+
+            reduction = (1 - zip_size / dir_size) * 100
+
+            drop_unarchived = kwargs.get("drop_unarchived", True)
+
+            if drop_unarchived:
+                shutil.rmtree(directory)
+
+            logger.info(
+                f"Archived files in a {archive_type} archive and reduced "
+                f"storage needs by {reduction:.2f} %. The unarchived files"
+                f" were dropped: {drop_unarchived}"
             )
 
     def save_edisgo_to_pickle(self, path="", filename=None):
@@ -1416,6 +1977,66 @@ class EDisGo:
             attr_to_reduce=kwargs.get("results_attr_to_reduce", None),
         )
 
+    def check_integrity(self):
+        """
+        Method to check the integrity of the EDisGo object.
+
+        Checks for consistency of topology (see
+        :func:`edisgo.topology.check_integrity`), timeseries (see
+        :func:`edisgo.timeseries.check_integrity`) and the interplay of both.
+
+        """
+        self.topology.check_integrity()
+        self.timeseries.check_integrity()
+
+        # check consistency of topology and timeseries
+        comp_types = ["generators", "loads", "storage_units"]
+
+        for comp_type in comp_types:
+            comps = getattr(self.topology, comp_type + "_df")
+
+            for ts in ["active_power", "reactive_power"]:
+                comp_ts_name = f"{comp_type}_{ts}"
+                comp_ts = getattr(self.timeseries, comp_ts_name)
+
+                # check whether all components in topology have an entry in the
+                # respective active and reactive power timeseries
+                missing = comps.index[~comps.index.isin(comp_ts.columns)]
+                if len(missing) > 0:
+                    logger.warning(
+                        f"The following {comp_type} are missing in {comp_ts_name}: "
+                        f"{missing.values}"
+                    )
+
+                # check whether all elements in timeseries have an entry in the topology
+                missing_ts = comp_ts.columns[~comp_ts.columns.isin(comps.index)]
+                if len(missing_ts) > 0:
+                    logger.warning(
+                        f"The following {comp_type} have entries in {comp_ts_name}, but"
+                        f" not in {comp_type}_df: {missing_ts.values}"
+                    )
+
+            # check if the active powers inside the timeseries exceed the given nominal
+            # or peak power of the component
+            if comp_type in ["generators", "storage_units"]:
+                attr = "p_nom"
+            else:
+                attr = "p_set"
+
+            active_power = getattr(self.timeseries, f"{comp_type}_active_power")
+            comps_complete = comps.index[comps.index.isin(active_power.columns)]
+            exceeding = comps_complete[
+                (active_power[comps_complete].max() > comps.loc[comps_complete, attr])
+            ]
+
+            if len(exceeding) > 0:
+                logger.warning(
+                    f"Values of active power in the timeseries object exceed {attr} for"
+                    f" the following {comp_type}: {exceeding.values}"
+                )
+
+            logging.info("Integrity check finished. Please pay attention to warnings.")
+
 
 def import_edisgo_from_pickle(filename, path=""):
     abs_path = os.path.abspath(path)
@@ -1423,40 +2044,96 @@ def import_edisgo_from_pickle(filename, path=""):
 
 
 def import_edisgo_from_files(
-    directory="",
+    edisgo_path="",
     import_topology=True,
     import_timeseries=False,
     import_results=False,
+    import_electromobility=False,
+    from_zip_archive=False,
     **kwargs,
 ):
+
     edisgo_obj = EDisGo(import_timeseries=False)
+
+    if not from_zip_archive and str(edisgo_path).endswith(".zip"):
+        from_zip_archive = True
+
+        logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
+
+    if from_zip_archive:
+        directory = edisgo_path
+
     if import_topology:
-        topology_dir = kwargs.get(
-            "topology_directory", os.path.join(directory, "topology")
-        )
-        if os.path.exists(topology_dir):
-            edisgo_obj.topology.from_csv(topology_dir, edisgo_obj)
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "topology_directory", os.path.join(edisgo_path, "topology")
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.topology.from_csv(directory, edisgo_obj, from_zip_archive)
         else:
-            logging.warning("No topology directory found. Topology not imported.")
+            logging.warning("No topology data found. Topology not imported.")
+
     if import_timeseries:
-        if os.path.exists(os.path.join(directory, "timeseries")):
-            edisgo_obj.timeseries.from_csv(os.path.join(directory, "timeseries"))
+        dtype = kwargs.get("dtype", None)
+
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "timeseries_directory", os.path.join(edisgo_path, "timeseries")
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.timeseries.from_csv(
+                directory, dtype=dtype, from_zip_archive=from_zip_archive
+            )
         else:
-            logging.warning("No timeseries directory found. Timeseries not imported.")
+            logging.warning("No timeseries data found. Timeseries not imported.")
+
     if import_results:
         parameters = kwargs.get("parameters", None)
-        if os.path.exists(os.path.join(directory, "results")):
-            edisgo_obj.results.from_csv(os.path.join(directory, "results"), parameters)
+        dtype = kwargs.get("dtype", None)
+
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "results_directory", os.path.join(edisgo_path, "results")
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.results.from_csv(
+                directory, parameters, dtype=dtype, from_zip_archive=from_zip_archive
+            )
         else:
-            logging.warning("No results directory found. Results not imported.")
-    if kwargs.get("import_residual_load", False) and os.path.exists(
-        os.path.join(directory, "time_series_sums.csv")
-    ):
-        residual_load = (
-            pd.read_csv(os.path.join(directory, "time_series_sums.csv"))
-            .rename(columns={"Unnamed: 0": "timeindex"})
-            .set_index("timeindex")["residual_load"]
-        )
-        residual_load.index = pd.to_datetime(residual_load.index)
-        edisgo_obj.timeseries._residual_load = residual_load
+            logging.warning("No results data found. Results not imported.")
+
+    if import_electromobility:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "electromobility_directory",
+                os.path.join(edisgo_path, "electromobility"),
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.electromobility.from_csv(
+                directory, edisgo_obj, from_zip_archive=from_zip_archive
+            )
+        else:
+            logging.warning(
+                "No electromobility data found. Electromobility not imported."
+            )
+
+    if kwargs.get("import_residual_load", False):
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "residual_load_path", os.path.join(edisgo_path, "time_series_sums.csv")
+            )
+
+        if os.path.exists(directory):
+            residual_load = pd.read_csv(directory, index_col=0, parse_dates=True)
+
+            residual_load.index.name = "timeindex"
+
+            edisgo_obj.timeseries._residual_load = residual_load["residual_load"]
+        else:
+            logging.warning("No residual load data found. Timeseries not imported.")
+
     return edisgo_obj

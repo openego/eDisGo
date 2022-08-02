@@ -35,10 +35,18 @@ class Grid(ABC):
 
     @property
     def id(self):
+        """
+        ID of the grid.
+
+        """
         return self._id
 
     @property
     def edisgo_obj(self):
+        """
+        EDisGo object the grid is stored in.
+
+        """
         return self._edisgo_obj
 
     @property
@@ -84,8 +92,8 @@ class Grid(ABC):
         """
         Returns components as :geopandas:`GeoDataFrame`\\ s
 
-        Returns container with :geopandas:`GeoDataFrame`\\ s containing all georeferenced
-        components within the grid.
+        Returns container with :geopandas:`GeoDataFrame`\\ s containing all
+        georeferenced components within the grid.
 
         Returns
         -------
@@ -307,7 +315,7 @@ class Grid(ABC):
         return self.generators_df.groupby(["type"]).sum()["p_nom"]
 
     @property
-    def p_nom(self):
+    def p_set(self):
         """
         Cumulative peak load of loads in the network in MW.
 
@@ -317,10 +325,10 @@ class Grid(ABC):
             Cumulative peak load of loads in the network in MW.
 
         """
-        return self.loads_df.p_nom.sum()
+        return self.loads_df.p_set.sum()
 
     @property
-    def p_nom_per_sector(self):
+    def p_set_per_sector(self):
         """
         Cumulative peak load of loads in the network per sector in MW.
 
@@ -330,7 +338,7 @@ class Grid(ABC):
             Cumulative peak load of loads in the network per sector in MW.
 
         """
-        return self.loads_df.groupby(["sector"]).sum()["p_nom"]
+        return self.loads_df.groupby(["sector"]).sum()["p_set"]
 
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self.id)])
@@ -345,30 +353,18 @@ class MVGrid(Grid):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        self._lv_grids = kwargs.get("lv_grids", [])
-
     @property
     def lv_grids(self):
         """
-        Underlying LV grids.
-
-        Parameters
-        ----------
-        lv_grids : list(:class:`~.network.grids.LVGrid`)
+        Yields generator object with all underlying low voltage grids.
 
         Returns
-        -------
-        list generator
-            Generator object of underlying LV grids of type
-            :class:`~.network.grids.LVGrid`.
+        --------
+        :class:`~.network.grids.LVGrid`
+            Yields generator object with :class:`~.network.grids.LVGrid` object.
 
         """
-        for lv_grid in self._lv_grids:
-            yield lv_grid
-
-    @lv_grids.setter
-    def lv_grids(self, lv_grids):
-        self._lv_grids = lv_grids
+        return self.edisgo_obj.topology.lv_grids
 
     @property
     def buses_df(self):
@@ -406,7 +402,6 @@ class MVGrid(Grid):
         Draw MV network.
 
         """
-        # ToDo call EDisGoReimport.plot_mv_grid_topology
         raise NotImplementedError
 
 
@@ -512,7 +507,7 @@ class LVGrid(Grid):
             edge_color_is_sequence = False
 
         node_size = [
-            top.get_connected_components_from_bus(v)["loads"].p_nom.sum() * 50000 + 10
+            top.get_connected_components_from_bus(v)["loads"].p_set.sum() * 50000 + 10
             for v in G
         ]
         if isinstance(node_color, pd.Series):

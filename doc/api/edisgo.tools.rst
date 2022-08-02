@@ -18,9 +18,25 @@ edisgo.tools.edisgo\_run module
     :show-inheritance:
 
 edisgo.tools.geo module
------------------------
+------------------------
 
 .. automodule:: edisgo.tools.geo
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+edisgo.tools.geopandas\_helper module
+----------------------------------------
+
+.. automodule:: edisgo.tools.geopandas_helper
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+edisgo.tools.networkx\_helper module
+----------------------------------------
+
+.. automodule:: edisgo.tools.networkx_helper
     :members:
     :undoc-members:
     :show-inheritance:
@@ -53,14 +69,6 @@ edisgo.tools.tools module
 --------------------------
 
 .. automodule:: edisgo.tools.tools
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-edisgo.tools.geopandas\_helper module
---------------------------------------
-
-.. automodule:: edisgo.tools.geopandas_helper
     :members:
     :undoc-members:
     :show-inheritance:

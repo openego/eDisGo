@@ -141,13 +141,11 @@ def _fixed_cosphi_default_power_factor(comp_df, component_type, configs):
     if component_type in comp_dict.keys():
         comp = comp_dict[component_type]
         # write series with power factor for each component
-        power_factor = pd.Series(index=comp_df.index)
+        power_factor = pd.Series(index=comp_df.index, dtype=float)
         for voltage_level in comp_df.voltage_level.unique():
             cols = comp_df.index[comp_df.voltage_level == voltage_level]
             if len(cols) > 0:
-                power_factor[cols] = reactive_power_factor[
-                    "{}_{}".format(voltage_level, comp)
-                ]
+                power_factor[cols] = reactive_power_factor[f"{voltage_level}_{comp}"]
         return power_factor
     else:
         raise ValueError(
@@ -198,12 +196,12 @@ def _fixed_cosphi_default_reactive_power_sign(comp_df, component_type, configs):
         comp = comp_dict[component_type]
         get_q_sign = q_sign_dict[component_type]
         # write series with power factor for each component
-        q_sign = pd.Series(index=comp_df.index)
+        q_sign = pd.Series(index=comp_df.index, dtype=float)
         for voltage_level in comp_df.voltage_level.unique():
             cols = comp_df.index[comp_df.voltage_level == voltage_level]
             if len(cols) > 0:
                 q_sign[cols] = get_q_sign(
-                    reactive_power_mode["{}_{}".format(voltage_level, comp)]
+                    reactive_power_mode[f"{voltage_level}_{comp}"]
                 )
         return q_sign
     else:

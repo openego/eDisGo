@@ -91,7 +91,7 @@ extlinks = {
     ),
     "shapely": ("https://shapely.readthedocs.io/en/latest/manual.html#%s", "shapely."),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "Ding0"),
-    "pypsa": ("https://pypsa.org/doc/components.html#%s", "pypsa"),
+    "pypsa": ("https://pypsa.readthedocs.io/en/latest/components.html#%s", "pypsa"),
     "plotly": ("https://plotly.com/python-api-reference/generated/#%s.html", "plotly"),
 }
 # Add any paths that contain templates here, relative to this directory.
@@ -109,16 +109,16 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = u"eDisGo"
-copyright = u"2017, open_eGo-Team"
-author = u"open_eGo-Team"
+project = "eDisGo"
+copyright = "2017, open_eGo-Team"
+author = "open_eGo-Team"
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
 # built documents.
 #
 # The short X.Y version.
-version = "0.1.0"
+version = "0.1.1"
 # The full version, including alpha/beta/rc tags.
 release = version
 
@@ -127,7 +127,7 @@ release = version
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "English"
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
@@ -301,7 +301,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, "edisgo.tex", u"eDisGo Documentation", u"open_eGo-Team", "manual"),
+    (master_doc, "edisgo.tex", "eDisGo Documentation", "open_eGo-Team", "manual"),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -329,7 +329,7 @@ latex_documents = [
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, "eDisGo", u"eDisGo Documentation", [author], 1)]
+man_pages = [(master_doc, "eDisGo", "eDisGo Documentation", [author], 1)]
 
 # If true, show URL addresses after external links.
 # man_show_urls = False
@@ -344,7 +344,7 @@ texinfo_documents = [
     (
         master_doc,
         "eDisGo",
-        u"eDisGo Documentation",
+        "eDisGo Documentation",
         author,
         "eDisGo",
         "One line description of project.",

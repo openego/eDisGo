@@ -2,6 +2,7 @@ import logging
 import os
 import random
 
+import numpy as np
 import pandas as pd
 
 from sqlalchemy import func
@@ -202,21 +203,17 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         capacity_grid = edisgo_object.topology.generators_df.p_nom.sum()
 
         logger.debug(
-            "Cumulative generator capacity (updated): {} MW".format(
-                round(capacity_imported, 1)
-            )
+            f"Cumulative generator capacity (updated): {round(capacity_imported, 1)} MW"
         )
 
         if abs(capacity_imported - capacity_grid) > cap_diff_threshold:
             raise ValueError(
-                "Cumulative capacity of imported generators ({} MW) "
-                "differs from cumulative capacity of generators "
-                "in updated grid ({} MW) by {} MW.".format(
-                    round(capacity_imported, 1),
-                    round(capacity_grid, 1),
-                    round(capacity_imported - capacity_grid, 1),
-                )
+                f"Cumulative capacity of imported generators ("
+                f"{round(capacity_imported, 1)} MW) differs from cumulative capacity of"
+                f" generators in updated grid ({round(capacity_grid, 1)} MW) by "
+                f"{round(capacity_imported - capacity_grid, 1)} MW."
             )
+
         else:
             logger.debug("Cumulative capacity of imported generators validated.")
 
@@ -237,11 +234,21 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
             # get geom of 1 random MV and 1 random LV generator and transform
             sample_mv_geno_geom_shp = transform(
                 projection,
-                wkt_loads(generators_res_mv["geom"].dropna().sample(n=1).values[0]),
+                wkt_loads(
+                    generators_res_mv["geom"]
+                    .dropna()
+                    .sample(n=1, random_state=42)
+                    .values[0]
+                ),
             )
             sample_lv_geno_geom_shp = transform(
                 projection,
-                wkt_loads(generators_res_lv["geom"].dropna().sample(n=1).values[0]),
+                wkt_loads(
+                    generators_res_lv["geom"]
+                    .dropna()
+                    .sample(n=1, random_state=42)
+                    .values[0]
+                ),
             )
 
             # get geom of MV grid district
@@ -305,7 +312,12 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         generators_conv_mv = _import_conv_generators(session)
         generators_res_mv, generators_res_lv = _import_res_generators(session)
 
-    generators_mv = generators_conv_mv.append(generators_res_mv)
+    generators_mv = pd.concat(
+        [
+            generators_conv_mv,
+            generators_res_mv,
+        ]
+    )
 
     # validate that imported generators are located inside the grid district
     _validate_sample_geno_location()
@@ -314,7 +326,7 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         edisgo_object=edisgo_object,
         imported_generators_mv=generators_mv,
         imported_generators_lv=generators_res_lv,
-        **kwargs
+        **kwargs,
     )
 
     if kwargs.get("p_target", None) is None:
@@ -329,7 +341,7 @@ def _update_grids(
     update_existing=True,
     p_target=None,
     allowed_number_of_comp_per_lv_bus=2,
-    **kwargs
+    **kwargs,
 ):
     """
     Update network according to new generator dataset.
@@ -373,7 +385,7 @@ def _update_grids(
         Index of the dataframe are the generator IDs.
         Columns are the same as in `imported_generators_mv` plus:
 
-            * mvlv_subst_id : int
+            * mvlv_subst_id : int or float
                 ID of MV-LV substation in grid = grid, the generator will be
                 connected to.
 
@@ -428,7 +440,7 @@ def _update_grids(
         [imported_generators_lv, imported_generators_mv], sort=True
     )
 
-    logger.debug("{} generators imported.".format(len(imported_gens)))
+    logger.debug(f"{len(imported_gens)} generators imported.")
 
     # get existing generators and append ID column
     existing_gens = edisgo_object.topology.generators_df
@@ -437,9 +449,8 @@ def _update_grids(
     )
 
     logger.debug(
-        "Cumulative generator capacity (existing): {} MW".format(
-            round(existing_gens.p_nom.sum(), 1)
-        )
+        "Cumulative generator capacity (existing): "
+        f"{round(existing_gens.p_nom.sum(), 1)} MW"
     )
 
     # check if capacity of any of the imported generators is <= 0
@@ -525,10 +536,16 @@ def _update_grids(
     new_gens_mv = imported_generators_mv[
         ~imported_generators_mv.index.isin(list(existing_gens.id))
     ]
+    new_gens_mv = new_gens_mv.assign(
+        p=new_gens_mv.p_nom,
+    )
 
     new_gens_lv = imported_generators_lv[
         ~imported_generators_lv.index.isin(list(existing_gens.id))
     ]
+    new_gens_lv = new_gens_lv.assign(
+        p=new_gens_lv.p_nom,
+    )
 
     if p_target is not None:
 
@@ -641,9 +658,13 @@ def _update_grids(
 
     # check if new generators can be allocated to an existing LV grid
     if not imported_generators_lv.empty:
-        grid_ids = [_.id for _ in edisgo_object.topology._grids.values()]
+        grid_ids = edisgo_object.topology._lv_grid_ids
         if not any(
-            [_ in grid_ids for _ in list(imported_generators_lv["mvlv_subst_id"])]
+            [
+                int(_) in grid_ids
+                for _ in list(imported_generators_lv["mvlv_subst_id"])
+                if not np.isnan(_)
+            ]
         ):
             logger.warning(
                 "None of the imported LV generators can be allocated "

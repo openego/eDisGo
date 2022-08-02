@@ -20,8 +20,9 @@ class TestGrids:
         # test getter
         assert mv_grid.id == 1
         assert mv_grid.nominal_voltage == 20
-        assert len(list(mv_grid.lv_grids)) == 10
-        assert isinstance(list(mv_grid.lv_grids)[0], LVGrid)
+        lv_grids = list(mv_grid.lv_grids)
+        assert len(lv_grids) == 10
+        assert isinstance(lv_grids[0], LVGrid)
 
         assert len(mv_grid.buses_df.index) == 31
         assert "Bus_BranchTee_MVGrid_1_7" in mv_grid.buses_df.index
@@ -46,11 +47,11 @@ class TestGrids:
         assert sorted(mv_grid.weather_cells) == [1122074, 1122075]
         assert mv_grid.peak_generation_capacity == 19.025
         assert mv_grid.peak_generation_capacity_per_technology["solar"] == 4.6
-        assert mv_grid.p_nom == 0.0
+        assert mv_grid.p_set == 0.0
 
     def test_lv_grid(self):
         """Test LVGrid class getter, setter, methods"""
-        lv_grid = [_ for _ in self.topology.mv_grid.lv_grids if _.id == 3][0]
+        lv_grid = self.topology.get_lv_grid(3)
 
         assert isinstance(lv_grid, LVGrid)
         assert lv_grid.id == 3
@@ -79,5 +80,5 @@ class TestGrids:
         assert sorted(lv_grid.weather_cells) == []
         assert lv_grid.peak_generation_capacity == 0
         assert lv_grid.peak_generation_capacity_per_technology.empty
-        assert lv_grid.p_nom == 0.054627
-        assert lv_grid.p_nom_per_sector["agricultural"] == 0.051
+        assert lv_grid.p_set == 0.054627
+        assert lv_grid.p_set_per_sector["agricultural"] == 0.051

@@ -11,9 +11,7 @@ from edisgo.flex_opt import check_tech_constraints
 class TestCheckTechConstraints:
     @classmethod
     def setup_class(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
         self.timesteps = self.edisgo.timeseries.timeindex
 
@@ -59,8 +57,7 @@ class TestCheckTechConstraints:
         # create over-load problem with highest over-load in first time step (as it is
         # a load case)
         self.edisgo.results.pfa_slack = pd.DataFrame(
-            data={"p": [30, 25, 30, 20], "q": [30, 25, 30, 20]},
-            index=self.timesteps
+            data={"p": [30, 25, 30, 20], "q": [30, 25, 30, 20]}, index=self.timesteps
         )
 
         df = check_tech_constraints.hv_mv_station_load(self.edisgo)
@@ -294,7 +291,7 @@ class TestCheckTechConstraints:
     def test__lv_allowed_voltage_limits(self):
 
         # get LVGrid_1 object
-        lv_grid = self.edisgo.topology._grids["LVGrid_1"]
+        lv_grid = self.edisgo.topology.get_lv_grid(1)
         # set voltage at stations' secondary side to known value
         self.edisgo.results._v_res.loc[
             self.timesteps[2], "BusBar_MVGrid_1_LVGrid_1_LV"

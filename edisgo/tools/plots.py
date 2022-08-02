@@ -37,11 +37,6 @@ if "READTHEDOCS" not in os.environ:
     from egoio.db_tables.model_draft import EgoGridMvGriddistrict
     from geoalchemy2 import shape
 
-    geopandas = True
-    try:
-        import geopandas as gpd
-    except Exception:
-        geopandas = False
     contextily = True
     try:
         import contextily as ctx
@@ -176,7 +171,7 @@ def add_basemap(ax, zoom=12):
     Adds map to a plot.
 
     """
-    url = ctx.sources.ST_TONER_LITE
+    url = ctx.providers.Stamen.TonerLite
     xmin, xmax, ymin, ymax = ax.axis()
     basemap, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=url)
     ax.imshow(basemap, extent=extent, interpolation="bilinear")
@@ -547,21 +542,21 @@ def mv_grid_topology(
             if bus in edisgo_obj.topology.transformers_df.bus0.values:
                 try:
                     bus_colors[bus] = costs_lv_stations.loc[bus, "total_costs"]
-                    bus_sizes[bus] = 100
+                    bus_sizes[bus] = 100.0
                 except Exception:
-                    bus_colors[bus] = 0
-                    bus_sizes[bus] = 0
+                    bus_colors[bus] = 0.0
+                    bus_sizes[bus] = 0.0
             # MVStation handeling
             elif bus in edisgo_obj.topology.transformers_hvmv_df.bus1.values:
                 try:
                     bus_colors[bus] = costs_mv_station.loc[bus, "total_costs"]
-                    bus_sizes[bus] = 100
+                    bus_sizes[bus] = 100.0
                 except Exception:
-                    bus_colors[bus] = 0
-                    bus_sizes[bus] = 0
+                    bus_colors[bus] = 0.0
+                    bus_sizes[bus] = 0.0
             else:
-                bus_colors[bus] = 0
-                bus_sizes[bus] = 0
+                bus_colors[bus] = 0.0
+                bus_sizes[bus] = 0.0
 
         return bus_sizes, bus_colors
 
@@ -752,16 +747,17 @@ def mv_grid_topology(
 
     # storage_units
     if node_color == "expansion_costs":
-        ax.scatter(
-            pypsa_plot.buses.loc[
-                edisgo_obj.topology.storage_units_df.loc[:, "bus"], "x"
-            ],
-            pypsa_plot.buses.loc[
-                edisgo_obj.topology.storage_units_df.loc[:, "bus"], "y"
-            ],
-            c="orangered",
-            s=edisgo_obj.topology.storage_units_df.loc[:, "p_nom"] * 1000 / 3,
-        )
+        if not edisgo_obj.topology.storage_units_df.empty:
+            ax.scatter(
+                pypsa_plot.buses.loc[
+                    edisgo_obj.topology.storage_units_df.loc[:, "bus"], "x"
+                ],
+                pypsa_plot.buses.loc[
+                    edisgo_obj.topology.storage_units_df.loc[:, "bus"], "y"
+                ],
+                c="orangered",
+                s=edisgo_obj.topology.storage_units_df.loc[:, "p_nom"] * 1000 / 3,
+            )
     # add legend for storage size and line capacity
     if (
         node_color == "storage_integration" or node_color == "expansion_costs"
@@ -861,7 +857,7 @@ def mv_grid_topology(
     if filename is None:
         plt.show()
     else:
-        plt.savefig(filename)
+        plt.savefig(filename, bbox_inches="tight")
         plt.close()
 
 
@@ -1129,7 +1125,7 @@ def draw_plotly(
         try:
             peak_load = edisgo_obj.topology.loads_df.loc[
                 edisgo_obj.topology.loads_df.bus == node
-            ].p_nom.sum()
+            ].p_set.sum()
             text += "<br>" + "peak_load = " + str(peak_load)
             p_nom = edisgo_obj.topology.generators_df.loc[
                 edisgo_obj.topology.generators_df.bus == node
@@ -1206,7 +1202,6 @@ def draw_plotly(
 def chosen_graph(
     edisgo_obj: EDisGo,
     selected_grid: str,
-    lv_grid_name_list: list[str],
 ) -> tuple[Graph, bool | Grid]:
     """
     Get the matching networkx graph from a chosen grid.
@@ -1215,19 +1210,16 @@ def chosen_graph(
     ----------
     edisgo_obj : :class:`~.EDisGo`
     selected_grid : str
-        Grid name. Can be either 'Grid' to select the mv grid with all lv grids or
-        the name of the mv grid to select only the mv grid or the name of one of the
-        lv grids of the eDisGo object to select a specific lv grid.
-    lv_grid_name_list : list(str)
-        List of the names of the lv grids within the mv grid of the eDisGo object.
+        Grid name. Can be either 'Grid' to select the MV grid with all LV grids or
+        the name of the MV grid to select only the MV grid or the name of one of the
+        LV grids of the eDisGo object to select a specific LV grid.
 
     Returns
     -------
-    :networkx:`networkx.Graph<network.Graph>`
-        networkx graph of the selected grid
-    :class:`~.network.grids.Grid` or bool
-        Grid to use as root node. See :py:func:`~edisgo.tools.plots.draw_plotly` for
-        more information.
+    (:networkx:`networkx.Graph<network.Graph>`, :class:`~.network.grids.Grid` or bool)
+        Tuple with the first entry being the networkx graph of the selected grid and
+        the second entry the grid to use as root node. See
+        :py:func:`~edisgo.tools.plots.draw_plotly` for more information.
 
     """
     mv_grid = edisgo_obj.topology.mv_grid
@@ -1240,11 +1232,10 @@ def chosen_graph(
         grid = mv_grid
     elif selected_grid.split("_")[0] == "LVGrid":
         try:
-            lv_grid_id = lv_grid_name_list.index(selected_grid)
+            lv_grid = edisgo_obj.topology.get_lv_grid(selected_grid)
         except ValueError:
-            logger.exception(f"Selceted grid {selected_grid} is not a valid lv grid.")
+            logger.exception(f"Selected grid {selected_grid} is not a valid LV grid.")
 
-        lv_grid = list(edisgo_obj.topology.mv_grid.lv_grids)[lv_grid_id]
         G = lv_grid.graph
         grid = lv_grid
     else:
@@ -1279,6 +1270,7 @@ def dash_plot(
         :py:func:`~edisgo.tools.plots.draw_plotly` for more information. If None is
         passed the modes 'adjacencies' and 'voltage_deviation' will be used.
         Default: None
+
     Returns
     -------
     JupyterDash
@@ -1292,11 +1284,7 @@ def dash_plot(
         edisgo_name_list = ["edisgo_obj"]
         edisgo_obj_1 = edisgo_objects
 
-    mv_grid = edisgo_obj_1.topology.mv_grid
-
-    lv_grid_name_list = list(map(str, mv_grid.lv_grids))
-
-    grid_name_list = ["Grid", str(mv_grid)] + lv_grid_name_list
+    grid_name_list = ["Grid"] + edisgo_obj_1.topology._grids_repr
 
     if line_plot_modes is None:
         line_plot_modes = ["reinforce", "loading", "relative_loading"]
@@ -1369,7 +1357,7 @@ def dash_plot(
             selected_node_plot_mode,
         ):
             edisgo_obj = edisgo_objects[selected_edisgo_object_1]
-            (G, grid) = chosen_graph(edisgo_obj, selected_grid, lv_grid_name_list)
+            (G, grid) = chosen_graph(edisgo_obj, selected_grid)
             fig_1 = draw_plotly(
                 edisgo_obj,
                 G,
@@ -1379,7 +1367,7 @@ def dash_plot(
             )
 
             edisgo_obj = edisgo_objects[selected_edisgo_object_2]
-            (G, grid) = chosen_graph(edisgo_obj, selected_grid, lv_grid_name_list)
+            (G, grid) = chosen_graph(edisgo_obj, selected_grid)
             fig_2 = draw_plotly(
                 edisgo_obj,
                 G,
@@ -1429,7 +1417,7 @@ def dash_plot(
         def update_figure(
             selected_grid, selected_line_plot_mode, selected_node_plot_mode
         ):
-            (G, grid) = chosen_graph(edisgo_obj_1, selected_grid, lv_grid_name_list)
+            (G, grid) = chosen_graph(edisgo_obj_1, selected_grid)
             fig = draw_plotly(
                 edisgo_obj_1,
                 G,

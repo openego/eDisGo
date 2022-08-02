@@ -1,0 +1,180 @@
+{
+    "simBEV_version": "0.1.3",
+    "scenario": "default_single",
+    "timestamp_start": "2022-05-17_083117",
+    "timestamp_end": "2022-05-17_083117",
+    "config": {
+        "region_mode": {
+            "region_mode": "single"
+        },
+        "basic": {
+            "regio_type": "LR_Zentr",
+            "eta_cp": "0.9",
+            "stepsize": "15",
+            "start_date": "2011-01-01",
+            "end_date": "2011-01-07",
+            "soc_min": "0.2",
+            "grid_timeseries": "false",
+            "grid_timeseries_by_usecase": "false"
+        },
+        "rampup_ev": {
+            "bev_mini": "2",
+            "bev_medium": "3",
+            "bev_luxury": "1",
+            "phev_mini": "1",
+            "phev_medium": "2",
+            "phev_luxury": "1"
+        },
+        "tech_data_cc_slow": {
+            "bev_mini": "22",
+            "bev_medium": "22",
+            "bev_luxury": "50",
+            "phev_mini": "11",
+            "phev_medium": "11",
+            "phev_luxury": "11"
+        },
+        "tech_data_cc_fast": {
+            "bev_mini": "150",
+            "bev_medium": "150",
+            "bev_luxury": "150",
+            "phev_mini": "0",
+            "phev_medium": "0",
+            "phev_luxury": "0"
+        },
+        "tech_data_bc": {
+            "bev_mini": "30",
+            "bev_medium": "65",
+            "bev_luxury": "90",
+            "phev_mini": "20",
+            "phev_medium": "20",
+            "phev_luxury": "20"
+        },
+        "tech_data_ec": {
+            "bev_mini": "0.13",
+            "bev_medium": "0.16",
+            "bev_luxury": "0.2",
+            "phev_mini": "0.16",
+            "phev_medium": "0.16",
+            "phev_luxury": "0.16"
+        },
+        "charging_probabilities": {
+            "slow": "charging_point_probability.csv",
+            "fast": "fast_charging_probability.csv",
+            "private_charging_home": "0.5",
+            "private_charging_work": "0.7"
+        },
+        "sim_params": {
+            "num_threads": "1",
+            "seed": "3"
+        }
+    },
+    "tech_data": {
+        "bev_mini": {
+            "max_charging_capacity_slow": 22.0,
+            "max_charging_capacity_fast": 150.0,
+            "battery_capacity": 30.0,
+            "energy_consumption": 0.13
+        },
+        "bev_medium": {
+            "max_charging_capacity_slow": 22.0,
+            "max_charging_capacity_fast": 150.0,
+            "battery_capacity": 65.0,
+            "energy_consumption": 0.16
+        },
+        "bev_luxury": {
+            "max_charging_capacity_slow": 50.0,
+            "max_charging_capacity_fast": 150.0,
+            "battery_capacity": 90.0,
+            "energy_consumption": 0.2
+        },
+        "phev_mini": {
+            "max_charging_capacity_slow": 11.0,
+            "max_charging_capacity_fast": 0.0,
+            "battery_capacity": 20.0,
+            "energy_consumption": 0.16
+        },
+        "phev_medium": {
+            "max_charging_capacity_slow": 11.0,
+            "max_charging_capacity_fast": 0.0,
+            "battery_capacity": 20.0,
+            "energy_consumption": 0.16
+        },
+        "phev_luxury": {
+            "max_charging_capacity_slow": 11.0,
+            "max_charging_capacity_fast": 0.0,
+            "battery_capacity": 20.0,
+            "energy_consumption": 0.16
+        }
+    },
+    "charge_prob_slow": {
+        "work": {
+            "0": 0.5887,
+            "3.7": 0.0411,
+            "11": 0.1645,
+            "22": 0.1645,
+            "50": 0.0411
+        },
+        "business": {
+            "0": 0.64,
+            "3.7": 0.033,
+            "11": 0.135,
+            "22": 0.15,
+            "50": 0.042
+        },
+        "school": {
+            "0": 0.5887,
+            "3.7": 0.0411,
+            "11": 0.1645,
+            "22": 0.1645,
+            "50": 0.0411
+        },
+        "shopping": {
+            "0": 0.5588,
+            "3.7": 0.0059,
+            "11": 0.0618,
+            "22": 0.253,
+            "50": 0.1206
+        },
+        "private/ridesharing": {
+            "0": 0.655,
+            "3.7": 0.0155,
+            "11": 0.081,
+            "22": 0.176,
+            "50": 0.0725
+        },
+        "leisure": {
+            "0": 0.6538,
+            "3.7": 0.0154,
+            "11": 0.0808,
+            "22": 0.177,
+            "50": 0.0731
+        },
+        "home": {
+            "0": 0.4894,
+            "3.7": 0.0911,
+            "11": 0.3402,
+            "22": 0.0715,
+            "50": 0.0079
+        }
+    },
+    "charge_prob_fast": {
+        "urban": {
+            "50": 0,
+            "150": 0.8,
+            "350": 0.2
+        },
+        "ex-urban": {
+            "50": 0,
+            "150": 0.2,
+            "350": 0.8
+        }
+    },
+    "car_amount": {
+        "bev_mini": 2,
+        "bev_medium": 3,
+        "bev_luxury": 1,
+        "phev_mini": 1,
+        "phev_medium": 2,
+        "phev_luxury": 1
+    }
+}

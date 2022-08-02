@@ -7,12 +7,12 @@ from edisgo.tools.config import Config
 
 class TestQControl:
     def test_get_q_sign_generator(self):
-        # ToDo implement
-        pass
+        assert q_control.get_q_sign_generator("Inductive") == -1
+        assert q_control.get_q_sign_generator("capacitive") == 1
 
     def test_get_q_sign_load(self):
-        # ToDo implement
-        pass
+        assert q_control.get_q_sign_load("inductive") == 1
+        assert q_control.get_q_sign_load("Capacitive") == -1
 
     def test_fixed_cosphi(self):
 
@@ -141,7 +141,7 @@ class TestQControl:
         assert pf.shape == (3,)
         assert np.isclose(
             pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
-            [0.98, 0.98, 0.98],
+            [1.0, 1.0, 1.0],
         ).all()
 
         # test for component_type="storage_units"
@@ -206,7 +206,7 @@ class TestQControl:
         assert pf.shape == (3,)
         assert np.isclose(
             pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
-            [-1.0, -1.0, -1.0],
+            [1.0, 1.0, 1.0],
         ).all()
 
         # test for component_type="storage_units"
