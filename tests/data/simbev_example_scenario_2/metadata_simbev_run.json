@@ -1,8 +1,8 @@
 {
     "simBEV_version": "0.1.3",
     "scenario": "default_multi",
-    "timestamp_start": "2022-08-02_184346",
-    "timestamp_end": "2022-08-02_184351",
+    "timestamp_start": "2022-08-03_152333",
+    "timestamp_end": "2022-08-03_152348",
     "config": {
         "region_mode": {
             "region_mode": "multi"
@@ -135,11 +135,11 @@
         }
     },
     "car_amount": {
-        "bev_mini": 55,
-        "bev_medium": 70,
+        "bev_mini": 60,
+        "bev_medium": 90,
         "bev_luxury": 30,
-        "phev_mini": 14,
-        "phev_medium": 55,
-        "phev_luxury": 26
+        "phev_mini": 20,
+        "phev_medium": 40,
+        "phev_luxury": 10
     }
 }
