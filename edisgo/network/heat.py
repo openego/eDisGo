@@ -119,6 +119,40 @@ class HeatPump:
     def thermal_storage_units_df(self, df):
         self._thermal_storage_units_df = df
 
+    @property
+    def building_ids_df(self):
+        """
+        DataFrame with buildings served by each heat pump.
+
+        Parameters
+        -----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            DataFrame with building IDs of buildings served by each heat pump.
+            Index of the dataframe are names of heat pumps as in
+            :attr:`~.network.topology.Topology.loads_df`.
+            Columns of the dataframe are:
+
+            building_ids : list(int)
+                List of building IDs.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            DataFrame with building IDs of buildings served by each heat pump.
+            For more information on the dataframe see input parameter `df`.
+
+        """
+        try:
+            return self._thermal_storage_units_df
+        except Exception:
+            return pd.DataFrame(
+                columns=["capacity", "efficiency", "state_of_charge_initial"]
+            )
+
+    @building_ids_df.setter
+    def building_ids_df(self, df):
+        self._building_ids_df = df
+
     def set_cop(self, edisgo_object, ts_cop, heat_pump_names=None):
         """
         Get COP time series for heat pumps.
@@ -223,10 +257,15 @@ class HeatPump:
             # # get building ID each heat pump is in
             #
             # # get heat demand per building
-            # self.heat_demand_df = timeseries_import.heat_demand_oedb(
+            # heat_demand_buildings_df = timeseries_import.heat_demand_oedb(
             #     edisgo_object.config,
             #     building_ids,
             #     edisgo_object.timeseries.timeindex,
+            # )
+            #
+            # # map building ID back to heat pump
+            # self.heat_demand_df = heat_demand_buildings_df.rename(
+            #     columns={}
             # )
 
         elif isinstance(ts_heat_demand, pd.DataFrame):
