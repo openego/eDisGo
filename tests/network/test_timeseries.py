@@ -2310,6 +2310,32 @@ class TestTimeSeries:
         assert len(component_names) == 1
         assert "Load_residential_LVGrid_5_3" in component_names
 
+    def test_resample_timeseries(self):
+        # add dummy time series
+        timeindex = pd.date_range("1/1/2011", periods=4, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+        # add example data for active power
+        self.edisgo.set_time_series_active_power_predefined(
+            fluctuating_generators_ts="oedb"
+        )
+        len_timeindex_orig = len(self.edisgo.timeseries.timeindex)
+        mean_value_orig = self.edisgo.timeseries.generators_active_power.mean()
+        self.edisgo.timeseries.resample_timeseries()
+        # check if resampled length of time index is 4 times original length of
+        # timeindex
+        assert len(self.edisgo.timeseries.timeindex) == 4 * len_timeindex_orig
+        # check if mean value of resampled data is the same as mean value of original
+        # data
+        assert (
+            self.edisgo.timeseries.generators_active_power.mean() == mean_value_orig
+        ).unique()
+        # Same tests for down-sampling
+        self.edisgo.timeseries.resample_timeseries(freq="2h")
+        assert len(self.edisgo.timeseries.timeindex) == 0.5 * len_timeindex_orig
+        assert (
+            self.edisgo.timeseries.generators_active_power.mean() == mean_value_orig
+        ).unique()
+
 
 class TestTimeSeriesRaw:
     @pytest.fixture(autouse=True)

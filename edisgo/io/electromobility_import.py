@@ -77,7 +77,7 @@ DTYPES = {
         "park_end_timesteps": np.uint16,
     },
     "simbev_config_df": {
-        "regio_type": str,
+        # "regio_type": str,
         "eta_cp": float,
         "stepsize": int,
         "soc_min": float,
@@ -152,7 +152,7 @@ def import_electromobility(
     edisgo_obj.electromobility.charging_processes_df = read_csvs_charging_processes(
         simbev_directory,
         mode=kwargs.pop("mode_parking_times", "frugal"),
-        csv_dir=kwargs.pop("charging_processes_dir", "simbev_run"),
+        csv_dir=kwargs.pop("charging_processes_dir", None),
     )
 
     edisgo_obj.electromobility.simbev_config_df = read_simbev_config_df(
@@ -235,15 +235,13 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
         COLUMNS["charging_processes_df"]
     ].astype(DTYPES["charging_processes_df"])
 
-    charging_processes_df = pd.merge(
+    return pd.merge(
         charging_processes_df,
         pd.DataFrame(columns=COLUMNS["matching_demand_and_location"]),
         how="outer",
         left_index=True,
         right_index=True,
     )
-
-    return charging_processes_df
 
 
 def read_simbev_config_df(
