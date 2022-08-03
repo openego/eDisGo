@@ -2,7 +2,7 @@ import pytest
 import shapely
 
 from edisgo.io import ding0_import
-from edisgo.network.grids import LVGrid, MVGrid
+from edisgo.network.grids import MVGrid
 from edisgo.network.topology import Topology
 
 

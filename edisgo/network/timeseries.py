@@ -466,9 +466,7 @@ class TimeSeries:
                 df_name=df_name, comp_names=ts_storage_units.columns
             )
             # set (re)active power
-            self.add_component_time_series(
-                df_name=df_name, ts_new=ts_storage_units
-            )
+            self.add_component_time_series(df_name=df_name, ts_new=ts_storage_units)
 
     def set_worst_case(
         self,
@@ -624,8 +622,7 @@ class TimeSeries:
             ts_dict = {f"{comp_type}_active_power": p, f"{comp_type}_reactive_power": q}
             for k, v in ts_dict.items():
                 # drop previously set time series
-                self.drop_component_time_series(
-                    df_name=k, comp_names=v.columns)
+                self.drop_component_time_series(df_name=k, comp_names=v.columns)
                 # set time series
                 self.add_component_time_series(
                     df_name=k,
@@ -2113,7 +2110,8 @@ class TimeSeries:
         )
 
     def _check_if_components_exist(
-            self, edisgo_object, component_names, component_type):
+        self, edisgo_object, component_names, component_type
+    ):
         """
         Checks if all provided components exist in the network.
 
@@ -2146,6 +2144,92 @@ class TimeSeries:
 
             return set(component_names) - set(comps_not_in_network)
         return component_names
+
+    def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
+        """
+        Returns timeseries resampled to a desired resolution. Both up- and down-
+        sampling methods are available.
+
+        Parameters
+        ----------
+        method : str, optional
+            Method to choose from to fill missing values when upsampling. Possible
+            options are:
+
+            * 'ffill': propagate last valid observation forward to next valid
+            observation. See
+            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.ffill.html
+            'ffill' is the Default.
+
+            * 'bfill': use next valid observation to fill gap. See
+            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.bfill.html
+
+            * 'interpolate': Fill NaN values using an interpolation method. See
+            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.interpolate.html
+
+        freq : str, optional
+            Frequency that timeseries is resampled to. Offset aliases can be found here:
+            https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases
+            15 minutes is the default.
+
+        """
+        attrs = self._attributes
+        freq_orig = self.timeindex[1] - self.timeindex[0]
+        df_dict = {}
+        for attr in attrs:
+            df_dict[attr] = getattr(self, attr)
+            if pd.Timedelta(freq) < freq_orig:  # up-sampling
+                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1] + freq_orig])
+            else:  # down-sampling
+                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1]])
+            df_dict[attr] = (
+                df_dict[attr]
+                .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
+                .ffill()
+            )
+        if pd.Timedelta(freq) < freq_orig:  # up-sampling
+            index = pd.date_range(
+                self.timeindex[0],
+                self.timeindex[-1] + freq_orig,
+                freq=freq,
+                closed="left",
+            )
+        else:  # down-sampling
+            index = pd.date_range(
+                self.timeindex[0],
+                self.timeindex[-1],
+                freq=freq,
+            )
+        self._timeindex = index
+        if pd.Timedelta(freq) < freq_orig:  # up-sampling
+            if method == "interpolate":
+                for attr in attrs:
+                    setattr(
+                        self,
+                        attr,
+                        df_dict[attr].resample(freq, closed="left").interpolate(),
+                    )
+            elif method == "ffill":
+                for attr in attrs:
+                    setattr(
+                        self, attr, df_dict[attr].resample(freq, closed="left").ffill()
+                    )
+            elif method == "bfill":
+                for attr in attrs:
+                    setattr(
+                        self, attr, df_dict[attr].resample(freq, closed="left").bfill()
+                    )
+            else:
+                raise NotImplementedError(
+                    'Resampling method "{}" is not implemented.'.format(method)
+                )
+        else:  # down-sampling
+            for attr in attrs:
+                setattr(
+                    self,
+                    attr,
+                    df_dict[attr].resample(freq).mean(),
+                )
 
 
 class TimeSeriesRaw:
