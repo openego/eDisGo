@@ -1,6 +1,6 @@
 ,location,use_case,nominal_charging_capacity_kW,grid_charging_capacity_kW,battery_charging_capacity_kW,soc_start,soc_end,chargingdemand_kWh,park_time_timesteps,park_start_timesteps,park_end_timesteps,drive_start_timesteps,drive_end_timesteps,consumption_kWh
-0,6_home,home,11.0,12.2222,11.0,0.9361,1.0,0.0,36,0,36,0,0,0.0
-1,driving,,0.0,0.0,0.0,1.0,0.9694,0.0,0,0,0,37,39,3.3657
+0,6_home,home,11.0,12.2222,11.0,0.9434,1.0,0.0,33,0,33,0,0,0.0
+1,driving,,0.0,0.0,0.0,1.0,0.9694,0.0,0,0,0,34,39,3.3657
 2,0_work,public,0.0,0.0,0.0,0.9694,0.9694,0.0,0,40,84,0,0,0.0
 3,driving,,0.0,0.0,0.0,0.9694,0.9336,0.0,0,0,0,85,135,3.9347
 4,3_shopping,public,22.0,24.4444,22.0,0.9336,0.9336,0.0,0,136,140,0,0,0.0
