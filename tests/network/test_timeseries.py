@@ -2314,10 +2314,15 @@ class TestTimeSeries:
         # add dummy time series
         timeindex = pd.date_range("1/1/2011", periods=4, freq="H")
         self.edisgo.set_timeindex(timeindex)
+
         # add example data for active power
         self.edisgo.set_time_series_active_power_predefined(
-            fluctuating_generators_ts="oedb"
+            fluctuating_generators_ts="oedb",
+            conventional_loads_ts="demandlib",
         )
+        # and reactive power
+        self.edisgo.set_time_series_reactive_power_control()
+
         len_timeindex_orig = len(self.edisgo.timeseries.timeindex)
         mean_value_orig = self.edisgo.timeseries.generators_active_power.mean()
         self.edisgo.timeseries.resample_timeseries()

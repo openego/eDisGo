@@ -927,7 +927,7 @@ class TestEDisGo:
         tracbev_path = pytest.tracbev_example_scenario_path
         self.edisgo.import_electromobility(simbev_path, tracbev_path)
 
-        assert len(self.edisgo.electromobility.charging_processes_df) == 45
+        assert len(self.edisgo.electromobility.charging_processes_df) == 54
         assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 452
         assert self.edisgo.electromobility.eta_charging_points == 0.9
 
