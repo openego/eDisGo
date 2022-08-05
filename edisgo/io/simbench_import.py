@@ -128,15 +128,15 @@ def create_buses_df(simbench_dict):
 
     def label_mv_grid_id(name):
         if "LV" in name:
-            return ""
+            return
         elif "MV" in name:
-            return name[0 : name.find(" ")]
+            return int(name[0 : name.find(" ")].split(".")[-1])
 
     def label_lv_grid_id(name):
         if "MV" in name:
             return
         elif "LV" in name:
-            return name
+            return int(name.split(".")[-1] + name.split(".")[0][2:])
 
     buses_col_location = COLUMNS["buses_df"]
     buses_col_location.append("name")
@@ -157,7 +157,7 @@ def create_buses_df(simbench_dict):
     buses_df["mv_grid_id"] = buses_df["name"].apply(label_mv_grid_id)
     buses_df["lv_grid_id"] = buses_df["subnet"].apply(label_lv_grid_id)
     mv_grid_ids = buses_df["mv_grid_id"].unique()
-    mv_grid_ids = [i for i in mv_grid_ids if i is not None and len(i) > 0]
+    mv_grid_ids = [int(i) for i in mv_grid_ids if i is not None and not np.isnan(i)]
     if len(mv_grid_ids) > 1:
         raise Exception("There is more than one MV grid present, please check.")
     else:
@@ -440,11 +440,11 @@ def _load_sector_translation_dict():
         "Soil_Alternative_1": "heat_pump",
         "Air_Semi-Parallel_1": "heat_pump",
         "Air_Semi-Parallel_2": "heat_pump",
-        "HLS_C_3.7": "other",
-        "HLS_B_3.7": "other",
-        "HLS_A_3.7": "other",
-        "HLS_A_11.0": "other",
-        "APLS_A_3.7": "other",
+        "HLS_C_3.7": "home",
+        "HLS_B_3.7": "home",
+        "HLS_A_3.7": "home",
+        "HLS_A_11.0": "home",
+        "APLS_A_3.7": "work",
     }
 
 
@@ -455,6 +455,8 @@ def _load_type_translation_dict():
         "agricultural": "conventional_load",
         "industrial": "conventional_load",
         "other": "conventional_load",
+        "home": "charging_point",
+        "work": "charging_point",
     }
 
 
