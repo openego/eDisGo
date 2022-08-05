@@ -319,9 +319,12 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         # get any transformer to get attributes for new transformer from
         duplicated_transformer = grid.transformers_df.iloc[[0]]
         # change transformer parameters
-        name = duplicated_transformer.index[0].split("_")
-        name.insert(-1, "reinforced")
-        name[-1] = len(grid.transformers_df) + 1
+        name = duplicated_transformer.index[0].replace(" ", "_").split("_")
+        if len(name) > 1:
+            name.insert(-1, "reinforced")
+            name[-1] = len(grid.transformers_df) + 1
+        else:
+            name.extend(["reinforced", len(grid.transformers_df) + 1])
         duplicated_transformer.index = ["_".join([str(_) for _ in name])]
         duplicated_transformer.s_nom = standard_transformer.S_nom
         duplicated_transformer.r_pu = standard_transformer.r_pu
