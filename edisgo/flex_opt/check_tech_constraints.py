@@ -377,12 +377,11 @@ def _station_load(edisgo_obj, grid):
     if isinstance(grid, LVGrid):
         voltage_level = "lv"
         transformers_df = grid.transformers_df
-        s_station_pfa = edisgo_obj.results.s_res.loc[:, transformers_df.index].sum(
-            axis=1
-        )
+        s_station_pfa = pd.DataFrame(
+            {f"{grid}_station": edisgo_obj.results.s_res.loc[
+                                :, transformers_df.index].sum(axis=1)})
     elif isinstance(grid, MVGrid):
         voltage_level = "mv"
-        transformers_df = edisgo_obj.topology.transformers_hvmv_df
         # ensure that power flow was conducted for MV
         mv_lines = edisgo_obj.topology.mv_grid.lines_df.index
         if not any(mv_lines.isin(edisgo_obj.results.i_res.columns)):
@@ -390,10 +389,76 @@ def _station_load(edisgo_obj, grid):
                 "MV was not included in power flow analysis, wherefore load "
                 "of HV/MV station cannot be calculated."
             )
-        s_station_pfa = np.hypot(
-            edisgo_obj.results.pfa_slack.p,
-            edisgo_obj.results.pfa_slack.q,
+        s_station_pfa = pd.DataFrame(
+            {f"{grid}_station": np.hypot(
+                edisgo_obj.results.pfa_slack.p,
+                edisgo_obj.results.pfa_slack.q,)
+            }
         )
+    else:
+        raise ValueError("Inserted grid is invalid.")
+
+    # get maximum allowed apparent power of station in each time step
+    s_station_allowed = station_allowed_load(edisgo_obj, grid)
+
+    # calculate residual apparent power (if negative, station is over-loaded)
+    s_res = s_station_allowed - s_station_pfa
+    s_res = s_res[s_res < 0]
+
+    if not s_res.dropna().empty:
+        load_factor = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
+            lambda _: edisgo_obj.config["grid_expansion_load_factors"][
+                f"{voltage_level}_{_}_transformer"
+            ]
+        )
+
+        # calculate greatest apparent power missing (residual apparent power is
+        # divided by the load factor to account for load factors smaller than
+        # one, which lead to a higher needed additional capacity)
+        s_missing = (s_res.iloc[:, 0] / load_factor).dropna()
+        return pd.DataFrame(
+            {
+                "s_missing": abs(s_missing.min()),
+                "time_index": s_missing.idxmin(),
+            },
+            index=[f"{grid}_station"],
+        )
+
+    else:
+        return pd.DataFrame(dtype=float)
+
+
+def station_allowed_load(edisgo_obj, grid):
+    """
+    Returns allowed loading of grid's station to the overlying voltage level per time
+    step in MVA.
+
+    Allowed loading considers allowed load factors in heavy load flow case ('load case')
+    and reverse power flow case ('feed-in case') from config files.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
+        Grid to get allowed station loading for.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing the maximum allowed apparent power over the grid's
+        transformers to the overlying voltage level per time step in MVA.
+        Index of the dataframe are all time steps power flow analysis
+        was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
+        Column name is grid's name with the extension '_station'.
+
+    """
+    # get grid's voltage level and transformers to the overlying voltage level
+    if isinstance(grid, LVGrid):
+        voltage_level = "lv"
+        transformers_df = grid.transformers_df
+    elif isinstance(grid, MVGrid):
+        voltage_level = "mv"
+        transformers_df = edisgo_obj.topology.transformers_hvmv_df
     else:
         raise ValueError("Inserted grid is invalid.")
 
@@ -405,27 +470,44 @@ def _station_load(edisgo_obj, grid):
         ]
     )
 
-    s_station_allowed = s_station * load_factor
+    return pd.DataFrame(
+        {f"{grid}_station": s_station * load_factor}, index=load_factor.index)
 
-    # calculate residual apparent power (if negative, station is over-loaded)
-    s_res = s_station_allowed - s_station_pfa
-    s_res = s_res[s_res < 0]
 
-    if not s_res.empty:
-        # calculate greatest apparent power missing (residual apparent power is
-        # devided by the load factor to account for load factors smaller than
-        # one, which lead to a higher needed additional capacity)
-        s_missing = (s_res / load_factor).dropna()
-        return pd.DataFrame(
-            {
-                "s_missing": abs(s_missing.min()),
-                "time_index": s_missing.idxmin(),
-            },
-            index=[repr(grid)],
-        )
+def stations_allowed_load(edisgo_obj, grids=None):
+    """
+    Returns allowed loading of specified grids stations to the overlying voltage level
+    per time step in MVA.
 
-    else:
-        return pd.DataFrame(dtype=float)
+    Allowed loading considers allowed load factors in heavy load flow case ('load case')
+    and reverse power flow case ('feed-in case') from config files.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    grids : list(:class:`~.network.grids.Grid`)
+        List of MV and LV grid to get allowed station loading for. Per default all
+        allowed loading is returned for all grids in the network. Default: None.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing the maximum allowed apparent power over the grid's
+        transformers to the overlying voltage level per time step in MVA.
+        Index of the dataframe are all time steps power flow analysis
+        was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
+        Column names are the respective grid's name with the extension '_station'.
+
+    """
+    if grids is None:
+        grids = list(edisgo_obj.topology.lv_grids) + [edisgo_obj.topology.mv_grid]
+
+    allowed_loading = pd.DataFrame()
+    for grid in grids:
+        allowed_loading = pd.concat(
+            [allowed_loading,
+             station_allowed_load(edisgo_obj, grid)], axis=1)
+    return allowed_loading
 
 
 def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):

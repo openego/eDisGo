@@ -3,6 +3,7 @@ from math import sqrt
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.util.testing import assert_frame_equal
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints
@@ -78,11 +79,74 @@ class TestCheckTechConstraints:
         assert (4, 2) == df.shape
         # check missing transformer capacity of one grid
         assert np.isclose(
-            df.at["LVGrid_1", "s_missing"],
+            df.at["LVGrid_1_station", "s_missing"],
             self.edisgo.results.s_res.at[self.timesteps[1], "LVStation_1_transformer_1"]
             - 0.16,
         )
-        assert df.at["LVGrid_1", "time_index"] == self.timesteps[0]
+        assert df.at["LVGrid_1_station", "time_index"] == self.timesteps[0]
+
+    def test_station_allowed_load(self):
+
+        # check LV grid
+        grid = self.edisgo.topology.get_lv_grid(4)
+        df = check_tech_constraints.station_allowed_load(self.edisgo, grid)
+        # check shape of dataframe
+        assert (4, 1) == df.shape
+        # check values
+        exp = pd.DataFrame(
+            {f"{grid}_station": [0.05] * len(self.edisgo.timeseries.timeindex)},
+            index=self.edisgo.timeseries.timeindex
+        )
+        assert_frame_equal(df, exp)
+
+        # check MV grid
+        grid = self.edisgo.topology.mv_grid
+        df = check_tech_constraints.station_allowed_load(self.edisgo, grid)
+        # check shape of dataframe
+        assert (4, 1) == df.shape
+        # check values
+        load_cases = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ]
+        assert np.isclose(20., df.loc[load_cases.values].values).all()
+        feed_in_cases = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
+        ]
+        assert np.isclose(40., df.loc[feed_in_cases.values].values).all()
+
+    def test_stations_allowed_load(self):
+
+        # check without specifying a grid
+        df = check_tech_constraints.stations_allowed_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 11) == df.shape
+        # check values
+        exp = pd.DataFrame(
+            {"LVGrid_4_station": [0.05] * len(self.edisgo.timeseries.timeindex)},
+            index=self.edisgo.timeseries.timeindex
+        )
+        assert_frame_equal(df.loc[:, ["LVGrid_4_station"]], exp)
+        load_cases = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ]
+        assert np.isclose(20., df.loc[load_cases.values, "MVGrid_1_station"].values).all()
+
+        # check with specifying grids
+        grids = [self.edisgo.topology.mv_grid, self.edisgo.topology.get_lv_grid(1)]
+        df = check_tech_constraints.stations_allowed_load(self.edisgo, grids)
+        # check shape of dataframe
+        assert (4, 2) == df.shape
+        # check values
+        exp = pd.DataFrame(
+            {"LVGrid_1_station": [0.16] * len(self.edisgo.timeseries.timeindex)},
+            index=self.edisgo.timeseries.timeindex
+        )
+        assert_frame_equal(df.loc[:, ["LVGrid_1_station"]], exp)
+        assert np.isclose(20., df.loc[load_cases.values, "MVGrid_1_station"].values).all()
+        feed_in_cases = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
+        ]
+        assert np.isclose(40., df.loc[feed_in_cases.values, "MVGrid_1_station"].values).all()
 
     def test_lines_allowed_load(self):
 
