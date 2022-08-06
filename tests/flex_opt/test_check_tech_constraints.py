@@ -3,6 +3,7 @@ from math import sqrt
 import numpy as np
 import pandas as pd
 import pytest
+
 from pandas.util.testing import assert_frame_equal
 
 from edisgo import EDisGo
@@ -85,6 +86,38 @@ class TestCheckTechConstraints:
         )
         assert df.at["LVGrid_1_station", "time_index"] == self.timesteps[0]
 
+    def test__station_load(self):
+        # check LV grid
+        grid = self.edisgo.topology.get_lv_grid(4)
+        df = check_tech_constraints._station_load(self.edisgo, grid)
+        # check shape and column of dataframe
+        assert (4, 1) == df.shape
+        assert f"{grid}_station" in df.columns
+
+        # check MV grid
+        grid = self.edisgo.topology.mv_grid
+        df = check_tech_constraints._station_load(self.edisgo, grid)
+        # check shape and column of dataframe
+        assert (4, 1) == df.shape
+        assert f"{grid}_station" in df.columns
+
+        # check ValueErrors
+        msg = "Inserted grid is invalid."
+        with pytest.raises(ValueError, match=msg):
+            check_tech_constraints._station_load(self.edisgo, str(grid))
+
+        self.edisgo.analyze(mode="lv", lv_grid_id=1)
+        msg = "MV was not included in power flow analysis"
+        with pytest.raises(ValueError, match=msg):
+            check_tech_constraints._station_load(self.edisgo, grid)
+
+        # check KeyError in case grid was not included in power flow
+        self.edisgo.analyze(mode="mv")
+        grid = self.edisgo.topology.get_lv_grid(4)
+        msg = "LVStation_4_transformer_1"
+        with pytest.raises(KeyError, match=msg):
+            check_tech_constraints._station_load(self.edisgo, grid)
+
     def test_station_allowed_load(self):
 
         # check LV grid
@@ -95,7 +128,7 @@ class TestCheckTechConstraints:
         # check values
         exp = pd.DataFrame(
             {f"{grid}_station": [0.05] * len(self.edisgo.timeseries.timeindex)},
-            index=self.edisgo.timeseries.timeindex
+            index=self.edisgo.timeseries.timeindex,
         )
         assert_frame_equal(df, exp)
 
@@ -108,11 +141,11 @@ class TestCheckTechConstraints:
         load_cases = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
         ]
-        assert np.isclose(20., df.loc[load_cases.values].values).all()
+        assert np.isclose(20.0, df.loc[load_cases.values].values).all()
         feed_in_cases = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
         ]
-        assert np.isclose(40., df.loc[feed_in_cases.values].values).all()
+        assert np.isclose(40.0, df.loc[feed_in_cases.values].values).all()
 
     def test_stations_allowed_load(self):
 
@@ -123,13 +156,15 @@ class TestCheckTechConstraints:
         # check values
         exp = pd.DataFrame(
             {"LVGrid_4_station": [0.05] * len(self.edisgo.timeseries.timeindex)},
-            index=self.edisgo.timeseries.timeindex
+            index=self.edisgo.timeseries.timeindex,
         )
         assert_frame_equal(df.loc[:, ["LVGrid_4_station"]], exp)
         load_cases = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
         ]
-        assert np.isclose(20., df.loc[load_cases.values, "MVGrid_1_station"].values).all()
+        assert np.isclose(
+            20.0, df.loc[load_cases.values, "MVGrid_1_station"].values
+        ).all()
 
         # check with specifying grids
         grids = [self.edisgo.topology.mv_grid, self.edisgo.topology.get_lv_grid(1)]
@@ -139,14 +174,55 @@ class TestCheckTechConstraints:
         # check values
         exp = pd.DataFrame(
             {"LVGrid_1_station": [0.16] * len(self.edisgo.timeseries.timeindex)},
-            index=self.edisgo.timeseries.timeindex
+            index=self.edisgo.timeseries.timeindex,
         )
         assert_frame_equal(df.loc[:, ["LVGrid_1_station"]], exp)
-        assert np.isclose(20., df.loc[load_cases.values, "MVGrid_1_station"].values).all()
+        assert np.isclose(
+            20.0, df.loc[load_cases.values, "MVGrid_1_station"].values
+        ).all()
         feed_in_cases = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
         ]
-        assert np.isclose(40., df.loc[feed_in_cases.values, "MVGrid_1_station"].values).all()
+        assert np.isclose(
+            40.0, df.loc[feed_in_cases.values, "MVGrid_1_station"].values
+        ).all()
+
+    def test_stations_relative_load(self):
+
+        # check without specifying grids
+        df = check_tech_constraints.stations_relative_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 11) == df.shape
+        # check values
+        load_cases = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ]
+        assert np.isclose(
+            0.02853, df.loc[load_cases.values, "LVGrid_4_station"].values, atol=1e-5
+        ).all()
+
+        # check with specifying grids
+        grids = [self.edisgo.topology.mv_grid, self.edisgo.topology.get_lv_grid(4)]
+        df = check_tech_constraints.stations_relative_load(self.edisgo, grids)
+        # check shape of dataframe
+        assert (4, 2) == df.shape
+        # check values
+        assert np.isclose(
+            0.02853, df.loc[load_cases.values, "LVGrid_4_station"].values, atol=1e-5
+        ).all()
+
+        # check with missing grids
+        self.edisgo.analyze(mode="mv")
+        df = check_tech_constraints.stations_relative_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 1) == df.shape
+        # check values
+        load_cases = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ]
+        assert np.isclose(
+            0.06753, df.loc[load_cases.values, "MVGrid_1_station"].values, atol=1e-5
+        ).all()
 
     def test_lines_allowed_load(self):
 

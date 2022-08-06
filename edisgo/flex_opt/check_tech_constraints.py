@@ -337,7 +337,7 @@ def mv_lv_station_load(edisgo_obj):
         crit_stations = pd.concat(
             [
                 crit_stations,
-                _station_load(edisgo_obj, lv_grid),
+                _station_overload(edisgo_obj, lv_grid),
             ]
         )
     if not crit_stations.empty:
@@ -352,7 +352,7 @@ def mv_lv_station_load(edisgo_obj):
     return crit_stations
 
 
-def _station_load(edisgo_obj, grid):
+def _station_overload(edisgo_obj, grid):
     """
     Checks for over-loading of stations.
 
@@ -378,8 +378,12 @@ def _station_load(edisgo_obj, grid):
         voltage_level = "lv"
         transformers_df = grid.transformers_df
         s_station_pfa = pd.DataFrame(
-            {f"{grid}_station": edisgo_obj.results.s_res.loc[
-                                :, transformers_df.index].sum(axis=1)})
+            {
+                f"{grid}_station": edisgo_obj.results.s_res.loc[
+                    :, transformers_df.index
+                ].sum(axis=1)
+            }
+        )
     elif isinstance(grid, MVGrid):
         voltage_level = "mv"
         # ensure that power flow was conducted for MV
@@ -390,9 +394,11 @@ def _station_load(edisgo_obj, grid):
                 "of HV/MV station cannot be calculated."
             )
         s_station_pfa = pd.DataFrame(
-            {f"{grid}_station": np.hypot(
-                edisgo_obj.results.pfa_slack.p,
-                edisgo_obj.results.pfa_slack.q,)
+            {
+                f"{grid}_station": np.hypot(
+                    edisgo_obj.results.pfa_slack.p,
+                    edisgo_obj.results.pfa_slack.q,
+                )
             }
         )
     else:
@@ -426,6 +432,58 @@ def _station_load(edisgo_obj, grid):
 
     else:
         return pd.DataFrame(dtype=float)
+
+
+def _station_load(edisgo_obj, grid):
+    """
+    Returns loading of stations per time step from power flow analysis in MVA.
+
+    In case of HV/MV transformers, which are not included in power flow analysis,
+    loading is determined using slack results.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing loading of grid's station to the overlying voltage level
+        per time step in MVA.
+        Index of the dataframe are all time steps power flow analysis
+        was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
+        Column name is grid's name with the extension '_station'.
+
+    """
+    # get apparent power over station from power flow analysis
+    if isinstance(grid, LVGrid):
+        return pd.DataFrame(
+            {
+                f"{grid}_station": edisgo_obj.results.s_res.loc[
+                    :, grid.transformers_df.index
+                ].sum(axis=1)
+            }
+        )
+    elif isinstance(grid, MVGrid):
+        # ensure that power flow was conducted for MV as slack could also be at MV/LV
+        # station's secondary side
+        mv_lines = edisgo_obj.topology.mv_grid.lines_df.index
+        if not any(mv_lines.isin(edisgo_obj.results.i_res.columns)):
+            raise ValueError(
+                "MV was not included in power flow analysis, wherefore load "
+                "of HV/MV station cannot be calculated."
+            )
+        return pd.DataFrame(
+            {
+                f"{grid}_station": np.hypot(
+                    edisgo_obj.results.pfa_slack.p,
+                    edisgo_obj.results.pfa_slack.q,
+                )
+            }
+        )
+    else:
+        raise ValueError("Inserted grid is invalid.")
 
 
 def station_allowed_load(edisgo_obj, grid):
@@ -471,7 +529,8 @@ def station_allowed_load(edisgo_obj, grid):
     )
 
     return pd.DataFrame(
-        {f"{grid}_station": s_station * load_factor}, index=load_factor.index)
+        {f"{grid}_station": s_station * load_factor}, index=load_factor.index
+    )
 
 
 def stations_allowed_load(edisgo_obj, grids=None):
@@ -486,8 +545,8 @@ def stations_allowed_load(edisgo_obj, grids=None):
     ----------
     edisgo_obj : :class:`~.EDisGo`
     grids : list(:class:`~.network.grids.Grid`)
-        List of MV and LV grid to get allowed station loading for. Per default all
-        allowed loading is returned for all grids in the network. Default: None.
+        List of MV and LV grids to get allowed station loading for. Per default
+        allowed loading is returned for all stations in the network. Default: None.
 
     Returns
     -------
@@ -505,9 +564,55 @@ def stations_allowed_load(edisgo_obj, grids=None):
     allowed_loading = pd.DataFrame()
     for grid in grids:
         allowed_loading = pd.concat(
-            [allowed_loading,
-             station_allowed_load(edisgo_obj, grid)], axis=1)
+            [allowed_loading, station_allowed_load(edisgo_obj, grid)], axis=1
+        )
     return allowed_loading
+
+
+def stations_relative_load(edisgo_obj, grids=None):
+    """
+    Returns relative loading of specified grids stations to the overlying voltage level
+    per time step in p.u..
+
+    Stations relative loading is determined by dividing the stations loading (from
+    power flow analysis) by the allowed loading (considering allowed load factors in
+    heavy load flow case ('load case') and reverse power flow case ('feed-in case')
+    from config files).
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    grids : list(:class:`~.network.grids.Grid`)
+        List of MV and LV grids to get relative station loading for. Per default
+        relative loading is returned for all stations in the network that were
+        included in the power flow analysis. Default: None.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing the relative loading of the grid's
+        transformers to the overlying voltage level per time step in p.u..
+        Index of the dataframe are all time steps power flow analysis
+        was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
+        Column names are the respective grid's name with the extension '_station'.
+
+    """
+    if grids is None:
+        grids = list(edisgo_obj.topology.lv_grids) + [edisgo_obj.topology.mv_grid]
+
+    # get allowed loading
+    allowed_loading = stations_allowed_load(edisgo_obj, grids)
+
+    # get loading from power flow results
+    loading = pd.DataFrame()
+    for grid in grids:
+        # check that grid was included in power flow analysis
+        try:
+            loading = pd.concat([loading, _station_load(edisgo_obj, grid)], axis=1)
+        except Exception:
+            pass
+
+    return loading / allowed_loading.loc[:, loading.columns]
 
 
 def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
