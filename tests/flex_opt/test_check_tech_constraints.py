@@ -118,11 +118,11 @@ class TestCheckTechConstraints:
         with pytest.raises(KeyError, match=msg):
             check_tech_constraints._station_load(self.edisgo, grid)
 
-    def test_station_allowed_load(self):
+    def test__station_allowed_load(self):
 
         # check LV grid
         grid = self.edisgo.topology.get_lv_grid(4)
-        df = check_tech_constraints.station_allowed_load(self.edisgo, grid)
+        df = check_tech_constraints._station_allowed_load(self.edisgo, grid)
         # check shape of dataframe
         assert (4, 1) == df.shape
         # check values
@@ -134,7 +134,7 @@ class TestCheckTechConstraints:
 
         # check MV grid
         grid = self.edisgo.topology.mv_grid
-        df = check_tech_constraints.station_allowed_load(self.edisgo, grid)
+        df = check_tech_constraints._station_allowed_load(self.edisgo, grid)
         # check shape of dataframe
         assert (4, 1) == df.shape
         # check values

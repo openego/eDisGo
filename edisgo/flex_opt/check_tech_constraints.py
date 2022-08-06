@@ -296,7 +296,7 @@ def hv_mv_station_load(edisgo_obj):
     section 'grid_expansion_load_factors'.
 
     """
-    crit_stations = _station_load(edisgo_obj, edisgo_obj.topology.mv_grid)
+    crit_stations = _station_overload(edisgo_obj, edisgo_obj.topology.mv_grid)
     if not crit_stations.empty:
         logger.debug("==> HV/MV station has load issues.")
     else:
@@ -405,7 +405,7 @@ def _station_overload(edisgo_obj, grid):
         raise ValueError("Inserted grid is invalid.")
 
     # get maximum allowed apparent power of station in each time step
-    s_station_allowed = station_allowed_load(edisgo_obj, grid)
+    s_station_allowed = _station_allowed_load(edisgo_obj, grid)
 
     # calculate residual apparent power (if negative, station is over-loaded)
     s_res = s_station_allowed - s_station_pfa
@@ -486,7 +486,7 @@ def _station_load(edisgo_obj, grid):
         raise ValueError("Inserted grid is invalid.")
 
 
-def station_allowed_load(edisgo_obj, grid):
+def _station_allowed_load(edisgo_obj, grid):
     """
     Returns allowed loading of grid's station to the overlying voltage level per time
     step in MVA.
@@ -564,7 +564,7 @@ def stations_allowed_load(edisgo_obj, grids=None):
     allowed_loading = pd.DataFrame()
     for grid in grids:
         allowed_loading = pd.concat(
-            [allowed_loading, station_allowed_load(edisgo_obj, grid)], axis=1
+            [allowed_loading, _station_allowed_load(edisgo_obj, grid)], axis=1
         )
     return allowed_loading
 
