@@ -92,14 +92,14 @@ class TestCheckTechConstraints:
         df = check_tech_constraints._station_load(self.edisgo, grid)
         # check shape and column of dataframe
         assert (4, 1) == df.shape
-        assert f"{grid}_station" in df.columns
+        assert grid.station_name in df.columns
 
         # check MV grid
         grid = self.edisgo.topology.mv_grid
         df = check_tech_constraints._station_load(self.edisgo, grid)
         # check shape and column of dataframe
         assert (4, 1) == df.shape
-        assert f"{grid}_station" in df.columns
+        assert grid.station_name in df.columns
 
         # check ValueErrors
         msg = "Inserted grid is invalid."
@@ -127,7 +127,7 @@ class TestCheckTechConstraints:
         assert (4, 1) == df.shape
         # check values
         exp = pd.DataFrame(
-            {f"{grid}_station": [0.05] * len(self.edisgo.timeseries.timeindex)},
+            {grid.station_name: [0.05] * len(self.edisgo.timeseries.timeindex)},
             index=self.edisgo.timeseries.timeindex,
         )
         assert_frame_equal(df, exp)

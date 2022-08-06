@@ -427,7 +427,7 @@ def _station_overload(edisgo_obj, grid):
                 "s_missing": abs(s_missing.min()),
                 "time_index": s_missing.idxmin(),
             },
-            index=[f"{grid}_station"],
+            index=[grid.station_name],
         )
 
     else:
@@ -460,7 +460,7 @@ def _station_load(edisgo_obj, grid):
     if isinstance(grid, LVGrid):
         return pd.DataFrame(
             {
-                f"{grid}_station": edisgo_obj.results.s_res.loc[
+                grid.station_name: edisgo_obj.results.s_res.loc[
                     :, grid.transformers_df.index
                 ].sum(axis=1)
             }
@@ -476,7 +476,7 @@ def _station_load(edisgo_obj, grid):
             )
         return pd.DataFrame(
             {
-                f"{grid}_station": np.hypot(
+                grid.station_name: np.hypot(
                     edisgo_obj.results.pfa_slack.p,
                     edisgo_obj.results.pfa_slack.q,
                 )
@@ -529,7 +529,7 @@ def _station_allowed_load(edisgo_obj, grid):
     )
 
     return pd.DataFrame(
-        {f"{grid}_station": s_station * load_factor}, index=load_factor.index
+        {grid.station_name: s_station * load_factor}, index=load_factor.index
     )
 
 

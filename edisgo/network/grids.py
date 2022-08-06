@@ -115,6 +115,14 @@ class Grid(ABC):
         return self.buses_df.loc[self.transformers_df.iloc[0].bus1].to_frame().T
 
     @property
+    def station_name(self):
+        """
+        Name of station to the overlying voltage level.
+
+        """
+        return f"{self}_station"
+
+    @property
     def generators_df(self):
         """
         Connected generators within the network.
