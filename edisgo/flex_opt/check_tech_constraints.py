@@ -373,36 +373,15 @@ def _station_overload(edisgo_obj, grid):
         :pandas:`pandas.Timestamp<Timestamp>`.
 
     """
-    # get apparent power over station from power flow analysis
     if isinstance(grid, LVGrid):
         voltage_level = "lv"
-        transformers_df = grid.transformers_df
-        s_station_pfa = pd.DataFrame(
-            {
-                f"{grid}_station": edisgo_obj.results.s_res.loc[
-                    :, transformers_df.index
-                ].sum(axis=1)
-            }
-        )
     elif isinstance(grid, MVGrid):
         voltage_level = "mv"
-        # ensure that power flow was conducted for MV
-        mv_lines = edisgo_obj.topology.mv_grid.lines_df.index
-        if not any(mv_lines.isin(edisgo_obj.results.i_res.columns)):
-            raise ValueError(
-                "MV was not included in power flow analysis, wherefore load "
-                "of HV/MV station cannot be calculated."
-            )
-        s_station_pfa = pd.DataFrame(
-            {
-                f"{grid}_station": np.hypot(
-                    edisgo_obj.results.pfa_slack.p,
-                    edisgo_obj.results.pfa_slack.q,
-                )
-            }
-        )
     else:
         raise ValueError("Inserted grid is invalid.")
+
+    # get apparent power over station from power flow analysis
+    s_station_pfa = _station_load(edisgo_obj, grid)
 
     # get maximum allowed apparent power of station in each time step
     s_station_allowed = _station_allowed_load(edisgo_obj, grid)
