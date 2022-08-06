@@ -270,7 +270,7 @@ def _line_load(edisgo_obj, voltage_level):
     return crit_lines
 
 
-def hv_mv_station_load(edisgo_obj):
+def hv_mv_station_overload(edisgo_obj):
     """
     Checks for over-loading of HV/MV station.
 
@@ -305,7 +305,7 @@ def hv_mv_station_load(edisgo_obj):
     return crit_stations
 
 
-def mv_lv_station_load(edisgo_obj):
+def mv_lv_station_overload(edisgo_obj):
     """
     Checks for over-loading of MV/LV stations.
 

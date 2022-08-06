@@ -39,12 +39,12 @@ def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
     dict
         Dictionary with added and removed transformers in the form::
 
-        {'added': {'Grid_1': ['transformer_reinforced_1',
-                              ...,
-                              'transformer_reinforced_x'],
-                   'Grid_10': ['transformer_reinforced_10']
+        {'added': {'Grid_1_station': ['transformer_reinforced_1',
+                                      ...,
+                                      'transformer_reinforced_x'],
+                   'Grid_10_station': ['transformer_reinforced_10']
                    },
-         'removed': {'Grid_1': ['transformer_1']}
+         'removed': {'Grid_1_station': ['transformer_1']}
         }
 
     """
@@ -86,12 +86,12 @@ def reinforce_hv_mv_station_overloading(edisgo_obj, critical_stations):
     dict
         Dictionary with added and removed transformers in the form::
 
-        {'added': {'Grid_1': ['transformer_reinforced_1',
-                              ...,
-                              'transformer_reinforced_x'],
-                   'Grid_10': ['transformer_reinforced_10']
+        {'added': {'Grid_1_station': ['transformer_reinforced_1',
+                                      ...,
+                                      'transformer_reinforced_x'],
+                   'Grid_10_station': ['transformer_reinforced_10']
                    },
-         'removed': {'Grid_1': ['transformer_1']}
+         'removed': {'Grid_1_station': ['transformer_1']}
         }
 
     """
@@ -133,12 +133,12 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
     dict
         Dictionary with added and removed transformers in the form::
 
-        {'added': {'Grid_1': ['transformer_reinforced_1',
-                              ...,
-                              'transformer_reinforced_x'],
-                   'Grid_10': ['transformer_reinforced_10']
+        {'added': {'Grid_1_station': ['transformer_reinforced_1',
+                                      ...,
+                                      'transformer_reinforced_x'],
+                   'Grid_10_station': ['transformer_reinforced_10']
                    },
-         'removed': {'Grid_1': ['transformer_1']}
+         'removed': {'Grid_1_station': ['transformer_1']}
         }
 
     """
@@ -172,15 +172,12 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
         )
 
     transformers_changes = {"added": {}, "removed": {}}
-    for grid_name in critical_stations.index:
-        if "MV" in grid_name:
-            grid = edisgo_obj.topology.mv_grid
-        else:
-            grid = edisgo_obj.topology.get_lv_grid(grid_name)
+    for station in critical_stations.index:
+        grid = critical_stations.at[station, "grid"]
         # list of maximum power of each transformer in the station
         s_max_per_trafo = grid.transformers_df.s_nom
         # missing capacity
-        s_trafo_missing = critical_stations.at[grid_name, "s_missing"]
+        s_trafo_missing = critical_stations.at[station, "s_missing"]
 
         # check if second transformer of the same kind is sufficient
         # if true install second transformer, otherwise install as many
@@ -202,7 +199,7 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
             new_transformers.index = ["_".join([str(_) for _ in name])]
 
             # add new transformer to list of added transformers
-            transformers_changes["added"][grid_name] = [new_transformers.index[0]]
+            transformers_changes["added"][station] = [new_transformers.index[0]]
         else:
             # get any transformer to get attributes for new transformer from
             duplicated_transformer = grid.transformers_df.iloc[[0]]
@@ -235,11 +232,9 @@ def _station_overloading(edisgo_obj, critical_stations, voltage_level):
             new_transformers.index = index
 
             # add new transformer to list of added transformers
-            transformers_changes["added"][grid_name] = new_transformers.index.values
+            transformers_changes["added"][station] = new_transformers.index.values
             # add previous transformers to list of removed transformers
-            transformers_changes["removed"][
-                grid_name
-            ] = grid.transformers_df.index.values
+            transformers_changes["removed"][station] = grid.transformers_df.index.values
             # remove previous transformers from topology
             if voltage_level == "lv":
                 edisgo_obj.topology.transformers_df.drop(

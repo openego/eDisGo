@@ -21,12 +21,15 @@ class TestReinforceMeasures:
         # create problems such that in LVGrid_1 existing transformer is
         # exchanged with standard transformer and in LVGrid_4 a third
         # transformer is added
+        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
+        lv_grid_4 = self.edisgo.topology.get_lv_grid(4)
         crit_lv_stations = pd.DataFrame(
             {
                 "s_missing": [0.17, 0.04],
                 "time_index": [self.timesteps[1]] * 2,
+                "grid": [lv_grid_1, lv_grid_4],
             },
-            index=["LVGrid_1", "LVGrid_4"],
+            index=[lv_grid_1.station_name, lv_grid_4.station_name],
         )
         transformer_changes = reinforce_measures.reinforce_mv_lv_station_overloading(
             self.edisgo, crit_lv_stations
@@ -37,14 +40,15 @@ class TestReinforceMeasures:
         assert len(transformer_changes["removed"].keys()) == 1
 
         assert (
-            transformer_changes["added"]["LVGrid_1"][0]
+            transformer_changes["added"]["LVGrid_1_station"][0]
             == "LVStation_1_transformer_reinforced_1"
         )
         assert (
-            transformer_changes["removed"]["LVGrid_1"][0] == "LVStation_1_transformer_1"
+            transformer_changes["removed"]["LVGrid_1_station"][0]
+            == "LVStation_1_transformer_1"
         )
         assert (
-            transformer_changes["added"]["LVGrid_4"][0]
+            transformer_changes["added"]["LVGrid_4_station"][0]
             == "LVStation_4_transformer_reinforced_3"
         )
 
@@ -86,13 +90,17 @@ class TestReinforceMeasures:
 
         # check adding transformer of same MVA
         crit_mv_station = pd.DataFrame(
-            {"s_missing": [19], "time_index": [self.timesteps[1]]},
-            index=["MVGrid_1"],
+            {
+                "s_missing": [19],
+                "time_index": [self.timesteps[1]],
+                "grid": self.edisgo.topology.mv_grid,
+            },
+            index=["MVGrid_1_station"],
         )
         transformer_changes = reinforce_measures.reinforce_hv_mv_station_overloading(
             self.edisgo, crit_mv_station
         )
-        assert len(transformer_changes["added"]["MVGrid_1"]) == 1
+        assert len(transformer_changes["added"]["MVGrid_1_station"]) == 1
         assert len(transformer_changes["removed"]) == 0
 
         trafo_new = self.edisgo.topology.transformers_hvmv_df.loc[
@@ -114,14 +122,18 @@ class TestReinforceMeasures:
         # check replacing current transformers and replacing them with three
         # standard transformers
         crit_mv_station = pd.DataFrame(
-            {"s_missing": [50], "time_index": [self.timesteps[1]]},
-            index=["MVGrid_1"],
+            {
+                "s_missing": [50],
+                "time_index": [self.timesteps[1]],
+                "grid": self.edisgo.topology.mv_grid,
+            },
+            index=["MVGrid_1_station"],
         )
         transformer_changes = reinforce_measures.reinforce_hv_mv_station_overloading(
             self.edisgo, crit_mv_station
         )
-        assert len(transformer_changes["added"]["MVGrid_1"]) == 3
-        assert len(transformer_changes["removed"]["MVGrid_1"]) == 1
+        assert len(transformer_changes["added"]["MVGrid_1_station"]) == 3
+        assert len(transformer_changes["removed"]["MVGrid_1_station"]) == 1
 
         trafos = self.edisgo.topology.transformers_hvmv_df
         assert (trafos.bus0 == "Bus_primary_MVStation_1").all()
@@ -130,7 +142,7 @@ class TestReinforceMeasures:
         assert (trafos.type_info == "40 MVA").all()
         assert (
             "MVStation_1_transformer_reinforced_2"
-            in transformer_changes["added"]["MVGrid_1"]
+            in transformer_changes["added"]["MVGrid_1_station"]
         )
         # check that removed transformer is removed from topology
         assert (
