@@ -281,13 +281,13 @@ def hv_mv_station_load(edisgo_obj):
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing over-loaded HV/MV station, their apparent power
-        at maximal over-loading and the corresponding time step.
-        Index of the dataframe is the representative of the MVGrid.
-        Columns are 's_missing' containing the missing
-        apparent power at maximal over-loading in MVA as float and 'time_index'
-        containing the corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<Timestamp>`.
+        In case there are no over-loading problems returns an empty dataframe.
+        In case of over-loading problems the dataframe contains the name of the
+        over-loaded station (grid's name with the extension '_station') in the index.
+        Columns are 's_missing' containing the missing apparent power at maximal
+        over-loading in MVA as float, 'time_index' containing the corresponding time
+        step the over-loading occurred in as :pandas:`pandas.Timestamp<Timestamp>`,
+        and 'grid' containing the grid object as :class:`~.network.grids.MVGrid`.
 
     Notes
     -----
@@ -316,13 +316,13 @@ def mv_lv_station_load(edisgo_obj):
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing over-loaded MV/LV stations, their missing apparent
-        power at maximal over-loading and the corresponding time step.
-        Index of the dataframe are the representatives of the grids with
-        over-loaded stations. Columns are 's_missing' containing the missing
-        apparent power at maximal over-loading in MVA as float and 'time_index'
-        containing the corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<Timestamp>`.
+        In case there are no over-loading problems returns an empty dataframe.
+        In case of over-loading problems the dataframe contains the name of the
+        over-loaded station (grid's name with the extension '_station') in the index.
+        Columns are 's_missing' containing the missing apparent power at maximal
+        over-loading in MVA as float, 'time_index' containing the corresponding time
+        step the over-loading occurred in as :pandas:`pandas.Timestamp<Timestamp>`,
+        and 'grid' containing the grid object as :class:`~.network.grids.LVGrid`.
 
     Notes
     -----
@@ -364,13 +364,13 @@ def _station_overload(edisgo_obj, grid):
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing over-loaded stations, their missing apparent
-        power at maximal over-loading and the corresponding time step.
-        Index of the dataframe are the representatives of the grids with
-        over-loaded stations. Columns are 's_missing' containing the missing
-        apparent power at maximal over-loading in MVA as float and 'time_index'
-        containing the corresponding time step the over-loading occured in as
-        :pandas:`pandas.Timestamp<Timestamp>`.
+        In case there are no over-loading problems returns an empty dataframe.
+        In case of over-loading problems the dataframe contains the name of the
+        over-loaded station (grid's name with the extension '_station') in the index.
+        Columns are 's_missing' containing the missing apparent power at maximal
+        over-loading in MVA as float, 'time_index' containing the corresponding time
+        step the over-loading occurred in as :pandas:`pandas.Timestamp<Timestamp>`,
+        and 'grid' containing the grid object as :class:`~.network.grids.Grid`.
 
     """
     if isinstance(grid, LVGrid):
@@ -405,6 +405,7 @@ def _station_overload(edisgo_obj, grid):
             {
                 "s_missing": abs(s_missing.min()),
                 "time_index": s_missing.idxmin(),
+                "grid": grid,
             },
             index=[grid.station_name],
         )
