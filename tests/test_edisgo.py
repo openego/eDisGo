@@ -318,7 +318,7 @@ class TestEDisGo:
 
     @pytest.mark.slow
     def test_generator_import(self):
-        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2095_path)
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
         edisgo.import_generators("nep2035")
         assert len(edisgo.topology.generators_df) == 524  # 1636
 
@@ -920,7 +920,7 @@ class TestEDisGo:
         self.edisgo.analyze()
 
     def test_import_electromobility(self):
-        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2095_path)
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         self.edisgo.set_timeindex(timeindex)
         self.edisgo.set_time_series_active_power_predefined(
@@ -938,8 +938,8 @@ class TestEDisGo:
         tracbev_path = pytest.tracbev_example_scenario_path
         self.edisgo.import_electromobility(simbev_path, tracbev_path)
 
-        assert len(self.edisgo.electromobility.charging_processes_df) == 45
-        assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 452
+        assert len(self.edisgo.electromobility.charging_processes_df) == 1001
+        assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 1633
         assert self.edisgo.electromobility.eta_charging_points == 0.9
 
         total_charging_demand_at_charging_parks = sum(
@@ -970,7 +970,7 @@ class TestEDisGo:
 
         assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
         # TODO: This test still fails; also in line 1034
-        # assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 14
+        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 28
 
         # fmt: off
         assert set(
@@ -985,8 +985,8 @@ class TestEDisGo:
         )
         # fmt: on
 
-        # test with kwargs #####
-        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2095_path)
+        # test with kwargs
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         self.edisgo.set_timeindex(timeindex)
         self.edisgo.set_time_series_active_power_predefined(
@@ -1006,8 +1006,11 @@ class TestEDisGo:
             {"mode": "grid_friendly"},
         )
 
-        assert len(self.edisgo.electromobility.charging_processes_df) == 345
-        assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 452
+        # Length of charging_processes_df, potential_charging_parks_gdf and
+        # integrated_charging_parks_df changed compared to test without kwagrs
+        # TODO: needs to be checked if that is correct
+        assert len(self.edisgo.electromobility.charging_processes_df) == 8845
+        assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 1634
         assert self.edisgo.electromobility.simulated_days == 7
 
         assert np.isclose(
@@ -1031,7 +1034,7 @@ class TestEDisGo:
         )
         assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
 
-        # assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 14
+        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 27
 
         # fmt: off
         assert set(
