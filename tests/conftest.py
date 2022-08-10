@@ -16,6 +16,10 @@ def pytest_configure(config):
         os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_3"
     )
 
+    pytest.ding0_test_network_2095_path = os.path.join(
+        os.path.realpath(os.path.dirname(__file__)), "data/2095"
+    )
+
     pytest.simbev_example_scenario_path = os.path.join(
         os.path.realpath(os.path.dirname(__file__)), "data/simbev_example_scenario"
     )
