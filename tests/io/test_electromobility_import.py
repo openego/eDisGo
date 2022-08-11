@@ -1,8 +1,9 @@
 import os
 
+import pandas as pd
 import pytest
 
-from edisgo.edisgo import import_edisgo_from_files
+from edisgo.edisgo import EDisGo
 from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
@@ -11,22 +12,27 @@ from edisgo.io.electromobility_import import (
 )
 
 
-class TestElectromobility:
+class TestElectromobilityImport:
+    """
+    Tests all functions in electromobility_import.py.
+
+    """
+
     @classmethod
     def setup_class(cls):
-        cls.ding0_path = pytest.ding0_test_network_3_path
+        cls.ding0_path = pytest.ding0_test_network_4_path
         cls.simbev_path = pytest.simbev_example_scenario_path
         cls.tracbev_path = pytest.tracbev_example_scenario_path
-        cls.standing_times_path = os.path.join(cls.simbev_path, "simbev_run")
+        cls.standing_times_path = cls.simbev_path
         cls.charging_strategies = ["dumb", "reduced", "residual"]
 
-        cls.edisgo_obj = import_edisgo_from_files(
-            cls.ding0_path,
-            import_topology=True,
-            import_timeseries=True,
-        )
+        cls.edisgo_obj = EDisGo(ding0_grid=cls.ding0_path)
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        cls.edisgo_obj.set_timeindex(timeindex)
 
-    def test_import_simbev_electromobility(self):
+        cls.edisgo_obj.resample_timeseries()
+
+    def test_import_electromobility(self):
 
         import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
 
@@ -72,11 +78,45 @@ class TestElectromobility:
         )
 
         # test grid friendly
-        self.edisgo_obj = import_edisgo_from_files(
-            self.ding0_path, import_topology=True, import_timeseries=True
-        )
+        self.edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        self.edisgo_obj.set_timeindex(timeindex)
+
+        self.edisgo_obj.resample_timeseries()
+
         import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
         distribute_charging_demand(self.edisgo_obj, mode="grid_friendly")
+
+        electromobility = self.edisgo_obj.electromobility
+
+        total_charging_demand_at_charging_parks = sum(
+            cp.charging_processes_df.chargingdemand_kWh.sum()
+            for cp in list(electromobility.potential_charging_parks)
+            if cp.designated_charging_point_capacity > 0
+        )
+
+        total_charging_demand = (
+            electromobility.charging_processes_df.chargingdemand_kWh.sum()
+        )
+
+        assert round(total_charging_demand_at_charging_parks, 0) == round(
+            total_charging_demand, 0
+        )
+
+        # test weight factors
+        self.edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        self.edisgo_obj.set_timeindex(timeindex)
+
+        self.edisgo_obj.resample_timeseries()
+
+        import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
+        distribute_charging_demand(
+            self.edisgo_obj,
+            generators_weight_factor=1 / 3,
+            distance_weight=0.5,
+            user_friendly_weight=1 / 3,
+        )
 
         electromobility = self.edisgo_obj.electromobility
 

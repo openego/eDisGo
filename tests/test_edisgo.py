@@ -923,14 +923,6 @@ class TestEDisGo:
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         self.edisgo.set_timeindex(timeindex)
-        self.edisgo.set_time_series_active_power_predefined(
-            fluctuating_generators_ts="oedb",
-            dispatchable_generators_ts=pd.DataFrame(
-                data=1, columns=["other"], index=timeindex
-            ),
-            conventional_loads_ts="demandlib",
-        )
-        self.edisgo.set_time_series_reactive_power_control()
 
         self.edisgo.resample_timeseries()
         # test with default parameters
@@ -969,7 +961,7 @@ class TestEDisGo:
         # fmt: on
 
         assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
-        # TODO: This test still fails; also in line 1034
+
         assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 28
 
         # fmt: off
@@ -989,14 +981,7 @@ class TestEDisGo:
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         self.edisgo.set_timeindex(timeindex)
-        self.edisgo.set_time_series_active_power_predefined(
-            fluctuating_generators_ts="oedb",
-            dispatchable_generators_ts=pd.DataFrame(
-                data=1, columns=["other"], index=timeindex
-            ),
-            conventional_loads_ts="demandlib",
-        )
-        self.edisgo.set_time_series_reactive_power_control()
+
         self.edisgo.resample_timeseries()
 
         self.edisgo.import_electromobility(
