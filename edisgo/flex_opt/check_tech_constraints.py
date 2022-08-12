@@ -644,6 +644,37 @@ def stations_relative_load(edisgo_obj, grids=None):
     return loading / allowed_loading.loc[:, loading.columns]
 
 
+def components_relative_load(edisgo_obj):
+    """
+    Returns relative loading of all lines and stations included in power flow analysis.
+
+    The component's relative loading is determined by dividing the stations loading
+    (from power flow analysis) by the allowed loading (considering allowed load factors
+    in heavy load flow case ('load case') and reverse power flow case ('feed-in case')
+    from config files).
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing the relative loading of lines and stations power flow
+        results are available for per time step in p.u..
+        Index of the dataframe are all time steps power flow analysis
+        was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
+        Columns are line names (as in index of
+        :attr:`~.network.topology.Topology.loads_df`) and station names (respective
+        grid's name with the extension '_station', see
+        :attr:`~.network.grids.Grid.station_name`).
+
+    """
+    stations_rel_load = stations_relative_load(edisgo_obj)
+    lines_rel_load = lines_relative_load(edisgo_obj, lines=None)
+    return pd.concat([lines_rel_load, stations_rel_load], axis=1)
+
+
 def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
     """
     Checks for voltage stability issues in MV network.

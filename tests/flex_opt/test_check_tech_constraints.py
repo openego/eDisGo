@@ -315,6 +315,46 @@ class TestCheckTechConstraints:
             0.06753, df.loc[load_cases.values, "MVGrid_1_station"].values, atol=1e-5
         ).all()
 
+    def test_components_relative_load(self):
+
+        # check with power flow results available for all components
+        df = check_tech_constraints.components_relative_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 140) == df.shape
+        # check values
+        load_cases = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ]
+        assert np.isclose(
+            0.02853, df.loc[load_cases.values, "LVGrid_4_station"].values, atol=1e-5
+        ).all()
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"], 0.00142 / (7.27461 * 0.5), atol=1e-5
+        )
+
+        # check with power flow results not available for all components
+        self.edisgo.analyze(mode="mvlv")
+        df = check_tech_constraints.components_relative_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 41) == df.shape
+        # check values
+        assert np.isclose(
+            0.02852, df.loc[load_cases.values, "LVGrid_4_station"].values, atol=1e-5
+        ).all()
+
+        # check with missing grids
+        self.edisgo.analyze(mode="mv")
+        df = check_tech_constraints.components_relative_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 31) == df.shape
+        # check values
+        load_cases = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ]
+        assert np.isclose(
+            0.06753, df.loc[load_cases.values, "MVGrid_1_station"].values, atol=1e-5
+        ).all()
+
     def mv_voltage_issues(self):
         """
         Fixture to create voltage issues in MV grid.
