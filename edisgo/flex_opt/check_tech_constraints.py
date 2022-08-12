@@ -504,7 +504,8 @@ def _station_allowed_load(edisgo_obj, grid):
     step in MVA.
 
     Allowed loading considers allowed load factors in heavy load flow case ('load case')
-    and reverse power flow case ('feed-in case') from config files.
+    and reverse power flow case ('feed-in case') that are defined in the config file
+    'config_grid_expansion' in section 'grid_expansion_load_factors'.
 
     Parameters
     ----------
@@ -551,7 +552,8 @@ def stations_allowed_load(edisgo_obj, grids=None):
     per time step in MVA.
 
     Allowed loading considers allowed load factors in heavy load flow case ('load case')
-    and reverse power flow case ('feed-in case') from config files.
+    and reverse power flow case ('feed-in case') that are defined in the config file
+    'config_grid_expansion' in section 'grid_expansion_load_factors'.
 
     Parameters
     ----------
