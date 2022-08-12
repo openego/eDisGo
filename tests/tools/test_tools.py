@@ -1,5 +1,3 @@
-from math import sqrt
-
 import numpy as np
 import pytest
 
@@ -16,38 +14,6 @@ class TestTools:
         self.edisgo.set_time_series_worst_case_analysis()
         self.timesteps = self.edisgo.timeseries.timeindex
         self.edisgo.analyze()
-
-    def test_calculate_relative_line_load(self):
-        # test without providing lines and time steps
-        rel_line_load = tools.calculate_relative_line_load(self.edisgo)
-        assert rel_line_load.shape == (4, 129)
-
-        # test with providing lines
-        rel_line_load = tools.calculate_relative_line_load(
-            self.edisgo, lines=["Line_10005", "Line_50000002", "Line_90000021"]
-        )
-        assert rel_line_load.shape == (4, 3)
-        assert np.isclose(
-            rel_line_load.at[self.timesteps[0], "Line_10005"],
-            self.edisgo.results.i_res.at[self.timesteps[0], "Line_10005"]
-            / (7.274613391789284 / 2 / 20 / sqrt(3)),
-        )
-        assert np.isclose(
-            rel_line_load.at[self.timesteps[1], "Line_50000002"],
-            self.edisgo.results.i_res.at[self.timesteps[1], "Line_50000002"]
-            / (0.08521689973238901 / 0.4 / sqrt(3)),
-        )
-
-        # test with providing lines and timesteps
-        rel_line_load = tools.calculate_relative_line_load(
-            self.edisgo, lines=["Line_10005"], timesteps=self.timesteps[0]
-        )
-        assert rel_line_load.shape == (1, 1)
-        assert np.isclose(
-            rel_line_load.at[self.timesteps[0], "Line_10005"],
-            self.edisgo.results.i_res.at[self.timesteps[0], "Line_10005"]
-            / (7.274613391789284 / 2 / 20 / sqrt(3)),
-        )
 
     def test_calculate_line_reactance(self):
         # test single line

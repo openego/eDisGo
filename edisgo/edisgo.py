@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
+from edisgo.flex_opt.check_tech_constraints import lines_relative_load
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
@@ -1808,15 +1809,14 @@ class EDisGo:
         else:
             lines = self.topology.lines_df
 
-        rel_line_loading = tools.calculate_relative_line_load(
-            self, lines.index, timestep
-        )
+        rel_line_loading = lines_relative_load(self, lines.index)
 
         if timestep is None:
             timestep = rel_line_loading.index
         # check if timesteps is array-like, otherwise convert to list
         if not hasattr(timestep, "__len__"):
             timestep = [timestep]
+        rel_line_loading = rel_line_loading.loc[timestep, :]
 
         if title is True:
             if len(timestep) == 1:

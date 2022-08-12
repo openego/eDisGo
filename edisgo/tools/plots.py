@@ -19,7 +19,8 @@ from networkx import Graph
 from pyproj import Transformer
 from pypsa import Network as PyPSANetwork
 
-from edisgo.tools import session_scope, tools
+from edisgo.flex_opt.check_tech_constraints import lines_relative_load
+from edisgo.tools import session_scope
 
 if TYPE_CHECKING:
     from numbers import Number
@@ -579,9 +580,11 @@ def mv_grid_topology(
 
     # line colors
     if line_color == "loading":
-        line_colors = tools.calculate_relative_line_load(
-            edisgo_obj, pypsa_plot.lines.index, timestep
-        ).max()
+        line_colors = lines_relative_load(edisgo_obj, pypsa_plot.lines.index)
+        if timestep is None:
+            line_colors = line_colors.max()
+        else:
+            line_colors = line_colors.loc[timestep, :]
     elif line_color == "expansion_costs":
         node_color = "expansion_costs"
         line_costs = pypsa_plot.lines.join(

@@ -1045,6 +1045,8 @@ class TestEDisGo:
         self.edisgo.analyze()
         self.edisgo.plot_mv_line_loading()
         plt.close("all")
+        self.edisgo.plot_mv_line_loading(timestep=self.edisgo.timeseries.timeindex[0])
+        plt.close("all")
 
     def test_plot_mv_grid_expansion_costs(self):
         # test with storage
