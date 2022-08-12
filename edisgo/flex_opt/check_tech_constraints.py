@@ -1,8 +1,6 @@
 import itertools
 import logging
 
-from math import sqrt
-
 import numpy as np
 import pandas as pd
 
@@ -97,9 +95,42 @@ def lv_line_load(edisgo_obj):
     return crit_lines
 
 
-def lines_allowed_load(edisgo_obj, voltage_level):
+def lines_allowed_load(edisgo_obj, lines=None):
     """
-    Get allowed maximum current per line per time step
+    Returns allowed loading of specified lines per time step in MVA.
+
+    Allowed loading is determined based on allowed load factors for feed-in and
+    load cases that are defined in the config file 'config_grid_expansion' in
+    section 'grid_expansion_load_factors'.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    lines : list(str)
+        List of line names to get allowed loading for. Per default
+        allowed loading is returned for all lines in the network. Default: None.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing the maximum allowed apparent power per line and time step
+        in MVA. Index of the dataframe are all time steps power flow analysis
+        was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
+        Columns are line names of all lines in the specified voltage level.
+
+    """
+    allowed_load_lv = _lines_allowed_load_voltage_level(edisgo_obj, voltage_level="lv")
+    allowed_load_mv = _lines_allowed_load_voltage_level(edisgo_obj, voltage_level="mv")
+    allowed_load = pd.concat([allowed_load_lv, allowed_load_mv])
+    if lines is None:
+        return allowed_load
+    else:
+        return allowed_load.loc[:, lines]
+
+
+def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
+    """
+    Returns allowed loading per line in the specified voltage level in MVA.
 
     Parameters
     ----------
@@ -111,8 +142,8 @@ def lines_allowed_load(edisgo_obj, voltage_level):
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing the maximum allowed current per line and time step
-        in kA. Index of the dataframe are all time steps power flow analysis
+        Dataframe containing the maximum allowed apparent power per line and time step
+        in MVA. Index of the dataframe are all time steps power flow analysis
         was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
         Columns are line names of all lines in the specified voltage level.
 
@@ -123,14 +154,8 @@ def lines_allowed_load(edisgo_obj, voltage_level):
         lines_df = edisgo_obj.topology.lines_df[
             ~edisgo_obj.topology.lines_df.index.isin(mv_grid.lines_df.index)
         ]
-        lv_grids = list(edisgo_obj.topology.lv_grids)
-        if len(lv_grids) > 0:
-            nominal_voltage = lv_grids[0].nominal_voltage
-        else:
-            nominal_voltage = np.NaN
     elif voltage_level == "mv":
         lines_df = mv_grid.lines_df
-        nominal_voltage = mv_grid.nominal_voltage
     else:
         raise ValueError(
             "{} is not a valid option for input variable 'voltage_level' in "
@@ -138,53 +163,60 @@ def lines_allowed_load(edisgo_obj, voltage_level):
             "'lv'.".format(voltage_level)
         )
 
-    i_lines_allowed_per_case = {}
-    i_lines_allowed_per_case["feed-in_case"] = (
-        lines_df.s_nom
-        / sqrt(3)
-        / nominal_voltage
-        * edisgo_obj.config["grid_expansion_load_factors"][
-            "{}_feed-in_case_line".format(voltage_level)
-        ]
-    )
+    allowed_load_per_case = {}
 
-    # adapt i_lines_allowed for radial feeders
-    buses_in_cycles = list(
-        set(itertools.chain.from_iterable(edisgo_obj.topology.rings))
-    )
+    # get allowed loads per case
+    for case in ["feed-in_case", "load_case"]:
 
-    # Find lines in cycles
-    lines_in_cycles = list(
-        lines_df.loc[
-            lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
-        ].index.values
-    )
-    lines_radial_feeders = list(
-        lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values
-    )
+        # if load factor is not 1, handle lines in cycles differently from lines in
+        # stubs
+        if (
+            edisgo_obj.config["grid_expansion_load_factors"][
+                f"{voltage_level}_{case}_line"
+            ]
+            != 1.0
+        ):
 
-    # lines in cycles have to be n-1 secure
-    i_lines_allowed_per_case["load_case"] = (
-        lines_df.loc[lines_in_cycles].s_nom
-        / sqrt(3)
-        / nominal_voltage
-        * edisgo_obj.config["grid_expansion_load_factors"][
-            "{}_load_case_line".format(voltage_level)
-        ]
-    )
+            buses_in_cycles = list(
+                set(itertools.chain.from_iterable(edisgo_obj.topology.rings))
+            )
 
-    # lines in radial feeders are not n-1 secure anyways
-    i_lines_allowed_per_case["load_case"] = pd.concat(
-        [
-            i_lines_allowed_per_case["load_case"],
-            lines_df.loc[lines_radial_feeders].s_nom / sqrt(3) / nominal_voltage,
-        ]
-    )
+            # Find lines in cycles
+            lines_in_cycles = list(
+                lines_df.loc[
+                    lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
+                ].index.values
+            )
+            lines_radial_feeders = list(
+                lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values
+            )
 
-    i_lines_allowed = edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
+            # lines in cycles have to be n-1 secure
+            allowed_load_per_case[case] = (
+                lines_df.loc[lines_in_cycles].s_nom
+                * edisgo_obj.config["grid_expansion_load_factors"][
+                    f"{voltage_level}_{case}_line"
+                ]
+            )
+
+            # lines in radial feeders are not n-1 secure anyways
+            allowed_load_per_case[case] = pd.concat(
+                [
+                    allowed_load_per_case[case],
+                    lines_df.loc[lines_radial_feeders].s_nom,
+                ]
+            )
+        else:
+            allowed_load_per_case[case] = (
+                lines_df.s_nom
+                * edisgo_obj.config["grid_expansion_load_factors"][
+                    f"{voltage_level}_{case}_line"
+                ]
+            )
+
+    return edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
         edisgo_obj.results.i_res.index
-    ].apply(lambda _: i_lines_allowed_per_case[_])
-    return i_lines_allowed
+    ].apply(lambda _: allowed_load_per_case[_])
 
 
 def lines_relative_load(edisgo_obj, lines_allowed_load):
