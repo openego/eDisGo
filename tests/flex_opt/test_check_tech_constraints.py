@@ -24,7 +24,7 @@ class TestCheckTechConstraints:
         self.edisgo.analyze()
 
     def test_mv_line_overload(self):
-        # implicitly checks function _line_load
+        # implicitly checks function _line_overload
 
         df = check_tech_constraints.mv_line_overload(self.edisgo)
         # check shape of dataframe
@@ -118,6 +118,31 @@ class TestCheckTechConstraints:
             df.at[self.timesteps[0], "Line_50000002"],
             0.08521689973238901,
         )
+
+    def test_lines_relative_load(self):
+
+        # check with default value (all lines)
+        df = check_tech_constraints.lines_relative_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 129) == df.shape
+        # check values (feed-in case)
+        assert np.isclose(
+            df.at[self.timesteps[2], "Line_10005"], 7.74132 / 7.27461, atol=1e-5
+        )
+        assert np.isclose(
+            df.at[self.timesteps[2], "Line_50000002"], 0.012644 / 0.08522, atol=1e-5
+        )
+        # check values (load case)
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"], 0.00142 / (7.27461 * 0.5), atol=1e-5
+        )
+
+        # check with specifying lines
+        df = check_tech_constraints.lines_relative_load(
+            self.edisgo, lines=["Line_10005", "Line_50000002"]
+        )
+        # check shape of dataframe
+        assert (4, 2) == df.shape
 
     def test_hv_mv_station_overload(self):
         # implicitly checks function _station_overload

@@ -285,32 +285,36 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
     ].apply(lambda _: allowed_load_per_case[_])
 
 
-def lines_relative_load(edisgo_obj, lines_allowed_load):
+def lines_relative_load(edisgo_obj, lines=None):
     """
-    Calculates relative line load based on specified allowed line load.
+    Returns relative line load based on specified allowed line load.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    lines_allowed_load : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing the maximum allowed current per line and time step
-        in kA. Index of the dataframe are time steps of type
-        :pandas:`pandas.Timestamp<Timestamp>` and columns are line names.
+    lines : list(str)
+        List of line names to get relative loading for. Per default
+        relative loading is returned for all lines in the network. Default: None.
 
     Returns
     --------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing the relative line load per line and time step.
-        Index and columns of the dataframe are the same as those of parameter
-        `lines_allowed_load`.
+        Dataframe containing the relative loading per line and time step
+        in p.u.. Index of the dataframe are all time steps power flow analysis
+        was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
+        Columns are line names as strings.
 
     """
-    # get line load from power flow analysis
-    i_lines_pfa = edisgo_obj.results.i_res.loc[
-        lines_allowed_load.index, lines_allowed_load.columns
-    ]
+    if lines is None:
+        lines = edisgo_obj.topology.lines_df.index
 
-    return i_lines_pfa / lines_allowed_load
+    # get allowed loading
+    allowed_loading = lines_allowed_load(edisgo_obj, lines)
+
+    # get line load from power flow analysis
+    loading = edisgo_obj.results.s_res.loc[:, lines]
+
+    return loading / allowed_loading
 
 
 def hv_mv_station_overload(edisgo_obj):
