@@ -313,7 +313,7 @@ def one_storage_per_feeder(
         #     (grid_expansion_costs_feeder_ranking.mv_feeder == feeder) &
         #     (grid_expansion_costs_feeder_ranking.voltage_level == 'mv')]
         # get all overloaded MV lines
-        critical_lines = check_tech_constraints.mv_line_load(edisgo.network)
+        critical_lines = check_tech_constraints.mv_line_overload(edisgo.network)
         # filter overloaded lines in feeder
         critical_lines_feeder = [
             line

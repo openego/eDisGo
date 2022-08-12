@@ -137,7 +137,7 @@ def get_steps_storage(edisgo_obj, window=5):
                     crit_periods.append(step)
 
     # Get periods with current violations
-    crit_lines = check_tech_constraints.mv_line_load(edisgo_obj)
+    crit_lines = check_tech_constraints.mv_line_overload(edisgo_obj)
     if "time_index" in crit_lines:
         for step in crit_lines["time_index"]:
             if step not in crit_periods:

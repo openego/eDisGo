@@ -23,10 +23,10 @@ class TestCheckTechConstraints:
         """
         self.edisgo.analyze()
 
-    def test_mv_line_load(self):
+    def test_mv_line_overload(self):
         # implicitly checks function _line_load
 
-        df = check_tech_constraints.mv_line_load(self.edisgo)
+        df = check_tech_constraints.mv_line_overload(self.edisgo)
         # check shape of dataframe
         assert (4, 3) == df.shape
         # check relative overload of one line
@@ -40,7 +40,7 @@ class TestCheckTechConstraints:
     def test_lv_line_load(self):
         # implicitly checks function _line_load
 
-        df = check_tech_constraints.lv_line_load(self.edisgo)
+        df = check_tech_constraints.lv_line_overload(self.edisgo)
         # check shape of dataframe
         assert (2, 3) == df.shape
         # check relative overload of one line

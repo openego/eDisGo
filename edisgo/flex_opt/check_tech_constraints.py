@@ -9,7 +9,7 @@ from edisgo.network.grids import LVGrid, MVGrid
 logger = logging.getLogger(__name__)
 
 
-def mv_line_load(edisgo_obj):
+def mv_line_overload(edisgo_obj):
     """
     Checks for over-loading issues in MV network.
 
@@ -52,7 +52,7 @@ def mv_line_load(edisgo_obj):
     return crit_lines
 
 
-def lv_line_load(edisgo_obj):
+def lv_line_overload(edisgo_obj):
     """
     Checks for over-loading issues in LV network.
 
