@@ -182,7 +182,8 @@ def lines_allowed_load(edisgo_obj, lines=None):
         Dataframe containing the maximum allowed apparent power per line and time step
         in MVA. Index of the dataframe are all time steps power flow analysis
         was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
-        Columns are line names as string.
+        Columns are line names as in index of
+        :attr:`~.network.topology.Topology.loads_df`.
 
     """
     allowed_load_lv = _lines_allowed_load_voltage_level(edisgo_obj, voltage_level="lv")
@@ -211,7 +212,9 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
         Dataframe containing the maximum allowed apparent power per line and time step
         in MVA. Index of the dataframe are all time steps power flow analysis
         was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
-        Columns are line names of all lines in the specified voltage level.
+        Columns are line names as in index of
+        :attr:`~.network.topology.Topology.loads_df` of all lines in the specified
+        voltage level.
 
     """
     # get lines in voltage level
@@ -293,8 +296,8 @@ def lines_relative_load(edisgo_obj, lines=None):
     ----------
     edisgo_obj : :class:`~.EDisGo`
     lines : list(str)
-        List of line names to get relative loading for. Per default
-        relative loading is returned for all lines in the network. Default: None.
+        List of line names to get relative loading for. Per default relative loading
+        is returned for all lines included in the power flow analysis. Default: None.
 
     Returns
     --------
@@ -302,7 +305,8 @@ def lines_relative_load(edisgo_obj, lines=None):
         Dataframe containing the relative loading per line and time step
         in p.u.. Index of the dataframe are all time steps power flow analysis
         was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
-        Columns are line names as strings.
+        Columns are line names as in index of
+        :attr:`~.network.topology.Topology.loads_df`.
 
     """
     if lines is None:

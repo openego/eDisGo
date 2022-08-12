@@ -119,6 +119,8 @@ class Grid(ABC):
         """
         Name of station to the overlying voltage level.
 
+        Name of station is composed of grid name with the extension '_station'.
+
         """
         return f"{self}_station"
 
