@@ -1,5 +1,3 @@
-from math import sqrt
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -34,8 +32,8 @@ class TestCheckTechConstraints:
         # check relative overload of one line
         assert np.isclose(
             df.at["Line_10005", "max_rel_overload"],
-            self.edisgo.results.i_res.at[self.timesteps[3], "Line_10005"]
-            / (7.274613391789284 / 20 / sqrt(3)),
+            self.edisgo.results.s_res.at[self.timesteps[3], "Line_10005"]
+            / 7.274613391789284,
         )
         assert df.at["Line_10005", "time_index"] == self.timesteps[3]
 
@@ -48,8 +46,8 @@ class TestCheckTechConstraints:
         # check relative overload of one line
         assert np.isclose(
             df.at["Line_50000002", "max_rel_overload"],
-            self.edisgo.results.i_res.at[self.timesteps[0], "Line_50000002"]
-            / (0.08521689973238901 / 0.4 / sqrt(3)),
+            self.edisgo.results.s_res.at[self.timesteps[0], "Line_50000002"]
+            / 0.08521689973238901,
         )
         assert df.at["Line_50000002", "time_index"] == self.timesteps[0]
 
