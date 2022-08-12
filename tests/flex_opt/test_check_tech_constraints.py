@@ -37,8 +37,8 @@ class TestCheckTechConstraints:
         )
         assert df.at["Line_10005", "time_index"] == self.timesteps[3]
 
-    def test_lv_line_load(self):
-        # implicitly checks function _line_load
+    def test_lv_line_overload(self):
+        # implicitly checks function _line_overload
 
         df = check_tech_constraints.lv_line_overload(self.edisgo)
         # check shape of dataframe
@@ -120,7 +120,7 @@ class TestCheckTechConstraints:
         )
 
     def test_hv_mv_station_overload(self):
-        # implicitly checks function _station_load
+        # implicitly checks function _station_overload
 
         # create over-load problem with highest over-load in first time step (as it is
         # a load case)
@@ -139,7 +139,7 @@ class TestCheckTechConstraints:
         assert df.at["MVGrid_1_station", "time_index"] == self.timesteps[0]
 
     def test_mv_lv_station_overload(self):
-        # implicitly checks function _station_load
+        # implicitly checks function _station_overload
 
         df = check_tech_constraints.mv_lv_station_overload(self.edisgo)
         # check shape of dataframe
