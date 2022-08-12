@@ -306,7 +306,7 @@ def lines_relative_load(edisgo_obj, lines=None):
 
     """
     if lines is None:
-        lines = edisgo_obj.topology.lines_df.index
+        lines = edisgo_obj.results.i_res.columns
 
     # get allowed loading
     allowed_loading = lines_allowed_load(edisgo_obj, lines)
