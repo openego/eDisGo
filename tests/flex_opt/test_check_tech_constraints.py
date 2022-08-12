@@ -53,6 +53,42 @@ class TestCheckTechConstraints:
         )
         assert df.at["Line_50000002", "time_index"] == self.timesteps[0]
 
+    def test__lines_allowed_load_voltage_level(self):
+
+        # check for MV
+        df = check_tech_constraints._lines_allowed_load_voltage_level(self.edisgo, "mv")
+        # check shape of dataframe
+        assert (4, 30) == df.shape
+        # check in feed-in case
+        assert np.isclose(
+            df.at[self.timesteps[2], "Line_10005"],
+            7.27461339178928,
+        )
+        # check in load case (line in cycle as well as stub)
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"],
+            7.274613391789284 * 0.5,
+        )
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10024"],
+            7.27461339178928,
+        )
+
+        # check for LV
+        df = check_tech_constraints._lines_allowed_load_voltage_level(self.edisgo, "lv")
+        # check shape of dataframe
+        assert (4, 99) == df.shape
+        # check in feed-in case
+        assert np.isclose(
+            df.at[self.timesteps[2], "Line_50000002"],
+            0.08521689973238901,
+        )
+        # check in load case
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_50000002"],
+            0.08521689973238901,
+        )
+
     def test_hv_mv_station_overload(self):
         # implicitly checks function _station_load
 
@@ -223,42 +259,6 @@ class TestCheckTechConstraints:
         assert np.isclose(
             0.06753, df.loc[load_cases.values, "MVGrid_1_station"].values, atol=1e-5
         ).all()
-
-    def test__lines_allowed_load_voltage_level(self):
-
-        # check for MV
-        df = check_tech_constraints._lines_allowed_load_voltage_level(self.edisgo, "mv")
-        # check shape of dataframe
-        assert (4, 30) == df.shape
-        # check in feed-in case
-        assert np.isclose(
-            df.at[self.timesteps[2], "Line_10005"],
-            7.27461339178928,
-        )
-        # check in load case (line in cycle as well as stub)
-        assert np.isclose(
-            df.at[self.timesteps[0], "Line_10005"],
-            7.274613391789284 * 0.5,
-        )
-        assert np.isclose(
-            df.at[self.timesteps[0], "Line_10024"],
-            7.27461339178928,
-        )
-
-        # check for LV
-        df = check_tech_constraints._lines_allowed_load_voltage_level(self.edisgo, "lv")
-        # check shape of dataframe
-        assert (4, 99) == df.shape
-        # check in feed-in case
-        assert np.isclose(
-            df.at[self.timesteps[2], "Line_50000002"],
-            0.08521689973238901,
-        )
-        # check in load case
-        assert np.isclose(
-            df.at[self.timesteps[0], "Line_50000002"],
-            0.08521689973238901,
-        )
 
     def mv_voltage_issues(self):
         """
