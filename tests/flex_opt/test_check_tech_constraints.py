@@ -53,6 +53,38 @@ class TestCheckTechConstraints:
         )
         assert df.at["Line_50000002", "time_index"] == self.timesteps[0]
 
+    def test_lines_allowed_load(self):
+
+        # check with default value (all lines)
+        df = check_tech_constraints.lines_allowed_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 129) == df.shape
+        # check values (feed-in case)
+        assert np.isclose(
+            df.at[self.timesteps[2], "Line_10005"],
+            7.27461339178928,
+        )
+        assert np.isclose(
+            df.at[self.timesteps[2], "Line_50000002"],
+            0.08521689973238901,
+        )
+        # check values (load case)
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"],
+            7.274613391789284 * 0.5,
+        )
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_50000002"],
+            0.08521689973238901,
+        )
+
+        # check with specifying lines
+        df = check_tech_constraints.lines_allowed_load(
+            self.edisgo, lines=["Line_10005", "Line_50000002"]
+        )
+        # check shape of dataframe
+        assert (4, 2) == df.shape
+
     def test__lines_allowed_load_voltage_level(self):
 
         # check for MV

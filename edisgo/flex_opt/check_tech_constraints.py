@@ -121,7 +121,7 @@ def lines_allowed_load(edisgo_obj, lines=None):
     """
     allowed_load_lv = _lines_allowed_load_voltage_level(edisgo_obj, voltage_level="lv")
     allowed_load_mv = _lines_allowed_load_voltage_level(edisgo_obj, voltage_level="mv")
-    allowed_load = pd.concat([allowed_load_lv, allowed_load_mv])
+    allowed_load = pd.concat([allowed_load_lv, allowed_load_mv], axis=1)
     if lines is None:
         return allowed_load
     else:
