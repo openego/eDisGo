@@ -20,8 +20,8 @@ def mv_line_overload(edisgo_obj):
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing over-loaded MV lines, their maximum relative
-        over-loading (maximum calculated current over allowed current) and the
+        Dataframe containing over-loaded MV lines, their maximum relative over-loading
+        (maximum calculated apparent power over allowed apparent power) and the
         corresponding time step.
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
@@ -54,7 +54,7 @@ def mv_line_overload(edisgo_obj):
 
 def lv_line_overload(edisgo_obj):
     """
-    Checks for over-loading issues in LV network.
+    Checks for over-loading issues in LV networks.
 
     Parameters
     ----------
@@ -63,8 +63,8 @@ def lv_line_overload(edisgo_obj):
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe containing over-loaded LV lines, their maximum relative
-        over-loading (maximum calculated current over allowed current) and the
+        Dataframe containing over-loaded LV lines, their maximum relative over-loading
+        (maximum calculated apparent power over allowed apparent power) and the
         corresponding time step.
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
@@ -182,7 +182,7 @@ def lines_allowed_load(edisgo_obj, lines=None):
         Dataframe containing the maximum allowed apparent power per line and time step
         in MVA. Index of the dataframe are all time steps power flow analysis
         was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
-        Columns are line names of all lines in the specified voltage level.
+        Columns are line names as string.
 
     """
     allowed_load_lv = _lines_allowed_load_voltage_level(edisgo_obj, voltage_level="lv")
@@ -214,7 +214,7 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
         Columns are line names of all lines in the specified voltage level.
 
     """
-    # get lines and nominal voltage
+    # get lines in voltage level
     mv_grid = edisgo_obj.topology.mv_grid
     if voltage_level == "lv":
         lines_df = edisgo_obj.topology.lines_df[
@@ -225,7 +225,7 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
     else:
         raise ValueError(
             "{} is not a valid option for input variable 'voltage_level' in "
-            "function lines_allowed_load. Try 'mv' or "
+            "function lines_allowed_load_voltage_level. Try 'mv' or "
             "'lv'.".format(voltage_level)
         )
 
