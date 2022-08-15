@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
+from more_itertools import filter_except, map_except
 from numpy.random import default_rng
 from sklearn import preprocessing
 
@@ -209,34 +210,27 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
 
     files.sort()
 
-    charging_processes_df_list = []
+    # wrapper function for csv files read in with map_except function
+    def rd_csv(file):
+        ags = int(file[1].parts[-2])
+        car_id = file[0]
+        return pd.read_csv(file[1]).assign(ags=ags, car_id=car_id)
 
-    for car_id, f in enumerate(files):
-        try:
-            df = pd.read_csv(f, index_col=[0])
+    df = pd.concat(map_except(rd_csv, list(enumerate(files))), ignore_index=True)
+    if mode == "frugal":
+        df = df.loc[df.chargingdemand_kWh > 0]
+    df = df.rename(columns={"location": "destination"})
 
-            if mode == "frugal":
-                df = df.loc[df.chargingdemand_kWh > 0]
+    df = df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
 
-            df = df.rename(columns={"location": "destination"})
-
-            df = df.assign(ags=int(f.parts[-2]), car_id=car_id)
-
-            df = df[COLUMNS["charging_processes_df"]].astype(
-                DTYPES["charging_processes_df"]
-            )
-
-            charging_processes_df_list.append(df)
-
-        except Exception:
-            logger.warning(f"File {f} couldn't be read and is skipped.")
-
-    charging_processes_df = pd.concat(charging_processes_df_list, ignore_index=True)[
-        COLUMNS["charging_processes_df"]
-    ].astype(DTYPES["charging_processes_df"])
+    for f in list(
+        set(list(enumerate(files)))
+        - set(list(filter_except(rd_csv, list(enumerate(files)), Exception)))
+    ):
+        logger.warning(f"File '{f[1].parts[-1]}' couldn't be read and is skipped.")
 
     charging_processes_df = pd.merge(
-        charging_processes_df,
+        df,
         pd.DataFrame(columns=COLUMNS["matching_demand_and_location"]),
         how="outer",
         left_index=True,
