@@ -138,7 +138,7 @@ def create_buses_df(simbench_dict):
         elif "LV" in name:
             return int(name.split(".")[-1] + name.split(".")[0][2:])
 
-    buses_col_location = COLUMNS["buses_df"]
+    buses_col_location = COLUMNS["buses_df"].copy()
     buses_col_location.append("name")
 
     buses_df = simbench_dict["Node"]
@@ -195,7 +195,7 @@ def create_transformer_dfs(simbench_dict):
 
     trans_rename_dict = {"id": "name", "nodeHV": "bus0", "nodeLV": "bus1"}
 
-    trans_col_location = COLUMNS["transformers_df"]
+    trans_col_location = COLUMNS["transformers_df"].copy()
     trans_col_location.append("name")
 
     sb_trans_df = simbench_dict["Transformer"]
@@ -249,7 +249,7 @@ def create_generators_df(simbench_dict):
         eDisGo compatible generators dataframe
     """
 
-    gen_col_location = COLUMNS["generators_df"]
+    gen_col_location = COLUMNS["generators_df"].copy()
     gen_col_location.extend(["name", "q_nom"])
 
     gen_rename_dict = {
@@ -309,7 +309,7 @@ def create_lines_df(simbench_dict, buses_df):
         eDisGo compatible lines dataframe
     """
 
-    lines_col_location = COLUMNS["lines_df"]
+    lines_col_location = COLUMNS["lines_df"].copy()
     lines_col_location.append("name")
 
     def get_line_char(lines_df, line_type_df):
@@ -372,7 +372,7 @@ def create_loads_df(simbench_dict):
         "qLoad": "q_set",
     }
 
-    loads_cols_location = COLUMNS["loads_df"]
+    loads_cols_location = COLUMNS["loads_df"].copy()
     loads_cols_location.extend(["name", "q_set"])
 
     loads_profile = simbench_dict["LoadProfile"]
@@ -412,28 +412,32 @@ def create_loads_df(simbench_dict):
 
 def _load_sector_translation_dict():
     return {
-        "G3-A": "retail",
-        "G0-M": "retail",
-        "G3-M": "retail",
         "G0-A": "retail",
-        "L0-A": "retail",
-        "G5-A": "retail",
+        "G0-M": "retail",
+        "G1-A": "retail",
+        "G1-B": "retail",
         "G1-C": "retail",
         "G2-A": "retail",
-        "G6-A": "retail",
-        "G1-B": "retail",
+        "G3-A": "retail",
+        "G3-H": "retail",
+        "G3-M": "retail",
         "G4-A": "retail",
-        "G1-A": "retail",
         "G4-B": "retail",
+        "G4-H": "retail",
         "G4-M": "retail",
-        "H0-C": "residential",
-        "H0-B": "residential",
+        "G5-A": "retail",
+        "G6-A": "retail",
         "H0-A": "residential",
-        "H0-G": "residential",
-        "H0-L": "residential",
-        "L2-M": "agricultural",
-        "L2-A": "agricultural",
+        "H0-B": "residential",
+        "H0-C": "residential",
+        "H0-G": "retail",
+        "H0-H": "residential",
+        "H0-L": "agricultural",
+        "L0-A": "agricultural",
         "L1-A": "agricultural",
+        "L1-B": "agricultural",
+        "L2-A": "agricultural",
+        "L2-M": "agricultural",
         "Soil_Alternative_2": "heat_pump",
         "Air_Parallel_1": "heat_pump",
         "Air_Alternative_1": "heat_pump",
@@ -445,6 +449,8 @@ def _load_sector_translation_dict():
         "HLS_A_3.7": "home",
         "HLS_A_11.0": "home",
         "APLS_A_3.7": "work",
+        "BL-H": "industrial",
+        "WB-H": "industrial",
     }
 
 
@@ -482,7 +488,7 @@ def create_switches_df(simbench_dict):
         "type": "type_info",
     }
 
-    switch_col_location = COLUMNS["switches_df"]
+    switch_col_location = COLUMNS["switches_df"].copy()
     switch_col_location.append("name")
 
     switches_df = simbench_dict["Switch"]
@@ -542,7 +548,7 @@ def create_storage_units_df(simbench_dict):
     return storage_units_df
 
 
-def import_sb_topology(sb_dict):
+def import_sb_topology(sb_dict, edisgo_obj):
     """
     Creating eDisGo object with topology data
 
@@ -570,7 +576,6 @@ def import_sb_topology(sb_dict):
     # Get mv grid id
     mv_grid_id = buses_df[buses_df["name"].str.contains("MV")]["mv_grid_id"].iloc[0]
 
-    edisgo_obj = EDisGo(import_timeseries=False)
     edisgo_obj.topology.buses_df = buses_df.set_index("name")
     edisgo_obj.topology.generators_df = generators_df.set_index("name")
     edisgo_obj.topology.lines_df = lines_df.set_index("name")
@@ -740,7 +745,10 @@ def import_from_simbench(data_folder, import_timeseries=True, **kwargs):
     if data_folder.split("-")[-1] != "no_sw":
         raise NotImplementedError("So far only -no_sw grids can be imported.")
     sb_dict = create_sb_dict(data_folder)
-    edisgo_obj = import_sb_topology(sb_dict)
+    edisgo_obj = EDisGo(
+        import_timeseries=False, config_path=kwargs.get("config_path", None)
+    )
+    edisgo_obj = import_sb_topology(sb_dict, edisgo_obj)
     if import_timeseries:
         logger.debug("Adding timeseries.")
         edisgo_obj = import_sb_timeseries(edisgo_obj, sb_dict, **kwargs)
