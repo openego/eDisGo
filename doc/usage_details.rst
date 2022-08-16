@@ -352,7 +352,31 @@ Electromobility
 Electromobility data including charging processes necessary to apply different
 charging strategies, as well as information on potential charging sites and
 integrated charging parks can be integrated into the grid and are stored in
-the electromobility class.
+the :pandas:`pandas.DataFrames<DataFrame>` or  :geopandas:`GeoDataFrame` in the 
+:class:`~.network.electromobility.Electromobility` object.
+
+You can access those dataframes/geodataframes as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with all SimBEV charging processes.
+    edisgo.electromobility.charging_processes_df
+
+    # Access GeoDataFrame with all TracBEV potential charging parks.
+    edisgo.electromobility.potential_charging_parks_gdf
+    
+    # Access DataFrame with all charging parks that got integrated.
+    edisgo.electromobility.integrated_charging_parks_df
+    
+The integrated charging points are then also stored in the 
+:pandas:`pandas.DataFrames<DataFrame>` in the :class:`~.network.topology.Topology` 
+object and can be accessed as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with all integrated charging points.
+    edisgo.topology.charging_points_df
+
 
 So far, adding electormobility data to an eDisGo object requires electromobility
 data from `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
