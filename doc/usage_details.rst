@@ -349,7 +349,61 @@ Further information on the grid reinforcement methodology can be found in sectio
 Electromobility
 -----------------
 
-.. todo:: Add
+Electromobility data including charging processes necessary to apply different
+charging strategies, as well as information on potential charging sites and
+integrated charging parks can be integrated into the grid and are stored in
+the electromobility class.
+
+So far, adding electormobility data to an eDisGo object requires electromobility
+data from `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
+`3083c5a <https://github.com/rl-institut/simbev/commit/
+86076c936940365587c9fba98a5b774e13083c5a>`_) 
+and `TracBEV <https://github.com/rl-institut/tracbev>`_ (required version:
+`14d864c <https://github.com/rl-institut/tracbev/commit/
+03e335655770a377166c05293a966052314d864c>`_) to be stored in the directories 
+specified through the parameters simbev_directory and tracbev_directory. 
+SimBEV provides data on standing times, charging demand, etc. per vehicle, 
+whereas TracBEV provides potential charging point locations.
+
+.. todo:: Add information on how to retrieve SimBEV and TracBEV data
+
+Here is a small examples on how to import electromobility data and apply a
+charging strategy to the charging processes.
+
+.. code-block:: python
+
+    import pandas as pd
+    from edisgo import EDisGo
+
+    # Set up the EDisGo object
+    timeindex = pd.date_range("1/1/2011", periods=24*7, freq="H")
+    edisgo = EDisGo(
+        ding0_grid=dingo_grid_path,
+        timeindex=timeindex
+    )
+    edisgo.set_time_series_active_power_predefined(
+        fluctuating_generators_ts="oedb",
+        dispatchable_generators_ts=pd.DataFrame(data=1, columns=["other"], index=timeindex),
+        conventional_loads_ts="demandlib",
+    )
+
+    edisgo.set_time_series_reactive_power_control()
+    
+    # Resample edisgo timeseries to 15-minute resolution to match simBEV and tracBEV data
+    edisgo.resample_timeseries()
+    
+    # Import electromobility data
+    edisgo.import_electromobility(
+        simbev_directory=simbev_path,
+        tracbev_directory=tracbev_path,
+    )
+    
+    # Apply charging strategy
+    edisgo.apply_charging_strategy(strategy="dumb")
+
+Further information on the electromobility integration methodology and the charging 
+strategies can be found in section :ref:`selectromobility-integration-label`.
+
 
 Battery storage systems
 ------------------------
