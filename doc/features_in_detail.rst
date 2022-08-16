@@ -261,6 +261,14 @@ It is also possible to curtail specific generators internally, though a user fri
     where :math:`c_{target,t}` is the given curtailment target (power) for timestep :math:`t` to be allocated
     to the generators.
 
+.. _electromobility-integration-label:
+
+Electromobility integration
+--------------------
+
+
+
+
 .. _storage-integration-label:
 
 Storage integration
