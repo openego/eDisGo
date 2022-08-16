@@ -971,15 +971,35 @@ def draw_plotly(
         x1, y1 = transformer_4326_to_3035.transform(x1, y1)
         return x0, y0, x1, y1
 
-    line_color_options = ["loading", "relative_loading", "reinforce"]
-    if line_color not in line_color_options:
-        raise KeyError(f"Line colors need to be one of {line_color_options}")
+    # check line_color input
+    if line_color is not None:
+        line_color_options = ["loading", "relative_loading", "reinforce"]
+        if line_color not in line_color_options:
+            logger.warning(f"Line colors need to be one of {line_color_options}")
+            line_color = None
+        else:
+            if edisgo_obj.results.s_res.empty and line_color in [
+                "loading",
+                "relative_loading",
+            ]:
+                logger.warning("No results to show. -> Run power flow.")
+                line_color = None
+            elif edisgo_obj.results.equipment_changes.empty and line_color in [
+                "reinforce"
+            ]:
+                logger.warning("No results to show. -> Run power flow.")
+                line_color = None
 
-    if edisgo_obj.results.s_res.empty and edisgo_obj.results.v_res.empty:
-        if line_color in ["loading", "relative_loading"]:
-            raise ValueError("No results to show. -> Run power flow.")
-        if node_color in ["voltage_deviation"]:
-            raise ValueError("No results to show. -> Run power flow.")
+    # check node_color
+    if node_color is not None:
+        node_color_options = ["voltage_deviation", "adjacencies"]
+        if node_color not in node_color_options:
+            logger.warning(f"Node colors need to be one of {node_color_options}")
+            node_color = None
+        else:
+            if edisgo_obj.results.v_res.empty and node_color in ["voltage_deviation"]:
+                logger.warning("No results to show. -> Run power flow.")
+                node_color = None
 
     if G is None:
         G = edisgo_obj.topology.mv_grid.graph
@@ -1148,27 +1168,32 @@ def draw_plotly(
         )
         data.append(edge_scatter)
 
-    colorbar_edge_scatter = go.Scatter(
-        mode="markers",
-        x=[None],
-        y=[None],
-        marker=dict(
-            colorbar=dict(
-                title="Lines", xanchor="left", titleside="right", x=1.17, thickness=15
+    if line_color:
+        colorbar_edge_scatter = go.Scatter(
+            mode="markers",
+            x=[None],
+            y=[None],
+            marker=dict(
+                colorbar=dict(
+                    title="Lines",
+                    xanchor="left",
+                    titleside="right",
+                    x=1.17,
+                    thickness=15,
+                ),
+                colorscale=colorscale,
+                cmax=color_max,
+                cmin=color_min,
+                showscale=showscale,
             ),
-            colorscale=colorscale,
-            cmax=color_max,
-            cmin=color_min,
-            showscale=showscale,
-        ),
-    )
+        )
 
-    if line_color == "reinforce":
-        colorbar_edge_scatter.marker.colorbar.tickmode = "array"
-        colorbar_edge_scatter.marker.colorbar.ticktext = ["added", "changed"]
-        colorbar_edge_scatter.marker.colorbar.tickvals = [0, 1]
+        if line_color == "reinforce":
+            colorbar_edge_scatter.marker.colorbar.tickmode = "array"
+            colorbar_edge_scatter.marker.colorbar.ticktext = ["added", "changed"]
+            colorbar_edge_scatter.marker.colorbar.tickvals = [0, 1]
 
-    data.append(colorbar_edge_scatter)
+        data.append(colorbar_edge_scatter)
 
     # node plot
     node_x = []
@@ -1194,8 +1219,9 @@ def draw_plotly(
         )
         colorscale = "RdBu"
         cmid = 0
+        showscale = True
 
-    else:
+    elif node_color == "adjacencies":
         node_colors = [len(adjacencies[1]) for adjacencies in G.adjacency()]
         colorscale = "YlGnBu"
         cmid = None
@@ -1203,6 +1229,14 @@ def draw_plotly(
         colorbar = dict(
             thickness=15, title="Node Connections", xanchor="left", titleside="right"
         )
+        showscale = True
+
+    else:
+        node_colors = "grey"
+        cmid = None
+        colorscale = None
+        colorbar = None
+        showscale = False
 
     node_text = []
     for node in G.nodes():
@@ -1252,7 +1286,7 @@ def draw_plotly(
         hoverinfo="text",
         text=node_text,
         marker=dict(
-            showscale=True,
+            showscale=showscale,
             colorscale=colorscale,
             color=node_colors,
             size=8,
@@ -1261,6 +1295,7 @@ def draw_plotly(
             colorbar=colorbar,
         ),
     )
+
     data.append(node_scatter)
 
     fig = go.Figure(
