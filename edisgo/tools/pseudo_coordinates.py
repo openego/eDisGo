@@ -224,7 +224,7 @@ def make_pseudo_coordinates_graph(G):
 
     """
     start_time = time()
-    logger.info("Start - Making pseudo coordinates for graph")
+    logger.debug("Start - Making pseudo coordinates for graph")
 
     x0, y0 = G.nodes[list(nx.nodes(G))[0]]["pos"]
     G = make_coordinates(G)
@@ -233,5 +233,5 @@ def make_pseudo_coordinates_graph(G):
         x, y = G.nodes[node]["pos"]
         G.nodes[node]["pos"] = coor_transform_back.transform(x + x0, y + y0)
 
-    logger.info("Finished in {}s".format(time() - start_time))
+    logger.debug("Finished in {}s".format(time() - start_time))
     return G
