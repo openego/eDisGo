@@ -163,23 +163,24 @@ def make_pseudo_coordinates(
     edisgo_root: EDisGo, mv_coordinates: bool = False
 ) -> EDisGo:
     """
-    Generates pseudo coordinates for grids.
+    Generates pseudo coordinates for all LV grids and optionally MV grid.
 
     Parameters
     ----------
     edisgo_root : :class:`~.EDisGo`
-        eDisGo Object
+        eDisGo object
     mv_coordinates : bool, optional
         If True pseudo coordinates are also generated for mv_grid.
-        Default: False
+        Default: False.
+
     Returns
     -------
-    edisgo_object : :class:`~.EDisGo`
-        eDisGo object with coordinates for all nodes
+    :class:`~.EDisGo`
+        eDisGo object with pseudo coordinates for all LV nodes and optionally MV nodes.
 
     """
     start_time = time()
-    logger.info(
+    logger.debug(
         "Start - Making pseudo coordinates for grid: {}".format(
             str(edisgo_root.topology.mv_grid)
         )
@@ -203,7 +204,7 @@ def make_pseudo_coordinates(
             edisgo_obj.topology.buses_df.loc[node, "x"] = x
             edisgo_obj.topology.buses_df.loc[node, "y"] = y
 
-    logger.info("Finished in {}s".format(time() - start_time))
+    logger.debug("Finished in {}s".format(time() - start_time))
     return edisgo_obj
 
 
@@ -213,15 +214,13 @@ def make_pseudo_coordinates_graph(G):
 
     Parameters
     ----------
-    edisgo_root : :class:`~.EDisGo`
-        eDisGo Object
-    mv_coordinates : bool, optional
-        If True pseudo coordinates are also generated for mv_grid.
-        Default: False
+    G : :networkx:`networkx.Graph<network.Graph>`
+        Graph object to generate pseudo coordinates for.
+
     Returns
     -------
-    edisgo_object : :class:`~.EDisGo`
-        eDisGo object with coordinates for all nodes
+    :networkx:`networkx.Graph<network.Graph>`
+        Graph with pseudo coordinates for all nodes.
 
     """
     start_time = time()
