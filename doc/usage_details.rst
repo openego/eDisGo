@@ -402,7 +402,7 @@ charging strategy to the charging processes.
     edisgo.apply_charging_strategy(strategy="dumb")
 
 Further information on the electromobility integration methodology and the charging 
-strategies can be found in section :ref:`selectromobility-integration-label`.
+strategies can be found in section :ref:`electromobility-integration-label`.
 
 
 Battery storage systems
