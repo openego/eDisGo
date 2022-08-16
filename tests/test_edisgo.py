@@ -1034,6 +1034,26 @@ class TestEDisGo:
         )
         # fmt: on
 
+    def test_apply_charging_strategy(self):
+        self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        self.edisgo_obj.set_timeindex(timeindex)
+
+        self.edisgo_obj.resample_timeseries()
+        # test with default parameters
+        simbev_path = pytest.simbev_example_scenario_path
+        tracbev_path = pytest.tracbev_example_scenario_path
+        self.edisgo_obj.import_electromobility(simbev_path, tracbev_path)
+        self.edisgo_obj.apply_charging_strategy()
+        ts = self.edisgo_obj.timeseries
+
+        # Check if all charging points have a valid chargingdemand_kWh > 0
+        df = ts.charging_points_active_power(self.edisgo_obj).loc[
+            :, (ts.charging_points_active_power(self.edisgo_obj) <= 0).any(axis=0)
+        ]
+
+        assert df.shape == ts.charging_points_active_power(self.edisgo_obj).shape
+
     def test_plot_mv_grid_topology(self):
         plt.ion()
         self.edisgo.plot_mv_grid_topology(technologies=True)
