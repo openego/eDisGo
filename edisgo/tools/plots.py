@@ -917,19 +917,18 @@ def draw_plotly(
         nodes. If no graph is given the mv grid graph of the edisgo object is used.
 
     line_color : str
-        Defines whereby to choose line colors (and implicitly size). Possible
+        Defines whereby to choose line colors. Possible
         options are:
 
         * 'loading'
           Line color is set according to loading of the line.
-        * 'relative_loading' (Default)
+        * 'relative_loading' (default)
           Line color is set according to relative loading of the line.
         * 'reinforce'
           Line color is set according to investment costs of the line.
 
     node_color : str or None
-        Defines whereby to choose node colors (and implicitly size). Possible
-        options are:
+        Defines whereby to choose node colors. Possible options are:
 
         * 'adjacencies'
           Node color as well as size is set according to the number of direct neighbors.
@@ -950,7 +949,7 @@ def draw_plotly(
     grid : :class:`~.network.grids.Grid` or bool
         Grid to use as root node. If a grid is given the transformer station is used
         as root. If False the root is set to the coordinates x=0 and y=0. Else the
-        coordinates from the hv-mv-station of the mv grid are used. Default: False
+        coordinates from the HV-MV-station of the MV grid are used. Default: False
 
     Returns
     -------
