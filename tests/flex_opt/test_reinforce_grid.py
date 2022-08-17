@@ -30,8 +30,10 @@ class TestReinforceGrid:
                 target = ["mv"]
             elif mode == "mvlv":
                 target = ["mv", "mv/lv"]
-            else:
+            elif mode == "lv":
                 target = ["mv/lv", "lv"]
+            else:
+                raise ValueError("Non existing mode")
 
             assert_array_equal(
                 np.sort(target),

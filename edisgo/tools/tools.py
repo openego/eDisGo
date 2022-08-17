@@ -1,3 +1,4 @@
+import logging
 import os
 
 from math import pi, sqrt
@@ -18,6 +19,9 @@ if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import climate
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
+
+
+logger = logging.getLogger(__name__)
 
 
 def select_worstcase_snapshots(edisgo_obj):
@@ -147,6 +151,31 @@ def calculate_line_resistance(line_resistance_per_km, line_length, num_parallel)
 
     """
     return line_resistance_per_km * line_length / num_parallel
+
+
+def calculate_line_susceptance(line_capacitance_per_km, line_length, num_parallel):
+    """
+    Calculates line shunt susceptance in Siemens.
+
+    Parameters
+    ----------
+    line_capacitance_per_km : float
+        Line inductance in uF/km.
+    line_length : float
+        Length of line in km.
+    num_parallel : int
+        Number of parallel lines.
+
+    Returns
+    -------
+    float
+        Shunt susceptance in Siemens
+
+    """
+    if line_capacitance_per_km == 0:
+        return 0
+    else:
+        return line_capacitance_per_km / 1e6 * line_length * 2 * pi * 50 * num_parallel
 
 
 def calculate_apparent_power(nominal_voltage, current, num_parallel):
@@ -532,3 +561,78 @@ def get_files_recursive(path, files=None):
             files.append(file)
 
     return files
+
+
+def add_line_susceptance(
+    edisgo_obj,
+    mode="mv_b",
+):
+    """
+    Add the line susceptance to existing grids, which has no susceptance. Therefore, the
+    susceptance (b) of all lines is recalculated.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+        EDisGo-Object in which the susceptance is added.
+
+    mode : str
+        Defines how the susceptance is added:
+
+        * 'no_b'
+          The b is set to 0 for all lines.
+        * 'mv_b' (Default)
+          The b is set for the mv-lines according to the equipment parameters and
+          for the lv-lines b = 0.
+        * 'all_b'
+          The b is set for the mv-lines according to the equipment parameters and
+          for the lv-lines 0.25 uF/km is chosen.
+
+    Returns
+    -------
+    edisgo_obj : :class:`~.EDisGo`
+
+    """
+    line_data_df = pd.concat(
+        [
+            edisgo_obj.topology.equipment_data["mv_overhead_lines"],
+            edisgo_obj.topology.equipment_data["mv_cables"],
+            edisgo_obj.topology.equipment_data["lv_cables"],
+        ]
+    )
+
+    if mode == "no_b":
+        line_data_df.loc[:, "C_per_km"] = 0
+    elif mode == "mv_b":
+        line_data_df.loc[
+            edisgo_obj.topology.equipment_data["lv_cables"].index, "C_per_km"
+        ] = 0
+    elif mode == "all_b":
+        line_data_df.loc[
+            edisgo_obj.topology.equipment_data["lv_cables"].index, "C_per_km"
+        ] = 0.25
+    else:
+        raise ValueError("Non-existing mode")
+
+    lines_df = edisgo_obj.topology.lines_df
+    buses_df = edisgo_obj.topology.buses_df
+
+    for index, bus0, type_info, length, num_parallel in lines_df[
+        ["bus0", "type_info", "length", "num_parallel"]
+    ].itertuples():
+        v_nom = buses_df.loc[bus0].v_nom
+
+        try:
+            line_capacitance_per_km = (
+                line_data_df.loc[line_data_df.U_n == v_nom].loc[type_info].C_per_km
+            )
+        except KeyError:
+            line_capacitance_per_km = line_data_df.loc[type_info].C_per_km
+            logger.warning(f"False voltage level for line {index}")
+
+        lines_df.loc[index, "b"] = calculate_line_susceptance(
+            line_capacitance_per_km, length, num_parallel
+        )
+
+    # edisgo_obj.topology.lines_df = lines_df
+    return edisgo_obj
