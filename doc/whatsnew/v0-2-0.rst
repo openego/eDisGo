@@ -28,4 +28,3 @@ Changes
   standing times, charging demand, etc. per vehicle, whereas TracBEV provides potential charging point locations)
   `#174 <https://github.com/openego/eDisGo/issues/174>`_ and
   `#191 <https://github.com/openego/eDisGo/pull/191>`_
-

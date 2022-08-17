@@ -79,7 +79,12 @@ def charging_strategy(
     # Delete possible old time series as these influence "residual" charging
     edisgo_obj.timeseries.drop_component_time_series(
         "loads_active_power",
-        edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values
+        edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values,
+    )
+
+    edisgo_obj.timeseries.drop_component_time_series(
+        "loads_reactive_power",
+        edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values,
     )
 
     eta_cp = edisgo_obj.electromobility.eta_charging_points
@@ -130,7 +135,7 @@ def charging_strategy(
 
             edisgo_obj.timeseries.add_component_time_series(
                 "loads_active_power",
-                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex)
+                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex),
             )
 
     elif strategy == "reduced":
@@ -168,7 +173,7 @@ def charging_strategy(
 
             edisgo_obj.timeseries.add_component_time_series(
                 "loads_active_power",
-                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex)
+                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex),
             )
 
     elif strategy == "residual":
@@ -277,22 +282,28 @@ def charging_strategy(
             dummy_ts.rename(
                 columns={
                     cp_id: edisgo_obj.electromobility.integrated_charging_parks_df.at[
-                        cp_id, "edisgo_id"] for cp_id in dummy_ts.columns}
-            )
+                        cp_id, "edisgo_id"
+                    ]
+                    for cp_id in dummy_ts.columns
+                }
+            ),
         )
 
     else:
         raise ValueError(f"Strategy {strategy} has not yet been implemented.")
 
     # set reactive power time series to 0 Mvar
+    # fmt: off
     edisgo_obj.timeseries.add_component_time_series(
         "loads_reactive_power",
         pd.DataFrame(
-            data=0.,
+            data=0.0,
             index=edisgo_obj.timeseries.timeindex,
-            columns=edisgo_obj.electromobility.integrated_charging_parks_df.
-                edisgo_id.values)
+            columns=edisgo_obj.electromobility.integrated_charging_parks_df
+            .edisgo_id.values,
+        ),
     )
+    # fmt: on
 
     logging.info(f"Charging strategy {strategy} completed.")
 
