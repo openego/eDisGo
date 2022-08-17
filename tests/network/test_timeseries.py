@@ -2312,12 +2312,7 @@ class TestTimeSeries:
 
     def test_resample_timeseries(self):
         # add dummy time series
-        timeindex = pd.date_range("1/1/2011", periods=4, freq="H")
-        self.edisgo.set_timeindex(timeindex)
-        # add example data for active power
-        self.edisgo.set_time_series_active_power_predefined(
-            fluctuating_generators_ts="oedb"
-        )
+        self.edisgo.set_time_series_worst_case_analysis()
         len_timeindex_orig = len(self.edisgo.timeseries.timeindex)
         mean_value_orig = self.edisgo.timeseries.generators_active_power.mean()
         self.edisgo.timeseries.resample_timeseries()
@@ -2327,14 +2322,16 @@ class TestTimeSeries:
         # check if mean value of resampled data is the same as mean value of original
         # data
         assert (
-            self.edisgo.timeseries.generators_active_power.mean() == mean_value_orig
-        ).unique()
+            self.edisgo.timeseries.generators_active_power.mean().round(5)
+            == mean_value_orig.round(5)
+        ).all()
         # Same tests for down-sampling
         self.edisgo.timeseries.resample_timeseries(freq="2h")
         assert len(self.edisgo.timeseries.timeindex) == 0.5 * len_timeindex_orig
         assert (
-            self.edisgo.timeseries.generators_active_power.mean() == mean_value_orig
-        ).unique()
+            self.edisgo.timeseries.generators_active_power.mean().round(5)
+            == mean_value_orig.round(5)
+        ).all()
 
 
 class TestTimeSeriesRaw:
