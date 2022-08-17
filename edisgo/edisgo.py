@@ -2039,7 +2039,9 @@ class EDisGo:
 
     def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
         """
-        Returns timeseries resampled from hourly resolution to 15 minute resolution.
+        Resample all timeseries to wanted resolution.
+
+        In case of upsampling the filling methods needs to be specified.
 
         Parameters
         ----------
