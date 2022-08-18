@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import warnings
 
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
@@ -1128,6 +1129,8 @@ def integrate_charging_parks(edisgo_obj):
         for cp in charging_parks
         if (cp.designated_charging_point_capacity > 0) and cp.within_grid
     ]
+
+    warnings.warn(str(len(designated_charging_parks)))
 
     charging_park_ids = [_.id for _ in designated_charging_parks]
 
