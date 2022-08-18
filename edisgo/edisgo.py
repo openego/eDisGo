@@ -2039,30 +2039,27 @@ class EDisGo:
 
     def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
         """
-        Resample all timeseries to wanted resolution.
+        Returns timeseries resampled to a desired resolution.
 
-        In case of upsampling the filling methods needs to be specified.
+        Both up- and downsampling methods are available.
 
         Parameters
         ----------
         method : str, optional
-            Method to choose from to fill missing values when upsampling. Possible
-            options are:
+            Method to choose from to fill missing values when upsampling. Default:
+            'ffill'. Possible options are:
 
             * 'ffill': propagate last valid observation forward to next valid
-            observation. See
-            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.ffill.html
-            'ffill' is the Default.
+            observation. See :pandas:`pandas.DataFrame.ffill<DataFrame.ffill>`
 
             * 'bfill': use next valid observation to fill gap. See
-            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.bfill.html
+            :pandas:`pandas.DataFrame.bfill<DataFrame.bfill>`
 
             * 'interpolate': Fill NaN values using an interpolation method. See
-            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.interpolate.html
+            :pandas:`pandas.DataFrame.interpolate<DataFrame.interpolate>`
 
         freq : str, optional
-            Frequency that timeseries is resampled to. Can be any frequency up to one
-            hour. Offset aliases can be found here:
+            Frequency that timeseries is resampled to. Offset aliases can be found here:
             https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases
             15 minutes is the default.
 
