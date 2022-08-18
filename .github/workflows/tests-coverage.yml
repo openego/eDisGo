@@ -24,7 +24,7 @@ jobs:
         pip3 install coveralls
     - name: Run coverage
       run: |
-        coverage run --source=edisgo -m pytest --runslow -vv tests/test_edisgo
+        coverage run --source=edisgo -m pytest --runslow -vv $GITHUB_WORKSPACE/tests/test_edisgo
     - name: Run coveralls
       run: |
         coveralls
