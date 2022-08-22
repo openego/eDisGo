@@ -1842,8 +1842,8 @@ class EDisGo:
         """
         Saves EDisGo object to csv.
 
-        It can be chosen if results, topology and timeseries should be saved.
-        For each one, a separate directory is created.
+        It can be chosen if results, topology, electromobility and timeseries should be
+        saved. For each one, a separate directory is created.
 
         Parameters
         ----------

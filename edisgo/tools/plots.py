@@ -912,7 +912,7 @@ def draw_plotly(
         Graph representation of the grid as networkx Ordered Graph, where lines are
         represented by edges in the graph, and buses and transformers are represented by
         nodes. If no graph is given the mv grid graph of the edisgo object is used.
-    line_color : str
+    line_color : str, optional
         Defines whereby to choose line colors (and implicitly size). Possible
         options are:
 
@@ -923,7 +923,7 @@ def draw_plotly(
         * 'reinforce'
           Line color is set according to investment costs of the line.
 
-    node_color : str or None
+    node_color : str or None, optional
         Defines whereby to choose node colors (and implicitly size). Possible
         options are:
 
@@ -932,8 +932,8 @@ def draw_plotly(
         * 'voltage_deviation' (default)
           Node color is set according to voltage deviation from 1 p.u..
 
-    grid : :class:`~.network.grids.Grid` or bool
-        Grid to use as root node. If a grid is given the transforer station is used
+    grid : :class:`~.network.grids.Grid` or bool, optional
+        Grid to use as root node. If a grid is given the transformer station is used
         as root. If False the root is set to the coordinates x=0 and y=0. Else the
         coordinates from the hv-mv-station of the mv grid are used. Default: False
 
