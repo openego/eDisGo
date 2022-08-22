@@ -552,8 +552,6 @@ curtailment requirements. It uses the EDisGo object from above.
 Plots
 ----------------
 
-.. todo:: Add plotly plot option
-
 EDisGo provides a bunch of predefined plots to e.g. plot the MV grid topology,
 line loading and node voltages in the MV grid or as a histograms.
 
@@ -567,7 +565,18 @@ line loading and node voltages in the MV grid or as a histograms.
 
     # plot voltage histogram
     edisgo.histogram_voltage()
+    
+    # draw a plotly html figure
+    draw_plotly(edisgo)
 
+    # plot relative loading and voltage deviation, with grid coordinates 
+    # modified to have the station in the origin
+    draw_plotly(
+        edisgo, G=edisgo_obj.topology.mv_grid.graph, 
+        line_color="relative_loading", node_color="voltage_deviation", 
+        grid=edisgo.topology.mv_grid
+    )
+    
 See :class:`~.EDisGo` class for more plots and plotting options.
 
 Results
