@@ -866,7 +866,7 @@ def color_map_color(
     value: Number,
     vmin: Number,
     vmax: Number,
-    cmap_name: str = "coolwarm",
+    cmap_name: str | list = "coolwarm",
 ) -> str:
     """
     Get matching color for a value on a matplotlib color map.
@@ -879,8 +879,8 @@ def color_map_color(
         Minimum value on color map
     vmax : float or int
         Maximum value on color map
-    cmap_name : str
-        Name of color map to use
+    cmap_name : str or list
+        Name of color map to use, or the colormap
 
     Returns
     -------
@@ -889,20 +889,27 @@ def color_map_color(
 
     """
     norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
-    cmap = cm.get_cmap(cmap_name)
+    if isinstance(cmap_name, str):
+        cmap = cm.get_cmap(cmap_name)
+    else:
+        cmap = matplotlib.colors.LinearSegmentedColormap.from_list("mycmap", cmap_name)
     rgb = cmap(norm(abs(value)))[:3]
     color = matplotlib.colors.rgb2hex(rgb)
 
     return color
 
 
-def draw_plotly(
+def plot_plotly(
     edisgo_obj: EDisGo,
-    G: Graph | None = None,
+    grid: Grid | None = None,
     line_color: str = "relative_loading",
     node_color: str = "voltage_deviation",
-    timestep: str = "min",
-    grid: bool | Grid = False,
+    line_result_selection: str = "max",
+    node_result_selection: str = "max",
+    selected_timesteps: bool | str | list = False,
+    center_coordinates: bool = False,
+    pseudo_coordinates: bool = False,
+    node_selection: list | str | bool = False,
 ) -> BaseFigure:
     """
     Draw a plotly html figure
@@ -935,7 +942,7 @@ def draw_plotly(
         * 'voltage_deviation' (default)
           Node color is set according to voltage deviation from 1 p.u..
 
-    timestep : str or :pandas:`pandas.Timestamp<Timestamp>`
+    result_selection : str or :pandas:`pandas.Timestamp<Timestamp>`
         Defines which values are shown for the load of the lines and the voltage of the
         nodes:
 
@@ -943,7 +950,7 @@ def draw_plotly(
           Minimal line load and minimal node voltage of all time steps.
         * 'max'
           Maximal line load and minimal node voltage of all time steps.
-        * 'timestep'
+        * 'result_selection'
           Line load and node voltage for the selected time step.
 
     grid : :class:`~.network.grids.Grid` or bool
@@ -957,6 +964,102 @@ def draw_plotly(
         Plotly figure with branches and nodes.
 
     """
+    if grid is None:
+        grid = edisgo_obj.topology.mv_grid
+
+    G = grid.graph
+
+    # check for existing power flow results
+    if edisgo_obj.results.s_res.empty:
+        power_flow_results = False
+    else:
+        power_flow_results = True
+
+    # check for existing reinforcement results
+    if edisgo_obj.results.equipment_changes.empty:
+        reinforcement_results = False
+    else:
+        reinforcement_results = True
+
+    # check line_color input
+    line_color_options = ["loading", "relative_loading", "reinforce"]
+    if line_color not in line_color_options:
+        logger.warning(f"Line colors need to be one of {line_color_options}")
+        line_color = None
+    elif (line_color in ["loading", "relative_loading"]) and (not power_flow_results):
+        logger.warning("No power flow results to show. -> Run power flow.")
+        line_color = None
+    elif (line_color in ["reinforce"]) and (not reinforcement_results):
+        logger.warning("No reinforcement results to show. -> Run reinforcement.")
+        line_color = None
+
+    # check node_color input
+    node_color_options = ["voltage_deviation", "adjacencies"]
+    if node_color not in node_color_options:
+        logger.warning(f"Line colors need to be one of {node_color_options}")
+        node_color = None
+    elif (node_color in ["voltage_deviation"]) and (not power_flow_results):
+        logger.warning("No power flow results to show. -> Run power flow.")
+        node_color = None
+
+    if center_coordinates:
+        # Center transformer coordinates on (0,0).
+        if hasattr(grid, "transformers_df"):
+            node_root = grid.transformers_df.bus1.iat[0]
+            x_root, y_root = G.nodes[node_root]["pos"]
+        else:
+            node_root = edisgo_obj.topology.transformers_hvmv_df.bus1.iat[0]
+            x_root, y_root = G.nodes[node_root]["pos"]
+    else:
+        x_root = 0
+        y_root = 0
+
+    if pseudo_coordinates:
+        G = make_pseudo_coordinates_graph(
+            G, edisgo_obj.config["grid_connection"]["branch_detour_factor"]
+        )
+
+    if node_selection:
+        G = G.subgraph(node_selection)
+        if not list(G.nodes()):
+            raise ValueError("Selected nodes are not in the selected grid.")
+
+    # Select values for displaying results.
+    if power_flow_results:
+        s_res_view = edisgo_obj.results.s_res.T.index.isin(
+            [edge[2]["branch_name"] for edge in G.edges.data()]
+        )
+        v_res_view = edisgo_obj.results.v_res.T.index.isin([node for node in G.nodes])
+
+        if selected_timesteps:
+            if isinstance(selected_timesteps, str):
+                s_res = edisgo_obj.results.s_res.T.loc[s_res_view, [selected_timesteps]]
+                v_res = edisgo_obj.results.v_res.T.loc[v_res_view, [selected_timesteps]]
+            else:
+                s_res = edisgo_obj.results.s_res.T.loc[s_res_view, selected_timesteps]
+                v_res = edisgo_obj.results.v_res.T.loc[v_res_view, selected_timesteps]
+        else:
+            s_res = edisgo_obj.results.s_res.T.loc[s_res_view, :]
+            v_res = edisgo_obj.results.v_res.T.loc[v_res_view, :]
+
+        result_selection_options = ["min", "max"]
+        if line_result_selection == "min":
+            s_res = s_res.T.min()
+        elif line_result_selection == "max":
+            s_res = s_res.T.max()
+        else:
+            raise ValueError(
+                f"line_result_selection need to be one of {result_selection_options}"
+            )
+        if node_result_selection == "min":
+            v_res = v_res.T.min()
+        elif node_result_selection == "max":
+            v_res = v_res.T.max()
+        else:
+            raise ValueError(
+                f"node_result_selection need to be one of {result_selection_options}"
+            )
+
     # initialization coordinate transformation
     transformer_4326_to_3035 = Transformer.from_crs(
         "EPSG:4326",
@@ -971,335 +1074,288 @@ def draw_plotly(
         x1, y1 = transformer_4326_to_3035.transform(x1, y1)
         return x0, y0, x1, y1
 
-    # check line_color input
-    if line_color is not None:
-        line_color_options = ["loading", "relative_loading", "reinforce"]
-        if line_color not in line_color_options:
-            logger.warning(f"Line colors need to be one of {line_color_options}")
-            line_color = None
-        else:
-            if edisgo_obj.results.s_res.empty and line_color in [
-                "loading",
-                "relative_loading",
-            ]:
-                logger.warning("No results to show. -> Run power flow.")
-                line_color = None
-            elif edisgo_obj.results.equipment_changes.empty and line_color in [
-                "reinforce"
-            ]:
-                logger.warning("No results to show. -> Run power flow.")
-                line_color = None
-
-    # check node_color
-    if node_color is not None:
-        node_color_options = ["voltage_deviation", "adjacencies"]
-        if node_color not in node_color_options:
-            logger.warning(f"Node colors need to be one of {node_color_options}")
-            node_color = None
-        else:
-            if edisgo_obj.results.v_res.empty and node_color in ["voltage_deviation"]:
-                logger.warning("No results to show. -> Run power flow.")
-                node_color = None
-
-    if G is None:
-        G = edisgo_obj.topology.mv_grid.graph
-
-    # Center transformer coordinates on (0,0).
-    if hasattr(grid, "transformers_df"):
-        node_root = grid.transformers_df.bus1.iat[0]
-        x_root, y_root = G.nodes[node_root]["pos"]
-    elif not grid:
-        x_root = 0
-        y_root = 0
-    else:
-        node_root = edisgo_obj.topology.transformers_hvmv_df.bus1.iat[0]
-        x_root, y_root = G.nodes[node_root]["pos"]
-
     x_root, y_root = transformer_4326_to_3035.transform(x_root, y_root)
 
-    # Select the values for loads and nodes.
-    s_res_view = edisgo_obj.results.s_res.T.index.isin(
-        [edge[2]["branch_name"] for edge in G.edges.data()]
-    )
-    v_res_view = edisgo_obj.results.v_res.T.index.isin([node for node in G.nodes])
-    if timestep == "min":
-        s_res = edisgo_obj.results.s_res.T.loc[s_res_view].T.min()
-        v_res = edisgo_obj.results.v_res.T.loc[v_res_view].T.min()
-    elif timestep == "max":
-        s_res = edisgo_obj.results.s_res.T.loc[s_res_view].T.max()
-        v_res = edisgo_obj.results.v_res.T.loc[v_res_view].T.max()
-    else:
-        s_res = edisgo_obj.results.s_res.T.loc[s_res_view, timestep]
-        v_res = edisgo_obj.results.v_res.T.loc[v_res_view, timestep]
+    def plot_line_text():
+        middle_node_x = []
+        middle_node_y = []
+        middle_node_text = []
 
-    # line text
-    middle_node_x = []
-    middle_node_y = []
-    middle_node_text = []
+        for edge in G.edges(data=True):
+            x0, y0, x1, y1 = get_coordinates_for_edge(edge)
+            middle_node_x.append((x0 - x_root + x1 - x_root) / 2)
+            middle_node_y.append((y0 - y_root + y1 - y_root) / 2)
 
-    for edge in G.edges(data=True):
-        x0, y0, x1, y1 = get_coordinates_for_edge(edge)
-        middle_node_x.append((x0 - x_root + x1 - x_root) / 2)
-        middle_node_y.append((y0 - y_root + y1 - y_root) / 2)
+            branch_name = edge[2]["branch_name"]
 
-        branch_name = edge[2]["branch_name"]
+            text = str(branch_name)
+            if power_flow_results:
+                text += "<br>" + "Loading = " + str(s_res.loc[branch_name])
 
-        text = str(branch_name)
-        try:
-            text += "<br>" + "Loading = " + str(s_res.loc[branch_name])
-        except KeyError:
-            logger.debug(
-                f"Could not find loading for branch {branch_name}", exc_info=True
-            )
-            text = text
-
-        try:
             line_parameters = edisgo_obj.topology.lines_df.loc[branch_name, :]
             for index, value in line_parameters.iteritems():
                 text += "<br>" + str(index) + " = " + str(value)
-        except KeyError:
-            logger.debug(
-                f"Could not find line parameters for branch {branch_name}",
-                exc_info=True,
-            )
-            text = text
 
-        middle_node_text.append(text)
+            middle_node_text.append(text)
 
-    middle_node_scatter = go.Scatter(
-        x=middle_node_x,
-        y=middle_node_y,
-        text=middle_node_text,
-        mode="markers",
-        hoverinfo="text",
-        marker=dict(
-            opacity=0.0,
-            size=10,
-            color="white",
-        ),
-        showlegend=False,
-    )
-    data = [middle_node_scatter]
+        middle_node_scatter = go.Scatter(
+            x=middle_node_x,
+            y=middle_node_y,
+            text=middle_node_text,
+            mode="markers",
+            hoverinfo="text",
+            marker=dict(
+                opacity=0.0,
+                size=10,
+                color="white",
+            ),
+            showlegend=False,
+        )
+        return [middle_node_scatter]
 
-    # line plot
-    showscale = True
-    if line_color == "loading":
-        color_min = s_res.T.min()
-        color_max = s_res.T.max()
-        colorscale = "YlOrRd"
-    elif line_color == "relative_loading":
-        color_min = 0
-        color_max = 1
-        colorscale = "YlOrRd"
-    elif line_color == "reinforce":
-        color_min = 0
-        color_max = 1
-        colorscale = [[0, "green"], [1, "red"]]
-    else:
-        showscale = False
+    def plot_lines():
 
-    for edge in G.edges(data=True):
-        x0, y0, x1, y1 = get_coordinates_for_edge(edge)
-        edge_x = [x0 - x_root, x1 - x_root, None]
-        edge_y = [y0 - y_root, y1 - y_root, None]
+        showscale = True
 
-        branch_name = edge[2]["branch_name"]
+        if line_color == "loading":
+            color_min = s_res.T.min()
+            color_max = s_res.T.max()
+            colorscale = "YlOrRd"
+        elif line_color == "relative_loading":
+            color_min = 0
+            color_max = 1
+            colorscale = [
+                [0, "yellow"],
+                [0.45, "orange"],
+                [0.9, "crimson"],
+                [0.9, "indigo"],
+                [1, "indigo"],
+            ]
+        elif line_color == "reinforce":
+            color_min = 0
+            color_max = 1
+            colorscale = [[0, "green"], [0.5, "green"], [0.5, "red"], [1, "red"]]
+        else:
+            showscale = False
 
-        if line_color == "reinforce":
-            try:
-                # Possible distinction between added parallel lines and changed lines
-                if (
-                    edisgo_obj.results.equipment_changes.index[
-                        edisgo_obj.results.equipment_changes["change"] == "added"
-                    ]
-                    .isin([branch_name])
-                    .any()
-                ):
-                    color = "green"
-                # Changed lines
-                elif (
-                    edisgo_obj.results.equipment_changes.index[
-                        edisgo_obj.results.equipment_changes["change"] == "changed"
-                    ]
-                    .isin([branch_name])
-                    .any()
-                ):
+        data_line_plot = []
+        for edge in G.edges(data=True):
 
-                    color = "red"
-                else:
+            x0, y0, x1, y1 = get_coordinates_for_edge(edge)
+            edge_x = [x0 - x_root, x1 - x_root, None]
+            edge_y = [y0 - y_root, y1 - y_root, None]
+
+            branch_name = edge[2]["branch_name"]
+
+            if line_color == "reinforce":
+                try:
+                    # Possible distinction between added parallel
+                    # lines and changed lines
+                    if (
+                        edisgo_obj.results.equipment_changes.index[
+                            edisgo_obj.results.equipment_changes["change"] == "added"
+                        ]
+                        .isin([branch_name])
+                        .any()
+                    ):
+                        color = "green"
+                    # Changed lines
+                    elif (
+                        edisgo_obj.results.equipment_changes.index[
+                            edisgo_obj.results.equipment_changes["change"] == "changed"
+                        ]
+                        .isin([branch_name])
+                        .any()
+                    ):
+
+                        color = "red"
+                    else:
+                        color = "black"
+                except Exception:
                     color = "black"
-            except Exception:
+
+            elif line_color == "loading":
+                loading = s_res.loc[branch_name]
+                color = color_map_color(
+                    loading,
+                    vmin=color_min,
+                    vmax=color_max,
+                    cmap_name=colorscale,
+                )
+
+            elif line_color == "relative_loading":
+                loading = s_res.loc[branch_name]
+                s_nom = edisgo_obj.topology.lines_df.s_nom.loc[branch_name]
+                color = color_map_color(
+                    loading / s_nom,
+                    vmin=color_min,
+                    vmax=color_max,
+                    cmap_name=colorscale,
+                )
+                if loading > s_nom:
+                    color = "indigo"
+            else:
                 color = "black"
 
-        elif line_color == "loading":
-            loading = s_res.loc[branch_name]
-            color = color_map_color(
-                loading,
-                vmin=color_min,
-                vmax=color_max,
-                cmap_name=colorscale,
-            )
-
-        elif line_color == "relative_loading":
-            loading = s_res.loc[branch_name]
-            s_nom = edisgo_obj.topology.lines_df.s_nom.loc[branch_name]
-            color = color_map_color(
-                loading / s_nom,
-                vmin=color_min,
-                vmax=color_max,
-                cmap_name=colorscale,
-            )
-            if loading > s_nom:
-                color = "green"
-        else:
-            color = "black"
-
-        edge_scatter = go.Scatter(
-            mode="lines",
-            x=edge_x,
-            y=edge_y,
-            hoverinfo="none",
-            opacity=0.5,
-            showlegend=False,
-            line=dict(
-                width=2,
-                color=color,
-            ),
-        )
-        data.append(edge_scatter)
-
-    if line_color:
-        colorbar_edge_scatter = go.Scatter(
-            mode="markers",
-            x=[None],
-            y=[None],
-            marker=dict(
-                colorbar=dict(
-                    title="Lines",
-                    xanchor="left",
-                    titleside="right",
-                    x=1.17,
-                    thickness=15,
+            edge_scatter = go.Scatter(
+                mode="lines",
+                x=edge_x,
+                y=edge_y,
+                hoverinfo="none",
+                opacity=0.8,
+                showlegend=False,
+                line=dict(
+                    width=2,
+                    color=color,
                 ),
-                colorscale=colorscale,
-                cmax=color_max,
-                cmin=color_min,
-                showscale=showscale,
-            ),
-        )
-
-        if line_color == "reinforce":
-            colorbar_edge_scatter.marker.colorbar.tickmode = "array"
-            colorbar_edge_scatter.marker.colorbar.ticktext = ["added", "changed"]
-            colorbar_edge_scatter.marker.colorbar.tickvals = [0, 1]
-
-        data.append(colorbar_edge_scatter)
-
-    # node plot
-    node_x = []
-    node_y = []
-
-    for node in G.nodes():
-        x, y = G.nodes[node]["pos"]
-        x, y = transformer_4326_to_3035.transform(x, y)
-        node_x.append(x - x_root)
-        node_y.append(y - y_root)
-
-    if node_color == "voltage_deviation":
-        node_colors = []
-        for node in G.nodes():
-            color = v_res.loc[node] - 1
-            node_colors.append(color)
-
-        colorbar = dict(
-            thickness=15,
-            title="Node Voltage Deviation",
-            xanchor="left",
-            titleside="right",
-        )
-        colorscale = "RdBu"
-        cmid = 0
-        showscale = True
-
-    elif node_color == "adjacencies":
-        node_colors = [len(adjacencies[1]) for adjacencies in G.adjacency()]
-        colorscale = "YlGnBu"
-        cmid = None
-
-        colorbar = dict(
-            thickness=15, title="Node Connections", xanchor="left", titleside="right"
-        )
-        showscale = True
-
-    else:
-        node_colors = "grey"
-        cmid = None
-        colorscale = None
-        colorbar = None
-        showscale = False
-
-    node_text = []
-    for node in G.nodes():
-        text = str(node)
-        try:
-            peak_load = edisgo_obj.topology.loads_df.loc[
-                edisgo_obj.topology.loads_df.bus == node
-            ].p_set.sum()
-            text += "<br>" + "peak_load = " + str(peak_load)
-
-            p_nom = edisgo_obj.topology.generators_df.loc[
-                edisgo_obj.topology.generators_df.bus == node
-            ].p_nom.sum()
-            text += "<br>" + "p_nom_gen = " + str(p_nom)
-
-            v = v_res.loc[node]
-            text += "<br>" + "v = " + str(v)
-
-        except KeyError:
-            logger.debug(f"Failed to add text for node {node}.", exc_info=True)
-            text = text
-
-        try:
-            text = text + "<br>" + "Neighbors = " + str(G.degree(node))
-        except KeyError:
-            logger.debug(
-                f"Failed to add neighbors to text for node {node}.", exc_info=True
             )
-            text = text
+            data_line_plot.append(edge_scatter)
 
-        try:
+        if line_color:
+            line_color_title = {
+                "loading": "Loading",
+                "relative_loading": "Relative loading",
+                "reinforce": "Reinforce",
+            }
+
+            colorbar_edge_scatter = go.Scatter(
+                mode="markers",
+                x=[None],
+                y=[None],
+                marker=dict(
+                    colorbar=dict(
+                        title=line_color_title[line_color],
+                        xanchor="left",
+                        titleside="right",
+                        x=1.17,
+                        thickness=15,
+                    ),
+                    colorscale=colorscale,
+                    cmax=color_max,
+                    cmin=color_min,
+                    showscale=showscale,
+                ),
+            )
+
+            if line_color == "reinforce":
+                colorbar_edge_scatter.marker.colorbar.tickmode = "array"
+                colorbar_edge_scatter.marker.colorbar.ticktext = ["added", "changed"]
+                colorbar_edge_scatter.marker.colorbar.tickvals = [0.25, 0.75]
+            elif line_color == "relative_loading":
+                colorbar_edge_scatter.marker.colorbar.tickmode = "array"
+                colorbar_edge_scatter.marker.colorbar.ticktext = [
+                    0,
+                    0.2,
+                    0.4,
+                    0.6,
+                    0.8,
+                    1,
+                    "Overloaded",
+                ]
+                colorbar_edge_scatter.marker.colorbar.tickvals = [
+                    0,
+                    0.2 * 0.9,
+                    0.4 * 0.9,
+                    0.6 * 0.9,
+                    0.8 * 0.9,
+                    1 * 0.9,
+                    0.95,
+                ]
+            data_line_plot.append(colorbar_edge_scatter)
+
+        return data_line_plot
+
+    def plot_buses():
+        node_x = []
+        node_y = []
+
+        for node in G.nodes():
+            x, y = G.nodes[node]["pos"]
+            x, y = transformer_4326_to_3035.transform(x, y)
+            node_x.append(x - x_root)
+            node_y.append(y - y_root)
+
+        if node_color == "voltage_deviation":
+            node_colors = []
+            for node in G.nodes():
+                color = v_res.loc[node] - 1
+                node_colors.append(color)
+
+            colorbar = dict(
+                thickness=15,
+                title="Node Voltage Deviation",
+                xanchor="left",
+                titleside="right",
+            )
+            colorscale = "RdBu"
+            cmid = 0
+            showscale = True
+
+        elif node_color == "adjacencies":
+            node_colors = [len(adjacencies[1]) for adjacencies in G.adjacency()]
+            colorscale = "YlGnBu"
+            cmid = None
+
+            colorbar = dict(
+                thickness=15,
+                title="Node Connections",
+                xanchor="left",
+                titleside="right",
+            )
+            showscale = True
+
+        else:
+            node_colors = "grey"
+            cmid = None
+            colorscale = None
+            colorbar = None
+            showscale = False
+
+        node_text = []
+        for node in G.nodes():
+            text = str(node)
+            if power_flow_results:
+                peak_load = edisgo_obj.topology.loads_df.loc[
+                    edisgo_obj.topology.loads_df.bus == node
+                ].p_set.sum()
+                text += "<br>" + "peak_load = " + str(peak_load)
+
+                p_nom = edisgo_obj.topology.generators_df.loc[
+                    edisgo_obj.topology.generators_df.bus == node
+                ].p_nom.sum()
+                text += "<br>" + "p_nom_gen = " + str(p_nom)
+
+                v = v_res.loc[node]
+                text += "<br>" + "v = " + str(v)
+
+            text = text + "<br>" + "Neighbors = " + str(G.degree(node))
+
             node_parameters = edisgo_obj.topology.buses_df.loc[node]
             for index, value in node_parameters.iteritems():
                 text += "<br>" + str(index) + " = " + str(value)
-        except KeyError:
-            logger.debug(
-                f"Failed to add neighbors to text for node {node}.", exc_info=True
-            )
-            text = text
 
-        node_text.append(text)
+            node_text.append(text)
 
-    node_scatter = go.Scatter(
-        x=node_x,
-        y=node_y,
-        mode="markers",
-        hoverinfo="text",
-        text=node_text,
-        marker=dict(
-            showscale=showscale,
-            colorscale=colorscale,
-            color=node_colors,
-            size=8,
-            cmid=cmid,
-            line_width=2,
-            colorbar=colorbar,
-        ),
-    )
-
-    data.append(node_scatter)
+        node_scatter = go.Scatter(
+            x=node_x,
+            y=node_y,
+            mode="markers",
+            hoverinfo="text",
+            text=node_text,
+            marker=dict(
+                showscale=showscale,
+                colorscale=colorscale,
+                color=node_colors,
+                size=8,
+                cmid=cmid,
+                line_width=2,
+                colorbar=colorbar,
+            ),
+        )
+        return [node_scatter]
 
     fig = go.Figure(
-        data=data,
+        data=plot_line_text() + plot_lines() + plot_buses(),
         layout=go.Layout(
             height=500,
             showlegend=False,
@@ -1367,7 +1423,7 @@ def chosen_graph(
     return G, grid
 
 
-def dash_plot(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
+def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
     """
     Generates a jupyter dash app from given eDisGo object(s).
 
@@ -1398,9 +1454,7 @@ def dash_plot(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
         edisgo_obj_1 = edisgo_objects
 
     mv_grid = edisgo_obj_1.topology.mv_grid
-
     lv_grid_name_list = list(map(str, mv_grid.lv_grids))
-
     grid_name_list = ["Grid", str(mv_grid)] + lv_grid_name_list
 
     line_plot_modes = ["reinforce", "loading", "relative_loading"]
@@ -1408,23 +1462,29 @@ def dash_plot(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
 
     if edisgo_obj_1.timeseries.is_worst_case:
         timestep_labels = [
-            "min",
-            "max",
+            "all",
         ] + edisgo_obj_1.timeseries.timeindex_worst_cases.index.to_list()
+        timestep_slider_labels = (
+            edisgo_obj_1.timeseries.timeindex_worst_cases.index.to_list()
+        )
     else:
         timestep_labels = [
-            "min",
-            "max",
-        ] + edisgo_obj_1.timeseries.timeindex.values.to_list()
+            "all",
+        ] + edisgo_obj_1.timeseries.timeindex.to_list()
+        timestep_slider_labels = edisgo_obj_1.timeseries.timeindex.to_list()
 
-    timestep_values = ["min", "max"] + edisgo_obj_1.timeseries.timeindex.to_list()
+    timestep_values = [False] + edisgo_obj_1.timeseries.timeindex.to_list()
+    timestep_slider_values = edisgo_obj_1.timeseries.timeindex.to_list()
+
     timestep_option = list()
     for i in range(0, len(timestep_labels)):
         timestep_option.append(
             {"label": timestep_labels[i], "value": timestep_values[i]}
         )
-
-    padding = 0
+    timestep_slider_marks = dict(
+        zip(range(0, len(timestep_slider_labels)), timestep_slider_labels)
+    )
+    padding = 1
 
     app = JupyterDash(__name__)
 
@@ -1564,14 +1624,94 @@ def dash_plot(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                 ),
                 html.Div(
                     [
-                        html.Label("Timestep"),
-                        dcc.Dropdown(
-                            id="timestep",
-                            options=timestep_option,
-                            value=timestep_option[0]["value"],
+                        html.Div(
+                            [
+                                html.Label("Timestep mode"),
+                                dcc.RadioItems(
+                                    ["Dropdown", "Slider"],
+                                    "Dropdown",
+                                    inline=True,
+                                    id="timestep_mode_radio",
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Timestep"),
+                                dcc.Dropdown(
+                                    id="timestep_dropdown",
+                                    options=timestep_option,
+                                    value=timestep_option[0]["value"],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Line result selection"),
+                                dcc.Dropdown(
+                                    id="line_result_selection",
+                                    options=[
+                                        {"label": "Min", "value": "min"},
+                                        {"label": "Max", "value": "max"},
+                                    ],
+                                    value="max",
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Node result selection"),
+                                dcc.Dropdown(
+                                    id="node_result_selection",
+                                    options=[
+                                        {"label": "Min", "value": "min"},
+                                        {"label": "Max", "value": "max"},
+                                    ],
+                                    value="max",
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
                         ),
                     ],
-                    style={"padding": padding, "flex": 1},
+                    style={
+                        "display": "flex",
+                        "flex-direction": "row",
+                        "padding": 0,
+                        "flex": 1,
+                    },
+                ),
+                html.Div(
+                    [
+                        html.Label("Timestep slider"),
+                        dcc.RangeSlider(
+                            0,
+                            len(timestep_slider_labels) - 1,
+                            1 if len(timestep_slider_labels) <= 6 else None,
+                            value=[0, len(timestep_slider_labels)],
+                            marks=timestep_slider_marks
+                            if len(timestep_slider_labels) <= 6
+                            else None,
+                            allowCross=False,
+                            pushable=0,
+                            tooltip={
+                                "placement": "left",
+                                "always_visible": False
+                                if len(timestep_slider_labels) <= 6
+                                else True,
+                            },
+                            id="timestep_slider",
+                        ),
+                    ],
+                    style={
+                        "padding-top": padding,
+                        "padding-bottom": 10,
+                        "padding-left": 15,
+                        "padding-right": 15,
+                        "flex": 1,
+                    },
                 ),
                 html.Div(
                     [
@@ -1585,49 +1725,91 @@ def dash_plot(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
         )
 
         @app.callback(
+            Output("timestep_dropdown", "disabled"),
+            Output("timestep_slider", "disabled"),
+            Input("timestep_mode_radio", "value"),
+        )
+        def update_timestep_components_double(timestep_mode_radio):
+            if timestep_mode_radio == "Dropdown":
+                timestep_dropdown = False
+                timestep_slider = True
+            elif timestep_mode_radio == "Slider":
+                timestep_dropdown = True
+                timestep_slider = False
+            return (timestep_dropdown, timestep_slider)
+
+        @app.callback(
             Output("fig_1", "figure"),
             Output("fig_2", "figure"),
-            Input("dropdown_grid", "value"),
             Input("dropdown_edisgo_object_1", "value"),
             Input("dropdown_edisgo_object_2", "value"),
+            Input("dropdown_grid", "value"),
             Input("dropdown_line_plot_mode", "value"),
             Input("dropdown_node_plot_mode", "value"),
             Input("radioitems_pseudo_coordinates", "value"),
-            Input("timestep", "value"),
+            Input("line_result_selection", "value"),
+            Input("node_result_selection", "value"),
+            Input("timestep_mode_radio", "value"),
+            Input("timestep_dropdown", "value"),
+            Input("timestep_slider", "value"),
         )
-        def update_figure(
-            selected_grid,
+        def update_figure_double(
             selected_edisgo_object_1,
             selected_edisgo_object_2,
+            selected_grid,
             selected_line_plot_mode,
             selected_node_plot_mode,
             pseudo_coordinates,
-            selected_timestep,
+            line_result_selection,
+            node_result_selection,
+            timestep_mode,
+            timestep_dropdown,
+            timestep_slider,
         ):
+            if timestep_mode == "Dropdown":
+                selected_timestep = timestep_dropdown
+            elif timestep_mode == "Slider":
+                logger.debug(
+                    f"Timestep Slider left={timestep_slider[0]}, "
+                    f"right={timestep_slider[1]}"
+                )
+                if timestep_slider[0] == timestep_slider[1]:
+                    selected_timestep = [timestep_slider_values[timestep_slider[0]]]
+                else:
+                    selected_timestep = timestep_slider_values[
+                        timestep_slider[0] : timestep_slider[1] + 1
+                    ]
+
+            logger.debug(f"Selected timesteps {selected_timestep}")
+
             edisgo_obj = edisgo_objects[selected_edisgo_object_1]
             (G, grid) = chosen_graph(edisgo_obj, selected_grid)
-            if pseudo_coordinates:
-                G = make_pseudo_coordinates_graph(G)
-            fig_1 = draw_plotly(
+
+            fig_1 = plot_plotly(
                 edisgo_obj=edisgo_obj,
-                G=G,
+                grid=grid,
                 line_color=selected_line_plot_mode,
                 node_color=selected_node_plot_mode,
-                timestep=selected_timestep,
-                grid=grid,
+                line_result_selection=line_result_selection,
+                node_result_selection=node_result_selection,
+                selected_timesteps=selected_timestep,
+                pseudo_coordinates=pseudo_coordinates,
+                center_coordinates=True,
             )
 
             edisgo_obj = edisgo_objects[selected_edisgo_object_2]
             (G, grid) = chosen_graph(edisgo_obj, selected_grid)
-            if pseudo_coordinates:
-                G = make_pseudo_coordinates_graph(G)
-            fig_2 = draw_plotly(
+
+            fig_2 = plot_plotly(
                 edisgo_obj=edisgo_obj,
-                G=G,
+                grid=grid,
                 line_color=selected_line_plot_mode,
                 node_color=selected_node_plot_mode,
-                timestep=selected_timestep,
-                grid=grid,
+                line_result_selection=line_result_selection,
+                node_result_selection=node_result_selection,
+                selected_timesteps=selected_timestep,
+                pseudo_coordinates=pseudo_coordinates,
+                center_coordinates=True,
             )
 
             return fig_1, fig_2
@@ -1712,14 +1894,94 @@ def dash_plot(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                 ),
                 html.Div(
                     [
-                        html.Label("Timestep"),
-                        dcc.Dropdown(
-                            id="timestep",
-                            options=timestep_option,
-                            value=timestep_option[0]["value"],
+                        html.Div(
+                            [
+                                html.Label("Timestep mode"),
+                                dcc.RadioItems(
+                                    ["Dropdown", "Slider"],
+                                    "Dropdown",
+                                    inline=True,
+                                    id="timestep_mode_radio",
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Timestep"),
+                                dcc.Dropdown(
+                                    id="timestep_dropdown",
+                                    options=timestep_option,
+                                    value=timestep_option[0]["value"],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Line result selection"),
+                                dcc.Dropdown(
+                                    id="line_result_selection",
+                                    options=[
+                                        {"label": "Min", "value": "min"},
+                                        {"label": "Max", "value": "max"},
+                                    ],
+                                    value="max",
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Node result selection"),
+                                dcc.Dropdown(
+                                    id="node_result_selection",
+                                    options=[
+                                        {"label": "Min", "value": "min"},
+                                        {"label": "Max", "value": "max"},
+                                    ],
+                                    value="max",
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
                         ),
                     ],
-                    style={"padding": padding, "flex": 1},
+                    style={
+                        "display": "flex",
+                        "flex-direction": "row",
+                        "padding": 0,
+                        "flex": 1,
+                    },
+                ),
+                html.Div(
+                    [
+                        html.Label("Timestep slider"),
+                        dcc.RangeSlider(
+                            0,
+                            len(timestep_slider_labels) - 1,
+                            1 if len(timestep_slider_labels) <= 6 else None,
+                            value=[0, len(timestep_slider_labels)],
+                            marks=timestep_slider_marks
+                            if len(timestep_slider_labels) <= 6
+                            else None,
+                            allowCross=False,
+                            pushable=0,
+                            tooltip={
+                                "placement": "left",
+                                "always_visible": False
+                                if len(timestep_slider_labels) <= 6
+                                else True,
+                            },
+                            id="timestep_slider",
+                        ),
+                    ],
+                    style={
+                        "padding-top": padding,
+                        "padding-bottom": 10,
+                        "padding-left": 15,
+                        "padding-right": 15,
+                        "flex": 1,
+                    },
                 ),
                 html.Div(
                     [html.Div([dcc.Graph(id="fig")], style={"flex": "auto"})],
@@ -1730,30 +1992,71 @@ def dash_plot(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
         )
 
         @app.callback(
+            Output("timestep_dropdown", "disabled"),
+            Output("timestep_slider", "disabled"),
+            Input("timestep_mode_radio", "value"),
+        )
+        def update_timestep_components_single(timestep_mode_radio):
+            if timestep_mode_radio == "Dropdown":
+                timestep_dropdown = False
+                timestep_slider = True
+            elif timestep_mode_radio == "Slider":
+                timestep_dropdown = True
+                timestep_slider = False
+            return (timestep_dropdown, timestep_slider)
+
+        @app.callback(
             Output("fig", "figure"),
             Input("dropdown_grid", "value"),
             Input("dropdown_line_plot_mode", "value"),
             Input("dropdown_node_plot_mode", "value"),
             Input("radioitems_pseudo_coordinates", "value"),
-            Input("timestep", "value"),
+            Input("line_result_selection", "value"),
+            Input("node_result_selection", "value"),
+            Input("timestep_mode_radio", "value"),
+            Input("timestep_dropdown", "value"),
+            Input("timestep_slider", "value"),
         )
-        def update_figure(
+        def update_figure_single(
             selected_grid,
             selected_line_plot_mode,
             selected_node_plot_mode,
             pseudo_coordinates,
-            selected_timestep,
+            line_result_selection,
+            node_result_selection,
+            timestep_mode,
+            timestep_dropdown,
+            timestep_slider,
         ):
+            if timestep_mode == "Dropdown":
+                selected_timestep = timestep_dropdown
+            elif timestep_mode == "Slider":
+                timestep_slider_left = int(timestep_slider[0])
+                timestep_slider_right = int(timestep_slider[1])
+                logger.debug(
+                    f"Timestep Slider left={timestep_slider_left}, "
+                    f"right={timestep_slider_right}"
+                )
+                if timestep_slider_left == timestep_slider_right:
+                    selected_timestep = [timestep_slider_values[timestep_slider_right]]
+                else:
+                    selected_timestep = timestep_slider_values[
+                        timestep_slider_left : timestep_slider_right + 1
+                    ]
+
+            logger.debug(f"Selected timesteps {selected_timestep}")
+
             (G, grid) = chosen_graph(edisgo_obj_1, selected_grid)
-            if pseudo_coordinates:
-                G = make_pseudo_coordinates_graph(G)
-            fig = draw_plotly(
+            fig = plot_plotly(
                 edisgo_obj=edisgo_obj_1,
-                G=G,
+                grid=grid,
                 line_color=selected_line_plot_mode,
                 node_color=selected_node_plot_mode,
-                timestep=selected_timestep,
-                grid=grid,
+                line_result_selection=line_result_selection,
+                node_result_selection=node_result_selection,
+                selected_timesteps=selected_timestep,
+                pseudo_coordinates=pseudo_coordinates,
+                center_coordinates=True,
             )
 
             return fig
@@ -1761,9 +2064,11 @@ def dash_plot(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
     return app
 
 
-def show_dash_plot(
+def plot_dash(
     edisgo_objects: EDisGo | dict[str, EDisGo],
+    mode: str = "inline",
     debug: bool = False,
+    port: int = 8050,
 ):
     """
     Shows the generated jupyter dash app from given eDisGo object(s).
@@ -1774,9 +2079,17 @@ def show_dash_plot(
         eDisGo objects to show in plotly dash app. In the case of multiple edisgo
         objects pass a dictionary with the eDisGo objects as values and the respective
         eDisGo object names as keys.
+    mode: str
+        Display mode
 
+        - "inline" (Default)
+        - "jupyterlab" -
+        - "external" -
     debug: bool
         Enables debugging of the jupyter dash app.
+
+    port: float
+        Port which the app uses
     """
-    app = dash_plot(edisgo_objects)
-    app.run_server(mode="inline", debug=debug, height=700)
+    app = plot_dash_app(edisgo_objects)
+    app.run_server(mode=mode, debug=debug, height=820, port=port)
