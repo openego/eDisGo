@@ -969,11 +969,29 @@ def plot_plotly(
 
     G = grid.graph
 
-    # check for existing power flow results
+    logger.debug(f"selected_timesteps={selected_timesteps}")
+
+    if isinstance(selected_timesteps, str):
+        selected_timesteps = [selected_timesteps]
+
+    if selected_timesteps is False:
+        selected_timesteps = edisgo_obj.results.s_res.index.to_list()
+
     if edisgo_obj.results.s_res.empty:
         power_flow_results = False
+        warning_message = "No power flow results. -> Run power flow."
+    elif selected_timesteps == []:
+        power_flow_results = False
+        warning_message = "No timesteps selected"
     else:
         power_flow_results = True
+        warning_message = False
+
+    try:
+        edisgo_obj.results.s_res.loc[selected_timesteps, :]
+    except KeyError:
+        power_flow_results = False
+        warning_message = "Timesteps are not in the results."
 
     # check for existing reinforcement results
     if edisgo_obj.results.equipment_changes.empty:
@@ -1031,16 +1049,8 @@ def plot_plotly(
         )
         v_res_view = edisgo_obj.results.v_res.T.index.isin([node for node in G.nodes])
 
-        if selected_timesteps:
-            if isinstance(selected_timesteps, str):
-                s_res = edisgo_obj.results.s_res.T.loc[s_res_view, [selected_timesteps]]
-                v_res = edisgo_obj.results.v_res.T.loc[v_res_view, [selected_timesteps]]
-            else:
-                s_res = edisgo_obj.results.s_res.T.loc[s_res_view, selected_timesteps]
-                v_res = edisgo_obj.results.v_res.T.loc[v_res_view, selected_timesteps]
-        else:
-            s_res = edisgo_obj.results.s_res.T.loc[s_res_view, :]
-            v_res = edisgo_obj.results.v_res.T.loc[v_res_view, :]
+        s_res = edisgo_obj.results.s_res.T.loc[s_res_view, selected_timesteps]
+        v_res = edisgo_obj.results.v_res.T.loc[v_res_view, selected_timesteps]
 
         result_selection_options = ["min", "max"]
         if line_result_selection == "min":
@@ -1148,30 +1158,27 @@ def plot_plotly(
             branch_name = edge[2]["branch_name"]
 
             if line_color == "reinforce":
-                try:
-                    # Possible distinction between added parallel
-                    # lines and changed lines
-                    if (
-                        edisgo_obj.results.equipment_changes.index[
-                            edisgo_obj.results.equipment_changes["change"] == "added"
-                        ]
-                        .isin([branch_name])
-                        .any()
-                    ):
-                        color = "green"
-                    # Changed lines
-                    elif (
-                        edisgo_obj.results.equipment_changes.index[
-                            edisgo_obj.results.equipment_changes["change"] == "changed"
-                        ]
-                        .isin([branch_name])
-                        .any()
-                    ):
+                # Possible distinction between added parallel
+                # lines and changed lines
+                if (
+                    edisgo_obj.results.equipment_changes.index[
+                        edisgo_obj.results.equipment_changes["change"] == "added"
+                    ]
+                    .isin([branch_name])
+                    .any()
+                ):
+                    color = "green"
+                # Changed lines
+                elif (
+                    edisgo_obj.results.equipment_changes.index[
+                        edisgo_obj.results.equipment_changes["change"] == "changed"
+                    ]
+                    .isin([branch_name])
+                    .any()
+                ):
 
-                        color = "red"
-                    else:
-                        color = "black"
-                except Exception:
+                    color = "red"
+                else:
                     color = "black"
 
             elif line_color == "loading":
@@ -1195,7 +1202,7 @@ def plot_plotly(
                 if loading > s_nom:
                     color = "indigo"
             else:
-                color = "black"
+                color = "grey"
 
             edge_scatter = go.Scatter(
                 mode="lines",
@@ -1227,7 +1234,7 @@ def plot_plotly(
                         title=line_color_title[line_color],
                         xanchor="left",
                         titleside="right",
-                        x=1.17,
+                        x=1.19,
                         thickness=15,
                     ),
                     colorscale=colorscale,
@@ -1375,7 +1382,19 @@ def plot_plotly(
             ),
         ),
     )
-
+    if warning_message:
+        fig.add_annotation(
+            x=0,
+            y=1,
+            xref="paper",
+            yref="paper",
+            xanchor="left",
+            text=warning_message,
+            showarrow=False,
+            font=dict(size=16, color="#ffffff"),
+            bgcolor="red",
+            opacity=0.75,
+        )
     return fig
 
 
@@ -1423,7 +1442,9 @@ def chosen_graph(
     return G, grid
 
 
-def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
+def plot_dash_app(
+    edisgo_objects: EDisGo | dict[str, EDisGo], debug=False
+) -> JupyterDash:
     """
     Generates a jupyter dash app from given eDisGo object(s).
 
@@ -1457,36 +1478,39 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
     lv_grid_name_list = list(map(str, mv_grid.lv_grids))
     grid_name_list = ["Grid", str(mv_grid)] + lv_grid_name_list
 
-    line_plot_modes = ["reinforce", "loading", "relative_loading"]
-    node_plot_modes = ["adjacencies", "voltage_deviation"]
+    line_plot_modes = ["relative_loading", "loading", "reinforce"]
+    node_plot_modes = ["voltage_deviation", "adjacencies"]
 
-    if edisgo_obj_1.timeseries.is_worst_case:
+    if edisgo_obj_1.results.v_res.empty:
+        timestep_values = ["No Results"]
+        timestep_labels = ["No Results"]
+    elif edisgo_obj_1.timeseries.is_worst_case:
+        timestep_values = edisgo_obj_1.results.v_res.index.to_list()
+        worst_case_series = edisgo_obj_1.timeseries.timeindex_worst_cases
         timestep_labels = [
-            "all",
-        ] + edisgo_obj_1.timeseries.timeindex_worst_cases.index.to_list()
-        timestep_slider_labels = (
-            edisgo_obj_1.timeseries.timeindex_worst_cases.index.to_list()
-        )
+            worst_case_series.index[worst_case_series.to_list().index(value)]
+            for value in timestep_values
+        ]
     else:
-        timestep_labels = [
-            "all",
-        ] + edisgo_obj_1.timeseries.timeindex.to_list()
-        timestep_slider_labels = edisgo_obj_1.timeseries.timeindex.to_list()
+        timestep_labels = edisgo_obj_1.results.v_res.index.to_list()
+        timestep_values = edisgo_obj_1.results.v_res.index.to_list()
 
-    timestep_values = [False] + edisgo_obj_1.timeseries.timeindex.to_list()
-    timestep_slider_values = edisgo_obj_1.timeseries.timeindex.to_list()
+    logger.debug(f"timestep_labels={timestep_labels}")
+    logger.debug(f"timestep_values={timestep_values}")
+    timestep_option = [
+        {"label": timestep_labels[i], "value": str(timestep_values[i])}
+        for i in range(0, len(timestep_values))
+    ]
+    logger.debug(f"timestep_option={timestep_option}")
 
-    timestep_option = list()
-    for i in range(0, len(timestep_labels)):
-        timestep_option.append(
-            {"label": timestep_labels[i], "value": timestep_values[i]}
-        )
-    timestep_slider_marks = dict(
-        zip(range(0, len(timestep_slider_labels)), timestep_slider_labels)
-    )
     padding = 1
 
     app = JupyterDash(__name__)
+    # Workaround to use standard python logging with plotly dash
+    logger.handlers.pop()
+    if debug:
+        app.logger.disabled = False
+        app.logger.setLevel(logging.DEBUG)
 
     if isinstance(edisgo_objects, dict) and len(edisgo_objects) > 1:
         app.layout = html.Div(
@@ -1564,30 +1588,6 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                         ),
                         html.Div(
                             [
-                                html.Label("Pseudo coordinates"),
-                                dcc.RadioItems(
-                                    id="radioitems_pseudo_coordinates",
-                                    options=[
-                                        {"label": "False", "value": False},
-                                        {"label": "True", "value": True},
-                                    ],
-                                    value=False,
-                                ),
-                            ],
-                            style={"padding": padding, "flex": 1},
-                        ),
-                    ],
-                    style={
-                        "display": "flex",
-                        "flex-direction": "row",
-                        "padding": 0,
-                        "flex": 1,
-                    },
-                ),
-                html.Div(
-                    [
-                        html.Div(
-                            [
                                 html.Label("Line plot mode"),
                                 dcc.Dropdown(
                                     id="dropdown_line_plot_mode",
@@ -1602,14 +1602,14 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                         ),
                         html.Div(
                             [
-                                html.Label("Node plot mode"),
+                                html.Label("Line result selection"),
                                 dcc.Dropdown(
-                                    id="dropdown_node_plot_mode",
+                                    id="line_result_selection",
                                     options=[
-                                        {"label": i, "value": i}
-                                        for i in node_plot_modes
+                                        {"label": "Min", "value": "min"},
+                                        {"label": "Max", "value": "max"},
                                     ],
-                                    value=node_plot_modes[0],
+                                    value="max",
                                 ),
                             ],
                             style={"padding": padding, "flex": 1},
@@ -1626,37 +1626,28 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                     [
                         html.Div(
                             [
-                                html.Label("Timestep mode"),
+                                html.Label("Pseudo coordinates"),
                                 dcc.RadioItems(
-                                    ["Dropdown", "Slider"],
-                                    "Dropdown",
-                                    inline=True,
-                                    id="timestep_mode_radio",
-                                ),
-                            ],
-                            style={"padding": padding, "flex": 1},
-                        ),
-                        html.Div(
-                            [
-                                html.Label("Timestep"),
-                                dcc.Dropdown(
-                                    id="timestep_dropdown",
-                                    options=timestep_option,
-                                    value=timestep_option[0]["value"],
-                                ),
-                            ],
-                            style={"padding": padding, "flex": 1},
-                        ),
-                        html.Div(
-                            [
-                                html.Label("Line result selection"),
-                                dcc.Dropdown(
-                                    id="line_result_selection",
+                                    id="radioitems_pseudo_coordinates",
                                     options=[
-                                        {"label": "Min", "value": "min"},
-                                        {"label": "Max", "value": "max"},
+                                        {"label": "False", "value": False},
+                                        {"label": "True", "value": True},
                                     ],
-                                    value="max",
+                                    value=False,
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Node plot mode"),
+                                dcc.Dropdown(
+                                    id="dropdown_node_plot_mode",
+                                    options=[
+                                        {"label": i, "value": i}
+                                        for i in node_plot_modes
+                                    ],
+                                    value=node_plot_modes[0],
                                 ),
                             ],
                             style={"padding": padding, "flex": 1},
@@ -1685,31 +1676,48 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                 ),
                 html.Div(
                     [
-                        html.Label("Timestep slider"),
-                        dcc.RangeSlider(
-                            0,
-                            len(timestep_slider_labels) - 1,
-                            1 if len(timestep_slider_labels) <= 6 else None,
-                            value=[0, len(timestep_slider_labels)],
-                            marks=timestep_slider_marks
-                            if len(timestep_slider_labels) <= 6
-                            else None,
-                            allowCross=False,
-                            pushable=0,
-                            tooltip={
-                                "placement": "left",
-                                "always_visible": False
-                                if len(timestep_slider_labels) <= 6
-                                else True,
-                            },
-                            id="timestep_slider",
+                        html.Div(
+                            [
+                                html.Label(
+                                    f"Timestep mode - "
+                                    f"Timesteps of {edisgo_name_list[0]}"
+                                ),
+                                dcc.RadioItems(
+                                    ["Single", "Range", "All"],
+                                    "All",
+                                    inline=True,
+                                    id="timestep_mode_radio",
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Timestep start"),
+                                dcc.Dropdown(
+                                    id="timestep_dropdown_start",
+                                    options=timestep_option,
+                                    value=timestep_option[0]["value"],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Timestep end"),
+                                dcc.Dropdown(
+                                    id="timestep_dropdown_end",
+                                    options=timestep_option,
+                                    value=timestep_option[-1]["value"],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
                         ),
                     ],
                     style={
-                        "padding-top": padding,
-                        "padding-bottom": 10,
-                        "padding-left": 15,
-                        "padding-right": 15,
+                        "display": "flex",
+                        "flex-direction": "row",
+                        "padding": 0,
                         "flex": 1,
                     },
                 ),
@@ -1725,18 +1733,21 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
         )
 
         @app.callback(
-            Output("timestep_dropdown", "disabled"),
-            Output("timestep_slider", "disabled"),
+            Output("timestep_dropdown_start", "disabled"),
+            Output("timestep_dropdown_end", "disabled"),
             Input("timestep_mode_radio", "value"),
         )
         def update_timestep_components_double(timestep_mode_radio):
-            if timestep_mode_radio == "Dropdown":
-                timestep_dropdown = False
-                timestep_slider = True
-            elif timestep_mode_radio == "Slider":
-                timestep_dropdown = True
-                timestep_slider = False
-            return (timestep_dropdown, timestep_slider)
+            if timestep_mode_radio == "Single":
+                timestep_dropdown_start = False
+                timestep_dropdown_end = True
+            elif timestep_mode_radio == "Range":
+                timestep_dropdown_start = False
+                timestep_dropdown_end = False
+            elif timestep_mode_radio == "All":
+                timestep_dropdown_start = True
+                timestep_dropdown_end = True
+            return (timestep_dropdown_start, timestep_dropdown_end)
 
         @app.callback(
             Output("fig_1", "figure"),
@@ -1750,8 +1761,9 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
             Input("line_result_selection", "value"),
             Input("node_result_selection", "value"),
             Input("timestep_mode_radio", "value"),
-            Input("timestep_dropdown", "value"),
-            Input("timestep_slider", "value"),
+            Input("timestep_dropdown_start", "value"),
+            Input("timestep_dropdown_end", "value"),
+            log=True,
         )
         def update_figure_double(
             selected_edisgo_object_1,
@@ -1763,27 +1775,33 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
             line_result_selection,
             node_result_selection,
             timestep_mode,
-            timestep_dropdown,
-            timestep_slider,
+            timestep_dropdown_start,
+            timestep_dropdown_end,
         ):
-            if timestep_mode == "Dropdown":
-                selected_timestep = timestep_dropdown
-            elif timestep_mode == "Slider":
-                logger.debug(
-                    f"Timestep Slider left={timestep_slider[0]}, "
-                    f"right={timestep_slider[1]}"
-                )
-                if timestep_slider[0] == timestep_slider[1]:
-                    selected_timestep = [timestep_slider_values[timestep_slider[0]]]
-                else:
-                    selected_timestep = timestep_slider_values[
-                        timestep_slider[0] : timestep_slider[1] + 1
-                    ]
-
-            logger.debug(f"Selected timesteps {selected_timestep}")
-
             edisgo_obj = edisgo_objects[selected_edisgo_object_1]
             (G, grid) = chosen_graph(edisgo_obj, selected_grid)
+
+            if timestep_mode == "Single":
+                selected_timesteps = timestep_dropdown_start
+            elif timestep_mode == "Range":
+                app.logger.debug(
+                    f"timestep_dropdown_start={timestep_dropdown_start}, "
+                    f"timestep_dropdown_end={timestep_dropdown_end}"
+                )
+                if timestep_dropdown_start == timestep_dropdown_end:
+                    selected_timesteps = timestep_dropdown_start
+                else:
+                    selected_timesteps = edisgo_obj.results.v_res.loc[
+                        timestep_dropdown_start:timestep_dropdown_end, :
+                    ].index.to_list()
+                    if selected_timesteps == []:
+                        selected_timesteps = edisgo_obj.results.v_res.loc[
+                            timestep_dropdown_end:timestep_dropdown_start, :
+                        ].index.to_list()
+            elif timestep_mode == "All":
+                selected_timesteps = False
+
+            app.logger.debug(f"selected_timesteps={selected_timesteps}")
 
             fig_1 = plot_plotly(
                 edisgo_obj=edisgo_obj,
@@ -1792,7 +1810,7 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                 node_color=selected_node_plot_mode,
                 line_result_selection=line_result_selection,
                 node_result_selection=node_result_selection,
-                selected_timesteps=selected_timestep,
+                selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
                 center_coordinates=True,
             )
@@ -1807,7 +1825,7 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                 node_color=selected_node_plot_mode,
                 line_result_selection=line_result_selection,
                 node_result_selection=node_result_selection,
-                selected_timesteps=selected_timestep,
+                selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
                 center_coordinates=True,
             )
@@ -1834,30 +1852,6 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                         ),
                         html.Div(
                             [
-                                html.Label("Pseudo coordinates"),
-                                dcc.RadioItems(
-                                    id="radioitems_pseudo_coordinates",
-                                    options=[
-                                        {"label": "False", "value": False},
-                                        {"label": "True", "value": True},
-                                    ],
-                                    value=False,
-                                ),
-                            ],
-                            style={"padding": padding, "flex": 1},
-                        ),
-                    ],
-                    style={
-                        "display": "flex",
-                        "flex-direction": "row",
-                        "padding": 0,
-                        "flex": 1,
-                    },
-                ),
-                html.Div(
-                    [
-                        html.Div(
-                            [
                                 html.Label("Line plot mode"),
                                 dcc.Dropdown(
                                     id="dropdown_line_plot_mode",
@@ -1872,14 +1866,14 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                         ),
                         html.Div(
                             [
-                                html.Label("Node plot mode"),
+                                html.Label("Line result selection"),
                                 dcc.Dropdown(
-                                    id="dropdown_node_plot_mode",
+                                    id="line_result_selection",
                                     options=[
-                                        {"label": i, "value": i}
-                                        for i in node_plot_modes
+                                        {"label": "Min", "value": "min"},
+                                        {"label": "Max", "value": "max"},
                                     ],
-                                    value=node_plot_modes[0],
+                                    value="max",
                                 ),
                             ],
                             style={"padding": padding, "flex": 1},
@@ -1896,37 +1890,28 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                     [
                         html.Div(
                             [
-                                html.Label("Timestep mode"),
+                                html.Label("Pseudo coordinates"),
                                 dcc.RadioItems(
-                                    ["Dropdown", "Slider"],
-                                    "Dropdown",
-                                    inline=True,
-                                    id="timestep_mode_radio",
-                                ),
-                            ],
-                            style={"padding": padding, "flex": 1},
-                        ),
-                        html.Div(
-                            [
-                                html.Label("Timestep"),
-                                dcc.Dropdown(
-                                    id="timestep_dropdown",
-                                    options=timestep_option,
-                                    value=timestep_option[0]["value"],
-                                ),
-                            ],
-                            style={"padding": padding, "flex": 1},
-                        ),
-                        html.Div(
-                            [
-                                html.Label("Line result selection"),
-                                dcc.Dropdown(
-                                    id="line_result_selection",
+                                    id="radioitems_pseudo_coordinates",
                                     options=[
-                                        {"label": "Min", "value": "min"},
-                                        {"label": "Max", "value": "max"},
+                                        {"label": "False", "value": False},
+                                        {"label": "True", "value": True},
                                     ],
-                                    value="max",
+                                    value=False,
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Node plot mode"),
+                                dcc.Dropdown(
+                                    id="dropdown_node_plot_mode",
+                                    options=[
+                                        {"label": i, "value": i}
+                                        for i in node_plot_modes
+                                    ],
+                                    value=node_plot_modes[0],
                                 ),
                             ],
                             style={"padding": padding, "flex": 1},
@@ -1955,31 +1940,45 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                 ),
                 html.Div(
                     [
-                        html.Label("Timestep slider"),
-                        dcc.RangeSlider(
-                            0,
-                            len(timestep_slider_labels) - 1,
-                            1 if len(timestep_slider_labels) <= 6 else None,
-                            value=[0, len(timestep_slider_labels)],
-                            marks=timestep_slider_marks
-                            if len(timestep_slider_labels) <= 6
-                            else None,
-                            allowCross=False,
-                            pushable=0,
-                            tooltip={
-                                "placement": "left",
-                                "always_visible": False
-                                if len(timestep_slider_labels) <= 6
-                                else True,
-                            },
-                            id="timestep_slider",
+                        html.Div(
+                            [
+                                html.Label("Timestep mode"),
+                                dcc.RadioItems(
+                                    ["Single", "Range", "All"],
+                                    "All",
+                                    inline=True,
+                                    id="timestep_mode_radio",
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Timestep start"),
+                                dcc.Dropdown(
+                                    id="timestep_dropdown_start",
+                                    options=timestep_option,
+                                    value=timestep_option[0]["value"],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
+                        ),
+                        html.Div(
+                            [
+                                html.Label("Timestep end"),
+                                dcc.Dropdown(
+                                    id="timestep_dropdown_end",
+                                    options=timestep_option,
+                                    value=timestep_option[-1]["value"],
+                                ),
+                            ],
+                            style={"padding": padding, "flex": 1},
                         ),
                     ],
                     style={
-                        "padding-top": padding,
-                        "padding-bottom": 10,
-                        "padding-left": 15,
-                        "padding-right": 15,
+                        "display": "flex",
+                        "flex-direction": "row",
+                        "padding": 0,
                         "flex": 1,
                     },
                 ),
@@ -1992,18 +1991,21 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
         )
 
         @app.callback(
-            Output("timestep_dropdown", "disabled"),
-            Output("timestep_slider", "disabled"),
+            Output("timestep_dropdown_start", "disabled"),
+            Output("timestep_dropdown_end", "disabled"),
             Input("timestep_mode_radio", "value"),
         )
         def update_timestep_components_single(timestep_mode_radio):
-            if timestep_mode_radio == "Dropdown":
-                timestep_dropdown = False
-                timestep_slider = True
-            elif timestep_mode_radio == "Slider":
-                timestep_dropdown = True
-                timestep_slider = False
-            return (timestep_dropdown, timestep_slider)
+            if timestep_mode_radio == "Single":
+                timestep_dropdown_start = False
+                timestep_dropdown_end = True
+            elif timestep_mode_radio == "Range":
+                timestep_dropdown_start = False
+                timestep_dropdown_end = False
+            elif timestep_mode_radio == "All":
+                timestep_dropdown_start = True
+                timestep_dropdown_end = True
+            return (timestep_dropdown_start, timestep_dropdown_end)
 
         @app.callback(
             Output("fig", "figure"),
@@ -2014,8 +2016,9 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
             Input("line_result_selection", "value"),
             Input("node_result_selection", "value"),
             Input("timestep_mode_radio", "value"),
-            Input("timestep_dropdown", "value"),
-            Input("timestep_slider", "value"),
+            Input("timestep_dropdown_start", "value"),
+            Input("timestep_dropdown_end", "value"),
+            log=True,
         )
         def update_figure_single(
             selected_grid,
@@ -2025,26 +2028,30 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
             line_result_selection,
             node_result_selection,
             timestep_mode,
-            timestep_dropdown,
-            timestep_slider,
+            timestep_dropdown_start,
+            timestep_dropdown_end,
         ):
-            if timestep_mode == "Dropdown":
-                selected_timestep = timestep_dropdown
-            elif timestep_mode == "Slider":
-                timestep_slider_left = int(timestep_slider[0])
-                timestep_slider_right = int(timestep_slider[1])
-                logger.debug(
-                    f"Timestep Slider left={timestep_slider_left}, "
-                    f"right={timestep_slider_right}"
-                )
-                if timestep_slider_left == timestep_slider_right:
-                    selected_timestep = [timestep_slider_values[timestep_slider_right]]
-                else:
-                    selected_timestep = timestep_slider_values[
-                        timestep_slider_left : timestep_slider_right + 1
-                    ]
+            if timestep_mode == "Single":
+                selected_timesteps = timestep_dropdown_start
+            elif timestep_mode == "Range":
+                app.logger.debug(f"timestep_dropdown_start={timestep_dropdown_start}")
+                app.logger.debug(f"timestep_dropdown_end={timestep_dropdown_end}")
 
-            logger.debug(f"Selected timesteps {selected_timestep}")
+                if timestep_dropdown_start == timestep_dropdown_end:
+                    selected_timesteps = str(timestep_dropdown_start)
+                else:
+                    selected_timesteps = edisgo_obj_1.results.v_res.loc[
+                        timestep_dropdown_start:timestep_dropdown_end, :
+                    ].index.to_list()
+                    if selected_timesteps == []:
+                        selected_timesteps = edisgo_obj_1.results.v_res.loc[
+                            timestep_dropdown_end:timestep_dropdown_start, :
+                        ].index.to_list()
+                    selected_timesteps = list(map(str, selected_timesteps))
+            elif timestep_mode == "All":
+                selected_timesteps = False
+
+            app.logger.debug(f"selected_timesteps={selected_timesteps}")
 
             (G, grid) = chosen_graph(edisgo_obj_1, selected_grid)
             fig = plot_plotly(
@@ -2054,7 +2061,7 @@ def plot_dash_app(edisgo_objects: EDisGo | dict[str, EDisGo]) -> JupyterDash:
                 node_color=selected_node_plot_mode,
                 line_result_selection=line_result_selection,
                 node_result_selection=node_result_selection,
-                selected_timesteps=selected_timestep,
+                selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
                 center_coordinates=True,
             )
@@ -2091,5 +2098,7 @@ def plot_dash(
     port: float
         Port which the app uses
     """
-    app = plot_dash_app(edisgo_objects)
+    app = plot_dash_app(edisgo_objects, debug=debug)
+    log = logging.getLogger("werkzeug")
+    log.setLevel(logging.ERROR)
     app.run_server(mode=mode, debug=debug, height=820, port=port)
