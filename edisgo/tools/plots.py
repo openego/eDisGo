@@ -909,7 +909,7 @@ def plot_plotly(
     selected_timesteps: bool | str | list = False,
     center_coordinates: bool = False,
     pseudo_coordinates: bool = False,
-    node_selection: list | str | bool = False,
+    node_selection: list | bool = False,
 ) -> BaseFigure:
     """
     Draw a plotly html figure
@@ -917,11 +917,10 @@ def plot_plotly(
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+        Selected edisgo_obj to plot the information of the object.
 
-    G : :networkx:`networkx.Graph<network.Graph>`, optional
-        Graph representation of the grid as networkx Ordered Graph, where lines are
-        represented by edges in the graph, and buses and transformers are represented by
-        nodes. If no graph is given the mv grid graph of the edisgo object is used.
+    grid : :class:`~.network.grids.Grid` or bool
+        Grid to plot if False the MVGrid of the edisgo_obj is plotted. Default: False
 
     line_color : str
         Defines whereby to choose line colors. Possible
@@ -942,7 +941,7 @@ def plot_plotly(
         * 'voltage_deviation' (default)
           Node color is set according to voltage deviation from 1 p.u..
 
-    result_selection : str or :pandas:`pandas.Timestamp<Timestamp>`
+    line_result_selection : str
         Defines which values are shown for the load of the lines and the voltage of the
         nodes:
 
@@ -950,13 +949,32 @@ def plot_plotly(
           Minimal line load and minimal node voltage of all time steps.
         * 'max'
           Maximal line load and minimal node voltage of all time steps.
-        * 'result_selection'
-          Line load and node voltage for the selected time step.
 
-    grid : :class:`~.network.grids.Grid` or bool
-        Grid to use as root node. If a grid is given the transformer station is used
-        as root. If False the root is set to the coordinates x=0 and y=0. Else the
-        coordinates from the HV-MV-station of the MV grid are used. Default: False
+    node_result_selection : str
+        Defines which values are shown for the load of the lines and the voltage of the
+        nodes:
+
+        * 'min' (default)
+          Minimal line load and minimal node voltage of all time steps.
+        * 'max'
+          Maximal line load and minimal node voltage of all time steps.
+
+    selected_timesteps : bool or str or list
+        Selected timesteps to show the results.
+
+        * False - All timesteps are used.
+        * list or str of Timesteps - Selected timesteps are used.
+
+    center_coordinates : bool
+        Enables the centering of the coordinates. If True the transformer node is set
+        to the coordinates x=0 and y=0. Else the coordinates from the HV-MV-station
+        of the MV grid are used. Default: False
+
+    pseudo_coordinates : bool
+        Enable pseudo coordinates for the plotted grid. Default: False
+
+    node_selection : bool or list
+        Only plot selected nodes. Default: False
 
     Returns
     -------
@@ -1443,7 +1461,7 @@ def chosen_graph(
 
 
 def plot_dash_app(
-    edisgo_objects: EDisGo | dict[str, EDisGo], debug=False
+    edisgo_objects: EDisGo | dict[str, EDisGo], debug: bool = False
 ) -> JupyterDash:
     """
     Generates a jupyter dash app from given eDisGo object(s).
@@ -1454,6 +1472,13 @@ def plot_dash_app(
         eDisGo objects to show in plotly dash app. In the case of multiple edisgo
         objects pass a dictionary with the eDisGo objects as values and the respective
         eDisGo object names as keys.
+
+    debug : bool
+        Debugging for the dash app:
+
+        * False - Disable debugging for the dash app (Default)
+        * True - Enable debugging for the dash app
+
 
     Returns
     -------
@@ -2086,17 +2111,19 @@ def plot_dash(
         eDisGo objects to show in plotly dash app. In the case of multiple edisgo
         objects pass a dictionary with the eDisGo objects as values and the respective
         eDisGo object names as keys.
+
     mode: str
         Display mode
 
-        - "inline" (Default)
-        - "jupyterlab" -
-        - "external" -
+        * "inline" (Default) - Jupyter lab inline plotting.
+        * "jupyterlab" - Plotting in own Jupyter lab tab.
+        * "external" - Plotting in own browser tab.
+
     debug: bool
         Enables debugging of the jupyter dash app.
 
-    port: float
-        Port which the app uses
+    port: int
+        Port which the app uses. Default: 8050
     """
     app = plot_dash_app(edisgo_objects, debug=debug)
     log = logging.getLogger("werkzeug")
