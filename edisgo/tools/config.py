@@ -135,6 +135,10 @@ class Config:
                     config_dir=config_path[conf],
                     copy_default_config=False,
                 )
+        elif config_path == "default":
+            for conf in config_files:
+                conf = conf + "_default"
+                load_config(filename="{}.cfg".format(conf), config_dir=os.path.join(package_path, "config"))
         else:
             for conf in config_files:
                 load_config(filename="{}.cfg".format(conf), config_dir=config_path)
