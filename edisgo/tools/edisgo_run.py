@@ -11,48 +11,9 @@ import pandas as pd
 from edisgo import EDisGo
 from edisgo.flex_opt.exceptions import MaximumIterationError
 from edisgo.network.results import Results
+from edisgo.tools.logger import setup_logger
 
-
-def setup_logging(
-    logfilename=None,
-    logfile_loglevel="debug",
-    console_loglevel="info",
-    **logging_kwargs
-):
-    # a dict to help with log level definition
-    loglevel_dict = {
-        "info": logging.INFO,
-        "debug": logging.DEBUG,
-        "warn": logging.WARNING,
-        "warning": logging.WARNING,
-        "error": logging.ERROR,
-        "critical": logging.CRITICAL,
-    }
-
-    if not (logfilename):
-        logfilename = "edisgo_run.log"
-
-    logging.basicConfig(
-        filename=logfilename,
-        format="%(asctime)s - %(name)s -" + " %(levelname)s - %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-        level=loglevel_dict[logfile_loglevel],
-    )
-
-    root_logger = logging.getLogger()
-
-    console_stream = logging.StreamHandler()
-    console_stream.setLevel(loglevel_dict[console_loglevel])
-    console_formatter = logging.Formatter(
-        fmt="%(asctime)s - %(name)s -" + " %(levelname)s - %(message)s",
-        datefmt="%m/%d/%Y %H:%M:%S",
-    )
-    console_stream.setFormatter(console_formatter)
-
-    # add stream handler to root logger
-    root_logger.addHandler(console_stream)
-
-    return root_logger
+logger = logging.getLogger(__name__)
 
 
 def run_edisgo_basic(
@@ -112,14 +73,14 @@ def run_edisgo_basic(
                 {"network": edisgo_grid, "msg": str(e)},
             )
 
-    logging.info("Grid expansion for MV network {}".format(edisgo_grid.topology.id))
+    logger.info("Grid expansion for MV network {}".format(edisgo_grid.topology.id))
 
     # Import generators
     if generator_scenario:
-        logging.info("Grid expansion for scenario '{}'.".format(generator_scenario))
+        logger.info("Grid expansion for scenario '{}'.".format(generator_scenario))
         edisgo_grid.import_generators(generator_scenario=generator_scenario)
     else:
-        logging.info("Grid expansion with status quo generator capacities.")
+        logger.info("Grid expansion with status quo generator capacities.")
 
     try:
         # Do network reinforcement
@@ -142,17 +103,17 @@ def run_edisgo_basic(
         grid_issues["network"] = None
         grid_issues["msg"] = None
 
-        logging.info("SUCCESS!")
+        logger.info("SUCCESS!")
     except MaximumIterationError:
         grid_issues["network"] = edisgo_grid.network.id
         grid_issues["msg"] = str(edisgo_grid.network.results.unresolved_issues)
         costs = pd.DataFrame(dtype=float)
-        logging.warning("Unresolved issues left after network expansion.")
+        logger.warning("Unresolved issues left after network expansion.")
     except Exception as e:
         grid_issues["network"] = edisgo_grid.network.id
         grid_issues["msg"] = repr(e)
         costs = pd.DataFrame(dtype=float)
-        logging.exception()
+        logger.exception()
 
     return edisgo_grid, costs, grid_issues
 
@@ -501,10 +462,12 @@ def edisgo_run():
     # get current time for output file names
     exec_time = pd.datetime.now().strftime("%Y-%m-%d_%H%M")
 
-    logger = setup_logging(  # noqa: F841
-        logfilename="test.log",
-        logfile_loglevel="debug",
-        console_loglevel="info",
+    setup_logger(  # noqa: F841
+        loggers=[
+            {"name": "root", "file_level": "warning", "stream_level": "warning"},
+            {"name": "edisgo", "file_level": "debug", "stream_level": "info"},
+        ],
+        file_name="test.log",
     )
 
     # get the list of files to run on
