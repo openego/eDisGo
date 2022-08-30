@@ -8,7 +8,7 @@ function read_statics(network_name::String)
     data_string=read(io,String)
     network_data = JSON.parse(data_string)
     close(io)
-
+    #PowerModels.io.common.correct_network_data(network_data)
     PowerModels.check_network_data(network_data)
 
     return network_data
@@ -169,7 +169,7 @@ function read_data(
     else
         thorizon = timehorizon
     end
-    data = PowerModels.replicate(network_data,thorizon,global_keys=global_keys)
+    data = PowerModels.replicate(network_data,thorizon,global_keys=global_keys) # use make_multinetwork() instead  https://github.com/lanl-ansi/PowerModels.jl/blob/master/src/core/data.jl#L253
     # write timeseries on replicated data
     add_load_timeseries(data,load_data)
     add_storage_timeseries(data,storage_data)

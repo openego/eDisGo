@@ -21,8 +21,6 @@ println(network_files)
 println(network_name)
 
 edisgoOPF.run_edisgo_opf_problem(network_files,solution_files)
-
-
 # data = edisgoOPF.read_edisgo_problem(network_name)
 #
 # pm = PowerModels.GenericPowerModel(data,SOCBFForm);
