@@ -53,6 +53,7 @@ def _init_pm():
         "dcline": dict(),
         "load": dict(),
         "storage": dict(),
+        "switch": dict(),
         "baseMVA": 1,
         "source_version": 2,
         "shunt": dict(),
