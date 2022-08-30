@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 import pickle
@@ -13,7 +14,7 @@ import pandas as pd
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
-from edisgo.io import pypsa_io
+from edisgo.io import powermodels_io, pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
@@ -591,6 +592,9 @@ class EDisGo:
         if check_edisgo_integrity or logger.level == logging.DEBUG:
             self.check_integrity()
         return pypsa_io.to_pypsa(self, mode, timesteps, **kwargs)
+
+    def to_powermodels(self):
+        return powermodels_io.to_powermodels(self)
 
     def to_graph(self):
         """
@@ -1942,6 +1946,41 @@ class EDisGo:
         if filename is None:
             filename = f"edisgo_object_{self.topology.mv_grid.id}.pkl"
         pickle.dump(self, open(os.path.join(abs_path, filename), "wb"))
+
+    def save_edisgo_to_json(self, directory):
+        os.makedirs(directory, exist_ok=True)
+        pm, load_dict, gen_dict = self.to_powermodels()
+
+        def _convert(o):
+            """
+            Helper function for json dump, as int64 cannot be dumped.
+
+            """
+            if isinstance(o, np.int64):
+                return int(o)
+            raise TypeError
+
+        with open(
+            os.path.join(directory, "{}_static.json".format(pm["name"])),
+            "w",
+        ) as outfile:
+            json.dump(pm, outfile, default=_convert)
+        with open(
+            os.path.join(directory, "{}_loads.json".format(pm["name"])),
+            "w",
+        ) as outfile:
+            json.dump(load_dict, outfile, default=_convert)
+        with open(
+            os.path.join(directory, "{}_gens.json".format(pm["name"])), "w"
+        ) as outfile:
+            json.dump(gen_dict, outfile, default=_convert)
+        # TODO Storage timeseries
+        # with open(
+        #         os.path.join(scenario_data_dir, "{}_storage.json".format(pm["name"])),
+        #         "w",
+        # ) as outfile:
+        #     json.dump(storage_data, outfile, default=convert)
+        # TODO remaining flexbility timeseries
 
     def reduce_memory(self, **kwargs):
         """

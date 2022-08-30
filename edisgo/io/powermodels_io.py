@@ -173,15 +173,45 @@ def _build_shunt(psa_net, pm):
 
 
 def _build_storage(psa_net, pm):
-    return
+    ps = psa_net.storage_units.p_set
+    qs = psa_net.storage_units.q_set
+    soc = psa_net.storage_units.state_of_charge_set
+    p_max = psa_net.storage_units.p_max_pu
+    p_min = psa_net.storage_units.p_min_pu
+    for stor_i in np.arange(len(psa_net.storage_units.index)):
+        idx_bus = _map_bus(psa_net, psa_net.storage_units.bus[stor_i])
+        pm["storage"][str(stor_i + 1)] = {
+            "x": 0,  # TODO
+            "r": 0,  # TODO
+            "ps": ps[stor_i],
+            "qs": qs[stor_i],
+            "pmax": p_max[stor_i],
+            "pmin": p_min[stor_i],
+            "p_loss": 0,  # TODO
+            "qmax": 0,  # pmax[stor_i],#TODO *tan(phi)
+            "qmin": 0,  # pmax[stor_i],#TODO *tan(phi)
+            "q_loss": 0,  # TODO
+            "energy": soc[stor_i],  # TODO: Ist das richtig?
+            "energy_rating": 0,  # TODO
+            "thermal_rating": 0,  # TODO
+            "charge_rating": 0,  # TODO
+            "discharge_rating": 0,  # TODO
+            "charge_efficiency": 1,  # TODO
+            "discharge_efficiency": 1,  # TODO
+            "storage_bus": idx_bus,
+            "status": True,
+            "index": stor_i + 1,
+        }
 
 
-def _build_load_dict(psa_net):
-    return
+def _build_load_dict(psa_net):  # TODO
+    load_dict = dict()
+    return load_dict
 
 
-def _build_gen_dict(psa_net):
-    return
+def _build_gen_dict(psa_net):  # TODO
+    gen_dict = dict()
+    return gen_dict
 
 
 def _map_bus(psa_net, bus_name):
