@@ -1949,7 +1949,7 @@ class EDisGo:
 
     def save_edisgo_to_json(self, directory):
         os.makedirs(directory, exist_ok=True)
-        pm, load_dict, gen_dict = self.to_powermodels()
+        pm = self.to_powermodels()
 
         def _convert(o):
             """
@@ -1961,26 +1961,10 @@ class EDisGo:
             raise TypeError
 
         with open(
-            os.path.join(directory, "{}_static.json".format(pm["name"])),
+            os.path.join(directory, "{}.json".format(pm["name"])),
             "w",
         ) as outfile:
             json.dump(pm, outfile, default=_convert)
-        with open(
-            os.path.join(directory, "{}_loads.json".format(pm["name"])),
-            "w",
-        ) as outfile:
-            json.dump(load_dict, outfile, default=_convert)
-        with open(
-            os.path.join(directory, "{}_gens.json".format(pm["name"])), "w"
-        ) as outfile:
-            json.dump(gen_dict, outfile, default=_convert)
-        # TODO Storage timeseries
-        # with open(
-        #         os.path.join(scenario_data_dir, "{}_storage.json".format(pm["name"])),
-        #         "w",
-        # ) as outfile:
-        #     json.dump(storage_data, outfile, default=convert)
-        # TODO remaining flexbility timeseries
 
     def reduce_memory(self, **kwargs):
         """
