@@ -995,7 +995,9 @@ def plot_plotly(
 
     logger.debug(f"selected_timesteps={selected_timesteps}")
 
-    if isinstance(selected_timesteps, str):
+    if isinstance(selected_timesteps, pd.Timestamp) or isinstance(
+        selected_timesteps, str
+    ):
         selected_timesteps = [selected_timesteps]
 
     if selected_timesteps is None:
