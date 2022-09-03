@@ -1068,27 +1068,27 @@ def plot_plotly(
 
     # Select values for displaying results.
     if power_flow_results:
-        s_res_view = edisgo_obj.results.s_res.T.index.isin(
+        s_res_view = edisgo_obj.results.s_res.columns.isin(
             [edge[2]["branch_name"] for edge in G.edges.data()]
         )
-        v_res_view = edisgo_obj.results.v_res.T.index.isin([node for node in G.nodes])
+        v_res_view = edisgo_obj.results.v_res.columns.isin([node for node in G.nodes])
 
-        s_res = edisgo_obj.results.s_res.T.loc[s_res_view, selected_timesteps]
-        v_res = edisgo_obj.results.v_res.T.loc[v_res_view, selected_timesteps]
+        s_res = edisgo_obj.results.s_res.loc[selected_timesteps, s_res_view]
+        v_res = edisgo_obj.results.v_res.loc[selected_timesteps, v_res_view]
 
         result_selection_options = ["min", "max"]
         if line_result_selection == "min":
-            s_res = s_res.T.min()
+            s_res = s_res.min()
         elif line_result_selection == "max":
-            s_res = s_res.T.max()
+            s_res = s_res.max()
         else:
             raise ValueError(
                 f"line_result_selection needs to be one of {result_selection_options}"
             )
         if node_result_selection == "min":
-            v_res = v_res.T.min()
+            v_res = v_res.min()
         elif node_result_selection == "max":
-            v_res = v_res.T.max()
+            v_res = v_res.max()
         else:
             raise ValueError(
                 f"node_result_selection needs to be one of {result_selection_options}"
@@ -1152,8 +1152,8 @@ def plot_plotly(
         showscale = True
 
         if line_color == "loading":
-            color_min = s_res.T.min()
-            color_max = s_res.T.max()
+            color_min = s_res.min()
+            color_max = s_res.max()
             colorscale = "YlOrRd"
         elif line_color == "relative_loading":
             color_min = 0
