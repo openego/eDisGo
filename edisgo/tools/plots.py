@@ -902,79 +902,85 @@ def color_map_color(
 def plot_plotly(
     edisgo_obj: EDisGo,
     grid: Grid | None = None,
-    line_color: str = "relative_loading",
-    node_color: str = "voltage_deviation",
+    line_color: None | str = "relative_loading",
+    node_color: None | str = "voltage_deviation",
     line_result_selection: str = "max",
     node_result_selection: str = "max",
-    selected_timesteps: bool | str | list = False,
+    selected_timesteps: pd.Timestamp | list | None = None,
     center_coordinates: bool = False,
     pseudo_coordinates: bool = False,
     node_selection: list | bool = False,
 ) -> BaseFigure:
     """
-    Draw a plotly html figure
+    Draws a plotly html figure.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-        Selected edisgo_obj to plot the information of the object.
+        Selected edisgo_obj to get plotting information from.
 
-    grid : :class:`~.network.grids.Grid` or bool
-        Grid to plot if False the MVGrid of the edisgo_obj is plotted. Default: False
+    grid : :class:`~.network.grids.Grid`
+        Grid to plot. If None, the MVGrid of the edisgo_obj is plotted. Default: None.
 
-    line_color : str
-        Defines whereby to choose line colors. Possible
-        options are:
+    line_color : str or None
+        Defines whereby to choose line colors. Possible options are:
 
         * 'loading'
-          Line color is set according to loading of the line.
+            Line color is set according to loading of the line.
         * 'relative_loading' (default)
-          Line color is set according to relative loading of the line.
+            Line color is set according to relative loading of the line.
         * 'reinforce'
-          Line color is set according to investment costs of the line.
+            Line color is set according to investment costs of the line.
+        * None
+            Line color is black. This is also the fallback, in case other options fail.
 
     node_color : str or None
         Defines whereby to choose node colors. Possible options are:
 
         * 'adjacencies'
-          Node color as well as size is set according to the number of direct neighbors.
+            Node color as well as size is set according to the number of direct
+            neighbors.
         * 'voltage_deviation' (default)
-          Node color is set according to voltage deviation from 1 p.u..
+            Node color is set according to voltage deviation from 1 p.u..
+        * None
+            Line color is black. This is also the fallback, in case other options fail.
 
     line_result_selection : str
-        Defines which values are shown for the load of the lines and the voltage of the
-        nodes:
+        Defines which values are shown for the load of the lines:
 
-        * 'min' (default)
-          Minimal line load and minimal node voltage of all time steps.
-        * 'max'
-          Maximal line load and minimal node voltage of all time steps.
+        * 'min'
+            Minimal line load of all time steps.
+        * 'max' (default)
+            Maximal line load of all time steps.
 
     node_result_selection : str
-        Defines which values are shown for the load of the lines and the voltage of the
-        nodes:
+        Defines which values are shown for the voltage of the nodes:
 
-        * 'min' (default)
-          Minimal line load and minimal node voltage of all time steps.
-        * 'max'
-          Maximal line load and minimal node voltage of all time steps.
+        * 'min'
+            Minimal node voltage of all time steps.
+        * 'max' (default)
+            Maximal node voltage of all time steps.
 
-    selected_timesteps : bool or str or list
-        Selected timesteps to show the results.
+    selected_timesteps : :pandas:`pandas.Timestamp<Timestamp>` or \
+        list(:pandas:`pandas.Timestamp<Timestamp>`) or None
+        Selected time steps to show results for.
 
-        * False - All timesteps are used.
-        * list or str of Timesteps - Selected timesteps are used.
+        * None (default)
+            All time steps are used.
+        * list(:pandas:`pandas.Timestamp<Timestamp>`) or \
+            :pandas:`pandas.Timestamp<Timestamp>`
+          Selected time steps are used.
 
     center_coordinates : bool
         Enables the centering of the coordinates. If True the transformer node is set
-        to the coordinates x=0 and y=0. Else the coordinates from the HV-MV-station
-        of the MV grid are used. Default: False
+        to the coordinates x=0 and y=0. Else, the coordinates from the HV/MV-station
+        of the MV grid are used. Default: False.
 
     pseudo_coordinates : bool
-        Enable pseudo coordinates for the plotted grid. Default: False
+        Enable pseudo coordinates for the plotted grid. Default: False.
 
-    node_selection : bool or list
-        Only plot selected nodes. Default: False
+    node_selection : bool or list(str)
+        Only plot selected nodes. Default: False.
 
     Returns
     -------
@@ -992,15 +998,15 @@ def plot_plotly(
     if isinstance(selected_timesteps, str):
         selected_timesteps = [selected_timesteps]
 
-    if selected_timesteps is False:
-        selected_timesteps = edisgo_obj.results.s_res.index.to_list()
+    if selected_timesteps is None:
+        selected_timesteps = edisgo_obj.results.s_res.index
 
     if edisgo_obj.results.s_res.empty:
         power_flow_results = False
         warning_message = "No power flow results. -> Run power flow."
-    elif selected_timesteps == []:
+    elif len(selected_timesteps) == 0:
         power_flow_results = False
-        warning_message = "No timesteps selected"
+        warning_message = "No time steps selected."
     else:
         power_flow_results = True
         warning_message = False
@@ -1009,7 +1015,7 @@ def plot_plotly(
         edisgo_obj.results.s_res.loc[selected_timesteps, :]
     except KeyError:
         power_flow_results = False
-        warning_message = "Timesteps are not in the results."
+        warning_message = "Time steps are not in the results."
 
     # check for existing reinforcement results
     if edisgo_obj.results.equipment_changes.empty:
@@ -1020,7 +1026,7 @@ def plot_plotly(
     # check line_color input
     line_color_options = ["loading", "relative_loading", "reinforce"]
     if line_color not in line_color_options:
-        logger.warning(f"Line colors need to be one of {line_color_options}")
+        logger.warning(f"Line colors need to be one of {line_color_options}.")
         line_color = None
     elif (line_color in ["loading", "relative_loading"]) and (not power_flow_results):
         logger.warning("No power flow results to show. -> Run power flow.")
@@ -1032,7 +1038,7 @@ def plot_plotly(
     # check node_color input
     node_color_options = ["voltage_deviation", "adjacencies"]
     if node_color not in node_color_options:
-        logger.warning(f"Line colors need to be one of {node_color_options}")
+        logger.warning(f"Line colors need to be one of {node_color_options}.")
         node_color = None
     elif (node_color in ["voltage_deviation"]) and (not power_flow_results):
         logger.warning("No power flow results to show. -> Run power flow.")
@@ -1077,7 +1083,7 @@ def plot_plotly(
             s_res = s_res.T.max()
         else:
             raise ValueError(
-                f"line_result_selection need to be one of {result_selection_options}"
+                f"line_result_selection needs to be one of {result_selection_options}"
             )
         if node_result_selection == "min":
             v_res = v_res.T.min()
@@ -1085,7 +1091,7 @@ def plot_plotly(
             v_res = v_res.T.max()
         else:
             raise ValueError(
-                f"node_result_selection need to be one of {result_selection_options}"
+                f"node_result_selection needs to be one of {result_selection_options}"
             )
 
     # initialization coordinate transformation
@@ -1308,7 +1314,7 @@ def plot_plotly(
 
             colorbar = dict(
                 thickness=15,
-                title="Node Voltage Deviation",
+                title="Node voltage deviation",
                 xanchor="left",
                 titleside="right",
             )
@@ -1323,7 +1329,7 @@ def plot_plotly(
 
             colorbar = dict(
                 thickness=15,
-                title="Node Connections",
+                title="Node connections",
                 xanchor="left",
                 titleside="right",
             )
@@ -1430,6 +1436,7 @@ def chosen_graph(
         Grid name. Can be either 'Grid' to select the MV grid with all LV grids or
         the name of the MV grid to select only the MV grid or the name of one of the
         LV grids of the eDisGo object to select a specific LV grid.
+
     Returns
     -------
     (:networkx:`networkx.Graph<network.Graph>`, :class:`~.network.grids.Grid` or bool)
@@ -1476,8 +1483,10 @@ def plot_dash_app(
     debug : bool
         Debugging for the dash app:
 
-        * False - Disable debugging for the dash app (Default)
-        * True - Enable debugging for the dash app
+        * False (default)
+            Disable debugging for the dash app.
+        * True
+            Enable debugging for the dash app.
 
 
     Returns
@@ -1493,7 +1502,7 @@ def plot_dash_app(
         edisgo_obj_1_mv_grid_name = str(edisgo_obj_1.topology.mv_grid)
         for edisgo_obj in edisgo_objects.values():
             if edisgo_obj_1_mv_grid_name != str(edisgo_obj.topology.mv_grid):
-                raise ValueError("edisgo_objects are not matching")
+                raise ValueError("edisgo_objects are not matching.")
 
     else:
         edisgo_name_list = ["edisgo_obj"]
@@ -1507,8 +1516,8 @@ def plot_dash_app(
     node_plot_modes = ["voltage_deviation", "adjacencies"]
 
     if edisgo_obj_1.results.v_res.empty:
-        timestep_values = ["No Results"]
-        timestep_labels = ["No Results"]
+        timestep_values = ["No results"]
+        timestep_labels = ["No results"]
     elif edisgo_obj_1.timeseries.is_worst_case:
         timestep_values = edisgo_obj_1.results.v_res.index.to_list()
         worst_case_series = edisgo_obj_1.timeseries.timeindex_worst_cases
@@ -1704,8 +1713,8 @@ def plot_dash_app(
                         html.Div(
                             [
                                 html.Label(
-                                    f"Timestep mode - "
-                                    f"Timesteps of {edisgo_name_list[0]}"
+                                    f"Time step mode - "
+                                    f"Time steps of {edisgo_name_list[0]}"
                                 ),
                                 dcc.RadioItems(
                                     ["Single", "Range", "All"],
@@ -1718,7 +1727,7 @@ def plot_dash_app(
                         ),
                         html.Div(
                             [
-                                html.Label("Timestep start"),
+                                html.Label("Time step start"),
                                 dcc.Dropdown(
                                     id="timestep_dropdown_start",
                                     options=timestep_option,
@@ -1729,7 +1738,7 @@ def plot_dash_app(
                         ),
                         html.Div(
                             [
-                                html.Label("Timestep end"),
+                                html.Label("Time step end"),
                                 dcc.Dropdown(
                                     id="timestep_dropdown_end",
                                     options=timestep_option,
@@ -1967,7 +1976,7 @@ def plot_dash_app(
                     [
                         html.Div(
                             [
-                                html.Label("Timestep mode"),
+                                html.Label("Time step mode"),
                                 dcc.RadioItems(
                                     ["Single", "Range", "All"],
                                     "All",
@@ -1979,7 +1988,7 @@ def plot_dash_app(
                         ),
                         html.Div(
                             [
-                                html.Label("Timestep start"),
+                                html.Label("Time step start"),
                                 dcc.Dropdown(
                                     id="timestep_dropdown_start",
                                     options=timestep_option,
@@ -1990,7 +1999,7 @@ def plot_dash_app(
                         ),
                         html.Div(
                             [
-                                html.Label("Timestep end"),
+                                html.Label("Time step end"),
                                 dcc.Dropdown(
                                     id="timestep_dropdown_end",
                                     options=timestep_option,
@@ -2067,11 +2076,11 @@ def plot_dash_app(
                 else:
                     selected_timesteps = edisgo_obj_1.results.v_res.loc[
                         timestep_dropdown_start:timestep_dropdown_end, :
-                    ].index.to_list()
-                    if selected_timesteps == []:
+                    ].index
+                    if len(selected_timesteps) == 0:
                         selected_timesteps = edisgo_obj_1.results.v_res.loc[
                             timestep_dropdown_end:timestep_dropdown_start, :
-                        ].index.to_list()
+                        ].index
                     selected_timesteps = list(map(str, selected_timesteps))
             elif timestep_mode == "All":
                 selected_timesteps = False
@@ -2112,18 +2121,22 @@ def plot_dash(
         objects pass a dictionary with the eDisGo objects as values and the respective
         eDisGo object names as keys.
 
-    mode: str
+    mode : str
         Display mode
 
-        * "inline" (Default) - Jupyter lab inline plotting.
-        * "jupyterlab" - Plotting in own Jupyter lab tab.
-        * "external" - Plotting in own browser tab.
+        * "inline" (default)
+            Jupyter lab inline plotting.
+        * "jupyterlab"
+            Plotting in own Jupyter lab tab.
+        * "external"
+            Plotting in own browser tab.
 
-    debug: bool
-        Enables debugging of the jupyter dash app.
+    debug : bool
+        If True, enables debugging of the jupyter dash app.
 
-    port: int
-        Port which the app uses. Default: 8050
+    port : int
+        Port which the app uses. Default: 8050.
+
     """
     app = plot_dash_app(edisgo_objects, debug=debug)
     log = logging.getLogger("werkzeug")

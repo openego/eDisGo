@@ -24,7 +24,7 @@ coor_transform_back = Transformer.from_crs("EPSG:3035", "EPSG:4326", always_xy=T
 
 
 # Pseudo coordinates
-def make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
+def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
     """
     Generates pseudo coordinates for a graph with equidistant coordinates.
 
@@ -39,7 +39,7 @@ def make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
     Returns
     -------
     :networkx:`networkx.Graph<network.Graph>`
-        Graph with equidistant pseudo coordinates for all nodes
+        Graph with equidistant pseudo coordinates for all nodes.
 
     """
 
@@ -202,7 +202,7 @@ def make_pseudo_coordinates_graph(G: Graph, branch_detour_factor: float) -> Grap
         Graph object to generate pseudo coordinates for.
 
     branch_detour_factor : float
-            Defines the quotient of the line length and the distance of the buses.
+        Defines the quotient of the line length and the distance of the buses.
 
     Returns
     -------
@@ -214,7 +214,7 @@ def make_pseudo_coordinates_graph(G: Graph, branch_detour_factor: float) -> Grap
     logger.debug("Start - Making pseudo coordinates for graph")
 
     x0, y0 = G.nodes[list(nx.nodes(G))[0]]["pos"]
-    G = make_coordinates(G, branch_detour_factor)
+    G = _make_coordinates(G, branch_detour_factor)
     x0, y0 = coor_transform.transform(x0, y0)
     for node in G.nodes():
         x, y = G.nodes[node]["pos"]
@@ -235,7 +235,7 @@ def make_pseudo_coordinates(
     edisgo_root : :class:`~.EDisGo`
         eDisGo object
     mv_coordinates : bool, optional
-        If True pseudo coordinates are also generated for mv_grid.
+        If True pseudo coordinates are also generated for MV grid.
         Default: False.
 
     Returns
