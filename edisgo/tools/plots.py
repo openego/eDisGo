@@ -1246,8 +1246,8 @@ def plot_plotly(
 
         if line_color:
             line_color_title = {
-                "loading": "Loading",
-                "relative_loading": "Relative loading",
+                "loading": "Loading in MVA",
+                "relative_loading": "Relative loading in p.u.",
                 "reinforce": "Reinforce",
             }
 
@@ -1316,7 +1316,7 @@ def plot_plotly(
 
             colorbar = dict(
                 thickness=15,
-                title="Node voltage deviation",
+                title="Node voltage deviation in p.u.",
                 xanchor="left",
                 titleside="right",
             )
