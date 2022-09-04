@@ -2311,10 +2311,13 @@ class TestTimeSeries:
         assert "Load_residential_LVGrid_5_3" in component_names
 
     def test_resample_timeseries(self):
-        # add dummy time series
+
         self.edisgo.set_time_series_worst_case_analysis()
+
         len_timeindex_orig = len(self.edisgo.timeseries.timeindex)
         mean_value_orig = self.edisgo.timeseries.generators_active_power.mean()
+
+        # test up-sampling
         self.edisgo.timeseries.resample_timeseries()
         # check if resampled length of time index is 4 times original length of
         # timeindex
@@ -2322,16 +2325,55 @@ class TestTimeSeries:
         # check if mean value of resampled data is the same as mean value of original
         # data
         assert (
-            self.edisgo.timeseries.generators_active_power.mean().round(5)
-            == mean_value_orig.round(5)
+            np.isclose(
+                self.edisgo.timeseries.generators_active_power.mean(),
+                mean_value_orig,
+                atol=1e-5,
+            )
         ).all()
-        # Same tests for down-sampling
+
+        # same tests for down-sampling
         self.edisgo.timeseries.resample_timeseries(freq="2h")
         assert len(self.edisgo.timeseries.timeindex) == 0.5 * len_timeindex_orig
         assert (
-            self.edisgo.timeseries.generators_active_power.mean().round(5)
-            == mean_value_orig.round(5)
+            np.isclose(
+                self.edisgo.timeseries.generators_active_power.mean(),
+                mean_value_orig,
+                atol=1e-5,
+            )
         ).all()
+
+        # test bfill
+        self.edisgo.timeseries.resample_timeseries(method="bfill")
+        assert len(self.edisgo.timeseries.timeindex) == 4 * len_timeindex_orig
+        assert np.isclose(
+            self.edisgo.timeseries.generators_active_power.iloc[1:, :].loc[
+                :, "GeneratorFluctuating_3"
+            ],
+            2.26950,
+            atol=1e-5,
+        ).all()
+
+        # test interpolate
+        self.edisgo.timeseries.reset()
+        self.edisgo.set_time_series_worst_case_analysis()
+        len_timeindex_orig = len(self.edisgo.timeseries.timeindex)
+        ts_orig = self.edisgo.timeseries.generators_active_power.loc[
+            :, "GeneratorFluctuating_3"
+        ]
+        self.edisgo.timeseries.resample_timeseries(method="interpolate")
+        assert len(self.edisgo.timeseries.timeindex) == 4 * len_timeindex_orig
+        assert np.isclose(
+            self.edisgo.timeseries.generators_active_power.at[
+                pd.Timestamp("1970-01-01 01:30:00"), "GeneratorFluctuating_3"
+            ],
+            (
+                ts_orig.at[pd.Timestamp("1970-01-01 01:00:00")]
+                + ts_orig.at[pd.Timestamp("1970-01-01 02:00:00")]
+            )
+            / 2,
+            atol=1e-5,
+        )
 
 
 class TestTimeSeriesRaw:
