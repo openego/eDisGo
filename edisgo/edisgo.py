@@ -2039,29 +2039,46 @@ class EDisGo:
 
     def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
         """
-        Returns timeseries resampled to a desired resolution.
+        Resamples all generator, load and storage time series to a desired resolution.
 
-        Both up- and downsampling methods are available.
+        The following time series are affected by this:
+
+        * :attr:`~.network.timeseries.TimeSeries.generators_active_power`
+
+        * :attr:`~.network.timeseries.TimeSeries.loads_active_power`
+
+        * :attr:`~.network.timeseries.TimeSeries.storage_units_active_power`
+
+        * :attr:`~.network.timeseries.TimeSeries.generators_reactive_power`
+
+        * :attr:`~.network.timeseries.TimeSeries.loads_reactive_power`
+
+        * :attr:`~.network.timeseries.TimeSeries.storage_units_reactive_power`
+
+        Both up- and down-sampling methods are possible.
 
         Parameters
         ----------
         method : str, optional
-            Method to choose from to fill missing values when upsampling. Default:
-            'ffill'. Possible options are:
+            Method to choose from to fill missing values when resampling.
+            Possible options are:
 
-            * 'ffill': propagate last valid observation forward to next valid
-            observation. See :pandas:`pandas.DataFrame.ffill<DataFrame.ffill>`
+            * 'ffill'
+                Propagate last valid observation forward to next valid
+                observation. See :pandas:`pandas.DataFrame.ffill<DataFrame.ffill>`.
+            * 'bfill'
+                Use next valid observation to fill gap. See
+                :pandas:`pandas.DataFrame.bfill<DataFrame.bfill>`.
+            * 'interpolate'
+                Fill NaN values using an interpolation method. See
+                :pandas:`pandas.DataFrame.interpolate<DataFrame.interpolate>`.
 
-            * 'bfill': use next valid observation to fill gap. See
-            :pandas:`pandas.DataFrame.bfill<DataFrame.bfill>`
-
-            * 'interpolate': Fill NaN values using an interpolation method. See
-            :pandas:`pandas.DataFrame.interpolate<DataFrame.interpolate>`
-
+            Default: 'ffill'.
         freq : str, optional
-            Frequency that timeseries is resampled to. Offset aliases can be found here:
-            https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases
-            15 minutes is the default.
+            Frequency that time series is resampled to. Offset aliases can be found
+            here:
+            https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases.
+            Default: '15min'.
 
         """
         self.timeseries.resample_timeseries(method=method, freq=freq)
