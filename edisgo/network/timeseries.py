@@ -307,9 +307,11 @@ class TimeSeries:
         Resets all time series.
 
         Active and reactive power time series of all loads, generators and storage units
-        are deleted, as well as everything stored in :py:attr:`~time_series_raw`.
+        are deleted, as well as timeindex everything stored in
+        :py:attr:`~time_series_raw`.
 
         """
+        self.timeindex = pd.DatetimeIndex([])
         self.generators_active_power = None
         self.loads_active_power = None
         self.storage_units_active_power = None
@@ -2160,6 +2162,9 @@ class TimeSeries:
             See :attr:`~.EDisGo.resample_timeseries` for more information.
 
         """
+
+        # add time step at the end of the time series in case of up-sampling so that
+        # last time interval in the original time series is still included
         attrs = self._attributes
         freq_orig = self.timeindex[1] - self.timeindex[0]
         df_dict = {}
@@ -2174,6 +2179,8 @@ class TimeSeries:
                 .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
                 .ffill()
             )
+
+        # create new index
         if pd.Timedelta(freq) < freq_orig:  # up-sampling
             index = pd.date_range(
                 self.timeindex[0],
@@ -2187,7 +2194,11 @@ class TimeSeries:
                 self.timeindex[-1],
                 freq=freq,
             )
+
+        # set new timeindex
         self._timeindex = index
+
+        # resample time series
         if pd.Timedelta(freq) < freq_orig:  # up-sampling
             if method == "interpolate":
                 for attr in attrs:
@@ -2208,7 +2219,7 @@ class TimeSeries:
                     )
             else:
                 raise NotImplementedError(
-                    'Resampling method "{}" is not implemented.'.format(method)
+                    f"Resampling method {method} is not implemented."
                 )
         else:  # down-sampling
             for attr in attrs:
