@@ -2149,15 +2149,15 @@ class TimeSeries:
         """
         Resamples all generator, load and storage time series to a desired resolution.
 
-        See :func:`~.edisgo.EDisGo.resample_timeseries` for more information.
+        See :attr:`~.EDisGo.resample_timeseries` for more information.
 
         Parameters
         ----------
         method : str, optional
-            See :func:`~.edisgo.EDisGo.resample_timeseries` for more information.
+            See :attr:`~.EDisGo.resample_timeseries` for more information.
 
         freq : str, optional
-            See :func:`~.edisgo.EDisGo.resample_timeseries` for more information.
+            See :attr:`~.EDisGo.resample_timeseries` for more information.
 
         """
         attrs = self._attributes
