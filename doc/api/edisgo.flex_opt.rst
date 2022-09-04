@@ -34,7 +34,7 @@ edisgo.flex\_opt.exceptions module
    :show-inheritance:
 
 edisgo.flex\_opt.q\_control module
-----------------------------------
+-----------------------------------
 
 .. automodule:: edisgo.flex_opt.q_control
    :members:

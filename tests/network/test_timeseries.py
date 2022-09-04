@@ -1393,6 +1393,7 @@ class TestTimeSeries:
         # time series for generators are set for those for which time series are
         # provided)
         self.edisgo.timeseries.reset()
+        self.edisgo.timeseries.timeindex = timeindex
         self.edisgo.timeseries.predefined_fluctuating_generators_by_technology(
             self.edisgo, gens_p
         )
