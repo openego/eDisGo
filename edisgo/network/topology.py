@@ -20,6 +20,7 @@ from edisgo.tools.tools import (
     calculate_apparent_power,
     calculate_line_reactance,
     calculate_line_resistance,
+    calculate_line_susceptance,
     select_cable,
 )
 
@@ -48,6 +49,7 @@ COLUMNS = {
         "length",
         "x",
         "r",
+        "b",
         "s_nom",
         "num_parallel",
         "type_info",
@@ -1247,7 +1249,7 @@ class Topology:
         Adds line to topology.
 
         Line name is generated automatically.
-        If `type_info` is provided, `x`, `r` and `s_nom` are calculated.
+        If `type_info` is provided, `x`, `r`, `b` and `s_nom` are calculated.
 
         Parameters
         ----------
@@ -1262,8 +1264,8 @@ class Topology:
         ------------------
         kwargs :
             Kwargs may contain any further attributes in :py:attr:`~lines_df`.
-            It is necessary to either provide `type_info` to determine `x`, `r`
-            and `s_nom` of the line, or to provide `x`, `r` and `s_nom`
+            It is necessary to either provide `type_info` to determine `x`, `r`, `b`
+            and `s_nom` of the line, or to provide `x`, `r`, `b` and `s_nom`
             directly.
 
         """
@@ -1328,6 +1330,7 @@ class Topology:
         # unpack optional parameters
         x = kwargs.get("x", None)
         r = kwargs.get("r", None)
+        b = kwargs.get("b", 0.0)
         s_nom = kwargs.get("s_nom", None)
         num_parallel = kwargs.get("num_parallel", 1)
         type_info = kwargs.get("type_info", None)
@@ -1335,10 +1338,10 @@ class Topology:
 
         # if type of line is specified calculate x, r and s_nom
         if type_info is not None:
-            if x is not None or r is not None or s_nom is not None:
+            if x is not None or r is not None or b is not None or s_nom is not None:
                 warnings.warn(
                     "When line 'type_info' is provided when creating a new "
-                    "line, x, r and s_nom are calculated and provided "
+                    "line, x, r, b and s_nom are calculated and provided "
                     "parameters are overwritten."
                 )
             line_data = _get_line_data()
@@ -1348,6 +1351,7 @@ class Topology:
                 ).iloc[0, :]
             x = calculate_line_reactance(line_data.L_per_km, length, num_parallel)
             r = calculate_line_resistance(line_data.R_per_km, length, num_parallel)
+            b = calculate_line_susceptance(line_data.C_per_km, length, num_parallel)
             s_nom = calculate_apparent_power(
                 line_data.U_n, line_data.I_max_th, num_parallel
             )
@@ -1374,6 +1378,7 @@ class Topology:
                 "bus1": bus1,
                 "x": x,
                 "r": r,
+                "b": b,
                 "length": length,
                 "type_info": type_info,
                 "num_parallel": num_parallel,
@@ -1595,7 +1600,7 @@ class Topology:
         """
         Changes number of parallel lines and updates line attributes.
 
-        When number of parallel lines changes, attributes x, r, and s_nom have
+        When number of parallel lines changes, attributes x, r, b, and s_nom have
         to be adapted, which is done in this function.
 
         Parameters
@@ -1606,11 +1611,16 @@ class Topology:
             new number of parallel lines.
 
         """
-        # update x, r and s_nom
+        # update x, r, b and s_nom
         self._lines_df.loc[lines_num_parallel.index, "x"] = (
             self._lines_df.loc[lines_num_parallel.index, "x"]
             * self._lines_df.loc[lines_num_parallel.index, "num_parallel"]
             / lines_num_parallel
+        )
+        self._lines_df.loc[lines_num_parallel.index, "b"] = (
+            self._lines_df.loc[lines_num_parallel.index, "b"]
+            / self._lines_df.loc[lines_num_parallel.index, "num_parallel"]
+            * lines_num_parallel
         )
         self._lines_df.loc[lines_num_parallel.index, "r"] = (
             self._lines_df.loc[lines_num_parallel.index, "r"]
@@ -1681,19 +1691,25 @@ class Topology:
         self._lines_df.loc[lines, "num_parallel"] = 1
         self._lines_df.loc[lines, "kind"] = "cable"
 
-        self._lines_df.loc[lines, "r"] = (
-            data_new_line.R_per_km * self.lines_df.loc[lines, "length"]
+        self._lines_df.loc[lines, "r"] = calculate_line_resistance(
+            data_new_line.R_per_km,
+            self.lines_df.loc[lines, "length"],
+            self._lines_df.loc[lines, "num_parallel"],
         )
-        self._lines_df.loc[lines, "x"] = (
-            data_new_line.L_per_km
-            * 2
-            * np.pi
-            * 50
-            / 1e3
-            * self.lines_df.loc[lines, "length"]
+        self._lines_df.loc[lines, "x"] = calculate_line_reactance(
+            data_new_line.L_per_km,
+            self.lines_df.loc[lines, "length"],
+            self._lines_df.loc[lines, "num_parallel"],
         )
-        self._lines_df.loc[lines, "s_nom"] = (
-            np.sqrt(3) * data_new_line.U_n * data_new_line.I_max_th
+        self._lines_df.loc[lines, "b"] = calculate_line_susceptance(
+            data_new_line.C_per_km,
+            self.lines_df.loc[lines, "length"],
+            self._lines_df.loc[lines, "num_parallel"],
+        )
+        self._lines_df.loc[lines, "s_nom"] = calculate_apparent_power(
+            data_new_line.U_n,
+            data_new_line.I_max_th,
+            self._lines_df.loc[lines, "num_parallel"],
         )
 
     def connect_to_mv(self, edisgo_object, comp_data, comp_type="generator"):
