@@ -56,16 +56,16 @@ geo_plot_requirements = [
     "contextily",
     "descartes",
     "plotly",
-    "dash==2.0.0",
-    "werkzeug==2.0.3",
+    "dash==2.6.0",
+    "werkzeug==2.2.0",
 ]
 examples_requirements = [
     "jupyter",
     "jupyterlab",
     "plotly",
-    "dash==2.0.0",
+    "dash==2.6.0",
     "jupyter_dash",
-    "werkzeug==2.0.3",
+    "werkzeug==2.2.0",
 ]
 dev_requirements = [
     "pytest",

@@ -1652,7 +1652,9 @@ class Topology:
             data_new_line = self.equipment_data["lv_cables"].loc[new_line_type]
         except KeyError:
             try:
-                data_new_line = self.equipment_data["mv_cables"].loc[new_line_type]
+                data_new_line = (
+                    self.equipment_data["mv_cables"].loc[new_line_type].copy()
+                )
                 # in case of MV cable adapt nominal voltage to MV voltage
                 grid_voltage = self.buses_df.at[
                     self.lines_df.at[lines[0], "bus0"], "v_nom"

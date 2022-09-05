@@ -14,6 +14,7 @@ Changes
 * added option to not raise error in case power flow did not converge `#207 <https://github.com/openego/eDisGo/issues/207>`_
 * added pyplot `#214 <https://github.com/openego/eDisGo/pull/214>`_
 * added functionality to create geopandas dataframes `#224 <https://github.com/openego/eDisGo/issues/224>`_
+* added functionality to resample time series `#269 <https://github.com/openego/eDisGo/pull/269>`_
 * added tests
 * major refactoring of loads and time series
 
