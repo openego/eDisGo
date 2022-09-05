@@ -1249,7 +1249,7 @@ class Topology:
         Adds line to topology.
 
         Line name is generated automatically.
-        If `type_info` is provided, `x`, `r` and `s_nom` are calculated.
+        If `type_info` is provided, `x`, `r`, `b` and `s_nom` are calculated.
 
         Parameters
         ----------
@@ -1264,8 +1264,8 @@ class Topology:
         ------------------
         kwargs :
             Kwargs may contain any further attributes in :py:attr:`~lines_df`.
-            It is necessary to either provide `type_info` to determine `x`, `r`
-            and `s_nom` of the line, or to provide `x`, `r` and `s_nom`
+            It is necessary to either provide `type_info` to determine `x`, `r`, `b`
+            and `s_nom` of the line, or to provide `x`, `r`, `b` and `s_nom`
             directly.
 
         """
