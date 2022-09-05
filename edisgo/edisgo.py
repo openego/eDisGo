@@ -116,7 +116,7 @@ class EDisGo:
     def __init__(self, **kwargs):
 
         # load configuration
-        self._config = Config(config_path=kwargs.get("config_path", None))
+        self._config = Config(config_path=kwargs.get("config_path", "default"))
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
@@ -2036,6 +2036,52 @@ class EDisGo:
                 )
 
             logging.info("Integrity check finished. Please pay attention to warnings.")
+
+    def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
+        """
+        Resamples all generator, load and storage time series to a desired resolution.
+
+        The following time series are affected by this:
+
+        * :attr:`~.network.timeseries.TimeSeries.generators_active_power`
+
+        * :attr:`~.network.timeseries.TimeSeries.loads_active_power`
+
+        * :attr:`~.network.timeseries.TimeSeries.storage_units_active_power`
+
+        * :attr:`~.network.timeseries.TimeSeries.generators_reactive_power`
+
+        * :attr:`~.network.timeseries.TimeSeries.loads_reactive_power`
+
+        * :attr:`~.network.timeseries.TimeSeries.storage_units_reactive_power`
+
+        Both up- and down-sampling methods are possible.
+
+        Parameters
+        ----------
+        method : str, optional
+            Method to choose from to fill missing values when resampling.
+            Possible options are:
+
+            * 'ffill'
+                Propagate last valid observation forward to next valid
+                observation. See :pandas:`pandas.DataFrame.ffill<DataFrame.ffill>`.
+            * 'bfill'
+                Use next valid observation to fill gap. See
+                :pandas:`pandas.DataFrame.bfill<DataFrame.bfill>`.
+            * 'interpolate'
+                Fill NaN values using an interpolation method. See
+                :pandas:`pandas.DataFrame.interpolate<DataFrame.interpolate>`.
+
+            Default: 'ffill'.
+        freq : str, optional
+            Frequency that time series is resampled to. Offset aliases can be found
+            here:
+            https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases.
+            Default: '15min'.
+
+        """
+        self.timeseries.resample_timeseries(method=method, freq=freq)
 
 
 def import_edisgo_from_pickle(filename, path=""):
