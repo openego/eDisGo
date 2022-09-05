@@ -1330,7 +1330,7 @@ class Topology:
         # unpack optional parameters
         x = kwargs.get("x", None)
         r = kwargs.get("r", None)
-        b = kwargs.get("b", None)
+        b = kwargs.get("b", 0.0)
         s_nom = kwargs.get("s_nom", None)
         num_parallel = kwargs.get("num_parallel", 1)
         type_info = kwargs.get("type_info", None)
@@ -1338,10 +1338,10 @@ class Topology:
 
         # if type of line is specified calculate x, r and s_nom
         if type_info is not None:
-            if x is not None or r is not None or s_nom is not None:
+            if x is not None or r is not None or b is not None or s_nom is not None:
                 warnings.warn(
                     "When line 'type_info' is provided when creating a new "
-                    "line, x, r and s_nom are calculated and provided "
+                    "line, x, r, b and s_nom are calculated and provided "
                     "parameters are overwritten."
                 )
             line_data = _get_line_data()

@@ -160,7 +160,7 @@ def calculate_line_susceptance(line_capacitance_per_km, line_length, num_paralle
     Parameters
     ----------
     line_capacitance_per_km : float
-        Line inductance in uF/km.
+        Line capacitance in uF/km.
     line_length : float
         Length of line in km.
     num_parallel : int
@@ -169,13 +169,10 @@ def calculate_line_susceptance(line_capacitance_per_km, line_length, num_paralle
     Returns
     -------
     float
-        Shunt susceptance in Siemens
+        Shunt susceptance in Siemens.
 
     """
-    if line_capacitance_per_km == 0:
-        return 0
-    else:
-        return line_capacitance_per_km / 1e6 * line_length * 2 * pi * 50 * num_parallel
+    return line_capacitance_per_km / 1e6 * line_length * 2 * pi * 50 * num_parallel
 
 
 def calculate_apparent_power(nominal_voltage, current, num_parallel):
@@ -568,29 +565,28 @@ def add_line_susceptance(
     mode="mv_b",
 ):
     """
-    Add the line susceptance to existing grids, which has no susceptance. Therefore, the
-    susceptance (b) of all lines is recalculated.
+    Adds line susceptance information in Siemens to lines in existing grids.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-        EDisGo-Object in which the susceptance is added.
+        EDisGo object to which line susceptance information is added.
 
     mode : str
         Defines how the susceptance is added:
 
         * 'no_b'
-          The b is set to 0 for all lines.
+            Susceptance is set to 0 for all lines.
         * 'mv_b' (Default)
-          The b is set for the mv-lines according to the equipment parameters and
-          for the lv-lines b = 0.
+            Susceptance is for the MV lines set according to the equipment parameters
+            and for the LV lines it is set to zero.
         * 'all_b'
-          The b is set for the mv-lines according to the equipment parameters and
-          for the lv-lines 0.25 uF/km is chosen.
+            Susceptance is for the MV lines set according to the equipment parameters
+            and for the LV lines 0.25 uF/km is chosen.
 
     Returns
     -------
-    edisgo_obj : :class:`~.EDisGo`
+    :class:`~.EDisGo`
 
     """
     line_data_df = pd.concat(
@@ -612,7 +608,7 @@ def add_line_susceptance(
             edisgo_obj.topology.equipment_data["lv_cables"].index, "C_per_km"
         ] = 0.25
     else:
-        raise ValueError("Non-existing mode")
+        raise ValueError("Non-existing mode.")
 
     lines_df = edisgo_obj.topology.lines_df
     buses_df = edisgo_obj.topology.buses_df
@@ -628,11 +624,10 @@ def add_line_susceptance(
             )
         except KeyError:
             line_capacitance_per_km = line_data_df.loc[type_info].C_per_km
-            logger.warning(f"False voltage level for line {index}")
+            logger.warning(f"False voltage level for line {index}.")
 
         lines_df.loc[index, "b"] = calculate_line_susceptance(
             line_capacitance_per_km, length, num_parallel
         )
 
-    # edisgo_obj.topology.lines_df = lines_df
     return edisgo_obj
