@@ -206,87 +206,47 @@ def _build_storage(psa_net, pm):
 
 def _build_timeseries(psa_net, pm):  # TODO add flexibilities
     pm["time_series"] = {
-        "gen": _build_component_timeseries(psa_net, pm, "gen"),
-        "load": _build_component_timeseries(psa_net, pm, "load"),
-        "storage": _build_component_timeseries(psa_net, pm, "storage"),
+        "gen": _build_component_timeseries(psa_net, "gen"),
+        "load": _build_component_timeseries(psa_net, "load"),
+        "storage": _build_component_timeseries(psa_net, "storage"),
         "num_steps": len(psa_net.snapshots),
     }
     return
 
 
-def _build_component_timeseries(psa_net, pm, kind):  # TODO add flexibilities
-    comp_dict = dict()
-    i = 1
+def _build_component_timeseries(psa_net, kind):  # TODO add flexibilities
     if kind == "gen":
-        pm_comp = {"gen": dict()}
-        # pm_comp = pm["gen"].copy()
+        pm_comp = dict()
         p_set = psa_net.generators_t.p_set
         q_set = psa_net.generators_t.q_set
     elif kind == "load":
-        pm_comp = {"load": dict()}
-        # pm_comp = pm["load"].copy()
+        pm_comp = dict()
         p_set = psa_net.loads_t.p_set
         q_set = psa_net.loads_t.q_set
     elif kind == "storage":
-        # pm_comp = pm["storage"].copy()
-        pm_comp = {"storage": dict()}
+        pm_comp = dict()
         p_set = psa_net.storage_units_t.p_set
         q_set = psa_net.storage_units_t.q_set
     #   else: #TODO NotImplementedError/Warning
-    for t in range(len(psa_net.snapshots)):
-        p = p_set.loc[psa_net.snapshots[t]]
-        q = q_set.loc[psa_net.snapshots[t]]
-        for comp in p_set.loc[psa_net.snapshots[t]].index:
-            comp_i = _mapping(psa_net, comp, kind)
-            if kind == "gen":
-                pm_comp["gen"][str(comp_i)] = {"pg": p[comp], "qg": q[comp]}
-            elif kind == "load":
-                pm_comp["load"][str(comp_i)] = {"pd": p[comp], "qd": q[comp]}
-            elif kind == "storage":
-                pm_comp["storage"][str(comp_i)] = {"ps": p[comp], "qs": q[comp]}
-            # TODO: more time dependable values?
-            comp_dict[i] = pm_comp
-            i += 1
-    return comp_dict
-
-
-def _build_load_dict(psa_net, pm):
-    load_dict = dict()
-    pm_load = pm["load"].copy()
-    i = 1
-    for t in range(len(psa_net.snapshots)):
-        pd = psa_net.loads_t.p_set.loc[psa_net.snapshots[t]]
-        qd = psa_net.loads_t.q_set.loc[psa_net.snapshots[t]]
-        for load in psa_net.loads_t.p_set.loc[psa_net.snapshots[t]].index:
-            load_i = _mapping(psa_net, load, "load")
-            pm_load[str(load_i)]["pd"] = pd[load]
-            pm_load[str(load_i)]["qd"] = qd[load]
-            # TODO: more time dependable values?
-            load_dict[i] = pm_load
-            i += 1
-    return load_dict
-
-
-def _build_gen_dict(psa_net, pm):
-    gen_dict = dict()
-    pm_gen = pm["gen"].copy()
-    i = 1
-    for t in range(len(psa_net.snapshots)):
-        pg = psa_net.generators_t.p_set.loc[psa_net.snapshots[t]]
-        qg = psa_net.generators_t.q_set.loc[psa_net.snapshots[t]]
-        for gen in psa_net.generators_t.p_set.loc[psa_net.snapshots[t]].index:
-            gen_i = _mapping(psa_net, gen, "gen")
-            pm_gen[str(gen_i)]["pg"] = pg[gen]
-            pm_gen[str(gen_i)]["qg"] = qg[gen]
-            # TODO: more time dependable values?
-            gen_dict[i] = pm_gen
-            i += 1
-    return gen_dict
-
-
-def _build_stor_dict(psa_net, pm):  # TODO
-    stor_dict = dict()
-    return stor_dict
+    for comp in p_set.columns:
+        comp_i = _mapping(psa_net, comp, kind)
+        if kind == "gen":
+            pm_comp[str(comp_i)] = {
+                "pg": p_set[comp].values.tolist(),
+                "qg": q_set[comp].values.tolist(),
+            }
+        elif kind == "load":
+            pm_comp[str(comp_i)] = {
+                "pd": p_set[comp].values.tolist(),
+                "qd": q_set[comp].values.tolist(),
+            }
+        elif kind == "storage":
+            pm_comp[str(comp_i)] = {
+                "ps": p_set[comp].values.tolist(),
+                "qs": q_set[comp].values.tolist(),
+            }
+        # TODO: more time dependable values?
+    return pm_comp
 
 
 def _mapping(psa_net, name, kind="bus"):
