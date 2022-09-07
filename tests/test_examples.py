@@ -75,3 +75,12 @@ class TestExamples:
     #         os.path.join(examples_dir_path, "edisgo_simple_example.ipynb")
     #     )
     #     assert errors == []
+
+    def test_edisgo_documentation_examples_ipynb(self):
+        examples_dir_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "examples"
+        )
+        nb, errors = self._notebook_run(
+            os.path.join(examples_dir_path, "edisgo_documentation_examples.ipynb")
+        )
+        assert errors == []
