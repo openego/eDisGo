@@ -110,6 +110,7 @@ def _build_branch(psa_net, pm):
     r = psa_net.lines.r_pu
     x = psa_net.lines.x_pu
     b = psa_net.lines.b_pu
+    g = psa_net.lines.g_pu
     s_nom = psa_net.lines.s_nom
 
     for branch_i in np.arange(len(psa_net.lines.index)):
@@ -120,19 +121,20 @@ def _build_branch(psa_net, pm):
             "br_x": x[branch_i],
             "f_bus": idx_f_bus,
             "t_bus": idx_t_bus,
-            "g_to": b[branch_i].imag / 2,  # TODO: Berechnung überprüfen
-            "g_fr": -b[branch_i].imag / 2,
-            "b_to": b[branch_i].real / 2,
-            "b_fr": -b[branch_i].real / 2,
-            "shift": 0.0,  # TODO
+            "g_to": g[branch_i] / 2,  # TODO: Malte fragen
+            "g_fr": g[branch_i] / 2,
+            "b_to": b[branch_i] / 2,  # Beide positiv?
+            # https://github.com/lanl-ansi/PowerModels.jl/blob/de7da4d11d04ce48b34d7b5f601f32f49361626b/src/io/matpower.jl#L459
+            "b_fr": b[branch_i] / 2,
+            "shift": 0.0,  # Default 0.0 if no transformer is attached
             "br_status": 1.0,  # TODO
             "rate_a": s_nom[branch_i].real,  # TODO: Berechnungsvorschrift Jaap?
             "rate_b": 250,  # TODO
             "rate_c": 250,  # TODO
             "angmin": -np.pi / 6,  # TODO: Deg oder Rad?
             "angmax": np.pi / 6,
-            "transformer": 0,  # TODO: Was genau für Daten sollen hier rein?
-            "tap": 1.0,  # TODO
+            "transformer": False,  # TODO: add transformer: tap + shift
+            "tap": 1.0,  # Default 1.0 if no transformer is attached
             "index": branch_i + 1,
         }
 
