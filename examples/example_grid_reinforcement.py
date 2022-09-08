@@ -32,9 +32,18 @@ import requests
 
 from edisgo import EDisGo
 from edisgo.network.results import Results
+from edisgo.tools.logger import setup_logger
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+
+# set up logger that streams edisgo logging messages with level info and above
+# and other logging messages with level warning and above to stdout
+setup_logger(
+    loggers=[
+        {"name": "root", "file_level": None, "stream_level": "warning"},
+        {"name": "edisgo", "file_level": None, "stream_level": "info"}
+    ]
+)
 
 
 def run_example():
