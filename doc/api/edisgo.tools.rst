@@ -33,6 +33,14 @@ edisgo.tools.geopandas\_helper module
     :undoc-members:
     :show-inheritance:
 
+edisgo.tools.logger module
+----------------------------------------
+
+.. automodule:: edisgo.tools.logger
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 edisgo.tools.networkx\_helper module
 ----------------------------------------
 
