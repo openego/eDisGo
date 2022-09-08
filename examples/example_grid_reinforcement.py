@@ -36,17 +36,17 @@ from edisgo.tools.logger import setup_logger
 
 logger = logging.getLogger(__name__)
 
-# set up logger that streams edisgo logging messages with level info and above
-# and other logging messages with level warning and above to stdout
-setup_logger(
-    loggers=[
-        {"name": "root", "file_level": None, "stream_level": "warning"},
-        {"name": "edisgo", "file_level": None, "stream_level": "info"}
-    ]
-)
-
 
 def run_example():
+
+    # set up logger that streams edisgo logging messages with level info and above
+    # and other logging messages with level warning and above to stdout
+    setup_logger(
+        loggers=[
+            {"name": "root", "file_level": None, "stream_level": "warning"},
+            {"name": "edisgo", "file_level": None, "stream_level": "info"}
+        ]
+    )
 
     # Specify path to directory containing ding0 grid csv files
     edisgo_path = os.path.join(os.path.expanduser("~"), ".edisgo")
