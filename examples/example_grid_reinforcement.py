@@ -47,13 +47,14 @@ setup_logger(
 
 
 def run_example():
+
     # Specify path to directory containing ding0 grid csv files
     edisgo_path = os.path.join(os.path.expanduser("~"), ".edisgo")
     dingo_grid_path = os.path.join(edisgo_path, "ding0_example_grid")
     # Download example grid data in case it does not yet exist
-    if not os.path.isdir(dingo_grid_path):
+    if not os.path.isdir(dingo_grid_path) or len(os.listdir(dingo_grid_path)) == 0:
         logger.debug("Download example grid data.")
-        os.makedirs(dingo_grid_path)
+        os.makedirs(dingo_grid_path, exist_ok=True)
         file_list = [
             "buses.csv",
             "lines.csv",
