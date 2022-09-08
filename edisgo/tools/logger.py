@@ -16,7 +16,7 @@ def setup_logger(
     reset_loggers=False,
 ):
     """
-    Setup different loggers with their logging levels and where to write output.
+    Setup different loggers with individual logging levels and where to write output.
 
     The following table from python 'Logging Howto' shows you when which logging level
     is used.
