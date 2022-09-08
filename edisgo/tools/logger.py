@@ -16,9 +16,10 @@ def setup_logger(
     reset_loggers=False,
 ):
     """
-    Setup different loggers.
+    Setup different loggers with their logging levels and where to write output.
 
-    When which logging level is used from python Logging Howto
+    The following table from python 'Logging Howto' shows you when which logging level
+    is used.
 
     .. tabularcolumns:: |l|L|
 
@@ -46,39 +47,51 @@ def setup_logger(
     Parameters
     ----------
     file_name : str or None
+        Specifies file name of file logging information is written to. Possible options
+        are:
 
-        * None - Saves edisgo log with standard name `%Y_%m_%d-%H:%M:%S_edisgo.log`.
-        * str - Saves edisgo with the selected file name.
+        * None (default)
+            Saves log file with standard name `%Y_%m_%d-%H:%M:%S_edisgo.log`.
+        * str
+            Saves log file with the specified file name.
 
     log_dir : str or None
+        Specifies directory log file is saved to. Possible options are:
 
-        * None - Saves edisgo log in current directory.
-        * "default" - Saves edisgo log into folder configured in the configs.
-        * str - Saves edisgo log into the selected folder.
+        * None (default)
+            Saves log file in current working directory.
+        * "default"
+            Saves log file into directory configured in the configs.
+        * str
+            Saves log file into the specified directory.
 
-    loggers : None or list
+    loggers : None or list(dict)
 
-        * None - Example cofiguration below is used. Configures root logger with file \
-        and stream level warning and the edisgo logger with file and stream level debug.
-
-        * list - List of dicts with the logger configuration.
+        * None
+            Configuration as shown in the example below is used. Configures root logger
+            with file and stream level warning and the edisgo logger with file and
+            stream level debug.
+        * list(dict)
+            List of dicts with the logger configuration.
 
     stream_output : stream
-        Default sys.stdout is used sys.stderr is also possible.
+        Default sys.stdout is used. sys.stderr is also possible.
 
     debug_message : bool
-        If True a the handlers of every configured logger is printed.
+        If True the handlers of every configured logger is printed.
 
     reset_loggers : bool
         If True the handlers of all loggers are cleared before configuring the loggers.
 
     Examples
     --------
-
     >>> setup_logger(
-    >>> loggers=[{"name":"root", "file_level":"warning", "stream_level":"warning"},
-    >>>          {"name":"edisgo", "file_level":"info", "stream_level":"info"}]
+    >>>     loggers=[
+    >>>         {"name": "root", "file_level": "warning", "stream_level": "warning"},
+    >>>         {"name": "edisgo", "file_level": "info", "stream_level": "info"}
+    >>>     ]
     >>> )
+
     """
 
     def create_dir(dir_path):
