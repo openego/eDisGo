@@ -1,0 +1,61 @@
+name: "Lychee Broken Link Checker"
+description: "Quickly check links in Markdown, HTML, and text files"
+inputs:
+  args:
+    description: "Lychee arguments (https://github.com/lycheeverse/lychee#commandline-parameters)"
+    default: "--verbose --no-progress './**/*.md' './**/*.html'"
+    required: false
+  debug:
+    description: "Enable debug output in action (set -x). Helpful for troubleshooting."
+    default: false
+    required: false
+  fail:
+    description: "Fail entire pipeline on error (i.e. when lychee exit code is not 0)"
+    default: false
+    required: false
+  format:
+    description: "Summary output format (e.g. json)"
+    default: "markdown"
+    required: false
+  jobSummary:
+    description: "Write Github job summary at the end of the job (written on Markdown output only)"
+    default: true
+    required: false
+  lycheeVersion:
+    description: "Use custom version of lychee link checker"
+    default: 0.10.1
+    required: false
+  output:
+    description: "Summary output file path"
+    default: "lychee/out.md"
+    required: false
+outputs:
+  exit_code:
+    description: "The exit code returned from Lychee"
+    value: ${{ steps.lychee.outputs.exit_code }}
+runs:
+  using: "composite"
+  steps:
+    - name: Install lychee
+      run: |
+        curl -sLO 'https://github.com/lycheeverse/lychee/releases/download/v${{ inputs.LYCHEEVERSION }}/lychee-v${{ inputs.LYCHEEVERSION }}-x86_64-unknown-linux-gnu.tar.gz'
+        tar -xvzf lychee-v${{ inputs.LYCHEEVERSION }}-x86_64-unknown-linux-gnu.tar.gz
+        install -t $HOME/.local/bin -D lychee
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+      shell: bash
+    - name: Run lychee
+      run: ${{ github.action_path }}/entrypoint.sh
+      id: lychee
+      env:
+        # https://github.com/actions/runner/issues/665
+        INPUT_GITHUB_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+        INPUT_ARGS: ${{ inputs.ARGS }}
+        INPUT_DEBUG: ${{ inputs.DEBUG }}
+        INPUT_FAIL: ${{ inputs.FAIL }}
+        INPUT_FORMAT: ${{ inputs.FORMAT }}
+        INPUT_JOBSUMMARY: ${{ inputs.JOBSUMMARY }}
+        INPUT_OUTPUT: ${{ inputs.OUTPUT }}
+      shell: bash
+branding:
+  icon: "external-link"
+  color: "purple"
