@@ -266,7 +266,8 @@ The charging strategies can be invoked as follows:
 
     edisgo.apply_charging_strategy()
 
-See :attr:`~.edisgo.EDisGo.apply_charging_strategy` for more information.
+See function docstring of :attr:`~.edisgo.EDisGo.apply_charging_strategy` or
+documentation section :ref:`charging_strategies-label` for more information.
 
 Reactive power time series
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -349,27 +350,24 @@ Further information on the grid reinforcement methodology can be found in sectio
 Electromobility
 -----------------
 
-Electromobility data including charging processes necessary to apply different
-charging strategies, as well as information on potential charging sites and
-integrated charging parks can be integrated into the grid and are stored in
-the :pandas:`pandas.DataFrames<DataFrame>` or  :geopandas:`GeoDataFrame` in the 
+Electromobility data including charging processes as well as information on potential charging sites and
+integrated charging parks are stored in the
 :class:`~.network.electromobility.Electromobility` object.
 
-You can access those dataframes/geodataframes as follows:
+You can access these data as follows:
 
 .. code-block:: python
 
-    # Access DataFrame with all SimBEV charging processes.
+    # Access DataFrame with all SimBEV charging processes
     edisgo.electromobility.charging_processes_df
 
-    # Access GeoDataFrame with all TracBEV potential charging parks.
+    # Access GeoDataFrame with all TracBEV potential charging parks
     edisgo.electromobility.potential_charging_parks_gdf
     
-    # Access DataFrame with all charging parks that got integrated.
+    # Access DataFrame with all charging parks that got integrated
     edisgo.electromobility.integrated_charging_parks_df
     
-The integrated charging points are then also stored in the 
-:pandas:`pandas.DataFrames<DataFrame>` in the :class:`~.network.topology.Topology` 
+The integrated charging points are also stored in the :class:`~.network.topology.Topology`
 object and can be accessed as follows:
 
 .. code-block:: python
@@ -378,7 +376,7 @@ object and can be accessed as follows:
     edisgo.topology.charging_points_df
 
 
-So far, adding electormobility data to an eDisGo object requires electromobility
+So far, adding electromobility data to an eDisGo object requires electromobility
 data from `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
 `3083c5a <https://github.com/rl-institut/simbev/commit/
 86076c936940365587c9fba98a5b774e13083c5a>`_) 
@@ -391,7 +389,7 @@ whereas TracBEV provides potential charging point locations.
 
 .. todo:: Add information on how to retrieve SimBEV and TracBEV data
 
-Here is a small examples on how to import electromobility data and apply a
+Here is a small example on how to import electromobility data and apply a
 charging strategy to the charging processes.
 
 .. code-block:: python
@@ -407,13 +405,15 @@ charging strategy to the charging processes.
     )
     edisgo.set_time_series_active_power_predefined(
         fluctuating_generators_ts="oedb",
-        dispatchable_generators_ts=pd.DataFrame(data=1, columns=["other"], index=timeindex),
+        dispatchable_generators_ts=pd.DataFrame(
+            data=1, columns=["other"], index=timeindex),
         conventional_loads_ts="demandlib",
     )
 
     edisgo.set_time_series_reactive_power_control()
     
-    # Resample edisgo timeseries to 15-minute resolution to match simBEV and tracBEV data
+    # Resample edisgo timeseries to 15-minute resolution to match with SimBEV and
+    # TracBEV data
     edisgo.resample_timeseries()
     
     # Import electromobility data
