@@ -72,7 +72,29 @@ def setup_logger(
             with file and stream level warning and the edisgo logger with file and
             stream level debug.
         * list(dict)
-            List of dicts with the logger configuration.
+            List of dicts with the logger configuration. Each dictionary must contain
+            the following keys and corresponding values:
+
+            * 'name'
+                Specifies name of the logger as string, e.g. 'root' or 'edisgo'.
+            * 'file_level'
+                Specifies file logging level. Possible options are:
+
+                * "debug"
+                    Logs logging messages with logging level logging.DEBUG and above.
+                * "info"
+                    Logs logging messages with logging level logging.INFO and above.
+                * "warning"
+                    Logs logging messages with logging level logging.WARNING and above.
+                * "error"
+                    Logs logging messages with logging level logging.ERROR and above.
+                * "critical"
+                    Logs logging messages with logging level logging.CRITICAL.
+                * None
+                    No logging messages are logged.
+            * 'stream_level'
+                Specifies stream logging level. Possible options are the same as for
+                `file_level`.
 
     stream_output : stream
         Default sys.stdout is used. sys.stderr is also possible.
