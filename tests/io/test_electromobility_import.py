@@ -4,7 +4,6 @@ import pandas as pd
 import pytest
 
 from edisgo.edisgo import EDisGo
-from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
     import_electromobility,
@@ -81,7 +80,6 @@ class TestElectromobilityImport:
         self.edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         self.edisgo_obj.set_timeindex(timeindex)
-
         self.edisgo_obj.resample_timeseries()
 
         import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
@@ -107,7 +105,6 @@ class TestElectromobilityImport:
         self.edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         self.edisgo_obj.set_timeindex(timeindex)
-
         self.edisgo_obj.resample_timeseries()
 
         import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
@@ -166,29 +163,3 @@ class TestElectromobilityImport:
         edisgo_ids_topology = sorted(topology.charging_points_df.index.tolist())
 
         assert edisgo_ids_cp == edisgo_ids_topology
-
-    def test_charging_strategy(self):
-        charging_demand_lst = []
-
-        for strategy in self.charging_strategies:
-            charging_strategy(self.edisgo_obj, strategy=strategy)
-
-            ts = self.edisgo_obj.timeseries
-
-            # Check if all charging points have a valid chargingdemand_kWh > 0
-            df = ts.charging_points_active_power(self.edisgo_obj).loc[
-                :, (ts.charging_points_active_power(self.edisgo_obj) <= 0).any(axis=0)
-            ]
-
-            assert df.shape == ts.charging_points_active_power(self.edisgo_obj).shape
-
-            charging_demand_lst.append(
-                ts.charging_points_active_power(self.edisgo_obj).sum()
-            )
-
-        # the chargingdemand_kWh per charging point and therefore in total should
-        # always be the same
-        assert all(
-            (_.round(4) == charging_demand_lst[0].round(4)).all()
-            for _ in charging_demand_lst
-        )

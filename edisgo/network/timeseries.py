@@ -307,9 +307,11 @@ class TimeSeries:
         Resets all time series.
 
         Active and reactive power time series of all loads, generators and storage units
-        are deleted, as well as everything stored in :py:attr:`~time_series_raw`.
+        are deleted, as well as timeindex and everything stored in
+        :py:attr:`~time_series_raw`.
 
         """
+        self.timeindex = pd.DatetimeIndex([])
         self.generators_active_power = None
         self.loads_active_power = None
         self.storage_units_active_power = None
@@ -2147,32 +2149,22 @@ class TimeSeries:
 
     def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
         """
-        Returns timeseries resampled to a desired resolution. Both up- and down-
-        sampling methods are available.
+        Resamples all generator, load and storage time series to a desired resolution.
+
+        See :attr:`~.EDisGo.resample_timeseries` for more information.
 
         Parameters
         ----------
         method : str, optional
-            Method to choose from to fill missing values when upsampling. Possible
-            options are:
-
-            * 'ffill': propagate last valid observation forward to next valid
-            observation. See
-            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.ffill.html
-            'ffill' is the Default.
-
-            * 'bfill': use next valid observation to fill gap. See
-            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.bfill.html
-
-            * 'interpolate': Fill NaN values using an interpolation method. See
-            https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.interpolate.html
+            See :attr:`~.EDisGo.resample_timeseries` for more information.
 
         freq : str, optional
-            Frequency that timeseries is resampled to. Offset aliases can be found here:
-            https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases
-            15 minutes is the default.
+            See :attr:`~.EDisGo.resample_timeseries` for more information.
 
         """
+
+        # add time step at the end of the time series in case of up-sampling so that
+        # last time interval in the original time series is still included
         attrs = self._attributes
         freq_orig = self.timeindex[1] - self.timeindex[0]
         df_dict = {}
@@ -2187,6 +2179,8 @@ class TimeSeries:
                 .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
                 .ffill()
             )
+
+        # create new index
         if pd.Timedelta(freq) < freq_orig:  # up-sampling
             index = pd.date_range(
                 self.timeindex[0],
@@ -2200,7 +2194,11 @@ class TimeSeries:
                 self.timeindex[-1],
                 freq=freq,
             )
+
+        # set new timeindex
         self._timeindex = index
+
+        # resample time series
         if pd.Timedelta(freq) < freq_orig:  # up-sampling
             if method == "interpolate":
                 for attr in attrs:
@@ -2221,7 +2219,7 @@ class TimeSeries:
                     )
             else:
                 raise NotImplementedError(
-                    'Resampling method "{}" is not implemented.'.format(method)
+                    f"Resampling method {method} is not implemented."
                 )
         else:  # down-sampling
             for attr in attrs:
