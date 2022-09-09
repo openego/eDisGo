@@ -363,10 +363,10 @@ You can access these data as follows:
 
     # Access GeoDataFrame with all TracBEV potential charging parks
     edisgo.electromobility.potential_charging_parks_gdf
-    
+
     # Access DataFrame with all charging parks that got integrated
     edisgo.electromobility.integrated_charging_parks_df
-    
+
 The integrated charging points are also stored in the :class:`~.network.topology.Topology`
 object and can be accessed as follows:
 
@@ -379,12 +379,12 @@ object and can be accessed as follows:
 So far, adding electromobility data to an eDisGo object requires electromobility
 data from `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
 `3083c5a <https://github.com/rl-institut/simbev/commit/
-86076c936940365587c9fba98a5b774e13083c5a>`_) 
+86076c936940365587c9fba98a5b774e13083c5a>`_)
 and `TracBEV <https://github.com/rl-institut/tracbev>`_ (required version:
 `14d864c <https://github.com/rl-institut/tracbev/commit/
-03e335655770a377166c05293a966052314d864c>`_) to be stored in the directories 
-specified through the parameters simbev_directory and tracbev_directory. 
-SimBEV provides data on standing times, charging demand, etc. per vehicle, 
+03e335655770a377166c05293a966052314d864c>`_) to be stored in the directories
+specified through the parameters simbev_directory and tracbev_directory.
+SimBEV provides data on standing times, charging demand, etc. per vehicle,
 whereas TracBEV provides potential charging point locations.
 
 .. todo:: Add information on how to retrieve SimBEV and TracBEV data
@@ -413,21 +413,21 @@ the example jupyter notebook
     )
 
     edisgo.set_time_series_reactive_power_control()
-    
+
     # Resample edisgo timeseries to 15-minute resolution to match with SimBEV and
     # TracBEV data
     edisgo.resample_timeseries()
-    
+
     # Import electromobility data
     edisgo.import_electromobility(
         simbev_directory=simbev_path,
         tracbev_directory=tracbev_path,
     )
-    
+
     # Apply charging strategy
     edisgo.apply_charging_strategy(strategy="dumb")
 
-Further information on the electromobility integration methodology and the charging 
+Further information on the electromobility integration methodology and the charging
 strategies can be found in section :ref:`electromobility-integration-label`.
 
 

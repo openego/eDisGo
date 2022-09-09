@@ -25,8 +25,9 @@ def pytest_configure(config):
     )
 
     pytest.tracbev_example_scenario_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data",
-        "tracbev_example_scenario_2"
+        os.path.realpath(os.path.dirname(__file__)),
+        "data",
+        "tracbev_example_scenario_2",
     )
 
     pytest.simbev_example_scenario_path_1 = os.path.join(

@@ -1038,7 +1038,8 @@ class TestEDisGo:
 
         # Check if all charging points have a valid chargingdemand_kWh > 0
         cps = self.edisgo_obj.topology.loads_df[
-            self.edisgo_obj.topology.loads_df.type == "charging_point"].index
+            self.edisgo_obj.topology.loads_df.type == "charging_point"
+        ].index
         ts = self.edisgo_obj.timeseries.loads_active_power.loc[:, cps]
         df = ts.loc[:, (ts <= 0).any(axis=0)]
         assert df.shape == ts.shape

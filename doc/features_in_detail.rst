@@ -271,21 +271,21 @@ The import and integration of electromobility data is implemented in :py:func:`~
 Allocation of charging demand
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The allocation of charging processes to charging stations is implemented in 
+The allocation of charging processes to charging stations is implemented in
 :py:func:`~edisgo.io.electromobility_import.distribute_charging_demand`.
-After electromobility data is loaded, the charging demand from SimBEV is allocated to potential charging parks 
-from TracBEV. The allocation of the charging processes to the charging infrastructure is carried out with the 
-help of the weighting factor of the potential charging parks determined by TracBEV. This involves a random and 
+After electromobility data is loaded, the charging demand from SimBEV is allocated to potential charging parks
+from TracBEV. The allocation of the charging processes to the charging infrastructure is carried out with the
+help of the weighting factor of the potential charging parks determined by TracBEV. This involves a random and
 weighted selection of one charging park per charging process. In the case of private charging infrastructure, a
 separate charging point is set up for each electric vehicle (EV). All charging processes of the respective EV and charging use case
-are assigned to this charging point. The allocation of private charging processes to charging stations is 
+are assigned to this charging point. The allocation of private charging processes to charging stations is
 implemented in :py:func:`~edisgo.io.electromobility_import.distribute_private_charging_demand`.
 
 For public charging infrastructure, the allocation is made explicitly per charging process. For each charging
-process it is determined whether a suitable charging point is already available. For this purpose it is checked 
+process it is determined whether a suitable charging point is already available. For this purpose it is checked
 whether the charging point is occupied by another EV in the corresponding period and whether it can provide the
-corresponding charging capacity. If no suitable charging point is available, a charging point is determined 
-randomly and weighted in the same way as for private charging. The allocation of public charging processes to 
+corresponding charging capacity. If no suitable charging point is available, a charging point is determined
+randomly and weighted in the same way as for private charging. The allocation of public charging processes to
 charging stations is implemented in :py:func:`~edisgo.io.electromobility_import.distribute_public_charging_demand`.
 
 .. _charging_strategies-label:
@@ -293,13 +293,13 @@ charging stations is implemented in :py:func:`~edisgo.io.electromobility_import.
 Charging strategies
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-eDisGo right now provides three charging strategy methodologies called 'dumb', 'reduced' and 'residual', that 
-are implemented in :py:mod:`~edisgo.flex_opt.charging_strategies`.  
+eDisGo right now provides three charging strategy methodologies called 'dumb', 'reduced' and 'residual', that
+are implemented in :py:mod:`~edisgo.flex_opt.charging_strategies`.
 The aim of the charging strategies 'reduced' and 'residual' is to generate the most grid-friendly charging behavior possible without
-restricting the convenience for end users. Therefore, the boundary condition of all charging strategies is that 
-the charging requirement of each charging process must be fully covered. This means that charging processes can 
+restricting the convenience for end users. Therefore, the boundary condition of all charging strategies is that
+the charging requirement of each charging process must be fully covered. This means that charging processes can
 only be flexibilised if the EV can be fully charged while it is stationary. Furthermore, only private
-charging processes can be used as a flexibility, since the fulfillment of the service is the priority for public 
+charging processes can be used as a flexibility, since the fulfillment of the service is the priority for public
 charging processes.
 
 'dumb'
@@ -309,7 +309,7 @@ In this charging strategy the cars are charged directly after arrival with the m
 'reduced'
 """"""""""""""""""
 This is a preventive charging strategy. The cars are charged directly after arrival with the minimum possible
-charging power. The minimum possible charging power is determined by the parking time and the parameter 
+charging power. The minimum possible charging power is determined by the parking time and the parameter
 minimum_charging_capacity_factor.
 
 'residual'
