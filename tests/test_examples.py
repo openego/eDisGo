@@ -38,7 +38,7 @@ class TestExamples:
                 "--to",
                 "notebook",
                 "--execute",
-                "--ExecutePreprocessor.timeout=60",
+                "--ExecutePreprocessor.timeout=90",
             ]
             subprocess.check_call(args)
 
@@ -76,6 +76,7 @@ class TestExamples:
     #     )
     #     assert errors == []
 
+    # @pytest.mark.slow
     def test_edisgo_documentation_examples_ipynb(self):
         examples_dir_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "examples"
