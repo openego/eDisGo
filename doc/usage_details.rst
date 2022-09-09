@@ -390,7 +390,9 @@ whereas TracBEV provides potential charging point locations.
 .. todo:: Add information on how to retrieve SimBEV and TracBEV data
 
 Here is a small example on how to import electromobility data and apply a
-charging strategy to the charging processes.
+charging strategy. A more extensive example can be found in
+the example jupyter notebook
+`electromobility_example <https://github.com/openego/eDisGo/blob/dev/examples/electromobility_example.ipynb>`_.
 
 .. code-block:: python
 
