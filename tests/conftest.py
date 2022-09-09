@@ -5,35 +5,36 @@ import pytest
 
 def pytest_configure(config):
     pytest.ding0_test_network_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_1"
+        os.path.realpath(os.path.dirname(__file__)), "data", "ding0_test_network_1"
     )
 
     pytest.ding0_test_network_2_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_2"
+        os.path.realpath(os.path.dirname(__file__)), "data", "ding0_test_network_2"
     )
 
     pytest.ding0_test_network_3_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_3"
+        os.path.realpath(os.path.dirname(__file__)), "data", "ding0_test_network_3"
     )
 
     pytest.ding0_test_network_4_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_4"
+        os.path.realpath(os.path.dirname(__file__)), "data", "ding0_test_network_4"
     )
 
     pytest.simbev_example_scenario_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/simbev_example_scenario_2"
+        os.path.realpath(os.path.dirname(__file__)), "data", "simbev_example_scenario_2"
     )
 
     pytest.tracbev_example_scenario_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/tracbev_example_scenario_2"
+        os.path.realpath(os.path.dirname(__file__)), "data",
+        "tracbev_example_scenario_2"
     )
 
     pytest.simbev_example_scenario_path_1 = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/simbev_example_scenario"
+        os.path.realpath(os.path.dirname(__file__)), "data", "simbev_example_scenario"
     )
 
     pytest.tracbev_example_scenario_path_1 = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/tracbev_example_scenario"
+        os.path.realpath(os.path.dirname(__file__)), "data", "tracbev_example_scenario"
     )
 
     config.addinivalue_line("markers", "slow: mark test as slow to run")
