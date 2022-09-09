@@ -9,14 +9,6 @@ edisgo.tools.config module
     :undoc-members:
     :show-inheritance:
 
-edisgo.tools.edisgo\_run module
---------------------------------
-
-.. automodule:: edisgo.tools.edisgo_run
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 edisgo.tools.geo module
 ------------------------
 
@@ -29,6 +21,14 @@ edisgo.tools.geopandas\_helper module
 ----------------------------------------
 
 .. automodule:: edisgo.tools.geopandas_helper
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+edisgo.tools.logger module
+----------------------------------------
+
+.. automodule:: edisgo.tools.logger
     :members:
     :undoc-members:
     :show-inheritance:
