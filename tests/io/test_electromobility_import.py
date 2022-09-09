@@ -80,7 +80,6 @@ class TestElectromobilityImport:
         self.edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         self.edisgo_obj.set_timeindex(timeindex)
-
         self.edisgo_obj.resample_timeseries()
 
         import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
@@ -106,7 +105,6 @@ class TestElectromobilityImport:
         self.edisgo_obj = EDisGo(ding0_grid=self.ding0_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         self.edisgo_obj.set_timeindex(timeindex)
-
         self.edisgo_obj.resample_timeseries()
 
         import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)

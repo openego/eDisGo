@@ -14,8 +14,6 @@ from shapely.geometry import Point
 
 from edisgo import EDisGo
 
-# from edisgo.edisgo import import_edisgo_from_files
-
 
 class TestEDisGo:
     @pytest.fixture(autouse=True)
@@ -320,7 +318,7 @@ class TestEDisGo:
     def test_generator_import(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
         edisgo.import_generators("nep2035")
-        assert len(edisgo.topology.generators_df) == 524  # 1636
+        assert len(edisgo.topology.generators_df) == 524
 
     def test_analyze(self, caplog):
         self.setup_worst_case_time_series()
@@ -921,10 +919,7 @@ class TestEDisGo:
 
     def test_import_electromobility(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
-        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
-        self.edisgo.set_timeindex(timeindex)
 
-        self.edisgo.resample_timeseries()
         # test with default parameters
         simbev_path = pytest.simbev_example_scenario_path
         tracbev_path = pytest.tracbev_example_scenario_path
@@ -979,11 +974,6 @@ class TestEDisGo:
 
         # test with kwargs
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
-        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
-        self.edisgo.set_timeindex(timeindex)
-
-        self.edisgo.resample_timeseries()
-
         self.edisgo.import_electromobility(
             simbev_path,
             tracbev_path,
@@ -992,7 +982,7 @@ class TestEDisGo:
         )
 
         # Length of charging_processes_df, potential_charging_parks_gdf and
-        # integrated_charging_parks_df changed compared to test without kwagrs
+        # integrated_charging_parks_df changed compared to test without kwargs
         # TODO: needs to be checked if that is correct
         assert len(self.edisgo.electromobility.charging_processes_df) == 8845
         assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 1634
@@ -1045,14 +1035,13 @@ class TestEDisGo:
         tracbev_path = pytest.tracbev_example_scenario_path
         self.edisgo_obj.import_electromobility(simbev_path, tracbev_path)
         self.edisgo_obj.apply_charging_strategy()
-        ts = self.edisgo_obj.timeseries
 
         # Check if all charging points have a valid chargingdemand_kWh > 0
-        df = ts.charging_points_active_power(self.edisgo_obj).loc[
-            :, (ts.charging_points_active_power(self.edisgo_obj) <= 0).any(axis=0)
-        ]
-
-        assert df.shape == ts.charging_points_active_power(self.edisgo_obj).shape
+        cps = self.edisgo_obj.topology.loads_df[
+            self.edisgo_obj.topology.loads_df.type == "charging_point"].index
+        ts = self.edisgo_obj.timeseries.loads_active_power.loc[:, cps]
+        df = ts.loc[:, (ts <= 0).any(axis=0)]
+        assert df.shape == ts.shape
 
     def test_plot_mv_grid_topology(self):
         plt.ion()
