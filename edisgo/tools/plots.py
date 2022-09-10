@@ -1835,7 +1835,7 @@ def plot_dash_app(
                             timestep_dropdown_end:timestep_dropdown_start, :
                         ].index.to_list()
             elif timestep_mode == "All":
-                selected_timesteps = False
+                selected_timesteps = None
 
             app.logger.debug(f"selected_timesteps={selected_timesteps}")
 
