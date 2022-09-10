@@ -877,8 +877,8 @@ class EDisGo:
         if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
 
             logger.info(
-                "Running reinforcement in worst-case mode by differentiating between mv"
-                " and lv load and feed-in cases."
+                "Running reinforcement in worst-case mode by differentiating between MV"
+                " and LV load and feed-in cases."
             )
 
             timeindex_worst_cases = self.timeseries.timeindex_worst_cases
@@ -913,6 +913,11 @@ class EDisGo:
             combined_analysis=combined_analysis,
             mode=mode,
         )
+
+        # in case of worst case calculation rerun power flow to obtain results for
+        # all time steps
+        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
+            self.analyze()
 
         # add measure to Results object
         if not copy_grid:
