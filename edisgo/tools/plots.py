@@ -2085,7 +2085,7 @@ def plot_dash_app(
                         ].index
                     selected_timesteps = list(map(str, selected_timesteps))
             elif timestep_mode == "All":
-                selected_timesteps = False
+                selected_timesteps = None
 
             app.logger.debug(f"selected_timesteps={selected_timesteps}")
 
