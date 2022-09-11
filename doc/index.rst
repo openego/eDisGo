@@ -63,6 +63,7 @@ Contents
    :maxdepth: 2
 
    quickstart
+   examples
    usage_details
    features_in_detail
    dev_notes
