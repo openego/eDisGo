@@ -13,5 +13,5 @@ and a `plot example <https://github.com/openego/eDisGo/blob/dev/examples/plot_ex
    :maxdepth: 2
    :glob:
 
-    notebooks/edisgo_simple_example
-    notebooks/plot_example
+   notebooks/edisgo_simple_example
+   notebooks/plot_example
