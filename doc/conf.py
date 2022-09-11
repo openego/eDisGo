@@ -55,6 +55,7 @@ extensions = [
     "sphinx.ext.napoleon",  # enable Napoleon Sphinx v>1.3
     "sphinx.ext.extlinks",  # enables external links with a key
     "sphinx_autodoc_typehints",
+    "nbsphinx",
 ]
 
 # Napoleon settings
