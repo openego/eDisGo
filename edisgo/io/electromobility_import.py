@@ -493,8 +493,7 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
     """
     Distribute charging demand from SimBEV onto potential charging parks from TracBEV.
 
-    After electromobility data is loaded, the charging demand from SimBEV is allocated
-    to potential charging parks from TracBEV. The allocation of the charging processes
+    The allocation of the charging processes
     to the charging infrastructure is carried out with the help of the weighting factor
     of the potential charging parks determined by TracBEV. This involves a random and
     weighted selection of one charging park per charging process. In the case of private
