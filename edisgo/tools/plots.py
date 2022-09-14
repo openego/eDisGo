@@ -1220,7 +1220,7 @@ def plot_plotly(
                 loading = s_res.loc[branch_name]
                 s_nom = edisgo_obj.topology.lines_df.s_nom.loc[branch_name]
                 color = color_map_color(
-                    loading / s_nom,
+                    loading / s_nom * 0.9,
                     vmin=color_min,
                     vmax=color_max,
                     cmap_name=colorscale,
