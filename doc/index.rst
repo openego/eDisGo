@@ -69,6 +69,5 @@ Contents
    definitions_and_units
    configs
    equipment
-   api
    whatsnew
    genindex

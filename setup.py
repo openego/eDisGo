@@ -72,6 +72,7 @@ dev_requirements = [
     "jupyter_contrib_nbextensions",
     "sphinx_rtd_theme",
     "sphinx-autodoc-typehints",
+    "sphinx-autoapi",
     "pre-commit",
     "black",
     "isort",

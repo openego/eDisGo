@@ -46,6 +46,7 @@ sys.path.insert(0, os.path.abspath("../"))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    "autoapi.extension",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
@@ -56,6 +57,9 @@ extensions = [
     "sphinx.ext.extlinks",  # enables external links with a key
     "sphinx_autodoc_typehints",
 ]
+# Autoapi settings
+autoapi_type = "python"
+autoapi_dirs = ["../edisgo"]
 
 # Napoleon settings
 napoleon_google_docstring = True
