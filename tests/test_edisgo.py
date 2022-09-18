@@ -1132,16 +1132,23 @@ class TestEDisGo:
 
     def test_save(self):
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
+
+        # test with default parameters
         self.edisgo.save(save_dir)
 
-        # check that results, topology and timeseries directory are created
+        # check that sub-directory are created
         dirs_in_save_dir = os.listdir(save_dir)
         assert len(dirs_in_save_dir) == 4
-        # Todo: check anything else?
-        shutil.rmtree(os.path.join(save_dir, "results"))
-        shutil.rmtree(os.path.join(save_dir, "topology"))
-        shutil.rmtree(os.path.join(save_dir, "timeseries"))
-        shutil.rmtree(os.path.join(save_dir, "electromobility"))
+        assert "configs.json" in dirs_in_save_dir
+
+        shutil.rmtree(save_dir)
+
+        # test with archiving and electromobility
+        self.edisgo.save(save_dir, archive=True, save_electromobility=True)
+        zip_file = os.path.join(os.path.dirname(save_dir), "edisgo_network.zip")
+        assert os.path.exists(zip_file)
+
+        os.remove(zip_file)
 
     def test_reduce_memory(self):
         self.setup_worst_case_time_series()
