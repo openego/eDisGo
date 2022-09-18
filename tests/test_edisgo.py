@@ -1322,3 +1322,58 @@ class TestEDisGo:
                 comp_ts_tmp,
             )
             caplog.clear()
+
+
+class TestEDisGoFunc:
+    def test_import_edisgo_from_files(self):
+
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo_obj.set_time_series_worst_case_analysis()
+        edisgo_obj.analyze()
+        save_dir = os.path.join(os.getcwd(), "edisgo_network")
+
+        # ######################## test with default ########################
+        edisgo_obj.save(save_dir, save_results=False)
+
+        edisgo_obj_loaded = import_edisgo_from_files(save_dir)
+
+        # check topology
+        assert_frame_equal(
+            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+        )
+        # check time series
+        assert edisgo_obj_loaded.timeseries.timeindex.empty
+        # check configs
+        assert edisgo_obj_loaded.config._data == edisgo_obj.config._data
+        # check results
+        assert edisgo_obj_loaded.results.i_res.empty
+
+        # delete directory
+        shutil.rmtree(save_dir)
+
+        # ############ test with loading time series and results from zip ############
+        edisgo_obj.save(save_dir, archive=True)
+        zip_file = f"{save_dir}.zip"
+        edisgo_obj_loaded = import_edisgo_from_files(
+            zip_file, import_results=True, import_timeseries=True, from_zip_archive=True
+        )
+
+        # check topology
+        assert_frame_equal(
+            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+        )
+        # check time series
+        assert_frame_equal(
+            edisgo_obj_loaded.timeseries.loads_active_power,
+            edisgo_obj.timeseries.loads_active_power,
+            check_freq=False,
+        )
+        # check configs
+        assert edisgo_obj_loaded.config._data == edisgo_obj.config._data
+        # check results
+        assert_frame_equal(
+            edisgo_obj_loaded.results.i_res, edisgo_obj.results.i_res, check_freq=False
+        )
+
+        # delete zip file
+        os.remove(zip_file)
