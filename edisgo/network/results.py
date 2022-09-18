@@ -1,4 +1,3 @@
-import csv
 import logging
 import os
 
@@ -941,15 +940,6 @@ class Results:
         pd.DataFrame(data={"measure": self.measures}).to_csv(
             os.path.join(directory, "measures.csv")
         )
-        # save configs
-        with open(os.path.join(directory, "configs.csv"), "w") as f:
-            writer = csv.writer(f)
-            rows = [
-                ["{}".format(key)]
-                + [value for item in values.items() for value in item]
-                for key, values in self.edisgo_object.config._data.items()
-            ]
-            writer.writerows(rows)
 
     def from_csv(self, data_path, parameters=None, dtype=None, from_zip_archive=False):
         """
