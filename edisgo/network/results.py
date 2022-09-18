@@ -962,9 +962,10 @@ class Results:
             all available attributes. See function docstring `parameters`
             parameter in :func:`~to_csv` for more information.
         dtype : str, optional
-            Numerical data type for data to be loaded from csv. E.g. "float32"
+            Numerical data type for data to be loaded from csv, e.g. "float32".
+            Per default this is None in which case data type is inferred.
         from_zip_archive : bool, optional
-            Set True if data is archived in a zip archive. Default: False
+            Set True if data is archived in a zip archive. Default: False.
 
         """
         # get dictionaries matching attribute names and file names
