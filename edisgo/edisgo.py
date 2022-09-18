@@ -2147,7 +2147,7 @@ def import_edisgo_from_pickle(filename, path=""):
 
 
 def import_edisgo_from_files(
-    edisgo_path="",
+    edisgo_path,
     import_topology=True,
     import_timeseries=False,
     import_results=False,
