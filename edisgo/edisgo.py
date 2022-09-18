@@ -2114,6 +2114,10 @@ def import_edisgo_from_files(
 
         logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
 
+    edisgo_obj = EDisGo(
+        from_json=True, config_path=edisgo_path, from_zip_archive=from_zip_archive
+    )
+
     if from_zip_archive:
         directory = edisgo_path
 
