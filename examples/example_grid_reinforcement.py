@@ -44,7 +44,7 @@ def run_example():
     setup_logger(
         loggers=[
             {"name": "root", "file_level": None, "stream_level": "warning"},
-            {"name": "edisgo", "file_level": None, "stream_level": "info"}
+            {"name": "edisgo", "file_level": None, "stream_level": "info"},
         ]
     )
 
@@ -103,7 +103,7 @@ def run_example():
 
     # Clear results and reset configs
     edisgo.results = Results(edisgo)
-    edisgo.config = None
+    edisgo.config = {}
 
     # Calculate expansion costs for NEP scenario
     logging.info("Determine grid expansion costs for NEP scenario.")
