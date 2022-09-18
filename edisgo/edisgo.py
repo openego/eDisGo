@@ -2179,19 +2179,4 @@ def import_edisgo_from_files(
                 "No electromobility data found. Electromobility not imported."
             )
 
-    if kwargs.get("import_residual_load", False):
-        if not from_zip_archive:
-            directory = kwargs.get(
-                "residual_load_path", os.path.join(edisgo_path, "time_series_sums.csv")
-            )
-
-        if os.path.exists(directory):
-            residual_load = pd.read_csv(directory, index_col=0, parse_dates=True)
-
-            residual_load.index.name = "timeindex"
-
-            edisgo_obj.timeseries._residual_load = residual_load["residual_load"]
-        else:
-            logging.warning("No residual load data found. Timeseries not imported.")
-
     return edisgo_obj
