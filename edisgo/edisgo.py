@@ -111,6 +111,9 @@ class EDisGo:
     results : :class:`~.network.results.Results`
         This is a container holding all calculation results from power flow
         analyses, curtailment, storage integration, etc.
+    electromobility : :class:`~.network.electromobility.Electromobility`
+        Data container for all electromobility data on e.g. charging processes,
+        information on potential charging sites and integrated charging parks.
 
     """
 
@@ -1848,33 +1851,45 @@ class EDisGo:
         **kwargs,
     ):
         """
-        Saves EDisGo object to csv.
+        Saves EDisGo object to csv files.
 
-        It can be chosen if results, topology and timeseries should be saved.
-        For each one, a separate directory is created.
+        It can be chosen what is included in the csv export (e.g. power flow results,
+        electromobility flexibility, etc.). Further, in order to save disk storage space
+        the data type of time series data can be reduced, e.g. to float32 and data
+        can be archived, e.g. in a zip archive.
 
         Parameters
         ----------
         directory : str
             Main directory to save EDisGo object to.
         save_topology : bool, optional
-            Indicates whether to save :class:`~.network.topology.Topology`.
-            Per default it is saved. See
+            Indicates whether to save :class:`~.network.topology.Topology` object.
+            Per default it is saved to sub-directory 'topology'. See
             :attr:`~.network.topology.Topology.to_csv` for more information.
+            Default: True.
         save_timeseries : bool, optional
-            Indicates whether to save :class:`~.network.timeseries.Timeseries`.
-            Per default it is saved. See
+            Indicates whether to save :class:`~.network.timeseries.Timeseries` object.
+            Per default it is saved to subdirectory 'timeseries'.
+            Through the keyword arguments `reduce_memory`
+            and `to_type` it can be chosen if memory should be reduced. See
             :attr:`~.network.timeseries.Timeseries.to_csv` for more
             information.
+            Default: True.
         save_results : bool, optional
             Indicates whether to save :class:`~.network.results.Results`
-            object. Per default it is saved. See
-            :attr:`~.network.results.Results.to_csv` for more information.
+            object. Per default it is saved to subdirectory 'results'.
+            Through the keyword argument `parameters` the results that should
+            be stored can be specified. Further, through the keyword parameters
+            `reduce_memory` and `to_type` it can be chosen if memory should be reduced.
+            See :attr:`~.network.results.Results.to_csv` for more information.
+            Default: True.
         save_electromobility : bool, optional
             Indicates whether to save
-            :class:`~.network.electromobility.Electromobility`. Per default it is saved.
+            :class:`~.network.electromobility.Electromobility` object. Per default it is
+            not saved. If set to True, it is saved to subdirectory 'electromobility'.
             See :attr:`~.network.electromobility.Electromobility.to_csv` for more
             information.
+            Default: False.
 
         Other Parameters
         ------------------
@@ -1889,14 +1904,20 @@ class EDisGo:
             functions cannot be passed here. Call these functions directly to
             make use of further options. Default: False.
         to_type : str, optional
-            Data type to convert time series data to. This is a tradeoff
+            Data type to convert time series data to. This is a trade-off
             between precision and memory. Default: "float32".
+        parameters : None or dict
+            Specifies which results to store. By default this is set to None,
+            in which case all available results are stored.
+            To only store certain results provide a dictionary. See function docstring
+            `parameters` parameter in :func:`~.network.results.Results.to_csv`
+            for more information.
         archive : bool, optional
-            Save storage capacity by archiving the results in an archive. The
+            Save disk storage capacity by archiving the csv files. The
             archiving takes place after the generation of the CSVs and
             therefore temporarily the storage needs are higher. Default: False.
         archive_type : str, optional
-            Set archive type. Default "zip"
+            Set archive type. Default: "zip".
         drop_unarchived : bool, optional
             Drop the unarchived data if parameter archive is set to True.
             Default: True.
@@ -1925,6 +1946,9 @@ class EDisGo:
         if save_electromobility:
             self.electromobility.to_csv(os.path.join(directory, "electromobility"))
 
+        # save configs
+        self.config.to_json(directory)
+
         if kwargs.get("archive", False):
             archive_type = kwargs.get("archive_type", "zip")
             shutil.make_archive(directory, archive_type, directory)
@@ -1946,6 +1970,19 @@ class EDisGo:
             )
 
     def save_edisgo_to_pickle(self, path="", filename=None):
+        """
+        Saves EDisGo object to pickle file.
+
+        Parameters
+        -----------
+        path : str
+            Directory the pickle file is saved to. Per default it takes the current
+            working directory.
+        filename : str or None
+            Filename the pickle file is saved under. If None, filename is
+            'edisgo_object_{grid_id}.pkl'.
+
+        """
         abs_path = os.path.abspath(path)
         if filename is None:
             filename = f"edisgo_object_{self.topology.mv_grid.id}.pkl"
@@ -2093,6 +2130,18 @@ class EDisGo:
 
 
 def import_edisgo_from_pickle(filename, path=""):
+    """
+    Restores EDisGo object from pickle file.
+
+    Parameters
+    -----------
+    filename : str
+        Filename the pickle file is saved under.
+    path : str
+        Directory the pickle file is restored from. Per default it takes the current
+        working directory.
+
+    """
     abs_path = os.path.abspath(path)
     return pickle.load(open(os.path.join(abs_path, filename), "rb"))
 
@@ -2106,12 +2155,90 @@ def import_edisgo_from_files(
     from_zip_archive=False,
     **kwargs,
 ):
+    """
+    Sets up EDisGo object from csv files.
 
-    edisgo_obj = EDisGo(import_timeseries=False)
+    This is the reverse function of :func:`~.edisgo.EDisGo.save` and if not specified
+    differently assumes all data in the default sub-directories created in the
+    :func:`~.edisgo.EDisGo.save` function.
 
+    Parameters
+    -----------
+    edisgo_path : str
+        Main directory to restore EDisGo object from. This directory must contain the
+        config files. Further, if not specified differently,
+        it is assumed to be the main directory containing sub-directories with
+        e.g. topology data. In case `from_zip_archive` is set to True, `edisgo_path`
+        is the name of the archive.
+    import_topology : bool
+        Indicates whether to import :class:`~.network.topology.Topology` object.
+        Per default it is set to True, in which case topology data is imported.
+        The default directory topology data is imported from is the sub-directory
+        'topology'. A different directory can be specified through keyword argument
+        `topology_directory`.
+        Default: True.
+    import_timeseries : bool
+        Indicates whether to import :class:`~.network.timeseries.Timeseries` object.
+        Per default it is set to False, in which case timeseries data is not imported.
+        The default directory time series data is imported from is the sub-directory
+        'timeseries'. A different directory can be specified through keyword argument
+        `timeseries_directory`.
+        Default: False.
+    import_results : bool
+        Indicates whether to import :class:`~.network.results.Results` object.
+        Per default it is set to False, in which case results data is not imported.
+        The default directory results data is imported from is the sub-directory
+        'results'. A different directory can be specified through keyword argument
+        `results_directory`.
+        Default: False.
+    import_electromobility : bool
+        Indicates whether to import :class:`~.network.electromobility.Electromobility`
+        object. Per default it is set to False, in which case electromobility data is
+        not imported.
+        The default directory electromobility data is imported from is the sub-directory
+        'electromobility'. A different directory can be specified through keyword
+        argument `electromobility_directory`.
+        Default: False.
+    from_zip_archive : bool
+        Set to True if data needs to be imported from an archive, e.g. a zip
+        archive. Default: False.
+
+    Other Parameters
+    -----------------
+    topology_directory : str
+        Indicates directory :class:`~.network.topology.Topology` object is imported
+        from. Per default topology data is imported from `edisgo_path` sub-directory
+        'topology'.
+    timeseries_directory : str
+        Indicates directory :class:`~.network.timeseries.Timeseries` object is imported
+        from. Per default time series data is imported from `edisgo_path` sub-directory
+        'timeseries'.
+    results_directory : str
+        Indicates directory :class:`~.network.results.Results` object is imported
+        from. Per default results data is imported from `edisgo_path` sub-directory
+        'results'.
+    electromobility_directory : str
+        Indicates directory :class:`~.network.electromobility.Electromobility` object is
+        imported from. Per default electromobility data is imported from `edisgo_path`
+        sub-directory 'electromobility'.
+    dtype : str
+        Numerical data type for time series and results data to be imported,
+        e.g. "float32". Per default this is None in which case data type is inferred.
+    parameters : None or dict
+        Specifies which results to restore. By default this is set to None,
+        in which case all available results are restored.
+        To only restore certain results provide a dictionary. See function docstring
+        `parameters` parameter in :func:`~.network.results.Results.to_csv`
+        for more information.
+
+    Results
+    ---------
+    :class:`~.EDisGo`
+        Restored EDisGo object.
+
+    """
     if not from_zip_archive and str(edisgo_path).endswith(".zip"):
         from_zip_archive = True
-
         logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
 
     edisgo_obj = EDisGo(
@@ -2145,7 +2272,7 @@ def import_edisgo_from_files(
                 directory, dtype=dtype, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning("No timeseries data found. Timeseries not imported.")
+            logging.warning("No time series data found. Timeseries not imported.")
 
     if import_results:
         parameters = kwargs.get("parameters", None)
