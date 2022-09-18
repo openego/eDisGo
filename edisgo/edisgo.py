@@ -1847,7 +1847,7 @@ class EDisGo:
         save_topology=True,
         save_timeseries=True,
         save_results=True,
-        save_electromobility=True,
+        save_electromobility=False,
         **kwargs,
     ):
         """
