@@ -2241,9 +2241,20 @@ def import_edisgo_from_files(
         from_zip_archive = True
         logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
 
-    edisgo_obj = EDisGo(
-        from_json=True, config_path=edisgo_path, from_zip_archive=from_zip_archive
-    )
+    edisgo_obj = EDisGo()
+    try:
+        edisgo_obj.config = {
+            "from_json": True,
+            "config_path": edisgo_path,
+            "from_zip_archive": from_zip_archive,
+        }
+    except FileNotFoundError:
+        logging.info(
+            "Configuration data could not be loaded from json wherefore "
+            "the default configuration data is loaded."
+        )
+    except Exception:
+        raise Exception
 
     if from_zip_archive:
         directory = edisgo_path
