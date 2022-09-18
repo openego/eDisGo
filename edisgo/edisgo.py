@@ -117,7 +117,7 @@ class EDisGo:
     def __init__(self, **kwargs):
 
         # load configuration
-        self._config = Config(config_path=kwargs.get("config_path", "default"))
+        self._config = Config(**kwargs)
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
@@ -144,6 +144,13 @@ class EDisGo:
         """
         eDisGo configuration data.
 
+        Parameters
+        ----------
+        kwargs : dict
+            Dictionary with keyword arguments to set up Config object. See parameters
+            of :class:`~.tools.config.Config` class for more information on possible
+            input parameters.
+
         Returns
         -------
         :class:`~.tools.config.Config`
@@ -153,8 +160,8 @@ class EDisGo:
         return self._config
 
     @config.setter
-    def config(self, config_path):
-        self._config = Config(config_path=config_path)
+    def config(self, kwargs):
+        self._config = Config(**kwargs)
 
     def import_ding0_grid(self, path):
         """

@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import shutil
@@ -30,6 +31,41 @@ class TestEDisGo:
 
     def setup_worst_case_time_series(self):
         self.edisgo.set_time_series_worst_case_analysis()
+
+    def test_config_setter(self):
+
+        save_dir = os.path.join(os.getcwd(), "config_dir")
+
+        # test default
+        config_orig = copy.deepcopy(self.edisgo.config)
+        self.edisgo.config = {}
+        assert config_orig._data == self.edisgo.config._data
+
+        # test specifying different directory
+        self.edisgo.config = {"config_path": save_dir}
+        assert len(os.listdir(save_dir)) == 5
+        shutil.rmtree(save_dir)
+
+        # test json and config_path=None
+        # save changed config to json
+        self.edisgo.config["geo"]["srid"] = 2
+        config_json = copy.deepcopy(self.edisgo.config)
+        self.edisgo.save(
+            save_dir,
+            save_topology=False,
+            save_timeseries=False,
+            save_results=False,
+            save_electromobility=False,
+        )
+        # overwrite config with config_path=None and check
+        self.edisgo.config = {"config_path": None}
+        assert config_orig._data == self.edisgo.config._data
+        # overwrite config from json and check
+        self.edisgo.config = {"from_json": True, "config_path": save_dir}
+        assert config_json._data == self.edisgo.config._data
+
+        # delete directory
+        shutil.rmtree(save_dir)
 
     def test_set_time_series_manual(self, caplog):
 
