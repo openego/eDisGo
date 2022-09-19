@@ -3,7 +3,7 @@ import copy
 import pytest
 
 from edisgo import EDisGo
-from edisgo.tools.plots import chosen_graph, dash_plot, draw_plotly
+from edisgo.tools.plots import chosen_graph, plot_dash_app, plot_plotly
 
 
 class TestPlots:
@@ -15,50 +15,87 @@ class TestPlots:
         cls.edisgo_reinforced = copy.deepcopy(cls.edisgo_root)
         cls.edisgo_analyzed.analyze()
         cls.edisgo_reinforced.reinforce()
+        cls.edisgo_reinforced.results.equipment_changes.loc[
+            "Line_10006", "change"
+        ] = "added"
 
-    def test_draw_plotly(self):
-        # test
-        edisgo_obj = self.edisgo_root
-        grid = edisgo_obj.topology.mv_grid
-        G = grid.graph
+    @pytest.mark.parametrize(
+        "line_color, node_color, line_result_selection, node_result_selection"
+        ", center_coordinates, pseudo_coordinates",
+        [
+            ("loading", "voltage_deviation", "min", "min", True, True),
+            ("relative_loading", "adjacencies", "max", "max", False, False),
+            ("reinforce", "adjacencies", "max", "min", True, False),
+        ],
+    )
+    @pytest.mark.parametrize(
+        "selected_timesteps",
+        [
+            None,
+            "1970-01-01 01:00:00",
+            ["1970-01-01 01:00:00", "1970-01-01 03:00:00"],
+        ],
+    )
+    @pytest.mark.parametrize(
+        "node_selection", [False, ["Bus_MVStation_1", "Bus_BranchTee_MVGrid_1_5"]]
+    )
+    @pytest.mark.parametrize(
+        "edisgo_obj_name", ["edisgo_root", "edisgo_analyzed", "edisgo_reinforced"]
+    )
+    @pytest.mark.parametrize("grid_name", ["None", "LVGrid"])
+    def test_plot_plotly(
+        self,
+        edisgo_obj_name,
+        grid_name,
+        line_color,
+        node_color,
+        line_result_selection,
+        node_result_selection,
+        selected_timesteps,
+        center_coordinates,
+        pseudo_coordinates,
+        node_selection,
+    ):
 
-        mode_lines = "reinforce"
-        mode_nodes = "adjacencies"
-        fig = draw_plotly(
-            edisgo_obj, G, line_color=mode_lines, node_color=mode_nodes, grid=grid
-        )
-        fig.show()
+        if edisgo_obj_name == "edisgo_root":
+            edisgo_obj = self.edisgo_root
+        elif edisgo_obj_name == "edisgo_analyzed":
+            edisgo_obj = self.edisgo_analyzed
+        elif edisgo_obj_name == "edisgo_reinforced":
+            edisgo_obj = self.edisgo_reinforced
 
-        edisgo_obj = self.edisgo_reinforced
-        grid = edisgo_obj.topology.mv_grid
-        G = grid.graph
+        if grid_name == "None":
+            grid = None
+        elif grid_name == "LVGrid":
+            grid = list(edisgo_obj.topology.mv_grid.lv_grids)[1]
 
-        mode_lines = "relative_loading"
-        mode_nodes = "voltage_deviation"
-        fig = draw_plotly(
-            edisgo_obj, G, line_color=mode_lines, node_color=mode_nodes, grid=grid
-        )
-        fig.show()
-
-        # plotting loading and voltage deviation, with unchanged coordinates
-        mode_lines = "loading"
-        mode_nodes = "voltage_deviation"
-        fig = draw_plotly(
-            edisgo_obj, G, line_color=mode_lines, node_color=mode_nodes, grid=False
-        )
-        fig.show()
-
-        # plotting reinforced lines and node adjacencies
-        edisgo_obj = self.edisgo_reinforced
-        edisgo_obj.results.equipment_changes.loc["Line_10006", "change"] = "added"
-        G = edisgo_obj.topology.mv_grid.graph
-
-        mode_lines = "reinforce"
-        mode_nodes = "adjacencies"
-        fig = draw_plotly(
-            edisgo_obj, G, line_color=mode_lines, node_color=mode_nodes, grid=False
-        )
-        fig.show()
+        if (grid_name == "LVGrid") and (node_selection is not False):
+            with pytest.raises(ValueError):
+                plot_plotly(
+                    edisgo_obj=edisgo_obj,
+                    grid=grid,
+                    line_color=line_color,
+                    node_color=node_color,
+                    line_result_selection=line_result_selection,
+                    node_result_selection=node_result_selection,
+                    selected_timesteps=selected_timesteps,
+                    center_coordinates=center_coordinates,
+                    pseudo_coordinates=pseudo_coordinates,
+                    node_selection=node_selection,
+                )
+        else:
+            plot_plotly(
+                edisgo_obj=edisgo_obj,
+                grid=grid,
+                line_color=line_color,
+                node_color=node_color,
+                line_result_selection=line_result_selection,
+                node_result_selection=node_result_selection,
+                selected_timesteps=selected_timesteps,
+                center_coordinates=center_coordinates,
+                pseudo_coordinates=pseudo_coordinates,
+                node_selection=node_selection,
+            )
 
     def test_chosen_graph(self):
         chosen_graph(edisgo_obj=self.edisgo_root, selected_grid="Grid")
@@ -67,15 +104,15 @@ class TestPlots:
         grid = list(map(str, self.edisgo_root.topology.mv_grid.lv_grids))[0]
         chosen_graph(edisgo_obj=self.edisgo_root, selected_grid=grid)
 
-    def test_dash_plot(self):
+    def test_plot_dash_app(self):
         # TODO: at the moment this doesn't really test anything. Add meaningful tests.
         # test if any errors occur when only passing one edisgo object
-        app = dash_plot(
+        plot_dash_app(
             edisgo_objects=self.edisgo_root,
         )
 
         # test if any errors occur when passing multiple edisgo objects
-        app = dash_plot(  # noqa: F841
+        plot_dash_app(  # noqa: F841
             edisgo_objects={
                 "edisgo_1": self.edisgo_root,
                 "edisgo_2": self.edisgo_reinforced,

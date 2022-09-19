@@ -12,7 +12,7 @@ from edisgo.network.components import PotentialChargingParks
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 COLUMNS = {
     "charging_processes_df": [

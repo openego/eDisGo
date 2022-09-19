@@ -9,6 +9,7 @@ from networkx.algorithms.shortest_paths.weighted import (
     _dijkstra as dijkstra_shortest_path_length,
 )
 
+from edisgo.network.components import Switch
 from edisgo.network.grids import LVGrid, MVGrid
 from edisgo.tools import geo
 
@@ -399,7 +400,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         ]
     elif isinstance(grid, MVGrid):
         standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
-            "mv_line"
+            f"mv_line_{int(grid.nominal_voltage)}kv"
         ]
     else:
         raise ValueError("Inserted grid is invalid.")
@@ -694,41 +695,54 @@ def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_
 
         lines_changes.update(number_parallel_lines.to_dict())
 
-    standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
-        "{}_line".format(voltage_level)
-    ]
-
     lines_changes = {}
 
     # chose lines of right grid level
     relevant_lines = edisgo_obj.topology.lines_df.loc[
         crit_lines[crit_lines.voltage_level == voltage_level].index
     ]
-
-    # handling of standard lines
-    lines_standard = relevant_lines.loc[relevant_lines.type_info == standard_line_type]
-    if not lines_standard.empty:
-        _add_parallel_standard_lines(lines_standard.index)
-
-    # get lines that have not been updated yet (i.e. that are not standard
-    # lines)
-    relevant_lines = relevant_lines.loc[
-        ~relevant_lines.index.isin(lines_standard.index)
-    ]
-    # handling of cables where adding one cable is sufficient
-    lines_single = (
-        relevant_lines.loc[relevant_lines.num_parallel == 1]
-        .loc[relevant_lines.kind == "cable"]
-        .loc[crit_lines.max_rel_overload < 2]
-    )
-    if not lines_single.empty:
-        _add_one_parallel_line_of_same_type(lines_single.index)
-
-    # handle rest of lines (replace by as many parallel standard lines as
-    # needed)
-    relevant_lines = relevant_lines.loc[~relevant_lines.index.isin(lines_single.index)]
     if not relevant_lines.empty:
-        _replace_by_parallel_standard_lines(relevant_lines.index)
+        nominal_voltage = edisgo_obj.topology.buses_df.loc[
+            edisgo_obj.topology.lines_df.loc[relevant_lines.index[0], "bus0"], "v_nom"
+        ]
+        if nominal_voltage == 0.4:
+            standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
+                "lv_line"
+            ]
+        else:
+            standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
+                f"mv_line_{int(nominal_voltage)}kv"
+            ]
+
+        # handling of standard lines
+        lines_standard = relevant_lines.loc[
+            relevant_lines.type_info == standard_line_type
+        ]
+        if not lines_standard.empty:
+            _add_parallel_standard_lines(lines_standard.index)
+
+        # get lines that have not been updated yet (i.e. that are not standard
+        # lines)
+        relevant_lines = relevant_lines.loc[
+            ~relevant_lines.index.isin(lines_standard.index)
+        ]
+        # handling of cables where adding one cable is sufficient
+        lines_single = (
+            relevant_lines.loc[relevant_lines.num_parallel == 1]
+            .loc[relevant_lines.kind == "cable"]
+            .loc[crit_lines.max_rel_overload < 2]
+        )
+        if not lines_single.empty:
+            _add_one_parallel_line_of_same_type(lines_single.index)
+
+        # handle rest of lines (replace by as many parallel standard lines as
+        # needed)
+        relevant_lines = relevant_lines.loc[
+            ~relevant_lines.index.isin(lines_single.index)
+        ]
+        if not relevant_lines.empty:
+            _replace_by_parallel_standard_lines(relevant_lines.index)
+
     return lines_changes
 
 
@@ -1226,3 +1240,349 @@ def add_substation_at_half_length(edisgo_obj, grid, crit_lines):
                     top_edisgo.lines_df.loc[
                         top_edisgo.lines_df.bus0 == bus0, "bus0"
                     ] = new_lv_busbar
+
+
+def optimize_cb_location(edisgo_obj, mv_grid, mode="loadgen"):
+    """
+    Locates the circuit breakers at the optimal position in the rings to
+    reduce the difference in loading of feeders
+
+    Parameters
+    ----------
+    edisgo_obj:
+        class:`~.EDisGo`
+    mv_grid :
+        class:`~.network.grids.MVGrid`
+    mode :obj:`str`
+        Type of loading.
+        1-'load'
+        2-'loadgen'
+        3-'gen'
+        Default: 'loadgen'.
+
+
+    Notes:According to planning principles of MV grids, a MV ring is run as two strings
+    (half-rings) separated by a circuit breaker which is open at normal operation.
+    Assuming a ring (route which is connected to the root node at either sides),
+    the optimal position of a circuit breaker is defined as the position
+    (virtual cable) between two nodes where the conveyed current is minimal on the
+    route.Instead of the peak current,the peak load is used here (assuming a constant
+    voltage.
+
+    The circuit breaker will be installed to a node in the main route of the ring
+
+    If a ring is dominated by loads (peak load > peak capacity of generators),
+    only loads are used for determining the location of circuit breaker.
+    If generators are prevailing (peak load < peak capacity of generators),
+    only generator capacities are considered for relocation.
+
+    Returns
+    -------
+    obj:`str`
+    the node where the cb is located
+
+    """
+    logging.basicConfig(format=10)
+    # power factor of loads and generators
+    cos_phi_load = edisgo_obj.config["reactive_power_factor"]["mv_load"]
+    cos_phi_feedin = edisgo_obj.config["reactive_power_factor"]["mv_gen"]
+
+    buses_df = edisgo_obj.topology.buses_df
+    lines_df = edisgo_obj.topology.lines_df
+    loads_df = edisgo_obj.topology.loads_df
+    generators_df = edisgo_obj.topology.generators_df
+    switches_df = edisgo_obj.topology.switches_df
+    transformers_df = edisgo_obj.topology.transformers_df
+
+    station = mv_grid.station.index[0]
+    graph = mv_grid.graph
+
+    def id_mv_node(mv_node):
+        """
+        Returns id of mv node
+        Parameters
+        ----------
+        mv_node:'str'
+            name of node. E.g. 'BusBar_mvgd_2534_lvgd_450268_MV'
+
+        Returns
+        -------
+        obj:`str`
+        the id of the node. E.g '450268'
+        """
+        lv_bus_tranformer = transformers_df[transformers_df.bus0 == mv_node].bus1[0]
+        lv_id = buses_df[buses_df.index == lv_bus_tranformer].lv_grid_id[0]
+        return int(lv_id)
+
+    def _sort_rings(remove_mv_station=True):
+        """
+        Sorts the nodes beginning from HV/MV station in the ring.
+
+        Parameters
+        ----------
+        remove_mv_station :
+            obj:`boolean`
+            If True reinforcement HV/MV station is not included
+            Default: True.
+
+        Returns
+        -------
+            obj:'dict`
+            Dictionary with name of sorted nodes in the ring
+        """
+        # close switches
+        switches = [
+            Switch(id=_, topology=edisgo_obj.topology)
+            for _ in edisgo_obj.topology.switches_df.index
+        ]
+        switch_status = {}
+        for switch in switches:
+            switch_status[switch] = switch.state
+            switch.close()
+        # find rings in topology
+        graph = edisgo_obj.topology.to_graph()
+        rings = nx.cycle_basis(graph, root=station)
+        if remove_mv_station:
+
+            for r in rings:
+                r.remove(station)
+
+        # reopen switches
+        for switch in switches:
+            if switch_status[switch] == "open":
+                switch.open()
+        return rings
+
+    def get_subtree_of_nodes(ring, graph):
+        """
+        Finds all nodes of a tree that is connected to main nodes in the ring and are
+        (except main nodes) not part of the ring of main nodes (traversal of graph
+        from main nodes excluding nodes along ring).
+        Parameters
+        ----------
+        edisgo_obj:
+            class:`~.EDisGo`
+        ring:
+            obj:'dict`
+            Dictionary with name of sorted nodes in the ring
+        graph
+            networkx:`networkx.Graph<network.Graph>`
+
+        Returns
+        -------
+            obj:'dict`
+            index:main node
+            columns: nodes of main node's tree
+        """
+        node_ring_d = {}
+        for node in ring:
+
+            if node == station:
+                continue
+
+            nodes_subtree = set()
+            for path in nx.shortest_path(graph, node).values():
+                if len(path) > 1:
+                    if (path[1] not in ring) and (path[1] != station):
+                        nodes_subtree.update(path[1 : len(path)])
+
+            if len(nodes_subtree) == 0:
+                node_ring_d.setdefault(node, []).append(None)
+            else:
+                for node_subtree in nodes_subtree:
+                    node_ring_d.setdefault(node, []).append(node_subtree)
+
+        return node_ring_d
+
+    def _calculate_peak_load_gen(bus_node):
+        """
+        Cumulative peak load/generation of loads/generators connected to underlying
+        MV or LV grid
+        Parameters
+        ----------
+        bus_node:
+            obj: bus_name of the node.
+
+        Returns
+        -------
+            obj:'list'
+            list of total generation and load of MV node
+        """
+        if (
+            bus_node
+            in buses_df[
+                buses_df.index.str.contains("BusBar")
+                & (~buses_df.index.str.contains("virtual"))
+                & (buses_df.v_nom >= 10)
+            ].index.values
+        ):
+            id_node = id_mv_node(bus_node)
+            p_load = (
+                loads_df[loads_df.index.str.contains(str(id_node))].p_set.sum()
+                / cos_phi_load
+            )
+            p_gen = (
+                generators_df[
+                    generators_df.index.str.contains(str(id_node))
+                ].p_nom.sum()
+                / cos_phi_feedin
+            )
+
+        elif bus_node in buses_df[buses_df.index.str.contains("gen")].index.values:
+            p_gen = (
+                generators_df[generators_df.bus == bus_node].p_nom.sum()
+                / cos_phi_feedin
+            )
+            p_load = loads_df[loads_df.bus == bus_node].p_set.sum() / cos_phi_feedin
+
+        else:
+            p_gen = 0
+            p_load = 0
+
+        return [p_gen, p_load]
+
+    def _circuit_breaker(ring):
+        """
+        finds the circuit of the related ring
+        Parameters
+        ----------
+        ring:
+            obj:'dict`
+            Dictionary with name of sorted nodes in the ring
+        Returns
+        -------
+        obj: str
+        the name of circuit breaker
+        """
+        circuit_breaker = []
+        for node in ring:
+
+            for switch in switches_df.bus_closed.values:
+                if switch in node:
+                    circuit_b = switches_df.loc[
+                        switches_df.bus_closed == node, "bus_closed"
+                    ].index[0]
+                    circuit_breaker.append(circuit_b)
+                else:
+                    continue
+        return circuit_breaker[0]
+
+    def _change_dataframe(node_cb, ring):
+
+        circuit_breaker = _circuit_breaker(ring)
+
+        if node_cb != switches_df.loc[circuit_breaker, "bus_closed"]:
+
+            node_existing = switches_df.loc[circuit_breaker, "bus_closed"]
+            new_virtual_bus = f"virtual_{node_cb}"
+            # if the adjacent node is previous circuit breaker
+            if f"virtual_{node2}" in mv_grid.graph.adj[node_cb]:
+                branch = mv_grid.graph.adj[node_cb][f"virtual_{node2}"]["branch_name"]
+            else:
+                branch = mv_grid.graph.adj[node_cb][node2]["branch_name"]
+            # Switch
+            # change bus0
+            switches_df.loc[circuit_breaker, "bus_closed"] = node_cb
+            # change bus1
+            switches_df.loc[circuit_breaker, "bus_open"] = new_virtual_bus
+            # change branch
+            switches_df.loc[circuit_breaker, "branch"] = branch
+
+            # Bus
+            x_coord = buses_df.loc[node_cb, "x"]
+            y_coord = buses_df.loc[node_cb, "y"]
+            buses_df.rename(index={node_existing: new_virtual_bus}, inplace=True)
+            buses_df.loc[new_virtual_bus, "x"] = x_coord
+            buses_df.loc[new_virtual_bus, "y"] = y_coord
+
+            buses_df.rename(
+                index={f"virtual_{node_existing}": node_existing}, inplace=True
+            )
+
+            # Line
+            lines_df.loc[
+                lines_df.bus0 == f"virtual_{node_existing}", "bus0"
+            ] = node_existing
+            if lines_df.loc[branch, "bus0"] == node_cb:
+                lines_df.loc[branch, "bus0"] = new_virtual_bus
+            else:
+                lines_df.loc[branch, "bus1"] = new_virtual_bus
+        else:
+            logging.info("The location of switch disconnector has not changed")
+
+    rings = _sort_rings(remove_mv_station=True)
+    for ring in rings:
+        node_ring_dictionary = get_subtree_of_nodes(ring, graph)
+        node_ring_df = pd.DataFrame.from_dict(node_ring_dictionary, orient="index")
+
+        node_peak_d = {}
+        for index, value in node_ring_df.iterrows():
+            total_peak_gen = 0
+            total_peak_load = 0
+            if value[0] is not None:
+                for v in value:
+                    if v is None:
+                        continue
+                    # sum the load and generation of all subtree nodes
+                    total_peak_gen += _calculate_peak_load_gen(v)[0]
+                    total_peak_load += _calculate_peak_load_gen(v)[1]
+                # sum the load and generation of nodes of subtree and tree itself
+                total_peak_gen = total_peak_gen + _calculate_peak_load_gen(index)[0]
+                total_peak_load = total_peak_load + _calculate_peak_load_gen(index)[1]
+            else:
+                total_peak_gen += _calculate_peak_load_gen(index)[0]
+                total_peak_load += _calculate_peak_load_gen(index)[1]
+            node_peak_d.setdefault(index, []).append(total_peak_gen)
+            node_peak_d.setdefault(index, []).append(total_peak_load)
+        node_peak_df = pd.DataFrame.from_dict(node_peak_d, orient="index")
+        node_peak_df.rename(
+            columns={0: "total_peak_gen", 1: "total_peak_load"}, inplace=True
+        )
+
+        diff_min = 10e9
+        if mode == "load":
+            node_peak_data = node_peak_df.total_peak_load
+        elif mode == "generation":
+            node_peak_data = node_peak_df.total_peak_gen
+        elif mode == "loadgen":
+            # is ring dominated by load or generation?
+            # (check if there's more load than generation in ring or vice versa)
+            if sum(node_peak_df.total_peak_load) > sum(node_peak_df.total_peak_gen):
+                node_peak_data = node_peak_df.total_peak_load
+            else:
+                node_peak_data = node_peak_df.total_peak_gen
+        else:
+            raise ValueError("parameter 'mode' is invalid!")
+
+        for ctr in range(len(node_peak_df.index)):
+
+            # split route and calc demand difference
+            route_data_part1 = sum(node_peak_data[0:ctr])
+            route_data_part2 = sum(node_peak_data[ctr : len(node_peak_df.index)])
+
+            diff = abs(route_data_part1 - route_data_part2)
+            if diff <= diff_min:
+                diff_min = diff
+                position = ctr
+            else:
+                break
+
+        # new cb location
+        node_cb = node_peak_df.index[position]
+
+        # check if node is last node of ring
+        if position < len(node_peak_df.index):
+            # check which branch to disconnect by determining load difference
+            # of neighboring nodes
+            diff2 = abs(
+                sum(node_peak_data[0 : position + 1])
+                - sum(node_peak_data[position + 1 : len(node_peak_data)])
+            )
+
+            if diff2 < diff_min:
+
+                node2 = node_peak_df.index[position + 1]
+            else:
+                node2 = node_peak_df.index[position - 1]
+        _change_dataframe(node_cb, ring)
+    return node_cb
