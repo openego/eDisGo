@@ -33,7 +33,7 @@ extract_extreme_weeks_no_hp = False
 reduce_timeseries_to_extreme_weeks = False
 reduce_timeseries_to_extreme_weeks_no_hp = True
 reduce_bands_to_extreme_weeks = False
-extract_feeders = False
+extract_feeders = True
 get_downstream_node_matrix = False
 cpu_count = 1  # int(mp.cpu_count()/2)
 
@@ -259,7 +259,7 @@ def extract_feeders_parallel(grid_id):
         edisgo_dir = os.path.join(grid_dir, str(grid_id), strategy)
         save_dir = os.path.join(grid_dir, str(grid_id))
         edisgo_obj = import_edisgo_from_files(edisgo_dir, import_timeseries=True)
-        extract_feeders_nx(edisgo_obj, save_dir)
+        extract_feeders_nx(edisgo_obj, save_dir, only_flex_ev=False)
     except Exception as e:
         print("Problem in grid {}.".format(grid_id))
         print(e)
