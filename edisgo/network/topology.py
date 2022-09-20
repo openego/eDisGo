@@ -587,6 +587,13 @@ class Topology:
         else:
             return pd.DataFrame(columns=COLUMNS["loads_df"])
 
+    @charging_points_df.setter
+    def charging_points_df(self, df):
+        if "charging_point" in self._loads_df.type.unique():
+            self._charging_points_df = df
+        else:
+            self._loads_df = pd.concat([self._loads_df, df], axis=0)
+
     @property
     def id(self):
         """
