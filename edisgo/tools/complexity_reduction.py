@@ -72,43 +72,52 @@ def extract_feeders_nx(edisgo_obj, save_dir=None, only_flex_ev=True):
     """
     Method to extract and optionally save MV-feeders.
     """
+
     def _extract_feeder(feeder_id):
         if len(list(set(subgraph.nodes))) > 1:
-            buses_with_feeders.loc[list(subgraph.nodes), 'feeder_id'] = feeder_id
-            edisgo_feeder = create_feeder_edisgo_object(buses_with_feeders, edisgo_orig,
-                                                        feeder_id)
+            buses_with_feeders.loc[list(subgraph.nodes), "feeder_id"] = feeder_id
+            edisgo_feeder = create_feeder_edisgo_object(
+                buses_with_feeders, edisgo_orig, feeder_id
+            )
             if save_dir:
-                os.makedirs(save_dir + '/feeder/{}'.format(int(feeder_id)),
-                            exist_ok=True)
-                edisgo_feeder.save(save_dir + '/feeder/{}'.format(int(feeder_id)))
+                os.makedirs(
+                    save_dir + "/feeder/{}".format(int(feeder_id)), exist_ok=True
+                )
+                edisgo_feeder.save(save_dir + "/feeder/{}".format(int(feeder_id)))
             feeders.append(edisgo_feeder)
             feeder_id += 1
         return feeder_id
+
     edisgo_orig = deepcopy(edisgo_obj)
     buses_with_feeders = edisgo_orig.topology.buses_df
     station_bus = edisgo_obj.topology.mv_grid.station.index[0]
     # get lines connected to station
     feeder_lines = edisgo_obj.topology.lines_df.loc[
-        edisgo_obj.topology.lines_df.bus0 == station_bus].append(
+        edisgo_obj.topology.lines_df.bus0 == station_bus
+    ].append(
         edisgo_obj.topology.lines_df.loc[
-            edisgo_obj.topology.lines_df.bus1 == station_bus])
-    for feeder_line in feeder_lines.index:
-        edisgo_obj.remove_component('line', feeder_line, force_remove=True)
-    graph = edisgo_obj.topology.to_graph()
-    subgraphs = list(
-        graph.subgraph(c)
-        for c in nx.connected_components(graph)
+            edisgo_obj.topology.lines_df.bus1 == station_bus
+        ]
     )
+    for feeder_line in feeder_lines.index:
+        edisgo_obj.remove_component("line", feeder_line, force_remove=True)
+    graph = edisgo_obj.topology.to_graph()
+    subgraphs = list(graph.subgraph(c) for c in nx.connected_components(graph))
     feeders = []
     feeder_id = 0
     for subgraph in subgraphs:
         if only_flex_ev:
             cp_feeder = edisgo_obj.topology.charging_points_df.loc[
-                edisgo_obj.topology.charging_points_df.bus.isin(list(subgraph.nodes))&
-                edisgo_obj.topology.charging_points_df.sector.isin(["home", "work", 1, "1"])]
+                edisgo_obj.topology.charging_points_df.bus.isin(list(subgraph.nodes))
+                & edisgo_obj.topology.charging_points_df.sector.isin(
+                    ["home", "work", 1, "1"]
+                )
+            ]
 
             if len(cp_feeder) > 0:
-                feeder_id = _extract_feeder(feeder_id) #buses_with_feeders, edisgo_orig, feeder_id, feeders, save_dir, subgraph
+                feeder_id = _extract_feeder(
+                    feeder_id
+                )  # buses_with_feeders, edisgo_orig, feeder_id, feeders, save_dir, subgraph
         else:
             feeder_id = _extract_feeder(feeder_id)
     return feeders, buses_with_feeders
