@@ -105,7 +105,8 @@ def extract_feeders_nx(edisgo_obj, save_dir=None, only_flex_ev=True):
         if only_flex_ev:
             cp_feeder = edisgo_obj.topology.charging_points_df.loc[
                 edisgo_obj.topology.charging_points_df.bus.isin(list(subgraph.nodes))&
-                edisgo_obj.topology.charging_points_df.use_case.isin(["home", "work", 1, "1"])]
+                edisgo_obj.topology.charging_points_df.sector.isin(["home", "work", 1, "1"])]
+
             if len(cp_feeder) > 0:
                 feeder_id = _extract_feeder(feeder_id) #buses_with_feeders, edisgo_orig, feeder_id, feeders, save_dir, subgraph
         else:
