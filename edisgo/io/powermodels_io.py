@@ -18,7 +18,7 @@ def to_powermodels(edisgo_object):
     # convert eDisGo object to pypsa network structure
     psa_net = to_pypsa(edisgo_object)
     # calculate per unit values
-    pypsa.pf.calculate_dependent_values(psa_net)  # Jaaps Code
+    pypsa.pf.calculate_dependent_values(psa_net)
 
     # build PowerModels structure
     pm = _init_pm()
@@ -203,7 +203,7 @@ def _build_storage(psa_net, pm):
         }
 
 
-# TODO: _build_flexibility(psa_net, pm) function for every flexibility
+# TODO: _build_flexibility(psa_net, pm)-function for every flexibility
 
 
 def _build_timeseries(psa_net, pm):  # TODO add flexibilities
