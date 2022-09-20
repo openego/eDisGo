@@ -582,8 +582,8 @@ class Topology:
             Pandas DataFrame with all loads of the given type.
 
         """
-        if "charging_point" in self.loads_df.type.unique():
-            return self.loads_df.loc[self.loads_df.type == "charging_point"]
+        if "charging_point" in self._loads_df.type.unique():
+            return self._loads_df.loc[self._loads_df.type == "charging_point"]
         else:
             return pd.DataFrame(columns=COLUMNS["loads_df"])
 
