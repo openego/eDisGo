@@ -1234,7 +1234,7 @@ class EDisGo:
 
         return comp_name
 
-    def remove_component(self, comp_type, comp_name, drop_ts=True):
+    def remove_component(self, comp_type, comp_name, drop_ts=True, **kwargs):
         """
         Removes single component from network.
 
@@ -1251,16 +1251,18 @@ class EDisGo:
         drop_ts : bool
             Indicator if time series for component are removed as well. Defaults
             to True.
+        force_remove=True, can force a bus or line to be removed even
+            though resulting topology has isolated buses or components.
 
         """
         # Todo: change into remove_components, when add_component is changed into
         #    add_components, to allow removal of several components at a time
 
         if comp_type == "bus":
-            self.topology.remove_bus(comp_name)
+            self.topology.remove_bus(comp_name, **kwargs)
 
         elif comp_type == "line":
-            self.topology.remove_line(comp_name)
+            self.topology.remove_line(comp_name, **kwargs)
 
         elif comp_type == "load":
             self.topology.remove_load(comp_name)
