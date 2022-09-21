@@ -999,7 +999,7 @@ class Results:
             zip = ZipFile(data_path)
 
             # get all directories and files within zip archive
-            files = zip.namelist()
+            files = [file.replace("/", os.path.sep) for file in zip.namelist()]
 
             # add directory and .csv to files to match zip archive
             params = {}
@@ -1008,18 +1008,22 @@ class Results:
             for key, value in parameters.items():
                 for v in value:
                     new_key = v
-                    new_value = "results/" + key + f"/{all_keys_dict[v]}.csv"
+                    new_value = (
+                        f"results{os.path.sep}"
+                        + key
+                        + f"{os.path.sep}{all_keys_dict[v]}.csv"
+                    )
 
                     params[new_key] = new_value
 
             # append measures
-            params["measures"] = "results/measures.csv"
+            params["measures"] = f"results{os.path.sep}measures.csv"
 
         else:
             # read from directory
             # check files within the directory and sub directories
             files = [
-                f.split(str(data_path) + "/")[-1]
+                f.split(str(data_path) + os.path.sep)[-1]
                 for f in get_files_recursive(data_path)
             ]
 
@@ -1030,7 +1034,7 @@ class Results:
             for key, value in parameters.items():
                 for v in value:
                     new_key = v
-                    new_value = key + f"/{all_keys_dict[v]}.csv"
+                    new_value = key + f"{os.path.sep}{all_keys_dict[v]}.csv"
 
                     params[new_key] = new_value
 
@@ -1053,7 +1057,7 @@ class Results:
 
             if from_zip_archive:
                 # open zip file to make it readable for pandas
-                with zip.open(file) as f:
+                with zip.open(file.replace(os.path.sep, "/")) as f:
                     df = pd.read_csv(f, index_col=0, parse_dates=True, dtype=dt)
             else:
                 path = os.path.join(data_path, file)
