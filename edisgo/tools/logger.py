@@ -11,7 +11,6 @@ def setup_logger(
     file_name=None,
     log_dir=None,
     loggers=None,
-    grid_id=None,
     stream_output=sys.stdout,
     debug_message=False,
     reset_loggers=False,
