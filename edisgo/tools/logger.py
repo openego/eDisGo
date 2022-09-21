@@ -11,6 +11,7 @@ def setup_logger(
     file_name=None,
     log_dir=None,
     loggers=None,
+    grid_id=None,
     stream_output=sys.stdout,
     debug_message=False,
     reset_loggers=False,
@@ -104,6 +105,7 @@ def setup_logger(
 
     reset_loggers : bool
         If True the handlers of all loggers are cleared before configuring the loggers.
+        Only use if you know what you do, it could be dangerous.
 
     Examples
     --------
@@ -151,7 +153,11 @@ def setup_logger(
         ]
 
         for logger in existing_loggers:
-            logger.handlers.clear()
+            for handler in logger.handlers:
+                if not isinstance(handler, logging.NullHandler):
+                    if debug_message:
+                        print(f"Removed {handler} of Logger: {logger}")
+                    logger.removeHandler(handler)
 
     loglevel_dict = {
         "debug": logging.DEBUG,
@@ -183,6 +189,9 @@ def setup_logger(
         else:
             logger = logging.getLogger(logger_name)
             logger.propagate = False
+
+        # clear existing handlers for the logger
+        logger.handlers.clear()
 
         if logger_file_level < logger_stream_level:
             logger.setLevel(logger_file_level)
