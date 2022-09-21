@@ -53,31 +53,38 @@ class Config:
 
     Parameters
     -----------
-    config_path : None or :obj:`str` or :obj:`dict`
+    config_path : None or str or :dict
         Path to the config directory. Options are:
 
-        * None
-          If `config_path` is None configs are loaded from the edisgo
-          default config directory ($HOME$/.edisgo). If the directory
-          does not exist it is created. If config files don't exist the
-          default config files are copied into the directory.
-        * :obj:`str`
-          If `config_path` is a string configs will be loaded from the
-          directory specified by `config_path`. If the directory
-          does not exist it is created. If config files don't exist the
-          default config files are copied into the directory.
-        * :obj:`dict`
-          A dictionary can be used to specify different paths to the
-          different config files. The dictionary must have the following
-          keys:
-          * 'config_db_tables'
-          * 'config_grid'
-          * 'config_grid_expansion'
-          * 'config_timeseries'
+        * 'default' (default)
+            If `config_path` is set to 'default', the provided default config files
+            are used directly.
+        * str
+            If `config_path` is a string, configs will be loaded from the
+            directory specified by `config_path`. If the directory
+            does not exist, it is created. If config files don't exist, the
+            default config files are copied into the directory.
+        * dict
+            A dictionary can be used to specify different paths to the
+            different config files. The dictionary must have the following
+            keys:
 
-          Values of the dictionary are paths to the corresponding
-          config file. In contrast to the other two options the directories
-          and config files must exist and are not automatically created.
+            * 'config_db_tables'
+
+            * 'config_grid'
+
+            * 'config_grid_expansion'
+
+            * 'config_timeseries'
+
+            Values of the dictionary are paths to the corresponding
+            config file. In contrast to the other options, the directories
+            and config files must exist and are not automatically created.
+        * None
+            If `config_path` is None, configs are loaded from the edisgo
+            default config directory ($HOME$/.edisgo). If the directory
+            does not exist, it is created. If config files don't exist, the
+            default config files are copied into the directory.
 
         Default: None.
 
@@ -109,7 +116,7 @@ class Config:
 
         Parameters
         -----------
-        config_path : None or :obj:`str` or dict
+        config_path : None or str or dict
             See class definition for more information.
 
         Returns
@@ -128,7 +135,14 @@ class Config:
         ]
 
         # load configs
-        if isinstance(config_path, dict):
+        if config_path == "default":
+            for conf in config_files:
+                conf = conf + "_default"
+                load_config(
+                    filename="{}.cfg".format(conf),
+                    config_dir=os.path.join(package_path, "config"),
+                )
+        elif isinstance(config_path, dict):
             for conf in config_files:
                 load_config(
                     filename="{}.cfg".format(conf),
@@ -202,13 +216,13 @@ def load_config(filename, config_dir=None, copy_default_config=True):
 
     Parameters
     -----------
-    filename : :obj:`str`
+    filename : str
         Config file name, e.g. 'config_grid.cfg'.
-    config_dir : :obj:`str`, optional
+    config_dir : str, optional
         Path to config file. If None uses default edisgo config directory
         specified in config file 'config_system.cfg' in section 'user_dirs'
         by subsections 'root_dir' and 'config_dir'. Default: None.
-    copy_default_config : Boolean
+    copy_default_config : bool
         If True copies a default config file into `config_dir` if the
         specified config file does not exist. Default: True.
 
@@ -254,12 +268,12 @@ def get(section, key):
 
     Parameters
     -----------
-    section : :obj:`str`
-    key : :obj:`str`
+    section : str
+    key : str
 
     Returns
     --------
-    float or int or Boolean or str
+    float or int or bool or str
         The value which will be casted to float, int or boolean.
         If no cast is successful, the raw string is returned.
 
@@ -285,7 +299,7 @@ def get_default_config_path():
 
     Returns
     --------
-    :obj:`str`
+    str
         Path to default edisgo config directory specified in config file
         'config_system.cfg' in section 'user_dirs' by subsections 'root_dir'
         and 'config_dir'.
@@ -335,7 +349,7 @@ def make_directory(directory):
 
     Parameters
     -----------
-    directory : :obj:`str`
+    directory : str
         Directory path
 
     """
