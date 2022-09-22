@@ -93,7 +93,7 @@ def feedin_oedb(config_data, weather_cell_ids, timeindex):
     new_level = [
         _ if _ not in ["wind_onshore"] else "wind" for _ in feedin.columns.levels[0]
     ]
-    feedin.columns.set_levels(new_level, level=0, inplace=True)
+    feedin.columns = feedin.columns.set_levels(new_level, level=0)
 
     feedin.columns.rename("type", level=0, inplace=True)
     feedin.columns.rename("weather_cell_id", level=1, inplace=True)
