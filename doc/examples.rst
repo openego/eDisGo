@@ -12,6 +12,6 @@ and a `plot example <https://github.com/openego/eDisGo/blob/dev/examples/plot_ex
 .. toctree::
    :maxdepth: 2
    :glob:
-
-   notebooks/edisgo_simple_example
-   notebooks/plot_example
+   
+   ../examples/edisgo_simple_example.ipynb
+   ../examples/plot_example.ipynb
