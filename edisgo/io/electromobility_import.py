@@ -179,9 +179,10 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir="simbev_run"):
         Main path holding SimBEV output data
     mode : str
         Returns all information if None. Returns only rows with charging
-        demand greater than 0 if "frugal". Default is "frugal".
+        demand greater than 0 if "frugal". Default: "frugal".
     csv_dir : str
-        Optional sub-directory holding charging processes CSVs under path
+        Optional sub-directory holding charging processes CSVs under path.
+        Default: "simbev_run".
 
     Returns
     -------
@@ -253,18 +254,19 @@ def read_simbev_config_df(
     Parameters
     ----------
     path : str
-        Main path holding SimBEV output data
+        Main path holding SimBEV output data.
     edisgo_obj : :class:`~.EDisGo`
     simbev_config_file : str
-        SimBEV config file name
+        SimBEV config file name. Default: "metadata_simbev_run.json".
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with used random seed, used threads, stepsize in minutes,
         year, scenarette, simulated days, maximum number of cars per AGS,
-        completed standing times and timeseries per AGS and used ramp up
+        completed standing times and time series per AGS and used ramp up
         data CSV.
+
     """
     try:
         if simbev_config_file is not None:
@@ -284,9 +286,9 @@ def read_simbev_config_df(
 
     except Exception:
         logging.warning(
-            "SimBEV config file could not be imported. Charging point"
-            "efficiency is set to 100%, the stepsize is set to 15 minutes"
-            "and the simulated days are estimated from the charging"
+            "SimBEV config file could not be imported. Charging point "
+            "efficiency is set to 100%, the stepsize is set to 15 minutes "
+            "and the simulated days are estimated from the charging "
             "processes."
         )
 
