@@ -292,22 +292,13 @@ def read_simbev_config_df(
             "processes."
         )
 
-        # fmt: off
-        data = [
-            1.0,
-            15,
-            np.ceil(
-                edisgo_obj.electromobility.charging_processes_df.park_end_timesteps.max(
-
-                )
-                / (4 * 24)
-            ),
-        ]
-        # fmt: on
-
-        index = ["eta_cp", "stepsize", "days"]
-
-        return pd.DataFrame(data=data, index=index, columns=["value"])
+        mx_t = edisgo_obj.electromobility.charging_processes_df.park_end_timesteps.max()
+        data = {
+            "eta_cp": [1.0],
+            "stepsize": [15],
+            "days": [np.ceil(mx_t / (4 * 24))],
+        }
+        return pd.DataFrame(data=data, index=[0])
 
 
 def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
