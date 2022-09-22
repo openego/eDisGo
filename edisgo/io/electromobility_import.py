@@ -168,7 +168,7 @@ def import_electromobility(
     )
 
 
-def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
+def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir="simbev_run"):
     """
     Reads all CSVs in a given path and returns a DataFrame with all
     `SimBEV <https://github.com/rl-institut/simbev>`_ charging processes.
