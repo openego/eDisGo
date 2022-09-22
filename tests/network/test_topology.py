@@ -419,7 +419,7 @@ class TestTopology:
         bus1 = "Bus_BranchTee_LVGrid_1_10"
         msg = (
             "When line 'type_info' is provided when creating a new "
-            "line, x, r and s_nom are calculated and provided "
+            "line, x, r, b and s_nom are calculated and provided "
             "parameters are overwritten."
         )
         with pytest.warns(UserWarning, match=msg):
