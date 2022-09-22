@@ -116,7 +116,7 @@ class EDisGo:
     def __init__(self, **kwargs):
 
         # load configuration
-        self._config = Config(config_path=kwargs.get("config_path", None))
+        self._config = Config(config_path=kwargs.get("config_path", "default"))
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
