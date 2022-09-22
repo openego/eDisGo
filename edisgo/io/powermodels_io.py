@@ -31,8 +31,6 @@ def to_powermodels(edisgo_object):
     _build_gen(psa_net, pm)
     _build_branch(psa_net, pm)
     _build_storage(psa_net, pm)
-    _build_switch(psa_net, pm)  # betrachten wir switches?
-    _build_shunt(psa_net, pm)
     _build_load(psa_net, pm)
     # Hier können jetzt noch die Dicts für die Flexibilitäten dem pm hinzugefügt werden
     _build_timeseries(psa_net, pm)
@@ -88,7 +86,11 @@ def _build_gen(psa_net, pm):
     p_max = psa_net.generators.p_max_pu
     p_min = psa_net.generators.p_min_pu
     p_nom = psa_net.generators.p_nom
-    # vg =
+    # Slack bus über Slack Generator bestimmen
+    slack_gen = psa_net.generators.bus[
+        psa_net.generators.index == "Generator_slack"
+    ].values[0]
+    pm["bus"][str(_mapping(psa_net, slack_gen))]["bus_type"] = 3
     for gen_i in np.arange(len(psa_net.generators.index)):
         idx_bus = _mapping(psa_net, psa_net.generators.bus[gen_i])
         pm["gen"][str(gen_i + 1)] = {
@@ -96,13 +98,16 @@ def _build_gen(psa_net, pm):
             "qg": qg[gen_i],
             "pmax": p_max[gen_i],
             "pmin": p_min[gen_i],
-            "qmax": 0,  # pmax[gen_i],#TODO *tan(phi)
+            "qmax": 1,  # pmax[gen_i],#TODO *tan(phi)
             "qmin": 0,  # pmax[gen_i],#TODO *tan(phi)
-            "vg": 0,  # TODO
+            "vg": 1,  # TODO
             "mbase": p_nom[gen_i],  # s_nom?
             "gen_bus": idx_bus,
             "gen_status": 1,
             "index": gen_i + 1,
+            "model": 2,  # TODO
+            "ncost": 3,  # TODO
+            "cost": [120, 20, 0],  # TODO
         }
 
 
@@ -121,14 +126,14 @@ def _build_branch(psa_net, pm):
             "br_x": x[branch_i],
             "f_bus": idx_f_bus,
             "t_bus": idx_t_bus,
-            "g_to": g[branch_i] / 2,  # TODO: Malte fragen
+            "g_to": g[branch_i] / 2,
             "g_fr": g[branch_i] / 2,
             "b_to": b[branch_i] / 2,  # Beide positiv?
             # https://github.com/lanl-ansi/PowerModels.jl/blob/de7da4d11d04ce48b34d7b5f601f32f49361626b/src/io/matpower.jl#L459
             "b_fr": b[branch_i] / 2,
             "shift": 0.0,  # Default 0.0 if no transformer is attached
             "br_status": 1.0,  # TODO
-            "rate_a": s_nom[branch_i].real,  # TODO: Berechnungsvorschrift Jaap?
+            "rate_a": s_nom[branch_i].real,
             "rate_b": 250,  # TODO
             "rate_c": 250,  # TODO
             "angmin": -np.pi / 6,  # TODO: Deg oder Rad?
@@ -137,10 +142,6 @@ def _build_branch(psa_net, pm):
             "tap": 1.0,  # Default 1.0 if no transformer is attached
             "index": branch_i + 1,
         }
-
-
-def _build_switch(psa_net, pm):
-    return
 
 
 def _build_load(psa_net, pm):
@@ -157,24 +158,10 @@ def _build_load(psa_net, pm):
         }
 
 
-def _build_shunt(psa_net, pm):
-    bs = psa_net.shunt_impedances.b
-    gs = psa_net.shunt_impedances.g
-    for shunt_i in np.arange(len(psa_net.shunt_impedances.index)):
-        idx_bus = _mapping(psa_net, psa_net.shunt_impedances.bus[shunt_i])
-        pm["shunt"][str(shunt_i + 1)] = {
-            "gs": gs[shunt_i],
-            "bs": bs[shunt_i],
-            "shunt_bus": idx_bus,
-            "status": True,
-            "index": shunt_i + 1,
-        }
-
-
 def _build_storage(psa_net, pm):
     ps = psa_net.storage_units.p_set
     qs = psa_net.storage_units.q_set
-    soc = psa_net.storage_units.state_of_charge_set
+    soc = psa_net.storage_units.state_of_charge_initial
     p_max = psa_net.storage_units.p_max_pu
     p_min = psa_net.storage_units.p_min_pu
     for stor_i in np.arange(len(psa_net.storage_units.index)):
@@ -187,10 +174,10 @@ def _build_storage(psa_net, pm):
             "pmax": p_max[stor_i],
             "pmin": p_min[stor_i],
             "p_loss": 0,  # TODO
-            "qmax": 0,  # pmax[stor_i],#TODO *tan(phi)
-            "qmin": 0,  # pmax[stor_i],#TODO *tan(phi)
+            "qmax": 0,  # pmax[stor_i] * tan(phi)
+            "qmin": 0,  # p_min[stor_i] * tan(phi)
             "q_loss": 0,  # TODO
-            "energy": soc[stor_i],  # TODO: Ist das richtig?
+            "energy": soc[stor_i],  # TODO: initial energy?
             "energy_rating": 0,  # TODO
             "thermal_rating": 0,  # TODO
             "charge_rating": 0,  # TODO
