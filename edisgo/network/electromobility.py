@@ -96,7 +96,7 @@ class Electromobility:
                     Identification Number). Leading zeros are missing.
 
                 car_id : int
-                    Car ID to differntiate charging processes from different cars.
+                    Car ID to differentiate charging processes from different cars.
 
                 destination : str
                     SimBEV driving destination.
@@ -311,7 +311,7 @@ class Electromobility:
         Returns
         -------
         float
-            Charging point efficiency
+            Charging point efficiency in p.u..
 
         """
         try:
