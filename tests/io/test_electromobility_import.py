@@ -19,7 +19,7 @@ class TestElectromobilityImport:
 
     @classmethod
     def setup_class(cls):
-        cls.ding0_path = pytest.ding0_test_network_4_path
+        cls.ding0_path = pytest.ding0_test_network_2_path
         cls.simbev_path = pytest.simbev_example_scenario_path
         cls.tracbev_path = pytest.tracbev_example_scenario_path
         cls.standing_times_path = cls.simbev_path

@@ -16,9 +16,9 @@ from edisgo.network.electromobility import Electromobility
 class TestElectromobility:
     @classmethod
     def setup_class(self):
-        self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
-        self.simbev_path = pytest.simbev_example_scenario_path_1
-        self.tracbev_path = pytest.tracbev_example_scenario_path_1
+        self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        self.simbev_path = pytest.simbev_example_scenario_path
+        self.tracbev_path = pytest.tracbev_example_scenario_path
         import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
         integrate_charging_parks(self.edisgo_obj)
 

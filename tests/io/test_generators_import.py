@@ -255,7 +255,7 @@ class TestGeneratorsImportOEDB:
     def test_oedb_without_timeseries(self):
 
         edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_4_path,
+            ding0_grid=pytest.ding0_test_network_2_path,
             generator_scenario="nep2035",
         )
         edisgo.set_time_series_worst_case_analysis()
@@ -268,7 +268,7 @@ class TestGeneratorsImportOEDB:
     @pytest.mark.slow
     def test_oedb_with_worst_case_timeseries(self):
 
-        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.set_time_series_worst_case_analysis()
 
         gens_before = edisgo.topology.generators_df.copy()
@@ -415,7 +415,7 @@ class TestGeneratorsImportOEDB:
         )
 
         edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_4_path, timeindex=timeindex
+            ding0_grid=pytest.ding0_test_network_2_path, timeindex=timeindex
         )
         edisgo.set_time_series_active_power_predefined(
             fluctuating_generators_ts=ts_gen_fluctuating,
@@ -536,7 +536,7 @@ class TestGeneratorsImportOEDB:
     def test_target_capacity(self):
 
         edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_4_path,
+            ding0_grid=pytest.ding0_test_network_2_path,
             worst_case_analysis="worst-case",
         )
 

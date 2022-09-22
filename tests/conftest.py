@@ -12,27 +12,11 @@ def pytest_configure(config):
         os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_2"
     )
 
-    pytest.ding0_test_network_3_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_3"
-    )
-
-    pytest.ding0_test_network_4_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_4"
-    )
-
     pytest.simbev_example_scenario_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/simbev_example_scenario_2"
-    )
-
-    pytest.tracbev_example_scenario_path = os.path.join(
-        os.path.realpath(os.path.dirname(__file__)), "data/tracbev_example_scenario_2"
-    )
-
-    pytest.simbev_example_scenario_path_1 = os.path.join(
         os.path.realpath(os.path.dirname(__file__)), "data/simbev_example_scenario"
     )
 
-    pytest.tracbev_example_scenario_path_1 = os.path.join(
+    pytest.tracbev_example_scenario_path = os.path.join(
         os.path.realpath(os.path.dirname(__file__)), "data/tracbev_example_scenario"
     )
 
