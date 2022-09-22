@@ -78,7 +78,7 @@ class TestCosts:
 
         costs = grid_expansion_costs(self.edisgo)
 
-        assert len(costs) == 5
+        assert len(costs) == 4
         assert (
             costs.loc["MVStation_1_transformer_reinforced_2", "voltage_level"]
             == "mv/lv"
@@ -91,11 +91,6 @@ class TestCosts:
         )
         assert costs.loc["LVStation_1_transformer_reinforced_1", "quantity"] == 1
         assert costs.loc["LVStation_1_transformer_reinforced_1", "total_costs"] == 10
-        assert np.isclose(costs.loc["Line_10006", "total_costs"], 29.765)
-        assert np.isclose(costs.loc["Line_10006", "length"], (0.29765 * 2))
-        assert costs.loc["Line_10006", "quantity"] == 2
-        assert costs.loc["Line_10006", "type"] == "NA2XS2Y 3x1x185 RM/25"
-        assert costs.loc["Line_10006", "voltage_level"] == "mv"
         assert np.isclose(costs.loc["Line_10019", "total_costs"], 32.3082)
         assert np.isclose(costs.loc["Line_10019", "length"], 0.40385)
         assert costs.loc["Line_10019", "quantity"] == 1

@@ -32,7 +32,7 @@ RELEVANT_CHARGING_STRATEGIES_COLUMNS = {
     ],
 }
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 # TODO: the dummy timeseries should be as long as the simulated days and not
