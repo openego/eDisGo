@@ -78,7 +78,6 @@ dev_requirements = [
     "pyupgrade",
     "flake8",
     "pylint",
-    "nbformat>=4.2.0",
 ]
 full_requirements = list(
     set(geo_plot_requirements + examples_requirements + dev_requirements)
