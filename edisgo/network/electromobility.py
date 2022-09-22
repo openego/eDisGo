@@ -402,9 +402,10 @@ class Electromobility:
                 part_time_step = charging_time - full_charging_steps
                 # lower band
                 lower_energy.loc[end - full_charging_steps + 1 : end, cp] += power
-                lower_energy.loc[end - full_charging_steps, cp] += (
-                    part_time_step * power
-                )
+                if part_time_step != 0.0:
+                    lower_energy.loc[end - full_charging_steps, cp] += (
+                        part_time_step * power
+                    )
                 # upper band
                 upper_energy.loc[start : start + full_charging_steps - 1, cp] += power
                 upper_energy.loc[start + full_charging_steps, cp] += (
