@@ -316,7 +316,7 @@ class TestEDisGo:
 
     @pytest.mark.slow
     def test_generator_import(self):
-        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.import_generators("nep2035")
         assert len(edisgo.topology.generators_df) == 524
 
@@ -918,7 +918,7 @@ class TestEDisGo:
         self.edisgo.analyze()
 
     def test_import_electromobility(self):
-        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
 
         # test with default parameters
         simbev_path = pytest.simbev_example_scenario_path
@@ -973,7 +973,7 @@ class TestEDisGo:
         # fmt: on
 
         # test with kwargs
-        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         self.edisgo.import_electromobility(
             simbev_path,
             tracbev_path,
@@ -1025,7 +1025,7 @@ class TestEDisGo:
         # fmt: on
 
     def test_apply_charging_strategy(self):
-        self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
+        self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         self.edisgo_obj.set_timeindex(timeindex)
 
