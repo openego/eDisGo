@@ -38,7 +38,6 @@ COLUMNS = {
         "park_end_timesteps",
     ],
     "simbev_config_df": [
-        "regio_type",
         "eta_cp",
         "stepsize",
         "start_date",
@@ -77,7 +76,6 @@ DTYPES = {
         "park_end_timesteps": np.uint16,
     },
     "simbev_config_df": {
-        "regio_type": str,
         "eta_cp": float,
         "stepsize": int,
         "soc_min": float,
