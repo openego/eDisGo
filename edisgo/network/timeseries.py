@@ -1993,7 +1993,7 @@ class TimeSeries:
             files = zip.namelist()
 
             # add directory and .csv to files to match zip archive
-            attrs = {v: f"timeseries{os.path.sep}{v}.csv" for v in attrs}
+            attrs = {v: f"timeseries/{v}.csv" for v in attrs}
 
         else:
             # read from directory
