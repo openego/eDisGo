@@ -92,14 +92,15 @@ def prepare_time_invariant_parameters(
         parameters["optimized_charging_points"] = []
     if optimize_hp:
         parameters["heat_pumps"] = parameters["grid_object"].loads_df.loc[
-                parameters["grid_object"].loads_df.type == "heat_pump"]
+            parameters["grid_object"].loads_df.type == "heat_pump"
+        ]
         parameters["optimized_heat_pumps"] = kwargs.get(
             "optimized_heat_pumps", parameters["heat_pumps"].index
         )
         # Todo: change to heat_pumps_df.index once exists
-        parameters["cop"] = edisgo.heat_pump.cop
-        parameters["heat_demand"] = edisgo.heat_pump.heat_demand
-        parameters["tes"] = edisgo.heat_pump.tes
+        parameters["cop"] = edisgo.heat_pump.cop_df
+        parameters["heat_demand"] = edisgo.heat_pump.heat_demand_df
+        parameters["tes"] = edisgo.heat_pump.thermal_storage_units_df
     else:
         parameters["optimized_heat_pumps"] = []
     # save non flexible loads
@@ -879,7 +880,7 @@ def add_heat_pump_model(
         model.time_set,
         initialize=set_cop_hp,
         mutable=True,
-        within=pm.Any
+        within=pm.Any,
     )
     model.heat_demand = timeinvariant_parameters["heat_demand"]
     model.heat_demand_hp = pm.Param(
