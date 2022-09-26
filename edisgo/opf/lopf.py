@@ -1394,16 +1394,12 @@ def get_underlying_elements(parameters):
             downstream_elements.loc[branch, "flexible_ev"] = []
         if parameters["optimize_hp"]:
             hps = parameters["grid_object"].loads_df.loc[
-                parameters["grid_object"].loads_df.type == "heat_pump"]
-            downstream_elements.loc[branch, "flexible_hp"] = (
-                hps.loc[
-                    hps.index.isin(
-                        parameters["optimized_heat_pumps"]
-                    )
-                    & hps.bus.isin(relevant_buses)
-                ]
-                .index.values
-            )
+                parameters["grid_object"].loads_df.type == "heat_pump"
+            ]
+            downstream_elements.loc[branch, "flexible_hp"] = hps.loc[
+                hps.index.isin(parameters["optimized_heat_pumps"])
+                & hps.bus.isin(relevant_buses)
+            ].index.values
         else:
             downstream_elements.loc[branch, "flexible_hp"] = []
         return downstream_elements, power_factors
