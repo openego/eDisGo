@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import shutil
@@ -30,6 +31,41 @@ class TestEDisGo:
 
     def setup_worst_case_time_series(self):
         self.edisgo.set_time_series_worst_case_analysis()
+
+    def test_config_setter(self):
+
+        save_dir = os.path.join(os.getcwd(), "config_dir")
+
+        # test default
+        config_orig = copy.deepcopy(self.edisgo.config)
+        self.edisgo.config = {}
+        assert config_orig._data == self.edisgo.config._data
+
+        # test specifying different directory
+        self.edisgo.config = {"config_path": save_dir}
+        assert len(os.listdir(save_dir)) == 5
+        shutil.rmtree(save_dir)
+
+        # test json and config_path=None
+        # save changed config to json
+        self.edisgo.config["geo"]["srid"] = 2
+        config_json = copy.deepcopy(self.edisgo.config)
+        self.edisgo.save(
+            save_dir,
+            save_topology=False,
+            save_timeseries=False,
+            save_results=False,
+            save_electromobility=False,
+        )
+        # overwrite config with config_path=None and check
+        self.edisgo.config = {"config_path": None}
+        assert config_orig._data == self.edisgo.config._data
+        # overwrite config from json and check
+        self.edisgo.config = {"from_json": True, "config_path": save_dir}
+        assert config_json._data == self.edisgo.config._data
+
+        # delete directory
+        shutil.rmtree(save_dir)
 
     def test_set_time_series_manual(self, caplog):
 
@@ -1096,16 +1132,23 @@ class TestEDisGo:
 
     def test_save(self):
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
+
+        # test with default parameters
         self.edisgo.save(save_dir)
 
-        # check that results, topology and timeseries directory are created
+        # check that sub-directory are created
         dirs_in_save_dir = os.listdir(save_dir)
         assert len(dirs_in_save_dir) == 4
-        # Todo: check anything else?
-        shutil.rmtree(os.path.join(save_dir, "results"))
-        shutil.rmtree(os.path.join(save_dir, "topology"))
-        shutil.rmtree(os.path.join(save_dir, "timeseries"))
-        shutil.rmtree(os.path.join(save_dir, "electromobility"))
+        assert "configs.json" in dirs_in_save_dir
+
+        shutil.rmtree(save_dir)
+
+        # test with archiving and electromobility
+        self.edisgo.save(save_dir, archive=True, save_electromobility=True)
+        zip_file = os.path.join(os.path.dirname(save_dir), "edisgo_network.zip")
+        assert os.path.exists(zip_file)
+
+        os.remove(zip_file)
 
     def test_reduce_memory(self):
         self.setup_worst_case_time_series()
@@ -1286,3 +1329,58 @@ class TestEDisGo:
                 comp_ts_tmp,
             )
             caplog.clear()
+
+
+class TestEDisGoFunc:
+    def test_import_edisgo_from_files(self):
+
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo_obj.set_time_series_worst_case_analysis()
+        edisgo_obj.analyze()
+        save_dir = os.path.join(os.getcwd(), "edisgo_network")
+
+        # ######################## test with default ########################
+        edisgo_obj.save(save_dir, save_results=False)
+
+        edisgo_obj_loaded = import_edisgo_from_files(save_dir)
+
+        # check topology
+        assert_frame_equal(
+            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+        )
+        # check time series
+        assert edisgo_obj_loaded.timeseries.timeindex.empty
+        # check configs
+        assert edisgo_obj_loaded.config._data == edisgo_obj.config._data
+        # check results
+        assert edisgo_obj_loaded.results.i_res.empty
+
+        # delete directory
+        shutil.rmtree(save_dir)
+
+        # ############ test with loading time series and results from zip ############
+        edisgo_obj.save(save_dir, archive=True)
+        zip_file = f"{save_dir}.zip"
+        edisgo_obj_loaded = import_edisgo_from_files(
+            zip_file, import_results=True, import_timeseries=True, from_zip_archive=True
+        )
+
+        # check topology
+        assert_frame_equal(
+            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+        )
+        # check time series
+        assert_frame_equal(
+            edisgo_obj_loaded.timeseries.loads_active_power,
+            edisgo_obj.timeseries.loads_active_power,
+            check_freq=False,
+        )
+        # check configs
+        assert edisgo_obj_loaded.config._data == edisgo_obj.config._data
+        # check results
+        assert_frame_equal(
+            edisgo_obj_loaded.results.i_res, edisgo_obj.results.i_res, check_freq=False
+        )
+
+        # delete zip file
+        os.remove(zip_file)

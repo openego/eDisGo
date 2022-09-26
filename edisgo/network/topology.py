@@ -2534,7 +2534,7 @@ class Topology:
             Path to topology csv files or zip archive.
         edisgo_obj : :class:`~.EDisGo`
         from_zip_archive : bool
-            Set True if data is archived in a zip archive. Default: False
+            Set to True if data is archived in a zip archive. Default: False.
 
         """
 
@@ -2578,7 +2578,7 @@ class Topology:
             files = zip.namelist()
 
             # add directory to attributes to match zip archive
-            attrs = {k: f"topology/{v}" for k, v in attrs.items()}
+            attrs = {k: f"topology{os.path.sep}{v}" for k, v in attrs.items()}
 
         else:
             # read from directory
