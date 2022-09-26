@@ -38,7 +38,7 @@ def reinforce_grid(
     ----------
     edisgo : :class:`~.EDisGo`
         The eDisGo API object
-    timesteps_pfa : :obj:`str` or \
+    timesteps_pfa : str or \
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
         timesteps_pfa specifies for which time steps power flow analysis is
@@ -65,18 +65,18 @@ def reinforce_grid(
           :pandas:`pandas.Timestamp<Timestamp>`
           Use this option to explicitly choose which time steps to consider.
 
-    copy_grid : :obj:`Boolean`
+    copy_grid : bool
         If True reinforcement is conducted on a copied grid and discarded.
         Default: False.
-    max_while_iterations : :obj:`int`
+    max_while_iterations : int
         Maximum number of times each while loop is conducted.
-    combined_analysis : :obj:`Boolean`
+    combined_analysis : bool
         If True allowed voltage deviations for combined analysis of MV and LV
         topology are used. If False different allowed voltage deviations for MV
         and LV are used. See also config section
         `grid_expansion_allowed_voltage_deviations`. If `mode` is set to 'mv'
         `combined_analysis` should be False. Default: False.
-    mode : :obj:`str`
+    mode : str
         Determines network levels reinforcement is conducted for. Specify
 
         * None to reinforce MV and LV network levels. None is the default.
