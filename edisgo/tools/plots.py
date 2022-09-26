@@ -1220,7 +1220,7 @@ def plot_plotly(
                 loading = s_res.loc[branch_name]
                 s_nom = edisgo_obj.topology.lines_df.s_nom.loc[branch_name]
                 color = color_map_color(
-                    loading / s_nom,
+                    loading / s_nom * 0.9,
                     vmin=color_min,
                     vmax=color_max,
                     cmap_name=colorscale,
@@ -1835,7 +1835,7 @@ def plot_dash_app(
                             timestep_dropdown_end:timestep_dropdown_start, :
                         ].index.to_list()
             elif timestep_mode == "All":
-                selected_timesteps = False
+                selected_timesteps = None
 
             app.logger.debug(f"selected_timesteps={selected_timesteps}")
 
@@ -2085,7 +2085,7 @@ def plot_dash_app(
                         ].index
                     selected_timesteps = list(map(str, selected_timesteps))
             elif timestep_mode == "All":
-                selected_timesteps = False
+                selected_timesteps = None
 
             app.logger.debug(f"selected_timesteps={selected_timesteps}")
 

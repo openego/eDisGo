@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import subprocess
@@ -75,3 +76,8 @@ class TestExamples:
     #         os.path.join(examples_dir_path, "edisgo_simple_example.ipynb")
     #     )
     #     assert errors == []
+
+    @classmethod
+    def teardown_class(cls):
+        logger = logging.getLogger("edisgo")
+        logger.propagate = True

@@ -12,7 +12,7 @@ from edisgo.network.components import PotentialChargingParks
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 COLUMNS = {
     "charging_processes_df": [
@@ -96,7 +96,7 @@ class Electromobility:
                     Identification Number). Leading zeros are missing.
 
                 car_id : int
-                    Car ID to differntiate charging processes from different cars.
+                    Car ID to differentiate charging processes from different cars.
 
                 destination : str
                     SimBEV driving destination.
@@ -311,13 +311,142 @@ class Electromobility:
         Returns
         -------
         float
-            Charging point efficiency
+            Charging point efficiency in p.u..
 
         """
         try:
             return float(self.simbev_config_df.at[0, "eta_cp"])
         except Exception:
             return None
+
+    def get_flexibility_bands(self, edisgo_obj, use_case):
+        """
+        Method to determine flexibility bands (lower and upper energy band as well as
+        upper power band).
+
+        Parameters
+        -----------
+        edisgo_obj : :class:`~.EDisGo`
+        use_case : str or list(str)
+            Charging point use case(s) to determine flexibility bands for.
+
+        Returns
+        --------
+        dict(str, :pandas:`pandas.DataFrame<DataFrame>`)
+            Keys are 'upper_power', 'lower_energy' and 'upper_energy'.
+            Values are dataframes containing the corresponding band for each charging
+            point of the specified use case. Columns of the dataframe are the
+            charging point names as in :attr:`~.network.topology.Topology.loads_df`.
+            Index is a time index.
+
+        """
+
+        def _shorten_and_set_index(band):
+            """
+            Method to adjust bands to time index of EDisGo object.
+            #Todo: change such that first day is replaced by (365+1)th day
+            """
+            band = band.iloc[: len(edisgo_obj.timeseries.timeindex)]
+            band.index = edisgo_obj.timeseries.timeindex
+            return band
+
+        if isinstance(use_case, str):
+            use_case = [use_case]
+
+        # get all relevant charging points
+        cp_df = edisgo_obj.topology.loads_df[
+            edisgo_obj.topology.loads_df.type == "charging_point"
+        ]
+        cps = cp_df[cp_df.sector.isin(use_case)]
+
+        # set up bands
+        t_max = 372 * 4 * 24
+        tmp_idx = range(t_max)
+        upper_power = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+        upper_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+        lower_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+        hourly_steps = 60 / self.stepsize
+        for cp in cps.index:
+            # get index of charging park used in charging processes
+            charging_park_id = self.integrated_charging_parks_df.loc[
+                self.integrated_charging_parks_df.edisgo_id == cp
+            ].index
+            # get relevant charging processes
+            charging_processes = self.charging_processes_df.loc[
+                self.charging_processes_df.charging_park_id.isin(charging_park_id)
+            ]
+            # iterate through charging processes and fill matrices
+            for idx, charging_process in charging_processes.iterrows():
+                # Last time steps can lead to problems --> skip
+                if charging_process.park_end_timesteps == t_max:
+                    continue
+
+                start = charging_process.park_start_timesteps
+                end = charging_process.park_end_timesteps
+                power = charging_process.nominal_charging_capacity_kW
+
+                # charging power
+                upper_power.loc[start:end, cp] += (
+                    power / edisgo_obj.electromobility.eta_charging_points
+                )
+                # energy bands
+                charging_time = (
+                    charging_process.chargingdemand_kWh / power * hourly_steps
+                )
+                if charging_time - (end - start + 1) > 1e-6:
+                    raise ValueError(
+                        "Charging demand cannot be fulfilled for charging process {}. "
+                        "Please check.".format(idx)
+                    )
+                full_charging_steps = int(charging_time)
+                part_time_step = charging_time - full_charging_steps
+                # lower band
+                lower_energy.loc[end - full_charging_steps + 1 : end, cp] += power
+                if part_time_step != 0.0:
+                    lower_energy.loc[end - full_charging_steps, cp] += (
+                        part_time_step * power
+                    )
+                # upper band
+                upper_energy.loc[start : start + full_charging_steps - 1, cp] += power
+                upper_energy.loc[start + full_charging_steps, cp] += (
+                    part_time_step * power
+                )
+        # sanity check
+        if (
+            (
+                (
+                    lower_energy
+                    - upper_power * edisgo_obj.electromobility.eta_charging_points
+                )
+                > 1e-6
+            )
+            .any()
+            .any()
+        ):
+            raise ValueError(
+                "Lower energy has power values higher than nominal power. Please check."
+            )
+        if ((upper_energy - upper_power * self.eta_charging_points) > 1e-6).any().any():
+            raise ValueError(
+                "Upper energy has power values higher than nominal power. Please check."
+            )
+        if ((upper_energy.cumsum() - lower_energy.cumsum()) < -1e-6).any().any():
+            raise ValueError(
+                "Lower energy is higher than upper energy bound. Please check."
+            )
+        # Convert to MW and cumulate energy
+        upper_power = upper_power / 1e3
+        lower_energy = lower_energy.cumsum() / hourly_steps / 1e3
+        upper_energy = upper_energy.cumsum() / hourly_steps / 1e3
+        # Set time_index
+        upper_power = _shorten_and_set_index(upper_power)
+        lower_energy = _shorten_and_set_index(lower_energy)
+        upper_energy = _shorten_and_set_index(upper_energy)
+        return {
+            "upper_power": upper_power,
+            "lower_energy": lower_energy,
+            "upper_energy": upper_energy,
+        }
 
     def to_csv(self, directory):
         """
