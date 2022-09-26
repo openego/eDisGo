@@ -393,7 +393,7 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
 
         num_gcs = len(use_case_gdf)
 
-        # if simbev doesn't provide possible grid cnnections choose a
+        # if simbev doesn't provide possible grid connections choose a
         # random public potential charging park and duplicate
         if num_gcs == 0:
             logger.warning(
