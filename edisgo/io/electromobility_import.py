@@ -208,41 +208,35 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir="simbev_run"):
 
     files.sort()
 
-    charging_processes_df_list = []
-
-    for car_id, f in enumerate(files):
+    # wrapper function for csv files read in with map_except function
+    def rd_csv(file):
+        ags = int(file[1].parts[-2])
+        car_id = file[0]
         try:
-            df = pd.read_csv(f, index_col=[0])
-
-            if mode == "frugal":
-                df = df.loc[df.chargingdemand_kWh > 0]
-
-            df = df.rename(columns={"location": "destination"})
-
-            df = df.assign(ags=int(f.parts[-2]), car_id=car_id)
-
-            df = df[COLUMNS["charging_processes_df"]].astype(
-                DTYPES["charging_processes_df"]
+            return pd.read_csv(file[1]).assign(ags=ags, car_id=car_id)
+        except Exception:
+            logger.warning(
+                f"File '{str(file[1]).split('/')[-1]}' couldn't be read and is skipped."
             )
 
-            charging_processes_df_list.append(df)
+            return pd.DataFrame()
 
-        except Exception:
-            logger.warning(f"File {f} couldn't be read and is skipped.")
+    df = pd.concat(map(rd_csv, list(enumerate(files))), ignore_index=True)
 
-    charging_processes_df = pd.concat(charging_processes_df_list, ignore_index=True)[
-        COLUMNS["charging_processes_df"]
-    ].astype(DTYPES["charging_processes_df"])
+    if mode == "frugal":
+        df = df.loc[df.chargingdemand_kWh > 0]
 
-    charging_processes_df = pd.merge(
-        charging_processes_df,
+    df = df.rename(columns={"location": "destination"})
+
+    df = df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
+
+    return pd.merge(
+        df,
         pd.DataFrame(columns=COLUMNS["matching_demand_and_location"]),
         how="outer",
         left_index=True,
         right_index=True,
     )
-
-    return charging_processes_df
 
 
 def read_simbev_config_df(
