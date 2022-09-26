@@ -62,7 +62,7 @@ class TestExamples:
         )
         assert errors == []
 
-    # ToDo Uncomment once a smaller grid is used and execution does not take as long
+    @pytest.mark.slow
     def test_edisgo_simple_example_ipynb(self):
         examples_dir_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "examples"
