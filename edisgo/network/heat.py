@@ -143,11 +143,9 @@ class HeatPump:
 
         """
         try:
-            return self._thermal_storage_units_df
+            return self._building_ids_df
         except Exception:
-            return pd.DataFrame(
-                columns=["capacity", "efficiency", "state_of_charge_initial"]
-            )
+            return pd.DataFrame(columns=["building_ids"])
 
     @building_ids_df.setter
     def building_ids_df(self, df):
