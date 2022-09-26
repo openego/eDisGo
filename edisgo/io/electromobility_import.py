@@ -215,9 +215,7 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir="simbev_run"):
         try:
             return pd.read_csv(file[1]).assign(ags=ags, car_id=car_id)
         except Exception:
-            logger.warning(
-                f"File '{str(file[1]).split('/')[-1]}' couldn't be read and is skipped."
-            )
+            logger.warning(f"File '{file[1]}' couldn't be read and is skipped.")
 
             return pd.DataFrame()
 
