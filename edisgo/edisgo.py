@@ -67,7 +67,7 @@ class EDisGo:
         Providing a time index is only optional in case a worst case analysis is set
         up using :func:`~set_time_series_worst_case_analysis`.
         In all other cases a time index needs to be set manually.
-    config_path : None or str or :dict
+    config_path : None or str or dict
         Path to the config directory. Options are:
 
         * 'default' (default)
