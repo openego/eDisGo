@@ -398,7 +398,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         ]
     elif isinstance(grid, MVGrid):
         standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
-            "mv_line"
+            f"mv_line_{int(grid.nominal_voltage)}kv"
         ]
     else:
         raise ValueError("Inserted grid is invalid.")
@@ -693,40 +693,52 @@ def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_
 
         lines_changes.update(number_parallel_lines.to_dict())
 
-    standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
-        "{}_line".format(voltage_level)
-    ]
-
     lines_changes = {}
 
     # chose lines of right grid level
     relevant_lines = edisgo_obj.topology.lines_df.loc[
         crit_lines[crit_lines.voltage_level == voltage_level].index
     ]
-
-    # handling of standard lines
-    lines_standard = relevant_lines.loc[relevant_lines.type_info == standard_line_type]
-    if not lines_standard.empty:
-        _add_parallel_standard_lines(lines_standard.index)
-
-    # get lines that have not been updated yet (i.e. that are not standard
-    # lines)
-    relevant_lines = relevant_lines.loc[
-        ~relevant_lines.index.isin(lines_standard.index)
-    ]
-    # handling of cables where adding one cable is sufficient
-    lines_single = (
-        relevant_lines.loc[relevant_lines.num_parallel == 1]
-        .loc[relevant_lines.kind == "cable"]
-        .loc[crit_lines.max_rel_overload < 2]
-    )
-    if not lines_single.empty:
-        _add_one_parallel_line_of_same_type(lines_single.index)
-
-    # handle rest of lines (replace by as many parallel standard lines as
-    # needed)
-    relevant_lines = relevant_lines.loc[~relevant_lines.index.isin(lines_single.index)]
     if not relevant_lines.empty:
-        _replace_by_parallel_standard_lines(relevant_lines.index)
+        nominal_voltage = edisgo_obj.topology.buses_df.loc[
+            edisgo_obj.topology.lines_df.loc[relevant_lines.index[0], "bus0"], "v_nom"
+        ]
+        if nominal_voltage == 0.4:
+            standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
+                "lv_line"
+            ]
+        else:
+            standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
+                f"mv_line_{int(nominal_voltage)}kv"
+            ]
+
+        # handling of standard lines
+        lines_standard = relevant_lines.loc[
+            relevant_lines.type_info == standard_line_type
+        ]
+        if not lines_standard.empty:
+            _add_parallel_standard_lines(lines_standard.index)
+
+        # get lines that have not been updated yet (i.e. that are not standard
+        # lines)
+        relevant_lines = relevant_lines.loc[
+            ~relevant_lines.index.isin(lines_standard.index)
+        ]
+        # handling of cables where adding one cable is sufficient
+        lines_single = (
+            relevant_lines.loc[relevant_lines.num_parallel == 1]
+            .loc[relevant_lines.kind == "cable"]
+            .loc[crit_lines.max_rel_overload < 2]
+        )
+        if not lines_single.empty:
+            _add_one_parallel_line_of_same_type(lines_single.index)
+
+        # handle rest of lines (replace by as many parallel standard lines as
+        # needed)
+        relevant_lines = relevant_lines.loc[
+            ~relevant_lines.index.isin(lines_single.index)
+        ]
+        if not relevant_lines.empty:
+            _replace_by_parallel_standard_lines(relevant_lines.index)
 
     return lines_changes

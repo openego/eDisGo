@@ -1,3 +1,5 @@
+import copy
+
 from math import sqrt
 
 import numpy as np
@@ -72,6 +74,14 @@ class TestTools:
         assert data == 3
         data = tools.calculate_line_resistance(np.array([2, 3]), 3, 2)
         assert_array_equal(data, np.array([3, 4.5]))
+
+    def test_calculate_line_susceptance(self):
+        # test single line
+        assert np.isclose(tools.calculate_line_susceptance(2, 3, 1), 0.00188495559)
+        # test parallel line
+        assert np.isclose(tools.calculate_line_susceptance(2, 3, 2), 2 * 0.00188495559)
+        # test line with c = 0
+        assert np.isclose(tools.calculate_line_susceptance(0, 3, 1), 0)
 
     def test_calculate_apparent_power(self):
         # test single line
@@ -238,3 +248,35 @@ class TestTools:
         # but there are generators in the grid that have that weather cell
         # for some reason..
         assert 1122074 in weather_cells
+
+    def test_add_susceptance(self):
+        assert self.edisgo.topology.lines_df.loc["Line_10006", "b"] == 0
+        assert self.edisgo.topology.lines_df.loc["Line_50000002", "b"] == 0
+
+        # test mode no_b
+        edisgo_root = copy.deepcopy(self.edisgo)
+        edisgo_root.topology.lines_df.loc["Line_10006", "b"] = 1
+        edisgo_root.topology.lines_df.loc["Line_50000002", "b"] = 1
+        edisgo_root = tools.add_line_susceptance(edisgo_root, mode="no_b")
+        assert edisgo_root.topology.lines_df.loc["Line_10006", "b"] == 0
+        assert edisgo_root.topology.lines_df.loc["Line_50000002", "b"] == 0
+
+        # test mode mv_b
+        edisgo_root = copy.deepcopy(self.edisgo)
+        edisgo_root.topology.lines_df.loc["Line_10006", "b"] = 1
+        edisgo_root.topology.lines_df.loc["Line_50000002", "b"] = 1
+        edisgo_root = tools.add_line_susceptance(edisgo_root, mode="mv_b")
+        assert edisgo_root.topology.lines_df.loc[
+            "Line_10006", "b"
+        ] == tools.calculate_line_susceptance(0.304, 0.297650465459542, 1)
+        assert edisgo_root.topology.lines_df.loc["Line_50000002", "b"] == 0
+
+        # test mode all_b
+        edisgo_root = copy.deepcopy(self.edisgo)
+        edisgo_root = tools.add_line_susceptance(edisgo_root, mode="all_b")
+        assert edisgo_root.topology.lines_df.loc[
+            "Line_10006", "b"
+        ] == tools.calculate_line_susceptance(0.304, 0.297650465459542, 1)
+        assert edisgo_root.topology.lines_df.loc[
+            "Line_50000002", "b"
+        ] == tools.calculate_line_susceptance(0.25, 0.03, 1)
