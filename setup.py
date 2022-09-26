@@ -50,6 +50,7 @@ requirements = [
     "sklearn",
     "pydot",
     "pygeos",
+    "bs4",
 ]
 
 geo_plot_requirements = [
