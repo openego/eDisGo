@@ -43,6 +43,7 @@ class TestExamples:
 
         return nb, errors
 
+    @pytest.mark.slow
     def test_plot_example_ipynb(self):
         examples_dir_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "examples"
