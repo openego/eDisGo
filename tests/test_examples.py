@@ -6,6 +6,7 @@ import tempfile
 
 import nbformat
 import pytest
+import pytest_notebook
 
 from examples import example_grid_reinforcement
 
@@ -56,15 +57,16 @@ class TestExamples:
 
         return nb, errors
 
-    @pytest.mark.slow
     def test_plot_example_ipynb(self):
         examples_dir_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "examples"
         )
-        nb, errors = self._notebook_run(
-            os.path.join(examples_dir_path, "plot_example.ipynb")
+        path = os.path.join(examples_dir_path, "plot_example.ipynb")
+        notebook = pytest_notebook.notebook.load_notebook(path=path)
+        result = pytest_notebook.execution.execute_notebook(
+            notebook, with_coverage=False, timeout=20
         )
-        assert errors == []
+        assert result.exec_error is None
 
     # ToDo Uncomment once a smaller grid is used and execution does not take as long
     # @pytest.mark.slow
