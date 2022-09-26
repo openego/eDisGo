@@ -140,7 +140,7 @@ def import_electromobility(
             If the mode_parking_times is set to "frugal" only parking times
             with any charging demand are imported. Default "frugal".
         charging_processes_dir : str
-            Charging processes sub-directory. Default "simbev_run".
+            Charging processes sub-directory. Default None.
         simbev_config_file : str
             Name of the simbev config file. Default "metadata_simbev_run.json".
 
@@ -150,7 +150,7 @@ def import_electromobility(
     edisgo_obj.electromobility.charging_processes_df = read_csvs_charging_processes(
         simbev_directory,
         mode=kwargs.pop("mode_parking_times", "frugal"),
-        csv_dir=kwargs.pop("charging_processes_dir", "simbev_run"),
+        csv_dir=kwargs.pop("charging_processes_dir", None),
     )
 
     edisgo_obj.electromobility.simbev_config_df = read_simbev_config_df(
@@ -168,7 +168,7 @@ def import_electromobility(
     )
 
 
-def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir="simbev_run"):
+def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
     """
     Reads all CSVs in a given path and returns a DataFrame with all
     `SimBEV <https://github.com/rl-institut/simbev>`_ charging processes.
@@ -182,7 +182,7 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir="simbev_run"):
         demand greater than 0 if "frugal". Default: "frugal".
     csv_dir : str
         Optional sub-directory holding charging processes CSVs under path.
-        Default: "simbev_run".
+        Default: None.
 
     Returns
     -------

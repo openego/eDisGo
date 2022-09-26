@@ -1442,7 +1442,7 @@ class EDisGo:
                 with any charging demand are imported. Any other input will lead
                 to all parking and driving events being imported. Default "frugal".
             charging_processes_dir : str
-                Charging processes sub-directory. Default "simbev_run".
+                Charging processes sub-directory. Default None.
             simbev_config_file : str
                 Name of the simbev config file. Default "metadata_simbev_run.json".
 
