@@ -13,7 +13,6 @@ from pandas.util.testing import assert_frame_equal
 from shapely.geometry import Point
 
 from edisgo import EDisGo
-from edisgo.edisgo import import_edisgo_from_files
 
 
 class TestEDisGo:
@@ -319,7 +318,7 @@ class TestEDisGo:
     def test_generator_import(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.import_generators("nep2035")
-        assert len(edisgo.topology.generators_df) == 1636
+        assert len(edisgo.topology.generators_df) == 524
 
     def test_analyze(self, caplog):
         self.setup_worst_case_time_series()
@@ -363,12 +362,34 @@ class TestEDisGo:
         assert "Current fraction in iterative process: 1.0." in caplog.text
 
     def test_reinforce(self):
+
+        # ###################### test with default settings ##########################
         self.setup_worst_case_time_series()
-        results = self.edisgo.reinforce(combined_analysis=True)
+        results = self.edisgo.reinforce()
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 10
         assert len(results.equipment_changes) == 10
-        # Todo: test other relevant values
+        assert results.v_res.shape == (4, 140)
+        assert self.edisgo.results.v_res.shape == (4, 140)
+
+        # ###################### test mode lv and copy grid ##########################
+        self.setup_edisgo_object()
+        self.setup_worst_case_time_series()
+        results = self.edisgo.reinforce(mode="lv", copy_grid=True)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 6
+        assert len(results.equipment_changes) == 6
+        assert results.v_res.shape == (2, 140)
+        assert self.edisgo.results.v_res.empty
+
+        # ################# test mode mvlv and combined analysis ####################
+        # self.setup_edisgo_object()
+        # self.setup_worst_case_time_series()
+        results = self.edisgo.reinforce(mode="mvlv", combined_analysis=False)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 8
+        assert len(results.equipment_changes) == 8
+        assert results.v_res.shape == (4, 41)
 
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()
@@ -919,16 +940,15 @@ class TestEDisGo:
         self.edisgo.analyze()
 
     def test_import_electromobility(self):
-        self.edisgo = import_edisgo_from_files(
-            pytest.ding0_test_network_3_path, import_timeseries=True
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+
         # test with default parameters
         simbev_path = pytest.simbev_example_scenario_path
         tracbev_path = pytest.tracbev_example_scenario_path
         self.edisgo.import_electromobility(simbev_path, tracbev_path)
 
-        assert len(self.edisgo.electromobility.charging_processes_df) == 45
-        assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 452
+        assert len(self.edisgo.electromobility.charging_processes_df) == 48
+        assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 1621
         assert self.edisgo.electromobility.eta_charging_points == 0.9
 
         total_charging_demand_at_charging_parks = sum(
@@ -959,7 +979,7 @@ class TestEDisGo:
 
         assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
 
-        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 14
+        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 3
 
         # fmt: off
         assert set(
@@ -975,9 +995,7 @@ class TestEDisGo:
         # fmt: on
 
         # test with kwargs
-        self.edisgo = import_edisgo_from_files(
-            pytest.ding0_test_network_3_path, import_timeseries=True
-        )
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         self.edisgo.import_electromobility(
             simbev_path,
             tracbev_path,
@@ -985,8 +1003,11 @@ class TestEDisGo:
             {"mode": "grid_friendly"},
         )
 
-        assert len(self.edisgo.electromobility.charging_processes_df) == 345
-        assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 452
+        # Length of charging_processes_df, potential_charging_parks_gdf and
+        # integrated_charging_parks_df changed compared to test without kwargs
+        # TODO: needs to be checked if that is correct
+        assert len(self.edisgo.electromobility.charging_processes_df) == 427
+        assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 1621
         assert self.edisgo.electromobility.simulated_days == 7
 
         assert np.isclose(
@@ -1010,7 +1031,7 @@ class TestEDisGo:
         )
         assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
 
-        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 14
+        assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 3
 
         # fmt: off
         assert set(
@@ -1024,6 +1045,26 @@ class TestEDisGo:
             .values
         )
         # fmt: on
+
+    def test_apply_charging_strategy(self):
+        self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        self.edisgo_obj.set_timeindex(timeindex)
+
+        self.edisgo_obj.resample_timeseries()
+        # test with default parameters
+        simbev_path = pytest.simbev_example_scenario_path
+        tracbev_path = pytest.tracbev_example_scenario_path
+        self.edisgo_obj.import_electromobility(simbev_path, tracbev_path)
+        self.edisgo_obj.apply_charging_strategy()
+
+        # Check if all charging points have a valid chargingdemand_kWh > 0
+        cps = self.edisgo_obj.topology.loads_df[
+            self.edisgo_obj.topology.loads_df.type == "charging_point"
+        ].index
+        ts = self.edisgo_obj.timeseries.loads_active_power.loc[:, cps]
+        df = ts.loc[:, (ts <= 0).any(axis=0)]
+        assert df.shape == ts.shape
 
     def test_plot_mv_grid_topology(self):
         plt.ion()

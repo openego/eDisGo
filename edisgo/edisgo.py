@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import pickle
@@ -854,6 +855,7 @@ class EDisGo:
         max_while_iterations: int = 20,
         combined_analysis: bool = False,
         mode: str | None = None,
+        without_generator_import: bool = False,
         **kwargs,
     ) -> Results:
         """
@@ -876,43 +878,66 @@ class EDisGo:
         """
         if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
 
-            logger.info(
-                "Running reinforcement in worst-case mode by differentiating between mv"
-                " and lv load and feed-in cases."
+            logger.debug(
+                "Running reinforcement in worst-case mode by differentiating between "
+                "MV and LV load and feed-in cases."
             )
+
+            if copy_grid:
+                edisgo_obj = copy.deepcopy(self)
+            else:
+                edisgo_obj = self
 
             timeindex_worst_cases = self.timeseries.timeindex_worst_cases
-            timesteps_pfa = pd.DatetimeIndex(
-                timeindex_worst_cases.loc[
-                    timeindex_worst_cases.index.str.contains("mv")
-                ]
-            )
-            mode = "mv"
 
-            reinforce_grid(
+            if mode != "lv":
+
+                timesteps_pfa = pd.DatetimeIndex(
+                    timeindex_worst_cases.loc[
+                        timeindex_worst_cases.index.str.contains("mv")
+                    ]
+                )
+                reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=timesteps_pfa,
+                    combined_analysis=combined_analysis,
+                    mode="mv",
+                    without_generator_import=without_generator_import,
+                )
+
+            if mode != "mv":
+                timesteps_pfa = pd.DatetimeIndex(
+                    timeindex_worst_cases.loc[
+                        timeindex_worst_cases.index.str.contains("lv")
+                    ]
+                )
+                reinforce_mode = mode if mode == "mvlv" else "lv"
+                reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=timesteps_pfa,
+                    combined_analysis=combined_analysis,
+                    mode=reinforce_mode,
+                    without_generator_import=without_generator_import,
+                )
+
+            if mode not in ["mv", "lv"]:
+                edisgo_obj.analyze(mode=mode)
+            results = edisgo_obj.results
+
+        else:
+            results = reinforce_grid(
                 self,
                 max_while_iterations=max_while_iterations,
                 copy_grid=copy_grid,
                 timesteps_pfa=timesteps_pfa,
                 combined_analysis=combined_analysis,
                 mode=mode,
+                without_generator_import=without_generator_import,
             )
-
-            timesteps_pfa = pd.DatetimeIndex(
-                timeindex_worst_cases.loc[
-                    timeindex_worst_cases.index.str.contains("lv")
-                ]
-            )
-            mode = "lv"
-
-        results = reinforce_grid(
-            self,
-            max_while_iterations=max_while_iterations,
-            copy_grid=copy_grid,
-            timesteps_pfa=timesteps_pfa,
-            combined_analysis=combined_analysis,
-            mode=mode,
-        )
 
         # add measure to Results object
         if not copy_grid:
@@ -1442,7 +1467,7 @@ class EDisGo:
                 with any charging demand are imported. Any other input will lead
                 to all parking and driving events being imported. Default "frugal".
             charging_processes_dir : str
-                Charging processes sub-directory. Default "simbev_run".
+                Charging processes sub-directory. Default None.
             simbev_config_file : str
                 Name of the simbev config file. Default "metadata_simbev_run.json".
 

@@ -1,27 +1,13 @@
 import logging
 import os
-import shutil
 import subprocess
 import tempfile
 
 import nbformat
 import pytest
 
-from examples import example_grid_reinforcement
-
 
 class TestExamples:
-    @pytest.mark.slow
-    def test_grid_reinforcement_example(self):
-        total_costs = example_grid_reinforcement.run_example()
-        # ToDo: total costs are for some reason not deterministic, check why!!
-        # assert np.isclose(total_costs, 1147.57198)
-        assert total_costs > 0.0
-
-        # Delete saved grid and results data
-        edisgo_path = os.path.join(os.path.expanduser("~"), ".edisgo")
-        shutil.rmtree(os.path.join(edisgo_path, "ding0_example_grid"))
-
     def _notebook_run(self, path):
         """
         Execute a notebook via nbconvert and collect output.
@@ -39,7 +25,7 @@ class TestExamples:
                 "--to",
                 "notebook",
                 "--execute",
-                "--ExecutePreprocessor.timeout=60",
+                "--ExecutePreprocessor.timeout=90",
             ]
             subprocess.check_call(args)
 
@@ -66,16 +52,25 @@ class TestExamples:
         )
         assert errors == []
 
-    # ToDo Uncomment once a smaller grid is used and execution does not take as long
-    # @pytest.mark.slow
-    # def test_edisgo_simple_example_ipynb(self):
-    #     examples_dir_path = os.path.join(
-    #         os.path.dirname(os.path.dirname(__file__)),
-    #         "examples")
-    #     nb, errors = self._notebook_run(
-    #         os.path.join(examples_dir_path, "edisgo_simple_example.ipynb")
-    #     )
-    #     assert errors == []
+    @pytest.mark.slow
+    def test_electromobility_example_ipynb(self):
+        examples_dir_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "examples"
+        )
+        nb, errors = self._notebook_run(
+            os.path.join(examples_dir_path, "electromobility_example.ipynb")
+        )
+        assert errors == []
+
+    @pytest.mark.slow
+    def test_edisgo_simple_example_ipynb(self):
+        examples_dir_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "examples"
+        )
+        nb, errors = self._notebook_run(
+            os.path.join(examples_dir_path, "edisgo_simple_example.ipynb")
+        )
+        assert errors == []
 
     @classmethod
     def teardown_class(cls):
