@@ -44,7 +44,7 @@ def run_example():
     setup_logger(
         loggers=[
             {"name": "root", "file_level": None, "stream_level": "warning"},
-            {"name": "edisgo", "file_level": None, "stream_level": "info"}
+            {"name": "edisgo", "file_level": None, "stream_level": "info"},
         ]
     )
 
