@@ -855,6 +855,7 @@ class EDisGo:
         max_while_iterations: int = 20,
         combined_analysis: bool = False,
         mode: str | None = None,
+        without_generator_import: bool = False,
         **kwargs,
     ) -> Results:
         """
@@ -903,6 +904,7 @@ class EDisGo:
                     timesteps_pfa=timesteps_pfa,
                     combined_analysis=combined_analysis,
                     mode="mv",
+                    without_generator_import=without_generator_import,
                 )
 
             if mode != "mv":
@@ -919,6 +921,7 @@ class EDisGo:
                     timesteps_pfa=timesteps_pfa,
                     combined_analysis=combined_analysis,
                     mode=reinforce_mode,
+                    without_generator_import=without_generator_import,
                 )
 
             if mode not in ["mv", "lv"]:
@@ -933,6 +936,7 @@ class EDisGo:
                 timesteps_pfa=timesteps_pfa,
                 combined_analysis=combined_analysis,
                 mode=mode,
+                without_generator_import=without_generator_import,
             )
 
         # add measure to Results object
