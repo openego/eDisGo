@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import pickle
@@ -876,20 +877,56 @@ class EDisGo:
         """
         if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
 
-            logger.info(
-                "Running reinforcement in worst-case mode by differentiating between mv"
-                " and lv load and feed-in cases."
+            logger.debug(
+                "Running reinforcement in worst-case mode by differentiating between "
+                "MV and LV load and feed-in cases."
             )
+
+            if copy_grid:
+                edisgo_obj = copy.deepcopy(self)
+            else:
+                edisgo_obj = self
 
             timeindex_worst_cases = self.timeseries.timeindex_worst_cases
-            timesteps_pfa = pd.DatetimeIndex(
-                timeindex_worst_cases.loc[
-                    timeindex_worst_cases.index.str.contains("mv")
-                ]
-            )
-            mode = "mv"
 
-            reinforce_grid(
+            if mode != "lv":
+
+                timesteps_pfa = pd.DatetimeIndex(
+                    timeindex_worst_cases.loc[
+                        timeindex_worst_cases.index.str.contains("mv")
+                    ]
+                )
+                reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=timesteps_pfa,
+                    combined_analysis=combined_analysis,
+                    mode="mv",
+                )
+
+            if mode != "mv":
+                timesteps_pfa = pd.DatetimeIndex(
+                    timeindex_worst_cases.loc[
+                        timeindex_worst_cases.index.str.contains("lv")
+                    ]
+                )
+                reinforce_mode = mode if mode == "mvlv" else "lv"
+                reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=timesteps_pfa,
+                    combined_analysis=combined_analysis,
+                    mode=reinforce_mode,
+                )
+
+            if mode not in ["mv", "lv"]:
+                edisgo_obj.analyze(mode=mode)
+            results = edisgo_obj.results
+
+        else:
+            results = reinforce_grid(
                 self,
                 max_while_iterations=max_while_iterations,
                 copy_grid=copy_grid,
@@ -897,22 +934,6 @@ class EDisGo:
                 combined_analysis=combined_analysis,
                 mode=mode,
             )
-
-            timesteps_pfa = pd.DatetimeIndex(
-                timeindex_worst_cases.loc[
-                    timeindex_worst_cases.index.str.contains("lv")
-                ]
-            )
-            mode = "lv"
-
-        results = reinforce_grid(
-            self,
-            max_while_iterations=max_while_iterations,
-            copy_grid=copy_grid,
-            timesteps_pfa=timesteps_pfa,
-            combined_analysis=combined_analysis,
-            mode=mode,
-        )
 
         # add measure to Results object
         if not copy_grid:

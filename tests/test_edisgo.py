@@ -362,12 +362,34 @@ class TestEDisGo:
         assert "Current fraction in iterative process: 1.0." in caplog.text
 
     def test_reinforce(self):
+
+        # ###################### test with default settings ##########################
         self.setup_worst_case_time_series()
-        results = self.edisgo.reinforce(combined_analysis=True)
+        results = self.edisgo.reinforce()
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 10
         assert len(results.equipment_changes) == 10
-        # Todo: test other relevant values
+        assert results.v_res.shape == (4, 140)
+        assert self.edisgo.results.v_res.shape == (4, 140)
+
+        # ###################### test mode lv and copy grid ##########################
+        self.setup_edisgo_object()
+        self.setup_worst_case_time_series()
+        results = self.edisgo.reinforce(mode="lv", copy_grid=True)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 6
+        assert len(results.equipment_changes) == 6
+        assert results.v_res.shape == (2, 140)
+        assert self.edisgo.results.v_res.empty
+
+        # ################# test mode mvlv and combined analysis ####################
+        # self.setup_edisgo_object()
+        # self.setup_worst_case_time_series()
+        results = self.edisgo.reinforce(mode="mvlv", combined_analysis=False)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 8
+        assert len(results.equipment_changes) == 8
+        assert results.v_res.shape == (4, 41)
 
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()
