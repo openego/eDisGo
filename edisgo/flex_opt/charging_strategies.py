@@ -32,7 +32,7 @@ RELEVANT_CHARGING_STRATEGIES_COLUMNS = {
     ],
 }
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 
 # TODO: the dummy timeseries should be as long as the simulated days and not
@@ -79,6 +79,11 @@ def charging_strategy(
     # Delete possible old time series as these influence "residual" charging
     edisgo_obj.timeseries.drop_component_time_series(
         "loads_active_power",
+        edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values,
+    )
+
+    edisgo_obj.timeseries.drop_component_time_series(
+        "loads_reactive_power",
         edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values,
     )
 

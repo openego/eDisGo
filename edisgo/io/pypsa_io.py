@@ -106,7 +106,7 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
             ],
             "Line": edisgo_object.topology.lines_df.loc[
                 :,
-                ["bus0", "bus1", "x", "r", "s_nom", "num_parallel", "length"],
+                ["bus0", "bus1", "x", "r", "b", "s_nom", "num_parallel", "length"],
             ],
             "Transformer": edisgo_object.topology.transformers_df.loc[
                 :, ["bus0", "bus1", "x_pu", "r_pu", "type_info", "s_nom"]
