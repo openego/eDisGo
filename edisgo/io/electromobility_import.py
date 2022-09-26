@@ -219,22 +219,24 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir="simbev_run"):
                 f"File '{str(file[1]).split('/')[-1]}' couldn't be read and is skipped."
             )
 
+            return pd.DataFrame()
+
     df = pd.concat(map(rd_csv, list(enumerate(files))), ignore_index=True)
+
     if mode == "frugal":
         df = df.loc[df.chargingdemand_kWh > 0]
+
     df = df.rename(columns={"location": "destination"})
 
     df = df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
 
-    charging_processes_df = pd.merge(
+    return pd.merge(
         df,
         pd.DataFrame(columns=COLUMNS["matching_demand_and_location"]),
         how="outer",
         left_index=True,
         right_index=True,
     )
-
-    return charging_processes_df
 
 
 def read_simbev_config_df(
