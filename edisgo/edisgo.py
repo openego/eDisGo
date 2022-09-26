@@ -2240,6 +2240,7 @@ def import_edisgo_from_files(
     import_timeseries=False,
     import_results=False,
     import_electromobility=False,
+    import_heat_pump=False,
     from_zip_archive=False,
     **kwargs,
 ):
@@ -2311,6 +2312,18 @@ def import_edisgo_from_files(
             logging.warning(
                 "No electromobility data found. Electromobility not imported."
             )
+
+    if import_heat_pump:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "heat_pump_directory",
+                os.path.join(edisgo_path, "heat_pump"),
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
+        else:
+            logging.warning("No heat pump data found. Heat pump data not imported.")
 
     if kwargs.get("import_residual_load", False):
         if not from_zip_archive:
