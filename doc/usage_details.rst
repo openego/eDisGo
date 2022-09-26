@@ -266,7 +266,8 @@ The charging strategies can be invoked as follows:
 
     edisgo.apply_charging_strategy()
 
-See :attr:`~.edisgo.EDisGo.apply_charging_strategy` for more information.
+See function docstring of :attr:`~.edisgo.EDisGo.apply_charging_strategy` or
+documentation section :ref:`charging_strategies-label` for more information.
 
 Reactive power time series
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -349,7 +350,86 @@ Further information on the grid reinforcement methodology can be found in sectio
 Electromobility
 -----------------
 
-.. todo:: Add
+Electromobility data including charging processes as well as information on potential charging sites and
+integrated charging parks are stored in the
+:class:`~.network.electromobility.Electromobility` object.
+
+You can access these data as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with all SimBEV charging processes
+    edisgo.electromobility.charging_processes_df
+
+    # Access GeoDataFrame with all TracBEV potential charging parks
+    edisgo.electromobility.potential_charging_parks_gdf
+
+    # Access DataFrame with all charging parks that got integrated
+    edisgo.electromobility.integrated_charging_parks_df
+
+The integrated charging points are also stored in the :class:`~.network.topology.Topology`
+object and can be accessed as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with all integrated charging points.
+    edisgo.topology.charging_points_df
+
+
+So far, adding electromobility data to an eDisGo object requires electromobility
+data from `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
+`3083c5a <https://github.com/rl-institut/simbev/commit/
+86076c936940365587c9fba98a5b774e13083c5a>`_)
+and `TracBEV <https://github.com/rl-institut/tracbev>`_ (required version:
+`14d864c <https://github.com/rl-institut/tracbev/commit/
+03e335655770a377166c05293a966052314d864c>`_) to be stored in the directories
+specified through the parameters simbev_directory and tracbev_directory.
+SimBEV provides data on standing times, charging demand, etc. per vehicle,
+whereas TracBEV provides potential charging point locations.
+
+.. todo:: Add information on how to retrieve SimBEV and TracBEV data
+
+Here is a small example on how to import electromobility data and apply a
+charging strategy. A more extensive example can be found in
+the example jupyter notebook
+`electromobility_example <https://github.com/openego/eDisGo/blob/dev/examples/electromobility_example.ipynb>`_.
+
+.. code-block:: python
+
+    import pandas as pd
+    from edisgo import EDisGo
+
+    # Set up the EDisGo object
+    timeindex = pd.date_range("1/1/2011", periods=24*7, freq="H")
+    edisgo = EDisGo(
+        ding0_grid=dingo_grid_path,
+        timeindex=timeindex
+    )
+    edisgo.set_time_series_active_power_predefined(
+        fluctuating_generators_ts="oedb",
+        dispatchable_generators_ts=pd.DataFrame(
+            data=1, columns=["other"], index=timeindex),
+        conventional_loads_ts="demandlib",
+    )
+
+    edisgo.set_time_series_reactive_power_control()
+
+    # Resample edisgo timeseries to 15-minute resolution to match with SimBEV and
+    # TracBEV data
+    edisgo.resample_timeseries()
+
+    # Import electromobility data
+    edisgo.import_electromobility(
+        simbev_directory=simbev_path,
+        tracbev_directory=tracbev_path,
+    )
+
+    # Apply charging strategy
+    edisgo.apply_charging_strategy(strategy="dumb")
+
+Further information on the electromobility integration methodology and the charging
+strategies can be found in section :ref:`electromobility-integration-label`.
+
 
 Battery storage systems
 ------------------------

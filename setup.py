@@ -50,6 +50,7 @@ requirements = [
     "sklearn",
     "pydot",
     "pygeos",
+    "beautifulsoup4",
     "contextily",
     "descartes",
     "jupyter",
