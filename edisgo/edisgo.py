@@ -51,7 +51,7 @@ class EDisGo:
         Otherwise defines which scenario of future generator park to use
         and invokes grid integration of these generators. Possible options are
         'nep2035' and 'ego100'. These are scenarios from the research project
-        `open_eGo <https://openegoproject.wordpres.com/>`_ (see
+        `open_eGo <https://openegoproject.wordpress.com/>`_ (see
         `final report <https://www.uni-flensburg.de/fileadmin/content/\
         abteilungen/industrial/dokumente/downloads/veroeffentlichungen/\
         forschungsergebnisse/20190426endbericht-openego-fkz0325881-final.pdf>`_
