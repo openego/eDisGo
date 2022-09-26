@@ -50,7 +50,6 @@ requirements = [
     "sklearn",
     "pydot",
     "pygeos",
-    "more_itertools",
 ]
 
 geo_plot_requirements = [

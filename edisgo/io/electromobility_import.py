@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from more_itertools import filter_except, map_except
 from numpy.random import default_rng
 from sklearn import preprocessing
 
@@ -214,20 +213,19 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
     def rd_csv(file):
         ags = int(file[1].parts[-2])
         car_id = file[0]
-        return pd.read_csv(file[1]).assign(ags=ags, car_id=car_id)
+        try:
+            return pd.read_csv(file[1]).assign(ags=ags, car_id=car_id)
+        except Exception:
+            logger.warning(
+                f"File '{str(file[1]).split('/')[-1]}' couldn't be read and is skipped."
+            )
 
-    df = pd.concat(map_except(rd_csv, list(enumerate(files))), ignore_index=True)
+    df = pd.concat(map(rd_csv, list(enumerate(files))), ignore_index=True)
     if mode == "frugal":
         df = df.loc[df.chargingdemand_kWh > 0]
     df = df.rename(columns={"location": "destination"})
 
     df = df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
-
-    for f in list(
-        set(list(enumerate(files)))
-        - set(list(filter_except(rd_csv, list(enumerate(files)), Exception)))
-    ):
-        logger.warning(f"File '{f[1].parts[-1]}' couldn't be read and is skipped.")
 
     charging_processes_df = pd.merge(
         df,
