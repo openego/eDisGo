@@ -216,11 +216,30 @@ def cop_oedb(config_data, weather_cell_ids=None, timeindex=None):
     #     # get weather cells in grid district
     #     pass
     #
-    # with session_scope() as session:
-    #     # get cop from database
-    #     cop = pd.DataFrame()
+    # import saio
+    # saio.register_schema("supply", engine)
+    # from saio.supply import egon_era5_renewable_feedin
     #
-    # cop.sort_index(axis=0, inplace=True)
+    # # get cop from database
+    # with db.session_scope() as session:
+    #     query = session.query(
+    #         egon_era5_renewable_feedin.w_id,
+    #         egon_era5_renewable_feedin.feedin.label("cop"),
+    #     ).filter(
+    #         egon_era5_renewable_feedin.carrier == "heat_pump_cop"
+    #     ).filter(
+    #         egon_era5_renewable_feedin.w_id.in_(weather_cell_ids)
+    #     )
+    #
+    #     cop = pd.read_sql(
+    #         query.statement, query.session.bind, index_col="w_id"
+    #     )
+    #
+    # # convert dataframe to have weather cell ID as column name and time index
+    # cop = pd.DataFrame(
+    #     {w_id: ts.cop for w_id, ts in cop.iterrows()},
+    #     index=timeindex
+    # )
     #
     # return cop
 
