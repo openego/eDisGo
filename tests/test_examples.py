@@ -5,9 +5,16 @@ import tempfile
 
 import nbformat
 import pytest
+import pytest_notebook
 
 
 class TestExamples:
+    @classmethod
+    def setup_class(self):
+        self.examples_dir_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)), "examples"
+        )
+
     def _notebook_run(self, path):
         """
         Execute a notebook via nbconvert and collect output.
@@ -44,31 +51,24 @@ class TestExamples:
 
     @pytest.mark.slow
     def test_plot_example_ipynb(self):
-        examples_dir_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "examples"
+        path = os.path.join(self.examples_dir_path, "plot_example.ipynb")
+        notebook = pytest_notebook.notebook.load_notebook(path=path)
+        result = pytest_notebook.execution.execute_notebook(
+            notebook, with_coverage=False, timeout=20
         )
-        nb, errors = self._notebook_run(
-            os.path.join(examples_dir_path, "plot_example.ipynb")
-        )
-        assert errors == []
+        assert result.exec_error is None
 
     @pytest.mark.slow
     def test_electromobility_example_ipynb(self):
-        examples_dir_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "examples"
-        )
         nb, errors = self._notebook_run(
-            os.path.join(examples_dir_path, "electromobility_example.ipynb")
+            os.path.join(self.examples_dir_path, "electromobility_example.ipynb")
         )
         assert errors == []
 
     @pytest.mark.slow
     def test_edisgo_simple_example_ipynb(self):
-        examples_dir_path = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)), "examples"
-        )
         nb, errors = self._notebook_run(
-            os.path.join(examples_dir_path, "edisgo_simple_example.ipynb")
+            os.path.join(self.examples_dir_path, "edisgo_simple_example.ipynb")
         )
         assert errors == []
 

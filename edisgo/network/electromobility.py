@@ -506,7 +506,7 @@ class Electromobility:
             files = zip.namelist()
 
             # add directory and .csv to files to match zip archive
-            attrs = {k: f"electromobility{os.path.sep}{v}" for k, v in attrs.items()}
+            attrs = {k: f"electromobility/{v}" for k, v in attrs.items()}
 
         else:
             # read from directory

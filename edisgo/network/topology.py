@@ -2578,7 +2578,7 @@ class Topology:
             files = zip.namelist()
 
             # add directory to attributes to match zip archive
-            attrs = {k: f"topology{os.path.sep}{v}" for k, v in attrs.items()}
+            attrs = {k: f"topology/{v}" for k, v in attrs.items()}
 
         else:
             # read from directory
