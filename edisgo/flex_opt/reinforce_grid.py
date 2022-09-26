@@ -87,7 +87,7 @@ def reinforce_grid(
           and neglecting LV network topology. LV load and generation is
           aggregated per LV network and directly connected to the secondary
           side of the respective MV/LV station.
-        * 'lv' to reinforce LV networks including MV/LV stations only.
+        * 'lv' to reinforce LV networks including MV/LV stations.
 
     Returns
     -------
