@@ -27,7 +27,7 @@ jobs:
           - name-suffix: "basic"
             os: ubuntu-latest
             python-version: 3.9
-          - name-suffix: "dev"
+          - name-suffix: "basic"
             os: windows-latest
             python-version: 3.8
 
