@@ -52,9 +52,12 @@ def oedb(edisgo_object, scenario, **kwargs):
         #     query.statement, session.bind, index_col="id"
         # )
 
-    def _get_large_heat_pumps(session):
+    def _get_central_heat_pumps(session):
         """
         Get heat pumps in district heating from oedb.
+
+        # ToDo The building IDs of all buildings served by the district heating
+        # network should also be retrieved
 
         Returns
         -------
@@ -77,19 +80,20 @@ def oedb(edisgo_object, scenario, **kwargs):
     # # get individual and district heating heat pumps
     # with session_scope() as session:
     #     hp_individual = _get_individual_heat_pumps(session)
-    #     hp_large = _get_large_heat_pumps(session)
+    #     hp_central = _get_central_heat_pumps(session)
     #
+    # # integrate into grid
     # return _grid_integration(
     #     edisgo_object=edisgo_object,
     #     hp_individual=hp_individual,
-    #     hp_large=hp_large,
+    #     hp_large=hp_central,
     # )
 
 
 def _grid_integration(
     edisgo_object,
     hp_individual,
-    hp_large,
+    hp_central,
 ):
     """
     Integrates the heat pumps into the grid.
@@ -117,7 +121,7 @@ def _grid_integration(
             * weather_cell_id : int
                 Weather cell the heat pump is in.
 
-    hp_large : :pandas:`pandas.DataFrame<DataFrame>`
+    hp_central : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing all heat pumps in district heating network.
         # ToDo add information on dataframe columns and index
         Index of the dataframe are the generator IDs.
@@ -125,6 +129,9 @@ def _grid_integration(
 
             * p_set : float
                 Nominal capacity in MW.
+            * building_id : list(int)
+                List of building IDs of the buildings in the district heating network
+                the heat pump is in.
             * weather_cell_id : int
                 Weather cell the heat pump is in.
             * geom : :shapely:`Shapely Point object<points>`
@@ -156,13 +163,19 @@ def _grid_integration(
     #     },
     #     index=integrated_heat_pumps,
     # )
+    # # ToDo use add_loads for the following?
     # edisgo_object.topology.loads_df = pd.concat([loads_df, hp_df])
+    # # add information on heat pump and corresponding building ID to HeatPump class
+    # # ToDo building_ids always as list in DataFrame as is the case for large heat
+    # #  pumps?
+    # edisgo_object.heat_pump.building_ids_df = pd.concat(
+    #     [edisgo_object.heat_pump.building_ids_df, hp_df.building_id])
     # logger.debug(
     #     f"{sum(hp_df.p_set)} MW of heat pumps for individual heating integrated."
     # )
     #
-    # # integrate large heat pumps
-    # for hp in hp_large:
+    # # integrate central heat pumps
+    # for hp in hp_central:
     #     hp_name = edisgo_object.integrate_component_based_on_geolocation(
     #         comp_type="heat_pump",
     #         geolocation=hp_large.at[hp, "geom"],
@@ -172,8 +185,16 @@ def _grid_integration(
     #         kwargs={"sector": "district_heating"},
     #     )
     #     integrated_heat_pumps = integrated_heat_pumps.append(hp_name)
+    #     # add information on heat pump and corresponding building IDs to HeatPump
+    #     # class
+    #     edisgo_object.heat_pump.building_ids_df = pd.concat(
+    #         [edisgo_object.heat_pump.building_ids_df,
+    #          pd.DataFrame({"building_ids": hp_large.loc[hp, "building_id"]},
+    #                       index=[hp_name])
+    #          ]
+    #     )
     #
     # logger.debug(
-    #     f"{sum(hp_large.p_set)} MW of heat pumps for district heating " f"integrated."
+    #     f"{sum(hp_central.p_set)} MW of heat pumps for district heating integrated."
     # )
     # return integrated_heat_pumps
