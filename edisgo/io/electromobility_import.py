@@ -38,7 +38,6 @@ COLUMNS = {
         "park_end_timesteps",
     ],
     "simbev_config_df": [
-        "regio_type",
         "eta_cp",
         "stepsize",
         "start_date",
@@ -77,7 +76,6 @@ DTYPES = {
         "park_end_timesteps": np.uint16,
     },
     "simbev_config_df": {
-        "regio_type": str,
         "eta_cp": float,
         "stepsize": int,
         "soc_min": float,
@@ -170,7 +168,7 @@ def import_electromobility(
     )
 
 
-def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
+def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir="simbev_run"):
     """
     Reads all CSVs in a given path and returns a DataFrame with all
     `SimBEV <https://github.com/rl-institut/simbev>`_ charging processes.
@@ -181,9 +179,10 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
         Main path holding SimBEV output data
     mode : str
         Returns all information if None. Returns only rows with charging
-        demand greater than 0 if "frugal". Default is "frugal".
+        demand greater than 0 if "frugal". Default: "frugal".
     csv_dir : str
-        Optional sub-directory holding charging processes CSVs under path
+        Optional sub-directory holding charging processes CSVs under path.
+        Default: "simbev_run".
 
     Returns
     -------
@@ -209,41 +208,33 @@ def read_csvs_charging_processes(csv_path, mode="frugal", csv_dir=None):
 
     files.sort()
 
-    charging_processes_df_list = []
-
-    for car_id, f in enumerate(files):
+    # wrapper function for csv files read in with map_except function
+    def rd_csv(file):
+        ags = int(file[1].parts[-2])
+        car_id = file[0]
         try:
-            df = pd.read_csv(f, index_col=[0])
-
-            if mode == "frugal":
-                df = df.loc[df.chargingdemand_kWh > 0]
-
-            df = df.rename(columns={"location": "destination"})
-
-            df = df.assign(ags=int(f.parts[-2]), car_id=car_id)
-
-            df = df[COLUMNS["charging_processes_df"]].astype(
-                DTYPES["charging_processes_df"]
-            )
-
-            charging_processes_df_list.append(df)
-
+            return pd.read_csv(file[1]).assign(ags=ags, car_id=car_id)
         except Exception:
-            logger.warning(f"File {f} couldn't be read and is skipped.")
+            logger.warning(f"File '{file[1]}' couldn't be read and is skipped.")
 
-    charging_processes_df = pd.concat(charging_processes_df_list, ignore_index=True)[
-        COLUMNS["charging_processes_df"]
-    ].astype(DTYPES["charging_processes_df"])
+            return pd.DataFrame()
 
-    charging_processes_df = pd.merge(
-        charging_processes_df,
+    df = pd.concat(map(rd_csv, list(enumerate(files))), ignore_index=True)
+
+    if mode == "frugal":
+        df = df.loc[df.chargingdemand_kWh > 0]
+
+    df = df.rename(columns={"location": "destination"})
+
+    df = df[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
+
+    return pd.merge(
+        df,
         pd.DataFrame(columns=COLUMNS["matching_demand_and_location"]),
         how="outer",
         left_index=True,
         right_index=True,
     )
-
-    return charging_processes_df
 
 
 def read_simbev_config_df(
@@ -255,18 +246,19 @@ def read_simbev_config_df(
     Parameters
     ----------
     path : str
-        Main path holding SimBEV output data
+        Main path holding SimBEV output data.
     edisgo_obj : :class:`~.EDisGo`
     simbev_config_file : str
-        SimBEV config file name
+        SimBEV config file name. Default: "metadata_simbev_run.json".
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with used random seed, used threads, stepsize in minutes,
         year, scenarette, simulated days, maximum number of cars per AGS,
-        completed standing times and timeseries per AGS and used ramp up
+        completed standing times and time series per AGS and used ramp up
         data CSV.
+
     """
     try:
         if simbev_config_file is not None:
@@ -286,28 +278,19 @@ def read_simbev_config_df(
 
     except Exception:
         logging.warning(
-            "SimBEV config file could not be imported. Charging point"
-            "efficiency is set to 100%, the stepsize is set to 15 minutes"
-            "and the simulated days are estimated from the charging"
+            "SimBEV config file could not be imported. Charging point "
+            "efficiency is set to 100%, the stepsize is set to 15 minutes "
+            "and the simulated days are estimated from the charging "
             "processes."
         )
 
-        # fmt: off
-        data = [
-            1.0,
-            15,
-            np.ceil(
-                edisgo_obj.electromobility.charging_processes_df.park_end_timesteps.max(
-
-                )
-                / (4 * 24)
-            ),
-        ]
-        # fmt: on
-
-        index = ["eta_cp", "stepsize", "days"]
-
-        return pd.DataFrame(data=data, index=index, columns=["value"])
+        mx_t = edisgo_obj.electromobility.charging_processes_df.park_end_timesteps.max()
+        data = {
+            "eta_cp": [1.0],
+            "stepsize": [15],
+            "days": [np.ceil(mx_t / (4 * 24))],
+        }
+        return pd.DataFrame(data=data, index=[0])
 
 
 def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
@@ -393,7 +376,7 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
 
         num_gcs = len(use_case_gdf)
 
-        # if simbev doesn't provide possible grid cnnections choose a
+        # if simbev doesn't provide possible grid connections choose a
         # random public potential charging park and duplicate
         if num_gcs == 0:
             logger.warning(
