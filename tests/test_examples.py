@@ -32,7 +32,7 @@ class TestExamples:
                 "--to",
                 "notebook",
                 "--execute",
-                "--ExecutePreprocessor.timeout=90",
+                "--ExecutePreprocessor.timeout=150",
             ]
             subprocess.check_call(args)
 
