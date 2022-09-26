@@ -52,7 +52,7 @@ def oedb(edisgo_object, scenario, **kwargs):
         #     query.statement, session.bind, index_col="id"
         # )
 
-    def _get_large_heat_pumps(session):
+    def _get_central_heat_pumps(session):
         """
         Get heat pumps in district heating from oedb.
 
@@ -80,20 +80,20 @@ def oedb(edisgo_object, scenario, **kwargs):
     # # get individual and district heating heat pumps
     # with session_scope() as session:
     #     hp_individual = _get_individual_heat_pumps(session)
-    #     hp_large = _get_large_heat_pumps(session)
+    #     hp_central = _get_central_heat_pumps(session)
     #
     # # integrate into grid
     # return _grid_integration(
     #     edisgo_object=edisgo_object,
     #     hp_individual=hp_individual,
-    #     hp_large=hp_large,
+    #     hp_large=hp_central,
     # )
 
 
 def _grid_integration(
     edisgo_object,
     hp_individual,
-    hp_large,
+    hp_central,
 ):
     """
     Integrates the heat pumps into the grid.
@@ -121,7 +121,7 @@ def _grid_integration(
             * weather_cell_id : int
                 Weather cell the heat pump is in.
 
-    hp_large : :pandas:`pandas.DataFrame<DataFrame>`
+    hp_central : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing all heat pumps in district heating network.
         # ToDo add information on dataframe columns and index
         Index of the dataframe are the generator IDs.
@@ -174,8 +174,8 @@ def _grid_integration(
     #     f"{sum(hp_df.p_set)} MW of heat pumps for individual heating integrated."
     # )
     #
-    # # integrate large heat pumps
-    # for hp in hp_large:
+    # # integrate central heat pumps
+    # for hp in hp_central:
     #     hp_name = edisgo_object.integrate_component_based_on_geolocation(
     #         comp_type="heat_pump",
     #         geolocation=hp_large.at[hp, "geom"],
@@ -195,6 +195,6 @@ def _grid_integration(
     #     )
     #
     # logger.debug(
-    #     f"{sum(hp_large.p_set)} MW of heat pumps for district heating " f"integrated."
+    #     f"{sum(hp_central.p_set)} MW of heat pumps for district heating integrated."
     # )
     # return integrated_heat_pumps
