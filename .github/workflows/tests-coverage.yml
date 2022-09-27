@@ -18,21 +18,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name-suffix: "basic"
-            os: ubuntu-latest
-            python-version: 3.8
-          - name-suffix: "basic"
-            os: ubuntu-latest
-            python-version: 3.9
-          - name-suffix: "basic"
-            os: windows-latest
-            python-version: 3.8
-          - name-suffix: "basic"
-            os: windows-latest
-            python-version: 3.9
           - name-suffix: "coverage"
             os: ubuntu-latest
             python-version: 3.8
+          - name-suffix: "basic"
+            os: ubuntu-latest
+            python-version: 3.9
+          - name-suffix: "basic"
+            os: windows-latest
+            python-version: 3.8
+          - name-suffix: "basic"
+            os: windows-latest
+            python-version: 3.9
 
     steps:
       - name: Checkout repo
