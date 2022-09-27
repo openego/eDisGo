@@ -1,12 +1,12 @@
-name: "Pull Request Docs Check"
-on: 
-- pull_request
+name: "Docs Check [Push]"
+on: [push]
 
 jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
-    - uses: ammaraskar/sphinx-action@master
-      with:
+    run: |
+         sphinx-build . -b linkcheck -d _build/doctrees _build/html
+    with:
         docs-folder: "doc/"
