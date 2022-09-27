@@ -4,9 +4,6 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: doc
     steps:
     - name: Check doc links
       run: |
