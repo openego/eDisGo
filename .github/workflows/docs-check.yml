@@ -6,7 +6,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./doc
+        working-directory: doc
     steps:
     - name: Check doc links
       run: |
