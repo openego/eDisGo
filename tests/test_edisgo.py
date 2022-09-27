@@ -43,7 +43,7 @@ class TestEDisGo:
 
         # test specifying different directory
         self.edisgo.config = {"config_path": save_dir}
-        assert len(os.listdir(save_dir)) == 5
+        assert len(os.listdir(save_dir)) == 6
         shutil.rmtree(save_dir)
 
         # test json and config_path=None
