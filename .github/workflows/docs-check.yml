@@ -6,6 +6,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Check doc links
-    - run: |
+      run: |
         cd doc
         sphinx-build . -b linkcheck -d _build/doctrees _build/html
