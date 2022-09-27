@@ -9,4 +9,4 @@ jobs:
     - name: Check doc links
       run: |
         sphinx-build . -b linkcheck -d _build/doctrees _build/html
-      working-directory: doc
+      working-directory: ./doc
