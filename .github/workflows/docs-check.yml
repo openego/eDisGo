@@ -4,10 +4,11 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: doc
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v2
     - name: Check doc links
-      working-directory: doc
       run: |
         sphinx-build . -b linkcheck -d _build/doctrees _build/html
