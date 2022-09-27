@@ -5,10 +5,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - name: Check out repository
-      uses: actions/checkout@v3
-    - name: Use local my-action
-      uses: ./doc/conf.py
+    - name: Display the path
+      run: |
+        import os
+        print(os.environ['PATH'])
+      shell: python
     - name: Check doc links
       run: |
         sphinx-build . -b linkcheck -d _build/doctrees _build/html
