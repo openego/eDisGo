@@ -4,11 +4,11 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        working-directory: doc
     steps:
+    - name: Check out repository
+      uses: actions/checkout@v3
+    - name: Use local my-action
+      uses: ./doc/conf.py
     - name: Check doc links
       run: |
         sphinx-build . -b linkcheck -d _build/doctrees _build/html
