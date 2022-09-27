@@ -2,11 +2,10 @@ name: "Docs Check [Push]"
 on: [push]
 
 jobs:
-  docs:
+  build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-    run: |
-         sphinx-build . -b linkcheck -d _build/doctrees _build/html
-    with:
-        docs-folder: "doc/"
+    - name: Check doc links
+    - run: |
+        cd doc
+        sphinx-build . -b linkcheck -d _build/doctrees _build/html
