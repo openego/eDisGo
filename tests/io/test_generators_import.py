@@ -255,7 +255,7 @@ class TestGeneratorsImportOEDB:
     def test_oedb_without_timeseries(self):
 
         edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_4_path,
+            ding0_grid=pytest.ding0_test_network_2_path,
             generator_scenario="nep2035",
         )
         edisgo.set_time_series_worst_case_analysis()
@@ -268,7 +268,7 @@ class TestGeneratorsImportOEDB:
     @pytest.mark.slow
     def test_oedb_with_worst_case_timeseries(self):
 
-        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.set_time_series_worst_case_analysis()
 
         gens_before = edisgo.topology.generators_df.copy()
@@ -350,7 +350,7 @@ class TestGeneratorsImportOEDB:
         )
 
         edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_4_path, timeindex=timeindex
+            ding0_grid=pytest.ding0_test_network_2_path, timeindex=timeindex
         )
         edisgo.set_time_series_active_power_predefined(
             fluctuating_generators_ts=ts_gen_fluctuating,
@@ -416,62 +416,12 @@ class TestGeneratorsImportOEDB:
         #     old_solar_gen.name] / old_solar_gen.p_nom,
         #     edisgo.timeseries.generators_reactive_power.loc[
         #     :, new_solar_gen.name] / new_solar_gen.p_nom).all()
-        # ToDo following test currently fails because gens_before doesn't contain wind
-        # generators
-        # check wind generator
-        # old_wind_gen = gens_before[gens_before.type == "wind"].iloc[0, :]
-        # new_wind_gen = gens_new[
-        #     (gens_new.type == "wind")
-        #     & (gens_new.weather_cell_id == old_wind_gen.weather_cell_id)
-        #     & (gens_new.p_nom == 0.001)
-        # ].iloc[0, :]
-        # # check if time series of old gen is the same as before
-        # assert np.isclose(
-        #     gens_ts_active_before.loc[:, old_wind_gen.name],
-        #     edisgo.timeseries.generators_active_power.loc[:, old_wind_gen.name],
-        # ).all()
-        # assert np.isclose(
-        #     gens_ts_reactive_before.loc[:, old_wind_gen.name],
-        #     edisgo.timeseries.generators_reactive_power.loc[:, old_wind_gen.name],
-        # ).all()
-        # # check if normalized time series of new gen is the same as normalized
-        # # time series of old gen
-        # assert np.isclose(
-        #     gens_ts_active_before.loc[:, old_wind_gen.name] / old_wind_gen.p_nom,
-        #     edisgo.timeseries.generators_active_power.loc[:, new_wind_gen.name]
-        #     / new_wind_gen.p_nom,
-        # ).all()
-        # assert np.isclose(
-        #     gens_ts_reactive_before.loc[:, old_wind_gen.name] / old_wind_gen.p_nom,
-        #     edisgo.timeseries.generators_reactive_power.loc[:, new_wind_gen.name]
-        #     / new_wind_gen.p_nom,
-        # ).all()
-        # # ToDo following test currently fails because gens_new doesn't contain gas
-        # # generators
-        # # check other generator
-        # new_gen = gens_new[
-        #     (gens_new.type == "gas")
-        #     & (gens_new.bus != edisgo.topology.mv_grid.station.index[0])
-        # ].iloc[0, :]
-        #
-        # # check if normalized time series of new gen is the same as normalized
-        # # time series of old gen
-        # assert np.isclose(
-        #     edisgo.timeseries.generators_active_power.loc[:, new_gen.name]
-        #     / new_gen.p_nom,
-        #     [0.9] * 3,
-        # ).all()
-        # assert np.isclose(
-        #     edisgo.timeseries.generators_reactive_power.loc[:, new_gen.name]
-        #     / (new_gen.p_nom * 0.9),
-        #     [-np.tan(np.arccos(0.95))] * 3,
-        # ).all()
 
     @pytest.mark.slow
     def test_target_capacity(self):
 
         edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_4_path,
+            ding0_grid=pytest.ding0_test_network_2_path,
             worst_case_analysis="worst-case",
         )
 

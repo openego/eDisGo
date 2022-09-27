@@ -16,22 +16,22 @@ from edisgo.network.electromobility import Electromobility
 class TestElectromobility:
     @classmethod
     def setup_class(self):
-        self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_4_path)
-        self.simbev_path = pytest.simbev_example_scenario_path_1
-        self.tracbev_path = pytest.tracbev_example_scenario_path_1
+        self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        self.simbev_path = pytest.simbev_example_scenario_path
+        self.tracbev_path = pytest.tracbev_example_scenario_path
         import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
         integrate_charging_parks(self.edisgo_obj)
 
     def test_charging_processes_df(self):
         charging_processes_df = self.edisgo_obj.electromobility.charging_processes_df
-        assert len(charging_processes_df) == 45
+        assert len(charging_processes_df) == 48
         assert isinstance(charging_processes_df, pd.DataFrame)
 
     def test_potential_charging_parks_gdf(self):
         potential_charging_parks_gdf = (
             self.edisgo_obj.electromobility.potential_charging_parks_gdf
         )
-        assert len(potential_charging_parks_gdf) == 452
+        assert len(potential_charging_parks_gdf) == 1621
         assert isinstance(potential_charging_parks_gdf, gpd.GeoDataFrame)
 
     def test_simbev_config_df(self):
@@ -82,8 +82,8 @@ class TestElectromobility:
 
         self.edisgo_obj.electromobility.from_csv(dir, self.edisgo_obj)
 
-        assert len(self.edisgo_obj.electromobility.charging_processes_df) == 45
-        assert len(self.edisgo_obj.electromobility.potential_charging_parks_gdf) == 452
+        assert len(self.edisgo_obj.electromobility.charging_processes_df) == 48
+        assert len(self.edisgo_obj.electromobility.potential_charging_parks_gdf) == 1621
         assert self.edisgo_obj.electromobility.integrated_charging_parks_df.empty
 
         shutil.rmtree(dir)

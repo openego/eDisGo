@@ -1330,7 +1330,7 @@ class Topology:
         # unpack optional parameters
         x = kwargs.get("x", None)
         r = kwargs.get("r", None)
-        b = kwargs.get("b", 0.0)
+        b = kwargs.get("b", None)
         s_nom = kwargs.get("s_nom", None)
         num_parallel = kwargs.get("num_parallel", 1)
         type_info = kwargs.get("type_info", None)
@@ -1365,6 +1365,8 @@ class Topology:
             )
 
         # check if all necessary data is now available
+        if b is None:
+            b = 0.0
         if x is None or r is None:
             raise AttributeError(
                 "Newly added line has no line resistance and/or reactance."
@@ -2532,7 +2534,7 @@ class Topology:
             Path to topology csv files or zip archive.
         edisgo_obj : :class:`~.EDisGo`
         from_zip_archive : bool
-            Set True if data is archived in a zip archive. Default: False
+            Set to True if data is archived in a zip archive. Default: False.
 
         """
 
