@@ -1,11 +1,13 @@
-name: "Docs Check [Push]"
+name: "Docs link check"
 on: [push]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+    - name: Checkout repo
+      uses: actions/checkout@v2
     - name: Check doc links
-      working-directory: doc/conf.py
+      working-directory: doc
       run: |
         sphinx-build . -b linkcheck -d _build/doctrees _build/html
