@@ -5,7 +5,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v3
     - name: Check doc links
       run: |
         sphinx-build . -b linkcheck -d _build/doctrees _build/html
-      shell: python
+      working-directory: doc
