@@ -19,7 +19,7 @@ class TestExamples:
         result = pytest_notebook.execution.execute_notebook(
             notebook,
             with_coverage=False,
-            timeout=300,
+            timeout=600,
         )
         if result.exec_error is not None:
             print(result.exec_error)
@@ -32,7 +32,7 @@ class TestExamples:
         result = pytest_notebook.execution.execute_notebook(
             notebook,
             with_coverage=False,
-            timeout=300,
+            timeout=600,
         )
         if result.exec_error is not None:
             print(result.exec_error)
@@ -45,7 +45,7 @@ class TestExamples:
         result = pytest_notebook.execution.execute_notebook(
             notebook,
             with_coverage=False,
-            timeout=300,
+            timeout=600,
         )
         if result.exec_error is not None:
             print(result.exec_error)
