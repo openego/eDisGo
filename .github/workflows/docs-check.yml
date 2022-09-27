@@ -7,5 +7,4 @@ jobs:
     steps:
     - name: Check doc links
       run: |
-        cd doc
         sphinx-build . -b linkcheck -d _build/doctrees _build/html
