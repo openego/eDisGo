@@ -63,6 +63,7 @@ requirements = [
 
 dev_requirements = [
     "pytest",
+    "pytest-notebook",
     "sphinx_rtd_theme",
     "sphinx-autodoc-typehints",
     "pre-commit",
