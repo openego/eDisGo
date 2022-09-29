@@ -6,10 +6,7 @@ import pandas as pd
 import edisgo.opf.lopf as opt
 
 from edisgo.edisgo import import_edisgo_from_files
-from edisgo.network.electromobility import (
-    Electromobility,
-    get_energy_bands_for_optimization,
-)
+from edisgo.network.electromobility import Electromobility
 from Script_prepare_grids_for_optimization import get_downstream_nodes_matrix_iterative
 
 par_dir = os.path.abspath(
@@ -61,7 +58,9 @@ if opt_ev:
     edisgo.electromobility.simbev_config_df = pd.DataFrame(
         index=["eta_cp", "stepsize"], columns=[0], data=[0.9, 60]
     ).T
-    energy_bands = get_energy_bands_for_optimization(edisgo_obj=edisgo, use_case="home")
+    energy_bands = edisgo.electromobility.get_flexibility_bands(
+        edisgo_obj=edisgo, use_case="home"
+    )
 else:
     energy_bands = {}
 
