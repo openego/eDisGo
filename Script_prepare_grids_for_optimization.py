@@ -6,7 +6,6 @@ import networkx as nx
 import pandas as pd
 
 from edisgo.edisgo import import_edisgo_from_files
-from edisgo.network.electromobility import get_energy_bands_for_optimization
 from edisgo.network.timeseries import TimeSeries
 from edisgo.network.topology import Topology
 from edisgo.opf.lopf import import_flexibility_bands
@@ -72,7 +71,7 @@ def extract_and_save_bands_parallel(grid_id):
                 import_timeseries=True,
                 import_electromobility=True,
             )
-            power, lower, upper = get_energy_bands_for_optimization(
+            power, lower, upper = edisgo_obj.electromobility.get_flexibility_bands(
                 edisgo_obj, use_case
             )
 
