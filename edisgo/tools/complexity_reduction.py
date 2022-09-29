@@ -158,13 +158,6 @@ def create_feeder_edisgo_object(buses_with_feeders, edisgo_obj, feeder_id):
             edisgo_feeder.topology.buses_df.index
         )
     ]
-    edisgo_feeder.topology.charging_points_df = (
-        edisgo_obj.topology.charging_points_df.loc[
-            edisgo_obj.topology.charging_points_df.bus.isin(
-                edisgo_feeder.topology.buses_df.index
-            )
-        ]
-    )
     edisgo_feeder.topology.switches_df = edisgo_obj.topology.switches_df.loc[
         edisgo_obj.topology.switches_df.branch.isin(
             edisgo_feeder.topology.lines_df.index
@@ -178,18 +171,7 @@ def create_feeder_edisgo_object(buses_with_feeders, edisgo_obj, feeder_id):
     ]
     # convert timeseries
     # Todo: code more efficiently using setattr and getattr
-    if not edisgo_obj.timeseries.charging_points_active_power.empty:
-        edisgo_feeder.timeseries.charging_points_active_power = (
-            edisgo_obj.timeseries.charging_points_active_power[
-                edisgo_feeder.topology.charging_points_df.index
-            ]
-        )
-    if not edisgo_obj.timeseries.charging_points_reactive_power.empty:
-        edisgo_feeder.timeseries.charging_points_reactive_power = (
-            edisgo_obj.timeseries.charging_points_reactive_power[
-                edisgo_feeder.topology.charging_points_df.index
-            ]
-        )
+
     if not edisgo_obj.timeseries.generators_active_power.empty:
         edisgo_feeder.timeseries.generators_active_power = (
             edisgo_obj.timeseries.generators_active_power[

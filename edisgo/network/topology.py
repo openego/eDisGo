@@ -603,10 +603,17 @@ class Topology:
             Pandas DataFrame with all loads of the given type.
 
         """
-        if "charging_point" in self.loads_df.type.unique():
-            return self.loads_df.loc[self.loads_df.type == "charging_point"]
+        if "charging_point" in self._loads_df.type.unique():
+            return self._loads_df.loc[self._loads_df.type == "charging_point"]
         else:
             return pd.DataFrame(columns=COLUMNS["loads_df"])
+
+    @charging_points_df.setter
+    def charging_points_df(self, df):
+        if "charging_point" in self._loads_df.type.unique():
+            self._charging_points_df = df
+        else:
+            self._loads_df = pd.concat([self._loads_df, df], axis=0)
 
     @property
     def id(self):

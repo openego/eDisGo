@@ -216,11 +216,30 @@ def cop_oedb(config_data, weather_cell_ids=None, timeindex=None):
     #     # get weather cells in grid district
     #     pass
     #
-    # with session_scope() as session:
-    #     # get cop from database
-    #     cop = pd.DataFrame()
+    # import saio
+    # saio.register_schema("supply", engine)
+    # from saio.supply import egon_era5_renewable_feedin
     #
-    # cop.sort_index(axis=0, inplace=True)
+    # # get cop from database
+    # with db.session_scope() as session:
+    #     query = session.query(
+    #         egon_era5_renewable_feedin.w_id,
+    #         egon_era5_renewable_feedin.feedin.label("cop"),
+    #     ).filter(
+    #         egon_era5_renewable_feedin.carrier == "heat_pump_cop"
+    #     ).filter(
+    #         egon_era5_renewable_feedin.w_id.in_(weather_cell_ids)
+    #     )
+    #
+    #     cop = pd.read_sql(
+    #         query.statement, query.session.bind, index_col="w_id"
+    #     )
+    #
+    # # convert dataframe to have weather cell ID as column name and time index
+    # cop = pd.DataFrame(
+    #     {w_id: ts.cop for w_id, ts in cop.iterrows()},
+    #     index=timeindex
+    # )
     #
     # return cop
 
@@ -247,6 +266,54 @@ def heat_demand_oedb(config_data, building_ids, timeindex=None):
         DataFrame with hourly heat demand time series in MW per building ID.
 
     """
+
+    def _get_CTS_demand():
+        """
+        Gets CTS heat demand time series for each building in building_ids.
+
+        First, the share of the total CTS demand in the NUTS 3 region for
+        each building and the total CTS heat demand time series in the NUTS 3 region
+        are retrieved. To obtain the heat demand time series per building the building's
+        share is multiplied with the total time series.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            CTS heat demand time series per building with building IDs in columns
+            and time steps as index.
+
+        """
+        raise NotImplementedError
+        # # get share per building
+        # # get total demand time series
+        # # multiply
+        # pd.read_sql(
+        #     query.statement, session.bind, index_col="id"
+        # )
+        #
+        # return
+
+    def _get_household_demand():
+        """
+        Gets household heat demand time series for each building in building_ids.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Household heat demand time series per building with building IDs in columns
+            and time steps as index.
+
+        """
+        raise NotImplementedError
+        # # get representative days per building
+        # # get time series for representative days
+        # # set up time series per building
+        # pd.read_sql(
+        #     query.statement, session.bind, index_col="id"
+        # )
+        #
+        # return
+
     raise NotImplementedError
     # ToDo Also include large heat pumps for district heating that don't have
     #  a building ID
@@ -256,8 +323,10 @@ def heat_demand_oedb(config_data, building_ids, timeindex=None):
     #
     # with session_scope() as session:
     #     # get heat demand from database
-    #     heat_demand = pd.DataFrame()
+    #     heat_demand_CTS = _get_CTS_demand()
+    #     heat_demand_households = _get_household_demand()
     #
+    # heat_demand = heat_demand_CTS + heat_demand_households
     # heat_demand.sort_index(axis=0, inplace=True)
     #
     # return heat_demand
