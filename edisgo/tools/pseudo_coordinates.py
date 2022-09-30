@@ -30,7 +30,7 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
 
     Parameters
     ----------
-    graph_root : :networkx:`networkx.Graph<network.Graph>`
+    graph_root : :networkx:`networkx.Graph<>`
         Graph object to generate pseudo coordinates for (with equidistant coordinates).
 
     branch_detour_factor : float
@@ -38,7 +38,7 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
 
     Returns
     -------
-    :networkx:`networkx.Graph<network.Graph>`
+    :networkx:`networkx.Graph<>`
         Graph with equidistant pseudo coordinates for all nodes.
 
     """
@@ -198,7 +198,7 @@ def make_pseudo_coordinates_graph(G: Graph, branch_detour_factor: float) -> Grap
 
     Parameters
     ----------
-    G : :networkx:`networkx.Graph<network.Graph>`
+    G : :networkx:`networkx.Graph<>`
         Graph object to generate pseudo coordinates for.
 
     branch_detour_factor : float
@@ -206,7 +206,7 @@ def make_pseudo_coordinates_graph(G: Graph, branch_detour_factor: float) -> Grap
 
     Returns
     -------
-    :networkx:`networkx.Graph<network.Graph>`
+    :networkx:`networkx.Graph<>`
         Graph with pseudo coordinates for all nodes.
 
     """

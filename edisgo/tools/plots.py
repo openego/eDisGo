@@ -1441,7 +1441,7 @@ def chosen_graph(
 
     Returns
     -------
-    (:networkx:`networkx.Graph<network.Graph>`, :class:`~.network.grids.Grid` or bool)
+    (:networkx:`networkx.Graph<>`, :class:`~.network.grids.Grid` or bool)
         Tuple with the first entry being the networkx graph of the selected grid and
         the second entry the grid to use as root node. See
         :py:func:`~edisgo.tools.plots.draw_plotly` for more information.
