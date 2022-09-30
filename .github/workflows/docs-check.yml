@@ -6,13 +6,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Setup node
-      uses: actions/setup-node@v3
-      with:
-        node-version: 16.13.x
-        cache: npm
-    - name: Install
-      run: npm ci
+    - name: Install dependencies
+      run: |
+        sudo apt install pandoc
+        python -m pip install --upgrade pip
+        pip install -r rtd_requirements.txt
     - name: Check doc links
       run: |
         sphinx-build . -b linkcheck -d _build/doctrees _build/html
