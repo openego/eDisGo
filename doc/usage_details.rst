@@ -158,7 +158,7 @@ of the whole topology or each single grid can be retrieved as follows:
     # Get graph representation for LV grid
     lv_grid.graph
 
-The returned graph is a :networkx:`networkx.Graph<network.Graph>`, where lines are represented
+The returned graph is a :networkx:`networkx.Graph<>`, where lines are represented
 by edges in the graph, and buses and transformers are represented by nodes.
 
 Component time series

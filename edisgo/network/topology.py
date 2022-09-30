@@ -2419,7 +2419,7 @@ class Topology:
     # Needs to be verified if that is correct
     # Same problem in network.grids line 82 and tools.networkx_helper line 30,
     # tools.plots line 1444, tools.pseudo_coordinates lines 33, 41, 201, 209,
-    # edisgo line 613
+    # edisgo line 613, usage_details.rst line 161
     def to_graph(self):
         """
         Returns graph representation of the grid.
