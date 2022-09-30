@@ -1330,7 +1330,7 @@ class TimeSeries:
         Parameters
         ----------
         edisgo_object : :class:`~.EDisGo`
-        ts_generators : :pandas:`pandas.DataFrame<DataDrame>`
+        ts_generators : :pandas:`pandas.DataFrame<DataFrame>`
             DataFrame with self-provided active power time series of each
             type of dispatchable generator normalized to a nominal capacity of 1.
             Columns contain the technology type as string, e.g. 'gas', 'coal'.

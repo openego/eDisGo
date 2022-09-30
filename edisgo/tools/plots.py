@@ -53,7 +53,7 @@ def histogram(data, **kwargs):
 
     Parameters
     ----------
-    data : :pandas:`pandas.DataFrame<dataframe>`
+    data : :pandas:`pandas.DataFrame<DataFrame>`
         Data to be plotted, e.g. voltage or current (`v_res` or `i_res` from
         :class:`network.results.Results`). Index of the dataframe must be
         a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
@@ -300,12 +300,12 @@ def mv_grid_topology(
         * 'charging_park'
           Plots nodes with charging stations in red.
 
-    line_load : :pandas:`pandas.DataFrame<dataframe>` or None
+    line_load : :pandas:`pandas.DataFrame<DataFrame>` or None
         Dataframe with current results from power flow analysis in A. Index of
         the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
         columns are the line representatives. Only needs to be provided when
         parameter `line_color` is set to 'loading'. Default: None.
-    grid_expansion_costs : :pandas:`pandas.DataFrame<dataframe>` or None
+    grid_expansion_costs : :pandas:`pandas.DataFrame<DataFrame>` or None
         Dataframe with network expansion costs in kEUR. See `grid_expansion_costs`
         in :class:`~.network.results.Results` for more information. Only needs to
         be provided when parameter `line_color` is set to 'expansion_costs'.
@@ -324,7 +324,7 @@ def mv_grid_topology(
     background_map : :obj:`Boolean`
         If True map is drawn in the background. This also requires the
         contextily package to be installed. Default: True.
-    voltage : :pandas:`pandas.DataFrame<dataframe>`
+    voltage : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with voltage results from power flow analysis in p.u.. Index
         of the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
         columns are the bus representatives. Only needs to be provided when
@@ -350,7 +350,7 @@ def mv_grid_topology(
         If provided line width is set according to the nominal apparent power
         of the lines. If line width is None a default line width of 2 is used
         for each line. Default: None.
-    curtailment_df : :pandas:`pandas.DataFrame<dataframe>`
+    curtailment_df : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with curtailed power per time step and node. Columns of the
         dataframe correspond to buses and index to the time step. Only needs
         to be provided if `node_color` is set to 'curtailment'.
