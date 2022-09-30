@@ -182,7 +182,7 @@ details are provided in :ref:`usage-details`. Further examples can be found in t
 All following examples assume you have a ding0 grid topology (directory containing
 csv files, defining the grid topology) in a directory "ding0_example_grid" in
 the directory from where you run your example. If you do not have an example grid, you
-can download one `here <https://raw.githubusercontent.com/openego/eDisGo/dev/tests/ding0_test_network_2/>`_.
+can download one `here <https://github.com/openego/eDisGo/tree/dev/tests/data/ding0_test_network_2/>`_.
 
 Aside from grid topology data you may eventually need a dataset on future
 installation of power plants. You may therefore use the scenarios developed in
