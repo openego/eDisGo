@@ -1607,7 +1607,7 @@ class Topology:
 
         Parameters
         ------------
-        lines_num_parallel : :pandas:`pandas.Series<series>`
+        lines_num_parallel : :pandas:`pandas.Series<Series>`
             Index contains identifiers of lines to update as in index of
             :py:attr:`~lines_df` and values of series contain corresponding
             new number of parallel lines.
@@ -2412,6 +2412,11 @@ class Topology:
 
             return target_obj["repr"]
 
+    # ToDo: :networkx:`networkx.Graph<network.Graph>` doesn't exist anymore because:
+    # "The ordered variants of graph classes in this module are deprecated and will be
+    # removed in version 3.0."
+    # Changed link to :networkx:`networkx.Graph<>`
+    # Needs to be verified if that is correct
     def to_graph(self):
         """
         Returns graph representation of the grid.
