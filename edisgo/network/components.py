@@ -200,7 +200,7 @@ class Load(Component):
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See :attr:`~.network.topology.Topology.loads_df` for more information.
 
         """
