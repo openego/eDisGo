@@ -2417,7 +2417,7 @@ class Topology:
     # removed in version 3.0."
     # Changed link to :networkx:`networkx.Graph<>`
     # Needs to be verified if that is correct
-    # Same problem in network.grids line 82
+    # Same problem in network.grids line 82 and tools.networkx_helper line 30
     def to_graph(self):
         """
         Returns graph representation of the grid.

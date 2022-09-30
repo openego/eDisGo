@@ -583,7 +583,7 @@ class Switch(BasicComponent):
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<DataDrame>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See :attr:`~.network.topology.Topology.switches_df` for more
             information.
 

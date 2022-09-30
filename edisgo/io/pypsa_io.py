@@ -805,7 +805,6 @@ def process_pfa_results(edisgo, pypsa, timesteps, dtype="float"):
     edisgo : :class:`~.EDisGo`
     pypsa : :pypsa:`pypsa.Network<network>`
         The PyPSA `Network container
-        <https://www.pypsa.org/doc/components.html#network>`_
     timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
         Time steps for which latest power flow analysis was conducted and
