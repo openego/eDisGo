@@ -2417,13 +2417,14 @@ class Topology:
     # removed in version 3.0."
     # Changed link to :networkx:`networkx.Graph<>`
     # Needs to be verified if that is correct
+    # Same problem in network.grids line 82
     def to_graph(self):
         """
         Returns graph representation of the grid.
 
         Returns
         -------
-        :networkx:`networkx.Graph<network.Graph>`
+        :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
             where lines are represented by edges in the graph, and buses and
             transformers are represented by nodes.
