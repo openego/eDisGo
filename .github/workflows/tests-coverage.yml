@@ -11,17 +11,14 @@ concurrency:
 
 jobs:
   build:
-    name: "eDisGo-${{ matrix.name-suffix }} at Python ${{ matrix.python-version }} on ${{ matrix.os }}"
+    name: "${{ matrix.name-suffix }} at py${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
 
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name-suffix: "basic"
-            os: ubuntu-latest
-            python-version: 3.8
-          - name-suffix: "dev"
+          - name-suffix: "coverage"
             os: ubuntu-latest
             python-version: 3.8
           - name-suffix: "basic"
@@ -30,6 +27,9 @@ jobs:
           - name-suffix: "basic"
             os: windows-latest
             python-version: 3.8
+          - name-suffix: "basic"
+            os: windows-latest
+            python-version: 3.9
 
     steps:
       - name: Checkout repo
@@ -40,17 +40,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install packages (Linux - Basic)
-        if: runner.os == 'Linux' && matrix.name-suffix == 'basic'
+      - name: Install packages (Linux)
+        if: runner.os == 'Linux'
         run: |
           pip install --upgrade pip wheel setuptools
           pip install -e "."
-
-      - name: Install packages (Linux - Dev)
-        if: runner.os == 'Linux' && matrix.name-suffix == 'dev'
-        run: |
-          pip install --upgrade pip wheel setuptools
-          pip install -e ".[dev]"
 
       - name: Install packages (Windows)
         if: runner.os == 'Windows'
@@ -62,16 +56,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Run tests
-        if: ${{ !(runner.os == 'Linux' && matrix.python-version == 3.8 && matrix.name-suffix == 'dev') }}
+        if: ${{ !(runner.os == 'Linux' && matrix.python-version == 3.8 && matrix.name-suffix == 'coverage') }}
         run: |
           python -m pip install pytest pytest-notebook
-          python -m pytest --runslow -vv
+          python -m pytest --runslow --disable-warnings --color=yes -v
 
       - name: Run tests, coverage and send to coveralls
-        if: runner.os == 'Linux' && matrix.python-version == 3.8 && matrix.name-suffix == 'dev'
+        if: runner.os == 'Linux' && matrix.python-version == 3.8 && matrix.name-suffix == 'coverage'
         run: |
-          pip install coveralls
-          coverage run --source=edisgo -m pytest --runslow -vv
+          pip install pytest pytest-notebook coveralls
+          coverage run --source=edisgo -m pytest --runslow --disable-warnings --color=yes -v
           coveralls
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
