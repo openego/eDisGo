@@ -11,7 +11,7 @@ The following tables hold all data of cables, lines and transformers used.
    :file: ../edisgo/equipment/equipment-parameters_LV_cables.csv
    :delim: ,
    :header-rows: 2
-   :widths: 3, 1, 1, 1, 1
+   :widths: 3, 1, 1, 1, 1, 1
    :stub-columns: 0
 
 .. _mv_cables_table:

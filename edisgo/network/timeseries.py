@@ -307,7 +307,7 @@ class TimeSeries:
         Resets all time series.
 
         Active and reactive power time series of all loads, generators and storage units
-        are deleted, as well as timeindex everything stored in
+        are deleted, as well as timeindex and everything stored in
         :py:attr:`~time_series_raw`.
 
         """
