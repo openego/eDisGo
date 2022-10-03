@@ -560,6 +560,53 @@ def get_files_recursive(path, files=None):
     return files
 
 
+def calculate_impedance_for_parallel_components(parallel_components, pu=False):
+    """
+    Method to calculate parallel impedance and power of parallel elements.
+    """
+    if pu:
+        raise NotImplementedError(
+            "Calculation in pu for parallel components not implemented yet."
+        )
+    else:
+        if not (parallel_components.diff().dropna() < 1e-6).all().all():
+            parallel_impedance = 1 / sum(
+                1 / complex(comp.r, comp.x)
+                for name, comp in parallel_components.iterrows()
+            )
+            # apply current devider and use minimum
+            s_parallel = min(
+                abs(
+                    comp.s_nom
+                    / (
+                        1
+                        / complex(comp.r, comp.x)
+                        / sum(
+                            1 / complex(comp.r, comp.x)
+                            for name, comp in parallel_components.iterrows()
+                        )
+                    )
+                )
+                for name, comp in parallel_components.iterrows()
+            )
+            return pd.Series(
+                {
+                    "r": parallel_impedance.real,
+                    "x": parallel_impedance.imag,
+                    "s_nom": s_parallel,
+                }
+            )
+        else:
+            nr_components = len(parallel_components)
+        return pd.Series(
+            {
+                "r": parallel_components.iloc[0].r / nr_components,
+                "x": parallel_components.iloc[0].x / nr_components,
+                "s_nom": parallel_components.iloc[0].s_nom * nr_components,
+            }
+        )
+
+
 def add_line_susceptance(
     edisgo_obj,
     mode="mv_b",

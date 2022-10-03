@@ -117,6 +117,8 @@ def _build_branch(psa_net, pm):
     b = psa_net.lines.b_pu
     g = psa_net.lines.g_pu
     s_nom = psa_net.lines.s_nom
+    # ToDo: add transformers
+    # calculate_impedance_for_parallel_components()
 
     for branch_i in np.arange(len(psa_net.lines.index)):
         idx_f_bus = _mapping(psa_net, psa_net.lines.bus0[branch_i])
