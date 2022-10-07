@@ -1,0 +1,177 @@
+from __future__ import annotations
+
+import logging
+
+from pathlib import Path
+
+import yaml
+
+from sqlalchemy import create_engine
+from sqlalchemy.engine.base import Engine
+from sshtunnel import SSHTunnelForwarder
+
+logger = logging.getLogger(__name__)
+
+
+def config_settings(path: Path | str) -> dict[str, dict[str, str | int | Path]]:
+    """
+    Return a nested dictionary containing the configuration settings.
+
+    It's a nested dictionary because the top level has command names as keys
+    and dictionaries as values where the second level dictionary has command
+    line switches applicable to the command as keys and the supplied values
+    as values.
+
+    So you would obtain the ``--database-name`` configuration setting used
+    by the current invocation of ``egon-data`` via
+
+    .. code-block:: python
+
+        settings()["egon-data"]["--database-name"]
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        Path to configuration YAML file of egon-data database.
+
+    Returns
+    -------
+    dict
+        Nested dictionary containing the egon-data and optional ssh tunnel configuration
+        settings.
+
+    """
+    if isinstance(path, str):
+        path = Path(path)
+
+    if not path.is_file():
+        raise ValueError(f"Configuration file {path} not found.")
+    with open(path) as f:
+        return yaml.safe_load(f)
+
+
+def credentials(path: Path | str) -> dict[str, str | int | Path]:
+    """
+    Return local database connection parameters.
+
+    Parameters
+    ----------
+    path : pathlib.Path or str
+        Path to configuration YAML file of egon-data database.
+
+    Returns
+    -------
+    dict
+        Complete DB connection information.
+
+    """
+    translated = {
+        "--database-name": "POSTGRES_DB",
+        "--database-password": "POSTGRES_PASSWORD",
+        "--database-host": "HOST",
+        "--database-port": "PORT",
+        "--database-user": "POSTGRES_USER",
+    }
+    configuration = config_settings(path=path)
+
+    egon_config = configuration["egon-data"]
+
+    update = {
+        translated[flag]: egon_config[flag]
+        for flag in egon_config
+        if flag in translated
+    }
+
+    if "PORT" in update.keys():
+        update["PORT"] = int(update["PORT"])
+
+    egon_config.update(update)
+
+    if "ssh-tunnel" in configuration.keys():
+        translated = {
+            "ssh-host": "SSH_HOST",
+            "ssh-user": "SSH_USER",
+            "ssh-pkey": "SSH_PKEY",
+            "pgres-host": "PGRES_HOST",
+        }
+
+        update = {
+            translated[flag]: configuration["ssh-tunnel"][flag]
+            for flag in configuration["ssh-tunnel"]
+            if flag in translated
+        }
+
+        egon_config.update(update)
+
+    if "SSH_PKEY" in egon_config.keys():
+        egon_config["SSH_PKEY"] = Path(egon_config["SSH_PKEY"]).expanduser()
+
+        if not egon_config["SSH_PKEY"].is_file():
+            raise ValueError(f"{egon_config['SSH_PKEY']} is not a file.")
+
+    return egon_config
+
+
+def ssh_tunnel(cred: dict) -> str:
+    """
+    Initialize a SSH tunnel to a remote host according to the input arguments.
+    See https://sshtunnel.readthedocs.io/en/latest/ for more information.
+
+    Parameters
+    ----------
+    cred : dict
+        Complete DB connection information.
+
+    Returns
+    -------
+    sqlalchemy.engine.base.Engine
+        SQLAlchemy engine.
+
+    """
+    server = SSHTunnelForwarder(
+        ssh_address_or_host=(cred["SSH_HOST"], 22),
+        ssh_username=cred["SSH_USER"],
+        ssh_private_key=cred["SSH_PKEY"],
+        remote_bind_address=(cred["PGRES_HOST"], cred["PORT"]),
+    )
+    server.start()
+
+    return str(server.local_bind_port)
+
+
+def engine(path: Path | str, ssh: bool = False) -> Engine:
+    """
+    Engine for local or remote database.
+
+    Parameters
+    ----------
+    path : dict
+        Path to configuration YAML file of egon-data database.
+    ssh : bool
+        If True try to establish ssh tunnel from given information within the
+        configuration YAML. If False try to connect to local database.
+
+    Returns
+    -------
+    str
+        Name of local port
+
+    """
+    cred = credentials(path=path)
+
+    if not ssh:
+        return create_engine(
+            f"postgresql+psycopg2://{cred['POSTGRES_USER']}:"
+            f"{cred['POSTGRES_PASSWORD']}@{cred['HOST']}:"
+            f"{cred['PORT']}/{cred['POSTGRES_DB']}",
+            echo=False,
+        )
+
+    local_port = ssh_tunnel(cred)
+
+    return create_engine(
+        f"postgresql+psycopg2://{cred['POSTGRES_USER']}:"
+        f"{cred['POSTGRES_PASSWORD']}@{cred['PGRES_HOST']}:"
+        f"{local_port}/{cred['POSTGRES_DB']}",
+        echo=False,
+    )
