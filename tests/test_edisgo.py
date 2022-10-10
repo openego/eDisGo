@@ -4,6 +4,7 @@ import os
 import shutil
 
 from copy import deepcopy
+from zipfile import ZipFile
 
 import numpy as np
 import pandas as pd
@@ -1173,9 +1174,26 @@ class TestEDisGo:
         plt.close("all")
 
     def test_save(self):
+        self.setup_worst_case_time_series()
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
 
-        # test with default parameters
+        # add heat pump and electromobility dummy data
+        self.edisgo.heat_pump.cop = pd.DataFrame(
+            data={
+                "hp1": [5.0, 6.0, 5.0, 6.0],
+                "hp2": [7.0, 8.0, 7.0, 8.0],
+            },
+            index=self.edisgo.timeseries.timeindex,
+        )
+        self.edisgo.electromobility.charging_processes_df = pd.DataFrame(
+            data={
+                "ags": [5.0, 6.0],
+                "car_id": [7.0, 8.0],
+            },
+            index=[0, 1],
+        )
+
+        # ################### test with default parameters ###################
         self.edisgo.save(save_dir)
 
         # check that sub-directory are created
@@ -1185,10 +1203,24 @@ class TestEDisGo:
 
         shutil.rmtree(save_dir)
 
-        # test with archiving and electromobility
+        # ############## test with saving heat pump and electromobility #############
+        self.edisgo.save(save_dir, save_electromobility=True, save_heatpump=True)
+
+        # check that sub-directory are created
+        dirs_in_save_dir = os.listdir(save_dir)
+        assert len(dirs_in_save_dir) == 6
+        assert "electromobility" in dirs_in_save_dir
+
+        shutil.rmtree(save_dir)
+
+        # ############## test with archiving and electromobility ##############
         self.edisgo.save(save_dir, archive=True, save_electromobility=True)
         zip_file = os.path.join(os.path.dirname(save_dir), "edisgo_network.zip")
         assert os.path.exists(zip_file)
+
+        zip = ZipFile(zip_file)
+        files = zip.namelist()
+        assert len(files) == 24
 
         os.remove(zip_file)
 
@@ -1375,14 +1407,31 @@ class TestEDisGo:
 
 class TestEDisGoFunc:
     def test_import_edisgo_from_files(self):
-        # ToDo: Testing to load emobility
         edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         edisgo_obj.set_time_series_worst_case_analysis()
         edisgo_obj.analyze()
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
 
+        # add heat pump and electromobility dummy data
+        edisgo_obj.heat_pump.cop = pd.DataFrame(
+            data={
+                "hp1": [5.0, 6.0, 5.0, 6.0],
+                "hp2": [7.0, 8.0, 7.0, 8.0],
+            },
+            index=edisgo_obj.timeseries.timeindex,
+        )
+        edisgo_obj.electromobility.charging_processes_df = pd.DataFrame(
+            data={
+                "ags": [5.0, 6.0],
+                "car_id": [7.0, 8.0],
+            },
+            index=[0, 1],
+        )
+
         # ######################## test with default ########################
-        edisgo_obj.save(save_dir, save_results=False)
+        edisgo_obj.save(
+            save_dir, save_results=False, save_electromobility=True, save_heatpump=True
+        )
 
         edisgo_obj_loaded = import_edisgo_from_files(save_dir)
 
@@ -1396,6 +1445,22 @@ class TestEDisGoFunc:
         assert edisgo_obj_loaded.config._data == edisgo_obj.config._data
         # check results
         assert edisgo_obj_loaded.results.i_res.empty
+
+        # ############ test with loading electromobility and heat pump data ###########
+
+        edisgo_obj_loaded = import_edisgo_from_files(
+            save_dir, import_electromobility=True, import_heat_pump=True
+        )
+
+        # check electromobility
+        assert_frame_equal(
+            edisgo_obj_loaded.electromobility.charging_processes_df,
+            edisgo_obj.electromobility.charging_processes_df,
+        )
+        # check heat pump
+        assert_frame_equal(
+            edisgo_obj_loaded.heat_pump.cop_df, edisgo_obj.heat_pump.cop_df
+        )
 
         # delete directory
         shutil.rmtree(save_dir)
