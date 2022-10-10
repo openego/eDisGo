@@ -1244,11 +1244,12 @@ class EDisGo:
 
         # Connect in LV
         else:
-            substations = self.topology.buses_df.loc[
-                self.topology.transformers_df.bus1.unique()
-            ]
-            nearest_substation, _ = find_nearest_bus(geolocation, substations)
-            kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
+            if kwargs.get("mvlv_subst_id", None) is None:
+                substations = self.topology.buses_df.loc[
+                    self.topology.transformers_df.bus1.unique()
+                ]
+                nearest_substation, _ = find_nearest_bus(geolocation, substations)
+                kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
             kwargs["geom"] = geolocation
             kwargs["voltage_level"] = voltage_level
             comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
