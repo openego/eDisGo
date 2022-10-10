@@ -1180,7 +1180,7 @@ class TestEDisGo:
 
         # check that sub-directory are created
         dirs_in_save_dir = os.listdir(save_dir)
-        assert len(dirs_in_save_dir) == 5
+        assert len(dirs_in_save_dir) == 4
         assert "configs.json" in dirs_in_save_dir
 
         shutil.rmtree(save_dir)

@@ -1999,7 +1999,7 @@ class EDisGo:
         save_timeseries=True,
         save_results=True,
         save_electromobility=False,
-        save_heatpump=True,
+        save_heatpump=False,
         **kwargs,
     ):
         """
