@@ -671,7 +671,7 @@ class TestEDisGo:
         # check bus
         assert (
             self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
-            == "Bus_BranchTee_LVGrid_1_3"
+            == "Bus_BranchTee_LVGrid_1_7"
         )
         # check time series
         assert (
