@@ -570,7 +570,7 @@ class TestEDisGo:
         )
         assert self.edisgo.topology.storage_units_df.loc[storage_name, "p_nom"] == 3.1
 
-    def test_integrate_component(self):
+    def test_integrate_component_based_on_geolocation(self):
         self.setup_worst_case_time_series()
 
         num_gens = len(self.edisgo.topology.generators_df)
@@ -654,6 +654,51 @@ class TestEDisGo:
             == [0.1, 0.2, 0.1, 0.2]
         ).all()
 
+        # test heat pump integration by nominal power, geom as shapely
+        # Point, with time series
+        num_loads = len(self.edisgo.topology.loads_df)
+
+        comp_data = {"p_set": 2.5}
+        dummy_ts = pd.Series(
+            data=[0.1, 0.2, 0.1, 0.2], index=self.edisgo.timeseries.timeindex
+        )
+        ts_active_power = dummy_ts
+        ts_reactive_power = dummy_ts
+
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
+            comp_type="heat_pump",
+            geolocation=geom,
+            ts_active_power=ts_active_power,
+            ts_reactive_power=ts_reactive_power,
+            **comp_data,
+        )
+
+        assert len(self.edisgo.topology.loads_df) == num_loads + 1
+        assert self.edisgo.topology.loads_df.at[comp_name, "type"] == "heat_pump"
+        # check voltage level
+        bus = self.edisgo.topology.loads_df.at[comp_name, "bus"]
+        assert (
+            self.edisgo.topology.buses_df.at[
+                bus,
+                "v_nom",
+            ]
+            == 20
+        )
+        # check that charging point is connected to the random bus chosen
+        # above
+        assert (
+            self.edisgo.topology.get_connected_lines_from_bus(bus).bus0[0] == random_bus
+        )
+        # check time series
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[:, comp_name].values
+            == [0.1, 0.2, 0.1, 0.2]
+        ).all()
+        assert (
+            self.edisgo.timeseries.loads_reactive_power.loc[:, comp_name].values
+            == [0.1, 0.2, 0.1, 0.2]
+        ).all()
+
         # ##### LV integration
 
         # test charging point integration by nominal power, geom as shapely
@@ -667,7 +712,7 @@ class TestEDisGo:
             **comp_data,
         )
 
-        assert len(self.edisgo.topology.charging_points_df) == num_cps + 2
+        assert len(self.edisgo.topology.loads_df) == num_loads + 2
         assert self.edisgo.topology.charging_points_df.at[comp_name, "number"] == 13
         # check bus
         assert (
@@ -683,6 +728,35 @@ class TestEDisGo:
             self.edisgo.timeseries.loads_reactive_power.loc[:, comp_name].values
             == [0.1, 0.2, 0.1, 0.2]
         ).all()
+
+        # test heat pump integration by voltage level, geom as shapely
+        # Point, without time series
+        comp_data = {
+            "voltage_level": 7,
+            "sector": "individual_heating",
+            "p_set": 0.2,
+            "mvlv_subst_id": 3.0,
+        }
+        x = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "x"]
+        y = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "y"]
+        geom = Point((x, y))
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
+            comp_type="heat_pump",
+            geolocation=geom,
+            add_ts=False,
+            **comp_data,
+        )
+
+        assert len(self.edisgo.topology.loads_df) == num_loads + 3
+        assert (
+            self.edisgo.topology.loads_df.at[comp_name, "sector"]
+            == "individual_heating"
+        )
+        # check bus
+        assert (
+            self.edisgo.topology.loads_df.at[comp_name, "bus"]
+            == "Bus_BranchTee_LVGrid_3_2"
+        )
 
     def test_remove_component(self):
         self.setup_worst_case_time_series()
