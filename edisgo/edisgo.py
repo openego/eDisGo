@@ -2042,8 +2042,9 @@ class EDisGo:
             See :attr:`~.network.electromobility.Electromobility.to_csv` for more
             information.
         save_heatpump : bool, optional
-            Indicates whether to save data in
-            :class:`~.network.heat.HeatPump`. Per default it is saved.
+            Indicates whether to save
+            :class:`~.network.heat.HeatPump` object. Per default it is not saved.
+            If set to True, it is saved to subdirectory 'heat_pump'.
             See :attr:`~.network.heat.HeatPump.to_csv` for more information.
 
         Other Parameters
@@ -2361,6 +2362,14 @@ def import_edisgo_from_files(
         'electromobility'. A different directory can be specified through keyword
         argument `electromobility_directory`.
         Default: False.
+    import_heat_pump : bool
+        Indicates whether to import :class:`~.network.heat.HeatPump` object.
+        Per default it is set to False, in which case heat pump data containing
+        information on COP, heat demand time series, etc. is not imported.
+        The default directory heat pump data is imported from is the sub-directory
+        'heat_pump'. A different directory can be specified through keyword
+        argument `heat_pump_directory`.
+        Default: False.
     from_zip_archive : bool
         Set to True if data needs to be imported from an archive, e.g. a zip
         archive. Default: False.
@@ -2383,6 +2392,10 @@ def import_edisgo_from_files(
         Indicates directory :class:`~.network.electromobility.Electromobility` object is
         imported from. Per default electromobility data is imported from `edisgo_path`
         sub-directory 'electromobility'.
+    heat_pump_directory : str
+        Indicates directory :class:`~.network.heat.HeatPump` object is
+        imported from. Per default heat pump data is imported from `edisgo_path`
+        sub-directory 'heat_pump'.
     dtype : str
         Numerical data type for time series and results data to be imported,
         e.g. "float32". Per default this is None in which case data type is inferred.
