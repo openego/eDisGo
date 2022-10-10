@@ -234,8 +234,8 @@ class HeatPump:
 
             * :pandas:`pandas.DataFrame<dataframe>`
 
-                DataFrame with self-provided heat demand time series per building with
-                heat pump. See :py:attr:`~heat_demand_df` on information on the required
+                DataFrame with self-provided heat demand time series per heat pump.
+                See :py:attr:`~heat_demand_df` on information on the required
                 dataframe format.
 
         heat_pump_names : list(str) or None
