@@ -1,4 +1,3 @@
-import csv
 import logging
 import os
 
@@ -941,15 +940,6 @@ class Results:
         pd.DataFrame(data={"measure": self.measures}).to_csv(
             os.path.join(directory, "measures.csv")
         )
-        # save configs
-        with open(os.path.join(directory, "configs.csv"), "w") as f:
-            writer = csv.writer(f)
-            rows = [
-                ["{}".format(key)]
-                + [value for item in values.items() for value in item]
-                for key, values in self.edisgo_object.config._data.items()
-            ]
-            writer.writerows(rows)
 
     def from_csv(self, data_path, parameters=None, dtype=None, from_zip_archive=False):
         """
@@ -972,9 +962,10 @@ class Results:
             all available attributes. See function docstring `parameters`
             parameter in :func:`~to_csv` for more information.
         dtype : str, optional
-            Numerical data type for data to be loaded from csv. E.g. "float32"
+            Numerical data type for data to be loaded from csv, e.g. "float32".
+            Per default this is None in which case data type is inferred.
         from_zip_archive : bool, optional
-            Set True if data is archived in a zip archive. Default: False
+            Set True if data is archived in a zip archive. Default: False.
 
         """
         # get dictionaries matching attribute names and file names
@@ -1008,7 +999,7 @@ class Results:
             zip = ZipFile(data_path)
 
             # get all directories and files within zip archive
-            files = zip.namelist()
+            files = [file.replace("/", os.path.sep) for file in zip.namelist()]
 
             # add directory and .csv to files to match zip archive
             params = {}
@@ -1017,18 +1008,22 @@ class Results:
             for key, value in parameters.items():
                 for v in value:
                     new_key = v
-                    new_value = "results/" + key + f"/{all_keys_dict[v]}.csv"
+                    new_value = (
+                        f"results{os.path.sep}"
+                        + key
+                        + f"{os.path.sep}{all_keys_dict[v]}.csv"
+                    )
 
                     params[new_key] = new_value
 
             # append measures
-            params["measures"] = "results/measures.csv"
+            params["measures"] = f"results{os.path.sep}measures.csv"
 
         else:
             # read from directory
             # check files within the directory and sub directories
             files = [
-                f.split(str(data_path) + "/")[-1]
+                f.split(str(data_path) + os.path.sep)[-1]
                 for f in get_files_recursive(data_path)
             ]
 
@@ -1039,7 +1034,7 @@ class Results:
             for key, value in parameters.items():
                 for v in value:
                     new_key = v
-                    new_value = key + f"/{all_keys_dict[v]}.csv"
+                    new_value = key + f"{os.path.sep}{all_keys_dict[v]}.csv"
 
                     params[new_key] = new_value
 
@@ -1062,7 +1057,7 @@ class Results:
 
             if from_zip_archive:
                 # open zip file to make it readable for pandas
-                with zip.open(file) as f:
+                with zip.open(file.replace(os.path.sep, "/")) as f:
                     df = pd.read_csv(f, index_col=0, parse_dates=True, dtype=dt)
             else:
                 path = os.path.join(data_path, file)

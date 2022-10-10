@@ -1,34 +1,72 @@
 # Tests with pytest the package and monitors the covarage and sends it to coveralls.io
 # Coverage is only send to coveralls.io when no pytest tests fail
-name: "Tests & coverage"
+name: "Tests & Coverage"
 
 on: [push]
 
+# Cancel jobs on new push
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: "${{ matrix.name-suffix }} at py${{ matrix.python-version }} on ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
-        python-version: [ '3.7', '3.8', '3.9' ]
+        include:
+          - name-suffix: "coverage"
+            os: ubuntu-latest
+            python-version: 3.8
+          - name-suffix: "basic"
+            os: ubuntu-latest
+            python-version: 3.9
+          - name-suffix: "basic"
+            os: windows-latest
+            python-version: 3.8
+          - name-suffix: "basic"
+            os: windows-latest
+            python-version: 3.9
+
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v2
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        pip3 install --upgrade pip
-        pip3 install -e $GITHUB_WORKSPACE[full]
-        pip3 install coveralls
-    - name: Run coverage
-      run: |
-        coverage run --source=edisgo -m pytest --runslow -vv
-    - name: Run coveralls
-      run: |
-        coveralls
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        COVERALLS_SERVICE_NAME: github
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install packages (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          pip install --upgrade pip wheel setuptools
+          pip install -e "."
+
+      - name: Install packages (Windows)
+        if: runner.os == 'Windows'
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: "latest"
+          activate-environment: edisgo_env
+          environment-file: eDisGo_env_dev.yml
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run tests
+        if: ${{ !(runner.os == 'Linux' && matrix.python-version == 3.8 && matrix.name-suffix == 'coverage') }}
+        run: |
+          python -m pip install pytest pytest-notebook
+          python -m pytest --runslow --disable-warnings --color=yes -v
+
+      - name: Run tests, coverage and send to coveralls
+        if: runner.os == 'Linux' && matrix.python-version == 3.8 && matrix.name-suffix == 'coverage'
+        run: |
+          pip install pytest pytest-notebook coveralls
+          coverage run --source=edisgo -m pytest --runslow --disable-warnings --color=yes -v
+          coveralls
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_SERVICE_NAME: github

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import pickle
@@ -72,39 +73,40 @@ class EDisGo:
         Providing a time index is only optional in case a worst case analysis is set
         up using :func:`~set_time_series_worst_case_analysis`.
         In all other cases a time index needs to be set manually.
-    config_path : None or :obj:`str` or :obj:`dict`
+    config_path : None or str or dict
         Path to the config directory. Options are:
 
+        * 'default' (default)
+            If `config_path` is set to 'default', the provided default config files
+            are used directly.
+        * str
+            If `config_path` is a string, configs will be loaded from the
+            directory specified by `config_path`. If the directory
+            does not exist, it is created. If config files don't exist, the
+            default config files are copied into the directory.
+        * dict
+            A dictionary can be used to specify different paths to the
+            different config files. The dictionary must have the following
+            keys:
+
+            * 'config_db_tables'
+
+            * 'config_grid'
+
+            * 'config_grid_expansion'
+
+            * 'config_timeseries'
+
+            Values of the dictionary are paths to the corresponding
+            config file. In contrast to the other options, the directories
+            and config files must exist and are not automatically created.
         * None
+            If `config_path` is None, configs are loaded from the edisgo
+            default config directory ($HOME$/.edisgo). If the directory
+            does not exist, it is created. If config files don't exist, the
+            default config files are copied into the directory.
 
-          If `config_path` is None, configs are loaded from the edisgo
-          default config directory ($HOME$/.edisgo). If the directory
-          does not exist it is created. If config files don't exist the
-          default config files are copied into the directory.
-
-        * :obj:`str`
-
-          If `config_path` is a string, configs will be loaded from the
-          directory specified by `config_path`. If the directory
-          does not exist it is created. If config files don't exist the
-          default config files are copied into the directory.
-
-        * :obj:`dict`
-
-          A dictionary can be used to specify different paths to the
-          different config files. The dictionary must have the following
-          keys:
-
-          * 'config_db_tables'
-          * 'config_grid'
-          * 'config_grid_expansion'
-          * 'config_timeseries'
-
-          Values of the dictionary are paths to the corresponding
-          config file. In contrast to the other two options, the directories
-          and config files must exist and are not automatically created.
-
-        Default: None.
+        Default: "default".
 
     Attributes
     ----------
@@ -132,7 +134,7 @@ class EDisGo:
     def __init__(self, **kwargs):
 
         # load configuration
-        self._config = Config(config_path=kwargs.get("config_path", "default"))
+        self._config = Config(**kwargs)
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
@@ -160,6 +162,13 @@ class EDisGo:
         """
         eDisGo configuration data.
 
+        Parameters
+        ----------
+        kwargs : dict
+            Dictionary with keyword arguments to set up Config object. See parameters
+            of :class:`~.tools.config.Config` class for more information on possible
+            input parameters.
+
         Returns
         -------
         :class:`~.tools.config.Config`
@@ -169,8 +178,8 @@ class EDisGo:
         return self._config
 
     @config.setter
-    def config(self, config_path):
-        self._config = Config(config_path=config_path)
+    def config(self, kwargs):
+        self._config = Config(**kwargs)
 
     def import_ding0_grid(self, path):
         """
@@ -871,6 +880,7 @@ class EDisGo:
         max_while_iterations: int = 20,
         combined_analysis: bool = False,
         mode: str | None = None,
+        without_generator_import: bool = False,
         **kwargs,
     ) -> Results:
         """
@@ -893,43 +903,66 @@ class EDisGo:
         """
         if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
 
-            logger.info(
-                "Running reinforcement in worst-case mode by differentiating between mv"
-                " and lv load and feed-in cases."
+            logger.debug(
+                "Running reinforcement in worst-case mode by differentiating between "
+                "MV and LV load and feed-in cases."
             )
+
+            if copy_grid:
+                edisgo_obj = copy.deepcopy(self)
+            else:
+                edisgo_obj = self
 
             timeindex_worst_cases = self.timeseries.timeindex_worst_cases
-            timesteps_pfa = pd.DatetimeIndex(
-                timeindex_worst_cases.loc[
-                    timeindex_worst_cases.index.str.contains("mv")
-                ]
-            )
-            mode = "mv"
 
-            reinforce_grid(
+            if mode != "lv":
+
+                timesteps_pfa = pd.DatetimeIndex(
+                    timeindex_worst_cases.loc[
+                        timeindex_worst_cases.index.str.contains("mv")
+                    ]
+                )
+                reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=timesteps_pfa,
+                    combined_analysis=combined_analysis,
+                    mode="mv",
+                    without_generator_import=without_generator_import,
+                )
+
+            if mode != "mv":
+                timesteps_pfa = pd.DatetimeIndex(
+                    timeindex_worst_cases.loc[
+                        timeindex_worst_cases.index.str.contains("lv")
+                    ]
+                )
+                reinforce_mode = mode if mode == "mvlv" else "lv"
+                reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=timesteps_pfa,
+                    combined_analysis=combined_analysis,
+                    mode=reinforce_mode,
+                    without_generator_import=without_generator_import,
+                )
+
+            if mode not in ["mv", "lv"]:
+                edisgo_obj.analyze(mode=mode)
+            results = edisgo_obj.results
+
+        else:
+            results = reinforce_grid(
                 self,
                 max_while_iterations=max_while_iterations,
                 copy_grid=copy_grid,
                 timesteps_pfa=timesteps_pfa,
                 combined_analysis=combined_analysis,
                 mode=mode,
+                without_generator_import=without_generator_import,
             )
-
-            timesteps_pfa = pd.DatetimeIndex(
-                timeindex_worst_cases.loc[
-                    timeindex_worst_cases.index.str.contains("lv")
-                ]
-            )
-            mode = "lv"
-
-        results = reinforce_grid(
-            self,
-            max_while_iterations=max_while_iterations,
-            copy_grid=copy_grid,
-            timesteps_pfa=timesteps_pfa,
-            combined_analysis=combined_analysis,
-            mode=mode,
-        )
 
         # add measure to Results object
         if not copy_grid:
@@ -1463,7 +1496,7 @@ class EDisGo:
                 with any charging demand are imported. Any other input will lead
                 to all parking and driving events being imported. Default "frugal".
             charging_processes_dir : str
-                Charging processes sub-directory. Default "simbev_run".
+                Charging processes sub-directory. Default None.
             simbev_config_file : str
                 Name of the simbev config file. Default "metadata_simbev_run.json".
 
@@ -1965,38 +1998,47 @@ class EDisGo:
         save_topology=True,
         save_timeseries=True,
         save_results=True,
-        save_electromobility=True,
+        save_electromobility=False,
         save_heatpump=True,
         **kwargs,
     ):
         """
-        Saves EDisGo object to csv.
+        Saves EDisGo object to csv files.
 
-        It can be chosen if results, topology, time series, electromobility
-        and heat pump data should be saved. For each one, a separate directory
-        is created. It can further be chosen, if time series should be reduced to
-        a smaller data type.
+        It can be chosen what is included in the csv export (e.g. power flow results,
+        electromobility flexibility, etc.). Further, in order to save disk storage space
+        the data type of time series data can be reduced, e.g. to float32 and data
+        can be archived, e.g. in a zip archive.
 
         Parameters
         ----------
         directory : str
             Main directory to save EDisGo object to.
         save_topology : bool, optional
-            Indicates whether to save data in :class:`~.network.topology.Topology`.
-            Per default it is saved. See
+            Indicates whether to save :class:`~.network.topology.Topology` object.
+            Per default it is saved to sub-directory 'topology'. See
             :attr:`~.network.topology.Topology.to_csv` for more information.
+            Default: True.
         save_timeseries : bool, optional
-            Indicates whether to save data in :class:`~.network.timeseries.Timeseries`.
-            Per default it is saved. See
+            Indicates whether to save :class:`~.network.timeseries.Timeseries` object.
+            Per default it is saved to subdirectory 'timeseries'.
+            Through the keyword arguments `reduce_memory`
+            and `to_type` it can be chosen if memory should be reduced. See
             :attr:`~.network.timeseries.Timeseries.to_csv` for more
             information.
+            Default: True.
         save_results : bool, optional
-            Indicates whether to save data in :class:`~.network.results.Results`
-            object. Per default it is saved. See
-            :attr:`~.network.results.Results.to_csv` for more information.
+            Indicates whether to save :class:`~.network.results.Results`
+            object. Per default it is saved to subdirectory 'results'.
+            Through the keyword argument `parameters` the results that should
+            be stored can be specified. Further, through the keyword parameters
+            `reduce_memory` and `to_type` it can be chosen if memory should be reduced.
+            See :attr:`~.network.results.Results.to_csv` for more information.
+            Default: True.
         save_electromobility : bool, optional
-            Indicates whether to save data in
-            :class:`~.network.electromobility.Electromobility`. Per default it is saved.
+            Indicates whether to save
+            :class:`~.network.electromobility.Electromobility` object. Per default it is
+            not saved. If set to True, it is saved to subdirectory 'electromobility'.
             See :attr:`~.network.electromobility.Electromobility.to_csv` for more
             information.
         save_heatpump : bool, optional
@@ -2016,17 +2058,20 @@ class EDisGo:
             functions cannot be passed here. Call these functions directly to
             make use of further options. Default: False.
         to_type : str, optional
-            Data type to convert time series data to. This is a tradeoff
+            Data type to convert time series data to. This is a trade-off
             between precision and memory. Default: "float32".
         parameters : None or dict
-            Result class parameters to save to csv. See
-            :attr:`~.network.results.Results.to_csv` for further information.
+            Specifies which results to store. By default this is set to None,
+            in which case all available results are stored.
+            To only store certain results provide a dictionary. See function docstring
+            `parameters` parameter in :func:`~.network.results.Results.to_csv`
+            for more information.
         archive : bool, optional
-            Save storage capacity by archiving the results in an archive. The
+            Save disk storage capacity by archiving the csv files. The
             archiving takes place after the generation of the CSVs and
             therefore temporarily the storage needs are higher. Default: False.
         archive_type : str, optional
-            Set archive type. Default "zip".
+            Set archive type. Default: "zip".
         drop_unarchived : bool, optional
             Drop the unarchived data if parameter archive is set to True.
             Default: True.
@@ -2054,6 +2099,9 @@ class EDisGo:
 
         if save_electromobility:
             self.electromobility.to_csv(os.path.join(directory, "electromobility"))
+
+        # save configs
+        self.config.to_json(directory)
 
         if save_heatpump:
             self.heat_pump.to_csv(
@@ -2083,6 +2131,19 @@ class EDisGo:
             )
 
     def save_edisgo_to_pickle(self, path="", filename=None):
+        """
+        Saves EDisGo object to pickle file.
+
+        Parameters
+        -----------
+        path : str
+            Directory the pickle file is saved to. Per default it takes the current
+            working directory.
+        filename : str or None
+            Filename the pickle file is saved under. If None, filename is
+            'edisgo_object_{grid_id}.pkl'.
+
+        """
         abs_path = os.path.abspath(path)
         if filename is None:
             filename = f"edisgo_object_{self.topology.mv_grid.id}.pkl"
@@ -2230,12 +2291,24 @@ class EDisGo:
 
 
 def import_edisgo_from_pickle(filename, path=""):
+    """
+    Restores EDisGo object from pickle file.
+
+    Parameters
+    -----------
+    filename : str
+        Filename the pickle file is saved under.
+    path : str
+        Directory the pickle file is restored from. Per default it takes the current
+        working directory.
+
+    """
     abs_path = os.path.abspath(path)
     return pickle.load(open(os.path.join(abs_path, filename), "rb"))
 
 
 def import_edisgo_from_files(
-    edisgo_path="",
+    edisgo_path,
     import_topology=True,
     import_timeseries=False,
     import_results=False,
@@ -2244,13 +2317,107 @@ def import_edisgo_from_files(
     from_zip_archive=False,
     **kwargs,
 ):
+    """
+    Sets up EDisGo object from csv files.
 
-    edisgo_obj = EDisGo(import_timeseries=False)
+    This is the reverse function of :func:`~.edisgo.EDisGo.save` and if not specified
+    differently assumes all data in the default sub-directories created in the
+    :func:`~.edisgo.EDisGo.save` function.
+
+    Parameters
+    -----------
+    edisgo_path : str
+        Main directory to restore EDisGo object from. This directory must contain the
+        config files. Further, if not specified differently,
+        it is assumed to be the main directory containing sub-directories with
+        e.g. topology data. In case `from_zip_archive` is set to True, `edisgo_path`
+        is the name of the archive.
+    import_topology : bool
+        Indicates whether to import :class:`~.network.topology.Topology` object.
+        Per default it is set to True, in which case topology data is imported.
+        The default directory topology data is imported from is the sub-directory
+        'topology'. A different directory can be specified through keyword argument
+        `topology_directory`.
+        Default: True.
+    import_timeseries : bool
+        Indicates whether to import :class:`~.network.timeseries.Timeseries` object.
+        Per default it is set to False, in which case timeseries data is not imported.
+        The default directory time series data is imported from is the sub-directory
+        'timeseries'. A different directory can be specified through keyword argument
+        `timeseries_directory`.
+        Default: False.
+    import_results : bool
+        Indicates whether to import :class:`~.network.results.Results` object.
+        Per default it is set to False, in which case results data is not imported.
+        The default directory results data is imported from is the sub-directory
+        'results'. A different directory can be specified through keyword argument
+        `results_directory`.
+        Default: False.
+    import_electromobility : bool
+        Indicates whether to import :class:`~.network.electromobility.Electromobility`
+        object. Per default it is set to False, in which case electromobility data is
+        not imported.
+        The default directory electromobility data is imported from is the sub-directory
+        'electromobility'. A different directory can be specified through keyword
+        argument `electromobility_directory`.
+        Default: False.
+    from_zip_archive : bool
+        Set to True if data needs to be imported from an archive, e.g. a zip
+        archive. Default: False.
+
+    Other Parameters
+    -----------------
+    topology_directory : str
+        Indicates directory :class:`~.network.topology.Topology` object is imported
+        from. Per default topology data is imported from `edisgo_path` sub-directory
+        'topology'.
+    timeseries_directory : str
+        Indicates directory :class:`~.network.timeseries.Timeseries` object is imported
+        from. Per default time series data is imported from `edisgo_path` sub-directory
+        'timeseries'.
+    results_directory : str
+        Indicates directory :class:`~.network.results.Results` object is imported
+        from. Per default results data is imported from `edisgo_path` sub-directory
+        'results'.
+    electromobility_directory : str
+        Indicates directory :class:`~.network.electromobility.Electromobility` object is
+        imported from. Per default electromobility data is imported from `edisgo_path`
+        sub-directory 'electromobility'.
+    dtype : str
+        Numerical data type for time series and results data to be imported,
+        e.g. "float32". Per default this is None in which case data type is inferred.
+    parameters : None or dict
+        Specifies which results to restore. By default this is set to None,
+        in which case all available results are restored.
+        To only restore certain results provide a dictionary. See function docstring
+        `parameters` parameter in :func:`~.network.results.Results.to_csv`
+        for more information.
+
+    Results
+    ---------
+    :class:`~.EDisGo`
+        Restored EDisGo object.
+
+    """
 
     if not from_zip_archive and str(edisgo_path).endswith(".zip"):
         from_zip_archive = True
-
         logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
+
+    edisgo_obj = EDisGo()
+    try:
+        edisgo_obj.config = {
+            "from_json": True,
+            "config_path": edisgo_path,
+            "from_zip_archive": from_zip_archive,
+        }
+    except FileNotFoundError:
+        logging.info(
+            "Configuration data could not be loaded from json wherefore "
+            "the default configuration data is loaded."
+        )
+    except Exception:
+        raise Exception
 
     if from_zip_archive:
         directory = edisgo_path
@@ -2279,7 +2446,7 @@ def import_edisgo_from_files(
                 directory, dtype=dtype, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning("No timeseries data found. Timeseries not imported.")
+            logging.warning("No time series data found. Timeseries not imported.")
 
     if import_results:
         parameters = kwargs.get("parameters", None)
@@ -2324,20 +2491,5 @@ def import_edisgo_from_files(
             edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
             logging.warning("No heat pump data found. Heat pump data not imported.")
-
-    if kwargs.get("import_residual_load", False):
-        if not from_zip_archive:
-            directory = kwargs.get(
-                "residual_load_path", os.path.join(edisgo_path, "time_series_sums.csv")
-            )
-
-        if os.path.exists(directory):
-            residual_load = pd.read_csv(directory, index_col=0, parse_dates=True)
-
-            residual_load.index.name = "timeindex"
-
-            edisgo_obj.timeseries._residual_load = residual_load["residual_load"]
-        else:
-            logging.warning("No residual load data found. Timeseries not imported.")
 
     return edisgo_obj

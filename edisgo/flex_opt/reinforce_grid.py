@@ -27,6 +27,7 @@ def reinforce_grid(
     max_while_iterations: int = 20,
     combined_analysis: bool = False,
     mode: str | None = None,
+    without_generator_import: bool = False,
 ) -> Results:
     """
     Evaluates network reinforcement needs and performs measures.
@@ -37,7 +38,7 @@ def reinforce_grid(
     ----------
     edisgo : :class:`~.EDisGo`
         The eDisGo API object
-    timesteps_pfa : :obj:`str` or \
+    timesteps_pfa : str or \
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
         timesteps_pfa specifies for which time steps power flow analysis is
@@ -64,18 +65,18 @@ def reinforce_grid(
           :pandas:`pandas.Timestamp<Timestamp>`
           Use this option to explicitly choose which time steps to consider.
 
-    copy_grid : :obj:`Boolean`
+    copy_grid : bool
         If True reinforcement is conducted on a copied grid and discarded.
         Default: False.
-    max_while_iterations : :obj:`int`
+    max_while_iterations : int
         Maximum number of times each while loop is conducted.
-    combined_analysis : :obj:`Boolean`
+    combined_analysis : bool
         If True allowed voltage deviations for combined analysis of MV and LV
         topology are used. If False different allowed voltage deviations for MV
         and LV are used. See also config section
         `grid_expansion_allowed_voltage_deviations`. If `mode` is set to 'mv'
         `combined_analysis` should be False. Default: False.
-    mode : :obj:`str`
+    mode : str
         Determines network levels reinforcement is conducted for. Specify
 
         * None to reinforce MV and LV network levels. None is the default.
@@ -87,7 +88,11 @@ def reinforce_grid(
           and neglecting LV network topology. LV load and generation is
           aggregated per LV network and directly connected to the secondary
           side of the respective MV/LV station.
-        * 'lv' to reinforce LV networks including MV/LV stations only.
+        * 'lv' to reinforce LV networks including MV/LV stations.
+    without_generator_import : bool
+        If True excludes lines that were added in the generator import to
+        connect new generators to the topology from calculation of topology expansion
+        costs. Default: False.
 
     Returns
     -------
@@ -596,7 +601,7 @@ def reinforce_grid(
 
     # calculate topology expansion costs
     edisgo_reinforce.results.grid_expansion_costs = grid_expansion_costs(
-        edisgo_reinforce
+        edisgo_reinforce, without_generator_import=without_generator_import
     )
 
     return edisgo_reinforce.results
