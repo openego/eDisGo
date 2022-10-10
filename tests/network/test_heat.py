@@ -4,6 +4,7 @@ import shutil
 import pandas as pd
 import pytest
 
+from edisgo import EDisGo
 from edisgo.network.heat import HeatPump
 
 
@@ -47,6 +48,40 @@ class TestHeatPump:
         self.heatpump.heat_demand_df = self.heat_demand
         self.heatpump.thermal_storage_units_df = self.tes
         self.heatpump.building_ids_df = self.building_ids
+
+    def test_set_cop(self):
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        # test with dataframe
+        cop = pd.DataFrame(
+            data={
+                "hp3": [5.0, 6.0],
+            },
+            index=self.timeindex,
+        )
+        self.heatpump.set_cop(self.edisgo, cop)
+        pd.testing.assert_frame_equal(
+            self.heatpump.cop_df,
+            cop,
+            check_freq=False,
+        )
+        # ToDo: test with oedb
+
+    def test_set_heat_demand(self):
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        # test with dataframe
+        heat_demand = pd.DataFrame(
+            data={
+                "hp3": [1.0, 2.0],
+            },
+            index=self.timeindex,
+        )
+        self.heatpump.set_heat_demand(self.edisgo, heat_demand)
+        pd.testing.assert_frame_equal(
+            self.heatpump.heat_demand_df,
+            heat_demand,
+            check_freq=False,
+        )
+        # ToDo: test with oedb
 
     def test_reduce_memory(self):
 
