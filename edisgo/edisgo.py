@@ -25,8 +25,7 @@ from edisgo.io.electromobility_import import (
     integrate_charging_parks,
 )
 from edisgo.io.generators_import import oedb as import_generators_oedb
-
-# from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
+from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.network import timeseries
 from edisgo.network.electromobility import Electromobility
 from edisgo.network.heat import HeatPump
@@ -1660,14 +1659,13 @@ class EDisGo:
             See :func:`edisgo.io.heat_pump_import.oedb`.
 
         """
-        raise NotImplementedError
-        # integrated_heat_pumps = import_heat_pumps_oedb(
-        #     edisgo_object=self, scenario=scenario, **kwargs
-        # )
-        # self.heat_pump.set_heat_demand(
-        #     self, "oedb", heat_pump_names=integrated_heat_pumps
-        # )
-        # self.heat_pump.set_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
+        integrated_heat_pumps = import_heat_pumps_oedb(
+            edisgo_object=self, scenario=scenario, **kwargs
+        )
+        self.heat_pump.set_heat_demand(
+            self, "oedb", heat_pump_names=integrated_heat_pumps
+        )
+        self.heat_pump.set_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
 
     def apply_heat_pump_operating_strategy(
         self, strategy="uncontrolled", heat_pump_names=None, **kwargs
