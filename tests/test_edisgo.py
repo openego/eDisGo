@@ -1294,6 +1294,7 @@ class TestEDisGo:
 
         zip = ZipFile(zip_file)
         files = zip.namelist()
+        zip.close()
         assert len(files) == 24
 
         os.remove(zip_file)
