@@ -12,6 +12,8 @@ from pathlib import PurePath
 import numpy as np
 import pandas as pd
 
+from sqlalchemy.engine.base import Engine
+
 from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io import pypsa_io
@@ -19,6 +21,7 @@ from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
     import_electromobility,
+    import_electromobility_from_database,
     integrate_charging_parks,
 )
 from edisgo.io.generators_import import oedb as import_generators_oedb
@@ -1523,6 +1526,9 @@ class EDisGo:
 
         integrate_charging_parks(self)
 
+    def import_electromobility_from_database(self, engine: Engine):
+        import_electromobility_from_database(self, engine=engine)
+
     def apply_charging_strategy(self, strategy="dumb", **kwargs):
         """
         Applies charging strategy to set EV charging time series at charging parks.
@@ -2172,12 +2178,12 @@ def import_edisgo_from_pickle(filename, path=""):
 
 
 def import_edisgo_from_files(
-    edisgo_path,
-    import_topology=True,
-    import_timeseries=False,
-    import_results=False,
-    import_electromobility=False,
-    from_zip_archive=False,
+    edisgo_path: str | PurePath,
+    import_topology: bool = True,
+    import_timeseries: bool = False,
+    import_results: bool = False,
+    import_electromobility: bool = False,
+    from_zip_archive: bool = False,
     **kwargs,
 ):
     """
@@ -2189,7 +2195,7 @@ def import_edisgo_from_files(
 
     Parameters
     -----------
-    edisgo_path : str
+    edisgo_path : str or pathlib.PurePath
         Main directory to restore EDisGo object from. This directory must contain the
         config files. Further, if not specified differently,
         it is assumed to be the main directory containing sub-directories with

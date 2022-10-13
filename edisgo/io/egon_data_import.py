@@ -4,6 +4,8 @@ import logging
 
 from pathlib import Path
 
+import geopandas as gpd
+import pandas as pd
 import yaml
 
 from sqlalchemy import create_engine
@@ -124,8 +126,8 @@ def ssh_tunnel(cred: dict) -> str:
 
     Returns
     -------
-    sqlalchemy.engine.base.Engine
-        SQLAlchemy engine.
+    str
+        Name of local port.
 
     """
     server = SSHTunnelForwarder(
@@ -153,8 +155,8 @@ def engine(path: Path | str, ssh: bool = False) -> Engine:
 
     Returns
     -------
-    str
-        Name of local port
+    sqlalchemy.engine.base.Engine
+        Database engine
 
     """
     cred = credentials(path=path)
@@ -175,3 +177,61 @@ def engine(path: Path | str, ssh: bool = False) -> Engine:
         f"{local_port}/{cred['POSTGRES_DB']}",
         echo=False,
     )
+
+
+def select_dataframe(sql, db_engine, index_col=None):
+    """Select data from local database as pandas.DataFrame
+
+    Parameters
+    ----------
+    sql : str
+        SQL query to be executed.
+    db_engine : sqlalchemy.engine.base.Engine
+        Database engine
+    index_col : str, optional
+        Column(s) to set as index(MultiIndex). The default is None.
+
+    Returns
+    -------
+    df : pandas.DataFrame
+        Data returned from SQL statement.
+
+    """
+
+    df = pd.read_sql(sql, db_engine, index_col=index_col)
+
+    if df.size == 0:
+        logger.warning(f"No data returned by statement:\n{sql}")
+
+    return df
+
+
+def select_geodataframe(sql, db_engine, index_col=None, geom_col="geom", epsg=3035):
+    """Select data from local database as geopandas.GeoDataFrame
+
+    Parameters
+    ----------
+    sql : str
+        SQL query to be executed.
+    db_engine : sqlalchemy.engine.base.Engine
+        Database engine
+    index_col : str, optional
+        Column(s) to set as index(MultiIndex). The default is None.
+    geom_col : str, optional
+        column name to convert to shapely geometries. The default is 'geom'.
+    epsg : int, optional
+        EPSG code specifying output projection. The default is 3035.
+
+    Returns
+    -------
+    gdf : pandas.DataFrame
+        Data returned from SQL statement.
+
+    """
+
+    gdf = gpd.read_postgis(sql, db_engine, index_col=index_col, geom_col=geom_col)
+
+    if gdf.size == 0:
+        logger.warning(f"No data returned by statement:\n{sql}")
+
+    return gdf.to_crs(epsg=epsg)

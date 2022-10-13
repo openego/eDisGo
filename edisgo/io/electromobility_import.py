@@ -4,6 +4,7 @@ import json
 import logging
 import os
 
+from collections import Counter
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
 
@@ -12,6 +13,9 @@ import pandas as pd
 
 from numpy.random import default_rng
 from sklearn import preprocessing
+from sqlalchemy.engine.base import Engine
+
+from edisgo.io.egon_data_import import select_dataframe
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -19,7 +23,7 @@ if "READTHEDOCS" not in os.environ:
 if TYPE_CHECKING:
     from edisgo import EDisGo
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 min_max_scaler = preprocessing.MinMaxScaler()
 
@@ -1133,3 +1137,87 @@ def integrate_charging_parks(edisgo_obj):
         data=edisgo_ids,
         index=charging_park_ids,
     )
+
+
+def import_electromobility_from_database(
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    scenario: str = "eGon2035",
+):
+    edisgo_obj.electromobility.charging_processes_df = charging_processes_from_database(
+        edisgo_obj=edisgo_obj, engine=engine, scenario=scenario
+    )
+
+    # edisgo_obj.electromobility.simbev_config_df = simbev_config_from_database(
+    #     engine=engine
+    # )
+    #
+    # edisgo_obj.electromobility.potential_charging_parks_gdf = (
+    #     potential_charging_parks_from_database(engine=engine)
+    # )
+
+
+def charging_processes_from_database(
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    scenario: str = "eGon2035",
+):
+    mv_grid_id = edisgo_obj.topology.id
+
+    sql = f"""
+    SELECT egon_ev_pool_ev_id FROM demand.egon_ev_mv_grid_district
+    WHERE scenario = '{scenario}'
+    AND bus_id = '{mv_grid_id}'
+    """
+
+    pool = Counter(select_dataframe(sql, db_engine=engine).egon_ev_pool_ev_id)
+
+    n_max = max(pool.values())
+
+    sql = f"""
+    SELECT * FROM demand.egon_ev_trip
+    WHERE scenario = '{scenario}'
+    AND charging_demand > 0
+    AND egon_ev_pool_ev_id IN ({str(list(pool.keys()))[1:-1]})
+    """
+
+    ev_trips_df = select_dataframe(sql=sql, db_engine=engine)
+
+    df_list = []
+
+    last_id = 0
+
+    for i in range(n_max, 0, -1):
+        evs = sorted([ev_id for ev_id, count in pool.items() if count >= i])
+
+        df = ev_trips_df.loc[ev_trips_df.egon_ev_pool_ev_id.isin(evs)]
+
+        mapping = {ev: count + last_id for count, ev in enumerate(evs)}
+
+        df.egon_ev_pool_ev_id = df.egon_ev_pool_ev_id.map(mapping)
+
+        last_id = max(mapping.values()) + 1
+
+        df_list.append(df)
+
+    df = pd.concat(df_list, ignore_index=True)
+
+    rename = {
+        "egon_ev_pool_ev_id": "car_id",
+        "location": "destination",
+        "charging_capacity_nominal": "nominal_charging_capacity_kW",
+        "charging_capacity_grid": "grid_charging_capacity_kW",
+        "charging_demand": "chargingdemand_kWh",
+        "park_start": "park_start_timesteps",
+        "park_end": "park_end_timesteps",
+    }
+
+    df = df.rename(columns=rename, errors="raise")
+
+    if df.park_start_timesteps.min() == 1:
+        df.loc[:, ["park_start_timesteps", "park_end_timesteps"]] -= 1
+
+    return df.assign(
+        ags=0,
+        park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
+    )[COLUMNS["charging_processes_df"]]
