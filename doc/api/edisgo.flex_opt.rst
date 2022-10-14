@@ -44,6 +44,14 @@ edisgo.flex\_opt.exceptions module
    :undoc-members:
    :show-inheritance:
 
+edisgo.flex\_opt.heat_pump_operation module
+---------------------------------------------
+
+.. automodule:: edisgo.flex_opt.heat_pump_operation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 edisgo.flex\_opt.q\_control module
 ----------------------------------
 

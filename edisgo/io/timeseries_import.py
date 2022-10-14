@@ -22,8 +22,8 @@ def feedin_oedb(config_data, weather_cell_ids, timeindex):
     ----------
     config_data : :class:`~.tools.config.Config`
         Configuration data from config files, relevant for information of
-        which data base table to retrieve feed-in data for.
-    weather_cell_ids : :obj:`list`
+        which data base table to retrieve feed-in data from.
+    weather_cell_ids : list(int)
         List of weather cell id's (integers) to obtain feed-in data for.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
         Feed-in data is currently only provided for weather year 2011. If
@@ -183,3 +183,150 @@ def load_time_series_demandlib(config_data, timeindex):
     )
 
     return elec_demand.loc[timeindex]
+
+
+def cop_oedb(config_data, weather_cell_ids=None, timeindex=None):
+    """
+    Get COP (coefficient of performance) time series data from the
+    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+
+    Parameters
+    ----------
+    config_data : :class:`~.tools.config.Config`
+        Configuration data from config files, relevant for information of
+        which data base table to retrieve COP data from.
+    weather_cell_ids : list(int)
+        List of weather cell id's (integers) to obtain COP data for.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        COP data is only provided for the weather year 2011. If
+        timeindex contains a different year, the data is reindexed.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with hourly COP time series in p.u. per weather cell.
+
+    """
+    raise NotImplementedError
+
+    # if timeindex is None:
+    #     timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
+    #
+    # if weather_cell_ids is None:
+    #     # get weather cells in grid district
+    #     pass
+    #
+    # import saio
+    # saio.register_schema("supply", engine)
+    # from saio.supply import egon_era5_renewable_feedin
+    #
+    # # get cop from database
+    # with db.session_scope() as session:
+    #     query = session.query(
+    #         egon_era5_renewable_feedin.w_id,
+    #         egon_era5_renewable_feedin.feedin.label("cop"),
+    #     ).filter(
+    #         egon_era5_renewable_feedin.carrier == "heat_pump_cop"
+    #     ).filter(
+    #         egon_era5_renewable_feedin.w_id.in_(weather_cell_ids)
+    #     )
+    #
+    #     cop = pd.read_sql(
+    #         query.statement, query.session.bind, index_col="w_id"
+    #     )
+    #
+    # # convert dataframe to have weather cell ID as column name and time index
+    # cop = pd.DataFrame(
+    #     {w_id: ts.cop for w_id, ts in cop.iterrows()},
+    #     index=timeindex
+    # )
+    #
+    # return cop
+
+
+def heat_demand_oedb(config_data, building_ids, timeindex=None):
+    """
+    Get heat demand time series data from the
+    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+
+    Parameters
+    ----------
+    config_data : :class:`~.tools.config.Config`
+        Configuration data from config files, relevant for information of
+        which data base table to retrieve data from.
+    building_ids : list(int)
+        List of building IDs to obtain heat demand for.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Heat demand data is only provided for the weather year 2011. If
+        timeindex contains a different year, the data is reindexed.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with hourly heat demand time series in MW per building ID.
+
+    """
+
+    def _get_CTS_demand():
+        """
+        Gets CTS heat demand time series for each building in building_ids.
+
+        First, the share of the total CTS demand in the NUTS 3 region for
+        each building and the total CTS heat demand time series in the NUTS 3 region
+        are retrieved. To obtain the heat demand time series per building the building's
+        share is multiplied with the total time series.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            CTS heat demand time series per building with building IDs in columns
+            and time steps as index.
+
+        """
+        raise NotImplementedError
+        # # get share per building
+        # # get total demand time series
+        # # multiply
+        # pd.read_sql(
+        #     query.statement, session.bind, index_col="id"
+        # )
+        #
+        # return
+
+    def _get_household_demand():
+        """
+        Gets household heat demand time series for each building in building_ids.
+
+        Returns
+        --------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Household heat demand time series per building with building IDs in columns
+            and time steps as index.
+
+        """
+        raise NotImplementedError
+        # # get representative days per building
+        # # get time series for representative days
+        # # set up time series per building
+        # pd.read_sql(
+        #     query.statement, session.bind, index_col="id"
+        # )
+        #
+        # return
+
+    raise NotImplementedError
+    # ToDo Also include large heat pumps for district heating that don't have
+    #  a building ID
+
+    # if timeindex is None:
+    #     timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
+    #
+    # with session_scope() as session:
+    #     # get heat demand from database
+    #     heat_demand_CTS = _get_CTS_demand()
+    #     heat_demand_households = _get_household_demand()
+    #
+    # heat_demand = heat_demand_CTS + heat_demand_households
+    # heat_demand.sort_index(axis=0, inplace=True)
+    #
+    # return heat_demand
