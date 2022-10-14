@@ -27,9 +27,6 @@ jobs:
           - name-suffix: "basic"
             os: windows-latest
             python-version: 3.8
-          - name-suffix: "basic"
-            os: windows-latest
-            python-version: 3.9
 
     steps:
       - name: Checkout repo
