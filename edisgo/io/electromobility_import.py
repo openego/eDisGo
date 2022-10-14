@@ -15,7 +15,7 @@ from numpy.random import default_rng
 from sklearn import preprocessing
 from sqlalchemy.engine.base import Engine
 
-from edisgo.io.egon_data_import import select_dataframe
+from edisgo.io.egon_data_import import select_dataframe, select_geodataframe
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -361,6 +361,18 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
         crs=potential_charging_parks_gdf_list[0].crs,
     ).astype(DTYPES["potential_charging_parks_gdf"])
 
+    return assure_minimum_potential_charging_parks(
+        edisgo_obj=edisgo_obj,
+        potential_charging_parks_gdf=potential_charging_parks_gdf,
+        **kwargs,
+    )
+
+
+def assure_minimum_potential_charging_parks(
+    edisgo_obj: EDisGo,
+    potential_charging_parks_gdf: gpd.GeoDataFrame,
+    **kwargs,
+):
     # ensure minimum number of potential charging parks per car
     num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
 
@@ -1143,18 +1155,52 @@ def import_electromobility_from_database(
     edisgo_obj: EDisGo,
     engine: Engine,
     scenario: str = "eGon2035",
+    **kwargs,
 ):
     edisgo_obj.electromobility.charging_processes_df = charging_processes_from_database(
         edisgo_obj=edisgo_obj, engine=engine, scenario=scenario
     )
 
     # edisgo_obj.electromobility.simbev_config_df = simbev_config_from_database(
-    #     engine=engine
+    #     edisgo_obj=edisgo_obj, engine=engine
     # )
-    #
-    # edisgo_obj.electromobility.potential_charging_parks_gdf = (
-    #     potential_charging_parks_from_database(engine=engine)
-    # )
+
+    edisgo_obj.electromobility.potential_charging_parks_gdf = (
+        potential_charging_parks_from_database(
+            edisgo_obj=edisgo_obj, engine=engine, **kwargs
+        )
+    )
+
+
+def potential_charging_parks_from_database(
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    **kwargs,
+):
+    mv_grid_id = edisgo_obj.topology.id
+
+    sql = f"""
+    SELECT * FROM grid.egon_emob_charging_infrastructure
+    WHERE mv_grid_id = '{mv_grid_id}'
+    """
+
+    gdf = select_geodataframe(
+        sql=sql, db_engine=engine, index_col="cp_id", geom_col="geometry"
+    )
+
+    gdf = gdf.assign(ags=0)
+
+    rename = {
+        "weight": "user_centric_weight",
+    }
+
+    gdf = gdf.rename(columns=rename, errors="raise")[
+        COLUMNS["potential_charging_parks_gdf"]
+    ]
+
+    return assure_minimum_potential_charging_parks(
+        edisgo_obj=edisgo_obj, potential_charging_parks_gdf=gdf, **kwargs
+    )
 
 
 def charging_processes_from_database(
