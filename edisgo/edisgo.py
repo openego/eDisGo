@@ -1546,8 +1546,17 @@ class EDisGo:
 
         integrate_charging_parks(self)
 
-    def import_electromobility_from_database(self, engine: Engine):
-        import_electromobility_from_database(self, engine=engine)
+    def import_electromobility_from_database(
+        self, engine: Engine, allocate_charging_demand_kwds: dict = None, **kwargs
+    ):
+        import_electromobility_from_database(self, engine=engine, **kwargs)
+
+        if allocate_charging_demand_kwds is None:
+            allocate_charging_demand_kwds = {}
+
+        distribute_charging_demand(self, **allocate_charging_demand_kwds)
+
+        integrate_charging_parks(self)
 
     def apply_charging_strategy(self, strategy="dumb", **kwargs):
         """

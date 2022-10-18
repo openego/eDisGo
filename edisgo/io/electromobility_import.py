@@ -40,6 +40,8 @@ COLUMNS = {
         "park_time_timesteps",
         "park_start_timesteps",
         "park_end_timesteps",
+        "charging_park_id",
+        "charging_point_id",
     ],
     "simbev_config_df": [
         "eta_cp",
@@ -78,6 +80,8 @@ DTYPES = {
         "park_time_timesteps": np.uint16,
         "park_start_timesteps": np.uint16,
         "park_end_timesteps": np.uint16,
+        "charging_park_id": np.uint16,
+        "charging_point_id": np.uint32,
     },
     "simbev_config_df": {
         "eta_cp": float,
@@ -359,7 +363,7 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
             ignore_index=True,
         ),
         crs=potential_charging_parks_gdf_list[0].crs,
-    ).astype(DTYPES["potential_charging_parks_gdf"])
+    )
 
     return assure_minimum_potential_charging_parks(
         edisgo_obj=edisgo_obj,
@@ -431,8 +435,8 @@ def assure_minimum_potential_charging_parks(
         while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
             logger.info(
                 f"Duplicating potential charging parks to meet the desired grid "
-                f"connections to cars rate of {gc_to_car_rate*100:.2f} %. Iteration: "
-                f"{n+1}."
+                f"connections to cars rate of {gc_to_car_rate*100:.2f} % for use case "
+                f"{use_case}. Iteration: {n+1}."
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
@@ -485,9 +489,13 @@ def assure_minimum_potential_charging_parks(
 
     # in case of polygons use the centroid as potential charging parks point
     # and set crs to match edisgo object
-    return potential_charging_parks_gdf.assign(
-        geometry=potential_charging_parks_gdf.geometry.representative_point()
-    ).to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
+    return (
+        potential_charging_parks_gdf.assign(
+            geometry=potential_charging_parks_gdf.geometry.representative_point()
+        )
+        .to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
+        .astype(DTYPES["potential_charging_parks_gdf"])
+    )
 
 
 def distribute_charging_demand(edisgo_obj, **kwargs):
@@ -1161,15 +1169,27 @@ def import_electromobility_from_database(
         edisgo_obj=edisgo_obj, engine=engine, scenario=scenario
     )
 
-    # edisgo_obj.electromobility.simbev_config_df = simbev_config_from_database(
-    #     edisgo_obj=edisgo_obj, engine=engine
-    # )
+    edisgo_obj.electromobility.simbev_config_df = simbev_config_from_database(
+        engine=engine, scenario=scenario
+    )
 
     edisgo_obj.electromobility.potential_charging_parks_gdf = (
         potential_charging_parks_from_database(
             edisgo_obj=edisgo_obj, engine=engine, **kwargs
         )
     )
+
+
+def simbev_config_from_database(
+    engine: Engine,
+    scenario: str = "eGon2035",
+):
+    sql = f"""
+    SELECT * FROM demand.egon_ev_metadata
+    WHERE scenario = '{scenario}'
+    """
+
+    return select_dataframe(sql=sql, db_engine=engine)
 
 
 def potential_charging_parks_from_database(
@@ -1266,4 +1286,6 @@ def charging_processes_from_database(
     return df.assign(
         ags=0,
         park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
-    )[COLUMNS["charging_processes_df"]]
+        charging_park_id=np.nan,
+        charging_point_id=np.nan,
+    )[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
