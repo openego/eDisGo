@@ -80,8 +80,6 @@ DTYPES = {
         "park_time_timesteps": np.uint16,
         "park_start_timesteps": np.uint16,
         "park_end_timesteps": np.uint16,
-        "charging_park_id": np.uint16,
-        "charging_point_id": np.uint32,
     },
     "simbev_config_df": {
         "eta_cp": float,
@@ -280,9 +278,7 @@ def read_simbev_config_df(
             for col in ["start_date", "end_date"]:
                 df[col] = pd.to_datetime(df[col])
 
-            df = df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
-
-            return df
+            return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
 
     except Exception:
         logging.warning(
@@ -1189,7 +1185,9 @@ def simbev_config_from_database(
     WHERE scenario = '{scenario}'
     """
 
-    return select_dataframe(sql=sql, db_engine=engine)
+    df = select_dataframe(sql=sql, db_engine=engine)
+
+    return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
 
 
 def potential_charging_parks_from_database(
