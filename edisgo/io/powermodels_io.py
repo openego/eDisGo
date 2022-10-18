@@ -11,12 +11,12 @@ import numpy as np
 # import pandas as pd
 import pypsa
 
-from edisgo.io.pypsa_io import to_pypsa
+# from edisgo.tools.tools import calculate_impedance_for_parallel_components
 
 
 def to_powermodels(edisgo_object):
     # convert eDisGo object to pypsa network structure
-    psa_net = to_pypsa(edisgo_object)
+    psa_net = edisgo_object.to_pypsa()
     # calculate per unit values
     pypsa.pf.calculate_dependent_values(psa_net)
 
@@ -32,8 +32,10 @@ def to_powermodels(edisgo_object):
     _build_branch(psa_net, pm)
     _build_storage(psa_net, pm)
     _build_load(psa_net, pm)
-    # Hier können jetzt noch die Dicts für die Flexibilitäten dem pm hinzugefügt werden
-    _build_timeseries(psa_net, pm)
+    _build_electromobility(psa_net, pm)
+    _build_heatpumps(pm)  # TODO: Daten auch im psa_net?
+    _build_dsm(pm)  # TODO Woher kommen Daten?
+    _build_timeseries(psa_net, pm, edisgo_object)
     return pm
 
 
@@ -47,6 +49,9 @@ def _init_pm():
         "load": dict(),
         "storage": dict(),
         "switch": dict(),
+        "electromobility": dict(),
+        "heatpumps": dict(),
+        "dsm": dict(),
         "baseMVA": 1,
         "source_version": 2,
         "shunt": dict(),
@@ -66,6 +71,7 @@ def _build_bus(psa_net, pm):
     )
     v_max = [min(val, 1.05) for val in psa_net.buses["v_mag_pu_max"].values]
     v_min = [max(val, 0.985) for val in psa_net.buses["v_mag_pu_min"].values]
+    v_set = psa_net.buses["v_mag_pu_set"].values
     for bus_i in np.arange(len(psa_net.buses.index)):
         pm["bus"][str(bus_i + 1)] = {
             "index": bus_i + 1,
@@ -75,7 +81,7 @@ def _build_bus(psa_net, pm):
             "vmax": v_max[bus_i],
             "vmin": v_min[bus_i],
             "va": 0,  # TODO
-            "vm": 1,  # TODO
+            "vm": v_set[bus_i],  # TODO
             "base_kv": psa_net.buses["v_nom"].values[bus_i],
         }
 
@@ -95,19 +101,19 @@ def _build_gen(psa_net, pm):
         idx_bus = _mapping(psa_net, psa_net.generators.bus[gen_i])
         pm["gen"][str(gen_i + 1)] = {
             "pg": pg[gen_i],
-            "qg": qg[gen_i],
+            "qg": qg[gen_i],  # TODO
             "pmax": p_max[gen_i],
             "pmin": p_min[gen_i],
-            "qmax": 1,  # pmax[gen_i],#TODO *tan(phi)
-            "qmin": 0,  # pmax[gen_i],#TODO *tan(phi)
+            "qmax": 1,  # TODO
+            "qmin": 0,  # TODO
             "vg": 1,  # TODO
-            "mbase": p_nom[gen_i],  # s_nom?
+            "mbase": p_nom[gen_i],
             "gen_bus": idx_bus,
             "gen_status": 1,
             "index": gen_i + 1,
-            "model": 2,  # TODO
-            "ncost": 3,  # TODO
-            "cost": [120, 20, 0],  # TODO
+            "model": 2,  # wird eigentlich nicht benötigt
+            "ncost": 3,  # wird eigentlich nicht benötigt
+            "cost": [120, 20, 0],  # wird eigentlich nicht benötigt
         }
 
 
@@ -123,6 +129,7 @@ def _build_branch(psa_net, pm):
     for branch_i in np.arange(len(psa_net.lines.index)):
         idx_f_bus = _mapping(psa_net, psa_net.lines.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, psa_net.lines.bus1[branch_i])
+
         pm["branch"][str(branch_i + 1)] = {
             "br_r": r[branch_i],
             "br_x": x[branch_i],
@@ -138,7 +145,7 @@ def _build_branch(psa_net, pm):
             "rate_a": s_nom[branch_i].real,
             "rate_b": 250,  # TODO
             "rate_c": 250,  # TODO
-            "angmin": -np.pi / 6,  # TODO: Deg oder Rad?
+            "angmin": -np.pi / 6,
             "angmax": np.pi / 6,
             "transformer": False,  # TODO: add transformer: tap + shift
             "tap": 1.0,  # Default 1.0 if no transformer is attached
@@ -147,10 +154,13 @@ def _build_branch(psa_net, pm):
 
 
 def _build_load(psa_net, pm):
-    pd = psa_net.loads.p_set  # Das hier sind die vorgegebenen load Zeitreihen?
-    qd = psa_net.loads.q_set
-    for load_i in np.arange(len(psa_net.loads.index)):
-        idx_bus = _mapping(psa_net, psa_net.loads.bus[load_i])
+    loads_df = psa_net.loads.loc[
+        psa_net.loads.index.str.startswith("Load")
+    ]  # Charging points werden rausgefiltert
+    pd = loads_df.p_set  # was sind p_set und q_set hier? (nicht die im loads_t df)
+    qd = loads_df.q_set
+    for load_i in np.arange(len(loads_df.index)):
+        idx_bus = _mapping(psa_net, loads_df.bus[load_i])
         pm["load"][str(load_i + 1)] = {
             "pd": pd[load_i],
             "qd": qd[load_i],
@@ -192,32 +202,82 @@ def _build_storage(psa_net, pm):
         }
 
 
-# TODO: _build_flexibility(psa_net, pm)-function for every flexibility
+def _build_electromobility(psa_net, pm):
+    emob_df = psa_net.loads.loc[psa_net.loads.index.str.startswith("Charging")]
+    pd = emob_df.p_set
+    qd = emob_df.q_set
+    for cp_i in np.arange(len(emob_df.index)):
+        idx_bus = _mapping(psa_net, emob_df.bus[cp_i])
+        pm["electromobility"][str(cp_i + 1)] = {
+            "pd": pd[cp_i],
+            "qd": qd[cp_i],
+            "p_max": 1,
+            "e_min": 0,
+            "e_max": 1,
+            "cp_bus": idx_bus,
+            "index": cp_i + 1,
+        }
 
 
-def _build_timeseries(psa_net, pm):  # TODO add flexibilities
+def _build_heatpumps(pm):  # TODO
+    return pm
+
+
+def _build_dsm(pm):  # TODO
+    return pm
+
+
+def _build_timeseries(psa_net, pm, edisgo_obj):
     pm["time_series"] = {
         "gen": _build_component_timeseries(psa_net, "gen"),
         "load": _build_component_timeseries(psa_net, "load"),
         "storage": _build_component_timeseries(psa_net, "storage"),
+        "emob": _build_component_timeseries(psa_net, "emob", edisgo_obj),
+        "heatpupms": _build_component_timeseries(psa_net, "heatpumps"),
+        "dsm": _build_component_timeseries(psa_net, "dsm"),
         "num_steps": len(psa_net.snapshots),
     }
     return
 
 
-def _build_component_timeseries(psa_net, kind):  # TODO add flexibilities
+def _build_component_timeseries(psa_net, kind, edisgo_obj=None):
     if kind == "gen":
         pm_comp = dict()
         p_set = psa_net.generators_t.p_set
         q_set = psa_net.generators_t.q_set
     elif kind == "load":
         pm_comp = dict()
-        p_set = psa_net.loads_t.p_set
-        q_set = psa_net.loads_t.q_set
+        p_set = psa_net.loads_t.p_set[
+            psa_net.loads_t.p_set.columns[
+                psa_net.loads_t.p_set.columns.str.startswith("Load")
+            ]
+        ]
+        q_set = psa_net.loads_t.p_set[
+            psa_net.loads_t.q_set.columns[
+                psa_net.loads_t.q_set.columns.str.startswith("Load")
+            ]
+        ]
     elif kind == "storage":
         pm_comp = dict()
         p_set = psa_net.storage_units_t.p_set
         q_set = psa_net.storage_units_t.q_set
+    elif kind == "emob":
+        pm_comp = dict()
+        p_set = psa_net.loads_t.p_set[
+            psa_net.loads_t.p_set.columns[
+                psa_net.loads_t.p_set.columns.str.startswith("Charging")
+            ]
+        ]
+        flex_bands = edisgo_obj.electromobility.get_flexibility_bands(
+            edisgo_obj, ["home", "work"]
+        )
+        p_max = flex_bands.upper_power
+        e_min = flex_bands.lower_energy
+        e_max = flex_bands.upper_energy
+    elif kind == "heatpumps":  # TODO
+        print("To Do")
+    elif kind == "dsm":  # TODO
+        print("To Do")
     #   else: #TODO NotImplementedError/Warning
     for comp in p_set.columns:
         comp_i = _mapping(psa_net, comp, kind)
@@ -236,6 +296,16 @@ def _build_component_timeseries(psa_net, kind):  # TODO add flexibilities
                 "ps": p_set[comp].values.tolist(),
                 "qs": q_set[comp].values.tolist(),
             }
+        elif kind == "electromobility":
+            pm_comp[str(comp_i)] = {
+                "p_max": p_max[comp].values.tolist(),
+                "e_min": e_min[comp].values.tolist(),
+                "e_max": e_max[comp].values.tolist(),
+            }
+        elif kind == "heatpumps":  # TODO
+            print("To Do")
+        elif kind == "dsm":  # TODO
+            print("To Do")
         # TODO: more time dependable values?
     return pm_comp
 
@@ -248,7 +318,9 @@ def _mapping(psa_net, name, kind="bus"):
     elif kind == "storage":
         df = psa_net.storage_units
     elif kind == "load":
-        df = psa_net.loads
+        df = psa_net.loads.loc[psa_net.loads.index.str.startswith("Load")]
+    elif kind == "emob":
+        df = psa_net.loads.loc[psa_net.loads.index.str.startswith("Charging")]
     #    else: #TODO
     #        logging.warning("No mapping for "{}" implemented yet.".format(kind))
     idx = df.reset_index()[df.index == name].index[0] + 1
