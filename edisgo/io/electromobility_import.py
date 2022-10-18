@@ -40,8 +40,6 @@ COLUMNS = {
         "park_time_timesteps",
         "park_start_timesteps",
         "park_end_timesteps",
-        "charging_park_id",
-        "charging_point_id",
     ],
     "simbev_config_df": [
         "eta_cp",
@@ -1281,9 +1279,14 @@ def charging_processes_from_database(
     if df.park_start_timesteps.min() == 1:
         df.loc[:, ["park_start_timesteps", "park_end_timesteps"]] -= 1
 
-    return df.assign(
-        ags=0,
-        park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
-        charging_park_id=np.nan,
-        charging_point_id=np.nan,
-    )[COLUMNS["charging_processes_df"]].astype(DTYPES["charging_processes_df"])
+    return (
+        df.assign(
+            ags=0,
+            park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
+        )[COLUMNS["charging_processes_df"]]
+        .astype(DTYPES["charging_processes_df"])
+        .assign(
+            charging_park_id=np.nan,
+            charging_point_id=np.nan,
+        )
+    )
