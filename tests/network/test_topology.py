@@ -1062,7 +1062,7 @@ class TestTopologyWithEdisgoObject:
         test_cp = {
             "geom": geom,
             "p_set": 2.5,
-            "sector": "fast",
+            "sector": "hpc",
             "number": 10,
             "voltage_level": 4,
         }
@@ -1095,6 +1095,49 @@ class TestTopologyWithEdisgoObject:
             self.edisgo.topology.charging_points_df.at[comp_name, "number"]
             == test_cp["number"]
         )
+
+        # ######### Heat Pump #############
+        # method not different from generators, wherefore only one voltage
+        # level is tested
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        loads_before = self.edisgo.topology.loads_df
+
+        # add heat pump
+        test_hp = {
+            "geom": geom,
+            "p_set": 2.5,
+            "sector": "district_heating",
+            "voltage_level": 4,
+        }
+
+        comp_name = self.edisgo.topology.connect_to_mv(
+            self.edisgo, test_hp, comp_type="heat_pump"
+        )
+
+        # check if number of buses increased
+        assert len(buses_before) + 1 == len(self.edisgo.topology.buses_df)
+        # check if number of lines increased
+        assert len(lines_before) + 1 == len(self.edisgo.topology.lines_df)
+        # check if number of charging points increased
+        assert len(loads_before) + 1 == len(self.edisgo.topology.loads_df)
+
+        # check new bus
+        new_bus = self.edisgo.topology.loads_df.at[comp_name, "bus"]
+        assert "HeatPump" in new_bus
+        assert self.edisgo.topology.buses_df.at[new_bus, "v_nom"] == 20
+        # check new line
+        new_line_df = self.edisgo.topology.get_connected_lines_from_bus(new_bus)
+        assert len(new_line_df) == 1
+        # check that other bus of new line is the station
+        assert (
+            self.edisgo.topology.mv_grid.station.index[0] == new_line_df.bus0.values[0]
+        )
+        # check new heat pump
+        assert (
+            self.edisgo.topology.loads_df.at[comp_name, "sector"] == "district_heating"
+        )
+        assert self.edisgo.topology.loads_df.at[comp_name, "type"] == "heat_pump"
 
     def test_connect_to_lv(self):
 
@@ -1433,10 +1476,154 @@ class TestTopologyWithEdisgoObject:
 
         # check bus
         bus = self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
-        assert bus == "Bus_BranchTee_LVGrid_3_1"
+        assert bus == "BusBar_MVGrid_1_LVGrid_3_LV"
         assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 3
         # check new charging point
         assert self.edisgo.topology.charging_points_df.at[comp_name, "number"] == 2
+
+        # ######### Heat Pump #############
+
+        # test voltage level 7 - sector individual heating
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        loads_before = self.edisgo.topology.loads_df
+
+        # add heat pump
+        test_hp = {
+            "p_set": 0.01,
+            "geom": geom,
+            "sector": "individual_heating",
+            "voltage_level": 7,
+            "mvlv_subst_id": 3.0,
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_hp, comp_type="heat_pump"
+        )
+
+        # check that number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check that number of loads increased
+        assert len(loads_before) + 1 == len(self.edisgo.topology.loads_df)
+
+        # check bus
+        bus = self.edisgo.topology.loads_df.at[comp_name, "bus"]
+        assert bus == "Bus_BranchTee_LVGrid_3_8"
+        assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 3
+        # check new heat pump
+        assert self.edisgo.topology.loads_df.at[comp_name, "p_set"] == 0.01
+
+        # test voltage level 7 - sector district_heating
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        loads_before = self.edisgo.topology.loads_df
+
+        # add heat pump
+        test_hp = {
+            "p_set": 0.02,
+            "number": 2,
+            "geom": geom,
+            "sector": "district_heating",
+            "voltage_level": 7,
+            "mvlv_subst_id": 3,
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_hp, comp_type="heat_pump"
+        )
+
+        # check that number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check that number of loads increased
+        assert len(loads_before) + 1 == len(self.edisgo.topology.loads_df)
+
+        # check bus
+        bus = self.edisgo.topology.loads_df.at[comp_name, "bus"]
+        assert bus == "Bus_BranchTee_LVGrid_3_3"
+        assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 3
+        # check new heat pump
+        assert self.edisgo.topology.loads_df.at[comp_name, "number"] == 2
+
+        # test voltage level 7 - other sector
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        loads_before = self.edisgo.topology.loads_df
+
+        # add charging point
+        test_hp = {
+            "p_set": 0.02,
+            "number": 2,
+            "geom": geom,
+            "sector": None,
+            "voltage_level": 7,
+            "mvlv_subst_id": 3,
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_hp, comp_type="heat_pump"
+        )
+
+        # check that number of buses stayed the same
+        assert len(buses_before) == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert len(lines_before) == len(self.edisgo.topology.lines_df)
+        # check that number of loads increased
+        assert len(loads_before) + 1 == len(self.edisgo.topology.loads_df)
+
+        # check bus
+        bus = self.edisgo.topology.loads_df.at[comp_name, "bus"]
+        assert bus == "Bus_BranchTee_LVGrid_3_8"
+        assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 3
+        # check new heat pump
+        assert self.edisgo.topology.loads_df.at[comp_name, "type"] == "heat_pump"
+
+        # test voltage level 6
+        # test existing substation ID and geom (voltage level 6)
+
+        lines_before = self.edisgo.topology.lines_df
+        buses_before = self.edisgo.topology.buses_df
+        loads_before = self.edisgo.topology.loads_df
+
+        test_hp = {
+            "p_set": 0.3,
+            "geom": geom,
+            "voltage_level": 6,
+            "mvlv_subst_id": 6,
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_hp, comp_type="heat_pump"
+        )
+
+        # check that number of buses increased
+        assert len(buses_before) + 1 == len(self.edisgo.topology.buses_df)
+        # check that number of lines increased
+        assert len(lines_before) + 1 == len(self.edisgo.topology.lines_df)
+        # check that number of loads increased
+        assert len(loads_before) + 1 == len(self.edisgo.topology.loads_df)
+
+        # check new bus
+        new_bus = self.edisgo.topology.loads_df.at[comp_name, "bus"]
+        assert self.edisgo.topology.buses_df.at[new_bus, "v_nom"] == 0.4
+        # check new line
+        new_line_df = self.edisgo.topology.get_connected_lines_from_bus(new_bus)
+        assert len(new_line_df) == 1
+        assert "Bus_HeatPump_56" in list(
+            new_line_df.loc[new_line_df.index[0], ["bus0", "bus1"]]
+        )
+        lv_grid = self.edisgo.topology.get_lv_grid(6)
+        assert lv_grid.station.index[0] in list(
+            new_line_df.loc[new_line_df.index[0], ["bus0", "bus1"]]
+        )
+        # check new heat pump
+        assert self.edisgo.topology.loads_df.at[comp_name, "p_set"] == 0.3
 
     def test_check_integrity(self, caplog):
         """Test of validation of grids."""
@@ -1542,4 +1729,14 @@ class TestTopologyWithEdisgoObject:
         self.edisgo.topology.check_integrity()
         assert "The following buses are isolated: {}.".format(bus.name) in caplog.text
         assert "The network has isolated nodes or edges." in caplog.text
+        caplog.clear()
+
+        # check small impedance and large line length
+        line = "Line_10017"
+        self.edisgo.topology.lines_df.at[line, "length"] = 12.0
+        self.edisgo.topology.lines_df.at[line, "x"] = 1e-7
+        self.edisgo.topology.lines_df.at[line, "r"] = 1e-7
+        self.edisgo.topology.check_integrity()
+        assert "There are lines with very large line lengths" in caplog.text
+        assert "Very small values for impedance of lines" and line in caplog.text
         caplog.clear()

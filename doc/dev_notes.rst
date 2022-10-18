@@ -47,7 +47,7 @@ Activate the newly created environment and install the pre-commit hooks with:
     conda activate eDisGo_env_dev
     pre-commit install  # install pre-commit hooks
 
-This will install eDisGo with all it's dependencies.
+This will install eDisGo with all its dependencies.
 
 Installation using MacOS
 ~~~~~~~~~~~~~~~~~~~~~~~~~

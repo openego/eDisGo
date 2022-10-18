@@ -4,6 +4,7 @@ import os
 import shutil
 
 from copy import deepcopy
+from zipfile import ZipFile
 
 import numpy as np
 import pandas as pd
@@ -569,7 +570,7 @@ class TestEDisGo:
         )
         assert self.edisgo.topology.storage_units_df.loc[storage_name, "p_nom"] == 3.1
 
-    def test_integrate_component(self):
+    def test_integrate_component_based_on_geolocation(self):
         self.setup_worst_case_time_series()
 
         num_gens = len(self.edisgo.topology.generators_df)
@@ -653,6 +654,51 @@ class TestEDisGo:
             == [0.1, 0.2, 0.1, 0.2]
         ).all()
 
+        # test heat pump integration by nominal power, geom as shapely
+        # Point, with time series
+        num_loads = len(self.edisgo.topology.loads_df)
+
+        comp_data = {"p_set": 2.5}
+        dummy_ts = pd.Series(
+            data=[0.1, 0.2, 0.1, 0.2], index=self.edisgo.timeseries.timeindex
+        )
+        ts_active_power = dummy_ts
+        ts_reactive_power = dummy_ts
+
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
+            comp_type="heat_pump",
+            geolocation=geom,
+            ts_active_power=ts_active_power,
+            ts_reactive_power=ts_reactive_power,
+            **comp_data,
+        )
+
+        assert len(self.edisgo.topology.loads_df) == num_loads + 1
+        assert self.edisgo.topology.loads_df.at[comp_name, "type"] == "heat_pump"
+        # check voltage level
+        bus = self.edisgo.topology.loads_df.at[comp_name, "bus"]
+        assert (
+            self.edisgo.topology.buses_df.at[
+                bus,
+                "v_nom",
+            ]
+            == 20
+        )
+        # check that charging point is connected to the random bus chosen
+        # above
+        assert (
+            self.edisgo.topology.get_connected_lines_from_bus(bus).bus0[0] == random_bus
+        )
+        # check time series
+        assert (
+            self.edisgo.timeseries.loads_active_power.loc[:, comp_name].values
+            == [0.1, 0.2, 0.1, 0.2]
+        ).all()
+        assert (
+            self.edisgo.timeseries.loads_reactive_power.loc[:, comp_name].values
+            == [0.1, 0.2, 0.1, 0.2]
+        ).all()
+
         # ##### LV integration
 
         # test charging point integration by nominal power, geom as shapely
@@ -666,12 +712,12 @@ class TestEDisGo:
             **comp_data,
         )
 
-        assert len(self.edisgo.topology.charging_points_df) == num_cps + 2
+        assert len(self.edisgo.topology.loads_df) == num_loads + 2
         assert self.edisgo.topology.charging_points_df.at[comp_name, "number"] == 13
         # check bus
         assert (
             self.edisgo.topology.charging_points_df.at[comp_name, "bus"]
-            == "Bus_BranchTee_LVGrid_1_3"
+            == "Bus_BranchTee_LVGrid_1_7"
         )
         # check time series
         assert (
@@ -682,6 +728,35 @@ class TestEDisGo:
             self.edisgo.timeseries.loads_reactive_power.loc[:, comp_name].values
             == [0.1, 0.2, 0.1, 0.2]
         ).all()
+
+        # test heat pump integration by voltage level, geom as shapely
+        # Point, without time series
+        comp_data = {
+            "voltage_level": 7,
+            "sector": "individual_heating",
+            "p_set": 0.2,
+            "mvlv_subst_id": 3.0,
+        }
+        x = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "x"]
+        y = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "y"]
+        geom = Point((x, y))
+        comp_name = self.edisgo.integrate_component_based_on_geolocation(
+            comp_type="heat_pump",
+            geolocation=geom,
+            add_ts=False,
+            **comp_data,
+        )
+
+        assert len(self.edisgo.topology.loads_df) == num_loads + 3
+        assert (
+            self.edisgo.topology.loads_df.at[comp_name, "sector"]
+            == "individual_heating"
+        )
+        # check bus
+        assert (
+            self.edisgo.topology.loads_df.at[comp_name, "bus"]
+            == "Bus_BranchTee_LVGrid_3_2"
+        )
 
     def test_remove_component(self):
         self.setup_worst_case_time_series()
@@ -1173,9 +1248,26 @@ class TestEDisGo:
         plt.close("all")
 
     def test_save(self):
+        self.setup_worst_case_time_series()
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
 
-        # test with default parameters
+        # add heat pump and electromobility dummy data
+        self.edisgo.heat_pump.cop = pd.DataFrame(
+            data={
+                "hp1": [5.0, 6.0, 5.0, 6.0],
+                "hp2": [7.0, 8.0, 7.0, 8.0],
+            },
+            index=self.edisgo.timeseries.timeindex,
+        )
+        self.edisgo.electromobility.charging_processes_df = pd.DataFrame(
+            data={
+                "ags": [5.0, 6.0],
+                "car_id": [7.0, 8.0],
+            },
+            index=[0, 1],
+        )
+
+        # ################### test with default parameters ###################
         self.edisgo.save(save_dir)
 
         # check that sub-directory are created
@@ -1185,10 +1277,25 @@ class TestEDisGo:
 
         shutil.rmtree(save_dir)
 
-        # test with archiving and electromobility
+        # ############## test with saving heat pump and electromobility #############
+        self.edisgo.save(save_dir, save_electromobility=True, save_heatpump=True)
+
+        # check that sub-directory are created
+        dirs_in_save_dir = os.listdir(save_dir)
+        assert len(dirs_in_save_dir) == 6
+        assert "electromobility" in dirs_in_save_dir
+
+        shutil.rmtree(save_dir)
+
+        # ############## test with archiving and electromobility ##############
         self.edisgo.save(save_dir, archive=True, save_electromobility=True)
         zip_file = os.path.join(os.path.dirname(save_dir), "edisgo_network.zip")
         assert os.path.exists(zip_file)
+
+        zip = ZipFile(zip_file)
+        files = zip.namelist()
+        zip.close()
+        assert len(files) == 24
 
         os.remove(zip_file)
 
@@ -1375,14 +1482,31 @@ class TestEDisGo:
 
 class TestEDisGoFunc:
     def test_import_edisgo_from_files(self):
-        # ToDo: Testing to load emobility
         edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         edisgo_obj.set_time_series_worst_case_analysis()
         edisgo_obj.analyze()
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
 
+        # add heat pump and electromobility dummy data
+        edisgo_obj.heat_pump.cop = pd.DataFrame(
+            data={
+                "hp1": [5.0, 6.0, 5.0, 6.0],
+                "hp2": [7.0, 8.0, 7.0, 8.0],
+            },
+            index=edisgo_obj.timeseries.timeindex,
+        )
+        edisgo_obj.electromobility.charging_processes_df = pd.DataFrame(
+            data={
+                "ags": [5.0, 6.0],
+                "car_id": [7.0, 8.0],
+            },
+            index=[0, 1],
+        )
+
         # ######################## test with default ########################
-        edisgo_obj.save(save_dir, save_results=False)
+        edisgo_obj.save(
+            save_dir, save_results=False, save_electromobility=True, save_heatpump=True
+        )
 
         edisgo_obj_loaded = import_edisgo_from_files(save_dir)
 
@@ -1396,6 +1520,22 @@ class TestEDisGoFunc:
         assert edisgo_obj_loaded.config._data == edisgo_obj.config._data
         # check results
         assert edisgo_obj_loaded.results.i_res.empty
+
+        # ############ test with loading electromobility and heat pump data ###########
+
+        edisgo_obj_loaded = import_edisgo_from_files(
+            save_dir, import_electromobility=True, import_heat_pump=True
+        )
+
+        # check electromobility
+        assert_frame_equal(
+            edisgo_obj_loaded.electromobility.charging_processes_df,
+            edisgo_obj.electromobility.charging_processes_df,
+        )
+        # check heat pump
+        assert_frame_equal(
+            edisgo_obj_loaded.heat_pump.cop_df, edisgo_obj.heat_pump.cop_df
+        )
 
         # delete directory
         shutil.rmtree(save_dir)
