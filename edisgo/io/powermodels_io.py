@@ -6,16 +6,36 @@ to retrieve the PowerModels network container.
 
 import logging
 
-# import pandas as pd
 import numpy as np
+import pandas as pd
 import pypsa
 
-# from edisgo.tools.tools import calculate_impedance_for_parallel_components
+from edisgo.tools.tools import calculate_impedance_for_parallel_components
 
 
-def to_powermodels(edisgo_object):
+def to_powermodels(edisgo_object):  # , flexible_cps, flexible_hps):
     # convert eDisGo object to pypsa network structure
-    psa_net = edisgo_object.to_pypsa()
+    psa_net = edisgo_object.to_pypsa(use_seed=True)
+    # calculate impedance for parallel transformers
+    # TODO: what about b, g?
+    trafo_df = (
+        psa_net.transformers.groupby(
+            by=[psa_net.transformers.bus0, psa_net.transformers.bus1]
+        )["r", "x", "s_nom"]
+        .apply(calculate_impedance_for_parallel_components)
+        .reset_index()
+    )
+    psa_net.transformers.index = [index[:-2] for index in psa_net.transformers.index]
+    psa_net.transformers = psa_net.transformers[
+        ~psa_net.transformers.index.duplicated(keep="first")
+    ]
+    psa_net.transformers = (
+        psa_net.transformers.reset_index()
+        .drop(columns=["r", "x", "s_nom"])
+        .merge(trafo_df, how="left")
+        .set_index("index")
+    )
+
     # calculate per unit values
     pypsa.pf.calculate_dependent_values(psa_net)
 
@@ -31,10 +51,10 @@ def to_powermodels(edisgo_object):
     _build_branch(psa_net, pm)
     _build_storage(psa_net, pm)
     _build_load(psa_net, pm)
-    _build_electromobility(psa_net, pm)
-    # _build_heatpumps(psa_net, pm)
+    _build_electromobility(psa_net, pm)  # , flexible_cps)
+    # _build_heatpumps(psa_net, pm, flexible_hps)
     # _build_dsm(psa_net, pm)
-    _build_timeseries(psa_net, pm, edisgo_object)
+    _build_timeseries(psa_net, pm, edisgo_object)  # , flexible_cps, flexible_hps)
     return pm
 
 
@@ -79,8 +99,8 @@ def _build_bus(psa_net, pm):
             "bus_type": bus_types_int[bus_i],
             "vmax": v_max[bus_i],
             "vmin": v_min[bus_i],
-            "va": 0,  # TODO
-            "vm": v_set[bus_i],  # TODO
+            "va": 0,
+            "vm": v_set[bus_i],
             "base_kv": psa_net.buses["v_nom"].values[bus_i],
         }
 
@@ -100,12 +120,12 @@ def _build_gen(psa_net, pm):
         idx_bus = _mapping(psa_net, psa_net.generators.bus[gen_i])
         pm["gen"][str(gen_i + 1)] = {
             "pg": pg[gen_i],
-            "qg": qg[gen_i],  # TODO
+            "qg": qg[gen_i],  # TODO: über PF
             "pmax": p_max[gen_i],
             "pmin": p_min[gen_i],
-            "qmax": 1,  # TODO: über PF?
-            "qmin": 0,  # TODO:  über PF?
-            "vg": 1,  # TODO
+            "qmax": 1,  # TODO: aus Zeitreihe
+            "qmin": 0,
+            "vg": 1,
             "mbase": p_nom[gen_i],
             "gen_bus": idx_bus,
             "gen_status": 1,
@@ -117,19 +137,23 @@ def _build_gen(psa_net, pm):
 
 
 def _build_branch(psa_net, pm):
-    r = psa_net.lines.r_pu
-    x = psa_net.lines.x_pu
-    b = psa_net.lines.b_pu
-    g = psa_net.lines.g_pu
-    s_nom = psa_net.lines.s_nom
-    # ToDo: add transformers
-    # calculate_impedance_for_parallel_components()
+    branches = pd.concat([psa_net.lines, psa_net.transformers])
+    name = branches.index
+    r = branches.r_pu
+    x = branches.x_pu
+    b = branches.b_pu
+    g = branches.g_pu
+    s_nom = branches.s_nom
+    transformer = ~branches.tap_ratio.isna()
+    tap = branches.tap_ratio.fillna(1)
+    shift = branches.phase_shift.fillna(0)
 
     for branch_i in np.arange(len(psa_net.lines.index)):
         idx_f_bus = _mapping(psa_net, psa_net.lines.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, psa_net.lines.bus1[branch_i])
 
         pm["branch"][str(branch_i + 1)] = {
+            "name": name[branch_i],
             "br_r": r[branch_i],
             "br_x": x[branch_i],
             "f_bus": idx_f_bus,
@@ -139,15 +163,15 @@ def _build_branch(psa_net, pm):
             "b_to": b[branch_i] / 2,  # Beide positiv?
             # https://github.com/lanl-ansi/PowerModels.jl/blob/de7da4d11d04ce48b34d7b5f601f32f49361626b/src/io/matpower.jl#L459
             "b_fr": b[branch_i] / 2,
-            "shift": 0.0,  # Default 0.0 if no transformer is attached
-            "br_status": 1.0,  # TODO
+            "shift": shift[branch_i],
+            "br_status": 1.0,
             "rate_a": s_nom[branch_i].real,
-            "rate_b": 250,  # TODO
-            "rate_c": 250,  # TODO
+            "rate_b": 250,
+            "rate_c": 250,
             "angmin": -np.pi / 6,
             "angmax": np.pi / 6,
-            "transformer": False,  # TODO: add transformer: tap + shift
-            "tap": 1.0,  # Default 1.0 if no transformer is attached
+            "transformer": transformer[branch_i],
+            "tap": tap[branch_i],
             "index": branch_i + 1,
         }
 
@@ -201,12 +225,13 @@ def _build_storage(psa_net, pm):  # TODO heat storages!
         }
 
 
-def _build_electromobility(psa_net, pm):
-    emob_df = psa_net.loads.loc[
+def _build_electromobility(psa_net, pm):  # , flexible_cps):
+    flexible_cps = [
         psa_net.loads.index.str.startswith("Charging")
         & (~psa_net.loads.index.str.contains("public"))
         & (~psa_net.loads.index.str.contains("hpc"))
     ]
+    emob_df = psa_net.loads.loc[flexible_cps]
     pd = emob_df.p_set
     qd = emob_df.q_set
     for cp_i in np.arange(len(emob_df.index)):
@@ -258,20 +283,24 @@ def _build_dsm(psa_net, pm):  # TODO
         }
 
 
-def _build_timeseries(psa_net, pm, edisgo_obj):
+def _build_timeseries(psa_net, pm, edisgo_obj):  # , flexible_cps, flexible_hps):
     pm["time_series"] = {
         "gen": _build_component_timeseries(psa_net, "gen"),
         "load": _build_component_timeseries(psa_net, "load"),
         "storage": _build_component_timeseries(psa_net, "storage"),
-        "electromobility": _build_component_timeseries(psa_net, "emob", edisgo_obj),
-        # "heatpumps": _build_component_timeseries(psa_net, "heatpumps"),
+        "electromobility": _build_component_timeseries(
+            psa_net, "emob", edisgo_obj
+        ),  # , flexible_cps),
+        # "heatpumps": _build_component_timeseries(psa_net, "heatpumps", flexible_hps),
         # "dsm": _build_component_timeseries(psa_net, "dsm"),
         "num_steps": len(psa_net.snapshots),
     }
     return
 
 
-def _build_component_timeseries(psa_net, kind, edisgo_obj=None):
+def _build_component_timeseries(
+    psa_net, kind, edisgo_obj=None
+):  # , flexible_cps=None, flexible_hps=None):
     if kind == "gen":
         pm_comp = dict()
         p_set = psa_net.generators_t.p_set
@@ -294,12 +323,12 @@ def _build_component_timeseries(psa_net, kind, edisgo_obj=None):
         q_set = psa_net.storage_units_t.q_set
     elif kind == "emob":
         pm_comp = dict()
-        p_set = psa_net.loads_t.p_set.loc[
-            :,
+        flexible_cps = [
             psa_net.loads_t.p_set.columns.str.startswith("Charging")
             & (~psa_net.loads_t.p_set.columns.str.contains("public"))
-            & (~psa_net.loads_t.p_set.columns.str.contains("hpc")),
+            & (~psa_net.loads_t.p_set.columns.str.contains("hpc"))
         ]
+        p_set = psa_net.loads_t.p_set.loc[:, flexible_cps]
         flex_bands = edisgo_obj.electromobility.get_flexibility_bands(
             edisgo_obj, ["home", "work"]
         )
