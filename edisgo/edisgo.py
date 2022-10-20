@@ -620,8 +620,8 @@ class EDisGo:
             self.check_integrity()
         return pypsa_io.to_pypsa(self, mode, timesteps, **kwargs)
 
-    def to_powermodels(self):
-        return powermodels_io.to_powermodels(self)
+    def to_powermodels(self, flexible_cps, flexible_hps):
+        return powermodels_io.to_powermodels(self, flexible_cps, flexible_hps)
 
     def to_graph(self):
         """

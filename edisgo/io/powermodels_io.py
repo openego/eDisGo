@@ -13,32 +13,13 @@ import pypsa
 from edisgo.tools.tools import calculate_impedance_for_parallel_components
 
 
-def to_powermodels(edisgo_object):  # , flexible_cps, flexible_hps):
+def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     # convert eDisGo object to pypsa network structure
     psa_net = edisgo_object.to_pypsa(use_seed=True)
-    # calculate impedance for parallel transformers
-    # TODO: what about b, g?
-    trafo_df = (
-        psa_net.transformers.groupby(
-            by=[psa_net.transformers.bus0, psa_net.transformers.bus1]
-        )["r", "x", "s_nom"]
-        .apply(calculate_impedance_for_parallel_components)
-        .reset_index()
-    )
-    psa_net.transformers.index = [index[:-2] for index in psa_net.transformers.index]
-    psa_net.transformers = psa_net.transformers[
-        ~psa_net.transformers.index.duplicated(keep="first")
-    ]
-    psa_net.transformers = (
-        psa_net.transformers.reset_index()
-        .drop(columns=["r", "x", "s_nom"])
-        .merge(trafo_df, how="left")
-        .set_index("index")
-    )
-
+    # aggregate parallel transformers
+    psa_net.transformers = aggregate_parallel_transformers(psa_net.transformers)
     # calculate per unit values
     pypsa.pf.calculate_dependent_values(psa_net)
-
     # build PowerModels structure
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # length of considered timesteps
@@ -50,11 +31,11 @@ def to_powermodels(edisgo_object):  # , flexible_cps, flexible_hps):
     _build_gen(psa_net, pm)
     _build_branch(psa_net, pm)
     _build_storage(psa_net, pm)
-    _build_load(psa_net, pm)
-    _build_electromobility(psa_net, pm)  # , flexible_cps)
-    # _build_heatpumps(psa_net, pm, flexible_hps)
+    _build_load(psa_net, pm, flexible_cps, flexible_hps)
+    _build_electromobility(psa_net, pm, flexible_cps)
+    _build_heatpumps(psa_net, pm, flexible_hps)
     # _build_dsm(psa_net, pm)
-    _build_timeseries(psa_net, pm, edisgo_object)  # , flexible_cps, flexible_hps)
+    _build_timeseries(psa_net, pm, edisgo_object, flexible_cps, flexible_hps)
     return pm
 
 
@@ -95,7 +76,7 @@ def _build_bus(psa_net, pm):
         pm["bus"][str(bus_i + 1)] = {
             "index": bus_i + 1,
             "bus_i": bus_i + 1,
-            "zone": 1,  # TODO: loss zone
+            "zone": 1,
             "bus_type": bus_types_int[bus_i],
             "vmax": v_max[bus_i],
             "vmin": v_min[bus_i],
@@ -176,11 +157,9 @@ def _build_branch(psa_net, pm):
         }
 
 
-def _build_load(psa_net, pm):
-    loads_df = psa_net.loads.loc[
-        psa_net.loads.index.str.startswith("Load")  # TODO: add public CPs?
-    ]
-    pd = loads_df.p_set  # was sind p_set und q_set hier? (nicht die im loads_t df)
+def _build_load(psa_net, pm, flexible_cps, flexible_hps):
+    loads_df = psa_net.loads.drop(flexible_cps).drop(flexible_hps)
+    pd = loads_df.p_set
     qd = loads_df.q_set
     for load_i in np.arange(len(loads_df.index)):
         idx_bus = _mapping(psa_net, loads_df.bus[load_i])
@@ -225,44 +204,45 @@ def _build_storage(psa_net, pm):  # TODO heat storages!
         }
 
 
-def _build_electromobility(psa_net, pm):  # , flexible_cps):
-    flexible_cps = [
-        psa_net.loads.index.str.startswith("Charging")
-        & (~psa_net.loads.index.str.contains("public"))
-        & (~psa_net.loads.index.str.contains("hpc"))
-    ]
-    emob_df = psa_net.loads.loc[flexible_cps]
-    pd = emob_df.p_set
-    qd = emob_df.q_set
-    for cp_i in np.arange(len(emob_df.index)):
-        idx_bus = _mapping(psa_net, emob_df.bus[cp_i])
-        pm["electromobility"][str(cp_i + 1)] = {
-            "pd": pd[cp_i],
-            "qd": qd[cp_i],
-            "p_max": 1,
-            "e_min": 0,
-            "e_max": 1,
-            "cp_bus": idx_bus,
-            "index": cp_i + 1,
-        }
+def _build_electromobility(psa_net, pm, flexible_cps):
+    if len(flexible_cps) == 0:
+        print("There are no flexible charging points in network.")
+    else:
+        emob_df = psa_net.loads.loc[flexible_cps]
+        pd = emob_df.p_set
+        qd = emob_df.q_set
+        for cp_i in np.arange(len(emob_df.index)):
+            idx_bus = _mapping(psa_net, emob_df.bus[cp_i])
+            pm["electromobility"][str(cp_i + 1)] = {
+                "pd": pd[cp_i],
+                "qd": qd[cp_i],
+                "p_max": 1,
+                "e_min": 0,
+                "e_max": 1,
+                "cp_bus": idx_bus,
+                "index": cp_i + 1,
+            }
 
 
-def _build_heatpumps(psa_net, pm):  # TODO
-    heat_df = psa_net.loads.loc[psa_net.loads.index.str.startswith("Load")]
-    pd = heat_df.p_set  # heat demand
-    qd = heat_df.q_set  # = 0
-    cop = heat_df.cop
-    p_max = heat_df.p_max
-    for hp_i in np.arange(len(heat_df.index)):
-        idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
-        pm["heatpumps"][str(hp_i + 1)] = {
-            "pd": pd[hp_i],
-            "qd": qd[hp_i],
-            "p_max": p_max[hp_i],
-            "cop": cop[hp_i],
-            "hp_bus": idx_bus,
-            "index": hp_i + 1,
-        }
+def _build_heatpumps(psa_net, pm, flexible_hps):  # TODO
+    if len(flexible_hps) == 0:
+        print("There are no flexible heatpumps in network.")
+    else:
+        heat_df = psa_net.loads.loc[flexible_hps]
+        pd = heat_df.p_set  # heat demand
+        qd = heat_df.q_set  # = 0
+        cop = heat_df.cop
+        p_max = heat_df.p_max
+        for hp_i in np.arange(len(heat_df.index)):
+            idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
+            pm["heatpumps"][str(hp_i + 1)] = {
+                "pd": pd[hp_i],
+                "qd": qd[hp_i],
+                "p_max": p_max[hp_i],
+                "cop": cop[hp_i],
+                "hp_bus": idx_bus,
+                "index": hp_i + 1,
+            }
 
 
 def _build_dsm(psa_net, pm):  # TODO
@@ -283,24 +263,25 @@ def _build_dsm(psa_net, pm):  # TODO
         }
 
 
-def _build_timeseries(psa_net, pm, edisgo_obj):  # , flexible_cps, flexible_hps):
+def _build_timeseries(psa_net, pm, edisgo_obj, flexible_cps, flexible_hps):
     pm["time_series"] = {
         "gen": _build_component_timeseries(psa_net, "gen"),
         "load": _build_component_timeseries(psa_net, "load"),
         "storage": _build_component_timeseries(psa_net, "storage"),
         "electromobility": _build_component_timeseries(
-            psa_net, "emob", edisgo_obj
-        ),  # , flexible_cps),
-        # "heatpumps": _build_component_timeseries(psa_net, "heatpumps", flexible_hps),
+            psa_net, "emob", edisgo_obj, flexible_cps
+        ),
+        "heatpumps": _build_component_timeseries(
+            psa_net, "heatpumps", flexible_hps=flexible_hps
+        ),
         # "dsm": _build_component_timeseries(psa_net, "dsm"),
         "num_steps": len(psa_net.snapshots),
     }
-    return
 
 
 def _build_component_timeseries(
-    psa_net, kind, edisgo_obj=None
-):  # , flexible_cps=None, flexible_hps=None):
+    psa_net, kind, edisgo_obj=None, flexible_cps=None, flexible_hps=None
+):
     if kind == "gen":
         pm_comp = dict()
         p_set = psa_net.generators_t.p_set
@@ -322,30 +303,35 @@ def _build_component_timeseries(
         p_set = psa_net.storage_units_t.p_set
         q_set = psa_net.storage_units_t.q_set
     elif kind == "emob":
-        pm_comp = dict()
-        flexible_cps = [
-            psa_net.loads_t.p_set.columns.str.startswith("Charging")
-            & (~psa_net.loads_t.p_set.columns.str.contains("public"))
-            & (~psa_net.loads_t.p_set.columns.str.contains("hpc"))
-        ]
-        p_set = psa_net.loads_t.p_set.loc[:, flexible_cps]
-        flex_bands = edisgo_obj.electromobility.get_flexibility_bands(
-            edisgo_obj, ["home", "work"]
-        )
-        p_max = flex_bands["upper_power"]
-        e_min = flex_bands["lower_energy"]
-        e_max = flex_bands["upper_energy"]
-        # p_max = pd.read_csv(
-        #     '/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_upper_power.csv')
-        # e_min = pd.read_csv(
-        #     '/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_lower_energy.csv')
-        # e_max = pd.read_csv(
-        #     '/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_upper_energy.csv')
-
+        if len(flexible_cps) == 0:
+            p_set = pd.DataFrame()
+        else:
+            pm_comp = dict()
+            p_set = psa_net.loads_t.p_set.loc[:, flexible_cps]
+            flex_bands = edisgo_obj.electromobility.get_flexibility_bands(
+                edisgo_obj, ["home", "work"]
+            )
+            p_max = flex_bands["upper_power"]
+            e_min = flex_bands["lower_energy"]
+            e_max = flex_bands["upper_energy"]
+            # p_max = pd.read_csv(
+            #     "/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_upper_power.csv"
+            # )
+            # e_min = pd.read_csv(
+            #     "/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_lower_energy.csv"
+            # )
+            # e_max = pd.read_csv(
+            #     "/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_upper_energy.csv"
+            # )
     elif kind == "heatpumps":  # TODO
-        print("To Do")  # Daten aus psa_net
+        pm_comp = dict()
+        if len(flexible_hps) == 0:
+            p_set = pd.DataFrame()
+        else:
+            p_set = psa_net.loads_t.p_set.loc[:, flexible_hps]
+        print("To Do")
     elif kind == "dsm":  # TODO
-        print("To Do")  # Woher kommen Daten?
+        print("To Do")
 
     for comp in p_set.columns:
         comp_i = _mapping(psa_net, comp, kind)
@@ -365,11 +351,12 @@ def _build_component_timeseries(
                 "qs": q_set[comp].values.tolist(),
             }
         elif kind == "emob":
-            pm_comp[str(comp_i)] = {
-                "p_max": p_max[comp].values.tolist(),
-                "e_min": e_min[comp].values.tolist(),
-                "e_max": e_max[comp].values.tolist(),
-            }
+            if len(flexible_cps) > 0:
+                pm_comp[str(comp_i)] = {
+                    "p_max": p_max[comp].values.tolist(),
+                    "e_min": e_min[comp].values.tolist(),
+                    "e_max": e_max[comp].values.tolist(),
+                }
         elif kind == "heatpumps":  # TODO
             print("To Do")
             # nur p_d (heat demand)
@@ -395,3 +382,21 @@ def _mapping(psa_net, name, kind="bus"):
         logging.warning("Mapping for '{}' not implemented.".format(kind))
     idx = df.reset_index()[df.index == name].index[0] + 1
     return idx
+
+
+def aggregate_parallel_transformers(psa_trafos):
+    # TODO: what about b, g?
+    trafo_df = (
+        psa_trafos.groupby(by=[psa_trafos.bus0, psa_trafos.bus1])["r", "x", "s_nom"]
+        .apply(calculate_impedance_for_parallel_components)
+        .reset_index()
+    )
+    psa_trafos.index = [index[:-2] for index in psa_trafos.index]
+    psa_trafos = psa_trafos[~psa_trafos.index.duplicated(keep="first")]
+    psa_trafos = (
+        psa_trafos.reset_index()
+        .drop(columns=["r", "x", "s_nom"])
+        .merge(trafo_df, how="left")
+        .set_index("index")
+    )
+    return psa_trafos
