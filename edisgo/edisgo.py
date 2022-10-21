@@ -2157,9 +2157,9 @@ class EDisGo:
             filename = f"edisgo_object_{self.topology.mv_grid.id}.pkl"
         pickle.dump(self, open(os.path.join(abs_path, filename), "wb"))
 
-    def save_edisgo_to_json(self, directory):
+    def save_edisgo_to_json(self, directory, flexible_cps, flexible_hps):
         os.makedirs(directory, exist_ok=True)
-        pm = self.to_powermodels()
+        pm = self.to_powermodels(flexible_cps, flexible_hps)
 
         def _convert(o):
             """

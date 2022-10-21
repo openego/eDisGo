@@ -30,10 +30,11 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     _build_bus(psa_net, pm)
     _build_gen(psa_net, pm)
     _build_branch(psa_net, pm)
-    _build_storage(psa_net, pm)
+    _build_battery_storage(psa_net, pm)
     _build_load(psa_net, pm, flexible_cps, flexible_hps)
     _build_electromobility(psa_net, pm, flexible_cps)
-    _build_heatpumps(psa_net, pm, flexible_hps)
+    _build_heatpumps(psa_net, pm, edisgo_object, flexible_hps)
+    _build_heat_storage(psa_net, pm, edisgo_object)
     # _build_dsm(psa_net, pm)
     _build_timeseries(psa_net, pm, edisgo_object, flexible_cps, flexible_hps)
     return pm
@@ -51,6 +52,7 @@ def _init_pm():
         "switch": dict(),
         "electromobility": dict(),
         "heatpumps": dict(),
+        "heat_storage": dict(),
         "dsm": dict(),
         "baseMVA": 1,
         "source_version": 2,
@@ -151,7 +153,7 @@ def _build_branch(psa_net, pm):
             "rate_c": 250,
             "angmin": -np.pi / 6,
             "angmax": np.pi / 6,
-            "transformer": transformer[branch_i],
+            "transformer": bool(transformer[branch_i]),
             "tap": tap[branch_i],
             "index": branch_i + 1,
         }
@@ -172,7 +174,7 @@ def _build_load(psa_net, pm, flexible_cps, flexible_hps):
         }
 
 
-def _build_storage(psa_net, pm):  # TODO heat storages!
+def _build_battery_storage(psa_net, pm):
     ps = psa_net.storage_units.p_set
     qs = psa_net.storage_units.q_set
     soc = psa_net.storage_units.state_of_charge_initial
@@ -224,25 +226,59 @@ def _build_electromobility(psa_net, pm, flexible_cps):
             }
 
 
-def _build_heatpumps(psa_net, pm, flexible_hps):  # TODO
+def _build_heatpumps(psa_net, pm, edisgo_obj, flexible_hps):  # TODO
     if len(flexible_hps) == 0:
         print("There are no flexible heatpumps in network.")
     else:
         heat_df = psa_net.loads.loc[flexible_hps]
         pd = heat_df.p_set  # heat demand
-        qd = heat_df.q_set  # = 0
-        cop = heat_df.cop
-        p_max = heat_df.p_max
+        qd = heat_df.q_set  #
+        cop = edisgo_obj.heat_pump.cop_df  # Wird das auch nach pypsa übersetzt?
+        p_max = (
+            edisgo_obj.heat_pump.p_max
+        )  # TODO: liegt noch nicht auf dem eDisGo object
         for hp_i in np.arange(len(heat_df.index)):
             idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
             pm["heatpumps"][str(hp_i + 1)] = {
                 "pd": pd[hp_i],
                 "qd": qd[hp_i],
-                "p_max": p_max[hp_i],
-                "cop": cop[hp_i],
+                "p_max": p_max[heat_df.index[hp_i]][0],
+                "cop": cop[heat_df.index[hp_i]][0],
                 "hp_bus": idx_bus,
                 "index": hp_i + 1,
             }
+
+
+def _build_heat_storage(psa_net, pm, edisg_obj):  # TODO
+    ps = psa_net.storage_units.p_set
+    qs = psa_net.storage_units.q_set
+    soc = psa_net.storage_units.state_of_charge_initial
+    p_max = psa_net.storage_units.p_max_pu
+    p_min = psa_net.storage_units.p_min_pu
+    for stor_i in np.arange(len(psa_net.storage_units.index)):
+        idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
+        pm["heat_storage"][str(stor_i + 1)] = {
+            "x": 0,  # TODO
+            "r": 0,  # TODO
+            "ps": ps[stor_i],
+            "qs": qs[stor_i],
+            "pmax": p_max[stor_i],
+            "pmin": p_min[stor_i],
+            "p_loss": 0,  # TODO
+            "qmax": 1,  # TODO: über PF?
+            "qmin": 0,  # TODO: über PF?
+            "q_loss": 0,  # TODO
+            "energy": soc[stor_i],  # TODO: initial energy?
+            "energy_rating": 0,  # TODO
+            "thermal_rating": 0,  # TODO
+            "charge_rating": 0,  # TODO
+            "discharge_rating": 0,  # TODO
+            "charge_efficiency": 1,  # TODO
+            "discharge_efficiency": 1,  # TODO
+            "storage_bus": idx_bus,
+            "status": True,
+            "index": stor_i + 1,
+        }
 
 
 def _build_dsm(psa_net, pm):  # TODO
@@ -282,12 +318,11 @@ def _build_timeseries(psa_net, pm, edisgo_obj, flexible_cps, flexible_hps):
 def _build_component_timeseries(
     psa_net, kind, edisgo_obj=None, flexible_cps=None, flexible_hps=None
 ):
+    pm_comp = dict()
     if kind == "gen":
-        pm_comp = dict()
         p_set = psa_net.generators_t.p_set
         q_set = psa_net.generators_t.q_set
     elif kind == "load":  # TODO: add public CPs
-        pm_comp = dict()
         p_set = psa_net.loads_t.p_set[
             psa_net.loads_t.p_set.columns[
                 psa_net.loads_t.p_set.columns.str.startswith("Load")
@@ -299,14 +334,12 @@ def _build_component_timeseries(
             ]
         ]
     elif kind == "storage":  # ist hier heat und dsm storage mit dabei?
-        pm_comp = dict()
         p_set = psa_net.storage_units_t.p_set
         q_set = psa_net.storage_units_t.q_set
     elif kind == "emob":
         if len(flexible_cps) == 0:
             p_set = pd.DataFrame()
         else:
-            pm_comp = dict()
             p_set = psa_net.loads_t.p_set.loc[:, flexible_cps]
             flex_bands = edisgo_obj.electromobility.get_flexibility_bands(
                 edisgo_obj, ["home", "work"]
@@ -314,6 +347,7 @@ def _build_component_timeseries(
             p_max = flex_bands["upper_power"]
             e_min = flex_bands["lower_energy"]
             e_max = flex_bands["upper_energy"]
+            # TODO: Flexbänder aus eDisGo object auslesen
             # p_max = pd.read_csv(
             #     "/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_upper_power.csv"
             # )
@@ -324,12 +358,10 @@ def _build_component_timeseries(
             #     "/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_upper_energy.csv"
             # )
     elif kind == "heatpumps":  # TODO
-        pm_comp = dict()
         if len(flexible_hps) == 0:
             p_set = pd.DataFrame()
         else:
             p_set = psa_net.loads_t.p_set.loc[:, flexible_hps]
-        print("To Do")
     elif kind == "dsm":  # TODO
         print("To Do")
 
