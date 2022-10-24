@@ -503,6 +503,10 @@ class Electromobility:
           `integrated_charging_parks.csv`.
         * 'simbev_config_df' : Attribute :py:attr:`~simbev_config_df` is
           saved to `simbev_config.csv`.
+        * 'flexibility_bands' : The three flexibility bands in attribute
+          :py:attr:`~flexibility_bands` are saved to
+          `flexibility_band_upper_power.csv`, `flexibility_band_lower_energy.csv`, and
+          `flexibility_band_upper_energy.csv`.
 
         Parameters
         ----------
@@ -516,10 +520,15 @@ class Electromobility:
 
         for attr, file in attrs.items():
             df = getattr(self, attr)
-
-            if not df.empty:
-                path = os.path.join(directory, file)
-                df.to_csv(path)
+            if attr == "flexibility_bands":
+                for band in ["upper_power", "lower_energy", "upper_energy"]:
+                    if not df[band].empty:
+                        path = os.path.join(directory, file.format(band))
+                        df[band].to_csv(path)
+            else:
+                if not df.empty:
+                    path = os.path.join(directory, file)
+                    df.to_csv(path)
 
     def from_csv(self, data_path, edisgo_obj, from_zip_archive=False):
         """
@@ -688,6 +697,7 @@ def _get_matching_dict_of_attributes_and_file_names():
         "potential_charging_parks_gdf": "potential_charging_parks.csv",
         "integrated_charging_parks_df": "integrated_charging_parks.csv",
         "simbev_config_df": "metadata_simbev_run.csv",
+        "flexibility_bands": "flexibility_band_{}.csv",
     }
 
     return emob_dict
