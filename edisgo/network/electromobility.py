@@ -489,7 +489,7 @@ class Electromobility:
 
     def to_csv(self, directory):
         """
-        Exports electromobility to csv files.
+        Exports electromobility data to csv files.
 
         The following attributes are exported:
 
@@ -511,7 +511,7 @@ class Electromobility:
         Parameters
         ----------
         directory : str
-            Path to save electromobility to.
+            Path to save electromobility data to.
 
         """
         os.makedirs(directory, exist_ok=True)
@@ -683,7 +683,8 @@ def _get_matching_dict_of_attributes_and_file_names():
     restore and maps them to the file name.
 
     Is used in functions
-    :attr:`~.network.electromobility.Electromobility.from_csv`.
+    :attr:`~.network.electromobility.Electromobility.from_csv` and
+    attr:`~.network.electromobility.Electromobility.to_csv`.
 
     Returns
     -------
