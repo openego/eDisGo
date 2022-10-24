@@ -319,10 +319,46 @@ class Electromobility:
         except Exception:
             return None
 
+    @property
+    def flexibility_bands(self):
+        """
+        Dictionary with flexibility bands (lower and upper energy band as well as
+        upper power band).
+
+        Parameters
+        -----------
+        flex_dict : dict(str, :pandas:`pandas.DataFrame<DataFrame>`)
+            Keys are 'upper_power', 'lower_energy' and 'upper_energy'.
+            Values are dataframes containing the corresponding band per each charging
+            point. Columns of the dataframe are the charging point names as in
+            :attr:`~.network.topology.Topology.loads_df`. Index is a time index.
+
+        Returns
+        -------
+        dict(str, :pandas:`pandas.DataFrame<DataFrame>`)
+            See input parameter `flex_dict` for more information on the dictionary.
+
+        """
+        try:
+            return self._flexibility_bands
+        except Exception:
+            return {
+                "upper_power": pd.DataFrame(),
+                "lower_energy": pd.DataFrame(),
+                "upper_energy": pd.DataFrame(),
+            }
+
+    @flexibility_bands.setter
+    def flexibility_bands(self, flex_dict):
+        self._flexibility_bands = flex_dict
+
     def get_flexibility_bands(self, edisgo_obj, use_case):
         """
         Method to determine flexibility bands (lower and upper energy band as well as
         upper power band).
+
+        Besides being returned by this function, flexibility bands are written to
+        :attr:`flexibility_bands`.
 
         Parameters
         -----------
@@ -442,11 +478,14 @@ class Electromobility:
         upper_power = _shorten_and_set_index(upper_power)
         lower_energy = _shorten_and_set_index(lower_energy)
         upper_energy = _shorten_and_set_index(upper_energy)
-        return {
+
+        flex_band_dict = {
             "upper_power": upper_power,
             "lower_energy": lower_energy,
             "upper_energy": upper_energy,
         }
+        self.flexibility_bands = flex_band_dict
+        return flex_band_dict
 
     def to_csv(self, directory):
         """
