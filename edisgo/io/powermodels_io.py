@@ -32,7 +32,6 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     dict
         Dictionary that contains all network data in PowerModels network data
         format.
-
     """
 
     # convert eDisGo object to pypsa network structure
@@ -81,12 +80,31 @@ def _init_pm():
         "sourcetype": "eDisGo",
         "per_unit": True,
         "name": "name",
-        "time_series": dict(),
+        "time_series": {
+            "gen": dict(),
+            "load": dict(),
+            "storage": dict(),
+            "electromobility": dict(),
+            "heatpumps": dict(),
+            "dsm": dict(),
+            "num_steps": int,
+        },
     }
     return pm
 
 
 def _build_bus(psa_net, pm):
+    """
+    Builds bus dictionary in PowerModels network data format and adds it to
+    PowerModels dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    """
     bus_types = ["PQ", "PV", "Slack", "None"]
     bus_types_int = np.array(
         [bus_types.index(b_type) + 1 for b_type in psa_net.buses["control"].values],
@@ -110,6 +128,17 @@ def _build_bus(psa_net, pm):
 
 
 def _build_gen(psa_net, pm):
+    """
+    Builds generator dictionary in PowerModels network data format and adds it to
+    PowerModels dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    """
     pg = psa_net.generators.p_set
     qg = psa_net.generators.q_set
     p_max = psa_net.generators.p_max_pu
@@ -141,6 +170,17 @@ def _build_gen(psa_net, pm):
 
 
 def _build_branch(psa_net, pm):
+    """
+    Builds branch dictionary in PowerModels network data format and adds it to
+    PowerModels dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
     name = branches.index
     r = branches.r_pu
@@ -152,9 +192,9 @@ def _build_branch(psa_net, pm):
     tap = branches.tap_ratio.fillna(1)
     shift = branches.phase_shift.fillna(0)
 
-    for branch_i in np.arange(len(psa_net.lines.index)):
-        idx_f_bus = _mapping(psa_net, psa_net.lines.bus0[branch_i])
-        idx_t_bus = _mapping(psa_net, psa_net.lines.bus1[branch_i])
+    for branch_i in np.arange(len(branches.index)):
+        idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
+        idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
         pm["branch"][str(branch_i + 1)] = {
             "name": name[branch_i],
             "br_r": r[branch_i],
@@ -180,6 +220,17 @@ def _build_branch(psa_net, pm):
 
 
 def _build_load(psa_net, pm, flexible_cps, flexible_hps):
+    """
+    Builds load dictionary in PowerModels network data format and adds it to
+    PowerModels dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    """
     loads_df = psa_net.loads.drop(np.concatenate((flexible_hps, flexible_cps)))
     pd = loads_df.p_set
     qd = loads_df.q_set
@@ -195,6 +246,17 @@ def _build_load(psa_net, pm, flexible_cps, flexible_hps):
 
 
 def _build_battery_storage(psa_net, pm):
+    """
+    Builds (battery) storage  dictionary in PowerModels network data format and adds
+    it to PowerModels dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    """
     ps = psa_net.storage_units.p_set
     qs = psa_net.storage_units.q_set
     soc = psa_net.storage_units.state_of_charge_initial
@@ -227,6 +289,18 @@ def _build_battery_storage(psa_net, pm):
 
 
 def _build_electromobility(psa_net, pm, flexible_cps):
+    """
+    Builds electromobility dictionary and adds it to PowerModels dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>`
+        Array containing all charging points that allow for flexible charging.
+    """
     if len(flexible_cps) == 0:
         print("There are no flexible charging points in network.")
     else:
@@ -247,6 +321,21 @@ def _build_electromobility(psa_net, pm, flexible_cps):
 
 
 def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
+    """
+    Builds heat pump dictionary and adds it to PowerModels dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    edisgo_obj : :class:`~.EDisGo`
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>`
+        Array containing all heat pumps that allow for flexible operation due to an
+        attached heat storage.
+
+    """
     if len(flexible_hps) == 0:
         print("There are no flexible heatpumps in network.")
     else:
@@ -270,6 +359,19 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
 
 
 def _build_heat_storage(psa_net, pm, edisgo_obj):  # TODO
+    """
+    Builds heat storage dictionary and adds it to PowerModels dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    edisgo_obj : :class:`~.EDisGo`
+
+    """
+
     heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df
     # ps = heat_storage_df.p_set # TODO
     soc = heat_storage_df.state_of_charge_initial
@@ -294,7 +396,19 @@ def _build_heat_storage(psa_net, pm, edisgo_obj):  # TODO
         }
 
 
-def _build_dsm(psa_net, pm):  # TODO
+def _build_dsm(psa_net, pm, edisgo_obj):  # TODO
+    """
+    Builds dsm 'storage' dictionary and adds it to PowerModels dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    edisgo_obj : :class:`~.EDisGo`
+
+    """
     dsm_df = psa_net.loads.loc[psa_net.loads.index.str.startswith("dsm_load")]
     pd = dsm_df.p_set
     qd = dsm_df.q_set
@@ -313,26 +427,57 @@ def _build_dsm(psa_net, pm):  # TODO
 
 
 def _build_timeseries(psa_net, pm, edisgo_obj, flexible_cps, flexible_hps):
-    pm["time_series"] = {
-        "gen": _build_component_timeseries(psa_net, "gen"),
-        "load": _build_component_timeseries(
-            psa_net, "load", flexible_cps=flexible_cps, flexible_hps=flexible_hps
-        ),
-        "storage": _build_component_timeseries(psa_net, "storage"),
-        "electromobility": _build_component_timeseries(
-            psa_net, "emob", edisgo_obj, flexible_cps
-        ),
-        # "heatpumps": _build_component_timeseries(
-        #     psa_net, "heatpumps", flexible_hps=flexible_hps
-        # ),
-        # "dsm": _build_component_timeseries(psa_net, "dsm"),
-        "num_steps": len(psa_net.snapshots),
-    }
+    """
+    Builds timeseries dictionary in PowerModels network data format and adds it to
+    PowerModels dictionary 'pm'. PowerModels' timeseries dictionary contains one
+    timeseries dictionary each for: gen, load, (battery) storage,
+    electromobility, heat pumps and dsm storage.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    edisgo_obj : :class:`~.EDisGo`
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>`
+        Array containing all charging points that allow for flexible charging.
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>`
+        Array containing all heat pumps that allow for flexible operation due to an
+        attached heat storage.
+
+    """
+    for kind in ["gen", "load", "storage", "electromobility"]:  # , "heatpumps", "dsm"]
+        _build_component_timeseries(
+            psa_net, pm, kind, edisgo_obj, flexible_cps, flexible_hps
+        )
+    pm["time_series"]["num_steps"] = len(psa_net.snapshots)
 
 
 def _build_component_timeseries(
-    psa_net, kind, edisgo_obj=None, flexible_cps=None, flexible_hps=None
+    psa_net, pm, kind, edisgo_obj=None, flexible_cps=None, flexible_hps=None
 ):
+    """
+    Builds timeseries dictionary for given kind and adds it to 'time_series'
+    dictionary in PowerModels dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    kind: str
+        Must be one of ["gen", "load", "storage", "electromobility", "heatpumps",
+        "dsm"]
+    edisgo_obj : :class:`~.EDisGo`
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>`
+        Array containing all charging points that allow for flexible charging.
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>`
+        Array containing all heat pumps that allow for flexible operation due to an
+        attached heat storage.
+
+    """
     pm_comp = dict()
     if kind == "gen":
         p_set = psa_net.generators_t.p_set
@@ -347,7 +492,7 @@ def _build_component_timeseries(
     elif kind == "storage":
         p_set = psa_net.storage_units_t.p_set
         q_set = psa_net.storage_units_t.q_set
-    elif kind == "emob":
+    elif kind == "electromobility":
         if len(flexible_cps) == 0:
             p_set = pd.DataFrame()
         else:
@@ -397,7 +542,7 @@ def _build_component_timeseries(
                 "ps": p_set[comp].values.tolist(),
                 "qs": q_set[comp].values.tolist(),
             }
-        elif kind == "emob":
+        elif kind == "electromobility":
             comp_i = _mapping(psa_net, comp, kind, flexible_cps=flexible_cps)
             if len(flexible_cps) > 0:
                 pm_comp[str(comp_i)] = {
@@ -415,7 +560,7 @@ def _build_component_timeseries(
             print("To Do")
             # e_min, e_max, p_min, p_max
         # TODO: more time dependable values?
-    return pm_comp
+    pm["time_series"][kind] = pm_comp
 
 
 def _mapping(psa_net, name, kind="bus", flexible_cps=None, flexible_hps=None):
@@ -428,9 +573,9 @@ def _mapping(psa_net, name, kind="bus", flexible_cps=None, flexible_hps=None):
         df = psa_net.storage_units
     elif kind == "load":
         df = psa_net.loads.drop(np.concatenate((flexible_hps, flexible_cps)))
-    elif kind == "emob":
+    elif kind == "electromobility":
         df = psa_net.loads.loc[flexible_cps]
-    elif kind == "hp":
+    elif kind == "hetapumps":
         df = psa_net.loads.loc[flexible_hps]
     else:
         logging.warning("Mapping for '{}' not implemented.".format(kind))
