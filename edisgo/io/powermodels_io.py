@@ -44,7 +44,9 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # length of considered timesteps
     pm["name"] = "ding0_{}_t_{}".format(edisgo_object.topology.id, timesteps)
-    pm["time_elapsed"] = 0  # TODO
+    pm["time_elapsed"] = int(
+        (psa_net.snapshots[1] - psa_net.snapshots[0]).seconds / 3600
+    )  # length of timesteps in hours
     pm["baseMVA"] = 1  # TODO
     pm["source_version"] = 2  # TODO
     _build_bus(psa_net, pm)
