@@ -1502,6 +1502,15 @@ class TestEDisGoFunc:
             },
             index=[0, 1],
         )
+        flex_bands = {
+            "upper_energy": pd.DataFrame(
+                {"cp_1": [1, 2]}, index=edisgo_obj.timeseries.timeindex[0:2]
+            ),
+            "upper_power": pd.DataFrame(
+                {"cp_1": [1, 2]}, index=edisgo_obj.timeseries.timeindex[0:2]
+            ),
+        }
+        edisgo_obj.electromobility.flexibility_bands = flex_bands
 
         # ######################## test with default ########################
         edisgo_obj.save(
@@ -1540,11 +1549,15 @@ class TestEDisGoFunc:
         # delete directory
         shutil.rmtree(save_dir)
 
-        # ############ test with loading time series and results from zip ############
-        edisgo_obj.save(save_dir, archive=True)
+        # ########### test with loading time series, results, emob from zip ###########
+        edisgo_obj.save(save_dir, archive=True, save_electromobility=True)
         zip_file = f"{save_dir}.zip"
         edisgo_obj_loaded = import_edisgo_from_files(
-            zip_file, import_results=True, import_timeseries=True, from_zip_archive=True
+            zip_file,
+            import_results=True,
+            import_timeseries=True,
+            import_electromobility=True,
+            from_zip_archive=True,
         )
 
         # check topology
@@ -1562,6 +1575,16 @@ class TestEDisGoFunc:
         # check results
         assert_frame_equal(
             edisgo_obj_loaded.results.i_res, edisgo_obj.results.i_res, check_freq=False
+        )
+        # check electromobility
+        assert_frame_equal(
+            edisgo_obj_loaded.electromobility.flexibility_bands["upper_energy"],
+            edisgo_obj.electromobility.flexibility_bands["upper_energy"],
+            check_freq=False,
+        )
+        assert_frame_equal(
+            edisgo_obj_loaded.electromobility.charging_processes_df,
+            edisgo_obj.electromobility.charging_processes_df,
         )
 
         # delete zip file
