@@ -521,9 +521,9 @@ class Electromobility:
         for attr, file in attrs.items():
             df = getattr(self, attr)
             if attr == "flexibility_bands":
-                for band in ["upper_power", "lower_energy", "upper_energy"]:
-                    if not df[band].empty:
-                        path = os.path.join(directory, file.format(band))
+                for band in file.keys():
+                    if band in df.keys() and not df[band].empty:
+                        path = os.path.join(directory, file[band])
                         df[band].to_csv(path)
             else:
                 if not df.empty:
@@ -698,7 +698,11 @@ def _get_matching_dict_of_attributes_and_file_names():
         "potential_charging_parks_gdf": "potential_charging_parks.csv",
         "integrated_charging_parks_df": "integrated_charging_parks.csv",
         "simbev_config_df": "metadata_simbev_run.csv",
-        "flexibility_bands": "flexibility_band_{}.csv",
+        "flexibility_bands": {
+            "upper_power": "flexibility_band_upper_power.csv",
+            "lower_energy": "flexibility_band_lower_energy.csv",
+            "upper_energy": "flexibility_band_upper_energy.csv",
+        },
     }
 
     return emob_dict
