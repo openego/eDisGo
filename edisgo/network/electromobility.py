@@ -554,23 +554,47 @@ class Electromobility:
             files = zip.namelist()
 
             # add directory and .csv to files to match zip archive
-            attrs = {k: f"electromobility/{v}" for k, v in attrs.items()}
+            attrs = {
+                k: (
+                    f"electromobility/{v}"
+                    if isinstance(v, str)
+                    else {k2: f"electromobility/{v2}" for k2, v2 in v.items()}
+                )
+                for k, v in attrs.items()
+            }
 
         else:
             # read from directory
             # check files within the directory
             files = os.listdir(data_path)
 
-        attrs_to_read = {k: v for k, v in attrs.items() if v in files}
+        attrs_to_read = {
+            k: v
+            for k, v in attrs.items()
+            if (isinstance(v, str) and v in files)
+            or (isinstance(v, dict) and any([_ in files for _ in v.values()]))
+        }
 
         for attr, file in attrs_to_read.items():
-            if from_zip_archive:
-                # open zip file to make it readable for pandas
-                with zip.open(file) as f:
-                    df = pd.read_csv(f, index_col=0)
+            if attr == "flexibility_bands":
+                df = {}
+                for band, file_name in file.items():
+                    if file_name in files:
+                        if from_zip_archive:
+                            # open zip file to make it readable for pandas
+                            with zip.open(file_name) as f:
+                                df[band] = pd.read_csv(f, index_col=0, parse_dates=True)
+                        else:
+                            path = os.path.join(data_path, file_name)
+                            df[band] = pd.read_csv(path, index_col=0, parse_dates=True)
             else:
-                path = os.path.join(data_path, file)
-                df = pd.read_csv(path, index_col=0)
+                if from_zip_archive:
+                    # open zip file to make it readable for pandas
+                    with zip.open(file) as f:
+                        df = pd.read_csv(f, index_col=0)
+                else:
+                    path = os.path.join(data_path, file)
+                    df = pd.read_csv(path, index_col=0)
 
             if attr == "potential_charging_parks_gdf":
                 epsg = edisgo_obj.topology.grid_district["srid"]
