@@ -89,6 +89,10 @@ extlinks = {
         "http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s",
         "SQLAlchemy session object",
     ),
+    "numpy": (
+        "https://numpy.org/doc/stable/reference/generated/numpy.%s.html",
+        "numpy.",
+    ),
     "shapely": ("https://shapely.readthedocs.io/en/latest/manual.html#%s", "shapely."),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "Ding0"),
     "pypsa": ("https://pypsa.readthedocs.io/en/latest/components.html#%s", "pypsa"),

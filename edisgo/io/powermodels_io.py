@@ -42,7 +42,7 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     pypsa.pf.calculate_dependent_values(psa_net)
     # build PowerModels structure
     pm = _init_pm()
-    timesteps = len(psa_net.snapshots)  # length of considered timesteps
+    timesteps = len(psa_net.snapshots)  # number of considered timesteps
     pm["name"] = "ding0_{}_t_{}".format(edisgo_object.topology.id, timesteps)
     pm["time_elapsed"] = int(
         (psa_net.snapshots[1] - psa_net.snapshots[0]).seconds / 3600
@@ -56,7 +56,7 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     _build_load(psa_net, pm, flexible_cps, flexible_hps)
     _build_electromobility(psa_net, pm, flexible_cps)
     _build_heatpump(psa_net, pm, edisgo_object, flexible_hps)
-    # _build_heat_storage(psa_net, pm, edisgo_object)
+    _build_heat_storage(psa_net, pm, edisgo_object)
     # _build_dsm(psa_net, pm)
     _build_timeseries(psa_net, pm, edisgo_object, flexible_cps, flexible_hps)
     return pm
@@ -112,8 +112,8 @@ def _build_bus(psa_net, pm):
         [bus_types.index(b_type) + 1 for b_type in psa_net.buses["control"].values],
         dtype=int,
     )
-    v_max = [min(val, 1.05) for val in psa_net.buses["v_mag_pu_max"].values]
-    v_min = [max(val, 0.985) for val in psa_net.buses["v_mag_pu_min"].values]
+    v_max = [min(val, 1.1) for val in psa_net.buses["v_mag_pu_max"].values]
+    v_min = [max(val, 0.9) for val in psa_net.buses["v_mag_pu_min"].values]
     v_set = psa_net.buses["v_mag_pu_set"].values
     for bus_i in np.arange(len(psa_net.buses.index)):
         pm["bus"][str(bus_i + 1)] = {
@@ -278,10 +278,10 @@ def _build_battery_storage(psa_net, pm):
             "qmin": 0,  # TODO: über PF?
             "q_loss": 0,  # TODO
             "energy": soc[stor_i],  # TODO: initial energy?
-            "energy_rating": 0,  # TODO
-            "thermal_rating": 0,  # TODO
-            "charge_rating": 0,  # TODO
-            "discharge_rating": 0,  # TODO
+            "energy_rating": 0,  # TODO unbegrenzt
+            "thermal_rating": 0,  # TODO unbegrenzt
+            "charge_rating": 0,  # TODO p_max
+            "discharge_rating": 0,  # TODO p_max
             "charge_efficiency": 1,  # TODO
             "discharge_efficiency": 1,  # TODO
             "storage_bus": idx_bus,
@@ -307,14 +307,15 @@ def _build_electromobility(psa_net, pm, flexible_cps):
         print("There are no flexible charging points in network.")
     else:
         emob_df = psa_net.loads.loc[flexible_cps]
-        pd = emob_df.p_set
-        qd = emob_df.q_set
+        p_max = emob_df.p_set
+        q_max = emob_df.q_set
         for cp_i in np.arange(len(emob_df.index)):
             idx_bus = _mapping(psa_net, emob_df.bus[cp_i])
             pm["electromobility"][str(cp_i + 1)] = {
-                "pd": pd[cp_i],
-                "qd": qd[cp_i],
-                "p_max": 1,
+                "pd": 0,
+                "qd": 0,
+                "p_max": p_max[cp_i],
+                "q_max": q_max[cp_i],
                 "e_min": 0,
                 "e_max": 1,
                 "cp_bus": idx_bus,
@@ -342,25 +343,23 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
         print("There are no flexible heatpumps in network.")
     else:
         heat_df = psa_net.loads.loc[flexible_hps]
-        pd = heat_df.p_set  # heat demand
-        qd = heat_df.q_set
-        cop = edisgo_obj.heat_pump.cop_df  # Wird das auch nach pypsa übersetzt?
-        # p_max = (
-        #     edisgo_obj.heat_pump.p_max
-        # )  # TODO: liegt noch nicht auf dem eDisGo object
+        p_max = heat_df.p_set  # heat demand
+        q_max = heat_df.q_set
+        cop = edisgo_obj.heat_pump.cop_df
         for hp_i in np.arange(len(heat_df.index)):
             idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
             pm["heatpumps"][str(hp_i + 1)] = {
-                "pd": pd[hp_i],
-                "qd": qd[hp_i],
-                # "p_max": p_max[heat_df.index[hp_i]][0],
+                "pd": 0,
+                "qd": 0,
+                "p_max": p_max[hp_i],
+                "q_max": q_max[hp_i],
                 "cop": cop[heat_df.index[hp_i]][0],
                 "hp_bus": idx_bus,
                 "index": hp_i + 1,
             }
 
 
-def _build_heat_storage(psa_net, pm, edisgo_obj):  # TODO
+def _build_heat_storage(psa_net, pm, edisgo_obj):
     """
     Builds heat storage dictionary and adds it to PowerModels dictionary 'pm'.
 
@@ -375,19 +374,16 @@ def _build_heat_storage(psa_net, pm, edisgo_obj):  # TODO
     """
 
     heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df
-    # ps = heat_storage_df.p_set # TODO
     soc = heat_storage_df.state_of_charge_initial
     efficiency = heat_storage_df.efficiency
     capacity = heat_storage_df.capacity
     # p_max = heat_storage_df.p_max_pu  # TODO
     for stor_i in np.arange(len(heat_storage_df.index)):
-        idx_bus = _mapping(
-            psa_net, heat_storage_df.bus[stor_i]
-        )  # TODO 'bus' column doesn't exist yet
+        idx_bus = _mapping(psa_net, psa_net.loads.bus[stor_i])
         pm["heat_storage"][str(stor_i + 1)] = {
-            # "ps": ps[stor_i],
+            "ps": 0,
             # "pmax": p_max[stor_i],
-            # "p_loss": 0,
+            "p_loss": 0,
             "energy": soc[stor_i],
             "capacity": capacity[stor_i],
             "charge_efficiency": efficiency[stor_i],
@@ -412,15 +408,16 @@ def _build_dsm(psa_net, pm, edisgo_obj):  # TODO
 
     """
     dsm_df = psa_net.loads.loc[psa_net.loads.index.str.startswith("dsm_load")]
-    pd = dsm_df.p_set
-    qd = dsm_df.q_set
+    p_max = dsm_df.p_set
+    q_max = dsm_df.q_set
     for dsm_i in np.arange(len(dsm_df.index)):
         idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
         pm["electromobility"][str(dsm_i + 1)] = {
-            "pd": pd[dsm_i],
-            "qd": qd[dsm_i],
+            "pd": 0,
+            "qd": 0,
             "p_min": 0,
-            "p_max": 1,
+            "p_max": p_max[dsm_i],
+            "q_max": q_max[dsm_i],
             "e_min": 0,
             "e_max": 1,
             "dsm_bus": idx_bus,
@@ -449,7 +446,7 @@ def _build_timeseries(psa_net, pm, edisgo_obj, flexible_cps, flexible_hps):
         attached heat storage.
 
     """
-    for kind in ["gen", "load", "storage", "electromobility"]:  # , "heatpumps", "dsm"]
+    for kind in ["gen", "load", "storage", "electromobility", "heatpumps"]:  # , "dsm"]
         _build_component_timeseries(
             psa_net, pm, kind, edisgo_obj, flexible_cps, flexible_hps
         )
@@ -471,7 +468,7 @@ def _build_component_timeseries(
         (PowerModels) dictionary.
     kind: str
         Must be one of ["gen", "load", "storage", "electromobility", "heatpumps",
-        "dsm"]
+        "heat_storage", "dsm"]
     edisgo_obj : :class:`~.EDisGo`
     flexible_cps : :numpy:`numpy.ndarray<ndarray>`
         Array containing all charging points that allow for flexible charging.
@@ -484,7 +481,7 @@ def _build_component_timeseries(
     if kind == "gen":
         p_set = psa_net.generators_t.p_set
         q_set = psa_net.generators_t.q_set
-    elif kind == "load":
+    elif kind == "load":  # TODO: filter out dsm loads
         p_set = psa_net.loads_t.p_set.drop(
             columns=np.concatenate((flexible_hps, flexible_cps))
         )
@@ -515,16 +512,18 @@ def _build_component_timeseries(
             # e_max = pd.read_csv(
             #     "/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_upper_energy.csv"
             # )
-    elif kind == "heatpumps":  # TODO
+    elif kind == "heatpumps":
         if len(flexible_hps) == 0:
             p_set = pd.DataFrame()
-        else:  # TODO add heat storages (== flexible hps)
+        else:
             p_set = psa_net.loads_t.p_set.loc[:, flexible_hps]
-            # cop
-            # wärmespeicherzeitreihe?
+            cop = edisgo_obj.heat_pump.cop_df
     elif kind == "dsm":  # TODO
-        print("To Do")
-
+        print("Not implemented yet.")
+        p_set = pd.DataFrame()  # p_max
+        p_min = pd.DataFrame()
+        e_min = pd.DataFrame()
+        e_max = pd.DataFrame()
     for comp in p_set.columns:
         if kind == "gen":
             comp_i = _mapping(psa_net, comp, kind)
@@ -552,15 +551,20 @@ def _build_component_timeseries(
                     "e_min": e_min[comp].values.tolist(),
                     "e_max": e_max[comp].values.tolist(),
                 }
-        elif kind == "heatpumps":  # TODO
+        elif kind == "heatpumps":
             comp_i = _mapping(psa_net, comp, kind, flexible_hps=flexible_hps)
-            print("To Do")
-            # p_d (heat demand)
-            # cop
-            # p wärmespeicher
-        elif kind == "dsm":  # TODO
-            print("To Do")
-            # e_min, e_max, p_min, p_max
+            pm_comp[str(comp_i)] = {
+                "p_d": p_set[comp].values.tolist(),
+                "cop": cop[comp].values.tolist(),  # ändert der sich über die Zeit?
+            }
+        elif kind == "dsm":
+            comp_i = _mapping(psa_net, comp, kind)
+            pm_comp[str(comp_i)] = {
+                "p_max": p_set[comp].values.tolist(),
+                "p_min": p_min[comp].values.tolist(),
+                "e_min": e_min[comp].values.tolist(),
+                "e_max": e_max[comp].values.tolist(),
+            }
         # TODO: more time dependable values?
     pm["time_series"][kind] = pm_comp
 
@@ -577,8 +581,10 @@ def _mapping(psa_net, name, kind="bus", flexible_cps=None, flexible_hps=None):
         df = psa_net.loads.drop(np.concatenate((flexible_hps, flexible_cps)))
     elif kind == "electromobility":
         df = psa_net.loads.loc[flexible_cps]
-    elif kind == "hetapumps":
+    elif (kind == "heatpumps") | (kind == "heat_storage"):
         df = psa_net.loads.loc[flexible_hps]
+    elif kind == "dsm":  # TODO: dsm load in psa_net loads df?
+        df = pd.DataFrame()
     else:
         logging.warning("Mapping for '{}' not implemented.".format(kind))
     idx = df.reset_index()[df.index == name].index[0] + 1
