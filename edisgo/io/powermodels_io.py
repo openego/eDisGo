@@ -37,7 +37,7 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     # convert eDisGo object to pypsa network structure
     psa_net = edisgo_object.to_pypsa(use_seed=True)
     # aggregate parallel transformers
-    psa_net.transformers = aggregate_parallel_transformers(psa_net.transformers)
+    aggregate_parallel_transformers(psa_net)
     # calculate per unit values
     pypsa.pf.calculate_dependent_values(psa_net)
     # build PowerModels structure
@@ -234,6 +234,7 @@ def _build_load(psa_net, pm, flexible_cps, flexible_hps):
         (PowerModels) dictionary.
     """
     loads_df = psa_net.loads.drop(np.concatenate((flexible_hps, flexible_cps)))
+    # TODO: filter out dsm loads
     pd = loads_df.p_set
     qd = loads_df.q_set
     for load_i in np.arange(len(loads_df.index)):
@@ -570,14 +571,14 @@ def _build_component_timeseries(
 
 
 def _mapping(psa_net, name, kind="bus", flexible_cps=None, flexible_hps=None):
-    # TODO: add heat storages and dsm
+    # TODO: add and dsm
     if kind == "bus":
         df = psa_net.buses
     elif kind == "gen":
         df = psa_net.generators
     elif kind == "storage":
         df = psa_net.storage_units
-    elif kind == "load":
+    elif kind == "load":  # TODO: filter out dsm loads
         df = psa_net.loads.drop(np.concatenate((flexible_hps, flexible_cps)))
     elif kind == "electromobility":
         df = psa_net.loads.loc[flexible_cps]
@@ -591,8 +592,20 @@ def _mapping(psa_net, name, kind="bus", flexible_cps=None, flexible_hps=None):
     return idx
 
 
-def aggregate_parallel_transformers(psa_trafos):
+def aggregate_parallel_transformers(psa_net):
+    """
+    Calculates impedance for parallel transformers and aggregates them. Replaces
+    psa_net.transformers dataframe by aggregated transformer dataframe.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+
+    """
+
     # TODO: what about b, g?
+    psa_trafos = psa_net.transformers
     trafo_df = (
         psa_trafos.groupby(by=[psa_trafos.bus0, psa_trafos.bus1])["r", "x", "s_nom"]
         .apply(calculate_impedance_for_parallel_components)
@@ -606,4 +619,4 @@ def aggregate_parallel_transformers(psa_trafos):
         .merge(trafo_df, how="left")
         .set_index("index")
     )
-    return psa_trafos
+    psa_net.transformers = psa_trafos
