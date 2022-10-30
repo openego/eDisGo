@@ -2074,7 +2074,7 @@ class EDisGo:
             Specifies which electromobility attributes to store. By default this is set
             to None, in which case all attributes are stored.
             See function docstring `attributes` parameter in
-            :func:`~.network.electromobility.Electromobility.to_csv` for more
+            :attr:`~.network.electromobility.Electromobility.to_csv` for more
             information.
         archive : bool, optional
             Save disk storage capacity by archiving the csv files. The
