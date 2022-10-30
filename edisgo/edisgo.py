@@ -2070,6 +2070,12 @@ class EDisGo:
             To only store certain results provide a dictionary. See function docstring
             `parameters` parameter in :func:`~.network.results.Results.to_csv`
             for more information.
+        electromobility_attributes : None or list(str)
+            Specifies which electromobility attributes to store. By default this is set
+            to None, in which case all attributes are stored.
+            See function docstring `attributes` parameter in
+            :attr:`~.network.electromobility.Electromobility.to_csv` for more
+            information.
         archive : bool, optional
             Save disk storage capacity by archiving the csv files. The
             archiving takes place after the generation of the CSVs and
@@ -2102,7 +2108,10 @@ class EDisGo:
             )
 
         if save_electromobility:
-            self.electromobility.to_csv(os.path.join(directory, "electromobility"))
+            self.electromobility.to_csv(
+                os.path.join(directory, "electromobility"),
+                attributes=kwargs.get("electromobility_attributes", None),
+            )
 
         # save configs
         self.config.to_json(directory)
