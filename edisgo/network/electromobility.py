@@ -487,11 +487,11 @@ class Electromobility:
         self.flexibility_bands = flex_band_dict
         return flex_band_dict
 
-    def to_csv(self, directory):
+    def to_csv(self, directory, attributes=None):
         """
         Exports electromobility data to csv files.
 
-        The following attributes are exported:
+        The following attributes can be exported:
 
         * 'charging_processes_df' : Attribute :py:attr:`~charging_processes_df`
           is saved to `charging_processes.csv`.
@@ -512,13 +512,20 @@ class Electromobility:
         ----------
         directory : str
             Path to save electromobility data to.
+        attributes : list(str) or None
+            List of attributes to export. See above for attributes that can be exported.
+            If None, all specified attributes are exported. Default: None.
 
         """
         os.makedirs(directory, exist_ok=True)
 
-        attrs = _get_matching_dict_of_attributes_and_file_names()
+        attrs_file_names = _get_matching_dict_of_attributes_and_file_names()
 
-        for attr, file in attrs.items():
+        if attributes is None:
+            attributes = list(attrs_file_names.keys())
+
+        for attr in attributes:
+            file = attrs_file_names[attr]
             df = getattr(self, attr)
             if attr == "flexibility_bands":
                 for band in file.keys():

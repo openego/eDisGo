@@ -1266,6 +1266,13 @@ class TestEDisGo:
             },
             index=[0, 1],
         )
+        self.edisgo.electromobility.potential_charging_parks_gdf = pd.DataFrame(
+            data={
+                "ags": [5.0, 6.0],
+                "car_id": [7.0, 8.0],
+            },
+            index=[0, 1],
+        )
 
         # ################### test with default parameters ###################
         self.edisgo.save(save_dir)
@@ -1278,7 +1285,12 @@ class TestEDisGo:
         shutil.rmtree(save_dir)
 
         # ############## test with saving heat pump and electromobility #############
-        self.edisgo.save(save_dir, save_electromobility=True, save_heatpump=True)
+        self.edisgo.save(
+            save_dir,
+            save_electromobility=True,
+            save_heatpump=True,
+            electromobility_attributes=["charging_processes_df"],
+        )
 
         # check that sub-directory are created
         dirs_in_save_dir = os.listdir(save_dir)
@@ -1295,7 +1307,7 @@ class TestEDisGo:
         zip = ZipFile(zip_file)
         files = zip.namelist()
         zip.close()
-        assert len(files) == 24
+        assert len(files) == 25
 
         os.remove(zip_file)
 
@@ -1533,7 +1545,9 @@ class TestEDisGoFunc:
         # ############ test with loading electromobility and heat pump data ###########
 
         edisgo_obj_loaded = import_edisgo_from_files(
-            save_dir, import_electromobility=True, import_heat_pump=True
+            save_dir,
+            import_electromobility=True,
+            import_heat_pump=True,
         )
 
         # check electromobility

@@ -70,12 +70,25 @@ class TestElectromobility:
             "lower_energy": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
         }
         self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+
+        # ############ test with default values #####################
         self.edisgo_obj.electromobility.to_csv(dir)
 
         saved_files = os.listdir(dir)
         assert len(saved_files) == 6
         assert "charging_processes.csv" in saved_files
         assert "flexibility_band_upper_power.csv" in saved_files
+
+        shutil.rmtree(dir)
+
+        # ############ test specifying attributes #####################
+        self.edisgo_obj.electromobility.to_csv(
+            dir, attributes=["potential_charging_parks_gdf"]
+        )
+
+        saved_files = os.listdir(dir)
+        assert len(saved_files) == 1
+        assert "potential_charging_parks.csv" in saved_files
 
         shutil.rmtree(dir)
 
