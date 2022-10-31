@@ -497,22 +497,9 @@ def _build_component_timeseries(
             p_set = pd.DataFrame()
         else:
             p_set = psa_net.loads_t.p_set.loc[:, flexible_cps]
-            flex_bands = edisgo_obj.electromobility.get_flexibility_bands(
-                edisgo_obj, ["home", "work"]
-            )
-            p_max = flex_bands["upper_power"]
-            e_min = flex_bands["lower_energy"]
-            e_max = flex_bands["upper_energy"]
-            # TODO: Flexbänder aus eDisGo object auslesen
-            # p_max = pd.read_csv(
-            #     "/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_upper_power.csv"
-            # )
-            # e_min = pd.read_csv(
-            #     "/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_lower_energy.csv"
-            # )
-            # e_max = pd.read_csv(
-            #     "/home/local/RL-INSTITUT/maike.held/Documents/PythonProjects/eDisGo_orig/eDisGo/examples/data_opf/2534/flex_bands_upper_energy.csv"
-            # )
+            p_max = edisgo_obj.electromobility.flexibility_bands["upper_power"]
+            e_min = edisgo_obj.electromobility.flexibility_bands["lower_energy"]
+            e_max = edisgo_obj.electromobility.flexibility_bands["upper_energy"]
     elif kind == "heatpumps":
         if len(flexible_hps) == 0:
             p_set = pd.DataFrame()
@@ -571,7 +558,7 @@ def _build_component_timeseries(
 
 
 def _mapping(psa_net, name, kind="bus", flexible_cps=None, flexible_hps=None):
-    # TODO: add and dsm
+    # TODO: add dsm
     if kind == "bus":
         df = psa_net.buses
     elif kind == "gen":
