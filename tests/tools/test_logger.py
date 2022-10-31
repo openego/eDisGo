@@ -56,4 +56,10 @@ class TestClass:
         logging.debug("edisgo")
         check_file_output("edisgo - DEBUG: edisgo\n")
 
+    @classmethod
+    def teardown_class(cls):
+        logger = logging.getLogger("edisgo")
+        logger.handlers.clear()
+        logger.propagate = True
+
         os.remove("edisgo.log")

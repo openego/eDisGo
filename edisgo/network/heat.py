@@ -1,3 +1,4 @@
+import ast
 import os
 
 from zipfile import ZipFile
@@ -149,6 +150,9 @@ class HeatPump:
 
     @building_ids_df.setter
     def building_ids_df(self, df):
+        # convert data in building_ids to list (when read from csv it is read as string)
+        if not df.empty and isinstance(df.building_ids[0], str):
+            df["building_ids"] = df["building_ids"].apply(lambda x: ast.literal_eval(x))
         self._building_ids_df = df
 
     def set_cop(self, edisgo_object, ts_cop, heat_pump_names=None):
@@ -230,8 +234,8 @@ class HeatPump:
 
             * :pandas:`pandas.DataFrame<dataframe>`
 
-                DataFrame with self-provided heat demand time series per building with
-                heat pump. See :py:attr:`~heat_demand_df` on information on the required
+                DataFrame with self-provided heat demand time series per heat pump.
+                See :py:attr:`~heat_demand_df` on information on the required
                 dataframe format.
 
         heat_pump_names : list(str) or None
@@ -294,6 +298,7 @@ class HeatPump:
                 self._get_matching_dict_of_attributes_and_file_names().keys()
             )
             attr_to_reduce.remove("thermal_storage_units_df")
+            attr_to_reduce.remove("building_ids_df")
         for attr in attr_to_reduce:
             setattr(
                 self,
@@ -320,6 +325,7 @@ class HeatPump:
             "cop_df": "cop.csv",
             "heat_demand_df": "heat_demand.csv",
             "thermal_storage_units_df": "thermal_storage_units.csv",
+            "building_ids_df": "building_ids.csv",
         }
 
     def to_csv(self, directory, reduce_memory=False, **kwargs):
@@ -338,6 +344,10 @@ class HeatPump:
 
             Attribute :py:attr:`~thermal_storage_units_df` is saved to
             `thermal_storage_units.csv`.
+        * 'building_ids_df'
+
+            Attribute :py:attr:`~building_ids_df` is saved to
+            `building_ids.csv`.
 
         Parameters
         ----------
