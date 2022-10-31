@@ -5,6 +5,8 @@ import geopandas as gpd
 import pandas as pd
 import pytest
 
+from pandas.util.testing import assert_frame_equal
+
 from edisgo.edisgo import EDisGo
 from edisgo.io.electromobility_import import (
     import_electromobility,
@@ -61,11 +63,32 @@ class TestElectromobility:
     def test_to_csv(self):
         """Test for method to_csv."""
         dir = os.path.join(os.getcwd(), "electromobility")
+        timeindex = pd.date_range("1/1/1970", periods=2, freq="H")
+        flex_bands = {
+            "upper_energy": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
+            "upper_power": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
+            "lower_energy": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
+        }
+        self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+
+        # ############ test with default values #####################
         self.edisgo_obj.electromobility.to_csv(dir)
 
         saved_files = os.listdir(dir)
-        assert len(saved_files) == 3
+        assert len(saved_files) == 6
         assert "charging_processes.csv" in saved_files
+        assert "flexibility_band_upper_power.csv" in saved_files
+
+        shutil.rmtree(dir)
+
+        # ############ test specifying attributes #####################
+        self.edisgo_obj.electromobility.to_csv(
+            dir, attributes=["potential_charging_parks_gdf"]
+        )
+
+        saved_files = os.listdir(dir)
+        assert len(saved_files) == 1
+        assert "potential_charging_parks.csv" in saved_files
 
         shutil.rmtree(dir)
 
@@ -75,9 +98,16 @@ class TestElectromobility:
 
         """
         dir = os.path.join(os.getcwd(), "electromobility")
+        timeindex = pd.date_range("1/1/1970", periods=2, freq="H")
+        flex_bands = {
+            "upper_energy": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
+            "upper_power": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
+            "lower_energy": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
+        }
+        self.edisgo_obj.electromobility.flexibility_bands = flex_bands
         self.edisgo_obj.electromobility.to_csv(dir)
 
-        # reset self.topology
+        # reset Electromobility
         self.edisgo_obj.electromobility = Electromobility()
 
         self.edisgo_obj.electromobility.from_csv(dir, self.edisgo_obj)
@@ -85,5 +115,21 @@ class TestElectromobility:
         assert len(self.edisgo_obj.electromobility.charging_processes_df) == 48
         assert len(self.edisgo_obj.electromobility.potential_charging_parks_gdf) == 1621
         assert self.edisgo_obj.electromobility.integrated_charging_parks_df.empty
+
+        assert_frame_equal(
+            self.edisgo_obj.electromobility.flexibility_bands["upper_energy"],
+            flex_bands["upper_energy"],
+            check_freq=False,
+        )
+        assert_frame_equal(
+            self.edisgo_obj.electromobility.flexibility_bands["lower_energy"],
+            flex_bands["lower_energy"],
+            check_freq=False,
+        )
+        assert_frame_equal(
+            self.edisgo_obj.electromobility.flexibility_bands["upper_power"],
+            flex_bands["upper_power"],
+            check_freq=False,
+        )
 
         shutil.rmtree(dir)
