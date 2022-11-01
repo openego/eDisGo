@@ -206,12 +206,6 @@ def _build_branch(psa_net, pm):
         (PowerModels) dictionary.
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
-    name = branches.index
-    r = branches.r_pu
-    x = branches.x_pu
-    b = branches.b_pu
-    g = branches.g_pu
-    s_nom = branches.s_nom
     transformer = ~branches.tap_ratio.isna()
     tap = branches.tap_ratio.fillna(1)
     shift = branches.phase_shift.fillna(0)
@@ -220,19 +214,19 @@ def _build_branch(psa_net, pm):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
         pm["branch"][str(branch_i + 1)] = {
-            "name": name[branch_i],
-            "br_r": r[branch_i],
-            "br_x": x[branch_i],
+            "name": branches.index[branch_i],
+            "br_r": branches.r_pu[branch_i],
+            "br_x": branches.x_pu[branch_i],
             "f_bus": idx_f_bus,
             "t_bus": idx_t_bus,
-            "g_to": g[branch_i] / 2,
-            "g_fr": g[branch_i] / 2,
-            "b_to": b[branch_i] / 2,  # Beide positiv?
+            "g_to": branches.g_pu[branch_i] / 2,
+            "g_fr": branches.g_pu[branch_i] / 2,
+            "b_to": branches.b_pu[branch_i] / 2,  # Beide positiv?
             # https://github.com/lanl-ansi/PowerModels.jl/blob/de7da4d11d04ce48b34d7b5f601f32f49361626b/src/io/matpower.jl#L459
-            "b_fr": b[branch_i] / 2,
+            "b_fr": branches.b_pu[branch_i] / 2,
             "shift": shift[branch_i],
             "br_status": 1.0,
-            "rate_a": s_nom[branch_i].real,
+            "rate_a": branches.s_nom[branch_i].real,
             "rate_b": 250,
             "rate_c": 250,
             "angmin": -np.pi / 6,
@@ -257,13 +251,11 @@ def _build_load(psa_net, pm, flexible_cps, flexible_hps):
     """
     loads_df = psa_net.loads.drop(np.concatenate((flexible_hps, flexible_cps)))
     # TODO: filter out dsm loads
-    pd = loads_df.p_set
-    qd = loads_df.q_set
     for load_i in np.arange(len(loads_df.index)):
         idx_bus = _mapping(psa_net, loads_df.bus[load_i])
         pm["load"][str(load_i + 1)] = {
-            "pd": pd[load_i],
-            "qd": qd[load_i],
+            "pd": loads_df.p_set[load_i],
+            "qd": loads_df.q_set[load_i],
             "load_bus": idx_bus,
             "status": True,
             "index": load_i + 1,
@@ -282,25 +274,22 @@ def _build_battery_storage(psa_net, pm):
     pm : dict
         (PowerModels) dictionary.
     """
-    ps = psa_net.storage_units.p_set
-    qs = psa_net.storage_units.q_set
-    soc = psa_net.storage_units.state_of_charge_initial
-    p_max = psa_net.storage_units.p_max_pu
-    p_min = psa_net.storage_units.p_min_pu
     for stor_i in np.arange(len(psa_net.storage_units.index)):
         idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
         pm["storage"][str(stor_i + 1)] = {
             "x": 0,  # TODO
             "r": 0,  # TODO
-            "ps": ps[stor_i],
-            "qs": qs[stor_i],
-            "pmax": p_max[stor_i],
-            "pmin": p_min[stor_i],
+            "ps": psa_net.storage_units.p_set[stor_i],
+            "qs": psa_net.storage_units.q_set[stor_i],
+            "pmax": psa_net.storage_units.p_max_pu[stor_i],
+            "pmin": psa_net.storage_units.p_min_pu[stor_i],
             "p_loss": 0,  # TODO
             "qmax": 1,  # TODO: über PF?
             "qmin": 0,  # TODO: über PF?
             "q_loss": 0,  # TODO
-            "energy": soc[stor_i],  # TODO: initial energy?
+            "energy": psa_net.storage_units.state_of_charge_initial[
+                stor_i
+            ],  # TODO: initial energy?
             "energy_rating": 0,  # TODO unbegrenzt
             "thermal_rating": 0,  # TODO unbegrenzt
             "charge_rating": 0,  # TODO p_max
@@ -330,15 +319,13 @@ def _build_electromobility(psa_net, pm, flexible_cps):
         print("There are no flexible charging points in network.")
     else:
         emob_df = psa_net.loads.loc[flexible_cps]
-        p_max = emob_df.p_set
-        q_max = emob_df.q_set
         for cp_i in np.arange(len(emob_df.index)):
             idx_bus = _mapping(psa_net, emob_df.bus[cp_i])
             pm["electromobility"][str(cp_i + 1)] = {
                 "pd": 0,
                 "qd": 0,
-                "p_max": p_max[cp_i],
-                "q_max": q_max[cp_i],
+                "p_max": emob_df.p_set[cp_i],
+                "q_max": emob_df.q_set[cp_i],
                 "e_min": 0,
                 "e_max": 1,
                 "cp_bus": idx_bus,
@@ -366,17 +353,14 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
         print("There are no flexible heatpumps in network.")
     else:
         heat_df = psa_net.loads.loc[flexible_hps]
-        p_max = heat_df.p_set  # heat demand
-        q_max = heat_df.q_set
-        cop = edisgo_obj.heat_pump.cop_df
         for hp_i in np.arange(len(heat_df.index)):
             idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
             pm["heatpumps"][str(hp_i + 1)] = {
                 "pd": 0,
                 "qd": 0,
-                "p_max": p_max[hp_i],
-                "q_max": q_max[hp_i],
-                "cop": cop[heat_df.index[hp_i]][0],
+                "p_max": heat_df.p_set[hp_i],  # heat demand
+                "q_max": heat_df.q_set[hp_i],
+                "cop": edisgo_obj.heat_pump.cop_df[heat_df.index[hp_i]][0],
                 "hp_bus": idx_bus,
                 "index": hp_i + 1,
             }
@@ -397,20 +381,16 @@ def _build_heat_storage(psa_net, pm, edisgo_obj):
     """
 
     heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df
-    soc = heat_storage_df.state_of_charge_initial
-    efficiency = heat_storage_df.efficiency
-    capacity = heat_storage_df.capacity
-    # p_max = heat_storage_df.p_max_pu  # TODO
     for stor_i in np.arange(len(heat_storage_df.index)):
         idx_bus = _mapping(psa_net, psa_net.loads.bus[stor_i])
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
-            # "pmax": p_max[stor_i],
+            # "pmax": heat_storage_df.p_max_pu[stor_i], # TODO
             "p_loss": 0,
-            "energy": soc[stor_i],
-            "capacity": capacity[stor_i],
-            "charge_efficiency": efficiency[stor_i],
-            "discharge_efficiency": efficiency[stor_i],
+            "energy": heat_storage_df.state_of_charge_initial[stor_i],
+            "capacity": heat_storage_df.capacity[stor_i],
+            "charge_efficiency": heat_storage_df.efficiency[stor_i],
+            "discharge_efficiency": heat_storage_df.efficiency[stor_i],
             "storage_bus": idx_bus,
             "status": True,
             "index": stor_i + 1,
@@ -469,7 +449,8 @@ def _build_timeseries(psa_net, pm, edisgo_obj, flexible_cps, flexible_hps):
         attached heat storage.
 
     """
-    for kind in ["gen", "load", "storage", "electromobility", "heatpumps"]:  # , "dsm"]
+    for kind in ["gen", "gen_nd", "load", "storage", "electromobility", "heatpumps"]:
+        # , "dsm"]
         _build_component_timeseries(
             psa_net, pm, kind, edisgo_obj, flexible_cps, flexible_hps
         )
@@ -490,8 +471,8 @@ def _build_component_timeseries(
     pm : dict
         (PowerModels) dictionary.
     kind: str
-        Must be one of ["gen", "load", "storage", "electromobility", "heatpumps",
-        "heat_storage", "dsm"]
+        Must be one of ["gen", "gen_nd", "load", "storage", "electromobility",
+        "heatpumps", "heat_storage", "dsm"]
     edisgo_obj : :class:`~.EDisGo`
     flexible_cps : :numpy:`numpy.ndarray<ndarray>`
         Array containing all charging points that allow for flexible charging.
