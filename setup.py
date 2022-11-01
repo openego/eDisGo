@@ -55,6 +55,7 @@ requirements = [
     "pyomo >= 6.0",
     "pyproj >= 3.0.0",
     "pypsa >= 0.17.0",
+    "saio",
     "shapely >= 1.7.0",
     "sklearn",
     "sqlalchemy < 1.4.0",

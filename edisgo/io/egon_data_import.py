@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from contextlib import contextmanager
 from pathlib import Path
 
 import geopandas as gpd
@@ -10,6 +11,7 @@ import yaml
 
 from sqlalchemy import create_engine
 from sqlalchemy.engine.base import Engine
+from sqlalchemy.orm import sessionmaker
 from sshtunnel import SSHTunnelForwarder
 
 logger = logging.getLogger(__name__)
@@ -235,3 +237,18 @@ def select_geodataframe(sql, db_engine, index_col=None, geom_col="geom", epsg=30
         logger.warning(f"No data returned by statement:\n{sql}")
 
     return gdf.to_crs(epsg=epsg)
+
+
+@contextmanager
+def session_scope(engine: Engine):
+    """Provide a transactional scope around a series of operations."""
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    try:
+        yield session
+        session.commit()
+    except:  # noqa: E722
+        session.rollback()
+        raise
+    finally:
+        session.close()

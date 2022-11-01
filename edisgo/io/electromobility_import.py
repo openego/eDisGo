@@ -10,12 +10,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+import saio
 
 from numpy.random import default_rng
 from sklearn import preprocessing
 from sqlalchemy.engine.base import Engine
 
-from edisgo.io.egon_data_import import select_dataframe, select_geodataframe
+from edisgo.io.egon_data_import import session_scope
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -266,7 +267,7 @@ def read_simbev_config_df(
     """
     try:
         if simbev_config_file is not None:
-            with open(os.path.join(path, simbev_config_file), "r") as f:
+            with open(os.path.join(path, simbev_config_file)) as f:
                 data = json.load(f)
 
             df = pd.DataFrame.from_dict(
@@ -1159,6 +1160,9 @@ def import_electromobility_from_database(
     scenario: str = "eGon2035",
     **kwargs,
 ):
+    saio.register_schema("demand", engine)
+    saio.register_schema("grid", engine)
+
     edisgo_obj.electromobility.charging_processes_df = charging_processes_from_database(
         edisgo_obj=edisgo_obj, engine=engine, scenario=scenario
     )
@@ -1178,12 +1182,14 @@ def simbev_config_from_database(
     engine: Engine,
     scenario: str = "eGon2035",
 ):
-    sql = f"""
-    SELECT * FROM demand.egon_ev_metadata
-    WHERE scenario = '{scenario}'
-    """
+    from saio.demand import egon_ev_metadata
 
-    df = select_dataframe(sql=sql, db_engine=engine)
+    with session_scope(engine) as session:
+        query = session.query(egon_ev_metadata).filter(
+            egon_ev_metadata.scenario == scenario
+        )
+
+    df = pd.read_sql(sql=query.statement, con=query.session.bind)
 
     return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
 
@@ -1193,16 +1199,22 @@ def potential_charging_parks_from_database(
     engine: Engine,
     **kwargs,
 ):
+    from saio.grid import egon_emob_charging_infrastructure
+
     mv_grid_id = edisgo_obj.topology.id
+    srid = edisgo_obj.topology.grid_district["srid"]
 
-    sql = f"""
-    SELECT * FROM grid.egon_emob_charging_infrastructure
-    WHERE mv_grid_id = '{mv_grid_id}'
-    """
+    with session_scope(engine) as session:
+        query = session.query(egon_emob_charging_infrastructure).filter(
+            egon_emob_charging_infrastructure.mv_grid_id == mv_grid_id
+        )
 
-    gdf = select_geodataframe(
-        sql=sql, db_engine=engine, index_col="cp_id", geom_col="geometry"
-    )
+    gdf = gpd.read_postgis(
+        sql=query.statement,
+        con=query.session.bind,
+        geom_col="geometry",
+        index_col="cp_id",
+    ).to_crs(epsg=srid)
 
     gdf = gdf.assign(ags=0)
 
@@ -1224,26 +1236,30 @@ def charging_processes_from_database(
     engine: Engine,
     scenario: str = "eGon2035",
 ):
+    from saio.demand import egon_ev_mv_grid_district, egon_ev_trip
+
     mv_grid_id = edisgo_obj.topology.id
 
-    sql = f"""
-    SELECT egon_ev_pool_ev_id FROM demand.egon_ev_mv_grid_district
-    WHERE scenario = '{scenario}'
-    AND bus_id = '{mv_grid_id}'
-    """
+    with session_scope(engine) as session:
+        query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
+            egon_ev_mv_grid_district.scenario == scenario,
+            egon_ev_mv_grid_district.bus_id == mv_grid_id,
+        )
 
-    pool = Counter(select_dataframe(sql, db_engine=engine).egon_ev_pool_ev_id)
+    pool = Counter(
+        pd.read_sql(sql=query.statement, con=query.session.bind).egon_ev_pool_ev_id
+    )
 
     n_max = max(pool.values())
 
-    sql = f"""
-    SELECT * FROM demand.egon_ev_trip
-    WHERE scenario = '{scenario}'
-    AND charging_demand > 0
-    AND egon_ev_pool_ev_id IN ({str(list(pool.keys()))[1:-1]})
-    """
+    with session_scope(engine) as session:
+        query = session.query(egon_ev_trip).filter(
+            egon_ev_trip.scenario == scenario,
+            egon_ev_trip.charging_demand > 0,
+            egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
+        )
 
-    ev_trips_df = select_dataframe(sql=sql, db_engine=engine)
+    ev_trips_df = pd.read_sql(sql=query.statement, con=query.session.bind)
 
     df_list = []
 
