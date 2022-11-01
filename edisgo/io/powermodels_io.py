@@ -483,19 +483,27 @@ def _build_component_timeseries(
     """
     pm_comp = dict()
     if kind == "gen":
-        gen_disp = psa_net.generators.loc[
-            ~(psa_net.generators.index.str.contains("solar"))
-            & ~(psa_net.generators.index.str.contains("wind"))
+        p_set = psa_net.generators_t.p_set.loc[
+            :,
+            ~(psa_net.generators_t.p_set.columns.str.contains("solar"))
+            & ~(psa_net.generators_t.p_set.columns.str.contains("wind")),
         ]
-        p_set = gen_disp.p_set
-        q_set = gen_disp.q_set
+        q_set = psa_net.generators_t.q_set.loc[
+            :,
+            ~(psa_net.generators_t.q_set.columns.str.contains("solar"))
+            & ~(psa_net.generators_t.q_set.columns.str.contains("wind")),
+        ]
     elif kind == "gen_nd":
-        gen_nondisp = psa_net.generators.loc[
-            (psa_net.generators.index.str.contains("solar"))
-            | (psa_net.generators.index.str.contains("wind"))
+        p_set = psa_net.generators_t.p_set.loc[
+            :,
+            psa_net.generators_t.p_set.columns.str.contains("solar")
+            | psa_net.generators_t.p_set.columns.str.contains("wind"),
         ]
-        p_set = gen_nondisp.p_set
-        q_set = gen_nondisp.q_set
+        q_set = psa_net.generators_t.q_set.loc[
+            :,
+            psa_net.generators_t.q_set.columns.str.contains("solar")
+            | psa_net.generators_t.q_set.columns.str.contains("wind"),
+        ]
     elif kind == "load":  # TODO: filter out dsm loads
         p_set = psa_net.loads_t.p_set.drop(
             columns=np.concatenate((flexible_hps, flexible_cps))
