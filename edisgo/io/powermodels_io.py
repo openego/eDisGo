@@ -66,6 +66,7 @@ def _init_pm():
     # init empty PowerModels dictionary
     pm = {
         "gen": dict(),
+        "gen_nd": dict(),
         "branch": dict(),
         "bus": dict(),
         "dcline": dict(),
@@ -114,7 +115,6 @@ def _build_bus(psa_net, pm):
     )
     v_max = [min(val, 1.1) for val in psa_net.buses["v_mag_pu_max"].values]
     v_min = [max(val, 0.9) for val in psa_net.buses["v_mag_pu_min"].values]
-    v_set = psa_net.buses["v_mag_pu_set"].values
     for bus_i in np.arange(len(psa_net.buses.index)):
         pm["bus"][str(bus_i + 1)] = {
             "index": bus_i + 1,
@@ -124,15 +124,15 @@ def _build_bus(psa_net, pm):
             "vmax": v_max[bus_i],
             "vmin": v_min[bus_i],
             "va": 0,
-            "vm": v_set[bus_i],
-            "base_kv": psa_net.buses["v_nom"].values[bus_i],
+            "vm": psa_net.buses.v_mag_pu_set[bus_i],
+            "base_kv": psa_net.buses.v_nom[bus_i],
         }
 
 
 def _build_gen(psa_net, pm):
     """
-    Builds generator dictionary in PowerModels network data format and adds it to
-    PowerModels dictionary 'pm'.
+    Builds dispatchable and non-dispatchable generator dictionaries in PowerModels
+    network data format and adds both to PowerModels dictionary 'pm'.
 
     Parameters
     ----------
@@ -141,33 +141,55 @@ def _build_gen(psa_net, pm):
     pm : dict
         (PowerModels) dictionary.
     """
-    pg = psa_net.generators.p_set
-    qg = psa_net.generators.q_set
-    p_max = psa_net.generators.p_max_pu
-    p_min = psa_net.generators.p_min_pu
-    p_nom = psa_net.generators.p_nom
+    # Divide in dispatchable and non-dispatchable generator sets
+    gen_disp = psa_net.generators.loc[
+        ~(psa_net.generators.index.str.contains("solar"))
+        & ~(psa_net.generators.index.str.contains("wind"))
+    ]
+    gen_nondisp = psa_net.generators.loc[
+        (psa_net.generators.index.str.contains("solar"))
+        | (psa_net.generators.index.str.contains("wind"))
+    ]
+
     # determine slack bus through slack generator
     slack_gen = psa_net.generators.bus[
         psa_net.generators.index == "Generator_slack"
     ].values[0]
     pm["bus"][str(_mapping(psa_net, slack_gen))]["bus_type"] = 3
-    for gen_i in np.arange(len(psa_net.generators.index)):
-        idx_bus = _mapping(psa_net, psa_net.generators.bus[gen_i])
+
+    for gen_i in np.arange(len(gen_disp.index)):
+        idx_bus = _mapping(psa_net, gen_disp.bus[gen_i])
         pm["gen"][str(gen_i + 1)] = {
-            "pg": pg[gen_i],
-            "qg": qg[gen_i],  # TODO: über PF
-            "pmax": p_max[gen_i],
-            "pmin": p_min[gen_i],
+            "pg": gen_disp.p_set[gen_i],  # TODO: aus Zeitreihe
+            "qg": gen_disp.q_set[gen_i],  # TODO: aus Zeitreihe
+            "pmax": gen_disp.p_max_pu[gen_i],
+            "pmin": gen_disp.p_min_pu[gen_i],
             "qmax": 1,  # TODO: aus Zeitreihe
             "qmin": 0,
             "vg": 1,
-            "mbase": p_nom[gen_i],
+            "mbase": gen_disp.p_nom[gen_i],
             "gen_bus": idx_bus,
             "gen_status": 1,
             "index": gen_i + 1,
             "model": 2,  # wird eigentlich nicht benötigt
             "ncost": 3,  # wird eigentlich nicht benötigt
             "cost": [120, 20, 0],  # wird eigentlich nicht benötigt
+        }
+
+    for gen_i in np.arange(len(gen_nondisp.index)):
+        idx_bus = _mapping(psa_net, gen_nondisp.bus[gen_i])
+        pm["gen_nd"][str(gen_i + 1)] = {
+            "pg": gen_nondisp.p_set[gen_i],  # TODO: aus Zeitreihe
+            "qg": gen_nondisp.q_set[gen_i],  # TODO: aus Zeitreihe
+            "pmax": gen_nondisp.p_max_pu[gen_i],
+            "pmin": gen_nondisp.p_min_pu[gen_i],
+            "qmax": 1,  # TODO: aus Zeitreihe
+            "qmin": 0,
+            "vg": 1,
+            "mbase": gen_nondisp.p_nom[gen_i],
+            "gen_bus": idx_bus,
+            "gen_status": 1,
+            "index": gen_i + 1,
         }
 
 
@@ -480,8 +502,19 @@ def _build_component_timeseries(
     """
     pm_comp = dict()
     if kind == "gen":
-        p_set = psa_net.generators_t.p_set
-        q_set = psa_net.generators_t.q_set
+        gen_disp = psa_net.generators.loc[
+            ~(psa_net.generators.index.str.contains("solar"))
+            & ~(psa_net.generators.index.str.contains("wind"))
+        ]
+        p_set = gen_disp.p_set
+        q_set = gen_disp.q_set
+    elif kind == "gen_nd":
+        gen_nondisp = psa_net.generators.loc[
+            (psa_net.generators.index.str.contains("solar"))
+            | (psa_net.generators.index.str.contains("wind"))
+        ]
+        p_set = gen_nondisp.p_set
+        q_set = gen_nondisp.q_set
     elif kind == "load":  # TODO: filter out dsm loads
         p_set = psa_net.loads_t.p_set.drop(
             columns=np.concatenate((flexible_hps, flexible_cps))
@@ -514,6 +547,12 @@ def _build_component_timeseries(
         e_max = pd.DataFrame()
     for comp in p_set.columns:
         if kind == "gen":
+            comp_i = _mapping(psa_net, comp, kind)
+            pm_comp[str(comp_i)] = {
+                "pg": p_set[comp].values.tolist(),
+                "qg": q_set[comp].values.tolist(),
+            }
+        if kind == "gen_nd":
             comp_i = _mapping(psa_net, comp, kind)
             pm_comp[str(comp_i)] = {
                 "pg": p_set[comp].values.tolist(),
@@ -562,7 +601,15 @@ def _mapping(psa_net, name, kind="bus", flexible_cps=None, flexible_hps=None):
     if kind == "bus":
         df = psa_net.buses
     elif kind == "gen":
-        df = psa_net.generators
+        df = psa_net.generators.loc[
+            ~(psa_net.generators.index.str.contains("solar"))
+            & ~(psa_net.generators.index.str.contains("wind"))
+        ]
+    elif kind == "gen_nd":
+        df = psa_net.generators.loc[
+            (psa_net.generators.index.str.contains("solar"))
+            | (psa_net.generators.index.str.contains("wind"))
+        ]
     elif kind == "storage":
         df = psa_net.storage_units
     elif kind == "load":  # TODO: filter out dsm loads
