@@ -75,7 +75,7 @@ class Electromobility:
     """
 
     def __init__(self, **kwargs):
-        self._edisgo_obj = kwargs.get("edisgo_obj", None)
+        self._edisgo_obj = kwargs.get("edisgo_obj")
 
     @property
     def charging_processes_df(self):

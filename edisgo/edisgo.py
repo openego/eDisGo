@@ -31,6 +31,7 @@ from edisgo.io.generators_import import oedb as import_generators_oedb
 
 # from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.network import timeseries
+from edisgo.network.dsm import DSM
 from edisgo.network.electromobility import Electromobility
 from edisgo.network.heat import HeatPump
 from edisgo.network.results import Results
@@ -151,9 +152,10 @@ class EDisGo:
             timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
         )
 
-        # instantiate electromobility and heat pump object
+        # instantiate electromobility, heat pump and dsm object
         self.electromobility = Electromobility(edisgo_obj=self)
         self.heat_pump = HeatPump()
+        self.dsm = DSM(edisgo_obj=self)
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
