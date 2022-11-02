@@ -730,7 +730,7 @@ def generators_from_database(
     edisgo_object: EDisGo, engine: Engine, scenario: str = "eGon2035"
 ):
     """
-
+    TODO
     :return:
     """
     fluctuating = ["wind_onshore", "solar"]
