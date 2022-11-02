@@ -33,6 +33,8 @@ def dsm_from_database(
     from saio.grid import (
         egon_etrago_link,
         egon_etrago_link_timeseries,
+        egon_etrago_store,
+        egon_etrago_store_timeseries,
         egon_hvmv_substation,
     )
 
@@ -77,6 +79,7 @@ def dsm_from_database(
         )
 
     link_id = edisgo_obj.dsm.egon_etrago_link.at[0, "link_id"]
+    store_bus_id = edisgo_obj.dsm.egon_etrago_link.at[0, "bus1"]
 
     with session_scope(engine) as session:
         query = session.query(egon_etrago_link_timeseries).filter(
@@ -115,8 +118,39 @@ def dsm_from_database(
             f"the time series of the edisgo object accordingly."
         )
 
-    edisgo_obj.dsm.grid_time_series = pd.DataFrame(
+    edisgo_obj.dsm.dsm_time_series = pd.DataFrame(
         time_series_data, index=edisgo_obj.timeseries.timeindex
     )
 
-    print("break")
+    with session_scope(engine) as session:
+        query = session.query(egon_etrago_store).filter(
+            egon_etrago_store.scn_name == scenario,
+            egon_etrago_store.carrier == "dsm",
+            egon_etrago_store.bus == store_bus_id,
+        )
+
+        edisgo_obj.dsm.egon_etrago_store = pd.read_sql(
+            sql=query.statement, con=query.session.bind
+        )
+
+    store_id = edisgo_obj.dsm.egon_etrago_store.at[0, "store_id"]
+    e_nom = edisgo_obj.dsm.egon_etrago_store.at[0, "e_nom"]
+
+    with session_scope(engine) as session:
+        query = session.query(egon_etrago_store_timeseries).filter(
+            egon_etrago_store_timeseries.scn_name == scenario,
+            egon_etrago_store_timeseries.store_id == store_id,
+        )
+
+        edisgo_obj.dsm.egon_etrago_store_timeseries = pd.read_sql(
+            sql=query.statement, con=query.session.bind
+        )
+
+    time_series_data = {
+        "e_min": edisgo_obj.dsm.egon_etrago_store_timeseries.at[0, "e_min_pu"],
+        "e_max": edisgo_obj.dsm.egon_etrago_store_timeseries.at[0, "e_max_pu"],
+    }
+
+    edisgo_obj.dsm.store_time_series = pd.DataFrame(
+        time_series_data, index=edisgo_obj.timeseries.timeindex
+    ).mul(e_nom)

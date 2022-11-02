@@ -28,9 +28,33 @@ class DSM:
         self._egon_etrago_link_timeseries = df
 
     @property
-    def grid_time_series(self):
-        return self._grid_time_series
+    def dsm_time_series(self):
+        return self._dsm_time_series
 
-    @grid_time_series.setter
-    def grid_time_series(self, df: pd.DataFrame):
-        self._grid_time_series = df
+    @dsm_time_series.setter
+    def dsm_time_series(self, df: pd.DataFrame):
+        self._dsm_time_series = df
+
+    @property
+    def egon_etrago_store(self):
+        return self._egon_etrago_store
+
+    @egon_etrago_store.setter
+    def egon_etrago_store(self, df: pd.DataFrame):
+        self._egon_etrago_store = df
+
+    @property
+    def egon_etrago_store_timeseries(self):
+        return self._egon_etrago_store_timeseries
+
+    @egon_etrago_store_timeseries.setter
+    def egon_etrago_store_timeseries(self, df: pd.DataFrame):
+        self._egon_etrago_store_timeseries = df
+
+    @property
+    def store_time_series(self):
+        return self._store_time_series
+
+    @store_time_series.setter
+    def store_time_series(self, df: pd.DataFrame):
+        self._store_time_series = df
