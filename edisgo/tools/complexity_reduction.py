@@ -68,25 +68,41 @@ def remove_1m_end_line(edisgo, line):
     print("{} removed.".format(line.name))
 
 
-def extract_feeders_nx(edisgo_obj, save_dir=None, only_flex_ev=True):
+def extract_feeders_nx(
+    edisgo_obj, save_dir=None, only_flex_ev=True, flexible_loads: list = None
+):
     """
     Method to extract and optionally save MV-feeders.
     """
 
-    def _extract_feeder(feeder_id):
+    def _extract_feeder(edisgo_orig, subgraph, feeder_id, export_dir, flexible_loads):
         if len(list(set(subgraph.nodes))) > 1:
             buses_with_feeders.loc[list(subgraph.nodes), "feeder_id"] = feeder_id
             edisgo_feeder = create_feeder_edisgo_object(
-                buses_with_feeders, edisgo_orig, feeder_id
+                buses_with_feeders,
+                edisgo_orig,
+                feeder_id,
+                flexible_loads=flexible_loads,
             )
             if save_dir:
-                os.makedirs(
-                    save_dir + "/feeder/{}".format(int(feeder_id)), exist_ok=True
+                export_dir = save_dir / "feeder" / str(feeder_id)
+                os.makedirs(export_dir, exist_ok=True)
+                edisgo_feeder.save(
+                    export_dir,
+                    save_topology=True,
+                    save_timeseries=True,
+                    save_heatpump=True,
+                    save_electromobility=True,
+                    electromobility_attributes=[
+                        "integrated_charging_parks_df",
+                        "simbev_config_df",
+                        "flexibility_bands",
+                    ],
                 )
-                edisgo_feeder.save(save_dir + "/feeder/{}".format(int(feeder_id)))
-            feeders.append(edisgo_feeder)
+                print(f"Saved feeder: {feeder_id} to {export_dir}")
+            # feeders.append(edisgo_feeder)
             feeder_id += 1
-        return feeder_id
+        return feeders
 
     edisgo_orig = deepcopy(edisgo_obj)
     buses_with_feeders = edisgo_orig.topology.buses_df
@@ -115,49 +131,67 @@ def extract_feeders_nx(edisgo_obj, save_dir=None, only_flex_ev=True):
             ]
 
             if len(cp_feeder) > 0:
-                feeder_id = _extract_feeder(
-                    feeder_id
-                )  # buses_with_feeders, edisgo_orig, feeder_id, feeders, save_dir, subgraph
+                feeder = _extract_feeder(
+                    edisgo_orig=edisgo_orig,
+                    subgraph=subgraph,
+                    feeder_id=feeder_id,
+                    export_dir=save_dir,
+                    flexible_loads=flexible_loads,
+                )
         else:
-            feeder_id = _extract_feeder(feeder_id)
+            feeder = _extract_feeder(
+                edisgo_orig=edisgo_orig,
+                subgraph=subgraph,
+                feeder_id=feeder_id,
+                export_dir=save_dir,
+                flexible_loads=flexible_loads,
+            )
+        feeders.append(feeder)
     return feeders, buses_with_feeders
 
 
-def create_feeder_edisgo_object(buses_with_feeders, edisgo_obj, feeder_id):
+def create_feeder_edisgo_object(
+    buses_with_feeders, edisgo_obj, feeder_id, flexible_loads: list = None
+):
     """
     Method to create feeder edisgo object.
     """
     edisgo_feeder = deepcopy(edisgo_obj)
-    # convert topology
+
+    # select topology
+    # get buses of feeder and append mv-station
     edisgo_feeder.topology.buses_df = edisgo_obj.topology.buses_df.loc[
         buses_with_feeders.feeder_id == feeder_id
-    ].append(edisgo_feeder.topology.mv_grid.station)
-    # Todo: code more efficiently using setattr and getattr
-    edisgo_feeder.topology.lines_df = edisgo_obj.topology.lines_df.loc[
-        edisgo_obj.topology.lines_df.bus0.isin(edisgo_feeder.topology.buses_df.index)
-    ].loc[edisgo_obj.topology.lines_df.bus1.isin(edisgo_feeder.topology.buses_df.index)]
-    edisgo_feeder.topology.transformers_df = edisgo_obj.topology.transformers_df.loc[
-        edisgo_obj.topology.transformers_df.bus0.isin(
-            edisgo_feeder.topology.buses_df.index
-        )
-    ].loc[
-        edisgo_obj.topology.transformers_df.bus1.isin(
-            edisgo_feeder.topology.buses_df.index
-        )
+    ].append(edisgo_obj.topology.mv_grid.station)
+
+    feeder_buses = edisgo_feeder.topology.buses_df.index
+
+    attr_list = [
+        "lines_df",
+        "transformers_df",
     ]
-    edisgo_feeder.topology.generators_df = edisgo_obj.topology.generators_df.loc[
-        edisgo_obj.topology.generators_df.bus.isin(
-            edisgo_feeder.topology.buses_df.index
-        )
+
+    for attr_name in attr_list:
+        attr_old = getattr(edisgo_obj.topology, attr_name)
+        attr_new = attr_old.loc[
+            attr_old.bus0.isin(feeder_buses) & attr_old.bus1.isin(feeder_buses)
+        ]
+        setattr(edisgo_feeder.topology, attr_name, attr_new)
+
+    attr_list = [
+        "generators_df",
+        "loads_df",
+        "storage_units_df",
+        # "charging_points_df", # already covered in loads_df
     ]
-    edisgo_feeder.topology.loads_df = edisgo_obj.topology.loads_df.loc[
-        edisgo_obj.topology.loads_df.bus.isin(edisgo_feeder.topology.buses_df.index)
-    ]
-    edisgo_feeder.topology.storage_units_df = edisgo_obj.topology.storage_units_df.loc[
-        edisgo_obj.topology.storage_units_df.bus.isin(
-            edisgo_feeder.topology.buses_df.index
-        )
-    ]
+
+    for attr_name in attr_list:
+        attr_old = getattr(edisgo_obj.topology, attr_name)
+        attr_new = attr_old.loc[attr_old.bus.isin(feeder_buses)]
+        setattr(edisgo_feeder.topology, attr_name, attr_new)
+
+    # get switches connected to a line of this feeder with either open or
+    # closed bus of this feeder
     edisgo_feeder.topology.switches_df = edisgo_obj.topology.switches_df.loc[
         edisgo_obj.topology.switches_df.branch.isin(
             edisgo_feeder.topology.lines_df.index
@@ -169,43 +203,52 @@ def create_feeder_edisgo_object(buses_with_feeders, edisgo_obj, feeder_id):
             edisgo_feeder.topology.buses_df.index
         )
     ]
-    # convert timeseries
-    # Todo: code more efficiently using setattr and getattr
 
-    if not edisgo_obj.timeseries.generators_active_power.empty:
-        edisgo_feeder.timeseries.generators_active_power = (
-            edisgo_obj.timeseries.generators_active_power[
-                edisgo_feeder.topology.generators_df.index
-            ]
-        )
-    if not edisgo_obj.timeseries.generators_reactive_power.empty:
-        edisgo_feeder.timeseries.generators_reactive_power = (
-            edisgo_obj.timeseries.generators_reactive_power[
-                edisgo_feeder.topology.generators_df.index
-            ]
-        )
-    if not edisgo_obj.timeseries.loads_active_power.empty:
-        edisgo_feeder.timeseries.loads_active_power = (
-            edisgo_obj.timeseries.loads_active_power[
-                edisgo_feeder.topology.loads_df.index
-            ]
-        )
-    if not edisgo_obj.timeseries.loads_reactive_power.empty:
-        edisgo_feeder.timeseries.loads_reactive_power = (
-            edisgo_obj.timeseries.loads_reactive_power[
-                edisgo_feeder.topology.loads_df.index
-            ]
-        )
-    if not edisgo_obj.timeseries.storage_units_active_power.empty:
-        edisgo_feeder.timeseries.storage_units_active_power = (
-            edisgo_obj.timeseries.storage_units_active_power[
-                edisgo_feeder.topology.storage_units_df.index
-            ]
-        )
-    if not edisgo_obj.timeseries.storage_units_reactive_power.empty:
-        edisgo_feeder.timeseries.storage_units_reactive_power = (
-            edisgo_obj.timeseries.storage_units_reactive_power[
-                edisgo_feeder.topology.storage_units_df.index
-            ]
-        )
+    # select timeseries
+    attr_list = {
+        "generators_active_power": "generators_df",
+        "generators_reactive_power": "generators_df",
+        "loads_active_power": "loads_df",
+        "loads_reactive_power": "loads_df",
+        "storage_units_active_power": "storage_units_df",
+        "storage_units_reactive_power": "storage_units_df",
+    }
+
+    for attr_name, id_attr in attr_list.items():
+
+        if not attr_old.empty:
+            # get attribute
+            attr_old = getattr(edisgo_obj.timeseries, attr_name)
+
+            # get ids for attribute but remove flexible loads
+            if isinstance(flexible_loads, list) & (id_attr == "loads_df"):
+                id_attr = getattr(edisgo_feeder.topology, id_attr)
+                # remove flexible loads
+                id_attr = id_attr.drop(
+                    id_attr.loc[id_attr.index.isin(flexible_loads)].index
+                )
+            else:
+                id_attr = getattr(edisgo_feeder.topology, id_attr)
+
+            # reduce attribute
+            attr_new = attr_old.loc[:, id_attr.index]
+            # set attribute
+            setattr(edisgo_feeder.timeseries, attr_name, attr_new)
+
+    # select heat pump attributes
+    attr_list = ["heat_demand_df", "cop_df", "thermal_storage_units_df"]
+
+    hp_ids = edisgo_feeder.topology.loads_df.loc[
+        edisgo_feeder.topology.loads_df["type"] == "heat_pump"
+    ].index
+
+    for attr_name in attr_list:
+        attr_old = getattr(edisgo_obj.heat_pump, attr_name)
+        if attr_name == "thermal_storage_units_df":
+            attr_new = attr_old.loc[hp_ids]
+        else:
+            attr_new = attr_old.loc[:, hp_ids]
+
+        setattr(edisgo_feeder.heat_pump, attr_name, attr_new)
+
     return edisgo_feeder
