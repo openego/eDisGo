@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import saio
 
-# from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
 from edisgo.io.egon_data_import import session_scope
@@ -44,13 +43,7 @@ def dsm_from_database(
         query = session.query(
             egon_hvmv_substation.bus_id,
             egon_hvmv_substation.point.label("geom"),
-        )  # TODO: wie muss die querry richtig lauten?
-        #     .filter(
-        #     func.ST_Within(
-        #         grid_gdf.geometry.iat[0],
-        #         egon_hvmv_substation.point,
-        #     )
-        # )
+        )
 
         gdf = gpd.read_postgis(
             sql=query.statement, con=query.session.bind, crs=grid_gdf.crs
