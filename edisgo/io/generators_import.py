@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def oedb(edisgo_obj, generator_scenario, **kwargs):
+def oedb(edisgo_object, generator_scenario, **kwargs):
     """
     Gets generator park for specified scenario from oedb and integrates them
     into the grid.
@@ -41,7 +41,7 @@ def oedb(edisgo_obj, generator_scenario, **kwargs):
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.EDisGo`
+    edisgo_object : :class:`~.EDisGo`
     generator_scenario : str
         Scenario for which to retrieve generator data. Possible options
         are 'nep2035' and 'ego100'.
@@ -108,7 +108,8 @@ def oedb(edisgo_obj, generator_scenario, **kwargs):
                 ).label("geom"),
             )
             .filter(
-                orm_conv_generators.columns.subst_id == edisgo_obj.topology.mv_grid.id
+                orm_conv_generators.columns.subst_id
+                == edisgo_object.topology.mv_grid.id
             )
             .filter(orm_conv_generators.columns.voltage_level.in_([4, 5]))
             .filter(orm_conv_generators_version)
@@ -157,7 +158,7 @@ def oedb(edisgo_obj, generator_scenario, **kwargs):
                 ).label("geom_em"),
             )
             .filter(
-                orm_re_generators.columns.subst_id == edisgo_obj.topology.mv_grid.id
+                orm_re_generators.columns.subst_id == edisgo_object.topology.mv_grid.id
             )
             .filter(orm_re_generators_version)
         )
@@ -209,7 +210,7 @@ def oedb(edisgo_obj, generator_scenario, **kwargs):
             + generators_conv_mv["p_nom"].sum()
         )
 
-        capacity_grid = edisgo_obj.topology.generators_df.p_nom.sum()
+        capacity_grid = edisgo_object.topology.generators_df.p_nom.sum()
 
         logger.debug(
             f"Cumulative generator capacity (updated): {round(capacity_imported, 1)} MW"
@@ -263,7 +264,7 @@ def oedb(edisgo_obj, generator_scenario, **kwargs):
             # get geom of MV grid district
             mvgd_geom_shp = transform(
                 projection,
-                edisgo_obj.topology.grid_district["geom"],
+                edisgo_object.topology.grid_district["geom"],
             )
 
             # check if MVGD contains geno
@@ -277,19 +278,19 @@ def oedb(edisgo_obj, generator_scenario, **kwargs):
                     "datasets."
                 )
 
-    oedb_data_source = edisgo_obj.config["data_source"]["oedb_data_source"]
-    srid = edisgo_obj.topology.grid_district["srid"]
+    oedb_data_source = edisgo_object.config["data_source"]["oedb_data_source"]
+    srid = edisgo_object.topology.grid_district["srid"]
 
     # load ORM names
     orm_conv_generators_name = (
-        edisgo_obj.config[oedb_data_source]["conv_generators_prefix"]
+        edisgo_object.config[oedb_data_source]["conv_generators_prefix"]
         + generator_scenario
-        + edisgo_obj.config[oedb_data_source]["conv_generators_suffix"]
+        + edisgo_object.config[oedb_data_source]["conv_generators_suffix"]
     )
     orm_re_generators_name = (
-        edisgo_obj.config[oedb_data_source]["re_generators_prefix"]
+        edisgo_object.config[oedb_data_source]["re_generators_prefix"]
         + generator_scenario
-        + edisgo_obj.config[oedb_data_source]["re_generators_suffix"]
+        + edisgo_object.config[oedb_data_source]["re_generators_suffix"]
     )
 
     if oedb_data_source == "model_draft":
@@ -304,7 +305,7 @@ def oedb(edisgo_obj, generator_scenario, **kwargs):
 
     elif oedb_data_source == "versioned":
 
-        data_version = edisgo_obj.config["versioned"]["version"]
+        data_version = edisgo_object.config["versioned"]["version"]
 
         # import ORMs
         orm_conv_generators = supply.__getattribute__(orm_conv_generators_name)
@@ -332,7 +333,7 @@ def oedb(edisgo_obj, generator_scenario, **kwargs):
     _validate_sample_geno_location()
 
     _update_grids(
-        edisgo_obj=edisgo_obj,
+        edisgo_object=edisgo_object,
         imported_generators_mv=generators_mv,
         imported_generators_lv=generators_res_lv,
         **kwargs,
@@ -343,7 +344,7 @@ def oedb(edisgo_obj, generator_scenario, **kwargs):
 
 
 def _update_grids(
-    edisgo_obj,
+    edisgo_object,
     imported_generators_mv,
     imported_generators_lv,
     remove_decommissioned=True,
@@ -366,7 +367,7 @@ def _update_grids(
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.EDisGo`
+    edisgo_object : :class:`~.EDisGo`
     imported_generators_mv : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing all MV generators.
         Index of the dataframe are the generator IDs.
@@ -452,7 +453,7 @@ def _update_grids(
     logger.debug(f"{len(imported_gens)} generators imported.")
 
     # get existing generators and append ID column
-    existing_gens = edisgo_obj.topology.generators_df
+    existing_gens = edisgo_object.topology.generators_df
     existing_gens["id"] = list(
         map(lambda _: int(_.split("_")[-1]), existing_gens.index)
     )
@@ -469,7 +470,7 @@ def _update_grids(
         # remove from topology (if generator exists)
         if id in existing_gens.id.values:
             gen_name = existing_gens[existing_gens.id == id].index[0]
-            edisgo_obj.topology.remove_generator(gen_name)
+            edisgo_object.topology.remove_generator(gen_name)
             logger.warning(
                 "Capacity of generator {} is <= 0, it is therefore "
                 "removed. Check your data source.".format(gen_name)
@@ -504,7 +505,7 @@ def _update_grids(
         ]
 
         for id, row in gens_to_update_cap.iterrows():
-            edisgo_obj.topology._generators_df.loc[id, "p_nom"] = imported_gens.loc[
+            edisgo_object.topology._generators_df.loc[id, "p_nom"] = imported_gens.loc[
                 row["id"], "p_nom"
             ]
 
@@ -529,7 +530,7 @@ def _update_grids(
 
     if not decommissioned_gens.empty and remove_decommissioned:
         for gen in decommissioned_gens.index:
-            edisgo_obj.topology.remove_generator(gen)
+            edisgo_object.topology.remove_generator(gen)
         log_geno_cap = decommissioned_gens.p_nom.sum()
         log_geno_count = len(decommissioned_gens)
         logger.debug(
@@ -624,7 +625,7 @@ def _update_grids(
                 drop_generators(imported_gens, gen_type, required_expansion)
 
         new_gens = pd.concat([new_gens_lv, new_gens_mv], sort=True)
-        update_imported_gens(edisgo_obj.topology.generators_df.index, new_gens)
+        update_imported_gens(edisgo_object.topology.generators_df.index, new_gens)
 
         # drop types not in p_target from new_gens
         for gen_type in new_gens.generator_type.unique():
@@ -649,7 +650,9 @@ def _update_grids(
             new_gens_mv.drop(id)
             continue
         new_gens_mv.at[id, "geom"] = geom
-        edisgo_obj.topology.connect_to_mv(edisgo_obj, dict(new_gens_mv.loc[id, :]))
+        edisgo_object.topology.connect_to_mv(
+            edisgo_object, dict(new_gens_mv.loc[id, :])
+        )
 
     log_geno_count = len(new_gens_mv)
     log_geno_cap = new_gens_mv["p_nom"].sum()
@@ -665,7 +668,7 @@ def _update_grids(
 
     # check if new generators can be allocated to an existing LV grid
     if not imported_generators_lv.empty:
-        grid_ids = edisgo_obj.topology._lv_grid_ids
+        grid_ids = edisgo_object.topology._lv_grid_ids
         if not any(
             [
                 int(_) in grid_ids
@@ -681,17 +684,17 @@ def _update_grids(
 
     # iterate over new generators and create them
     for id in new_gens_lv.index.sort_values(ascending=True):
-        edisgo_obj.topology.connect_to_lv(
-            edisgo_obj,
+        edisgo_object.topology.connect_to_lv(
+            edisgo_object,
             dict(new_gens_lv.loc[id, :]),
             allowed_number_of_comp_per_bus=allowed_number_of_comp_per_lv_bus,
         )
 
     def scale_generators(gen_type, total_capacity):
-        idx = edisgo_obj.topology.generators_df["type"] == gen_type
-        current_capacity = edisgo_obj.topology.generators_df[idx].p_nom.sum()
+        idx = edisgo_object.topology.generators_df["type"] == gen_type
+        current_capacity = edisgo_object.topology.generators_df[idx].p_nom.sum()
         if current_capacity != 0:
-            edisgo_obj.topology.generators_df.loc[idx, "p_nom"] *= (
+            edisgo_object.topology.generators_df.loc[idx, "p_nom"] *= (
                 total_capacity / current_capacity
             )
 
@@ -707,7 +710,7 @@ def _update_grids(
         )
     )
 
-    for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
+    for lv_grid in edisgo_object.topology.mv_grid.lv_grids:
         lv_loads = len(lv_grid.loads_df)
         lv_gens_voltage_level_7 = len(
             lv_grid.generators_df[lv_grid.generators_df.bus != lv_grid.station.index[0]]
@@ -723,7 +726,7 @@ def _update_grids(
 
 
 def generators_from_database(
-    edisgo_obj: EDisGo, engine: Engine, scenario: str = "eGon2035"
+    edisgo_object: EDisGo, engine: Engine, scenario: str = "eGon2035"
 ):
     """
     TODO
@@ -732,7 +735,7 @@ def generators_from_database(
     fluctuating = ["wind_onshore", "solar"]
     firm = ["others", "gas", "oil", "biomass", "run_of_river", "reservoir"]
 
-    srid = edisgo_obj.topology.grid_district["srid"]
+    srid = edisgo_object.topology.grid_district["srid"]
 
     sql = """
     SELECT * FROM supply.egon_power_plants
@@ -740,7 +743,7 @@ def generators_from_database(
     AND carrier IN ({})
     """
 
-    grid_gdf = mv_grid_gdf(edisgo_obj)
+    grid_gdf = mv_grid_gdf(edisgo_object)
 
     # 1. firm egon_power_plants
     firm_gdf = select_geodataframe(
