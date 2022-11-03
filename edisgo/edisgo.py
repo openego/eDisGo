@@ -21,6 +21,7 @@ from edisgo.flex_opt.heat_pump_operation import (
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
+from edisgo.io.dsm_import import dsm_from_database
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
     import_electromobility,
@@ -1685,6 +1686,9 @@ class EDisGo:
         #     self, "oedb", heat_pump_names=integrated_heat_pumps
         # )
         # self.heat_pump.set_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
+
+    def import_dsm(self, engine: Engine, scenario: str = "eGon2035"):
+        dsm_from_database(edisgo_obj=self, engine=engine, scenario=scenario)
 
     def apply_heat_pump_operating_strategy(
         self, strategy="uncontrolled", heat_pump_names=None, **kwargs

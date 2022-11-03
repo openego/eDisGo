@@ -80,6 +80,7 @@ def dsm_from_database(
 
     link_id = edisgo_obj.dsm.egon_etrago_link.at[0, "link_id"]
     store_bus_id = edisgo_obj.dsm.egon_etrago_link.at[0, "bus1"]
+    p_nom = edisgo_obj.dsm.egon_etrago_link.at[0, "p_nom"]
 
     with session_scope(engine) as session:
         query = session.query(egon_etrago_link_timeseries).filter(
@@ -92,8 +93,8 @@ def dsm_from_database(
         )
 
     time_series_data = {
-        "p_min_pu": edisgo_obj.dsm.egon_etrago_link_timeseries.at[0, "p_min_pu"],
-        "p_max_pu": edisgo_obj.dsm.egon_etrago_link_timeseries.at[0, "p_max_pu"],
+        "p_min": edisgo_obj.dsm.egon_etrago_link_timeseries.at[0, "p_min_pu"],
+        "p_max": edisgo_obj.dsm.egon_etrago_link_timeseries.at[0, "p_max_pu"],
         "p_set": edisgo_obj.dsm.egon_etrago_link_timeseries.at[0, "p_set"],
     }
 
@@ -104,23 +105,23 @@ def dsm_from_database(
         )
 
         time_series_data["p_set"] = [
-            (p_min_pu + p_max_pu) / 2
-            for p_min_pu, p_max_pu in zip(
-                time_series_data["p_min_pu"], time_series_data["p_max_pu"]
+            (p_min + p_max) / 2
+            for p_min, p_max in zip(
+                time_series_data["p_min"], time_series_data["p_max"]
             )
         ]
 
-    if len(edisgo_obj.timeseries.timeindex) != len(time_series_data["p_min_pu"]):
+    if len(edisgo_obj.timeseries.timeindex) != len(time_series_data["p_min"]):
         raise IndexError(
             f"The length of the time series of the edisgo object ("
             f"{len(edisgo_obj.timeseries.timeindex)}) and the database ("
-            f"{len(time_series_data['p_min_pu'])}) do not match. Adjust the length of "
+            f"{len(time_series_data['p_min'])}) do not match. Adjust the length of "
             f"the time series of the edisgo object accordingly."
         )
 
     edisgo_obj.dsm.dsm_time_series = pd.DataFrame(
         time_series_data, index=edisgo_obj.timeseries.timeindex
-    )
+    ).mul(p_nom)
 
     with session_scope(engine) as session:
         query = session.query(egon_etrago_store).filter(
