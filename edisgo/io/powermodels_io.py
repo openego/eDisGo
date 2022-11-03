@@ -290,12 +290,14 @@ def _build_battery_storage(psa_net, pm):
             "energy": psa_net.storage_units.state_of_charge_initial[
                 stor_i
             ],  # TODO: initial energy?
-            "energy_rating": 0,  # TODO unbegrenzt
-            "thermal_rating": 0,  # TODO unbegrenzt
-            "charge_rating": 0,  # TODO p_max
-            "discharge_rating": 0,  # TODO p_max
-            "charge_efficiency": 1,  # TODO
-            "discharge_efficiency": 1,  # TODO
+            "energy_rating": psa_net.storage_units.capacity[
+                stor_i
+            ],  # TODO: storage capacity
+            "thermal_rating": 1,  # TODO unbegrenzt
+            "charge_rating": psa_net.storage_units.p_max_pu[stor_i],
+            "discharge_rating": -psa_net.storage_units.p_min_pu[stor_i],
+            "charge_efficiency": 1,
+            "discharge_efficiency": 1,
             "storage_bus": idx_bus,
             "status": True,
             "index": stor_i + 1,
@@ -570,7 +572,7 @@ def _build_component_timeseries(
         elif kind == "heatpumps":
             comp_i = _mapping(psa_net, comp, kind, flexible_hps=flexible_hps)
             pm_comp[str(comp_i)] = {
-                "p_d": p_set[comp].values.tolist(),
+                "pd": p_set[comp].values.tolist(),
                 "cop": cop[comp].values.tolist(),  # ändert der sich über die Zeit?
             }
         elif kind == "dsm":
