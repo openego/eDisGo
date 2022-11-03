@@ -28,14 +28,6 @@ class DSM:
         self._egon_etrago_link_timeseries = df
 
     @property
-    def dsm_time_series(self):
-        return self._dsm_time_series
-
-    @dsm_time_series.setter
-    def dsm_time_series(self, df: pd.DataFrame):
-        self._dsm_time_series = df
-
-    @property
     def egon_etrago_store(self):
         return self._egon_etrago_store
 
@@ -52,9 +44,33 @@ class DSM:
         self._egon_etrago_store_timeseries = df
 
     @property
-    def store_time_series(self):
-        return self._store_time_series
+    def p_min(self):
+        return self._p_min
 
-    @store_time_series.setter
-    def store_time_series(self, df: pd.DataFrame):
-        self._store_time_series = df
+    @p_min.setter
+    def p_min(self, df: pd.DataFrame):
+        self._p_min = df
+
+    @property
+    def p_max(self):
+        return self._p_max
+
+    @p_max.setter
+    def p_max(self, df: pd.DataFrame):
+        self._p_max = df
+
+    @property
+    def e_min(self):
+        return self._e_min
+
+    @e_min.setter
+    def e_min(self, df: pd.DataFrame):
+        self._e_min = df
+
+    @property
+    def e_max(self):
+        return self._e_max
+
+    @e_max.setter
+    def e_max(self, df: pd.DataFrame):
+        self._e_max = df

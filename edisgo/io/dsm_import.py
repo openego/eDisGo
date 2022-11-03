@@ -92,36 +92,24 @@ def dsm_from_database(
             sql=query.statement, con=query.session.bind
         )
 
-    time_series_data = {
-        "p_min": edisgo_obj.dsm.egon_etrago_link_timeseries.at[0, "p_min_pu"],
-        "p_max": edisgo_obj.dsm.egon_etrago_link_timeseries.at[0, "p_max_pu"],
-        "p_set": edisgo_obj.dsm.egon_etrago_link_timeseries.at[0, "p_set"],
-    }
+    for p in ["p_min_pu", "p_max_pu"]:
+        name = "_".join(p.split("_")[:-1])
 
-    if time_series_data["p_set"] is None:
-        logger.warning(
-            "DSM time series for p_set is missing. Using the mean from p_min_pu and "
-            "p_max_pu as fallback."
-        )
+        data = {name: edisgo_obj.dsm.egon_etrago_link_timeseries.at[0, p]}
 
-        time_series_data["p_set"] = [
-            (p_min + p_max) / 2
-            for p_min, p_max in zip(
-                time_series_data["p_min"], time_series_data["p_max"]
+        if len(edisgo_obj.timeseries.timeindex) != len(data[name]):
+            raise IndexError(
+                f"The length of the time series of the edisgo object ("
+                f"{len(edisgo_obj.timeseries.timeindex)}) and the database ("
+                f"{len(data[name])}) do not match. Adjust the length of "
+                f"the time series of the edisgo object accordingly."
             )
-        ]
 
-    if len(edisgo_obj.timeseries.timeindex) != len(time_series_data["p_min"]):
-        raise IndexError(
-            f"The length of the time series of the edisgo object ("
-            f"{len(edisgo_obj.timeseries.timeindex)}) and the database ("
-            f"{len(time_series_data['p_min'])}) do not match. Adjust the length of "
-            f"the time series of the edisgo object accordingly."
+        setattr(
+            edisgo_obj.dsm,
+            name,
+            pd.DataFrame(data, index=edisgo_obj.timeseries.timeindex).mul(p_nom),
         )
-
-    edisgo_obj.dsm.dsm_time_series = pd.DataFrame(
-        time_series_data, index=edisgo_obj.timeseries.timeindex
-    ).mul(p_nom)
 
     with session_scope(engine) as session:
         query = session.query(egon_etrago_store).filter(
@@ -147,11 +135,21 @@ def dsm_from_database(
             sql=query.statement, con=query.session.bind
         )
 
-    time_series_data = {
-        "e_min": edisgo_obj.dsm.egon_etrago_store_timeseries.at[0, "e_min_pu"],
-        "e_max": edisgo_obj.dsm.egon_etrago_store_timeseries.at[0, "e_max_pu"],
-    }
+    for e in ["e_min_pu", "e_max_pu"]:
+        name = "_".join(e.split("_")[:-1])
 
-    edisgo_obj.dsm.store_time_series = pd.DataFrame(
-        time_series_data, index=edisgo_obj.timeseries.timeindex
-    ).mul(e_nom)
+        data = {name: edisgo_obj.dsm.egon_etrago_store_timeseries.at[0, e]}
+
+        if len(edisgo_obj.timeseries.timeindex) != len(data[name]):
+            raise IndexError(
+                f"The length of the time series of the edisgo object ("
+                f"{len(edisgo_obj.timeseries.timeindex)}) and the database ("
+                f"{len(data[name])}) do not match. Adjust the length of "
+                f"the time series of the edisgo object accordingly."
+            )
+
+        setattr(
+            edisgo_obj.dsm,
+            name,
+            pd.DataFrame(data, index=edisgo_obj.timeseries.timeindex).mul(e_nom),
+        )
