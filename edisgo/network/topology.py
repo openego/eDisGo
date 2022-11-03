@@ -2810,7 +2810,7 @@ class Topology:
             Path to topology csv files or zip archive.
         edisgo_obj : :class:`~.EDisGo`
         from_zip_archive : bool
-            Set True if data is archived in a zip archive. Default: False
+            Set to True if data is archived in a zip archive. Default: False.
 
         """
 

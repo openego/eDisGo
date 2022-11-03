@@ -4,6 +4,7 @@ import shutil
 import pandas as pd
 import pytest
 
+from edisgo import EDisGo
 from edisgo.network.heat import HeatPump
 
 
@@ -33,6 +34,12 @@ class TestHeatPump:
             },
             index=["hp1", "hp2"],
         )
+        self.building_ids = pd.DataFrame(
+            data={
+                "building_ids": [[1], [2, 3]],
+            },
+            index=["hp1", "hp2"],
+        )
 
     @pytest.fixture(autouse=True)
     def setup_heat_pump(self):
@@ -40,6 +47,41 @@ class TestHeatPump:
         self.heatpump.cop_df = self.cop
         self.heatpump.heat_demand_df = self.heat_demand
         self.heatpump.thermal_storage_units_df = self.tes
+        self.heatpump.building_ids_df = self.building_ids
+
+    def test_set_cop(self):
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        # test with dataframe
+        cop = pd.DataFrame(
+            data={
+                "hp3": [5.0, 6.0],
+            },
+            index=self.timeindex,
+        )
+        self.heatpump.set_cop(self.edisgo, cop)
+        pd.testing.assert_frame_equal(
+            self.heatpump.cop_df,
+            cop,
+            check_freq=False,
+        )
+        # ToDo: test with oedb
+
+    def test_set_heat_demand(self):
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        # test with dataframe
+        heat_demand = pd.DataFrame(
+            data={
+                "hp3": [1.0, 2.0],
+            },
+            index=self.timeindex,
+        )
+        self.heatpump.set_heat_demand(self.edisgo, heat_demand)
+        pd.testing.assert_frame_equal(
+            self.heatpump.heat_demand_df,
+            heat_demand,
+            check_freq=False,
+        )
+        # ToDo: test with oedb
 
     def test_reduce_memory(self):
 
@@ -69,10 +111,11 @@ class TestHeatPump:
         self.heatpump.to_csv(save_dir)
 
         files_in_dir = os.listdir(save_dir)
-        assert len(files_in_dir) == 3
+        assert len(files_in_dir) == 4
         assert "cop.csv" in files_in_dir
         assert "heat_demand.csv" in files_in_dir
         assert "thermal_storage_units.csv" in files_in_dir
+        assert "building_ids.csv" in files_in_dir
 
         shutil.rmtree(save_dir)
 
@@ -81,7 +124,7 @@ class TestHeatPump:
 
         assert (self.heatpump.cop_df.dtypes == "float16").all()
         files_in_dir = os.listdir(save_dir)
-        assert len(files_in_dir) == 3
+        assert len(files_in_dir) == 4
 
         shutil.rmtree(save_dir, ignore_errors=True)
 
@@ -109,6 +152,10 @@ class TestHeatPump:
         pd.testing.assert_frame_equal(
             self.heatpump.thermal_storage_units_df,
             self.tes,
+        )
+        pd.testing.assert_frame_equal(
+            self.heatpump.building_ids_df,
+            self.building_ids,
         )
 
         shutil.rmtree(save_dir)
