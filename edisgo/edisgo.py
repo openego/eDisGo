@@ -2024,6 +2024,7 @@ class EDisGo:
         save_results=True,
         save_electromobility=False,
         save_heatpump=False,
+        save_dsm=False,
         **kwargs,
     ):
         """
@@ -2144,12 +2145,17 @@ class EDisGo:
                 to_type=kwargs.get("to_type", "float32"),
             )
 
+        if save_dsm:
+            self.dsm.to_csv(
+                os.path.join(directory, "dsm"),
+            )
+
         if kwargs.get("archive", False):
             archive_type = kwargs.get("archive_type", "zip")
             shutil.make_archive(directory, archive_type, directory)
 
             dir_size = tools.get_directory_size(directory)
-            zip_size = os.path.getsize(directory + ".zip")
+            zip_size = os.path.getsize(str(directory) + ".zip")
 
             reduction = (1 - zip_size / dir_size) * 100
 
@@ -2348,6 +2354,7 @@ def import_edisgo_from_files(
     import_results: bool = False,
     import_electromobility: bool = False,
     import_heat_pump: bool = False,
+    import_dsm: bool = False,
     from_zip_archive: bool = False,
     **kwargs,
 ):
@@ -2536,5 +2543,17 @@ def import_edisgo_from_files(
             edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
             logging.warning("No heat pump data found. Heat pump data not imported.")
+
+    if import_dsm:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "dsm_directory",
+                os.path.join(edisgo_path, "dsm"),
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.dsm.from_csv(directory, from_zip_archive=from_zip_archive)
+        else:
+            logging.warning("No dsm data found. DSM data not imported.")
 
     return edisgo_obj
