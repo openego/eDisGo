@@ -40,7 +40,7 @@ if opt_ev:
     ev_data = pd.read_csv(
         os.path.join(grid_dir, "BEV_standing_times_minimum_working.csv"), index_col=0
     )
-    charging_events = ev_data.loc[ev_data.chargingdemand > 0]
+    charging_events = ev_data.loc[ev_data.chargingdemand_kWh > 0]
     charging_events["charging_park_id"] = cp_id
     Electromobility(edisgo_obj=edisgo)
     edisgo.electromobility.charging_processes_df = charging_events
@@ -74,17 +74,17 @@ if opt_hp:
         add_ts=False,
     )
 
-    edisgo.heat_pump.heat_demand = (
+    edisgo.heat_pump.heat_demand_df = (
         pd.read_csv(os.path.join(grid_dir, "hp_heat_2011.csv"), index_col=0)
         .set_index(timeindex)
         .rename(columns={"0": hp_name})
     )
-    edisgo.heat_pump.cop = (
+    edisgo.heat_pump.cop_df = (
         pd.read_csv(os.path.join(grid_dir, "COP_2011.csv"))
         .set_index(timeindex)
         .rename(columns={"COP 2011": hp_name})
     )
-    edisgo.heat_pump.tes = pd.DataFrame(
+    edisgo.heat_pump.thermal_storage_units_df = pd.DataFrame(
         data={
             "capacity": [0.05],
             "efficiency": [1.0],
