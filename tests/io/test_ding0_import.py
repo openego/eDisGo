@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 import shapely
 
@@ -10,10 +12,13 @@ class TestImportFromDing0:
     @classmethod
     def setup_class(self):
         self.topology = Topology()
-        ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
 
-    def test_import_ding0_grid(self):
+    def test_import_ding0_grid(self, caplog):
         """Test successful import of ding0 network."""
+
+        with caplog.at_level(logging.DEBUG):
+            ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
+            assert "Removed 2 1 m end lines." in caplog.text
 
         # buses, generators, loads, lines, transformers dataframes
         # check number of imported components
@@ -42,6 +47,7 @@ class TestImportFromDing0:
             ding0_import.import_ding0_grid("wrong_directory", self.topology)
 
     def test_transformer_buses(self):
+        ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
         assert (
             self.topology.buses_df.loc[self.topology.transformers_df.bus1].v_nom.values
             < self.topology.buses_df.loc[
