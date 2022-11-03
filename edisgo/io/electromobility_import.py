@@ -4,14 +4,19 @@ import json
 import logging
 import os
 
+from collections import Counter
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+import saio
 
 from numpy.random import default_rng
 from sklearn import preprocessing
+from sqlalchemy.engine.base import Engine
+
+from edisgo.io.egon_data_import import session_scope
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -19,7 +24,7 @@ if "READTHEDOCS" not in os.environ:
 if TYPE_CHECKING:
     from edisgo import EDisGo
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 min_max_scaler = preprocessing.MinMaxScaler()
 
@@ -262,7 +267,7 @@ def read_simbev_config_df(
     """
     try:
         if simbev_config_file is not None:
-            with open(os.path.join(path, simbev_config_file), "r") as f:
+            with open(os.path.join(path, simbev_config_file)) as f:
                 data = json.load(f)
 
             df = pd.DataFrame.from_dict(
@@ -272,9 +277,7 @@ def read_simbev_config_df(
             for col in ["start_date", "end_date"]:
                 df[col] = pd.to_datetime(df[col])
 
-            df = df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
-
-            return df
+            return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
 
     except Exception:
         logging.warning(
@@ -355,8 +358,20 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
             ignore_index=True,
         ),
         crs=potential_charging_parks_gdf_list[0].crs,
-    ).astype(DTYPES["potential_charging_parks_gdf"])
+    )
 
+    return assure_minimum_potential_charging_parks(
+        edisgo_obj=edisgo_obj,
+        potential_charging_parks_gdf=potential_charging_parks_gdf,
+        **kwargs,
+    )
+
+
+def assure_minimum_potential_charging_parks(
+    edisgo_obj: EDisGo,
+    potential_charging_parks_gdf: gpd.GeoDataFrame,
+    **kwargs,
+):
     # ensure minimum number of potential charging parks per car
     num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
 
@@ -415,8 +430,8 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
         while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
             logger.info(
                 f"Duplicating potential charging parks to meet the desired grid "
-                f"connections to cars rate of {gc_to_car_rate*100:.2f} %. Iteration: "
-                f"{n+1}."
+                f"connections to cars rate of {gc_to_car_rate*100:.2f} % for use case "
+                f"{use_case}. Iteration: {n+1}."
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
@@ -469,9 +484,13 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
 
     # in case of polygons use the centroid as potential charging parks point
     # and set crs to match edisgo object
-    return potential_charging_parks_gdf.assign(
-        geometry=potential_charging_parks_gdf.geometry.representative_point()
-    ).to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
+    return (
+        potential_charging_parks_gdf.assign(
+            geometry=potential_charging_parks_gdf.geometry.representative_point()
+        )
+        .to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
+        .astype(DTYPES["potential_charging_parks_gdf"])
+    )
 
 
 def distribute_charging_demand(edisgo_obj, **kwargs):
@@ -1132,4 +1151,159 @@ def integrate_charging_parks(edisgo_obj):
         columns=COLUMNS["integrated_charging_parks_df"],
         data=edisgo_ids,
         index=charging_park_ids,
+    )
+
+
+def import_electromobility_from_database(
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    scenario: str = "eGon2035",
+    **kwargs,
+):
+    saio.register_schema("demand", engine)
+    saio.register_schema("grid", engine)
+
+    edisgo_obj.electromobility.charging_processes_df = charging_processes_from_database(
+        edisgo_obj=edisgo_obj, engine=engine, scenario=scenario
+    )
+
+    edisgo_obj.electromobility.simbev_config_df = simbev_config_from_database(
+        engine=engine, scenario=scenario
+    )
+
+    edisgo_obj.electromobility.potential_charging_parks_gdf = (
+        potential_charging_parks_from_database(
+            edisgo_obj=edisgo_obj, engine=engine, **kwargs
+        )
+    )
+
+
+def simbev_config_from_database(
+    engine: Engine,
+    scenario: str = "eGon2035",
+):
+    from saio.demand import egon_ev_metadata
+
+    with session_scope(engine) as session:
+        query = session.query(egon_ev_metadata).filter(
+            egon_ev_metadata.scenario == scenario
+        )
+
+    df = pd.read_sql(sql=query.statement, con=query.session.bind)
+
+    return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
+
+
+def potential_charging_parks_from_database(
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    **kwargs,
+):
+    from saio.grid import egon_emob_charging_infrastructure
+
+    mv_grid_id = edisgo_obj.topology.id
+    srid = edisgo_obj.topology.grid_district["srid"]
+
+    # TODO: change to load charging parks that lay within the grid geometry?
+    with session_scope(engine) as session:
+        query = session.query(egon_emob_charging_infrastructure).filter(
+            egon_emob_charging_infrastructure.mv_grid_id == mv_grid_id
+        )
+
+    gdf = gpd.read_postgis(
+        sql=query.statement,
+        con=query.session.bind,
+        geom_col="geometry",
+        index_col="cp_id",
+    ).to_crs(epsg=srid)
+
+    gdf = gdf.assign(ags=0)
+
+    rename = {
+        "weight": "user_centric_weight",
+    }
+
+    gdf = gdf.rename(columns=rename, errors="raise")[
+        COLUMNS["potential_charging_parks_gdf"]
+    ]
+
+    return assure_minimum_potential_charging_parks(
+        edisgo_obj=edisgo_obj, potential_charging_parks_gdf=gdf, **kwargs
+    )
+
+
+def charging_processes_from_database(
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    scenario: str = "eGon2035",
+):
+    from saio.demand import egon_ev_mv_grid_district, egon_ev_trip
+
+    mv_grid_id = edisgo_obj.topology.id
+
+    with session_scope(engine) as session:
+        query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
+            egon_ev_mv_grid_district.scenario == scenario,
+            egon_ev_mv_grid_district.bus_id == mv_grid_id,
+        )
+
+    pool = Counter(
+        pd.read_sql(sql=query.statement, con=query.session.bind).egon_ev_pool_ev_id
+    )
+
+    n_max = max(pool.values())
+
+    with session_scope(engine) as session:
+        query = session.query(egon_ev_trip).filter(
+            egon_ev_trip.scenario == scenario,
+            egon_ev_trip.charging_demand > 0,
+            egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
+        )
+
+    ev_trips_df = pd.read_sql(sql=query.statement, con=query.session.bind)
+
+    df_list = []
+
+    last_id = 0
+
+    for i in range(n_max, 0, -1):
+        evs = sorted([ev_id for ev_id, count in pool.items() if count >= i])
+
+        df = ev_trips_df.loc[ev_trips_df.egon_ev_pool_ev_id.isin(evs)]
+
+        mapping = {ev: count + last_id for count, ev in enumerate(evs)}
+
+        df.egon_ev_pool_ev_id = df.egon_ev_pool_ev_id.map(mapping)
+
+        last_id = max(mapping.values()) + 1
+
+        df_list.append(df)
+
+    df = pd.concat(df_list, ignore_index=True)
+
+    rename = {
+        "egon_ev_pool_ev_id": "car_id",
+        "location": "destination",
+        "charging_capacity_nominal": "nominal_charging_capacity_kW",
+        "charging_capacity_grid": "grid_charging_capacity_kW",
+        "charging_demand": "chargingdemand_kWh",
+        "park_start": "park_start_timesteps",
+        "park_end": "park_end_timesteps",
+    }
+
+    df = df.rename(columns=rename, errors="raise")
+
+    if df.park_start_timesteps.min() == 1:
+        df.loc[:, ["park_start_timesteps", "park_end_timesteps"]] -= 1
+
+    return (
+        df.assign(
+            ags=0,
+            park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
+        )[COLUMNS["charging_processes_df"]]
+        .astype(DTYPES["charging_processes_df"])
+        .assign(
+            charging_park_id=np.nan,
+            charging_point_id=np.nan,
+        )
     )

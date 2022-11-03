@@ -13,6 +13,8 @@ from pathlib import PurePath
 import numpy as np
 import pandas as pd
 
+from sqlalchemy.engine.base import Engine
+
 from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
@@ -20,15 +22,18 @@ from edisgo.flex_opt.heat_pump_operation import (
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io import powermodels_io, pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
+from edisgo.io.dsm_import import dsm_from_database
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
     import_electromobility,
+    import_electromobility_from_database,
     integrate_charging_parks,
 )
 from edisgo.io.generators_import import oedb as import_generators_oedb
 
 # from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.network import timeseries
+from edisgo.network.dsm import DSM
 from edisgo.network.electromobility import Electromobility
 from edisgo.network.heat import HeatPump
 from edisgo.network.results import Results
@@ -149,9 +154,10 @@ class EDisGo:
             timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
         )
 
-        # instantiate electromobility and heat pump object
+        # instantiate electromobility, heat pump and dsm object
         self.electromobility = Electromobility(edisgo_obj=self)
         self.heat_pump = HeatPump()
+        self.dsm = DSM(edisgo_obj=self)
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
@@ -1547,6 +1553,18 @@ class EDisGo:
 
         integrate_charging_parks(self)
 
+    def import_electromobility_from_database(
+        self, engine: Engine, allocate_charging_demand_kwds: dict = None, **kwargs
+    ):
+        import_electromobility_from_database(self, engine=engine, **kwargs)
+
+        if allocate_charging_demand_kwds is None:
+            allocate_charging_demand_kwds = {}
+
+        distribute_charging_demand(self, **allocate_charging_demand_kwds)
+
+        integrate_charging_parks(self)
+
     def apply_charging_strategy(self, strategy="dumb", **kwargs):
         """
         Applies charging strategy to set EV charging time series at charging parks.
@@ -1672,6 +1690,9 @@ class EDisGo:
         #     self, "oedb", heat_pump_names=integrated_heat_pumps
         # )
         # self.heat_pump.set_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
+
+    def import_dsm(self, engine: Engine, scenario: str = "eGon2035"):
+        dsm_from_database(edisgo_obj=self, engine=engine, scenario=scenario)
 
     def apply_heat_pump_operating_strategy(
         self, strategy="uncontrolled", heat_pump_names=None, **kwargs
@@ -2007,6 +2028,7 @@ class EDisGo:
         save_results=True,
         save_electromobility=False,
         save_heatpump=False,
+        save_dsm=False,
         **kwargs,
     ):
         """
@@ -2127,12 +2149,17 @@ class EDisGo:
                 to_type=kwargs.get("to_type", "float32"),
             )
 
+        if save_dsm:
+            self.dsm.to_csv(
+                os.path.join(directory, "dsm"),
+            )
+
         if kwargs.get("archive", False):
             archive_type = kwargs.get("archive_type", "zip")
             shutil.make_archive(directory, archive_type, directory)
 
             dir_size = tools.get_directory_size(directory)
-            zip_size = os.path.getsize(directory + ".zip")
+            zip_size = os.path.getsize(str(directory) + ".zip")
 
             reduction = (1 - zip_size / dir_size) * 100
 
@@ -2344,13 +2371,14 @@ def import_edisgo_from_pickle(filename, path=""):
 
 
 def import_edisgo_from_files(
-    edisgo_path,
-    import_topology=True,
-    import_timeseries=False,
-    import_results=False,
-    import_electromobility=False,
-    import_heat_pump=False,
-    from_zip_archive=False,
+    edisgo_path: str | PurePath,
+    import_topology: bool = True,
+    import_timeseries: bool = False,
+    import_results: bool = False,
+    import_electromobility: bool = False,
+    import_heat_pump: bool = False,
+    import_dsm: bool = False,
+    from_zip_archive: bool = False,
     **kwargs,
 ):
     """
@@ -2362,7 +2390,7 @@ def import_edisgo_from_files(
 
     Parameters
     -----------
-    edisgo_path : str
+    edisgo_path : str or pathlib.PurePath
         Main directory to restore EDisGo object from. This directory must contain the
         config files. Further, if not specified differently,
         it is assumed to be the main directory containing sub-directories with
@@ -2447,7 +2475,6 @@ def import_edisgo_from_files(
         Restored EDisGo object.
 
     """
-
     if not from_zip_archive and str(edisgo_path).endswith(".zip"):
         from_zip_archive = True
         logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
@@ -2539,5 +2566,17 @@ def import_edisgo_from_files(
             edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
             logging.warning("No heat pump data found. Heat pump data not imported.")
+
+    if import_dsm:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "dsm_directory",
+                os.path.join(edisgo_path, "dsm"),
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.dsm.from_csv(directory, from_zip_archive=from_zip_archive)
+        else:
+            logging.warning("No dsm data found. DSM data not imported.")
 
     return edisgo_obj

@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import logging
 import os
 
 from math import pi, sqrt
+from typing import TYPE_CHECKING
 
 import networkx as nx
 import numpy as np
@@ -19,6 +22,9 @@ if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import climate
     from shapely.geometry.multipolygon import MultiPolygon
     from shapely.wkt import loads as wkt_loads
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 
 logger = logging.getLogger(__name__)
@@ -678,3 +684,10 @@ def add_line_susceptance(
         )
 
     return edisgo_obj
+
+
+def mv_grid_gdf(edisgo_obj: EDisGo):
+    return gpd.GeoDataFrame(
+        geometry=[edisgo_obj.topology.grid_district["geom"]],
+        crs=f"EPSG:{edisgo_obj.topology.grid_district['srid']}",
+    )

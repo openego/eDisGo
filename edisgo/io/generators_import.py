@@ -1,21 +1,31 @@
+from __future__ import annotations
+
 import logging
 import os
 import random
+
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
 from sqlalchemy import func
+from sqlalchemy.engine.base import Engine
 
+from edisgo.io.egon_data_import import select_geodataframe
 from edisgo.tools import session_scope
 from edisgo.tools.geo import proj2equidistant
-
-logger = logging.getLogger(__name__)
+from edisgo.tools.tools import mv_grid_gdf
 
 if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import model_draft, supply
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
+
+logger = logging.getLogger(__name__)
 
 
 def oedb(edisgo_object, generator_scenario, **kwargs):
@@ -713,3 +723,73 @@ def _update_grids(
                     lv_gens_voltage_level_7, lv_loads, lv_grid.id
                 )
             )
+
+
+def generators_from_database(
+    edisgo_object: EDisGo, engine: Engine, scenario: str = "eGon2035"
+):
+    """
+    TODO
+    :return:
+    """
+    fluctuating = ["wind_onshore", "solar"]
+    firm = ["others", "gas", "oil", "biomass", "run_of_river", "reservoir"]
+
+    srid = edisgo_object.topology.grid_district["srid"]
+
+    sql = """
+    SELECT * FROM supply.egon_power_plants
+    WHERE scenario = '{}'
+    AND carrier IN ({})
+    """
+
+    grid_gdf = mv_grid_gdf(edisgo_object)
+
+    # 1. firm egon_power_plants
+    firm_gdf = select_geodataframe(
+        sql=sql.format(scenario, str(firm)[1:-1]),
+        db_engine=engine,
+        geom_col="geom",
+        epsg=srid,
+    )
+
+    firm_gdf = firm_gdf.loc[firm_gdf.geom.within(grid_gdf.geometry)]
+
+    # 2. fluctuating egon_power_plants
+    fluc_gdf = select_geodataframe(
+        sql=sql.format(scenario, str(fluctuating)[1:-1]),
+        db_engine=engine,
+        geom_col="geom",
+        epsg=srid,
+    )
+
+    fluc_gdf = fluc_gdf.loc[fluc_gdf.geom.within(grid_gdf.geometry)]
+
+    # TODO:
+    # # 3. pv rooftop egon_power_plants_pv_roof_building
+    # sql = f"""
+    # SELECT * FROM supply.egon_power_plants_pv_roof_building
+    # WHERE scenario = '{scenario}'
+    # """
+    #
+    # pv_roof_df = select_dataframe(sql=sql, db_engine=engine, index_col="index")
+    #
+    # sql = f"""
+    # SELECT * FROM openstreetmap.osm_buildings_filtered
+    # """
+    #
+    # buildings_gdf = select_geodataframe(
+    #     sql=sql, db_engine=engine, geom_col="geom_point", epsg=srid
+    # )
+
+    # 4. chp plants egon_chp_plants
+    sql = f"""
+    SELECT * FROM supply.egon_chp_plants
+    WHERE scenario = '{scenario}'
+    """
+
+    chp_gdf = select_geodataframe(sql=sql, db_engine=engine, index_col="id", epsg=srid)
+
+    chp_gdf = chp_gdf.loc[chp_gdf.geom.within(grid_gdf.geometry)]
+
+    return fluc_gdf
