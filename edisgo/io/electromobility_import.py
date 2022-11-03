@@ -1204,6 +1204,7 @@ def potential_charging_parks_from_database(
     mv_grid_id = edisgo_obj.topology.id
     srid = edisgo_obj.topology.grid_district["srid"]
 
+    # TODO: change to load charging parks that lay within the grid geometry?
     with session_scope(engine) as session:
         query = session.query(egon_emob_charging_infrastructure).filter(
             egon_emob_charging_infrastructure.mv_grid_id == mv_grid_id

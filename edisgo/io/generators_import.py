@@ -15,10 +15,9 @@ from sqlalchemy.engine.base import Engine
 from edisgo.io.egon_data_import import select_geodataframe
 from edisgo.tools import session_scope
 from edisgo.tools.geo import proj2equidistant
+from edisgo.tools.tools import mv_grid_gdf
 
 if "READTHEDOCS" not in os.environ:
-    import geopandas as gpd
-
     from egoio.db_tables import model_draft, supply
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
@@ -730,7 +729,7 @@ def generators_from_database(
     edisgo_object: EDisGo, engine: Engine, scenario: str = "eGon2035"
 ):
     """
-
+    TODO
     :return:
     """
     fluctuating = ["wind_onshore", "solar"]
@@ -744,9 +743,7 @@ def generators_from_database(
     AND carrier IN ({})
     """
 
-    grid_gdf = gpd.GeoDataFrame(
-        geometry=[edisgo_object.topology.grid_district["geom"]], crs=f"EPSG:{srid}"
-    )
+    grid_gdf = mv_grid_gdf(edisgo_object)
 
     # 1. firm egon_power_plants
     firm_gdf = select_geodataframe(
