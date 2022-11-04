@@ -2427,6 +2427,9 @@ def import_edisgo_from_files(
 
     """
 
+    if not os.path.exists(edisgo_path):
+        raise ValueError("Given edisgo_path does not exist.")
+
     if not from_zip_archive and str(edisgo_path).endswith(".zip"):
         from_zip_archive = True
         logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
