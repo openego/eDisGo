@@ -16,7 +16,7 @@ from numpy.random import default_rng
 from sklearn import preprocessing
 from sqlalchemy.engine.base import Engine
 
-from edisgo.io.egon_data_import import session_scope
+from edisgo.io.egon_data_import import session_scope_egon_data
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -1184,7 +1184,7 @@ def simbev_config_from_database(
 ):
     from saio.demand import egon_ev_metadata
 
-    with session_scope(engine) as session:
+    with session_scope_egon_data(engine) as session:
         query = session.query(egon_ev_metadata).filter(
             egon_ev_metadata.scenario == scenario
         )
@@ -1205,7 +1205,7 @@ def potential_charging_parks_from_database(
     srid = edisgo_obj.topology.grid_district["srid"]
 
     # TODO: change to load charging parks that lay within the grid geometry?
-    with session_scope(engine) as session:
+    with session_scope_egon_data(engine) as session:
         query = session.query(egon_emob_charging_infrastructure).filter(
             egon_emob_charging_infrastructure.mv_grid_id == mv_grid_id
         )
@@ -1241,7 +1241,7 @@ def charging_processes_from_database(
 
     mv_grid_id = edisgo_obj.topology.id
 
-    with session_scope(engine) as session:
+    with session_scope_egon_data(engine) as session:
         query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
             egon_ev_mv_grid_district.scenario == scenario,
             egon_ev_mv_grid_district.bus_id == mv_grid_id,
@@ -1253,7 +1253,7 @@ def charging_processes_from_database(
 
     n_max = max(pool.values())
 
-    with session_scope(engine) as session:
+    with session_scope_egon_data(engine) as session:
         query = session.query(egon_ev_trip).filter(
             egon_ev_trip.scenario == scenario,
             egon_ev_trip.charging_demand > 0,

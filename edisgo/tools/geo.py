@@ -1,13 +1,24 @@
+from __future__ import annotations
+
+import logging
 import os
+
+from typing import TYPE_CHECKING
+
+import pandas as pd
 
 from geopy.distance import geodesic
 from pyproj import Transformer
+from sqlalchemy import func
+from sqlalchemy.orm.attributes import InstrumentedAttribute
+from sqlalchemy.orm.session import Session
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
 
-import logging
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -310,3 +321,16 @@ def find_nearest_conn_objects(grid_topology, bus, lines, conn_diff_tolerance=0.0
     ]
 
     return conn_objects_min_stack
+
+
+def sql_grid_geom(edisgo_obj: EDisGo):
+    return func.ST_GeomFromText(
+        str(edisgo_obj.topology.grid_district["geom"]),
+        edisgo_obj.topology.grid_district["srid"],
+    )
+
+
+def get_srid_of_db_table(session: Session, geom_col: InstrumentedAttribute):
+    query = session.query(func.ST_SRID(geom_col)).limit(1)
+
+    return pd.read_sql(sql=query.statement, con=query.session.bind).iat[0, 0]

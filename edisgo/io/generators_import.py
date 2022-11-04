@@ -8,16 +8,19 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+import saio
 
 from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
-from edisgo.io.egon_data_import import select_geodataframe
+from edisgo.io.egon_data_import import session_scope_egon_data
 from edisgo.tools import session_scope
-from edisgo.tools.geo import proj2equidistant
+from edisgo.tools.geo import get_srid_of_db_table, proj2equidistant, sql_grid_geom
 from edisgo.tools.tools import mv_grid_gdf
 
 if "READTHEDOCS" not in os.environ:
+    import geopandas as gpd
+
     from egoio.db_tables import model_draft, supply
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
@@ -732,64 +735,121 @@ def generators_from_database(
     TODO
     :return:
     """
+    saio.register_schema("supply", engine)
+    saio.register_schema("openstreetmap", engine)
+
+    from saio.openstreetmap import osm_buildings_filtered
+    from saio.supply import egon_power_plants, egon_power_plants_pv_roof_building
+
     fluctuating = ["wind_onshore", "solar"]
     firm = ["others", "gas", "oil", "biomass", "run_of_river", "reservoir"]
 
-    srid = edisgo_object.topology.grid_district["srid"]
-
-    sql = """
-    SELECT * FROM supply.egon_power_plants
-    WHERE scenario = '{}'
-    AND carrier IN ({})
-    """
-
+    sql_geom = sql_grid_geom(edisgo_object)
     grid_gdf = mv_grid_gdf(edisgo_object)
 
     # 1. firm egon_power_plants
-    firm_gdf = select_geodataframe(
-        sql=sql.format(scenario, str(firm)[1:-1]),
-        db_engine=engine,
-        geom_col="geom",
-        epsg=srid,
-    )
+    with session_scope_egon_data(engine) as session:
+        srid = get_srid_of_db_table(session, egon_power_plants.geom)
 
-    firm_gdf = firm_gdf.loc[firm_gdf.geom.within(grid_gdf.geometry)]
+        query = session.query(egon_power_plants).filter(
+            egon_power_plants.scenario == scenario,
+            egon_power_plants.carrier.in_(firm),
+            func.ST_Within(
+                egon_power_plants.geom,
+                func.ST_Transform(
+                    sql_geom,
+                    srid,
+                ),
+            ),
+        )
+
+        firm_gdf = gpd.read_postgis(
+            sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
+        ).to_crs(grid_gdf.crs)
 
     # 2. fluctuating egon_power_plants
-    fluc_gdf = select_geodataframe(
-        sql=sql.format(scenario, str(fluctuating)[1:-1]),
-        db_engine=engine,
-        geom_col="geom",
-        epsg=srid,
+    with session_scope_egon_data(engine) as session:
+        srid = get_srid_of_db_table(session, egon_power_plants.geom)
+
+        query = session.query(egon_power_plants).filter(
+            egon_power_plants.scenario == scenario,
+            egon_power_plants.carrier.in_(fluctuating),
+            func.ST_Within(
+                egon_power_plants.geom,
+                func.ST_Transform(
+                    sql_geom,
+                    srid,
+                ),
+            ),
+        )
+
+        fluc_gdf = gpd.read_postgis(
+            sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
+        ).to_crs(grid_gdf.crs)
+
+    # 3. pv rooftop egon_power_plants_pv_roof_building
+    with session_scope_egon_data(engine) as session:
+        srid = get_srid_of_db_table(session, osm_buildings_filtered.geom_point)
+
+        query = session.query(
+            func.ST_Transform(
+                osm_buildings_filtered.geom_point,
+                srid,
+            ).label("geom"),
+            osm_buildings_filtered.id,
+        ).filter(
+            func.ST_Within(
+                func.ST_Transform(
+                    osm_buildings_filtered.geom_point,
+                    srid,
+                ),
+                func.ST_Transform(
+                    sql_geom,
+                    srid,
+                ),
+            ),
+        )
+
+        buildings_gdf = gpd.read_postgis(
+            sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
+        ).to_crs(grid_gdf.crs)
+
+    building_ids = buildings_gdf.id
+
+    with session_scope_egon_data(engine) as session:
+        query = session.query(egon_power_plants_pv_roof_building).filter(
+            egon_power_plants_pv_roof_building.scenario == scenario,
+            egon_power_plants_pv_roof_building.building_id.in_(building_ids),
+        )
+
+        pv_roof_df = pd.read_sql(sql=query.statement, con=query.session.bind)
+
+    pv_roof_gdf = gpd.GeoDataFrame(
+        pv_roof_df.merge(
+            buildings_gdf, how="left", left_on="building_id", right_on="id"
+        ).drop(columns=["id"]),
+        geometry="geom",
+        crs=buildings_gdf.crs,
     )
 
-    fluc_gdf = fluc_gdf.loc[fluc_gdf.geom.within(grid_gdf.geometry)]
+    print("break")
+    print("break")
 
-    # TODO:
-    # # 3. pv rooftop egon_power_plants_pv_roof_building
+    return firm_gdf, fluc_gdf, pv_roof_gdf
+
+    # TODO: Funktion, welche die egon-data bus_id returned
+    # TODO: move tools Funktionen in egon_data_import?
+
+    #
+    # # 4. chp plants egon_chp_plants
     # sql = f"""
-    # SELECT * FROM supply.egon_power_plants_pv_roof_building
+    # SELECT * FROM supply.egon_chp_plants
     # WHERE scenario = '{scenario}'
     # """
     #
-    # pv_roof_df = select_dataframe(sql=sql, db_engine=engine, index_col="index")
+    # chp_gdf = select_geodataframe(
+    #     sql=sql, db_engine=engine, index_col="id", epsg=srid)
     #
-    # sql = f"""
-    # SELECT * FROM openstreetmap.osm_buildings_filtered
-    # """
+    # chp_gdf = chp_gdf.loc[chp_gdf.geom.within(grid_gdf.geometry)]
     #
-    # buildings_gdf = select_geodataframe(
-    #     sql=sql, db_engine=engine, geom_col="geom_point", epsg=srid
-    # )
-
-    # 4. chp plants egon_chp_plants
-    sql = f"""
-    SELECT * FROM supply.egon_chp_plants
-    WHERE scenario = '{scenario}'
-    """
-
-    chp_gdf = select_geodataframe(sql=sql, db_engine=engine, index_col="id", epsg=srid)
-
-    chp_gdf = chp_gdf.loc[chp_gdf.geom.within(grid_gdf.geometry)]
-
-    return fluc_gdf
+    # return fluc_gdf

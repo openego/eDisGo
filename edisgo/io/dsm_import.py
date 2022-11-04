@@ -1,20 +1,17 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from typing import TYPE_CHECKING
 
 import pandas as pd
 import saio
 
+from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
-from edisgo.io.egon_data_import import session_scope
-from edisgo.tools.tools import mv_grid_gdf
-
-if "READTHEDOCS" not in os.environ:
-    import geopandas as gpd
+from edisgo.io.egon_data_import import session_scope_egon_data
+from edisgo.tools.geo import sql_grid_geom
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -37,19 +34,15 @@ def dsm_from_database(
         egon_hvmv_substation,
     )
 
-    grid_gdf = mv_grid_gdf(edisgo_obj)
-
-    with session_scope(engine) as session:
-        query = session.query(
-            egon_hvmv_substation.bus_id,
-            egon_hvmv_substation.point.label("geom"),
+    with session_scope_egon_data(engine) as session:
+        query = session.query(egon_hvmv_substation.bus_id,).filter(
+            func.ST_Within(
+                egon_hvmv_substation.point,
+                sql_grid_geom(edisgo_obj),
+            )
         )
 
-        gdf = gpd.read_postgis(
-            sql=query.statement, con=query.session.bind, crs=grid_gdf.crs
-        )
-
-    bus_ids = gdf.loc[gdf.geometry.within(grid_gdf.geometry.iat[0])].bus_id
+        bus_ids = pd.read_sql(sql=query.statement, con=query.session.bind).bus_id
 
     if len(bus_ids) == 0:
         raise ImportError(
@@ -60,7 +53,7 @@ def dsm_from_database(
     # pick one randomly (if more than one)
     bus_id = bus_ids.iat[0]
 
-    with session_scope(engine) as session:
+    with session_scope_egon_data(engine) as session:
         query = session.query(egon_etrago_link).filter(
             egon_etrago_link.scn_name == "eGon2035",
             egon_etrago_link.carrier == "dsm",
@@ -75,7 +68,7 @@ def dsm_from_database(
     store_bus_id = edisgo_obj.dsm.egon_etrago_link.at[0, "bus1"]
     p_nom = edisgo_obj.dsm.egon_etrago_link.at[0, "p_nom"]
 
-    with session_scope(engine) as session:
+    with session_scope_egon_data(engine) as session:
         query = session.query(egon_etrago_link_timeseries).filter(
             egon_etrago_link_timeseries.scn_name == scenario,
             egon_etrago_link_timeseries.link_id == link_id,
@@ -104,7 +97,7 @@ def dsm_from_database(
             pd.DataFrame(data, index=edisgo_obj.timeseries.timeindex).mul(p_nom),
         )
 
-    with session_scope(engine) as session:
+    with session_scope_egon_data(engine) as session:
         query = session.query(egon_etrago_store).filter(
             egon_etrago_store.scn_name == scenario,
             egon_etrago_store.carrier == "dsm",
@@ -118,7 +111,7 @@ def dsm_from_database(
     store_id = edisgo_obj.dsm.egon_etrago_store.at[0, "store_id"]
     e_nom = edisgo_obj.dsm.egon_etrago_store.at[0, "e_nom"]
 
-    with session_scope(engine) as session:
+    with session_scope_egon_data(engine) as session:
         query = session.query(egon_etrago_store_timeseries).filter(
             egon_etrago_store_timeseries.scn_name == scenario,
             egon_etrago_store_timeseries.store_id == store_id,

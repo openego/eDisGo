@@ -240,7 +240,7 @@ def select_geodataframe(sql, db_engine, index_col=None, geom_col="geom", epsg=30
 
 
 @contextmanager
-def session_scope(engine: Engine):
+def session_scope_egon_data(engine: Engine):
     """Provide a transactional scope around a series of operations."""
     Session = sessionmaker(bind=engine)
     session = Session()
