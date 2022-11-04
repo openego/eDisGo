@@ -1524,6 +1524,12 @@ class TestEDisGoFunc:
         }
         edisgo_obj.electromobility.flexibility_bands = flex_bands
 
+        # ################ test with non-existing path ######################
+
+        msg = "Given edisgo_path does not exist."
+        with pytest.raises(ValueError, match=msg):
+            import_edisgo_from_files("dummy_dir")
+
         # ######################## test with default ########################
         edisgo_obj.save(
             save_dir, save_results=False, save_electromobility=True, save_heatpump=True

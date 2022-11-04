@@ -18,7 +18,7 @@ GeneratorFluctuating_15,Bus_BranchTee_LVGrid_2_4,PQ,0.006,solar,1122075,solar_so
 GeneratorFluctuating_16,Bus_GeneratorFluctuating_16,PQ,0.03,solar,1122075,solar_solar_roof_mounted
 GeneratorFluctuating_17,Bus_BranchTee_LVGrid_4_2,PQ,0.055,solar,1122075,solar_solar_roof_mounted
 GeneratorFluctuating_18,Bus_BranchTee_LVGrid_4_2,PQ,0.01,solar,1122075,solar_solar_roof_mounted
-GeneratorFluctuating_19,Bus_BranchTee_LVGrid_5_6,PQ,0.023,solar,1122075,solar_solar_roof_mounted
+GeneratorFluctuating_19,Bus_GeneratorFluctuating_19,PQ,0.023,solar,1122075,solar_solar_roof_mounted
 GeneratorFluctuating_20,Bus_BranchTee_LVGrid_7_6,PQ,0.005,solar,1122075,solar_solar_roof_mounted
 GeneratorFluctuating_21,Bus_BranchTee_LVGrid_7_6,PQ,0.036,solar,1122075,solar_solar_roof_mounted
 GeneratorFluctuating_22,Bus_BranchTee_LVGrid_7_4,PQ,0.008,solar,1122075,solar_solar_roof_mounted
