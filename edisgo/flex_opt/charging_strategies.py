@@ -1,7 +1,15 @@
+from __future__ import annotations
+
 import logging
+
+from numbers import Number
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 RELEVANT_CHARGING_STRATEGIES_COLUMNS = {
     "dumb": [
@@ -40,10 +48,10 @@ logger = logging.getLogger(__name__)
 #  wrong results if the timeindex of the edisgo object is not continuously
 #  (e.g. 2 weeks of the year)
 def charging_strategy(
-    edisgo_obj,
-    strategy="dumb",
-    timestamp_share_threshold=0.2,
-    minimum_charging_capacity_factor=0.1,
+    edisgo_obj: EDisGo,
+    strategy: str = "dumb",
+    timestamp_share_threshold: Number = 0.2,
+    minimum_charging_capacity_factor: Number = 0.1,
 ):
     """
     Applies charging strategy to set EV charging time series at charging parks.

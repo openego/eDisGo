@@ -23,7 +23,6 @@ class TestChargingStrategy:
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         cls.edisgo_obj.set_timeindex(timeindex)
 
-        cls.edisgo_obj.resample_timeseries()
         cls.edisgo_obj.import_electromobility(cls.simbev_path, cls.tracbev_path)
 
     def test_charging_strategy(self):
