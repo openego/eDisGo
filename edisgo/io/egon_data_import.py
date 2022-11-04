@@ -4,15 +4,22 @@ import logging
 
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import geopandas as gpd
 import pandas as pd
+import saio
 import yaml
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm.attributes import InstrumentedAttribute
+from sqlalchemy.orm.session import Session
 from sshtunnel import SSHTunnelForwarder
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -252,3 +259,51 @@ def session_scope_egon_data(engine: Engine):
         raise
     finally:
         session.close()
+
+
+def get_matching_egon_data_bus_id(edisgo_obj: EDisGo, db_engine: Engine):
+    saio.register_schema("grid", db_engine)
+
+    from saio.grid import egon_hvmv_substation
+
+    with session_scope_egon_data(db_engine) as session:
+        srid = get_srid_of_db_table(session, egon_hvmv_substation.point)
+
+        query = session.query(egon_hvmv_substation.bus_id).filter(
+            func.ST_Within(
+                func.ST_Transform(
+                    egon_hvmv_substation.point,
+                    srid,
+                ),
+                func.ST_Transform(
+                    sql_grid_geom(edisgo_obj),
+                    srid,
+                ),
+            )
+        )
+
+        bus_ids = pd.read_sql(
+            sql=query.statement, con=query.session.bind
+        ).bus_id.tolist()
+
+    if not bus_ids:
+        raise ImportError(
+            f"There is no egon-data substation within the open_ego grid "
+            f"{edisgo_obj.topology.id}. Cannot import any DSM information."
+        )
+
+    # pick one bus id if more than one
+    return sorted(bus_ids)[0]
+
+
+def sql_grid_geom(edisgo_obj: EDisGo):
+    return func.ST_GeomFromText(
+        str(edisgo_obj.topology.grid_district["geom"]),
+        edisgo_obj.topology.grid_district["srid"],
+    )
+
+
+def get_srid_of_db_table(session: Session, geom_col: InstrumentedAttribute):
+    query = session.query(func.ST_SRID(geom_col)).limit(1)
+
+    return pd.read_sql(sql=query.statement, con=query.session.bind).iat[0, 0]

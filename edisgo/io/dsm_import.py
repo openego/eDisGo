@@ -7,11 +7,12 @@ from typing import TYPE_CHECKING
 import pandas as pd
 import saio
 
-from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
-from edisgo.io.egon_data_import import session_scope_egon_data
-from edisgo.tools.geo import sql_grid_geom
+from edisgo.io.egon_data_import import (
+    get_matching_egon_data_bus_id,
+    session_scope_egon_data,
+)
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -31,33 +32,15 @@ def dsm_from_database(
         egon_etrago_link_timeseries,
         egon_etrago_store,
         egon_etrago_store_timeseries,
-        egon_hvmv_substation,
     )
 
-    with session_scope_egon_data(engine) as session:
-        query = session.query(egon_hvmv_substation.bus_id,).filter(
-            func.ST_Within(
-                egon_hvmv_substation.point,
-                sql_grid_geom(edisgo_obj),
-            )
-        )
-
-        bus_ids = pd.read_sql(sql=query.statement, con=query.session.bind).bus_id
-
-    if len(bus_ids) == 0:
-        raise ImportError(
-            f"There is no egon-data substation within the open_ego grid "
-            f"{edisgo_obj.topology.id}. Cannot import any DSM information."
-        )
-
-    # pick one randomly (if more than one)
-    bus_id = bus_ids.iat[0]
+    egon_bus_id = get_matching_egon_data_bus_id(edisgo_obj=edisgo_obj, db_engine=engine)
 
     with session_scope_egon_data(engine) as session:
         query = session.query(egon_etrago_link).filter(
             egon_etrago_link.scn_name == "eGon2035",
             egon_etrago_link.carrier == "dsm",
-            egon_etrago_link.bus0 == bus_id,
+            egon_etrago_link.bus0 == egon_bus_id,
         )
 
         edisgo_obj.dsm.egon_etrago_link = pd.read_sql(

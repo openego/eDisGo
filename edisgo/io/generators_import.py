@@ -13,10 +13,13 @@ import saio
 from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
-from edisgo.io.egon_data_import import session_scope_egon_data
+from edisgo.io.egon_data_import import (
+    get_srid_of_db_table,
+    session_scope_egon_data,
+    sql_grid_geom,
+)
 from edisgo.tools import session_scope
-from edisgo.tools.geo import get_srid_of_db_table, proj2equidistant, sql_grid_geom
-from edisgo.tools.tools import mv_grid_gdf
+from edisgo.tools.geo import mv_grid_gdf, proj2equidistant
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -739,7 +742,11 @@ def generators_from_database(
     saio.register_schema("openstreetmap", engine)
 
     from saio.openstreetmap import osm_buildings_filtered
-    from saio.supply import egon_power_plants, egon_power_plants_pv_roof_building
+    from saio.supply import (
+        egon_chp_plants,
+        egon_power_plants,
+        egon_power_plants_pv_roof_building,
+    )
 
     fluctuating = ["wind_onshore", "solar"]
     firm = ["others", "gas", "oil", "biomass", "run_of_river", "reservoir"]
@@ -832,13 +839,31 @@ def generators_from_database(
         crs=buildings_gdf.crs,
     )
 
+    with session_scope_egon_data(engine) as session:
+        srid = get_srid_of_db_table(session, egon_chp_plants.geom)
+
+        query = session.query(egon_chp_plants).filter(
+            egon_chp_plants.scenario == scenario,
+            func.ST_Within(
+                func.ST_Transform(
+                    egon_chp_plants.geom,
+                    srid,
+                ),
+                func.ST_Transform(
+                    sql_geom,
+                    srid,
+                ),
+            ),
+        )
+
+        chp_gdf = gpd.read_postgis(
+            sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
+        ).to_crs(grid_gdf.crs)
+
     print("break")
     print("break")
 
-    return firm_gdf, fluc_gdf, pv_roof_gdf
-
-    # TODO: Funktion, welche die egon-data bus_id returned
-    # TODO: move tools Funktionen in egon_data_import?
+    return firm_gdf, fluc_gdf, pv_roof_gdf, chp_gdf
 
     #
     # # 4. chp plants egon_chp_plants
