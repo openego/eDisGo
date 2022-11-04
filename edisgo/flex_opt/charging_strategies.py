@@ -107,12 +107,15 @@ def charging_strategy(
     )
     simbev_timedelta = timeindex[1] - timeindex[0]
 
-    assert edisgo_timedelta == simbev_timedelta, (
-        "The step size of the time series of the edisgo object differs from the"
-        f"simbev step size. The edisgo time delta is {edisgo_timedelta}, while"
-        f" the simbev time delta is {simbev_timedelta}. Make sure to use a "
-        f"matching step size."
-    )
+    if edisgo_timedelta != simbev_timedelta:
+        logger.warning(
+            "The step size of the time series of the edisgo object differs from the"
+            f"simbev step size. The edisgo time delta is {edisgo_timedelta}, while"
+            f" the simbev time delta is {simbev_timedelta}. The edisgo time series "
+            f"will be resampled accordingly."
+        )
+
+        edisgo_obj.resample_timeseries(freq=f"{edisgo_obj.electromobility.stepsize}Min")
 
     if strategy == "dumb":
         # "dumb" charging
