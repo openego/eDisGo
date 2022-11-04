@@ -752,7 +752,7 @@ def generators_from_database(
     firm = ["others", "gas", "oil", "biomass", "run_of_river", "reservoir"]
 
     sql_geom = sql_grid_geom(edisgo_object)
-    grid_gdf = mv_grid_gdf(edisgo_object)
+    crs = mv_grid_gdf(edisgo_object).crs
 
     # 1. firm egon_power_plants
     with session_scope_egon_data(engine) as session:
@@ -772,7 +772,7 @@ def generators_from_database(
 
         firm_gdf = gpd.read_postgis(
             sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
-        ).to_crs(grid_gdf.crs)
+        ).to_crs(crs)
 
     # 2. fluctuating egon_power_plants
     with session_scope_egon_data(engine) as session:
@@ -792,7 +792,7 @@ def generators_from_database(
 
         fluc_gdf = gpd.read_postgis(
             sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
-        ).to_crs(grid_gdf.crs)
+        ).to_crs(crs)
 
     # 3. pv rooftop egon_power_plants_pv_roof_building
     with session_scope_egon_data(engine) as session:
@@ -819,7 +819,7 @@ def generators_from_database(
 
         buildings_gdf = gpd.read_postgis(
             sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
-        ).to_crs(grid_gdf.crs)
+        ).to_crs(crs)
 
     building_ids = buildings_gdf.id
 
@@ -858,23 +858,9 @@ def generators_from_database(
 
         chp_gdf = gpd.read_postgis(
             sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
-        ).to_crs(grid_gdf.crs)
+        ).to_crs(crs)
 
     print("break")
     print("break")
 
     return firm_gdf, fluc_gdf, pv_roof_gdf, chp_gdf
-
-    #
-    # # 4. chp plants egon_chp_plants
-    # sql = f"""
-    # SELECT * FROM supply.egon_chp_plants
-    # WHERE scenario = '{scenario}'
-    # """
-    #
-    # chp_gdf = select_geodataframe(
-    #     sql=sql, db_engine=engine, index_col="id", epsg=srid)
-    #
-    # chp_gdf = chp_gdf.loc[chp_gdf.geom.within(grid_gdf.geometry)]
-    #
-    # return fluc_gdf

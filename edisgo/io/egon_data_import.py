@@ -11,6 +11,7 @@ import pandas as pd
 import saio
 import yaml
 
+from geoalchemy2.types import Geometry
 from sqlalchemy import create_engine, func
 from sqlalchemy.engine.base import Engine
 from sqlalchemy.orm import sessionmaker
@@ -261,7 +262,7 @@ def session_scope_egon_data(engine: Engine):
         session.close()
 
 
-def get_matching_egon_data_bus_id(edisgo_obj: EDisGo, db_engine: Engine):
+def get_matching_egon_data_bus_id(edisgo_obj: EDisGo, db_engine: Engine) -> int:
     saio.register_schema("grid", db_engine)
 
     from saio.grid import egon_hvmv_substation
@@ -296,14 +297,14 @@ def get_matching_egon_data_bus_id(edisgo_obj: EDisGo, db_engine: Engine):
     return sorted(bus_ids)[0]
 
 
-def sql_grid_geom(edisgo_obj: EDisGo):
+def sql_grid_geom(edisgo_obj: EDisGo) -> Geometry:
     return func.ST_GeomFromText(
         str(edisgo_obj.topology.grid_district["geom"]),
         edisgo_obj.topology.grid_district["srid"],
     )
 
 
-def get_srid_of_db_table(session: Session, geom_col: InstrumentedAttribute):
+def get_srid_of_db_table(session: Session, geom_col: InstrumentedAttribute) -> int:
     query = session.query(func.ST_SRID(geom_col)).limit(1)
 
     return pd.read_sql(sql=query.statement, con=query.session.bind).iat[0, 0]
