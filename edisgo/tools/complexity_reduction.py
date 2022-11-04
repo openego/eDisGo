@@ -75,7 +75,9 @@ def extract_feeders_nx(
     Method to extract and optionally save MV-feeders.
     """
 
-    def _extract_feeder(edisgo_orig, subgraph, feeder_id, export_dir, flexible_loads):
+    def _extract_feeder(
+        edisgo_orig, subgraph, feeder_id, export_dir, buses_with_feeders, flexible_loads
+    ):
         if len(list(set(subgraph.nodes))) > 1:
             buses_with_feeders.loc[list(subgraph.nodes), "feeder_id"] = feeder_id
             edisgo_feeder = create_feeder_edisgo_object(
@@ -136,6 +138,7 @@ def extract_feeders_nx(
                     subgraph=subgraph,
                     feeder_id=feeder_id,
                     export_dir=save_dir,
+                    buses_with_feeders=buses_with_feeders,
                     flexible_loads=flexible_loads,
                 )
         else:
@@ -144,6 +147,7 @@ def extract_feeders_nx(
                 subgraph=subgraph,
                 feeder_id=feeder_id,
                 export_dir=save_dir,
+                buses_with_feeders=buses_with_feeders,
                 flexible_loads=flexible_loads,
             )
         feeders.append(feeder)
