@@ -102,7 +102,7 @@ def extract_feeders_nx(
                     ],
                 )
                 print(f"Saved feeder: {feeder_id} to {export_dir}")
-            # feeders.append(edisgo_feeder)
+            feeders.append(edisgo_feeder)
             feeder_id += 1
         return feeders
 
