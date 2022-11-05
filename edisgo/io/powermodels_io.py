@@ -39,10 +39,13 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     # aggregate parallel transformers
     aggregate_parallel_transformers(psa_net)
     # calculate per unit values
-    pypsa.pf.calculate_dependent_values(psa_net)
+    pypsa.pf.calculate_dependent_values(psa_net)  # TODO: selbst umrechnen?
     # build PowerModels structure
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # number of considered timesteps
+    flexible_loads = (
+        edisgo_object.dsm.e_max.columns
+    )  # TODO: soll das auch an to_powermodels übergeben werden?
     pm["name"] = "ding0_{}_t_{}".format(edisgo_object.topology.id, timesteps)
     pm["time_elapsed"] = int(
         (psa_net.snapshots[1] - psa_net.snapshots[0]).seconds / 3600
@@ -53,12 +56,14 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     _build_gen(psa_net, pm)
     _build_branch(psa_net, pm)
     _build_battery_storage(psa_net, pm)
-    _build_load(psa_net, pm, flexible_cps, flexible_hps)
+    _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads)
     _build_electromobility(psa_net, pm, flexible_cps)
     _build_heatpump(psa_net, pm, edisgo_object, flexible_hps)
     _build_heat_storage(psa_net, pm, edisgo_object)
-    # _build_dsm(psa_net, pm)
-    _build_timeseries(psa_net, pm, edisgo_object, flexible_cps, flexible_hps)
+    _build_dsm(psa_net, pm, flexible_loads)
+    _build_timeseries(
+        psa_net, pm, edisgo_object, flexible_cps, flexible_hps, flexible_loads
+    )
     return pm
 
 
@@ -237,7 +242,7 @@ def _build_branch(psa_net, pm):
         }
 
 
-def _build_load(psa_net, pm, flexible_cps, flexible_hps):
+def _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads):
     """
     Builds load dictionary in PowerModels network data format and adds it to
     PowerModels dictionary 'pm'.
@@ -248,9 +253,18 @@ def _build_load(psa_net, pm, flexible_cps, flexible_hps):
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
         (PowerModels) dictionary.
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>`
+        Array containing all charging points that allow for flexible charging.
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>`
+        Array containing all heat pumps that allow for flexible operation due to an
+        attached heat storage.
+    flexible_loads : :numpy:`numpy.ndarray<ndarray>`
+        Array containing all flexible loads that allow for application of demand side
+        management strategy.
     """
-    loads_df = psa_net.loads.drop(np.concatenate((flexible_hps, flexible_cps)))
-    # TODO: filter out dsm loads
+    loads_df = psa_net.loads.drop(
+        np.concatenate((flexible_hps, flexible_cps, flexible_loads))
+    )
     for load_i in np.arange(len(loads_df.index)):
         idx_bus = _mapping(psa_net, loads_df.bus[load_i])
         pm["load"][str(load_i + 1)] = {
@@ -335,7 +349,7 @@ def _build_electromobility(psa_net, pm, flexible_cps):
             }
 
 
-def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
+def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):  # TODO: pu überprüfen!
     """
     Builds heat pump dictionary and adds it to PowerModels dictionary 'pm'.
 
@@ -368,7 +382,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
             }
 
 
-def _build_heat_storage(psa_net, pm, edisgo_obj):
+def _build_heat_storage(psa_net, pm, edisgo_obj):  # TODO: pu überprüfen!
     """
     Builds heat storage dictionary and adds it to PowerModels dictionary 'pm'.
 
@@ -387,7 +401,6 @@ def _build_heat_storage(psa_net, pm, edisgo_obj):
         idx_bus = _mapping(psa_net, psa_net.loads.bus[stor_i])
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
-            # "pmax": heat_storage_df.p_max_pu[stor_i], # TODO
             "p_loss": 0,
             "energy": heat_storage_df.state_of_charge_initial[stor_i],
             "capacity": heat_storage_df.capacity[stor_i],
@@ -399,7 +412,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj):
         }
 
 
-def _build_dsm(psa_net, pm, edisgo_obj):  # TODO
+def _build_dsm(psa_net, pm, flexible_loads):  # TODO: überprüfen
     """
     Builds dsm 'storage' dictionary and adds it to PowerModels dictionary 'pm'.
 
@@ -409,28 +422,32 @@ def _build_dsm(psa_net, pm, edisgo_obj):  # TODO
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
         (PowerModels) dictionary.
-    edisgo_obj : :class:`~.EDisGo`
-
+    flexible_loads : :numpy:`numpy.ndarray<ndarray>`
+        Array containing all flexible loads that allow for application of demand side
+        management strategy.
     """
-    dsm_df = psa_net.loads.loc[psa_net.loads.index.str.startswith("dsm_load")]
-    p_max = dsm_df.p_set
-    q_max = dsm_df.q_set
-    for dsm_i in np.arange(len(dsm_df.index)):
-        idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
-        pm["electromobility"][str(dsm_i + 1)] = {
-            "pd": 0,
-            "qd": 0,
-            "p_min": 0,
-            "p_max": p_max[dsm_i],
-            "q_max": q_max[dsm_i],
-            "e_min": 0,
-            "e_max": 1,
-            "dsm_bus": idx_bus,
-            "index": dsm_i + 1,
-        }
+    if len(flexible_loads) == 0:
+        print("There are no flexible loads (DSM) in network.")
+    else:
+        dsm_df = psa_net.loads.loc[flexible_loads]
+        for dsm_i in np.arange(len(dsm_df.index)):
+            idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
+            pm["dsm"][str(dsm_i + 1)] = {
+                "pd": 0,
+                "qd": 0,
+                "p_min": 0,
+                "p_max": 1,
+                "q_max": 1,
+                "e_min": 0,
+                "e_max": 1,
+                "dsm_bus": idx_bus,
+                "index": dsm_i + 1,
+            }
 
 
-def _build_timeseries(psa_net, pm, edisgo_obj, flexible_cps, flexible_hps):
+def _build_timeseries(
+    psa_net, pm, edisgo_obj, flexible_cps, flexible_hps, flexible_loads
+):
     """
     Builds timeseries dictionary in PowerModels network data format and adds it to
     PowerModels dictionary 'pm'. PowerModels' timeseries dictionary contains one
@@ -449,18 +466,34 @@ def _build_timeseries(psa_net, pm, edisgo_obj, flexible_cps, flexible_hps):
     flexible_hps: :numpy:`numpy.ndarray<ndarray>`
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
+    flexible_loads : :numpy:`numpy.ndarray<ndarray>`
+        Array containing all flexible loads that allow for application of demand side
+        management strategy.
 
     """
-    for kind in ["gen", "gen_nd", "load", "storage", "electromobility", "heatpumps"]:
-        # , "dsm"]
+    for kind in [
+        "gen",
+        "gen_nd",
+        "load",
+        "storage",
+        "electromobility",
+        "heatpumps",
+        "dsm",
+    ]:
         _build_component_timeseries(
-            psa_net, pm, kind, edisgo_obj, flexible_cps, flexible_hps
+            psa_net, pm, kind, edisgo_obj, flexible_cps, flexible_hps, flexible_loads
         )
     pm["time_series"]["num_steps"] = len(psa_net.snapshots)
 
 
 def _build_component_timeseries(
-    psa_net, pm, kind, edisgo_obj=None, flexible_cps=None, flexible_hps=None
+    psa_net,
+    pm,
+    kind,
+    edisgo_obj=None,
+    flexible_cps=None,
+    flexible_hps=None,
+    flexible_loads=None,
 ):
     """
     Builds timeseries dictionary for given kind and adds it to 'time_series'
@@ -506,12 +539,12 @@ def _build_component_timeseries(
             psa_net.generators_t.q_set.columns.str.contains("solar")
             | psa_net.generators_t.q_set.columns.str.contains("wind"),
         ]
-    elif kind == "load":  # TODO: filter out dsm loads
+    elif kind == "load":
         p_set = psa_net.loads_t.p_set.drop(
-            columns=np.concatenate((flexible_hps, flexible_cps))
+            columns=np.concatenate((flexible_hps, flexible_cps, flexible_loads))
         )
         q_set = psa_net.loads_t.q_set.drop(
-            columns=np.concatenate((flexible_hps, flexible_cps))
+            columns=np.concatenate((flexible_hps, flexible_cps, flexible_loads))
         )
     elif kind == "storage":
         p_set = psa_net.storage_units_t.p_set
@@ -530,12 +563,14 @@ def _build_component_timeseries(
         else:
             p_set = psa_net.loads_t.p_set.loc[:, flexible_hps]
             cop = edisgo_obj.heat_pump.cop_df
-    elif kind == "dsm":  # TODO
-        print("Not implemented yet.")
-        p_set = pd.DataFrame()  # p_max
-        p_min = pd.DataFrame()
-        e_min = pd.DataFrame()
-        e_max = pd.DataFrame()
+    elif kind == "dsm":  # TODO: pu berechnen!
+        if len(flexible_loads) == 0:
+            p_set = pd.DataFrame()
+        else:
+            p_set = edisgo_obj.dsm.p_max
+            p_min = edisgo_obj.dsm.p_min
+            e_min = edisgo_obj.dsm.e_min
+            e_max = edisgo_obj.dsm.e_max
     for comp in p_set.columns:
         if kind == "gen":
             comp_i = _mapping(psa_net, comp, kind)
@@ -550,7 +585,9 @@ def _build_component_timeseries(
                 "qg": q_set[comp].values.tolist(),
             }
         elif kind == "load":
-            comp_i = _mapping(psa_net, comp, kind, flexible_cps, flexible_hps)
+            comp_i = _mapping(
+                psa_net, comp, kind, flexible_cps, flexible_hps, flexible_loads
+            )
             pm_comp[str(comp_i)] = {
                 "pd": p_set[comp].values.tolist(),
                 "qd": q_set[comp].values.tolist(),
@@ -576,19 +613,19 @@ def _build_component_timeseries(
                 "cop": cop[comp].values.tolist(),  # ändert der sich über die Zeit?
             }
         elif kind == "dsm":
-            comp_i = _mapping(psa_net, comp, kind)
+            comp_i = _mapping(psa_net, comp, kind, flexible_loads=flexible_loads)
             pm_comp[str(comp_i)] = {
                 "p_max": p_set[comp].values.tolist(),
                 "p_min": p_min[comp].values.tolist(),
                 "e_min": e_min[comp].values.tolist(),
                 "e_max": e_max[comp].values.tolist(),
             }
-        # TODO: more time dependable values?
     pm["time_series"][kind] = pm_comp
 
 
-def _mapping(psa_net, name, kind="bus", flexible_cps=None, flexible_hps=None):
-    # TODO: add dsm
+def _mapping(
+    psa_net, name, kind="bus", flexible_cps=None, flexible_hps=None, flexible_loads=None
+):
     if kind == "bus":
         df = psa_net.buses
     elif kind == "gen":
@@ -603,14 +640,16 @@ def _mapping(psa_net, name, kind="bus", flexible_cps=None, flexible_hps=None):
         ]
     elif kind == "storage":
         df = psa_net.storage_units
-    elif kind == "load":  # TODO: filter out dsm loads
-        df = psa_net.loads.drop(np.concatenate((flexible_hps, flexible_cps)))
+    elif kind == "load":
+        df = psa_net.loads.drop(
+            np.concatenate((flexible_hps, flexible_cps, flexible_loads))
+        )
     elif kind == "electromobility":
         df = psa_net.loads.loc[flexible_cps]
     elif (kind == "heatpumps") | (kind == "heat_storage"):
         df = psa_net.loads.loc[flexible_hps]
-    elif kind == "dsm":  # TODO: dsm load in psa_net loads df?
-        df = pd.DataFrame()
+    elif kind == "dsm":
+        df = psa_net.loads.loc[flexible_loads]
     else:
         logging.warning("Mapping for '{}' not implemented.".format(kind))
     idx = df.reset_index()[df.index == name].index[0] + 1
