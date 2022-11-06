@@ -122,8 +122,7 @@ def extract_feeders_nx(
     graph = edisgo_obj.topology.to_graph()
     subgraphs = list(graph.subgraph(c) for c in nx.connected_components(graph))
     feeders = []
-    feeder_id = 0
-    for subgraph in subgraphs:
+    for feeder_id, subgraph in enumerate(subgraphs):
         if only_flex_ev:
             cp_feeder = edisgo_obj.topology.charging_points_df.loc[
                 edisgo_obj.topology.charging_points_df.bus.isin(list(subgraph.nodes))
