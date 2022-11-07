@@ -39,7 +39,7 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     # aggregate parallel transformers
     aggregate_parallel_transformers(psa_net)
     # calculate per unit values
-    pypsa.pf.calculate_dependent_values(psa_net)  # TODO: selbst umrechnen?
+    pypsa.pf.calculate_dependent_values(psa_net)
     # build PowerModels structure
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # number of considered timesteps
@@ -61,6 +61,7 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     _build_heatpump(psa_net, pm, edisgo_object, flexible_hps)
     _build_heat_storage(psa_net, pm, edisgo_object)
     _build_dsm(psa_net, pm, flexible_loads)
+    _build_HV_requirements(pm)
     _build_timeseries(
         psa_net, pm, edisgo_object, flexible_cps, flexible_hps, flexible_loads
     )
@@ -82,6 +83,7 @@ def _init_pm():
         "heatpumps": dict(),
         "heat_storage": dict(),
         "dsm": dict(),
+        "HV_requirements": dict(),
         "baseMVA": 1,
         "source_version": 2,
         "shunt": dict(),
@@ -95,6 +97,7 @@ def _init_pm():
             "electromobility": dict(),
             "heatpumps": dict(),
             "dsm": dict(),
+            "HV_requirements": dict(),
             "num_steps": int,
         },
     }
@@ -190,6 +193,8 @@ def _build_gen(psa_net, pm):
             "pmin": gen_nondisp.p_min_pu[gen_i],
             "qmax": 1,  # TODO: aus Zeitreihe
             "qmin": 0,
+            "P": 0,
+            "Q": 0,
             "vg": 1,
             "mbase": gen_nondisp.p_nom[gen_i],
             "gen_bus": idx_bus,
@@ -435,14 +440,38 @@ def _build_dsm(psa_net, pm, flexible_loads):  # TODO: überprüfen
             pm["dsm"][str(dsm_i + 1)] = {
                 "pd": 0,
                 "qd": 0,
+                "energy": 0,
                 "p_min": 0,
                 "p_max": 1,
                 "q_max": 1,
                 "e_min": 0,
                 "e_max": 1,
+                "charge_efficiency": 1,
+                "discharge_efficiency": 1,
                 "dsm_bus": idx_bus,
                 "index": dsm_i + 1,
             }
+
+
+def _build_HV_requirements(pm):
+    """
+    Builds dictionary for HV requirement data in PowerModels network data format and
+    adds it to PowerModels dictionary 'pm'.
+
+    Parameters
+    ----------
+    pm : dict
+        (PowerModels) dictionary.
+    """
+    pm["HV_requirements"] = {
+        "P_curt": 0,
+        "Q_curt": 0,
+        "P_cp": 0,
+        "P_hp": 0,
+        "Q_hp": 0,
+        "P_dsm": 0,
+        "Q_dsm": 0,
+    }
 
 
 def _build_timeseries(
@@ -479,6 +508,7 @@ def _build_timeseries(
         "electromobility",
         "heatpumps",
         "dsm",
+        "HV_requirements",
     ]:
         _build_component_timeseries(
             psa_net, pm, kind, edisgo_obj, flexible_cps, flexible_hps, flexible_loads
@@ -507,7 +537,7 @@ def _build_component_timeseries(
         (PowerModels) dictionary.
     kind: str
         Must be one of ["gen", "gen_nd", "load", "storage", "electromobility",
-        "heatpumps", "heat_storage", "dsm"]
+        "heatpumps", "heat_storage", "dsm", "HV_requirements"]
     edisgo_obj : :class:`~.EDisGo`
     flexible_cps : :numpy:`numpy.ndarray<ndarray>`
         Array containing all charging points that allow for flexible charging.
@@ -571,6 +601,8 @@ def _build_component_timeseries(
             p_min = edisgo_obj.dsm.p_min
             e_min = edisgo_obj.dsm.e_min
             e_max = edisgo_obj.dsm.e_max
+    elif kind == "HV_requirements":
+        p_set = pd.DataFrame()
     for comp in p_set.columns:
         if kind == "gen":
             comp_i = _mapping(psa_net, comp, kind)
@@ -620,6 +652,19 @@ def _build_component_timeseries(
                 "e_min": e_min[comp].values.tolist(),
                 "e_max": e_max[comp].values.tolist(),
             }
+    if kind == "HV_requirements":  # TODO: add correct time series
+        timesteps = len(psa_net.snapshots)
+        pm_comp = {
+            "P_curt": np.ones(timesteps).tolist(),
+            "Q_curt": np.ones(timesteps).tolist(),
+            "P_cp": np.ones(timesteps).tolist(),
+            "P_hp": np.ones(timesteps).tolist(),
+            "Q_hp": np.ones(timesteps).tolist(),
+            "P_dsm": np.ones(timesteps).tolist(),
+            "Q_dsm": np.ones(timesteps).tolist(),
+        }
+        print("To do")
+
     pm["time_series"][kind] = pm_comp
 
 
