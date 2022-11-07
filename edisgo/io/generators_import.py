@@ -762,7 +762,10 @@ def generators_from_database(
             egon_power_plants.scenario == scenario,
             egon_power_plants.carrier.in_(firm),
             func.ST_Within(
-                egon_power_plants.geom,
+                func.ST_Transform(
+                    egon_power_plants.geom,
+                    srid,
+                ),
                 func.ST_Transform(
                     sql_geom,
                     srid,
@@ -782,7 +785,10 @@ def generators_from_database(
             egon_power_plants.scenario == scenario,
             egon_power_plants.carrier.in_(fluctuating),
             func.ST_Within(
-                egon_power_plants.geom,
+                func.ST_Transform(
+                    egon_power_plants.geom,
+                    srid,
+                ),
                 func.ST_Transform(
                     sql_geom,
                     srid,

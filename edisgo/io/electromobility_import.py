@@ -14,9 +14,16 @@ import saio
 
 from numpy.random import default_rng
 from sklearn import preprocessing
+from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
-from edisgo.io.egon_data_import import session_scope_egon_data
+from edisgo.io.egon_data_import import (
+    get_matching_egon_data_bus_id,
+    get_srid_of_db_table,
+    session_scope_egon_data,
+    sql_grid_geom,
+)
+from edisgo.tools.geo import mv_grid_gdf
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -1189,7 +1196,7 @@ def simbev_config_from_database(
             egon_ev_metadata.scenario == scenario
         )
 
-    df = pd.read_sql(sql=query.statement, con=query.session.bind)
+        df = pd.read_sql(sql=query.statement, con=query.session.bind)
 
     return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
 
@@ -1201,21 +1208,32 @@ def potential_charging_parks_from_database(
 ):
     from saio.grid import egon_emob_charging_infrastructure
 
-    mv_grid_id = edisgo_obj.topology.id
-    srid = edisgo_obj.topology.grid_district["srid"]
+    crs = mv_grid_gdf(edisgo_obj).crs
+    sql_geom = sql_grid_geom(edisgo_obj)
 
-    # TODO: change to load charging parks that lay within the grid geometry?
     with session_scope_egon_data(engine) as session:
+        srid = get_srid_of_db_table(session, egon_emob_charging_infrastructure.geometry)
+
         query = session.query(egon_emob_charging_infrastructure).filter(
-            egon_emob_charging_infrastructure.mv_grid_id == mv_grid_id
+            func.ST_Within(
+                func.ST_Transform(
+                    egon_emob_charging_infrastructure.geometry,
+                    srid,
+                ),
+                func.ST_Transform(
+                    sql_geom,
+                    srid,
+                ),
+            )
         )
 
-    gdf = gpd.read_postgis(
-        sql=query.statement,
-        con=query.session.bind,
-        geom_col="geometry",
-        index_col="cp_id",
-    ).to_crs(epsg=srid)
+        gdf = gpd.read_postgis(
+            sql=query.statement,
+            con=query.session.bind,
+            geom_col="geometry",
+            crs=f"EPSG:{srid}",
+            index_col="cp_id",
+        ).to_crs(crs)
 
     gdf = gdf.assign(ags=0)
 
@@ -1239,17 +1257,17 @@ def charging_processes_from_database(
 ):
     from saio.demand import egon_ev_mv_grid_district, egon_ev_trip
 
-    mv_grid_id = edisgo_obj.topology.id
+    egon_bus_id = get_matching_egon_data_bus_id(edisgo_obj=edisgo_obj, db_engine=engine)
 
     with session_scope_egon_data(engine) as session:
         query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
             egon_ev_mv_grid_district.scenario == scenario,
-            egon_ev_mv_grid_district.bus_id == mv_grid_id,
+            egon_ev_mv_grid_district.bus_id == egon_bus_id,
         )
 
-    pool = Counter(
-        pd.read_sql(sql=query.statement, con=query.session.bind).egon_ev_pool_ev_id
-    )
+        pool = Counter(
+            pd.read_sql(sql=query.statement, con=query.session.bind).egon_ev_pool_ev_id
+        )
 
     n_max = max(pool.values())
 
@@ -1260,7 +1278,7 @@ def charging_processes_from_database(
             egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
         )
 
-    ev_trips_df = pd.read_sql(sql=query.statement, con=query.session.bind)
+        ev_trips_df = pd.read_sql(sql=query.statement, con=query.session.bind)
 
     df_list = []
 
