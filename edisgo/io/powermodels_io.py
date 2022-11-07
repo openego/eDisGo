@@ -168,31 +168,28 @@ def _build_gen(psa_net, pm):
     for gen_i in np.arange(len(gen_disp.index)):
         idx_bus = _mapping(psa_net, gen_disp.bus[gen_i])
         pm["gen"][str(gen_i + 1)] = {
-            "pg": gen_disp.p_set[gen_i],  # TODO: aus Zeitreihe
-            "qg": gen_disp.q_set[gen_i],  # TODO: aus Zeitreihe
+            "pg": 0,
+            "qg": 0,
             "pmax": gen_disp.p_max_pu[gen_i],
             "pmin": gen_disp.p_min_pu[gen_i],
-            "qmax": 1,  # TODO: aus Zeitreihe
-            "qmin": 0,
+            "qmax": 1,  # TODO: mit PF
+            "qmin": 0,  # TODO: mit PF
             "vg": 1,
             "mbase": gen_disp.p_nom[gen_i],
             "gen_bus": idx_bus,
             "gen_status": 1,
             "index": gen_i + 1,
-            "model": 2,  # wird eigentlich nicht benötigt
-            "ncost": 3,  # wird eigentlich nicht benötigt
-            "cost": [120, 20, 0],  # wird eigentlich nicht benötigt
         }
 
     for gen_i in np.arange(len(gen_nondisp.index)):
         idx_bus = _mapping(psa_net, gen_nondisp.bus[gen_i])
         pm["gen_nd"][str(gen_i + 1)] = {
-            "pg": gen_nondisp.p_set[gen_i],  # TODO: aus Zeitreihe
-            "qg": gen_nondisp.q_set[gen_i],  # TODO: aus Zeitreihe
+            "pg": 0,
+            "qg": 0,
             "pmax": gen_nondisp.p_max_pu[gen_i],
             "pmin": gen_nondisp.p_min_pu[gen_i],
-            "qmax": 1,  # TODO: aus Zeitreihe
-            "qmin": 0,
+            "qmax": 1,  # TODO: mit PF
+            "qmin": 0,  # TODO: mit PF
             "P": 0,
             "Q": 0,
             "vg": 1,
@@ -273,8 +270,8 @@ def _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads):
     for load_i in np.arange(len(loads_df.index)):
         idx_bus = _mapping(psa_net, loads_df.bus[load_i])
         pm["load"][str(load_i + 1)] = {
-            "pd": loads_df.p_set[load_i],
-            "qd": loads_df.q_set[load_i],
+            "pd": loads_df.p_set[load_i],  # das ist als p_max?
+            "qd": loads_df.q_set[load_i],  # / q_max?
             "load_bus": idx_bus,
             "status": True,
             "index": load_i + 1,
@@ -296,22 +293,14 @@ def _build_battery_storage(psa_net, pm):
     for stor_i in np.arange(len(psa_net.storage_units.index)):
         idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
         pm["storage"][str(stor_i + 1)] = {
-            "x": 0,  # TODO
-            "r": 0,  # TODO
-            "ps": psa_net.storage_units.p_set[stor_i],
-            "qs": psa_net.storage_units.q_set[stor_i],
+            "ps": 0,
+            "qs": 0,
             "pmax": psa_net.storage_units.p_max_pu[stor_i],
             "pmin": psa_net.storage_units.p_min_pu[stor_i],
-            "p_loss": 0,  # TODO
-            "qmax": 1,  # TODO: über PF?
-            "qmin": 0,  # TODO: über PF?
-            "q_loss": 0,  # TODO
-            "energy": psa_net.storage_units.state_of_charge_initial[
-                stor_i
-            ],  # TODO: initial energy?
-            "energy_rating": psa_net.storage_units.capacity[
-                stor_i
-            ],  # TODO: storage capacity
+            "qmax": 1,  # TODO: über PF
+            "qmin": 0,  # TODO: über PF
+            "energy": psa_net.storage_units.state_of_charge_initial[stor_i],
+            "energy_rating": psa_net.storage_units.capacity[stor_i],
             "thermal_rating": 1,  # TODO unbegrenzt
             "charge_rating": psa_net.storage_units.p_max_pu[stor_i],
             "discharge_rating": -psa_net.storage_units.p_min_pu[stor_i],
@@ -377,9 +366,8 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):  # TODO: pu überpr�
         for hp_i in np.arange(len(heat_df.index)):
             idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
             pm["heatpumps"][str(hp_i + 1)] = {
-                "pd": 0,
-                "qd": 0,
-                "p_max": heat_df.p_set[hp_i],  # heat demand
+                "pd": 0,  # heat demand
+                "p_max": heat_df.p_set[hp_i],
                 "q_max": heat_df.q_set[hp_i],
                 "cop": edisgo_obj.heat_pump.cop_df[heat_df.index[hp_i]][0],
                 "hp_bus": idx_bus,
@@ -417,7 +405,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj):  # TODO: pu überprüfen!
         }
 
 
-def _build_dsm(psa_net, pm, flexible_loads):  # TODO: überprüfen
+def _build_dsm(psa_net, pm, flexible_loads):
     """
     Builds dsm 'storage' dictionary and adds it to PowerModels dictionary 'pm'.
 
@@ -652,7 +640,7 @@ def _build_component_timeseries(
                 "e_min": e_min[comp].values.tolist(),
                 "e_max": e_max[comp].values.tolist(),
             }
-    if kind == "HV_requirements":  # TODO: add correct time series
+    if kind == "HV_requirements":  # TODO: add correct time series + PU
         timesteps = len(psa_net.snapshots)
         pm_comp = {
             "P_curt": np.ones(timesteps).tolist(),
@@ -663,7 +651,6 @@ def _build_component_timeseries(
             "P_dsm": np.ones(timesteps).tolist(),
             "Q_dsm": np.ones(timesteps).tolist(),
         }
-        print("To do")
 
     pm["time_series"][kind] = pm_comp
 
