@@ -738,6 +738,80 @@ def generators_from_database(
     TODO
     :return:
     """
+    data = get_generators_from_database(
+        edisgo_object=edisgo_object, engine=engine, scenario=scenario
+    )
+
+    data = preprocess_data(edisgo_object=edisgo_object, data=data)
+
+    # TODO: check if gens already exists in status quo / previous scenario
+    # TODO: remove old gens
+    # TODO: add new gens
+
+
+def preprocess_data(
+    edisgo_object: EDisGo, data: dict[str, gpd.GeoDataFrame]
+) -> dict[str, gpd.GeoDataFrame]:
+    # 1. firm
+    rename = {
+        "el_capacity": "p_nom",
+        "carrier": "type",
+    }
+
+    data["firm_gdf"] = (
+        data["firm_gdf"]
+        .assign(subtype=data["firm_gdf"]["carrier"])
+        .rename(columns=rename, errors="raise")
+    )
+
+    # 2. fluc
+    mapping = {"wind_onshore": "wind", "solar": "solar"}
+
+    data["fluc_gdf"] = (
+        data["fluc_gdf"]
+        .assign(carrier=data["fluc_gdf"].carrier.map(mapping))
+        .rename(columns=rename, errors="raise")
+    )
+
+    mapping = {
+        "wind": "wind_onshore",
+        "solar": "solar_ground_mounted",
+    }
+
+    data["fluc_gdf"] = data["fluc_gdf"].assign(
+        subtype=data["fluc_gdf"]["type"].map(mapping)
+    )
+
+    # 3. chp
+    data["chp_gdf"] = (
+        data["chp_gdf"]
+        .assign(subtype=data["chp_gdf"].carrier)
+        .rename(columns=rename, errors="raise")
+    )
+
+    # 4. pv rooftop
+    rename = {
+        "capacity": "p_nom",
+    }
+
+    data["pv_roof_gdf"] = (
+        data["pv_roof_gdf"]
+        .assign(
+            type="solar",
+            subtype="solar_roof_mounted",
+        )
+        .rename(columns=rename, errors="raise")
+    )
+
+    return data
+
+
+def get_generators_from_database(
+    edisgo_object: EDisGo, engine: Engine, scenario: str = "eGon2035"
+) -> dict[str, gpd.GeoDataFrame]:
+    # TODO: max. capacity? 17.5 or 20 MW?
+    # TODO: sort new gens
+
     saio.register_schema("supply", engine)
     saio.register_schema("openstreetmap", engine)
 
@@ -753,6 +827,8 @@ def generators_from_database(
 
     sql_geom = sql_grid_geom(edisgo_object)
     crs = mv_grid_gdf(edisgo_object).crs
+
+    data = dict()
 
     # 1. firm egon_power_plants
     with session_scope_egon_data(engine) as session:
@@ -773,7 +849,7 @@ def generators_from_database(
             ),
         )
 
-        firm_gdf = gpd.read_postgis(
+        data["firm_gdf"] = gpd.read_postgis(
             sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
         ).to_crs(crs)
 
@@ -796,7 +872,7 @@ def generators_from_database(
             ),
         )
 
-        fluc_gdf = gpd.read_postgis(
+        data["fluc_gdf"] = gpd.read_postgis(
             sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
         ).to_crs(crs)
 
@@ -837,7 +913,7 @@ def generators_from_database(
 
         pv_roof_df = pd.read_sql(sql=query.statement, con=query.session.bind)
 
-    pv_roof_gdf = gpd.GeoDataFrame(
+    data["pv_roof_gdf"] = gpd.GeoDataFrame(
         pv_roof_df.merge(
             buildings_gdf, how="left", left_on="building_id", right_on="id"
         ).drop(columns=["id"]),
@@ -862,11 +938,8 @@ def generators_from_database(
             ),
         )
 
-        chp_gdf = gpd.read_postgis(
+        data["chp_gdf"] = gpd.read_postgis(
             sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
         ).to_crs(crs)
 
-    print("break")
-    print("break")
-
-    return firm_gdf, fluc_gdf, pv_roof_gdf, chp_gdf
+    return data
