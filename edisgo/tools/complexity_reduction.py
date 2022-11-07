@@ -103,7 +103,8 @@ def extract_feeders_nx(
                 )
                 print(f"Saved feeder: {feeder_id} to {export_dir}")
             feeder_id += 1
-        return edisgo_feeder
+            return edisgo_feeder
+        return None
 
     edisgo_orig = deepcopy(edisgo_obj)
     buses_with_feeders = edisgo_orig.topology.buses_df
@@ -148,7 +149,8 @@ def extract_feeders_nx(
                 buses_with_feeders=buses_with_feeders,
                 flexible_loads=flexible_loads,
             )
-        feeders.append(feeder)
+        if feeder:
+            feeders.append(feeder)
     return feeders, buses_with_feeders
 
 
