@@ -219,9 +219,9 @@ def create_feeder_edisgo_object(
 
     for attr_name, id_attr in attr_list.items():
 
+        # get attribute
+        attr_old = getattr(edisgo_obj.timeseries, attr_name)
         if not attr_old.empty:
-            # get attribute
-            attr_old = getattr(edisgo_obj.timeseries, attr_name)
 
             # get ids for attribute but remove flexible loads
             if isinstance(flexible_loads, list) & (id_attr == "loads_df"):
