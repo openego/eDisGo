@@ -29,7 +29,7 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
 
     Returns
     -------
-    dict
+    pm: dict
         Dictionary that contains all network data in PowerModels network data
         format.
     """
@@ -753,7 +753,26 @@ def aggregate_parallel_transformers(psa_net):
 
 
 def _calculate_q(edisgo_obj, pm, idx_bus, kind):
-    # retrieve power factor and sign from config
+    """
+    Retrieves power factor and sign from edisgo config files to calculate reactive
+    power.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    pm : dict
+        (PowerModels) dictionary.
+    idx_bus: int
+        Bus index from PowerModels bus dictionary.
+    kind: str
+        Must be one of ["gen", "load", "storage", "hp", "cp"]
+
+    Returns
+    -------
+    pf_sign: float
+        Product of sign and tan(arccos(PF)).
+    """
+
     grid_level = pm["bus"][str(idx_bus)]["grid_level"]
     pf = edisgo_obj.config._data["reactive_power_factor"][
         "{}_{}".format(grid_level, kind)
