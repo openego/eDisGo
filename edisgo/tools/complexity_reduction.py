@@ -3,6 +3,7 @@ import os
 from copy import deepcopy
 
 import networkx as nx
+import pandas as pd
 
 from edisgo.network.components import Switch
 
@@ -69,7 +70,8 @@ def remove_1m_end_line(edisgo, line):
 
 
 def extract_feeders_nx(
-    edisgo_obj, save_dir=None, only_flex_ev=True, flexible_loads: list = None
+    edisgo_obj, save_dir=None, only_flex_ev=True, flexible_loads:
+        pd.DataFrame = None
 ):
     """
     Method to extract and optionally save MV-feeders.
@@ -156,7 +158,8 @@ def extract_feeders_nx(
 
 
 def create_feeder_edisgo_object(
-    buses_with_feeders, edisgo_obj, feeder_id, flexible_loads: list = None
+    buses_with_feeders, edisgo_obj, feeder_id,
+        flexible_loads: pd.DataFrame = None
 ):
     """
     Method to create feeder edisgo object.
@@ -228,11 +231,11 @@ def create_feeder_edisgo_object(
         if not attr_old.empty:
 
             # get ids for attribute but remove flexible loads
-            if isinstance(flexible_loads, list) & (id_attr == "loads_df"):
+            if isinstance(flexible_loads, pd.DataFrame) & (id_attr == "loads_df"):
                 id_attr = getattr(edisgo_feeder.topology, id_attr)
                 # remove flexible loads
                 id_attr = id_attr.drop(
-                    id_attr.loc[id_attr.index.isin(flexible_loads)].index
+                    id_attr.loc[id_attr.index.isin(flexible_loads.index)].index
                 )
             else:
                 id_attr = getattr(edisgo_feeder.topology, id_attr)
@@ -243,12 +246,14 @@ def create_feeder_edisgo_object(
             setattr(edisgo_feeder.timeseries, attr_name, attr_new)
 
     # select emob attributes
-    emob_ids = edisgo_feeder.topology.loads_df.loc[
-        edisgo_feeder.topology.loads_df["type"] == "charging_point"].index
+    emob_ids = flexible_loads.loc[
+                    (flexible_loads["type"] == "charging_point") & (
+                        flexible_loads["bus"].isin(feeder_buses))].index
 
-    flex_bands = edisgo_obj.electromobility.flexibility_bands
-    edisgo_obj.electromobility.flexibility_bands = {
-        band: df.loc[:, emob_ids] for band, df in flex_bands.items()}
+    for band, df in edisgo_obj.electromobility.flexibility_bands.items():
+        if not df.empty:
+            df = df.loc[:, df.columns.isin(emob_ids)]
+            edisgo_feeder.electromobility.flexibility_bands.update({band: df})
 
     # select heat pump attributes
     attr_list = ["heat_demand_df", "cop_df", "thermal_storage_units_df"]
