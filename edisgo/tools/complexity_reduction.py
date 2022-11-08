@@ -242,6 +242,14 @@ def create_feeder_edisgo_object(
             # set attribute
             setattr(edisgo_feeder.timeseries, attr_name, attr_new)
 
+    # select emob attributes
+    emob_ids = edisgo_feeder.topology.loads_df.loc[
+        edisgo_feeder.topology.loads_df["type"] == "charging_point"].index
+
+    flex_bands = edisgo_obj.electromobility.flexibility_bands
+    edisgo_obj.electromobility.flexibility_bands = {
+        band: df.loc[:, emob_ids] for band, df in flex_bands.items()}
+
     # select heat pump attributes
     attr_list = ["heat_demand_df", "cop_df", "thermal_storage_units_df"]
 
