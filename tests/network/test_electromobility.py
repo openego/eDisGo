@@ -77,7 +77,7 @@ class TestElectromobility:
         self.edisgo_obj.electromobility.to_csv(dir)
 
         saved_files = os.listdir(dir)
-        assert len(saved_files) == 6
+        assert len(saved_files) == 7
         assert "charging_processes.csv" in saved_files
         assert "flexibility_band_upper_power.csv" in saved_files
 
@@ -116,7 +116,7 @@ class TestElectromobility:
 
         assert len(self.edisgo_obj.electromobility.charging_processes_df) == 48
         assert len(self.edisgo_obj.electromobility.potential_charging_parks_gdf) == 1621
-        assert self.edisgo_obj.electromobility.integrated_charging_parks_df.empty
+        assert len(self.edisgo_obj.electromobility.integrated_charging_parks_df) == 3
 
         assert_frame_equal(
             self.edisgo_obj.electromobility.flexibility_bands["upper_energy"],
