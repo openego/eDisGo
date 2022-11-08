@@ -108,6 +108,7 @@ def extract_feeders_nx(
 
     edisgo_orig = deepcopy(edisgo_obj)
     buses_with_feeders = edisgo_orig.topology.buses_df
+
     station_bus = edisgo_obj.topology.mv_grid.station.index[0]
     # get lines connected to station
     feeder_lines = edisgo_obj.topology.lines_df.loc[
@@ -177,10 +178,11 @@ def create_feeder_edisgo_object(
 
     for attr_name in attr_list:
         attr_old = getattr(edisgo_obj.topology, attr_name)
-        attr_new = attr_old.loc[
-            attr_old.bus0.isin(feeder_buses) & attr_old.bus1.isin(feeder_buses)
-        ]
-        setattr(edisgo_feeder.topology, attr_name, attr_new)
+        if not attr_old.empty:
+            attr_new = attr_old.loc[
+                attr_old.bus0.isin(feeder_buses) & attr_old.bus1.isin(feeder_buses)
+            ]
+            setattr(edisgo_feeder.topology, attr_name, attr_new)
 
     attr_list = [
         "generators_df",
@@ -191,8 +193,9 @@ def create_feeder_edisgo_object(
 
     for attr_name in attr_list:
         attr_old = getattr(edisgo_obj.topology, attr_name)
-        attr_new = attr_old.loc[attr_old.bus.isin(feeder_buses)]
-        setattr(edisgo_feeder.topology, attr_name, attr_new)
+        if not attr_old.empty:
+            attr_new = attr_old.loc[attr_old.bus.isin(feeder_buses)]
+            setattr(edisgo_feeder.topology, attr_name, attr_new)
 
     # get switches connected to a line of this feeder with either open or
     # closed bus of this feeder
@@ -248,11 +251,12 @@ def create_feeder_edisgo_object(
 
     for attr_name in attr_list:
         attr_old = getattr(edisgo_obj.heat_pump, attr_name)
-        if attr_name == "thermal_storage_units_df":
-            attr_new = attr_old.loc[hp_ids]
-        else:
-            attr_new = attr_old.loc[:, hp_ids]
+        if not attr_old.empty:
+            if attr_name == "thermal_storage_units_df":
+                attr_new = attr_old.loc[hp_ids]
+            else:
+                attr_new = attr_old.loc[:, hp_ids]
 
-        setattr(edisgo_feeder.heat_pump, attr_name, attr_new)
+            setattr(edisgo_feeder.heat_pump, attr_name, attr_new)
 
     return edisgo_feeder
