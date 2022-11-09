@@ -1177,7 +1177,7 @@ class TimeSeries:
         return active_power, reactive_power
 
     def predefined_fluctuating_generators_by_technology(
-        self, edisgo_object, ts_generators, generator_names=None
+        self, edisgo_object, ts_generators, generator_names=None, engine=None
     ):
         """
         Set active power feed-in time series for fluctuating generators by technology.
@@ -1202,6 +1202,11 @@ class TimeSeries:
                 for the weather year 2011. See
                 :func:`edisgo.io.timeseries_import.import_feedin_timeseries` for more
                 information.
+
+            * 'egon_data'
+
+                Technology and weather cell specific hourly feed-in time series are
+                obtained from an eGon-data instance for the weather year 2011.
 
             * :pandas:`pandas.DataFrame<dataframe>`
 
@@ -1236,11 +1241,25 @@ class TimeSeries:
         # in case time series from oedb are used, retrieve oedb time series
         if isinstance(ts_generators, str) and ts_generators == "oedb":
             weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
-                edisgo_object
+                edisgo_object, source=ts_generators, engine=None
             )
             ts_generators = timeseries_import.feedin_oedb(
                 edisgo_object.config, weather_cell_ids, self.timeindex
             )
+
+        elif isinstance(ts_generators, str) and ts_generators == "egon_data":
+            if engine is None:
+                raise ValueError(
+                    "Please provide a valid engine to your egon-data instance."
+                )
+
+            weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
+                edisgo_object, source=ts_generators, engine=engine
+            )
+            ts_generators = timeseries_import.feedin_oedb(
+                edisgo_object.config, weather_cell_ids, self.timeindex
+            )
+
         elif not isinstance(ts_generators, pd.DataFrame):
             raise ValueError(
                 "'ts_generators' must either be a pandas DataFrame or 'oedb'."
@@ -1261,6 +1280,7 @@ class TimeSeries:
                 generator_names = edisgo_object.topology.generators_df[
                     edisgo_object.topology.generators_df.type.isin(technologies)
                 ].index
+
         generator_names = self._check_if_components_exist(
             edisgo_object, generator_names, "generators"
         )
@@ -1277,6 +1297,7 @@ class TimeSeries:
                 lambda x: ts_generators[x.type].T * x.p_nom,
                 axis=1,
             ).T
+
         if not ts_scaled.empty:
             self.add_component_time_series("generators_active_power", ts_scaled)
 

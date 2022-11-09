@@ -1158,11 +1158,15 @@ class Topology:
             grid = self.get_lv_grid(int(bus_s.lv_grid_id))
         else:
             grid = self.mv_grid
+
         tmp = f"{str(grid)}_{generator_type}"
         generator_id = kwargs.pop("generator_id", None)
+
         if generator_id is not None:
             tmp = f"{tmp}_{generator_id}"
+
         generator_name = f"Generator_{tmp}"
+
         while generator_name in self.generators_df.index:
             random.seed(a=generator_name)
             generator_name = f"Generator_{tmp}_{random.randint(10**8, 10**9)}"

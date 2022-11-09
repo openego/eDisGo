@@ -339,6 +339,7 @@ class EDisGo:
         conventional_loads_names=None,
         charging_points_ts=None,
         charging_points_names=None,
+        engine: Engine | None = None,
     ):
         """
         Uses predefined feed-in or demand profiles.
@@ -425,7 +426,10 @@ class EDisGo:
             return
         if fluctuating_generators_ts is not None:
             self.timeseries.predefined_fluctuating_generators_by_technology(
-                self, fluctuating_generators_ts, fluctuating_generators_names
+                self,
+                fluctuating_generators_ts,
+                fluctuating_generators_names,
+                engine=engine,
             )
         if dispatchable_generators_ts is not None:
             self.timeseries.predefined_dispatchable_generators_by_technology(
@@ -1257,8 +1261,10 @@ class EDisGo:
                 ]
                 nearest_substation, _ = find_nearest_bus(geolocation, substations)
                 kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
+
             kwargs["geom"] = geolocation
             kwargs["voltage_level"] = voltage_level
+
             comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
 
         if add_ts:
@@ -1405,8 +1411,10 @@ class EDisGo:
                 axis=1,
             )
             gens_df_grouped["control"] = "PQ"
+
             if "weather_cell_id" in gens_df_grouped.columns:
                 gens_df_grouped.drop(columns=["weather_cell_id"], inplace=True)
+
             self.topology.generators_df = gens_df_grouped.set_index("name")
 
             # set up new generator time series

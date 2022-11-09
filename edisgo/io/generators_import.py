@@ -17,6 +17,7 @@ from edisgo.io.egon_data_import import (
     get_srid_of_db_table,
     session_scope_egon_data,
     sql_grid_geom,
+    sql_within,
 )
 from edisgo.tools import session_scope
 from edisgo.tools.geo import mv_grid_gdf, proj2equidistant
@@ -742,16 +743,62 @@ def generators_from_database(
         edisgo_object=edisgo_object, engine=engine, scenario=scenario
     )
 
-    data = preprocess_data(edisgo_object=edisgo_object, data=data)
+    data = preprocess_data(data=data)
 
+    remove_existing_gens(edisgo_object=edisgo_object)
+
+    add_generators(edisgo_object=edisgo_object, data=data)
+
+
+def remove_existing_gens(edisgo_object: EDisGo) -> None:
     # TODO: check if gens already exists in status quo / previous scenario
-    # TODO: remove old gens
-    # TODO: add new gens
+    generators_df = edisgo_object.topology.generators_df.copy()
+
+    for name in generators_df.index:
+        edisgo_object.remove_component(comp_type="generator", comp_name=name)
 
 
-def preprocess_data(
-    edisgo_object: EDisGo, data: dict[str, gpd.GeoDataFrame]
-) -> dict[str, gpd.GeoDataFrame]:
+def add_generators(edisgo_object: EDisGo, data: dict[str, gpd.GeoDataFrame]) -> None:
+    cols_to_iterate = [
+        "id",
+        "type",
+        "p_nom",
+        "voltage_level",
+        "geom",
+        "subtype",
+        "weather_cell_id",
+    ]
+    # TODO: integration of LV generators needs to be changed to previously determine the
+    #  closest MV-LV station
+    # TODO: change to add pv rooftop to specific buildings as soon as building id is
+    #  given
+
+    for key, gdf in data.items():
+        for (
+            index,
+            gen_type,
+            p_nom,
+            voltage_level,
+            geom,
+            subtype,
+            weather_cell_id,
+        ) in gdf[cols_to_iterate].itertuples(index=False):
+            index = f"egon_{subtype}_{index}"
+
+            edisgo_object.integrate_component_based_on_geolocation(
+                comp_type="generator",
+                generator_id=index,
+                geolocation=geom,
+                voltage_level=voltage_level,
+                add_ts=False,
+                p_nom=p_nom,
+                generator_type=gen_type,
+                subtype=subtype,
+                weather_cell_id=weather_cell_id,
+            )
+
+
+def preprocess_data(data: dict[str, gpd.GeoDataFrame]) -> dict[str, gpd.GeoDataFrame]:
     # 1. firm
     rename = {
         "el_capacity": "p_nom",
@@ -760,7 +807,7 @@ def preprocess_data(
 
     data["firm_gdf"] = (
         data["firm_gdf"]
-        .assign(subtype=data["firm_gdf"]["carrier"])
+        .assign(subtype=data["firm_gdf"]["carrier"], weather_cell_id=np.nan)
         .rename(columns=rename, errors="raise")
     )
 
@@ -785,14 +832,12 @@ def preprocess_data(
     # 3. chp
     data["chp_gdf"] = (
         data["chp_gdf"]
-        .assign(subtype=data["chp_gdf"].carrier)
+        .assign(subtype=data["chp_gdf"].carrier, weather_cell_id=np.nan)
         .rename(columns=rename, errors="raise")
     )
 
     # 4. pv rooftop
-    rename = {
-        "capacity": "p_nom",
-    }
+    rename = {"capacity": "p_nom", "index": "id"}
 
     data["pv_roof_gdf"] = (
         data["pv_roof_gdf"]
@@ -810,7 +855,6 @@ def get_generators_from_database(
     edisgo_object: EDisGo, engine: Engine, scenario: str = "eGon2035"
 ) -> dict[str, gpd.GeoDataFrame]:
     # TODO: max. capacity? 17.5 or 20 MW?
-    # TODO: sort new gens
 
     saio.register_schema("supply", engine)
     saio.register_schema("openstreetmap", engine)
@@ -834,19 +878,15 @@ def get_generators_from_database(
     with session_scope_egon_data(engine) as session:
         srid = get_srid_of_db_table(session, egon_power_plants.geom)
 
-        query = session.query(egon_power_plants).filter(
-            egon_power_plants.scenario == scenario,
-            egon_power_plants.carrier.in_(firm),
-            func.ST_Within(
-                func.ST_Transform(
-                    egon_power_plants.geom,
-                    srid,
-                ),
-                func.ST_Transform(
-                    sql_geom,
-                    srid,
-                ),
-            ),
+        query = (
+            session.query(egon_power_plants)
+            .filter(
+                egon_power_plants.scenario == scenario,
+                egon_power_plants.carrier.in_(firm),
+                egon_power_plants.voltage_level >= 4,
+                sql_within(egon_power_plants.geom, sql_geom, srid),
+            )
+            .order_by(egon_power_plants.id)
         )
 
         data["firm_gdf"] = gpd.read_postgis(
@@ -857,19 +897,15 @@ def get_generators_from_database(
     with session_scope_egon_data(engine) as session:
         srid = get_srid_of_db_table(session, egon_power_plants.geom)
 
-        query = session.query(egon_power_plants).filter(
-            egon_power_plants.scenario == scenario,
-            egon_power_plants.carrier.in_(fluctuating),
-            func.ST_Within(
-                func.ST_Transform(
-                    egon_power_plants.geom,
-                    srid,
-                ),
-                func.ST_Transform(
-                    sql_geom,
-                    srid,
-                ),
-            ),
+        query = (
+            session.query(egon_power_plants)
+            .filter(
+                egon_power_plants.scenario == scenario,
+                egon_power_plants.carrier.in_(fluctuating),
+                egon_power_plants.voltage_level >= 4,
+                sql_within(egon_power_plants.geom, sql_geom, srid),
+            )
+            .order_by(egon_power_plants.id)
         )
 
         data["fluc_gdf"] = gpd.read_postgis(
@@ -887,16 +923,7 @@ def get_generators_from_database(
             ).label("geom"),
             osm_buildings_filtered.id,
         ).filter(
-            func.ST_Within(
-                func.ST_Transform(
-                    osm_buildings_filtered.geom_point,
-                    srid,
-                ),
-                func.ST_Transform(
-                    sql_geom,
-                    srid,
-                ),
-            ),
+            sql_within(osm_buildings_filtered.geom_point, sql_geom, srid),
         )
 
         buildings_gdf = gpd.read_postgis(
@@ -906,9 +933,14 @@ def get_generators_from_database(
     building_ids = buildings_gdf.id
 
     with session_scope_egon_data(engine) as session:
-        query = session.query(egon_power_plants_pv_roof_building).filter(
-            egon_power_plants_pv_roof_building.scenario == scenario,
-            egon_power_plants_pv_roof_building.building_id.in_(building_ids),
+        query = (
+            session.query(egon_power_plants_pv_roof_building)
+            .filter(
+                egon_power_plants_pv_roof_building.scenario == scenario,
+                egon_power_plants_pv_roof_building.building_id.in_(building_ids),
+                egon_power_plants_pv_roof_building.voltage_level >= 4,
+            )
+            .order_by(egon_power_plants_pv_roof_building.index)
         )
 
         pv_roof_df = pd.read_sql(sql=query.statement, con=query.session.bind)
@@ -921,21 +953,18 @@ def get_generators_from_database(
         crs=buildings_gdf.crs,
     )
 
+    # 4. chp plants egon_chp_plants
     with session_scope_egon_data(engine) as session:
         srid = get_srid_of_db_table(session, egon_chp_plants.geom)
 
-        query = session.query(egon_chp_plants).filter(
-            egon_chp_plants.scenario == scenario,
-            func.ST_Within(
-                func.ST_Transform(
-                    egon_chp_plants.geom,
-                    srid,
-                ),
-                func.ST_Transform(
-                    sql_geom,
-                    srid,
-                ),
-            ),
+        query = (
+            session.query(egon_chp_plants)
+            .filter(
+                egon_chp_plants.scenario == scenario,
+                egon_chp_plants.voltage_level >= 4,
+                sql_within(egon_chp_plants.geom, sql_geom, srid),
+            )
+            .order_by(egon_chp_plants.id)
         )
 
         data["chp_gdf"] = gpd.read_postgis(

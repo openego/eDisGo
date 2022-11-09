@@ -308,3 +308,29 @@ def get_srid_of_db_table(session: Session, geom_col: InstrumentedAttribute) -> i
     query = session.query(func.ST_SRID(geom_col)).limit(1)
 
     return pd.read_sql(sql=query.statement, con=query.session.bind).iat[0, 0]
+
+
+def sql_within(geom_col: InstrumentedAttribute, geom_shape: Geometry, srid: int):
+    return func.ST_Within(
+        func.ST_Transform(
+            geom_col,
+            srid,
+        ),
+        func.ST_Transform(
+            geom_shape,
+            srid,
+        ),
+    )
+
+
+def sql_intersects(geom_col: InstrumentedAttribute, geom_shape: Geometry, srid: int):
+    return func.ST_Intersects(
+        func.ST_Transform(
+            geom_col,
+            srid,
+        ),
+        func.ST_Transform(
+            geom_shape,
+            srid,
+        ),
+    )
