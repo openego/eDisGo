@@ -8,7 +8,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pandas.util.testing import assert_frame_equal, assert_series_equal
+from pandas.util.testing import (
+    assert_frame_equal,
+    assert_index_equal,
+    assert_series_equal,
+)
 
 from edisgo import EDisGo
 from edisgo.network import timeseries
@@ -2317,6 +2321,7 @@ class TestTimeSeries:
 
         len_timeindex_orig = len(self.edisgo.timeseries.timeindex)
         mean_value_orig = self.edisgo.timeseries.generators_active_power.mean()
+        index_orig = self.edisgo.timeseries.timeindex.copy()
 
         # test up-sampling
         self.edisgo.timeseries.resample_timeseries()
@@ -2332,6 +2337,9 @@ class TestTimeSeries:
                 atol=1e-5,
             )
         ).all()
+        # check if index is the same after resampled back
+        self.edisgo.timeseries.resample_timeseries(freq="1h")
+        assert_index_equal(self.edisgo.timeseries.timeindex, index_orig)
 
         # same tests for down-sampling
         self.edisgo.timeseries.resample_timeseries(freq="2h")
