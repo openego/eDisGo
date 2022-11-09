@@ -81,6 +81,7 @@ def _init_pm():
     pm = {
         "gen": dict(),
         "gen_nd": dict(),
+        "gen_slack": dict(),
         "branch": dict(),
         "bus": dict(),
         "dcline": dict(),
@@ -160,21 +161,19 @@ def _build_gen(edisgo_obj, psa_net, pm):
     pm : dict
         (PowerModels) dictionary.
     """
-    # Divide in dispatchable and non-dispatchable generator sets
-    gen_disp = psa_net.generators.loc[
-        ~(psa_net.generators.index.str.contains("solar"))
-        & ~(psa_net.generators.index.str.contains("wind"))
-    ]
+    # Divide in slack, dispatchable and non-dispatchable generator sets
+    gen_slack = psa_net.generators.loc[psa_net.generators.index == "Generator_slack"]
     gen_nondisp = psa_net.generators.loc[
         (psa_net.generators.index.str.contains("solar"))
         | (psa_net.generators.index.str.contains("wind"))
     ]
-
-    # determine slack bus through slack generator
-    slack_gen = psa_net.generators.bus[
-        psa_net.generators.index == "Generator_slack"
-    ].values[0]
-    pm["bus"][str(_mapping(psa_net, slack_gen))]["bus_type"] = 3
+    gen_disp = psa_net.generators.drop(
+        np.concatenate((gen_nondisp.index, gen_slack.index))
+    )
+    # determine slack buses through slack generators
+    slack_gens_bus = gen_slack.bus.values
+    for bus in slack_gens_bus:
+        pm["bus"][str(_mapping(psa_net, bus))]["bus_type"] = 3
 
     for gen_i in np.arange(len(gen_disp.index)):
         idx_bus = _mapping(psa_net, gen_disp.bus[gen_i])
@@ -214,6 +213,26 @@ def _build_gen(edisgo_obj, psa_net, pm):
             "gen_status": 1,
             "index": gen_i + 1,
         }
+
+        for gen_i in np.arange(len(gen_slack.index)):
+            idx_bus = _mapping(psa_net, gen_slack.bus[gen_i])
+            pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "gen")
+            q = [pf_sign * gen_slack.p_nom[gen_i], pf_sign * gen_slack.p_nom_min[gen_i]]
+            pm["gen_slack"][str(gen_i + 1)] = {
+                "pg": psa_net.generators_t.p_set[gen_slack.index[gen_i]][0],
+                "qg": psa_net.generators_t.q_set[gen_slack.index[gen_i]][0],
+                "pmax": gen_slack.p_nom[gen_i],
+                "pmin": gen_slack.p_nom_min[gen_i],
+                "qmax": max(q),
+                "qmin": min(q),
+                "P": 0,
+                "Q": 0,
+                "vg": 1,
+                "mbase": gen_slack.p_nom[gen_i],
+                "gen_bus": idx_bus,
+                "gen_status": 1,
+                "index": gen_i + 1,
+            }
 
 
 def _build_branch(psa_net, pm):
@@ -497,15 +516,13 @@ def _build_HV_requirements(pm):
     pm : dict
         (PowerModels) dictionary.
     """
-    pm["HV_requirements"] = {
-        "P_curt": 0,
-        "Q_curt": 0,
-        "P_cp": 0,
-        "P_hp": 0,
-        "Q_hp": 0,
-        "P_dsm": 0,
-        "Q_dsm": 0,
-    }
+    flexibilities = ["curt", "storage", "cp", "hp", "dsm"]
+    for i in np.arange(len(flexibilities)):
+        pm["HV_requirements"][str(i + 1)] = {
+            "P": 0,
+            "Q": 0,
+            "flexibility": flexibilities[i],
+        }
 
 
 def _build_timeseries(
@@ -537,6 +554,7 @@ def _build_timeseries(
     for kind in [
         "gen",
         "gen_nd",
+        "gen_slack",
         "load",
         "storage",
         "electromobility",
@@ -570,8 +588,8 @@ def _build_component_timeseries(
     pm : dict
         (PowerModels) dictionary.
     kind: str
-        Must be one of ["gen", "gen_nd", "load", "storage", "electromobility",
-        "heatpumps", "heat_storage", "dsm", "HV_requirements"]
+        Must be one of ["gen", "gen_nd", "gen_slack", "load", "storage",
+        "electromobility", "heatpumps", "heat_storage", "dsm", "HV_requirements"]
     edisgo_obj : :class:`~.EDisGo`
     flexible_cps : :numpy:`numpy.ndarray<ndarray>`
         Array containing all charging points that allow for flexible charging.
@@ -585,12 +603,14 @@ def _build_component_timeseries(
         p_set = psa_net.generators_t.p_set.loc[
             :,
             ~(psa_net.generators_t.p_set.columns.str.contains("solar"))
-            & ~(psa_net.generators_t.p_set.columns.str.contains("wind")),
+            & ~(psa_net.generators_t.p_set.columns.str.contains("wind"))
+            & ~(psa_net.generators_t.p_set.columns.str.contains("Generator_slack")),
         ]
         q_set = psa_net.generators_t.q_set.loc[
             :,
             ~(psa_net.generators_t.q_set.columns.str.contains("solar"))
-            & ~(psa_net.generators_t.q_set.columns.str.contains("wind")),
+            & ~(psa_net.generators_t.q_set.columns.str.contains("wind"))
+            & ~(psa_net.generators_t.q_set.columns.str.contains("slack")),
         ]
     elif kind == "gen_nd":
         p_set = psa_net.generators_t.p_set.loc[
@@ -602,6 +622,15 @@ def _build_component_timeseries(
             :,
             psa_net.generators_t.q_set.columns.str.contains("solar")
             | psa_net.generators_t.q_set.columns.str.contains("wind"),
+        ]
+    elif kind == "gen_slack":
+        p_set = psa_net.generators_t.p_set.loc[
+            :,
+            psa_net.generators_t.p_set.columns.str.contains("slack"),
+        ]
+        q_set = psa_net.generators_t.q_set.loc[
+            :,
+            psa_net.generators_t.q_set.columns.str.contains("slack"),
         ]
     elif kind == "load":
         p_set = psa_net.loads_t.p_set.drop(
@@ -644,7 +673,13 @@ def _build_component_timeseries(
                 "pg": p_set[comp].values.tolist(),
                 "qg": q_set[comp].values.tolist(),
             }
-        if kind == "gen_nd":
+        elif kind == "gen_nd":
+            comp_i = _mapping(psa_net, comp, kind)
+            pm_comp[str(comp_i)] = {
+                "pg": p_set[comp].values.tolist(),
+                "qg": q_set[comp].values.tolist(),
+            }
+        elif kind == "gen_slack":
             comp_i = _mapping(psa_net, comp, kind)
             pm_comp[str(comp_i)] = {
                 "pg": p_set[comp].values.tolist(),
@@ -688,15 +723,12 @@ def _build_component_timeseries(
             }
     if kind == "HV_requirements":  # TODO: add correct time series from edisgo.etrago
         timesteps = len(psa_net.snapshots)
-        pm_comp = {
-            "P_curt": np.ones(timesteps).tolist(),
-            "Q_curt": np.ones(timesteps).tolist(),
-            "P_cp": np.ones(timesteps).tolist(),
-            "P_hp": np.ones(timesteps).tolist(),
-            "Q_hp": np.ones(timesteps).tolist(),
-            "P_dsm": np.ones(timesteps).tolist(),
-            "Q_dsm": np.ones(timesteps).tolist(),
-        }
+        flexibilities = ["curt", "storage", "cp", "hp", "dsm"]
+        for i in np.arange(len(flexibilities)):
+            pm_comp[(str(i + 1))] = {
+                "P": np.ones(timesteps).tolist(),
+                "Q": np.ones(timesteps).tolist(),
+            }
 
     pm["time_series"][kind] = pm_comp
 
@@ -710,12 +742,15 @@ def _mapping(
         df = psa_net.generators.loc[
             ~(psa_net.generators.index.str.contains("solar"))
             & ~(psa_net.generators.index.str.contains("wind"))
+            & ~(psa_net.generators.index.str.contains("slack"))
         ]
     elif kind == "gen_nd":
         df = psa_net.generators.loc[
             (psa_net.generators.index.str.contains("solar"))
             | (psa_net.generators.index.str.contains("wind"))
         ]
+    elif kind == "gen_slack":
+        df = psa_net.generators.loc[(psa_net.generators.index.str.contains("slack"))]
     elif kind == "storage":
         df = psa_net.storage_units
     elif kind == "load":
