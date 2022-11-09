@@ -26,8 +26,8 @@ class TestTopology:
 
     """
 
-    @classmethod
-    def setup_class(self):
+    @pytest.fixture(autouse=True)
+    def setup_fixture(self):
         self.topology = Topology()
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
 
