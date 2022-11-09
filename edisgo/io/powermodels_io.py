@@ -13,7 +13,7 @@ import pypsa
 from edisgo.tools.tools import calculate_impedance_for_parallel_components
 
 
-def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
+def to_powermodels(edisgo_object, flexible_cps, flexible_hps, opt_version):
     """
     Converts eDisGo representation of the network topology and timeseries to
     PowerModels network data format.
@@ -26,6 +26,9 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     flexible_hps: :numpy:`numpy.ndarray<ndarray>`
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
+    opt_version: Int
+        Version of optimization models to choose from. For more information see MA.
+        Must be one of [1, 2].
 
     Returns
     -------
@@ -52,6 +55,7 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     )  # length of timesteps in hours
     pm["baseMVA"] = 1
     pm["source_version"] = 2
+    pm["opt_version"] = opt_version
     _build_bus(psa_net, pm)
     _build_gen(edisgo_object, psa_net, pm)
     _build_branch(psa_net, pm)
@@ -65,6 +69,10 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps):
     _build_timeseries(
         psa_net, pm, edisgo_object, flexible_cps, flexible_hps, flexible_loads
     )
+    pm["PF"] = {  # TODO: PF != 1 immer für beide voltage levels oder keins?
+        "cp": edisgo_object.config._data["reactive_power_factor"]["mv_cp"],
+        "hp": edisgo_object.config._data["reactive_power_factor"]["mv_hp"],
+    }
     return pm
 
 
@@ -307,6 +315,10 @@ def _build_battery_storage(edisgo_obj, psa_net, pm):
             pf_sign * psa_net.storage_units.p_nom[stor_i],
         ]
         pm["storage"][str(stor_i + 1)] = {
+            "r": 0,
+            "x": 0,
+            "p_loss": 0,
+            "q_loss": 0,
             "ps": psa_net.storage_units_t.p_set[psa_net.storage_units.index[stor_i]][0],
             "qs": psa_net.storage_units_t.q_set[psa_net.storage_units.index[stor_i]][0],
             "pmax": psa_net.storage_units.p_nom[stor_i],
@@ -317,7 +329,7 @@ def _build_battery_storage(edisgo_obj, psa_net, pm):
             "energy_rating": psa_net.storage_units.capacity[stor_i],
             "thermal_rating": 1,  # TODO unbegrenzt
             "charge_rating": psa_net.storage_units.p_nom[stor_i],
-            "discharge_rating": -psa_net.storage_units.p_nom[stor_i],
+            "discharge_rating": psa_net.storage_units.p_nom[stor_i],
             "charge_efficiency": 1,
             "discharge_efficiency": 1,
             "storage_bus": idx_bus,

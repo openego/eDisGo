@@ -626,8 +626,10 @@ class EDisGo:
             self.check_integrity()
         return pypsa_io.to_pypsa(self, mode, timesteps, **kwargs)
 
-    def to_powermodels(self, flexible_cps, flexible_hps):
-        return powermodels_io.to_powermodels(self, flexible_cps, flexible_hps)
+    def to_powermodels(self, flexible_cps, flexible_hps, opt_version):
+        return powermodels_io.to_powermodels(
+            self, flexible_cps, flexible_hps, opt_version
+        )
 
     def to_graph(self):
         """
@@ -2193,9 +2195,9 @@ class EDisGo:
             filename = f"edisgo_object_{self.topology.mv_grid.id}.pkl"
         pickle.dump(self, open(os.path.join(abs_path, filename), "wb"))
 
-    def save_edisgo_to_json(self, directory, flexible_cps, flexible_hps):
+    def save_edisgo_to_json(self, directory, flexible_cps, flexible_hps, opt_version):
         os.makedirs(directory, exist_ok=True)
-        pm = self.to_powermodels(flexible_cps, flexible_hps)
+        pm = self.to_powermodels(flexible_cps, flexible_hps, opt_version)
 
         def _convert(o):
             """
