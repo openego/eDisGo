@@ -1559,10 +1559,11 @@ class EDisGo:
         in :attr:`~.network.timeseries.TimeSeries.loads_reactive_power` is
         set to 0 Mvar.
 
-        If the time series of the edisgo object and the SimBEV data are provided with
-        different time steps, then the time series of the edisgo object are
-        automatically resampled to match the SimBEV data. See
-        :func:`edisgo.apply_charging_strategy`.
+        If the frequency of time series data in :class:`~.network.timeseries.TimeSeries`
+        (checked using :attr:`~.network.timeseries.timeindex`) differs from the
+        frequency of SimBEV data, then the time series in
+        :class:`~.network.timeseries.TimeSeries` automatically resampled to match the
+        SimBEV data frequency.
 
         Parameters
         ----------
