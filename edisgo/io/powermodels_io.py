@@ -69,10 +69,6 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps, opt_version):
     _build_timeseries(
         psa_net, pm, edisgo_object, flexible_cps, flexible_hps, flexible_loads
     )
-    pm["PF"] = {  # TODO: PF != 1 immer für beide voltage levels oder keins?
-        "cp": edisgo_object.config._data["reactive_power_factor"]["mv_cp"],
-        "hp": edisgo_object.config._data["reactive_power_factor"]["mv_hp"],
-    }
     return pm
 
 
