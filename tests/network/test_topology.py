@@ -841,13 +841,17 @@ class TestTopology:
 
         # check that buses were exchanged
         line = "Line_10008"
-        assert lines_df_before.at[line, "bus0"] == self.topology.lines_df.at[
-            line, "bus1"]
-        assert lines_df_before.at[line, "bus1"] == self.topology.lines_df.at[
-            line, "bus0"]
+        assert (
+            lines_df_before.at[line, "bus0"] == self.topology.lines_df.at[line, "bus1"]
+        )
+        assert (
+            lines_df_before.at[line, "bus1"] == self.topology.lines_df.at[line, "bus0"]
+        )
 
         # check number of lines where buses were exchanged
-        assert (lines_df_before.bus0 == self.topology.lines_df.bus0).value_counts().loc[False] == 9
+        assert (lines_df_before.bus0 == self.topology.lines_df.bus0).value_counts().loc[
+            False
+        ] == 9
 
     def test_to_csv(self):
         """Test for method to_csv."""
