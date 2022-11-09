@@ -102,7 +102,7 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
                 :, ["bus", "control", "p_nom"]
             ],
             "StorageUnit": edisgo_object.topology.storage_units_df.loc[
-                :, ["bus", "control"]
+                :, ["bus", "control", "p_nom", "max_hours"]
             ],
             "Line": edisgo_object.topology.lines_df.loc[
                 :,

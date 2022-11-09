@@ -41,7 +41,7 @@ COLUMNS = {
         "weather_cell_id",
         "subtype",
     ],
-    "storage_units_df": ["bus", "control", "p_nom"],
+    "storage_units_df": ["bus", "control", "p_nom", "max_hours"],
     "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
     "lines_df": [
         "bus0",
@@ -337,6 +337,10 @@ class Topology:
 
             p_nom : float
                 Nominal power in MW.
+
+            max_hours : float
+                Maximum state of charge capacity in terms of hours at full output
+                capacity p_nom.
 
         Returns
         --------
@@ -1216,7 +1220,8 @@ class Topology:
         Other Parameters
         ------------------
         kwargs :
-            Kwargs may contain any further attributes you want to specify.
+            Kwargs may contain any further attributes you want to specify, e.g.
+            `max_hours`.
 
         """
         try:
