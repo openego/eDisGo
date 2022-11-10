@@ -41,7 +41,7 @@ COLUMNS = {
         "weather_cell_id",
         "subtype",
     ],
-    "storage_units_df": ["bus", "control", "p_nom"],
+    "storage_units_df": ["bus", "control", "p_nom", "max_hours"],
     "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
     "lines_df": [
         "bus0",
@@ -337,6 +337,10 @@ class Topology:
 
             p_nom : float
                 Nominal power in MW.
+
+            max_hours : float
+                Maximum state of charge capacity in terms of hours at full output
+                capacity p_nom.
 
         Returns
         --------
@@ -1216,7 +1220,8 @@ class Topology:
         Other Parameters
         ------------------
         kwargs :
-            Kwargs may contain any further attributes you want to specify.
+            Kwargs may contain any further attributes you want to specify, e.g.
+            `max_hours`.
 
         """
         try:
@@ -1734,6 +1739,25 @@ class Topology:
             data_new_line.I_max_th,
             self._lines_df.loc[lines, "num_parallel"],
         )
+
+    def sort_buses(self):
+        """
+        Sorts buses in :py:attr:`~buses_df` such that bus0 is always the upstream bus.
+
+        The changes are directly written to :py:attr:`~buses_df` dataframe.
+
+        """
+        # create BFS tree to get successor node of each node
+        graph = self.to_graph()
+        source = self.mv_grid.station.index[0]
+        tree = nx.bfs_tree(graph, source)
+
+        for line in self.lines_df.index:
+            bus0 = self.lines_df.at[line, "bus0"]
+            bus1 = self.lines_df.at[line, "bus1"]
+            if bus1 not in tree.succ[bus0].keys():
+                self.lines_df.at[line, "bus0"] = bus1
+                self.lines_df.at[line, "bus1"] = bus0
 
     def connect_to_mv(self, edisgo_object, comp_data, comp_type="generator"):
         """

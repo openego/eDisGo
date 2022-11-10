@@ -102,7 +102,7 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
                 :, ["bus", "control", "p_nom"]
             ],
             "StorageUnit": edisgo_object.topology.storage_units_df.loc[
-                :, ["bus", "control", "p_nom"]
+                :, ["bus", "control", "p_nom", "max_hours"]
             ],
             "Line": edisgo_object.topology.lines_df.loc[
                 :,
@@ -455,7 +455,9 @@ def _get_grid_component_dict(grid_object):
     components = {
         "Load": grid_object.loads_df.loc[:, ["bus", "p_set"]],
         "Generator": grid_object.generators_df.loc[:, ["bus", "control", "p_nom"]],
-        "StorageUnit": grid_object.storage_units_df.loc[:, ["bus", "control", "p_nom"]],
+        "StorageUnit": grid_object.storage_units_df.loc[
+            :, ["bus", "control", "p_nom", "max_hours"]
+        ],
         "Line": grid_object.lines_df.loc[
             :,
             ["bus0", "bus1", "x", "r", "s_nom", "num_parallel", "length"],

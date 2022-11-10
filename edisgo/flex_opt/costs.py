@@ -206,26 +206,31 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     return costs
 
 
-def line_expansion_costs(edisgo_obj, lines_names):
+def line_expansion_costs(edisgo_obj, lines_names=None):
     """
-    Returns costs for earthworks and per added cable as well as voltage level
-    for chosen lines in edisgo_obj.
+    Returns costs for earthwork and per added cable in kEUR as well as voltage level
+    for chosen lines.
 
     Parameters
     -----------
     edisgo_obj : :class:`~.edisgo.EDisGo`
-        eDisGo object of which lines of lines_df are part
-    lines_names: list of str
-        List of names of evaluated lines
+        eDisGo object
+    lines_names: None or list(str)
+        List of names of lines to return cost information for. If None, it is returned
+        for all lines in :attr:`~.network.topology.Topology.lines_df`.
 
     Returns
     -------
     costs: :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with names of lines as index and entries for
-        'costs_earthworks', 'costs_cable', 'voltage_level' for each line
+        Dataframe with names of lines in index and columns 'costs_earthworks' with
+        earthwork costs in kEUR, 'costs_cable' with costs per cable/line in kEUR, and
+        'voltage_level' with information on voltage level the line is in.
 
     """
-    lines_df = edisgo_obj.topology.lines_df.loc[lines_names, ["length"]]
+    if lines_names is None:
+        lines_df = edisgo_obj.topology.lines_df.loc[:, ["length"]]
+    else:
+        lines_df = edisgo_obj.topology.lines_df.loc[lines_names, ["length"]]
     mv_lines = lines_df[
         lines_df.index.isin(edisgo_obj.topology.mv_grid.lines_df.index)
     ].index
