@@ -1,7 +1,7 @@
 Release v0.2.0
 ================
 
-Release date: <Month> <Day>, <Year>
+Release date: November 10, 2022
 
 Changes
 -------
