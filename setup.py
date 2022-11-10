@@ -38,7 +38,7 @@ requirements = [
     "geopandas >= 0.9.0",
     "pyproj >= 3.0.0",
     "shapely >= 1.7.0",
-    "pypsa >= 0.17.0, <=0.20.1",
+    "pypsa >= 0.17.0, <= 0.20.1",
     "pyomo >= 6.0",
     "multiprocess",
     "workalendar",
