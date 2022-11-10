@@ -106,7 +106,8 @@ def to_powermodels(
     _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads)
     _build_electromobility(edisgo_object, psa_net, pm, flexible_cps)
     _build_heatpump(psa_net, pm, edisgo_object, flexible_hps)
-    _build_heat_storage(psa_net, pm, edisgo_object)
+    if "hp" in opt_flex:
+        _build_heat_storage(psa_net, pm, edisgo_object)
     _build_dsm(edisgo_object, psa_net, pm, flexible_loads)
     if (opt_version == 1) | (opt_version == 2):
         _build_HV_requirements(pm, opt_flex)
@@ -785,7 +786,10 @@ def _build_component_timeseries(
                 "e_min": e_min[comp].values.tolist(),
                 "e_max": e_max[comp].values.tolist(),
             }
-    if kind == "HV_requirements":  # TODO: add correct time series from edisgo.etrago
+    if (kind == "HV_requirements") & (
+        (pm["opt_version"] == 1) | (pm["opt_version"] == 2)
+    ):
+        # TODO: add correct time series from edisgo.etrago
         timesteps = len(psa_net.snapshots)
         for i in np.arange(len(opt_flex)):
             pm_comp[(str(i + 1))] = {

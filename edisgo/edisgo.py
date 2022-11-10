@@ -2205,11 +2205,11 @@ class EDisGo:
     def save_edisgo_to_json(
         self,
         directory,
-        flexible_cps,
-        flexible_hps,
-        flexible_loads,
-        opt_version,
-        opt_flex,
+        flexible_cps=[],
+        flexible_hps=[],
+        flexible_loads=[],
+        opt_version=1,
+        opt_flex=[],
     ):
         os.makedirs(directory, exist_ok=True)
         pm = self.to_powermodels(
