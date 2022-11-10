@@ -2479,6 +2479,10 @@ def import_edisgo_from_files(
         Restored EDisGo object.
 
     """
+
+    if not os.path.exists(edisgo_path):
+        raise ValueError("Given edisgo_path does not exist.")
+
     if not from_zip_archive and str(edisgo_path).endswith(".zip"):
         from_zip_archive = True
         logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
@@ -2570,17 +2574,5 @@ def import_edisgo_from_files(
             edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
             logging.warning("No heat pump data found. Heat pump data not imported.")
-
-    if import_dsm:
-        if not from_zip_archive:
-            directory = kwargs.get(
-                "dsm_directory",
-                os.path.join(edisgo_path, "dsm"),
-            )
-
-        if os.path.exists(directory):
-            edisgo_obj.dsm.from_csv(directory, from_zip_archive=from_zip_archive)
-        else:
-            logging.warning("No dsm data found. DSM data not imported.")
 
     return edisgo_obj

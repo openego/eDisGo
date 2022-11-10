@@ -16,7 +16,7 @@ Load_residential_LVGrid_3_4,Bus_BranchTee_LVGrid_3_8,0.001209,residential,4.3
 Load_residential_LVGrid_4_1,Bus_BranchTee_LVGrid_4_2,0.001354,residential,6.5
 Load_industrial_LVGrid_5_1,Bus_BranchTee_LVGrid_5_2,0.07992,industrial,100
 Load_agricultural_LVGrid_5_2,Bus_BranchTee_LVGrid_5_4,0.06196,agricultural,450
-Load_residential_LVGrid_5_3,Bus_BranchTee_LVGrid_5_6,0.001354,residential,4.7
+Load_residential_LVGrid_5_3,Bus_Load_residential_LVGrid_5_3,0.001354,residential,4.7
 Load_industrial_LVGrid_6_1,Bus_BranchTee_LVGrid_6_2,0.07992,industrial,580
 Load_agricultural_LVGrid_7_1,Bus_BranchTee_LVGrid_7_2,0.06196,agricultural,630
 Load_residential_LVGrid_7_2,Bus_BranchTee_LVGrid_7_4,0.001164,residential,5.8
