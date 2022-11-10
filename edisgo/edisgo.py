@@ -626,9 +626,16 @@ class EDisGo:
             self.check_integrity()
         return pypsa_io.to_pypsa(self, mode, timesteps, **kwargs)
 
-    def to_powermodels(self, flexible_cps, flexible_hps, opt_version, opt_flex):
+    def to_powermodels(
+        self,
+        flexible_cps=[],
+        flexible_hps=[],
+        flexible_loads=[],
+        opt_version=1,
+        opt_flex=[],
+    ):
         return powermodels_io.to_powermodels(
-            self, flexible_cps, flexible_hps, opt_version, opt_flex
+            self, flexible_cps, flexible_hps, flexible_loads, opt_version, opt_flex
         )
 
     def to_graph(self):
@@ -2196,10 +2203,18 @@ class EDisGo:
         pickle.dump(self, open(os.path.join(abs_path, filename), "wb"))
 
     def save_edisgo_to_json(
-        self, directory, flexible_cps, flexible_hps, opt_version, opt_flex
+        self,
+        directory,
+        flexible_cps,
+        flexible_hps,
+        flexible_loads,
+        opt_version,
+        opt_flex,
     ):
         os.makedirs(directory, exist_ok=True)
-        pm = self.to_powermodels(flexible_cps, flexible_hps, opt_version, opt_flex)
+        pm = self.to_powermodels(
+            flexible_cps, flexible_hps, flexible_loads, opt_version, opt_flex
+        )
 
         def _convert(o):
             """
@@ -2574,5 +2589,17 @@ def import_edisgo_from_files(
             edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
             logging.warning("No heat pump data found. Heat pump data not imported.")
+
+    if import_dsm:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "dsm_directory",
+                os.path.join(edisgo_path, "dsm"),
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.dsm.from_csv(directory, from_zip_archive=from_zip_archive)
+        else:
+            logging.warning("No dsm data found. DSM data not imported.")
 
     return edisgo_obj

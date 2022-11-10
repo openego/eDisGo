@@ -13,8 +13,17 @@ import pypsa
 from edisgo.flex_opt.costs import line_expansion_costs
 from edisgo.tools.tools import calculate_impedance_for_parallel_components
 
+logger = logging.getLogger(__name__)
 
-def to_powermodels(edisgo_object, flexible_cps, flexible_hps, opt_version, opt_flex):
+
+def to_powermodels(
+    edisgo_object,
+    flexible_cps=[],
+    flexible_hps=[],
+    flexible_loads=[],
+    opt_version=1,
+    opt_flex=[],
+):
     """
     Converts eDisGo representation of the network topology and timeseries to
     PowerModels network data format.
@@ -22,11 +31,14 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps, opt_version, opt_f
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
-    flexible_cps : :numpy:`numpy.ndarray<ndarray>`
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
-    flexible_hps: :numpy:`numpy.ndarray<ndarray>`
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
+    flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
+        Array containing all flexible loads that allow for application of demand side
+        management strategy.
     opt_version: Int
         Version of optimization models to choose from. For more information see MA.
         Must be one of [1, 2].
@@ -40,6 +52,27 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps, opt_version, opt_f
         Dictionary that contains all network data in PowerModels network data
         format.
     """
+    # Check if names of flexible loads for optimization are supplied
+    for (flex, loads, text) in [
+        ("cp", flexible_cps, "charging parks"),
+        ("hp", flexible_hps, "heatpumps"),
+        ("dsm", flexible_loads, "loads"),
+    ]:
+        if (flex in opt_flex) & (len(loads) == 0):
+            logger.warning(
+                " No flexible {} in network, {} will not be optimized.".format(
+                    text, text
+                )
+            )
+            opt_flex.remove(flex)
+        elif (flex not in opt_flex) & (len(loads) != 0):
+            logger.warning(
+                " Flexible {} found in network, {} will be optimized.".format(
+                    text, text
+                )
+            )
+            opt_flex.append(flex)
+
     # Sorts buses such that bus0 is always the upstream bus
     edisgo_object.topology.sort_buses()
     # Calculate line costs
@@ -61,9 +94,6 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps, opt_version, opt_f
     # build PowerModels structure
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # number of considered timesteps
-    flexible_loads = (
-        edisgo_object.dsm.e_max.columns
-    )  # TODO: soll das auch an to_powermodels übergeben werden?
     pm["name"] = "ding0_{}_t_{}".format(edisgo_object.topology.id, timesteps)
     pm["time_elapsed"] = int(
         (psa_net.snapshots[1] - psa_net.snapshots[0]).seconds / 3600
@@ -80,7 +110,8 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps, opt_version, opt_f
     _build_heatpump(psa_net, pm, edisgo_object, flexible_hps)
     _build_heat_storage(psa_net, pm, edisgo_object)
     _build_dsm(edisgo_object, psa_net, pm, flexible_loads)
-    _build_HV_requirements(pm, opt_flex)
+    if opt_version == 1 | opt_version == 2:
+        _build_HV_requirements(pm, opt_flex)
     _build_timeseries(
         psa_net, pm, edisgo_object, flexible_cps, flexible_hps, flexible_loads, opt_flex
     )
@@ -302,18 +333,20 @@ def _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads):
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
         (PowerModels) dictionary.
-    flexible_cps : :numpy:`numpy.ndarray<ndarray>`
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
-    flexible_hps: :numpy:`numpy.ndarray<ndarray>`
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
-    flexible_loads : :numpy:`numpy.ndarray<ndarray>`
+    flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
     """
-    loads_df = psa_net.loads.drop(
-        np.concatenate((flexible_hps, flexible_cps, flexible_loads))
-    )
+    flex_loads = np.concatenate((flexible_hps, flexible_cps, flexible_loads))
+    if len(flex_loads) == 0:
+        loads_df = psa_net.loads
+    else:
+        loads_df = psa_net.loads.drop(flex_loads)
     for load_i in np.arange(len(loads_df.index)):
         idx_bus = _mapping(psa_net, loads_df.bus[load_i])
         pm["load"][str(load_i + 1)] = {
@@ -382,7 +415,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps):
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
         (PowerModels) dictionary.
-    flexible_cps : :numpy:`numpy.ndarray<ndarray>`
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
     """
     if len(flexible_cps) == 0:
@@ -420,7 +453,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
     pm : dict
         (PowerModels) dictionary.
     edisgo_obj : :class:`~.EDisGo`
-    flexible_hps: :numpy:`numpy.ndarray<ndarray>`
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
 
@@ -487,7 +520,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads):
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
         (PowerModels) dictionary.
-    flexible_loads : :numpy:`numpy.ndarray<ndarray>`
+    flexible_loads : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
     """
@@ -557,12 +590,12 @@ def _build_timeseries(
     pm : dict
         (PowerModels) dictionary.
     edisgo_obj : :class:`~.EDisGo`
-    flexible_cps : :numpy:`numpy.ndarray<ndarray>`
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
-    flexible_hps: :numpy:`numpy.ndarray<ndarray>`
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
-    flexible_loads : :numpy:`numpy.ndarray<ndarray>`
+    flexible_loads : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
     opt_flex: list
@@ -617,11 +650,14 @@ def _build_component_timeseries(
         Must be one of ["gen", "gen_nd", "gen_slack", "load", "storage",
         "electromobility", "heatpumps", "heat_storage", "dsm", "HV_requirements"]
     edisgo_obj : :class:`~.EDisGo`
-    flexible_cps : :numpy:`numpy.ndarray<ndarray>`
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
-    flexible_hps: :numpy:`numpy.ndarray<ndarray>`
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
+    flexible_loads : :numpy:`numpy.ndarray<ndarray>` or list
+        Array containing all flexible loads that allow for application of demand side
+        management strategy.
     opt_flex: list
         List of flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]
@@ -662,12 +698,13 @@ def _build_component_timeseries(
             psa_net.generators_t.q_set.columns.str.contains("slack"),
         ]
     elif kind == "load":
-        p_set = psa_net.loads_t.p_set.drop(
-            columns=np.concatenate((flexible_hps, flexible_cps, flexible_loads))
-        )
-        q_set = psa_net.loads_t.q_set.drop(
-            columns=np.concatenate((flexible_hps, flexible_cps, flexible_loads))
-        )
+        flex_loads = np.concatenate((flexible_hps, flexible_cps, flexible_loads))
+        if len(flex_loads) == 0:
+            p_set = psa_net.loads_t.p_set
+            q_set = psa_net.loads_t.q_set
+        else:
+            p_set = psa_net.loads_t.p_set.drop(columns=flex_loads)
+            q_set = psa_net.loads_t.q_set.drop(columns=flex_loads)
     elif kind == "storage":
         p_set = psa_net.storage_units_t.p_set
         q_set = psa_net.storage_units_t.q_set
@@ -782,9 +819,11 @@ def _mapping(
     elif kind == "storage":
         df = psa_net.storage_units
     elif kind == "load":
-        df = psa_net.loads.drop(
-            np.concatenate((flexible_hps, flexible_cps, flexible_loads))
-        )
+        flex_loads = np.concatenate((flexible_hps, flexible_cps, flexible_loads))
+        if len(flex_loads) == 0:
+            df = psa_net.loads
+        else:
+            df = psa_net.loads.drop(flex_loads)
     elif kind == "electromobility":
         df = psa_net.loads.loc[flexible_cps]
     elif (kind == "heatpumps") | (kind == "heat_storage"):
