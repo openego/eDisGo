@@ -478,6 +478,26 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
     """
     Distribute charging demand from SimBEV onto potential charging parks from TracBEV.
 
+    The allocation of the charging processes
+    to the charging infrastructure is carried out with the help of the weighting factor
+    of the potential charging parks determined by TracBEV. This involves a random and
+    weighted selection of one charging park per charging process. In the case of private
+    charging infrastructure, a separate charging point is set up for each EV. All
+    charging processes of the respective EV and charging use case are assigned to this
+    charging point. The allocation of private charging processes to charging stations
+    is implemented in
+    :py:func:`~edisgo.io.electromobility_import.distribute_private_charging_demand`.
+
+     For the public charging infrastructure, the allocation is made explicitly per
+     charging process. For each charging process it is determined whether a suitable
+     charging point is already available. For this purpose it is checked if the charging
+     point is occupied by another EV in the corresponding period and whether it can
+     provide the corresponding charging capacity. If no suitable charging point is
+     available, a charging point is determined randomly and weighted in the same way as
+     for private charging. The allocation of public charging processes to charging
+     stations is implemented in
+     :py:func:`~edisgo.io.electromobility_import.distribute_public_charging_demand`.
+
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`

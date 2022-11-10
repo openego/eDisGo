@@ -919,10 +919,10 @@ def plot_plotly(
     edisgo_obj : :class:`~.EDisGo`
         Selected edisgo_obj to get plotting information from.
 
-    grid : :class:`~.network.grids.Grid`
+    grid : :class:`~.network.grids.Grid`, optional
         Grid to plot. If None, the MVGrid of the edisgo_obj is plotted. Default: None.
 
-    line_color : str or None
+    line_color : str or None, optional
         Defines whereby to choose line colors. Possible options are:
 
         * 'loading'
@@ -934,7 +934,7 @@ def plot_plotly(
         * None
             Line color is black. This is also the fallback, in case other options fail.
 
-    node_color : str or None
+    node_color : str or None, optional
         Defines whereby to choose node colors. Possible options are:
 
         * 'adjacencies'
@@ -945,7 +945,7 @@ def plot_plotly(
         * None
             Line color is black. This is also the fallback, in case other options fail.
 
-    line_result_selection : str
+    line_result_selection : str, optional
         Defines which values are shown for the load of the lines:
 
         * 'min'
@@ -953,7 +953,7 @@ def plot_plotly(
         * 'max' (default)
             Maximal line load of all time steps.
 
-    node_result_selection : str
+    node_result_selection : str, optional
         Defines which values are shown for the voltage of the nodes:
 
         * 'min'
@@ -962,7 +962,7 @@ def plot_plotly(
             Maximal node voltage of all time steps.
 
     selected_timesteps : :pandas:`pandas.Timestamp<Timestamp>` or \
-        list(:pandas:`pandas.Timestamp<Timestamp>`) or None
+        list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
         Selected time steps to show results for.
 
         * None (default)
@@ -971,15 +971,15 @@ def plot_plotly(
             :pandas:`pandas.Timestamp<Timestamp>`
           Selected time steps are used.
 
-    center_coordinates : bool
+    center_coordinates : bool, optional
         Enables the centering of the coordinates. If True the transformer node is set
         to the coordinates x=0 and y=0. Else, the coordinates from the HV/MV-station
         of the MV grid are used. Default: False.
 
-    pseudo_coordinates : bool
+    pseudo_coordinates : bool, optional
         Enable pseudo coordinates for the plotted grid. Default: False.
 
-    node_selection : bool or list(str)
+    node_selection : bool or list(str), optional
         Only plot selected nodes. Default: False.
 
     Returns
@@ -1482,7 +1482,7 @@ def plot_dash_app(
         objects pass a dictionary with the eDisGo objects as values and the respective
         eDisGo object names as keys.
 
-    debug : bool
+    debug : bool, optional
         Debugging for the dash app:
 
         * False (default)

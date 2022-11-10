@@ -637,8 +637,6 @@ curtailment requirements. It uses the EDisGo object from above.
 Plots
 ----------------
 
-.. todo:: Add plotly plot option
-
 EDisGo provides a bunch of predefined plots to e.g. plot the MV grid topology,
 line loading and node voltages in the MV grid or as a histograms.
 
@@ -649,6 +647,18 @@ line loading and node voltages in the MV grid or as a histograms.
 
     # plot grid expansion costs for lines in the MV grid and stations on a map
     edisgo.plot_mv_grid_expansion_costs()
+
+    # draw a plotly html figure showing relative loading and voltage deviation
+    # in the MV grid
+    from edisgo.tools.plots import draw_plotly
+    draw_plotly(
+        edisgo=edisgo,
+        line_color="relative_loading",
+        node_color="voltage_deviation",
+    )
+
+    # dash plot allowing to interactively toggle between different plotting options
+    plot_dash(edisgo_objects=edisgo)
 
     # plot voltage histogram
     edisgo.histogram_voltage()
