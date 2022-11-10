@@ -1742,9 +1742,9 @@ class Topology:
 
     def sort_buses(self):
         """
-        Sorts buses in :py:attr:`~buses_df` such that bus0 is always the upstream bus.
+        Sorts buses in :py:attr:`~lines_df` such that bus0 is always the upstream bus.
 
-        The changes are directly written to :py:attr:`~buses_df` dataframe.
+        The changes are directly written to :py:attr:`~lines_df` dataframe.
 
         """
         # create BFS tree to get successor node of each node

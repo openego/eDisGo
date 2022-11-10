@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import pypsa
 
+from edisgo.flex_opt.costs import line_expansion_costs
 from edisgo.tools.tools import calculate_impedance_for_parallel_components
 
 
@@ -39,11 +40,22 @@ def to_powermodels(edisgo_object, flexible_cps, flexible_hps, opt_version, opt_f
         Dictionary that contains all network data in PowerModels network data
         format.
     """
-
+    # Sorts buses such that bus0 is always the upstream bus
+    edisgo_object.topology.sort_buses()
+    # Calculate line costs
+    costs = line_expansion_costs(edisgo_object).drop(columns="voltage_level")
     # convert eDisGo object to pypsa network structure
     psa_net = edisgo_object.to_pypsa(use_seed=True)
+    # add line costs to psa_net
+    psa_net.lines = psa_net.lines.merge(costs, left_index=True, right_index=True)
+    psa_net.lines.capital_cost = (
+        psa_net.lines.costs_earthworks + psa_net.lines.costs_cable
+    )
     # aggregate parallel transformers
     aggregate_parallel_transformers(psa_net)
+    psa_net.transformers.capital_cost = edisgo_object.config._data[
+        "costs_transformers"
+    ]["lv"]
     # calculate per unit values
     pypsa.pf.calculate_dependent_values(psa_net)
     # build PowerModels structure
@@ -273,8 +285,8 @@ def _build_branch(psa_net, pm):
             "angmax": np.pi / 6,
             "transformer": bool(transformer[branch_i]),
             "tap": tap[branch_i],
-            "length": branches.length.fillna(0)[branch_i],
-            "cost": 1,
+            "length": branches.length.fillna(1)[branch_i],
+            "cost": branches.capital_cost[branch_i],
             "index": branch_i + 1,
         }
 
