@@ -54,22 +54,19 @@ def to_powermodels(
     """
     # Check if names of flexible loads for optimization are supplied
     for (flex, loads, text) in [
-        ("cp", flexible_cps, "charging parks"),
-        ("hp", flexible_hps, "heatpumps"),
-        ("dsm", flexible_loads, "loads"),
+        ("cp", flexible_cps, "flexible charging parks"),
+        ("hp", flexible_hps, "flexible heatpumps"),
+        ("dsm", flexible_loads, "flexible loads"),
+        ("storage", edisgo_object.topology.storage_units_df, "storage units"),
     ]:
         if (flex in opt_flex) & (len(loads) == 0):
             logger.warning(
-                " No flexible {} in network, {} will not be optimized.".format(
-                    text, text
-                )
+                " No {} found in network, {} will not be optimized.".format(text, text)
             )
             opt_flex.remove(flex)
         elif (flex not in opt_flex) & (len(loads) != 0):
             logger.warning(
-                " Flexible {} found in network, {} will be optimized.".format(
-                    text, text
-                )
+                " {} found in network, {} will be optimized.".format(text, text)
             )
             opt_flex.append(flex)
 
