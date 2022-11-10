@@ -101,6 +101,7 @@ def to_powermodels(
     pm["baseMVA"] = 1
     pm["source_version"] = 2
     pm["opt_version"] = opt_version
+    pm["flexibilities"] = opt_flex
     _build_bus(psa_net, pm)
     _build_gen(edisgo_object, psa_net, pm)
     _build_branch(psa_net, pm)
@@ -110,7 +111,7 @@ def to_powermodels(
     _build_heatpump(psa_net, pm, edisgo_object, flexible_hps)
     _build_heat_storage(psa_net, pm, edisgo_object)
     _build_dsm(edisgo_object, psa_net, pm, flexible_loads)
-    if opt_version == 1 | opt_version == 2:
+    if (opt_version == 1) | (opt_version == 2):
         _build_HV_requirements(pm, opt_flex)
     _build_timeseries(
         psa_net, pm, edisgo_object, flexible_cps, flexible_hps, flexible_loads, opt_flex
