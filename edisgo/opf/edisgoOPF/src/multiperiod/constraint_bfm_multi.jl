@@ -43,7 +43,7 @@ function constraint_power_balance(pm, i,nw::Int=pm.cnw, cnd::Int=pm.ccnd)
     bus_gens = ref(pm, nw, :bus_gens, i)
     bus_loads = ref(pm, nw, :bus_loads, i)
     bus_shunts = ref(pm, nw, :bus_shunts, i)
-    
+
     if haskey(var(pm,nw),:uc)
         bus_storage = ref(pm,nw,:bus_storage,i)
         uc = var(pm,nw,:uc)
@@ -57,10 +57,10 @@ function constraint_power_balance(pm, i,nw::Int=pm.cnw, cnd::Int=pm.ccnd)
 
     bus_gs = Dict(k => ref(pm, nw, :shunt, k, "gs", cnd) for k in bus_shunts)
     bus_bs = Dict(k => ref(pm, nw, :shunt, k, "bs", cnd) for k in bus_shunts)
-    
+
     incoming_arcs = [idx for idx in ref(pm)[:arcs][1:n_branches] if idx[3]==i]
     outgoing_arcs = [idx for idx in ref(pm)[:arcs][1:n_branches] if idx[2]==i]
-    
+
     branch = ref(pm,:branch)
     if haskey(var(pm),:r)
         r = var(pm, :r)
@@ -84,9 +84,9 @@ function constraint_power_balance(pm, i,nw::Int=pm.cnw, cnd::Int=pm.ccnd)
                         sum(q[idx] for idx in outgoing_arcs)-
                         sum(q[idx]-x[idx[1]]*cm[idx[1]] for idx in incoming_arcs)-
                         sum(bs for bs in values(bus_bs))*w[i])
-                         
+
 end
-        
+
 function constraint_ohms_law(pm, i, nw::Int=pm.cnw, cnd::Int=pm.ccnd)
     branch = ref(pm,:branch,i)
     f_bus = branch["f_bus"]
@@ -119,9 +119,9 @@ end
 function constraint_current_rating(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd)
     """
     adds constraints for network expansion for dependencies of resistance, maximal allowed current and squared current
-    input: 
+    input:
         pm:: GenericPowerModel
-    
+
     """
     I_max =  PowerModels.var(pm, :I_max)
     I_ub = getupperbound(I_max)
@@ -134,11 +134,11 @@ end
 
 function constraint_current_rating_relaxed(pm,nw::Int=pm.cnw, cnd::Int=pm.ccnd)
     """
-    adds constraints in network expansion between maximal allowed current and squared current flow as linear relaxation 
+    adds constraints in network expansion between maximal allowed current and squared current flow as linear relaxation
     with a point-slope approximation between the lower bound and upper bound of the maximal allowed currrent
-    input: 
+    input:
         pm:: GenericPowerModel
-    
+
     """
     I_max =  PowerModels.var(pm, :I_max)
     I_ub = getupperbound(I_max)
@@ -155,7 +155,7 @@ function constraint_network_expansion(pm)
     if haskey(var(pm),:r)
         r =  PowerModels.var(pm, :r)
         for i in ids(pm, pm.cnw, :branch)
-            @constraint(pm.model,r[i]*I_max[i] == getupperbound(r[i])*getlowerbound(I_max[i]))    
+            @constraint(pm.model,r[i]*I_max[i] == getupperbound(r[i])*getlowerbound(I_max[i]))
         end
     end
 

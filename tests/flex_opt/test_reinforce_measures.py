@@ -1,5 +1,7 @@
-import pandas as pd
+import copy
+
 import numpy as np
+import pandas as pd
 import pytest
 
 from edisgo import EDisGo
@@ -7,15 +9,14 @@ from edisgo.flex_opt import reinforce_measures
 
 
 class TestReinforceMeasures:
-
     @classmethod
-    def setup_class(self):
-        self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_path,
-            worst_case_analysis="worst-case"
-        )
-        self.edisgo.analyze()
-        self.timesteps = pd.date_range("1/1/1970", periods=2, freq="H")
+    def setup_class(cls):
+        cls.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+
+        cls.edisgo.set_time_series_worst_case_analysis()
+        cls.edisgo.analyze()
+        cls.edisgo_root = copy.deepcopy(cls.edisgo)
+        cls.timesteps = pd.date_range("1/1/1970", periods=2, freq="H")
 
     def test_reinforce_mv_lv_station_overloading(self):
         # implicitly checks function _station_overloading
@@ -23,6 +24,8 @@ class TestReinforceMeasures:
         # create problems such that in LVGrid_1 existing transformer is
         # exchanged with standard transformer and in LVGrid_4 a third
         # transformer is added
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+
         crit_lv_stations = pd.DataFrame(
             {
                 "s_missing": [0.17, 0.04],
@@ -43,8 +46,7 @@ class TestReinforceMeasures:
             == "LVStation_1_transformer_reinforced_1"
         )
         assert (
-            transformer_changes["removed"]["LVGrid_1"][0]
-            == "LVStation_1_transformer_1"
+            transformer_changes["removed"]["LVGrid_1"][0] == "LVStation_1_transformer_1"
         )
         assert (
             transformer_changes["added"]["LVGrid_4"][0]
@@ -61,9 +63,9 @@ class TestReinforceMeasures:
         trafo_new = self.edisgo.topology.transformers_df.loc[
             "LVStation_1_transformer_reinforced_1"
         ]
-        trafo_copy = self.edisgo.topology.equipment_data[
-            "lv_transformers"
-        ].loc["630 kVA"]
+        trafo_copy = self.edisgo.topology.equipment_data["lv_transformers"].loc[
+            "630 kVA"
+        ]
         assert trafo_new.bus0 == "BusBar_MVGrid_1_LVGrid_1_MV"
         assert trafo_new.bus1 == "BusBar_MVGrid_1_LVGrid_1_LV"
         assert trafo_new.r_pu == trafo_copy.r_pu
@@ -88,6 +90,8 @@ class TestReinforceMeasures:
         # implicitly checks function _station_overloading
 
         # check adding transformer of same MVA
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+
         crit_mv_station = pd.DataFrame(
             {"s_missing": [19], "time_index": [self.timesteps[1]]},
             index=["MVGrid_1"],
@@ -142,6 +146,8 @@ class TestReinforceMeasures:
         )
 
     def test_reinforce_mv_lv_station_voltage_issues(self):
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+
         station_9 = pd.DataFrame(
             {"v_diff_max": [0.03], "time_index": [self.timesteps[0]]},
             index=["Bus_secondary_LVStation_9"],
@@ -161,16 +167,14 @@ class TestReinforceMeasures:
             == "LVStation_9_transformer_reinforced_2"
         )
         # check changes in transformers_df
-        assert len(self.edisgo.topology.transformers_df) == (
-            len(trafos_pre) + 1
-        )
+        assert len(self.edisgo.topology.transformers_df) == (len(trafos_pre) + 1)
         # check values
         trafo_new = self.edisgo.topology.transformers_df.loc[
             "LVStation_9_transformer_reinforced_2"
         ]
-        trafo_copy = self.edisgo.topology.equipment_data[
-            "lv_transformers"
-        ].loc["630 kVA"]
+        trafo_copy = self.edisgo.topology.equipment_data["lv_transformers"].loc[
+            "630 kVA"
+        ]
         assert trafo_new.bus0 == "BusBar_MVGrid_1_LVGrid_9_MV"
         assert trafo_new.bus1 == "BusBar_MVGrid_1_LVGrid_9_LV"
         assert trafo_new.r_pu == trafo_copy.r_pu
@@ -192,6 +196,7 @@ class TestReinforceMeasures:
         # * check problem in same feeder => Bus_BranchTee_MVGrid_1_10 (node
         #   has higher voltage issue than Bus_BranchTee_MVGrid_1_11, but
         #   Bus_BranchTee_MVGrid_1_10 is farther away from station)
+        self.edisgo = copy.deepcopy(self.edisgo_root)
 
         crit_nodes = pd.DataFrame(
             {
@@ -224,44 +229,32 @@ class TestReinforceMeasures:
         # check that MV station is one of the buses
         assert (
             "Bus_MVStation_1"
-            in self.edisgo.topology.lines_df.loc[
-                "Line_10028", ["bus0", "bus1"]
-            ].values
+            in self.edisgo.topology.lines_df.loc["Line_10028", ["bus0", "bus1"]].values
         )
         assert (
             "Bus_MVStation_1"
-            in self.edisgo.topology.lines_df.loc[
-                "Line_10023", ["bus0", "bus1"]
-            ].values
+            in self.edisgo.topology.lines_df.loc["Line_10023", ["bus0", "bus1"]].values
         )
         assert (
             "Bus_MVStation_1"
-            in self.edisgo.topology.lines_df.loc[
-                "Line_10007", ["bus0", "bus1"]
-            ].values
+            in self.edisgo.topology.lines_df.loc["Line_10007", ["bus0", "bus1"]].values
         )
         # check other bus
         assert (
             "Bus_BranchTee_MVGrid_1_11"
-            in self.edisgo.topology.lines_df.loc[
-                "Line_10028", ["bus0", "bus1"]
-            ].values
+            in self.edisgo.topology.lines_df.loc["Line_10028", ["bus0", "bus1"]].values
         )
         assert (
             "BusBar_MVGrid_1_LVGrid_3_MV"
-            in self.edisgo.topology.lines_df.loc[
-                "Line_10023", ["bus0", "bus1"]
-            ].values
+            in self.edisgo.topology.lines_df.loc["Line_10023", ["bus0", "bus1"]].values
         )
         assert (
             "BusBar_MVGrid_1_LVGrid_1_MV"
-            in self.edisgo.topology.lines_df.loc[
-                "Line_10007", ["bus0", "bus1"]
-            ].values
+            in self.edisgo.topology.lines_df.loc["Line_10007", ["bus0", "bus1"]].values
         )
         # check line parameters
         std_line_mv = self.edisgo.topology.equipment_data["mv_cables"].loc[
-            self.edisgo.config["grid_expansion_standard_equipment"]["mv_line"]
+            self.edisgo.config["grid_expansion_standard_equipment"]["mv_line_20kv"]
         ]
         line = self.edisgo.topology.lines_df.loc["Line_10028"]
         assert line.type_info == std_line_mv.name
@@ -307,7 +300,7 @@ class TestReinforceMeasures:
             index=["Bus_BranchTee_LVGrid_5_2", "Bus_BranchTee_LVGrid_5_5"],
         )
 
-        grid = self.edisgo.topology._grids["LVGrid_5"]
+        grid = self.edisgo.topology.get_lv_grid("LVGrid_5")
         lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
             self.edisgo, grid, crit_nodes
         )
@@ -370,6 +363,7 @@ class TestReinforceMeasures:
         #   and Line_50000002
         # * check for replacement by parallel standard lines (MV and LV) =>
         #   problems at Line_10003 and Line_60000001
+        self.edisgo = copy.deepcopy(self.edisgo_root)
 
         # create crit_lines dataframe
         crit_lines = pd.DataFrame(
@@ -402,28 +396,17 @@ class TestReinforceMeasures:
         # check lines that were already standard lines and where parallel
         # standard lines were added
         line = self.edisgo.topology.lines_df.loc["Line_10007"]
-        assert line.type_info == "NA2XS2Y 3x1x185 RM/25"
-        assert np.isclose(
-            line.r,
-            0.164 * line.length / 3)
-        assert np.isclose(
-            line.x,
-            0.38 * 2 * np.pi * 50 / 1e3 * line.length / 3)
-        assert np.isclose(
-            line.s_nom, 0.357 * 20 * np.sqrt(3) * 3)
+        assert line.type_info == "NA2XS2Y 3x1x240"
+        assert np.isclose(line.r, 0.13 * line.length / 3)
+        assert np.isclose(line.x, 0.3597 * 2 * np.pi * 50 / 1e3 * line.length / 3)
+        assert np.isclose(line.s_nom, 7.27461339178928 * 3)
         assert line.num_parallel == 3
 
         line = self.edisgo.topology.lines_df.loc["Line_70000006"]
         assert line.type_info == "NAYY 4x1x150"
-        assert np.isclose(
-            line.r,
-            0.206 * line.length / 3)
-        assert np.isclose(
-            line.x,
-            0.256 * 2 * np.pi * 50 / 1e3 * line.length / 3)
-        assert np.isclose(
-            line.s_nom,
-            0.275 * 0.4 * np.sqrt(3) * 3)
+        assert np.isclose(line.r, 0.206 * line.length / 3)
+        assert np.isclose(line.x, 0.256 * 2 * np.pi * 50 / 1e3 * line.length / 3)
+        assert np.isclose(line.s_nom, 0.275 * 0.4 * np.sqrt(3) * 3)
         assert line.num_parallel == 3
 
         # check lines where a second parallel line of the same type is added
@@ -443,26 +426,15 @@ class TestReinforceMeasures:
 
         # check lines that were exchanged by parallel standard lines
         line = self.edisgo.topology.lines_df.loc["Line_10003"]
-        assert line.type_info == "NA2XS2Y 3x1x185 RM/25"
-        assert np.isclose(
-            line.r,
-            0.164 * line.length / 2)
-        assert np.isclose(
-            line.x,
-            0.38 * 2 * np.pi * 50 / 1e3 * line.length / 2)
-        assert np.isclose(
-            line.s_nom, 0.357 * 20 * np.sqrt(3) * 2)
+        assert line.type_info == "NA2XS2Y 3x1x240"
+        assert np.isclose(line.r, 0.13 * line.length / 2)
+        assert np.isclose(line.x, 0.3597 * 2 * np.pi * 50 / 1e3 * line.length / 2)
+        assert np.isclose(line.s_nom, 0.417 * 20 * np.sqrt(3) * 2)
         assert line.num_parallel == 2
 
         line = self.edisgo.topology.lines_df.loc["Line_60000001"]
         assert line.type_info == "NAYY 4x1x150"
-        assert np.isclose(
-            line.r,
-            0.206 * line.length)
-        assert np.isclose(
-            line.x,
-            0.256 * 2 * np.pi * 50 / 1e3 * line.length)
-        assert np.isclose(
-            line.s_nom,
-            0.275 * 0.4 * np.sqrt(3))
+        assert np.isclose(line.r, 0.206 * line.length)
+        assert np.isclose(line.x, 0.256 * 2 * np.pi * 50 / 1e3 * line.length)
+        assert np.isclose(line.s_nom, 0.275 * 0.4 * np.sqrt(3))
         assert line.num_parallel == 1

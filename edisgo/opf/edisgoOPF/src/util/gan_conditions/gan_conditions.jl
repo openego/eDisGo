@@ -43,30 +43,30 @@ function calculate_A_i(i,pm,T,para)
         r_ij = ref(pm,:branch,br_nr)["br_r"]
         x_ij = ref(pm,:branch,br_nr)["br_x"]
     else
-        r_ij = getvalue(var(pm,:r,br_nr))  
+        r_ij = getvalue(var(pm,:r,br_nr))
         x_ij = getvalue(var(pm,:x,br_nr))
     end
     # get lowerbound of voltage at bus i
     v_min = ref(pm,:bus,i)["vmin"]
-    
+
     # calculate A_i
     u_i = [r_ij; x_ij]
     S_i = [P̂ Q̂]
     A_i = eye - 2/v_min*(u_i*S_i)
     return A_i,u_i,S_i,v_min,comp
-end     
+end
 
 """
 calculate condition C1 in Theorem 1 in Gan et. al "Exact Convex Relaxation of Optimal Power Flow
 in Radial Networks", 2013
 
-### Input: 
+### Input:
 - `G`: a graph representing a powermodel
 - `pm`: generic powermodel
 - `para`: bool -  inital values for resistance/reactance are used, Default: true
 
 C1 is calculated for any node in powermodel, all violations, i.e.
-    A_{ls}...A_{lt-1}u_{t}<=0, are stored in a Dict "violations" 
+    A_{ls}...A_{lt-1}u_{t}<=0, are stored in a Dict "violations"
 
 returns the violations dict
 """
@@ -84,7 +84,7 @@ function check_condition_C1(G,pm,para::Bool=true)
             push!(bus_list,src(e))
             A_k,u_k = calculate_A_i(dst(e),pm,T,para)
             # A_g,u_g = calc_A_i(dst(e),pm,T,para)
-            A_i = A_k*A_i 
+            A_i = A_k*A_i
             res = A_i*u_l
             if any(res.<=0)
                 println("t = $(l)")

@@ -1,3 +1,0 @@
-name,bus_closed,bus_open,branch,type_info
-circuit_breaker_1,BusBar_MVGrid_1_LVGrid_4_MV,virtual_BusBar_MVGrid_1_LVGrid_4_MV,Line_10031,Switch Disconnector
-circuit_breaker_2,BusBar_MVGrid_1_LVGrid_9_MV,virtual_BusBar_MVGrid_1_LVGrid_9_MV,Line_10016,Switch Disconnector

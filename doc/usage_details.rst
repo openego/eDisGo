@@ -11,7 +11,7 @@ features can be used.
 The fundamental data structure
 ------------------------------
 
-It's worth to understand how the fundamental data structure of eDisGo is
+It's worth understanding how the fundamental data structure of eDisGo is
 designed in order to make use of its entire features.
 
 The class :class:`~.EDisGo` serves as the top-level API for
@@ -20,7 +20,15 @@ capacity, grid reinforcement and flexibility measures. It also provides
 access to all relevant data.
 Grid data is stored in the :class:`~.network.topology.Topology` class.
 Time series data can be found in the :class:`~.network.timeseries.TimeSeries`
-class. Results data holding results e.g. from the power flow analysis and grid
+class.
+The class :class:`~.network.electromobility.Electromobility` holds data on charging
+processes (how long cars are parking at a charging station, how much they need to charge,
+etc.) necessary to apply different charging strategies, as well as information on
+potential charging sites and integrated charging parks.
+The class :class:`~.network.heat.HeatPump` holds data on
+heat pump COP, heat demand to be served by the heat pumps and thermal storage units, which is
+necessary to determine flexibility potential of heat pumps.
+Results data holding results e.g. from the power flow analysis and grid
 expansion is stored in the :class:`~.network.results.Results` class.
 Configuration data from the config files (see :ref:`default_configs`) is stored
 in the :class:`~.tools.config.Config` class.
@@ -35,6 +43,12 @@ code examples `edisgo` constitues an :class:`~.EDisGo` object.
 
     # Access TimeSeries data container object
     edisgo.timeseries
+
+    # Access Electromobility data container object
+    edisgo.electromobility
+
+    # Access HeatPump data container object
+    edisgo.heat_pump
 
     # Access Results data container object
     edisgo.results
@@ -103,14 +117,16 @@ A list of all LV grids can be retrieved through:
     # (Note that MVGrid.lv_grids returns a generator object that must first be
     #  converted to a list in order to view the LVGrid objects)
     list(edisgo.topology.mv_grid.lv_grids)
+    # the following yields the same
+    list(edisgo.topology.lv_grids)
 
 Access to a single LV grid's components can be obtained analog to shown above for
 the whole topology and the MV grid:
 
 .. code-block:: python
 
-    # Get single LV grid
-    lv_grid = list(edisgo.topology.mv_grid.lv_grids)[0]
+    # Get single LV grid by providing its ID (e.g. 1) or name (e.g. "LVGrid_1")
+    lv_grid = edisgo.topology.get_lv_grid("LVGrid_402945")
 
     # Access all buses in that LV grid
     lv_grid.buses_df
@@ -151,8 +167,159 @@ of the whole topology or each single grid can be retrieved as follows:
 The returned graph is a :networkx:`networkx.Graph<network.Graph>`, where lines are represented
 by edges in the graph, and buses and transformers are represented by nodes.
 
-Identify grid issues
---------------------
+Component time series
+------------------------
+
+There are various options how to set active and reactive power time series. First, options
+for setting active power time series are explained, followed by options for setting
+reactive power time series.
+You can also check out the :ref:`edisgo-mwe` section to get a quick start.
+
+Active power time series
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are various options how to set active time series:
+
+* "manual": providing your own time series
+* "worst-case": using simultaneity factors from config files
+* "predefined": using predefined profiles, e.g. standard load profiles
+* "optimised": using the LOPF to optimise e.g. vehicle charging
+* "heuristic": using heuristics
+
+.. _active_power_manual:
+
+Manual
+.......
+
+Use this mode to provide your own time series for specific components.
+It can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_manual()
+
+See :attr:`~.edisgo.EDisGo.set_time_series_manual` for more information.
+
+When using this mode make sure to previously set the time index. This can either be done
+upon initialisation of the EDisGo object by providing the input parameter 'timeindex' or
+by using the function :attr:`~.edisgo.EDisGo.set_timeindex`.
+
+Worst-case
+...........
+
+Use this mode to set feed-in and load in heavy load flow case (here called "load_case")
+and/or reverse power flow case (here called "feed-in_case") using simultaneity factors
+used in conventional grid planning.
+It can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_worst_case_analysis()
+
+See :attr:`~.edisgo.EDisGo.set_time_series_worst_case_analysis` for more information.
+
+When using this mode a fictitious time index starting 1/1/1970 00:00 is automatically set.
+This is done because pypsa needs time indeces. To find out which time index corresponds
+to which case check out:
+
+.. code-block:: python
+
+    edisgo.timeseries.timeindex_worst_cases
+
+Predefined
+.............
+
+Use this mode if you want to set time series by component type.
+You may either provide your own time series or use ones provided through the
+OpenEnergy DataBase or other python tools.
+This mode can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_active_power_predefined()
+
+For the following components you can use existing time series:
+
+* Fluctuating generators: Feed-in time series for solar and wind power plants can be
+  retrieved from the `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+* Conventional loads: Standard load profiles for the different sectors residential,
+  commercial, agricultural and industrial are generated using the oemof
+  `demandlib <https://github.com/oemof/demandlib/>`_.
+
+For all other components you need to provide your own time series. Time series for
+heat pumps cannot be set using this mode.
+See :attr:`~.edisgo.EDisGo.set_time_series_active_power_predefined` for more information.
+
+When using this mode make sure to previously set the time index. This can either be done
+upon initialisation of the EDisGo object by providing the input parameter 'timeindex' or
+by using the function :attr:`~.edisgo.EDisGo.set_timeindex`.
+
+Optimised
+..........
+
+Use this mode to optimise flexibilities, e.g. charging of electric vehicles or
+dispatch of heat pumps with thermal storage units.
+
+.. todo:: Add more details once the optimisation is merged.
+
+Heuristic
+..........
+
+Use this mode to use heuristics to set time series. So far, only heuristics for
+electric vehicle charging are implemented.
+The charging strategies can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.apply_charging_strategy()
+
+See function docstring of :attr:`~.edisgo.EDisGo.apply_charging_strategy` or
+documentation section :ref:`charging_strategies-label` for more information.
+
+Further, there is currently one operating strategy for heat pumps implemented where
+the heat demand is directly served by the heat pump without buffering heat using a
+thermal storage.
+The operating strategy can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.apply_heat_pump_operating_strategy()
+
+See function docstring of :attr:`~.edisgo.EDisGo.apply_heat_pump_operating_strategy`
+for more information.
+
+Reactive power time series
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+There are so far two options how to set reactive power time series:
+
+* "manual": providing your own time series
+* "fixed :math:`cos\varphi`": using a fixed power factor
+
+It is perspectively planned to also provide reactive power controls Q(U) and
+:math:`cos\varphi(P)`.
+
+Manual
+.......
+
+See active power :ref:`active_power_manual` mode documentation.
+
+Fixed :math:`cos\varphi`
+................................
+
+Use this mode to set reactive power time series using fixed power factors.
+It can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.set_time_series_reactive_power_control()
+
+See :attr:`~.edisgo.EDisGo.set_time_series_reactive_power_control` for more information.
+
+When using this mode make sure to previously set active power time series.
+
+Identifying grid issues
+-------------------------
 
 As detailed in :ref:`edisgo-mwe`, once you set up your scenario by instantiating an
 :class:`~.EDisGo` object, you are ready for a grid analysis and identifying grid
@@ -199,16 +366,159 @@ Costs for the grid expansion measures can be obtained as follows:
 Further information on the grid reinforcement methodology can be found in section
 :ref:`grid_expansion_methodology`.
 
+Electromobility
+-----------------
+
+Electromobility data including charging processes as well as information on potential charging sites and
+integrated charging parks are stored in the
+:class:`~.network.electromobility.Electromobility` object.
+
+You can access these data as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with all SimBEV charging processes
+    edisgo.electromobility.charging_processes_df
+
+    # Access GeoDataFrame with all TracBEV potential charging parks
+    edisgo.electromobility.potential_charging_parks_gdf
+
+    # Access DataFrame with all charging parks that got integrated
+    edisgo.electromobility.integrated_charging_parks_df
+
+The integrated charging points are also stored in the :class:`~.network.topology.Topology`
+object and can be accessed as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with all integrated charging points.
+    edisgo.topology.charging_points_df
+
+
+So far, adding electromobility data to an eDisGo object requires electromobility
+data from `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
+`3083c5a <https://github.com/rl-institut/simbev/commit/
+86076c936940365587c9fba98a5b774e13083c5a>`_)
+and `TracBEV <https://github.com/rl-institut/tracbev>`_ (required version:
+`14d864c <https://github.com/rl-institut/tracbev/commit/
+03e335655770a377166c05293a966052314d864c>`_) to be stored in the directories
+specified through the parameters simbev_directory and tracbev_directory.
+SimBEV provides data on standing times, charging demand, etc. per vehicle,
+whereas TracBEV provides potential charging point locations.
+
+.. todo:: Add information on how to retrieve SimBEV and TracBEV data
+
+Here is a small example on how to import electromobility data and apply a
+charging strategy. A more extensive example can be found in
+the example jupyter notebook
+`electromobility_example <https://github.com/openego/eDisGo/blob/dev/examples/electromobility_example.ipynb>`_.
+
+.. code-block:: python
+
+    import pandas as pd
+    from edisgo import EDisGo
+
+    # Set up the EDisGo object
+    timeindex = pd.date_range("1/1/2011", periods=24*7, freq="H")
+    edisgo = EDisGo(
+        ding0_grid=dingo_grid_path,
+        timeindex=timeindex
+    )
+    edisgo.set_time_series_active_power_predefined(
+        fluctuating_generators_ts="oedb",
+        dispatchable_generators_ts=pd.DataFrame(
+            data=1, columns=["other"], index=timeindex),
+        conventional_loads_ts="demandlib",
+    )
+
+    edisgo.set_time_series_reactive_power_control()
+
+    # Resample edisgo timeseries to 15-minute resolution to match with SimBEV and
+    # TracBEV data
+    edisgo.resample_timeseries()
+
+    # Import electromobility data
+    edisgo.import_electromobility(
+        simbev_directory=simbev_path,
+        tracbev_directory=tracbev_path,
+    )
+
+    # Apply charging strategy
+    edisgo.apply_charging_strategy(strategy="dumb")
+
+Further information on the electromobility integration methodology and the charging
+strategies can be found in section :ref:`electromobility-integration-label`.
+
+Heat pumps
+-----------------
+
+Heat pump data including the heat pump's time variant COP, heat demand to be served
+as well as thermal storage capacities are stored in the
+:class:`~.network.heat.HeatPump` object.
+
+You can access these data as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with COP time series
+    edisgo.heat_pump.cop_df
+
+    # Access DataFrame with heat demand time series
+    edisgo.heat_pump.heat_demand_df
+
+    # Access DataFrame with information on thermal storage capacities
+    edisgo.heat_pump.thermal_storage_units_df
+
+The heat pumps themselves are also stored in the :class:`~.network.topology.Topology`
+object and can be accessed as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with all integrated heat pumps
+    edisgo.topology.loads_df[edisgo.topology.loads_df.type == "heat_pump"]
+
+Here is a small example on how to integrate a heat pump and apply an
+operating strategy.
+
+.. code-block:: python
+
+    import pandas as pd
+    from edisgo import EDisGo
+
+    # Set up the EDisGo object
+    timeindex = pd.date_range("1/1/2011", periods=4, freq="H")
+    edisgo = EDisGo(
+        ding0_grid=dingo_grid_path,
+        timeindex=timeindex
+    )
+
+    # Set up dummy heat pump data
+    bus = edisgo.topology.loads_df[
+        edisgo.topology.loads_df.sector == "residential"].bus[0]
+    heat_pump_params = {"bus": bus, "p_set": 0.015, "type": "heat_pump"}
+
+    cop = pd.Series([1.0, 2.0, 1.5, 3.4], index=timeindex)
+    heat_demand = pd.Series([0.01, 0.03, 0.015, 0.0], index=timeindex)
+
+    # Add heat pump to grid topology
+    hp_name = edisgo.add_component("load", **heat_pump_params)
+
+    # Add heat pump COP and heat demand to be served
+    edisgo.heat_pump.set_cop(edisgo, cop.to_frame(name=hp_name))
+    edisgo.heat_pump.set_heat_demand(edisgo, heat_demand.to_frame(name=hp_name))
+
+    # Apply operating strategy - this sets the heat pump's dispatch time series
+    # in timeseries.loads_active_power
+    edisgo.apply_heat_pump_operating_strategy()
+
+    hp_dispatch = edisgo.timeseries.loads_active_power.loc[:, hp_name]
+    hp_dispatch.plot()
+
 Battery storage systems
 ------------------------
 
 Battery storage systems can be integrated into the grid as an alternative to
 classical grid expansion.
-The storage integration heuristic described in section
-:ref:`storage-integration-label` is not available at the moment. Instead, you
-may either integrate a storage unit at a specified bus manually or use the
-optimal power flow to optimally distribute a given storage capacity in the grid.
-
 Here are two small examples on how to integrate a storage unit manually. In the
 first one, the EDisGo object is set up for a worst-case analysis, wherefore no
 time series needs to be provided for the storage unit, as worst-case definition
@@ -220,52 +530,69 @@ a time series for the storage unit needs to be provided.
     from edisgo import EDisGo
 
     # Set up EDisGo object
-    edisgo = EDisGo(ding0_grid=dingo_grid_path,
-                    worst_case_analysis='worst-case')
+    edisgo = EDisGo(ding0_grid=dingo_grid_path)
 
     # Get random bus to connect storage to
     random_bus = edisgo.topology.buses_df.index[3]
     # Add storage instance
     edisgo.add_component(
-        "StorageUnit",
+        comp_type="storage_unit",
+        add_ts=False,
         bus=random_bus,
-        p_nom=4)
+        p_nom=4
+    )
+
+    # Set up worst case time series for loads, generators and storage unit
+    edisgo.set_time_series_worst_case_analysis()
+
 
 .. code-block:: python
 
     import pandas as pd
     from edisgo import EDisGo
 
-    # Set up the EDisGo object using the OpenEnergy DataBase and the oemof
-    # demandlib to set up time series for loads and fluctuating generators
-    # (time series for dispatchable generators need to be provided)
-    timeindex = pd.date_range('1/1/2011', periods=4, freq='H')
-    timeseries_generation_dispatchable = pd.DataFrame(
-        {'biomass': [1] * len(timeindex),
-         'coal': [1] * len(timeindex),
-         'other': [1] * len(timeindex)
-         },
-        index=timeindex)
+    # Set up the EDisGo object
+    timeindex = pd.date_range("1/1/2011", periods=4, freq="H")
     edisgo = EDisGo(
-        ding0_grid='ding0_example_grid',
-        generator_scenario='ego100',
-        timeseries_load='demandlib',
-        timeseries_generation_fluctuating='oedb',
-        timeseries_generation_dispatchable=timeseries_generation_dispatchable,
-        timeindex=timeindex)
+        ding0_grid=dingo_grid_path,
+        generator_scenario="ego100",
+        timeindex=timeindex
+    )
 
-    # Get random bus to connect storage to
-    random_bus = edisgo.topology.buses_df.index[3]
-    # Add storage instance
+    # Add time series for loads and generators
+    timeseries_generation_dispatchable = pd.DataFrame(
+        {"biomass": [1] * len(timeindex),
+         "coal": [1] * len(timeindex),
+         "other": [1] * len(timeindex)
+         },
+        index=timeindex
+    )
+    edisgo.set_time_series_active_power_predefined(
+        conventional_loads_ts="demandlib",
+        fluctuating_generators_ts="oedb",
+        dispatchable_generators_ts=timeseries_generation_dispatchable
+    )
+    edisgo.set_time_series_reactive_power_control()
+
+    # Add storage unit to random bus with time series
     edisgo.add_component(
-        "StorageUnit",
-        bus=random_bus,
+        comp_type="storage_unit",
+        bus=edisgo.topology.buses_df.index[3],
         p_nom=4,
         ts_active_power=pd.Series(
             [-3.4, 2.5, -3.4, 2.5],
-            index=edisgo.timeseries.timeindex))
+            index=edisgo.timeseries.timeindex),
+        ts_reactive_power=pd.Series(
+            [0., 0., 0., 0.],
+            index=edisgo.timeseries.timeindex)
+    )
 
-Following is an example on how to use the OPF to find the optimal storage
+To optimise storage positioning and operation eDisGo provides the options to use a
+heuristic (described in section :ref:`storage-integration-label`) or an optimal power
+flow approach. However, the storage integration heuristic is not yet adapted to the
+refactored code and therefore not available, and the OPF is not maintained and may therefore
+not work out of the box.
+Following you find an example on how to use the OPF to find the optimal storage
 positions in the grid with regard to grid expansion costs. Storage operation
 is optimized at the same time. The example uses the same EDisGo instance as
 above. A total storage capacity of 10 MW is distributed in the grid. `storage_buses`
@@ -287,12 +614,16 @@ Curtailment
 -----------
 
 The curtailment function is used to spatially distribute the power that is to be curtailed.
-The two heuristics `feedin-proportional` and `voltage-based`, in detail explained
-in section :ref:`curtailment_in_detail-label`, are currently not available.
-Instead you may use the optimal power flow to find the optimal generator
+To optimise which generators should be curtailed eDisGo provides the options to use a
+heuristics (heuristics `feedin-proportional` and `voltage-based`, in detail explained
+in section :ref:`curtailment_in_detail-label`) or an optimal power
+flow approach. However, the heuristics are not yet adapted to the
+refactored code and therefore not available, and the OPF is not maintained and may therefore
+not work out of the box.
+
+In the following example the optimal power flow is used to find the optimal generator
 curtailment with regard to minimizing grid expansion costs for given
-curtailment requirements. The following example again uses the EDisGo object
-from above.
+curtailment requirements. It uses the EDisGo object from above.
 
 .. code-block:: python
 
@@ -305,6 +636,8 @@ from above.
 
 Plots
 ----------------
+
+.. todo:: Add plotly plot option
 
 EDisGo provides a bunch of predefined plots to e.g. plot the MV grid topology,
 line loading and node voltages in the MV grid or as a histograms.

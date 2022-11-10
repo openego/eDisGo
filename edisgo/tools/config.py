@@ -18,18 +18,23 @@ __url__ = "https://github.com/openego/edisgo/blob/master/LICENSE"
 __author__ = "nesnoj, gplssm"
 
 
-import os
-from glob import glob
-import shutil
-import edisgo
-import logging
+import copy
 import datetime
+import json
+import logging
+import os
+import shutil
 
-logger = logging.getLogger("edisgo")
+from glob import glob
+from zipfile import ZipFile
+
+import edisgo
+
+logger = logging.getLogger(__name__)
 
 try:
     import configparser as cp
-except:
+except Exception:
     # to be compatible with Python2.7
     import ConfigParser as cp
 
@@ -38,55 +43,69 @@ _loaded = False
 
 # load config dirs
 package_path = edisgo.__path__[0]
-internal_config_file = os.path.join(
-    package_path, "config", "config_system.cfg"
-)
+internal_config_file = os.path.join(package_path, "config", "config_system.cfg")
 try:
     cfg.read(internal_config_file)
-except:
-    logger.exception(
-        "Internal config {} file not found.".format(internal_config_file)
-    )
+except Exception:
+    logger.exception("Internal config {} file not found.".format(internal_config_file))
 
 
 class Config:
     """
     Container for all configurations.
 
-    Parameters
-    -----------
-    config_path : None or :obj:`str` or :obj:`dict`
+    Other Parameters
+    -----------------
+    config_path : None or str or :dict
         Path to the config directory. Options are:
 
+        * 'default' (default)
+            If `config_path` is set to 'default', the provided default config files
+            are used directly.
+        * str
+            If `config_path` is a string, configs will be loaded from the
+            directory specified by `config_path`. If the directory
+            does not exist, it is created. If config files don't exist, the
+            default config files are copied into the directory.
+        * dict
+            A dictionary can be used to specify different paths to the
+            different config files. The dictionary must have the following
+            keys:
+
+            * 'config_db_tables'
+
+            * 'config_grid'
+
+            * 'config_grid_expansion'
+
+            * 'config_timeseries'
+
+            Values of the dictionary are paths to the corresponding
+            config file. In contrast to the other options, the directories
+            and config files must exist and are not automatically created.
         * None
-          If `config_path` is None configs are loaded from the edisgo
-          default config directory ($HOME$/.edisgo). If the directory
-          does not exist it is created. If config files don't exist the
-          default config files are copied into the directory.
-        * :obj:`str`
-          If `config_path` is a string configs will be loaded from the
-          directory specified by `config_path`. If the directory
-          does not exist it is created. If config files don't exist the
-          default config files are copied into the directory.
-        * :obj:`dict`
-          A dictionary can be used to specify different paths to the
-          different config files. The dictionary must have the following
-          keys:
-          * 'config_db_tables'
-          * 'config_grid'
-          * 'config_grid_expansion'
-          * 'config_timeseries'
+            If `config_path` is None, configs are loaded from the edisgo
+            default config directory ($HOME$/.edisgo). If the directory
+            does not exist, it is created. If config files don't exist, the
+            default config files are copied into the directory.
 
-          Values of the dictionary are paths to the corresponding
-          config file. In contrast to the other two options the directories
-          and config files must exist and are not automatically created.
+        Default: "default".
 
-        Default: None.
+    from_json : bool
+        Set to True to load config data from json file. In that case the json
+        file is assumed to be located in path specified through `config_path`.
+        Per default this is set to False in which case config data is loaded from cfg
+        files.
+        Default: False.
+    json_filename : str
+        Filename of the json file. If None, it is loaded from file with name
+        "configs.json". Default: None.
+    from_zip_archive : bool
+        Set to True to load json config file from zip archive. Default: False.
 
     Notes
     -----
-    The Config object can be used like a dictionary. See example on how to use
-    it.
+    The Config object can be used like a dictionary. See example on how to use it.
 
     Examples
     --------
@@ -102,16 +121,22 @@ class Config:
     """
 
     def __init__(self, **kwargs):
-        self._data = self._load_config(kwargs.get("config_path", None))
+        if not kwargs.get("from_json", False):
+            self._data = self.from_cfg(kwargs.get("config_path", "default"))
+        else:
+            self._data = self.from_json(
+                directory=kwargs.get("config_path", None),
+                filename=kwargs.get("json_filename", None),
+                from_zip_archive=kwargs.get("from_zip_archive", False),
+            )
 
-    @staticmethod
-    def _load_config(config_path=None):
+    def from_cfg(self, config_path=None):
         """
         Load config files.
 
         Parameters
         -----------
-        config_path : None or :obj:`str` or dict
+        config_path : None or str or dict
             See class definition for more information.
 
         Returns
@@ -130,7 +155,14 @@ class Config:
         ]
 
         # load configs
-        if isinstance(config_path, dict):
+        if config_path == "default":
+            for conf in config_files:
+                conf = conf + "_default"
+                load_config(
+                    filename="{}.cfg".format(conf),
+                    config_dir=os.path.join(package_path, "config"),
+                )
+        elif isinstance(config_path, dict):
             for conf in config_files:
                 load_config(
                     filename="{}.cfg".format(conf),
@@ -139,9 +171,7 @@ class Config:
                 )
         else:
             for conf in config_files:
-                load_config(
-                    filename="{}.cfg".format(conf), config_dir=config_path
-                )
+                load_config(filename="{}.cfg".format(conf), config_dir=config_path)
 
         config_dict = cfg._sections
 
@@ -151,7 +181,7 @@ class Config:
                 # try str -> float conversion
                 try:
                     config_dict[sec][subsec] = float(val)
-                except:
+                except Exception:
                     pass
 
         # convert to time object
@@ -172,18 +202,91 @@ class Config:
 
         return config_dict
 
+    def to_json(self, directory, filename=None):
+        """
+        Saves config data to json file.
+
+        Parameters
+        -----------
+        directory : str
+            Directory, the json file is saved to.
+        filename : str or None
+            Filename the json file is saved under. If None, it is saved under the
+            filename "configs.json". Default: None.
+
+        """
+        # data type time needs to be changed to str
+        data_dict = copy.deepcopy(self._data)
+        data_dict["demandlib"]["day_start"] = str(data_dict["demandlib"]["day_start"])
+        data_dict["demandlib"]["day_end"] = str(data_dict["demandlib"]["day_end"])
+        if filename is None:
+            filename = "configs.json"
+        with open(os.path.join(directory, filename), "w") as f:
+            json.dump(data_dict, f)
+
+    def from_json(self, directory, filename=None, from_zip_archive=False):
+        """
+        Imports config data from json file as dictionary.
+
+        Parameters
+        -----------
+        directory : str
+            Directory, the json file is loaded from.
+        filename : str or None
+            Filename of the json file. If None, it is loaded from file with name
+            "configs.json". Default: None.
+        from_zip_archive : bool
+            Set to True if data is archived in a zip archive. Default: False.
+
+        Returns
+        --------
+        dict
+            Dictionary with config data loaded from json file.
+
+        """
+        if filename is None:
+            filename = "configs.json"
+
+        if from_zip_archive:
+            # read from zip archive
+            # setup ZipFile Class
+            zip = ZipFile(directory)
+
+            with zip.open(filename) as json_file:
+                data = json_file.read()
+        else:
+            with open(os.path.join(directory, filename)) as json_file:
+                data = json_file.read()
+
+        config_dict = json.loads(data)
+
+        config_dict["demandlib"]["day_start"] = datetime.datetime.strptime(
+            config_dict["demandlib"]["day_start"], "%H:%M:%S"
+        )
+        config_dict["demandlib"]["day_start"] = datetime.time(
+            config_dict["demandlib"]["day_start"].hour,
+            config_dict["demandlib"]["day_start"].minute,
+        )
+        config_dict["demandlib"]["day_end"] = datetime.datetime.strptime(
+            config_dict["demandlib"]["day_end"], "%H:%M:%S"
+        )
+        config_dict["demandlib"]["day_end"] = datetime.time(
+            config_dict["demandlib"]["day_end"].hour,
+            config_dict["demandlib"]["day_end"].minute,
+        )
+
+        return config_dict
+
     def __getitem__(self, key1, key2=None):
         if key2 is None:
             try:
                 return self._data[key1]
-            except:
-                raise KeyError(
-                    "Config does not contain section {}.".format(key1)
-                )
+            except Exception:
+                raise KeyError("Config does not contain section {}.".format(key1))
         else:
             try:
                 return self._data[key1][key2]
-            except:
+            except Exception:
                 raise KeyError(
                     "Config does not contain value for {} or "
                     "section {}.".format(key2, key1)
@@ -208,13 +311,13 @@ def load_config(filename, config_dir=None, copy_default_config=True):
 
     Parameters
     -----------
-    filename : :obj:`str`
+    filename : str
         Config file name, e.g. 'config_grid.cfg'.
-    config_dir : :obj:`str`, optional
+    config_dir : str, optional
         Path to config file. If None uses default edisgo config directory
         specified in config file 'config_system.cfg' in section 'user_dirs'
         by subsections 'root_dir' and 'config_dir'. Default: None.
-    copy_default_config : Boolean
+    copy_default_config : bool
         If True copies a default config file into `config_dir` if the
         specified config file does not exist. Default: True.
 
@@ -260,12 +363,12 @@ def get(section, key):
 
     Parameters
     -----------
-    section : :obj:`str`
-    key : :obj:`str`
+    section : str
+    key : str
 
     Returns
     --------
-    float or int or Boolean or str
+    float or int or bool or str
         The value which will be casted to float, int or boolean.
         If no cast is successful, the raw string is returned.
 
@@ -274,13 +377,13 @@ def get(section, key):
         pass
     try:
         return cfg.getfloat(section, key)
-    except:
+    except Exception:
         try:
             return cfg.getint(section, key)
-        except:
+        except Exception:
             try:
                 return cfg.getboolean(section, key)
-            except:
+            except Exception:
                 return cfg.get(section, key)
 
 
@@ -291,7 +394,7 @@ def get_default_config_path():
 
     Returns
     --------
-    :obj:`str`
+    str
         Path to default edisgo config directory specified in config file
         'config_system.cfg' in section 'user_dirs' by subsections 'root_dir'
         and 'config_dir'.
@@ -306,9 +409,7 @@ def get_default_config_path():
     if not os.path.isdir(root_path):
         # create it
         logger.info(
-            "eDisGo root path {} not found, I will create it.".format(
-                root_path
-            )
+            "eDisGo root path {} not found, I will create it.".format(root_path)
         )
         make_directory(root_path)
 
@@ -320,9 +421,7 @@ def get_default_config_path():
 
         # copy default config files
         logger.info(
-            "eDisGo config path {} not found, I will create it.".format(
-                config_path
-            )
+            "eDisGo config path {} not found, I will create it.".format(config_path)
         )
 
     # copy default config files if they don't exist
@@ -333,9 +432,7 @@ def get_default_config_path():
         )
         if not os.path.isfile(filename):
             logger.info(
-                "I will create a default config file {} in {}".format(
-                    file, config_path
-                )
+                "I will create a default config file {} in {}".format(file, config_path)
             )
             shutil.copy(file, filename)
     return config_path
@@ -347,7 +444,7 @@ def make_directory(directory):
 
     Parameters
     -----------
-    directory : :obj:`str`
+    directory : str
         Directory path
 
     """

@@ -1,8 +1,34 @@
 Release v0.2.0
 ================
 
-Release date: <Month> <Day>, <Year>
+Release date: November 10, 2022
 
 Changes
 -------
 
+* added pre-commit hooks (flake8, black, isort, pyupgrade) `#229 <https://github.com/openego/eDisGo/pull/229>`_
+* added issue and pull request templates `#220 <https://github.com/openego/eDisGo/issues/220>`_
+* added Windows installation yml and documentation
+* added automatic testing for Windows `#317 <https://github.com/openego/eDisGo/pull/317>`_
+* dropped support for python 3.7
+* added functionality to set up different loggers with individual logging levels and where to write output `#295 <https://github.com/openego/eDisGo/issues/295>`_
+* added integrity checks of eDisGo object `#231 <https://github.com/openego/eDisGo/issues/231>`_
+* added functionality to save to and load from zip archive `#216 <https://github.com/openego/eDisGo/pull/216>`_
+* added option to not raise error in case power flow did not converge `#207 <https://github.com/openego/eDisGo/issues/207>`_
+* added pyplot `#214 <https://github.com/openego/eDisGo/pull/214>`_
+* added functionality to create geopandas dataframes `#224 <https://github.com/openego/eDisGo/issues/224>`_
+* added functionality to resample time series `#269 <https://github.com/openego/eDisGo/pull/269>`_
+* added tests
+* major refactoring of loads and time series
+
+  * restructured time series module to allow more options on how to set component time series `#236 <https://github.com/openego/eDisGo/pull/236>`_
+  * added charging points to Topology.loads_df to make eDisGo more flexible when further new load types are added
+  * peak_load in Topology.loads_df is renamed to p_nom `#242 <https://github.com/openego/eDisGo/issues/242>`_
+  * renamed all occurences of feedin in config files to feed-in
+  * added simultaneity factors for heat pumps and electric vehicles
+  * grid reinforcement now considers separate simultaneity factors for dimensioning of LV and MV `#252 <https://github.com/openego/eDisGo/pull/252>`_
+
+* added interface to electromobility data from tools SimBEV and TracBEV (SimBEV provides data on
+  standing times, charging demand, etc. per vehicle, whereas TracBEV provides potential charging point locations)
+  `#174 <https://github.com/openego/eDisGo/issues/174>`_ and
+  `#191 <https://github.com/openego/eDisGo/pull/191>`_

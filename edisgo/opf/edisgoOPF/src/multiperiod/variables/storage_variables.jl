@@ -14,7 +14,7 @@ function add_var_charging_rate(pm;nw::Int=pm.cnw,cnd::Int=pm.ccnd,bounded=true)
 
         var(pm,nw)[:ud] = @variable(pm.model,[i in ids(pm,nw,:storage)], basename="ud_$(nw)",
             lowerbound = 0,
-            upperbound = ref(pm,nw,:storage,i,"discharge_rating"))  
+            upperbound = ref(pm,nw,:storage,i,"discharge_rating"))
     else
         var(pm,nw)[:uc] = @variable(pm.model,[i in ids(pm,nw,:storage)],basename="uc_$(nw)",
             lowerbound = 0)
@@ -29,7 +29,7 @@ variables for state of starge `soc`
 
 optional argument: `bounded` DEFAULT: `true`, if `false` no upper bounds
 - sym: `:soc`
-- ``0\\leq soc \\leq soc^{max}``: state of charge 
+- ``0\\leq soc \\leq soc^{max}``: state of charge
 
 """
 function add_var_soc(pm;nw::Int=pm.cnw,cnd::Int=pm.ccnd,bounded=false)
@@ -44,7 +44,7 @@ end
 
 """
 variable for energy rating, i.e. maximal state-of-charge, with lower bound 0
-    
+
 - sym: `:emax`
 
 ``0\\leq \\overline{e_i}``

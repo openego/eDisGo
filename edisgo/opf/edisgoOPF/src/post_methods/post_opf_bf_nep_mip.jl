@@ -1,12 +1,12 @@
 """
 # MIP
-MINLP for multiperiod optimal power flow as branch flow model including network expansion 
+MINLP for multiperiod optimal power flow as branch flow model including network expansion
 with integer variable representing number of lines
 ## Arguments
 - `pm::GenericPowerModel{T} where T <: PowerModels.AbstractBFForm`
 ### optional
 - `maxexp::Integer` maximal allowed expansion of lines, DEFAULT = `10`
-- `obj::String` choose objective function between `both`,`onlyGen`,`onlyExp` 
+- `obj::String` choose objective function between `both`,`onlyGen`,`onlyExp`
     for minimizing generation and expansion or one of them
 ### setup:
 
@@ -65,19 +65,18 @@ function post_opf_bf_nep_mip(pm::GenericPowerModel{T};maxexp::Integer=10,obj::St
             end
         end
     end
-    
-    for (t,network) in nws(pm)            
+
+    for (t,network) in nws(pm)
         # adding constraint for branch flow model
         # Power Balance
         for i in ids(pm, :bus)
             constraint_power_balance_ne(pm,i,t)
         end
         # Ohms Law and branch flow over each line
-        for i in ids(pm, :branch) 
+        for i in ids(pm, :branch)
             constraint_branch_flow_ne(pm,i,t)
             constraint_ohms_law_ne(pm,i,t)
         end
     end
     add_objective_ne(pm,ismultinetwork(pm),costfactor,obj);
 end
-
