@@ -26,8 +26,8 @@ class TestTopology:
 
     """
 
-    @classmethod
-    def setup_class(self):
+    @pytest.fixture(autouse=True)
+    def setup_fixture(self):
         self.topology = Topology()
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
 
@@ -833,6 +833,26 @@ class TestTopology:
             == np.sqrt(3) * 0.4 * 0.419
         ).all()
 
+    def test_sort_buses(self):
+
+        lines_df_before = self.topology.lines_df.copy()
+
+        self.topology.sort_buses()
+
+        # check that buses were exchanged
+        line = "Line_10008"
+        assert (
+            lines_df_before.at[line, "bus0"] == self.topology.lines_df.at[line, "bus1"]
+        )
+        assert (
+            lines_df_before.at[line, "bus1"] == self.topology.lines_df.at[line, "bus0"]
+        )
+
+        # check number of lines where buses were exchanged
+        assert (lines_df_before.bus0 == self.topology.lines_df.bus0).value_counts().loc[
+            False
+        ] == 11
+
     def test_to_csv(self):
         """Test for method to_csv."""
         dir = os.path.join(os.getcwd(), "topology")
@@ -901,8 +921,8 @@ class TestTopologyWithEdisgoObject:
         assert len(self.edisgo.topology.generators_df) == 28
         assert self.edisgo.topology.charging_points_df.empty
         assert len(self.edisgo.topology.storage_units_df) == 1
-        assert len(self.edisgo.topology.lines_df) == 129
-        assert len(self.edisgo.topology.buses_df) == 140
+        assert len(self.edisgo.topology.lines_df) == 131
+        assert len(self.edisgo.topology.buses_df) == 142
         assert len(self.edisgo.topology.switches_df) == 2
         assert self.edisgo.topology.grid_district["population"] == 23358
 
