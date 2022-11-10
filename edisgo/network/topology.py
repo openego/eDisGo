@@ -1790,7 +1790,7 @@ class Topology:
         remove_bus1 = self._check_bus_for_removal(bus1)
 
         # drop line
-        self._lines_df.drop(name, inplace=True)
+        self._lines_df = self.lines_df.drop(name)
 
         # drop buses if no other elements are connected
         if remove_bus0:
@@ -1834,13 +1834,7 @@ class Topology:
                 f"connected elements ({conn_comp_types}) first to remove bus."
             )
         else:
-            if force_remove:
-                logger.debug(
-                    f"Bus {name} is connected to elements, but forced to be removed. "
-                    "The resulting topology cannot be used to calculate power flows. "
-                    "Make sure to remove the connected elements as well."
-                )
-            self._buses_df.drop(name, inplace=True)
+            self._buses_df = self.buses_df.drop(name)
 
     def update_number_of_parallel_lines(self, lines_num_parallel):
         """

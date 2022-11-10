@@ -9,6 +9,7 @@ from pandas.util.testing import assert_frame_equal
 
 from edisgo.edisgo import EDisGo
 from edisgo.io.electromobility_import import (
+    distribute_charging_demand,
     import_electromobility,
     integrate_charging_parks,
 )
@@ -22,6 +23,7 @@ class TestElectromobility:
         self.simbev_path = pytest.simbev_example_scenario_path
         self.tracbev_path = pytest.tracbev_example_scenario_path
         import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
+        distribute_charging_demand(self.edisgo_obj)
         integrate_charging_parks(self.edisgo_obj)
 
     def test_charging_processes_df(self):
@@ -45,7 +47,7 @@ class TestElectromobility:
         integrated_charging_parks_df = (
             self.edisgo_obj.electromobility.integrated_charging_parks_df
         )
-        assert integrated_charging_parks_df.empty
+        assert len(integrated_charging_parks_df) == 3
         assert isinstance(integrated_charging_parks_df, pd.DataFrame)
 
     def test_stepsize(self):
@@ -75,7 +77,7 @@ class TestElectromobility:
         self.edisgo_obj.electromobility.to_csv(dir)
 
         saved_files = os.listdir(dir)
-        assert len(saved_files) == 6
+        assert len(saved_files) == 7
         assert "charging_processes.csv" in saved_files
         assert "flexibility_band_upper_power.csv" in saved_files
 
@@ -114,7 +116,7 @@ class TestElectromobility:
 
         assert len(self.edisgo_obj.electromobility.charging_processes_df) == 48
         assert len(self.edisgo_obj.electromobility.potential_charging_parks_gdf) == 1621
-        assert self.edisgo_obj.electromobility.integrated_charging_parks_df.empty
+        assert len(self.edisgo_obj.electromobility.integrated_charging_parks_df) == 3
 
         assert_frame_equal(
             self.edisgo_obj.electromobility.flexibility_bands["upper_energy"],
