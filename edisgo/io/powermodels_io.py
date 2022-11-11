@@ -417,9 +417,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps):
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
     """
-    if len(flexible_cps) == 0:
-        print("There are no flexible charging points in network.")
-    else:
+    if len(flexible_cps) > 0:
         emob_df = psa_net.loads.loc[flexible_cps]
         flex_bands_df = edisgo_obj.electromobility.flexibility_bands
         for cp_i in np.arange(len(emob_df.index)):
@@ -457,9 +455,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
         attached heat storage.
 
     """
-    if len(flexible_hps) == 0:
-        print("There are no flexible heatpumps in network.")
-    else:
+    if len(flexible_hps) > 0:
         heat_df = psa_net.loads.loc[flexible_hps]
         for hp_i in np.arange(len(heat_df.index)):
             idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
@@ -523,9 +519,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads):
         Array containing all flexible loads that allow for application of demand side
         management strategy.
     """
-    if len(flexible_loads) == 0:
-        print("There are no flexible loads (DSM) in network.")
-    else:
+    if len(flexible_loads) > 0:
         dsm_df = psa_net.loads.loc[flexible_loads]
         for dsm_i in np.arange(len(dsm_df.index)):
             idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
