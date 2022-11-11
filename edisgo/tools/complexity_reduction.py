@@ -89,7 +89,7 @@ def extract_feeders_nx(
                 flexible_loads=flexible_loads,
             )
             if save_dir:
-                export_dir = save_dir / "feeder" / str(feeder_id)
+                export_dir = save_dir / "feeder" / f"{feeder_id:02}"
                 os.makedirs(export_dir, exist_ok=True)
                 edisgo_feeder.save(
                     export_dir,
