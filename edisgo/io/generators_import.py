@@ -733,7 +733,10 @@ def _update_grids(
 
 
 def generators_from_database(
-    edisgo_object: EDisGo, engine: Engine, scenario: str = "eGon2035"
+    edisgo_object: EDisGo,
+    engine: Engine,
+    scenario: str = "eGon2035",
+    remove_existing: bool = True,
 ):
     """
     TODO
@@ -745,7 +748,8 @@ def generators_from_database(
 
     data = preprocess_data(data=data)
 
-    remove_existing_gens(edisgo_object=edisgo_object)
+    if remove_existing:
+        remove_existing_gens(edisgo_object=edisgo_object)
 
     add_generators(edisgo_object=edisgo_object, data=data)
 
@@ -767,13 +771,14 @@ def add_generators(edisgo_object: EDisGo, data: dict[str, gpd.GeoDataFrame]) -> 
         "geom",
         "subtype",
         "weather_cell_id",
+        "building_id",
     ]
     # TODO: integration of LV generators needs to be changed to previously determine the
     #  closest MV-LV station
     # TODO: change to add pv rooftop to specific buildings as soon as building id is
     #  given
 
-    for key, gdf in data.items():
+    for gdf in data.values():
         for (
             index,
             gen_type,
@@ -782,6 +787,7 @@ def add_generators(edisgo_object: EDisGo, data: dict[str, gpd.GeoDataFrame]) -> 
             geom,
             subtype,
             weather_cell_id,
+            building_id,
         ) in gdf[cols_to_iterate].itertuples(index=False):
             index = f"egon_{subtype}_{index}"
 
@@ -795,6 +801,7 @@ def add_generators(edisgo_object: EDisGo, data: dict[str, gpd.GeoDataFrame]) -> 
                 generator_type=gen_type,
                 subtype=subtype,
                 weather_cell_id=weather_cell_id,
+                building_id=building_id,
             )
 
 
@@ -807,7 +814,11 @@ def preprocess_data(data: dict[str, gpd.GeoDataFrame]) -> dict[str, gpd.GeoDataF
 
     data["firm_gdf"] = (
         data["firm_gdf"]
-        .assign(subtype=data["firm_gdf"]["carrier"], weather_cell_id=np.nan)
+        .assign(
+            subtype=data["firm_gdf"]["carrier"],
+            weather_cell_id=np.nan,
+            building_id=np.nan,
+        )
         .rename(columns=rename, errors="raise")
     )
 
@@ -816,7 +827,7 @@ def preprocess_data(data: dict[str, gpd.GeoDataFrame]) -> dict[str, gpd.GeoDataF
 
     data["fluc_gdf"] = (
         data["fluc_gdf"]
-        .assign(carrier=data["fluc_gdf"].carrier.map(mapping))
+        .assign(carrier=data["fluc_gdf"].carrier.map(mapping), building_id=np.nan)
         .rename(columns=rename, errors="raise")
     )
 
@@ -832,7 +843,9 @@ def preprocess_data(data: dict[str, gpd.GeoDataFrame]) -> dict[str, gpd.GeoDataF
     # 3. chp
     data["chp_gdf"] = (
         data["chp_gdf"]
-        .assign(subtype=data["chp_gdf"].carrier, weather_cell_id=np.nan)
+        .assign(
+            subtype=data["chp_gdf"].carrier, weather_cell_id=np.nan, building_id=np.nan
+        )
         .rename(columns=rename, errors="raise")
     )
 
@@ -854,8 +867,6 @@ def preprocess_data(data: dict[str, gpd.GeoDataFrame]) -> dict[str, gpd.GeoDataF
 def get_generators_from_database(
     edisgo_object: EDisGo, engine: Engine, scenario: str = "eGon2035"
 ) -> dict[str, gpd.GeoDataFrame]:
-    # TODO: max. capacity? 17.5 or 20 MW?
-
     saio.register_schema("supply", engine)
     saio.register_schema("openstreetmap", engine)
 
