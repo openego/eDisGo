@@ -1256,8 +1256,8 @@ class TimeSeries:
             weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
                 edisgo_object, source=ts_generators, engine=engine
             )
-            ts_generators = timeseries_import.feedin_oedb(
-                edisgo_object.config, weather_cell_ids, self.timeindex
+            ts_generators = timeseries_import.feedin_egon_data(
+                weather_cell_ids, self.timeindex, engine=engine
             )
 
         elif not isinstance(ts_generators, pd.DataFrame):
@@ -1271,7 +1271,9 @@ class TimeSeries:
                 groups = edisgo_object.topology.generators_df.groupby(
                     ["type", "weather_cell_id"]
                 ).groups
+
                 combinations = ts_generators.columns
+
                 generator_names = np.concatenate(
                     [groups[_].values for _ in combinations if _ in groups.keys()]
                 )

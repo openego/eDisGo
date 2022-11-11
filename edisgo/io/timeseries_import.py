@@ -2,11 +2,14 @@ import datetime
 import os
 
 import pandas as pd
+import saio
 
 from demandlib import bdew as bdew
 from demandlib import particular_profiles as profiles
+from sqlalchemy.engine.base import Engine
 from workalendar.europe import Germany
 
+from edisgo.io.egon_data_import import session_scope_egon_data
 from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
@@ -183,6 +186,40 @@ def load_time_series_demandlib(config_data, timeindex):
     )
 
     return elec_demand.loc[timeindex]
+
+
+def feedin_egon_data(
+    weather_cell_ids: set, timeindex: pd.DatetimeIndex, engine: Engine
+):
+    saio.register_schema("supply", engine)
+
+    from saio.supply import egon_era5_renewable_feedin
+
+    with session_scope_egon_data(engine) as session:
+        query = (
+            session.query(
+                egon_era5_renewable_feedin.w_id.label("weather_cell_id"),
+                egon_era5_renewable_feedin.carrier,
+                egon_era5_renewable_feedin.feedin,
+            )
+            .filter(egon_era5_renewable_feedin.w_id.in_(weather_cell_ids))
+            .order_by(
+                egon_era5_renewable_feedin.w_id, egon_era5_renewable_feedin.carrier
+            )
+        )
+
+        feedin_df = pd.read_sql(sql=query.statement, con=query.session.bind)
+
+    # TODO: gibt es auch MS Netze mit offshore wind? vermutlich nicht
+    feedin_df.carrier = feedin_df.carrier.str.replace("pv", "solar").str.replace(
+        "_onshore", ""
+    )
+
+    feedin_df = feedin_df.set_index(["carrier", "weather_cell_id"])
+
+    data = [list(val)[: len(timeindex)] for val in feedin_df.feedin.tolist()]
+
+    return pd.DataFrame(data=data, index=feedin_df.index, columns=timeindex).T
 
 
 def cop_oedb(config_data, weather_cell_ids=None, timeindex=None):
