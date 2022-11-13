@@ -23,6 +23,8 @@ def to_powermodels(
     flexible_loads=[],
     opt_version=1,
     opt_flex=[],
+    hv_req_p=pd.DataFrame(),
+    hv_req_q=pd.DataFrame(),
 ):
     """
     Converts eDisGo representation of the network topology and timeseries to
@@ -102,17 +104,32 @@ def to_powermodels(
     _build_bus(psa_net, pm)
     _build_gen(edisgo_object, psa_net, pm)
     _build_branch(psa_net, pm)
-    _build_battery_storage(edisgo_object, psa_net, pm)
-    _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads)
-    _build_electromobility(edisgo_object, psa_net, pm, flexible_cps)
-    _build_heatpump(psa_net, pm, edisgo_object, flexible_hps)
+    if len(edisgo_object.topology.storage_units_df) > 0:
+        _build_battery_storage(edisgo_object, psa_net, pm)
+    if len(psa_net.loads) > 0:
+        _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads)
+    else:
+        logger.warning("No loads found in network.")
+    if len(flexible_cps) > 0:
+        _build_electromobility(edisgo_object, psa_net, pm, flexible_cps)
+    if len(flexible_hps) > 0:
+        _build_heatpump(psa_net, pm, edisgo_object, flexible_hps)
     if "hp" in opt_flex:
         _build_heat_storage(psa_net, pm, edisgo_object)
-    _build_dsm(edisgo_object, psa_net, pm, flexible_loads)
+    if len(flexible_loads) > 0:
+        _build_dsm(edisgo_object, psa_net, pm, flexible_loads)
     if (opt_version == 1) | (opt_version == 2):
-        _build_HV_requirements(pm, opt_flex)
+        _build_HV_requirements(pm, opt_flex, hv_req_p, hv_req_q)
     _build_timeseries(
-        psa_net, pm, edisgo_object, flexible_cps, flexible_hps, flexible_loads, opt_flex
+        psa_net,
+        pm,
+        edisgo_object,
+        flexible_cps,
+        flexible_hps,
+        flexible_loads,
+        opt_flex,
+        hv_req_p,
+        hv_req_q,
     )
     return pm
 
@@ -171,7 +188,7 @@ def _build_bus(psa_net, pm):
         [bus_types.index(b_type) + 1 for b_type in psa_net.buses["control"].values],
         dtype=int,
     )
-    grid_level = {20: "mv", 0.4: "lv"}
+    grid_level = {20: "mv", 10: "mv", 0.4: "lv"}
     v_max = [min(val, 1.1) for val in psa_net.buses["v_mag_pu_max"].values]
     v_min = [max(val, 0.9) for val in psa_net.buses["v_mag_pu_min"].values]
     for bus_i in np.arange(len(psa_net.buses.index)):
@@ -417,26 +434,25 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps):
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
     """
-    if len(flexible_cps) > 0:
-        emob_df = psa_net.loads.loc[flexible_cps]
-        flex_bands_df = edisgo_obj.electromobility.flexibility_bands
-        for cp_i in np.arange(len(emob_df.index)):
-            idx_bus = _mapping(psa_net, emob_df.bus[cp_i])
-            # retrieve power factor and sign from config
-            pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "cp")
-            q = pf_sign * psa_net.storage_units.p_nom[cp_i]
-            pm["electromobility"][str(cp_i + 1)] = {
-                "pd": 0,
-                "qd": 0,
-                "p_min": 0,
-                "p_max": flex_bands_df["upper_power"][emob_df.index[cp_i]][0],
-                "q_min": min(q, 0),
-                "q_max": max(q, 0),
-                "e_min": flex_bands_df["lower_energy"][emob_df.index[cp_i]][0],
-                "e_max": flex_bands_df["upper_energy"][emob_df.index[cp_i]][0],
-                "cp_bus": idx_bus,
-                "index": cp_i + 1,
-            }
+    emob_df = psa_net.loads.loc[flexible_cps]
+    flex_bands_df = edisgo_obj.electromobility.flexibility_bands
+    for cp_i in np.arange(len(emob_df.index)):
+        idx_bus = _mapping(psa_net, emob_df.bus[cp_i])
+        # retrieve power factor and sign from config
+        pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "cp")
+        q = pf_sign * flex_bands_df["upper_power"][emob_df.index[cp_i]][0]
+        pm["electromobility"][str(cp_i + 1)] = {
+            "pd": 0,
+            "qd": 0,
+            "p_min": 0,
+            "p_max": flex_bands_df["upper_power"][emob_df.index[cp_i]][0],
+            "q_min": min(q, 0),
+            "q_max": max(q, 0),
+            "e_min": flex_bands_df["lower_energy"][emob_df.index[cp_i]][0],
+            "e_max": flex_bands_df["upper_energy"][emob_df.index[cp_i]][0],
+            "cp_bus": idx_bus,
+            "index": cp_i + 1,
+        }
 
 
 def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
@@ -455,23 +471,22 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
         attached heat storage.
 
     """
-    if len(flexible_hps) > 0:
-        heat_df = psa_net.loads.loc[flexible_hps]
-        for hp_i in np.arange(len(heat_df.index)):
-            idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
-            # retrieve power factor and sign from config
-            pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "hp")
-            q = pf_sign * heat_df.p_set[hp_i]
-            pm["heatpumps"][str(hp_i + 1)] = {
-                "pd": psa_net.loads_t.p_set[heat_df.index[hp_i]][0],  # heat demand
-                "p_min": 0,
-                "p_max": heat_df.p_set[hp_i],
-                "q_min": min(q, 0),
-                "q_max": max(q, 0),
-                "cop": edisgo_obj.heat_pump.cop_df[heat_df.index[hp_i]][0],
-                "hp_bus": idx_bus,
-                "index": hp_i + 1,
-            }
+    heat_df = psa_net.loads.loc[flexible_hps]
+    for hp_i in np.arange(len(heat_df.index)):
+        idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
+        # retrieve power factor and sign from config
+        pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "hp")
+        q = pf_sign * heat_df.p_set[hp_i]
+        pm["heatpumps"][str(hp_i + 1)] = {
+            "pd": psa_net.loads_t.p_set[heat_df.index[hp_i]][0],  # heat demand
+            "p_min": 0,
+            "p_max": heat_df.p_set[hp_i],
+            "q_min": min(q, 0),
+            "q_max": max(q, 0),
+            "cop": edisgo_obj.heat_pump.cop_df[heat_df.index[hp_i]][0],
+            "hp_bus": idx_bus,
+            "index": hp_i + 1,
+        }
 
 
 def _build_heat_storage(psa_net, pm, edisgo_obj):
@@ -519,34 +534,33 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads):
         Array containing all flexible loads that allow for application of demand side
         management strategy.
     """
-    if len(flexible_loads) > 0:
-        dsm_df = psa_net.loads.loc[flexible_loads]
-        for dsm_i in np.arange(len(dsm_df.index)):
-            idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
-            # retrieve power factor and sign from config
-            pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "load")
-            q = [
-                pf_sign * edisgo_obj.dsm.p_max[dsm_df.index[dsm_i]][0],
-                pf_sign * edisgo_obj.dsm.p_min[dsm_df.index[dsm_i]][0],
-            ]
-            pm["dsm"][str(dsm_i + 1)] = {
-                "pd": 0,
-                "qd": 0,
-                "energy": 0,  # TODO: am Anfang immer 0?
-                "p_min": edisgo_obj.dsm.p_min[dsm_df.index[dsm_i]][0],
-                "p_max": edisgo_obj.dsm.p_max[dsm_df.index[dsm_i]][0],
-                "q_max": max(q),
-                "q_min": min(q),
-                "e_min": edisgo_obj.dsm.e_min[dsm_df.index[dsm_i]][0],
-                "e_max": edisgo_obj.dsm.e_max[dsm_df.index[dsm_i]][0],
-                "charge_efficiency": 1,
-                "discharge_efficiency": 1,
-                "dsm_bus": idx_bus,
-                "index": dsm_i + 1,
-            }
+    dsm_df = psa_net.loads.loc[flexible_loads]
+    for dsm_i in np.arange(len(dsm_df.index)):
+        idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
+        # retrieve power factor and sign from config
+        pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "load")
+        q = [
+            pf_sign * edisgo_obj.dsm.p_max[dsm_df.index[dsm_i]][0],
+            pf_sign * edisgo_obj.dsm.p_min[dsm_df.index[dsm_i]][0],
+        ]
+        pm["dsm"][str(dsm_i + 1)] = {
+            "pd": 0,
+            "qd": 0,
+            "energy": 0,  # TODO: am Anfang immer 0?
+            "p_min": edisgo_obj.dsm.p_min[dsm_df.index[dsm_i]][0],
+            "p_max": edisgo_obj.dsm.p_max[dsm_df.index[dsm_i]][0],
+            "q_max": max(q),
+            "q_min": min(q),
+            "e_min": edisgo_obj.dsm.e_min[dsm_df.index[dsm_i]][0],
+            "e_max": edisgo_obj.dsm.e_max[dsm_df.index[dsm_i]][0],
+            "charge_efficiency": 1,
+            "discharge_efficiency": 1,
+            "dsm_bus": idx_bus,
+            "index": dsm_i + 1,
+        }
 
 
-def _build_HV_requirements(pm, opt_flex):
+def _build_HV_requirements(pm, opt_flex, hv_req_p, hv_req_q):
     """
     Builds dictionary for HV requirement data in PowerModels network data format and
     adds it to PowerModels dictionary 'pm'.
@@ -561,14 +575,22 @@ def _build_HV_requirements(pm, opt_flex):
     """
     for i in np.arange(len(opt_flex)):
         pm["HV_requirements"][str(i + 1)] = {
-            "P": 0,
-            "Q": 0,
+            "P": hv_req_p[opt_flex[i]][0],
+            "Q": hv_req_q[opt_flex[i]][0],
             "flexibility": opt_flex[i],
         }
 
 
 def _build_timeseries(
-    psa_net, pm, edisgo_obj, flexible_cps, flexible_hps, flexible_loads, opt_flex
+    psa_net,
+    pm,
+    edisgo_obj,
+    flexible_cps,
+    flexible_hps,
+    flexible_loads,
+    opt_flex,
+    hv_req_p,
+    hv_req_q,
 ):
     """
     Builds timeseries dictionary in PowerModels network data format and adds it to
@@ -615,6 +637,8 @@ def _build_timeseries(
             flexible_hps,
             flexible_loads,
             opt_flex,
+            hv_req_p,
+            hv_req_q,
         )
     pm["time_series"]["num_steps"] = len(psa_net.snapshots)
 
@@ -628,6 +652,8 @@ def _build_component_timeseries(
     flexible_hps=None,
     flexible_loads=None,
     opt_flex=None,
+    hv_req_p=None,
+    hv_req_q=None,
 ):
     """
     Builds timeseries dictionary for given kind and adds it to 'time_series'
@@ -784,11 +810,10 @@ def _build_component_timeseries(
         (pm["opt_version"] == 1) | (pm["opt_version"] == 2)
     ):
         # TODO: add correct time series from edisgo.etrago
-        timesteps = len(psa_net.snapshots)
         for i in np.arange(len(opt_flex)):
             pm_comp[(str(i + 1))] = {
-                "P": np.ones(timesteps).tolist(),
-                "Q": np.ones(timesteps).tolist(),
+                "P": hv_req_p[opt_flex[i]].tolist(),
+                "Q": hv_req_q[opt_flex[i]].tolist(),
             }
 
     pm["time_series"][kind] = pm_comp
@@ -847,7 +872,7 @@ def aggregate_parallel_transformers(psa_net):
     # TODO: what about b, g?
     psa_trafos = psa_net.transformers
     trafo_df = (
-        psa_trafos.groupby(by=[psa_trafos.bus0, psa_trafos.bus1])["r", "x", "s_nom"]
+        psa_trafos.groupby(by=[psa_trafos.bus0, psa_trafos.bus1])[["r", "x", "s_nom"]]
         .apply(calculate_impedance_for_parallel_components)
         .reset_index()
     )

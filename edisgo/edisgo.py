@@ -633,9 +633,44 @@ class EDisGo:
         flexible_loads=[],
         opt_version=1,
         opt_flex=[],
+        hv_req_p=pd.DataFrame(),
+        hv_req_q=pd.DataFrame(),
     ):
+        """
+        Converts eDisGo representation of the network topology and timeseries to
+        PowerModels network data format.
+
+        Parameters
+        ----------
+        flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
+            Array containing all charging points that allow for flexible charging.
+        flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
+            Array containing all heat pumps that allow for flexible operation due to an
+            attached heat storage.
+        flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
+            Array containing all flexible loads that allow for application of demand
+            side management strategy.
+        opt_version: Int
+            Version of optimization models to choose from. For more information see MA.
+            Must be one of [1, 2].
+        opt_flex: list
+            List of flexibilities that should be considered in the optimization. Must be
+            any subset of ["curt", "storage", "cp", "hp", "dsm"]
+        Returns
+        -------
+        pm: dict
+            Dictionary that contains all network data in PowerModels network data
+            format.
+        """
         return powermodels_io.to_powermodels(
-            self, flexible_cps, flexible_hps, flexible_loads, opt_version, opt_flex
+            self,
+            flexible_cps,
+            flexible_hps,
+            flexible_loads,
+            opt_version,
+            opt_flex,
+            hv_req_p,
+            hv_req_q,
         )
 
     def to_graph(self):
@@ -2204,16 +2239,59 @@ class EDisGo:
 
     def save_edisgo_to_json(
         self,
-        directory,
+        directory="",
+        filename=None,
         flexible_cps=[],
         flexible_hps=[],
         flexible_loads=[],
         opt_version=1,
         opt_flex=[],
+        hv_req_p=pd.DataFrame(),
+        hv_req_q=pd.DataFrame(),
     ):
-        os.makedirs(directory, exist_ok=True)
+        """
+        Saves EDisGo object in PowerModels network format to json file and returns the
+        PowerModel.
+
+        Parameters
+        -----------
+        directory : str
+            Directory the json file is saved to. Per default it takes the current
+            working directory.
+        filename : str or None
+            Filename the json file is saved under. If None, filename is
+            'ding0_{grid_id}_t_{#timesteps}.json'.
+        flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
+            Array containing all charging points that allow for flexible charging.
+        flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
+            Array containing all heat pumps that allow for flexible operation due to an
+            attached heat storage.
+        flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
+            Array containing all flexible loads that allow for application of demand
+            side management strategy.
+        opt_version: Int
+            Version of optimization models to choose from. For more information see MA.
+            Must be one of [1, 2].
+        opt_flex: list
+            List of flexibilities that should be considered in the optimization. Must be
+            any subset of ["curt", "storage", "cp", "hp", "dsm"]
+
+        Returns
+            -------
+            pm: dict
+                Dictionary that contains all network data in PowerModels network data
+                format.
+        """
+        abs_path = os.path.abspath(directory)
+        os.makedirs(abs_path, exist_ok=True)
         pm = self.to_powermodels(
-            flexible_cps, flexible_hps, flexible_loads, opt_version, opt_flex
+            flexible_cps,
+            flexible_hps,
+            flexible_loads,
+            opt_version,
+            opt_flex,
+            hv_req_p,
+            hv_req_q,
         )
 
         def _convert(o):
@@ -2225,11 +2303,16 @@ class EDisGo:
                 return int(o)
             raise TypeError
 
+        if filename is None:
+            filename = "{}.json".format(pm["name"])
+
         with open(
-            os.path.join(directory, "{}.json".format(pm["name"])),
+            os.path.join(abs_path, filename),
             "w",
         ) as outfile:
             json.dump(pm, outfile, default=_convert)
+
+        return pm
 
     def reduce_memory(self, **kwargs):
         """
