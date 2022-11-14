@@ -377,14 +377,7 @@ class Electromobility:
 
         """
 
-        def _shorten_and_set_index(band):
-            """
-            Method to adjust bands to time index of EDisGo object.
-            #Todo: change such that first day is replaced by (365+1)th day
-            """
-            band = band.iloc[: len(edisgo_obj.timeseries.timeindex)]
-            band.index = edisgo_obj.timeseries.timeindex
-            return band
+        # Todo: change such that first day is replaced by (365+1)th day
 
         if isinstance(use_case, str):
             use_case = [use_case]
@@ -395,9 +388,29 @@ class Electromobility:
         ]
         cps = cp_df[cp_df.sector.isin(use_case)]
 
+        # set up time index
+        start_date = self.simbev_config_df.start_date.values[0]
+        # end date from SimBEV includes to the specified day, wherefore 1 day needs
+        # to be added to have the day included in the time index
+        end_date = self.simbev_config_df.end_date.values[0] + pd.Timedelta(1, "day")
+        stepsize = self.stepsize
+        flex_band_index = pd.date_range(
+            start=start_date, end=end_date, freq=f"{stepsize}min", inclusive="left"
+        )
+        # check if maximum end time step in charging data is larger than length of
+        # time index and if so, expand time index and raise warning
+        t_max = self.charging_processes_df.park_end_timesteps.max()
+        if len(flex_band_index) < t_max:
+            logger.warning(
+                "Time steps in charging processes exceed time steps specified in "
+                "SimBEV config data."
+            )
+            flex_band_index = pd.date_range(
+                start=start_date, periods=t_max + 1, freq=f"{stepsize}min"
+            )
+
         # set up bands
-        t_max = 372 * 4 * 24
-        tmp_idx = range(t_max)
+        tmp_idx = range(len(flex_band_index))
         upper_power = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
         upper_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
         lower_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
@@ -414,7 +427,7 @@ class Electromobility:
             # iterate through charging processes and fill matrices
             for idx, charging_process in charging_processes.iterrows():
                 # Last time steps can lead to problems --> skip
-                if charging_process.park_end_timesteps == t_max:
+                if charging_process.park_end_timesteps == max(tmp_idx):
                     continue
 
                 start = charging_process.park_start_timesteps
@@ -447,6 +460,7 @@ class Electromobility:
                 upper_energy.loc[start + full_charging_steps, cp] += (
                     part_time_step * power
                 )
+
         # sanity check
         if (
             (
@@ -470,22 +484,36 @@ class Electromobility:
             raise ValueError(
                 "Lower energy is higher than upper energy bound. Please check."
             )
-        # Convert to MW and cumulate energy
+
+        # convert to MW and cumulate energy
         upper_power = upper_power / 1e3
         lower_energy = lower_energy.cumsum() / hourly_steps / 1e3
         upper_energy = upper_energy.cumsum() / hourly_steps / 1e3
-        # Set time_index
-        upper_power = _shorten_and_set_index(upper_power)
-        lower_energy = _shorten_and_set_index(lower_energy)
-        upper_energy = _shorten_and_set_index(upper_energy)
 
+        # set time index
+        upper_power.index = flex_band_index
+        lower_energy.index = flex_band_index
+        upper_energy.index = flex_band_index
+
+        # write to self.flexibility_bands
         flex_band_dict = {
             "upper_power": upper_power,
             "lower_energy": lower_energy,
             "upper_energy": upper_energy,
         }
         self.flexibility_bands = flex_band_dict
-        return flex_band_dict
+
+        # check if time index matches Timeseries.timeindex and if not resample flex
+        # bands
+        edisgo_timeindex = edisgo_obj.timeseries.timeindex
+        if len(edisgo_timeindex) > 1:
+            # check if frequencies match
+            freq_edisgo = edisgo_timeindex[1] - edisgo_timeindex[0]
+            if freq_edisgo != stepsize:
+                # resample
+                self.resample(freq=freq_edisgo)
+
+        return self.flexibility_bands
 
     def to_csv(self, directory, attributes=None):
         """
