@@ -2,6 +2,7 @@ import os
 import shutil
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -75,6 +76,56 @@ class TestElectromobility:
     def test_eta_charging_points(self):
         eta_charging_points = self.edisgo_obj.electromobility.eta_charging_points
         assert eta_charging_points == 0.9
+
+    def test_get_flexibility_bands(self):
+        self.edisgo_obj.electromobility.get_flexibility_bands(
+            self.edisgo_obj, ["work", "public"]
+        )
+
+        integrated_charging_parks = (
+            self.edisgo_obj.electromobility.integrated_charging_parks_df
+        )
+        charging_processes = self.edisgo_obj.electromobility.charging_processes_df
+        flex_bands = self.edisgo_obj.electromobility.flexibility_bands
+
+        # check concrete values
+        cp = "Charging_Point_LVGrid_131957_public_1"
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122222
+        ).all()
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 0.0
+        ).all()
+
+        tmp = flex_bands["upper_energy"].loc[:, [cp]]
+        assert np.isclose(tmp.iloc[648, 0] + 11 / 4 / 1000, tmp.iloc[649, 0])
+        assert np.isclose(tmp.iloc[654, 0], tmp.iloc[655, 0])
+
+        tmp = flex_bands["lower_energy"].loc[:, [cp]]
+        assert np.isclose(tmp.iloc[648, 0], tmp.iloc[649, 0])
+        assert np.isclose(tmp.iloc[654, 0] + 11 / 4 / 1000, tmp.iloc[655, 0])
+
+        # check charging demand
+        for cp in [
+            "Charging_Point_LVGrid_131957_public_1",
+            "Charging_Point_LVGrid_362451_public_1",
+            "Charging_Point_LVGrid_136124_work_1",
+        ]:
+
+            charging_park_id = integrated_charging_parks.loc[
+                integrated_charging_parks.edisgo_id == cp
+            ].index
+            charging_processes_cp = charging_processes.loc[
+                charging_processes.charging_park_id.isin(charging_park_id)
+            ]
+            assert np.isclose(
+                charging_processes_cp.loc[:, "chargingdemand_kWh"].sum() / 1e3,
+                flex_bands["upper_energy"].loc[:, [cp]].iloc[-1, 0],
+            )
+            assert np.isclose(
+                charging_processes_cp.loc[:, "chargingdemand_kWh"].sum() / 1e3,
+                flex_bands["lower_energy"].loc[:, [cp]].iloc[-1, 0],
+            )
 
     def test_to_csv(self):
         """Test for method to_csv."""
