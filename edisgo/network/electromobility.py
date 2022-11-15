@@ -515,6 +515,62 @@ class Electromobility:
 
         return self.flexibility_bands
 
+    def check_integrity(self):
+        """
+        Method to check the integrity of the Electromobility object.
+
+        Currently only checks integrity of flexibility bands.
+
+        """
+        if self.flexibility_bands["upper_energy"].empty:
+            return
+
+        efficiency = self.eta_charging_points
+        if (
+            (
+                (
+                    self.flexibility_bands["upper_energy"]
+                    - self.flexibility_bands["lower_energy"]
+                )
+                < 1e-6
+            )
+            .any()
+            .any()
+        ):
+            raise ValueError(
+                "Lower energy bound is higher than upper energy bound. Please check."
+            )
+        if (
+            (
+                (
+                    self.flexibility_bands["upper_energy"].diff()
+                    - self.flexibility_bands["upper_power"] * efficiency
+                )
+                > 1e-6
+            )
+            .any()
+            .any()
+        ):
+            raise ValueError(
+                "Upper energy band has power values higher than nominal power. "
+                "Please check."
+            )
+        if (
+            (
+                (
+                    self.flexibility_bands["lower_energy"].diff()
+                    - self.flexibility_bands["upper_power"] * efficiency
+                )
+                > -1e-6
+            )
+            .any()
+            .any()
+        ):
+            raise ValueError(
+                "Lower energy band has power values higher than nominal power. "
+                "Please check."
+            )
+
     def to_csv(self, directory, attributes=None):
         """
         Exports electromobility data to csv files.
