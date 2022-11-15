@@ -522,17 +522,24 @@ class Electromobility:
         Currently only checks integrity of flexibility bands.
 
         """
-        if self.flexibility_bands["upper_energy"].empty:
+        # pick random flex band for some pre-checks
+        flex_band = list(self.flexibility_bands.values())[0]
+
+        # if there are no flex bands, skip integrity check
+        if flex_band.empty:
             return
 
         efficiency = self.eta_charging_points
+        freq_orig = flex_band.index[1] - flex_band.index[0]
+        hourly_steps = int(60 / (freq_orig.total_seconds() / 60))
+
         if (
             (
                 (
                     self.flexibility_bands["upper_energy"]
                     - self.flexibility_bands["lower_energy"]
                 )
-                < 1e-6
+                < -1e-6
             )
             .any()
             .any()
@@ -544,7 +551,7 @@ class Electromobility:
             (
                 (
                     self.flexibility_bands["upper_energy"].diff()
-                    - self.flexibility_bands["upper_power"] * efficiency
+                    - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
                 )
                 > 1e-6
             )
@@ -559,9 +566,9 @@ class Electromobility:
             (
                 (
                     self.flexibility_bands["lower_energy"].diff()
-                    - self.flexibility_bands["upper_power"] * efficiency
+                    - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
                 )
-                > -1e-6
+                > 1e-6
             )
             .any()
             .any()
