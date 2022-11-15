@@ -461,30 +461,6 @@ class Electromobility:
                     part_time_step * power
                 )
 
-        # sanity check
-        if (
-            (
-                (
-                    lower_energy
-                    - upper_power * edisgo_obj.electromobility.eta_charging_points
-                )
-                > 1e-6
-            )
-            .any()
-            .any()
-        ):
-            raise ValueError(
-                "Lower energy has power values higher than nominal power. Please check."
-            )
-        if ((upper_energy - upper_power * self.eta_charging_points) > 1e-6).any().any():
-            raise ValueError(
-                "Upper energy has power values higher than nominal power. Please check."
-            )
-        if ((upper_energy.cumsum() - lower_energy.cumsum()) < -1e-6).any().any():
-            raise ValueError(
-                "Lower energy is higher than upper energy bound. Please check."
-            )
-
         # convert to MW and cumulate energy
         upper_power = upper_power / 1e3
         lower_energy = lower_energy.cumsum() / hourly_steps / 1e3
@@ -502,6 +478,9 @@ class Electromobility:
             "upper_energy": upper_energy,
         }
         self.flexibility_bands = flex_band_dict
+
+        # sanity check
+        self.check_integrity()
 
         # check if time index matches Timeseries.timeindex and if not resample flex
         # bands
