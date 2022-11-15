@@ -25,6 +25,14 @@ edisgo.network.grids module
    :undoc-members:
    :show-inheritance:
 
+edisgo.network.heat module
+---------------------------
+
+.. automodule:: edisgo.network.heat
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 edisgo.network.results module
 -----------------------------
 
