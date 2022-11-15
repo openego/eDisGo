@@ -73,15 +73,25 @@ def prepare_time_invariant_parameters(
     parameters["optimize_ev_charging"] = optimize_ev_charging
     parameters["optimize_storage"] = optimize_storage
     parameters["optimize_hp"] = optimize_hp
+
+    flexible_loads = kwargs.get("flexible_loads", False)
+
     if optimize_storage:
-        parameters["optimized_storage_units"] = kwargs.get(
-            "flexible_storage_units", parameters["grid_object"].storage_units_df.index
-        )
+        if isinstance(flexible_loads, pd.DataFrame):
+            parameters["flexible_storage_units"] = flexible_loads.loc[
+                flexible_loads["type"] == "storage"
+            ].index
+        else:
+            parameters["optimized_storage_units"] = kwargs.get(
+                "flexible_storage_units",
+                parameters["grid_object"].storage_units_df.index,
+            )
         parameters["inflexible_storage_units"] = parameters[
             "grid_object"
         ].storage_units_df.index.drop(parameters["optimized_storage_units"])
     if optimize_ev_charging:
-        parameters["ev_flex_bands"] = kwargs.get("ev_flex_bands")
+        # parameters["ev_flex_bands"] = kwargs.get("ev_flex_bands")
+        parameters["ev_flex_bands"] = edisgo.electromobility.flexibility_bands
         parameters["optimized_charging_points"] = parameters["ev_flex_bands"][
             "upper_power"
         ].columns
@@ -91,12 +101,17 @@ def prepare_time_invariant_parameters(
     else:
         parameters["optimized_charging_points"] = []
     if optimize_hp:
+        if isinstance(flexible_loads, pd.DataFrame):
+            parameters["optimized_heat_pumps"] = flexible_loads.loc[
+                flexible_loads["type"] == "heat_pump"
+            ].index
+        else:
+            parameters["optimized_heat_pumps"] = kwargs.get(
+                "optimized_heat_pumps", parameters["heat_pumps"].index
+            )
         parameters["heat_pumps"] = parameters["grid_object"].loads_df.loc[
             parameters["grid_object"].loads_df.type == "heat_pump"
         ]
-        parameters["optimized_heat_pumps"] = kwargs.get(
-            "optimized_heat_pumps", parameters["heat_pumps"].index
-        )
         # Todo: change to heat_pumps_df.index once exists
         parameters["cop"] = edisgo.heat_pump.cop_df
         parameters["heat_demand"] = edisgo.heat_pump.heat_demand_df
@@ -105,11 +120,17 @@ def prepare_time_invariant_parameters(
         parameters["optimized_heat_pumps"] = []
     # save non flexible loads
     # Todo: add other flexible loads once relevant
-    parameters["inflexible_loads"] = (
-        parameters["grid_object"]
-        .loads_df.index.drop(parameters["optimized_charging_points"])
-        .drop(parameters["optimized_heat_pumps"])
-    )
+    if isinstance(flexible_loads, pd.DataFrame):
+        parameters["inflexible_loads"] = parameters["grid_object"].loads_df.index.drop(
+            flexible_loads.index
+        )
+    else:
+        parameters["inflexible_loads"] = (
+            parameters["grid_object"]
+            .loads_df.index.drop(parameters["optimized_charging_points"])
+            .drop(parameters["optimized_heat_pumps"])
+        )
+
     # extract residual load of non optimised components
     parameters[
         "res_load_inflexible_units"
