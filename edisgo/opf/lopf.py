@@ -77,89 +77,91 @@ def prepare_time_invariant_parameters(
 
     """
     t1 = perf_counter()
-    parameters = {}
+    fixed_parameters = {}
     # set grid and edisgo objects as well as slack
     (
-        parameters["edisgo_object"],
-        parameters["grid_object"],
-        parameters["slack"],
+        fixed_parameters["edisgo_object"],
+        fixed_parameters["grid_object"],
+        fixed_parameters["slack"],
     ) = setup_grid_object(edisgo_obj)
 
-    parameters["downstream_nodes_matrix"] = downstream_nodes_matrix
-    parameters["optimize_emob"] = kwargs.get("optimize_emob", False)
-    parameters["optimize_bess"] = kwargs.get("optimize_bess", False)
-    parameters["optimize_hp"] = kwargs.get("optimize_hp", False)
-    parameters["per_unit"] = kwargs.get("per_unit", False)
-    parameters["flexible_loads"] = kwargs.get("flexible_loads", pd.DataFrame())
+    fixed_parameters["downstream_nodes_matrix"] = downstream_nodes_matrix
+    fixed_parameters["optimize_emob"] = kwargs.get("optimize_emob", False)
+    fixed_parameters["optimize_bess"] = kwargs.get("optimize_bess", False)
+    fixed_parameters["optimize_hp"] = kwargs.get("optimize_hp", False)
+    fixed_parameters["per_unit"] = kwargs.get("per_unit", False)
+    fixed_parameters["flexible_loads"] = kwargs.get("flexible_loads", pd.DataFrame())
 
-    if parameters["optimize_bess"]:
-        if not parameters["flexible_loads"].empty:
-            parameters["flexible_storage_units"] = parameters[
-                "flexible_loads"].loc[
-                parameters[
-                    "flexible_loads"]["type"] == "storage"
-            ].index
+    if fixed_parameters["optimize_bess"]:
+        if not fixed_parameters["flexible_loads"].empty:
+            fixed_parameters["flexible_storage_units"] = (
+                fixed_parameters["flexible_loads"]
+                .loc[fixed_parameters["flexible_loads"]["type"] == "storage"]
+                .index
+            )
         else:
-            parameters["optimized_storage_units"] = kwargs.get(
+            fixed_parameters["optimized_storage_units"] = kwargs.get(
                 "flexible_storage_units",
-                parameters["grid_object"].storage_units_df.index,
+                fixed_parameters["grid_object"].storage_units_df.index,
             )
-        parameters["inflexible_storage_units"] = parameters[
+        fixed_parameters["inflexible_storage_units"] = fixed_parameters[
             "grid_object"
-        ].storage_units_df.index.drop(parameters["optimized_storage_units"])
-    if parameters["optimize_emob"]:
-        # parameters["ev_flex_bands"] = kwargs.get("ev_flex_bands")
-        parameters["ev_flex_bands"] = edisgo_obj.electromobility.flexibility_bands
-        parameters["optimized_charging_points"] = parameters["ev_flex_bands"][
-            "upper_power"
-        ].columns
-        parameters["inflexible_charging_points"] = parameters[
+        ].storage_units_df.index.drop(fixed_parameters["optimized_storage_units"])
+    if fixed_parameters["optimize_emob"]:
+        # fixed_parameters["ev_flex_bands"] = kwargs.get("ev_flex_bands")
+        fixed_parameters["ev_flex_bands"] = edisgo_obj.electromobility.flexibility_bands
+        fixed_parameters["optimized_charging_points"] = fixed_parameters[
+            "ev_flex_bands"
+        ]["upper_power"].columns
+        fixed_parameters["inflexible_charging_points"] = fixed_parameters[
             "grid_object"
-        ].charging_points_df.index.drop(parameters["optimized_charging_points"])
+        ].charging_points_df.index.drop(fixed_parameters["optimized_charging_points"])
     else:
-        parameters["optimized_charging_points"] = []
-    if parameters["optimize_hp"]:
-        if not parameters["flexible_loads"].empty:
-            parameters["optimized_heat_pumps"] = parameters[
-                "flexible_loads"].loc[parameters[
-                "flexible_loads"]["type"] == "heat_pump"].index
-        else:
-            parameters["optimized_heat_pumps"] = kwargs.get(
-                "optimized_heat_pumps", parameters["heat_pumps"].index
+        fixed_parameters["optimized_charging_points"] = []
+    if fixed_parameters["optimize_hp"]:
+        if not fixed_parameters["flexible_loads"].empty:
+            fixed_parameters["optimized_heat_pumps"] = (
+                fixed_parameters["flexible_loads"]
+                .loc[fixed_parameters["flexible_loads"]["type"] == "heat_pump"]
+                .index
             )
-        parameters["heat_pumps"] = parameters["grid_object"].loads_df.loc[
-            parameters["grid_object"].loads_df.type == "heat_pump"
+        else:
+            fixed_parameters["optimized_heat_pumps"] = kwargs.get(
+                "optimized_heat_pumps", fixed_parameters["heat_pumps"].index
+            )
+        fixed_parameters["heat_pumps"] = fixed_parameters["grid_object"].loads_df.loc[
+            fixed_parameters["grid_object"].loads_df.type == "heat_pump"
         ]
         # Todo: change to heat_pumps_df.index once exists
-        parameters["cop"] = edisgo_obj.heat_pump.cop_df
-        parameters["heat_demand"] = edisgo_obj.heat_pump.heat_demand_df
-        parameters["tes"] = edisgo_obj.heat_pump.thermal_storage_units_df
+        fixed_parameters["cop"] = edisgo_obj.heat_pump.cop_df
+        fixed_parameters["heat_demand"] = edisgo_obj.heat_pump.heat_demand_df
+        fixed_parameters["tes"] = edisgo_obj.heat_pump.thermal_storage_units_df
     else:
-        parameters["optimized_heat_pumps"] = []
+        fixed_parameters["optimized_heat_pumps"] = []
     # save non flexible loads
     # Todo: add other flexible loads once relevant
-    if not parameters["flexible_loads"].empty:
-        parameters["inflexible_loads"] = parameters["grid_object"].loads_df.index.drop(
-            parameters[
-                "flexible_loads"].index
-        )
+    if not fixed_parameters["flexible_loads"].empty:
+        fixed_parameters["inflexible_loads"] = fixed_parameters[
+            "grid_object"
+        ].loads_df.index.drop(fixed_parameters["flexible_loads"].index)
     else:
-        parameters["inflexible_loads"] = (
-            parameters["grid_object"]
-            .loads_df.index.drop(parameters["optimized_charging_points"])
-            .drop(parameters["optimized_heat_pumps"])
+        fixed_parameters["inflexible_loads"] = (
+            fixed_parameters["grid_object"]
+            .loads_df.index.drop(fixed_parameters["optimized_charging_points"])
+            .drop(fixed_parameters["optimized_heat_pumps"])
         )
 
     # extract residual load of non optimised components
-    parameters[
+    fixed_parameters[
         "res_load_inflexible_units"
     ] = get_residual_load_of_not_optimized_components(
-        parameters["grid_object"],
-        parameters["edisgo_object"],
-        relevant_storage_units=parameters.get(
-            "inflexible_storage_units", parameters["grid_object"].storage_units_df.index
+        fixed_parameters["grid_object"],
+        fixed_parameters["edisgo_object"],
+        relevant_storage_units=fixed_parameters.get(
+            "inflexible_storage_units",
+            fixed_parameters["grid_object"].storage_units_df.index,
         ),
-        relevant_loads=parameters["inflexible_loads"],
+        relevant_loads=fixed_parameters["inflexible_loads"],
     )
     # get nodal active and reactive powers of non optimised components
     # Todo: add handling of storage and hp once become relevant
@@ -173,36 +175,39 @@ def prepare_time_invariant_parameters(
         nodal_active_storage,
         nodal_reactive_storage,
     ) = get_nodal_residual_load(
-        parameters["grid_object"],
-        parameters["edisgo_object"],
-        considered_storage=parameters.get(
-            "inflexible_storage_units", parameters["grid_object"].storage_units_df.index
+        fixed_parameters["grid_object"],
+        fixed_parameters["edisgo_object"],
+        considered_storage=fixed_parameters.get(
+            "inflexible_storage_units",
+            fixed_parameters["grid_object"].storage_units_df.index,
         ),
-        considered_loads=parameters["inflexible_loads"],
+        considered_loads=fixed_parameters["inflexible_loads"],
     )
-    parameters["nodal_active_power"] = nodal_active_power.T
-    parameters["nodal_reactive_power"] = nodal_reactive_power.T
-    parameters["nodal_active_load"] = nodal_active_load.T
-    parameters["nodal_reactive_load"] = nodal_reactive_load.T
-    parameters["nodal_active_feedin"] = nodal_active_generation.T
-    parameters["nodal_reactive_feedin"] = nodal_reactive_generation.T
-    parameters["tan_phi_load"] = (nodal_reactive_load.divide(nodal_active_load)).fillna(
-        0
-    )
-    parameters["tan_phi_feedin"] = (
+    fixed_parameters["nodal_active_power"] = nodal_active_power.T
+    fixed_parameters["nodal_reactive_power"] = nodal_reactive_power.T
+    fixed_parameters["nodal_active_load"] = nodal_active_load.T
+    fixed_parameters["nodal_reactive_load"] = nodal_reactive_load.T
+    fixed_parameters["nodal_active_feedin"] = nodal_active_generation.T
+    fixed_parameters["nodal_reactive_feedin"] = nodal_reactive_generation.T
+    fixed_parameters["tan_phi_load"] = (
+        nodal_reactive_load.divide(nodal_active_load)
+    ).fillna(0)
+    fixed_parameters["tan_phi_feedin"] = (
         nodal_reactive_generation.divide(nodal_active_generation)
     ).fillna(0)
     # get underlying branch elements and power factors
     # handle pu conversion
-    if parameters["per_unit"]:
+    if fixed_parameters["per_unit"]:
         print(
             "Optimisation in pu-system. Make sure the inserted energy "
             "bands are also converted to the same pu-system."
         )
-        parameters["v_nom"] = 1.0
+        fixed_parameters["v_nom"] = 1.0
         s_base = kwargs.get("s_base", 1)
-        parameters["grid_object"].convert_to_pu_system(s_base, timeseries_inplace=True)
-        parameters["pars"] = {
+        fixed_parameters["grid_object"].convert_to_pu_system(
+            s_base, timeseries_inplace=True
+        )
+        fixed_parameters["pars"] = {
             "r": "r_pu",
             "x": "x_pu",
             "s_nom": "s_nom_pu",
@@ -211,8 +216,10 @@ def prepare_time_invariant_parameters(
             "capacity": "capacity_pu",
         }
     else:
-        parameters["v_nom"] = parameters["grid_object"].buses_df.v_nom.iloc[0]
-        parameters["pars"] = {
+        fixed_parameters["v_nom"] = fixed_parameters["grid_object"].buses_df.v_nom.iloc[
+            0
+        ]
+        fixed_parameters["pars"] = {
             "r": "r",
             "x": "x",
             "s_nom": "s_nom",
@@ -220,33 +227,35 @@ def prepare_time_invariant_parameters(
             "peak_load": "peak_load",
             "capacity": "capacity",
         }
-        parameters["grid_object"].transformers_df["r"] = (
-            parameters["grid_object"].transformers_df["r_pu"]
-            * np.square(parameters["v_nom"])
-            / parameters["grid_object"].transformers_df.s_nom
+        fixed_parameters["grid_object"].transformers_df["r"] = (
+            fixed_parameters["grid_object"].transformers_df["r_pu"]
+            * np.square(fixed_parameters["v_nom"])
+            / fixed_parameters["grid_object"].transformers_df.s_nom
         )
-        parameters["grid_object"].transformers_df["x"] = (
-            parameters["grid_object"].transformers_df["x_pu"]
-            * np.square(parameters["v_nom"])
-            / parameters["grid_object"].transformers_df.s_nom
+        fixed_parameters["grid_object"].transformers_df["x"] = (
+            fixed_parameters["grid_object"].transformers_df["x_pu"]
+            * np.square(fixed_parameters["v_nom"])
+            / fixed_parameters["grid_object"].transformers_df.s_nom
         )
-    parameters["branches"] = concat_parallel_branch_elements(parameters["grid_object"])
+    fixed_parameters["branches"] = concat_parallel_branch_elements(
+        fixed_parameters["grid_object"]
+    )
     (
-        parameters["underlying_branch_elements"],
-        parameters["power_factors"],
+        fixed_parameters["underlying_branch_elements"],
+        fixed_parameters["power_factors"],
     ) = get_underlying_elements(
-        parameters
+        fixed_parameters
     )  # Todo: time invariant
     print(
         "It took {} seconds to extract timeinvariant parameters.".format(
             perf_counter() - t1
         )
     )
-    return parameters
+    return fixed_parameters
 
 
 def setup_model(
-    timeinvariant_parameters,
+    fixed_parameters,
     timesteps,
     objective="curtailment",
     **kwargs,
@@ -256,7 +265,7 @@ def setup_model(
     and/or ev charging with linear approximation of power flow from
     eDisGo-object.
 
-    :param timeinvariant_parameters: parameters that stay the same for every iteration
+    :param fixed_parameters: parameters that stay the same for every iteration
     :param timesteps:
     :param optimize_bess:
     :param optimize_emob:
@@ -282,9 +291,9 @@ def setup_model(
         raise ValueError("The objective you inserted is not implemented yet.")
     # Todo: unnecessary?
     edisgo_obj, grid_object, slack = (
-        timeinvariant_parameters["edisgo_object"],
-        timeinvariant_parameters["grid_object"],
-        timeinvariant_parameters["slack"],
+        fixed_parameters["edisgo_object"],
+        fixed_parameters["grid_object"],
+        fixed_parameters["slack"],
     )
 
     # DEFINE SETS AND FIX PARAMETERS
@@ -311,16 +320,16 @@ def setup_model(
     if not any(char.isdigit() for char in model.time_increment):
         model.time_increment = "1" + model.time_increment
 
-    if timeinvariant_parameters["optimize_bess"]:
+    if fixed_parameters["optimize_bess"]:
         model.storage_set = pm.Set(initialize=grid_object.storage_units_df.index)
         model.optimized_storage_set = pm.Set(
-            initialize=timeinvariant_parameters["optimized_storage_units"]
+            initialize=fixed_parameters["optimized_storage_units"]
         )
         model.fixed_storage_set = model.storage_set - model.optimized_storage_set
         model.fix_relative_soc = kwargs.get("fix_relative_soc", 0.5)
 
     res_load = {
-        i: timeinvariant_parameters["res_load_inflexible_units"][model.timeindex[i]]
+        i: fixed_parameters["res_load_inflexible_units"][model.timeindex[i]]
         for i in model.time_set
     }
     model.residual_load = pm.Param(model.time_set, initialize=res_load, mutable=True)
@@ -335,7 +344,7 @@ def setup_model(
 
     # DEFINE VARIABLES
 
-    if timeinvariant_parameters["optimize_bess"]:
+    if fixed_parameters["optimize_bess"]:
         model.soc = pm.Var(
             model.optimized_storage_set,
             model.time_set,
@@ -353,11 +362,11 @@ def setup_model(
             ),
         )
 
-    if timeinvariant_parameters["optimize_emob"]:
+    if fixed_parameters["optimize_emob"]:
         print("Setup model: Adding EV model.")
         model = add_ev_model_bands(
             model=model,
-            timeinvariant_parameters=timeinvariant_parameters,
+            fixed_parameters=fixed_parameters,
             grid_object=grid_object,
             charging_efficiency=kwargs.get("charging_efficiency", 0.9),
             energy_level_start=kwargs.get("energy_level_start_ev", None),
@@ -366,11 +375,11 @@ def setup_model(
             charging_start=kwargs.get("charging_start_ev", None),
         )
 
-    if timeinvariant_parameters["optimize_hp"]:
+    if fixed_parameters["optimize_hp"]:
         print("Setup model: Adding HP model.")
         model = add_heat_pump_model(
             model=model,
-            timeinvariant_parameters=timeinvariant_parameters,
+            fixed_parameters=fixed_parameters,
             energy_level_start=kwargs.get("energy_level_start_hp", None),
             energy_level_end=kwargs.get("energy_level_end_hp", None),
             energy_level_beginning=kwargs.get("energy_level_beginning_hp", None),
@@ -381,7 +390,7 @@ def setup_model(
         print("Setup model: Adding grid model.")
         model = add_grid_model_lopf(
             model=model,
-            timeinvariant_parameters=timeinvariant_parameters,
+            fixed_parameters=fixed_parameters,
             timesteps=timesteps,
             edisgo_obj=edisgo_obj,
             grid_object=grid_object,
@@ -389,7 +398,7 @@ def setup_model(
             v_min=kwargs.get("v_min", 0.9),
             v_max=kwargs.get("v_max", 1.1),
             thermal_limits=kwargs.get("thermal_limit", 1.0),
-            v_slack=kwargs.get("v_slack", timeinvariant_parameters["v_nom"]),
+            v_slack=kwargs.get("v_slack", fixed_parameters["v_nom"]),
             load_factor_rings=kwargs.get("load_factor_rings", 1.0),
             # 0.5 Todo: change to edisgo.config["grid_expansion_load_factors"]
             #  ["mv_load_case_line"]?
@@ -397,7 +406,7 @@ def setup_model(
 
     # DEFINE CONSTRAINTS
 
-    if timeinvariant_parameters["optimize_bess"]:
+    if fixed_parameters["optimize_bess"]:
         model.BatteryCharging = pm.Constraint(
             model.storage_set, model.time_non_zero, rule=soc
         )
@@ -460,7 +469,7 @@ def setup_model(
 
 def add_grid_model_lopf(
     model,
-    timeinvariant_parameters,
+    fixed_parameters,
     timesteps,
     edisgo_obj,
     grid_object,
@@ -480,50 +489,44 @@ def add_grid_model_lopf(
 
     def init_active_nodal_power(model, bus, time):
         return (
-            timeinvariant_parameters["nodal_active_power"]
-            .T.loc[model.timeindex[time]]
-            .loc[bus]
+            fixed_parameters["nodal_active_power"].T.loc[model.timeindex[time]].loc[bus]
         )
 
     def init_reactive_nodal_power(model, bus, time):
         return (
-            timeinvariant_parameters["nodal_reactive_power"]
+            fixed_parameters["nodal_reactive_power"]
             .T.loc[model.timeindex[time]]
             .loc[bus]
         )
 
     def init_active_nodal_load(model, bus, time):
         return (
-            timeinvariant_parameters["nodal_active_load"]
-            .T.loc[model.timeindex[time]]
-            .loc[bus]
+            fixed_parameters["nodal_active_load"].T.loc[model.timeindex[time]].loc[bus]
         )
 
     def init_reactive_nodal_load(model, bus, time):
         return (
-            timeinvariant_parameters["nodal_reactive_load"]
+            fixed_parameters["nodal_reactive_load"]
             .T.loc[model.timeindex[time]]
             .loc[bus]
         )
 
     def init_active_nodal_feedin(model, bus, time):
         return (
-            timeinvariant_parameters["nodal_active_feedin"]
+            fixed_parameters["nodal_active_feedin"]
             .T.loc[model.timeindex[time]]
             .loc[bus]
         )
 
     def init_reactive_nodal_feedin(model, bus, time):
         return (
-            timeinvariant_parameters["nodal_reactive_feedin"]
+            fixed_parameters["nodal_reactive_feedin"]
             .T.loc[model.timeindex[time]]
             .loc[bus]
         )
 
     def init_power_factors(model, branch, time):
-        return timeinvariant_parameters["power_factors"].loc[
-            branch, model.timeindex[time]
-        ]
+        return fixed_parameters["power_factors"].loc[branch, model.timeindex[time]]
 
     # check if multiple voltage levels are present
     if len(grid_object.buses_df.v_nom.unique()) > 1:
@@ -536,11 +539,11 @@ def add_grid_model_lopf(
     model.slack_bus = pm.Set(initialize=slack)
     model.v_min = v_min
     model.v_max = v_max
-    model.v_nom = timeinvariant_parameters["v_nom"]
+    model.v_nom = fixed_parameters["v_nom"]
     model.thermal_limit = thermal_limits
-    model.pars = timeinvariant_parameters["pars"]
+    model.pars = fixed_parameters["pars"]
     model.grid = grid_object
-    model.downstream_nodes_matrix = timeinvariant_parameters["downstream_nodes_matrix"]
+    model.downstream_nodes_matrix = fixed_parameters["downstream_nodes_matrix"]
     model.nodal_active_power = pm.Param(
         model.bus_set, model.time_set, initialize=init_active_nodal_power, mutable=True
     )
@@ -565,14 +568,12 @@ def add_grid_model_lopf(
         initialize=init_reactive_nodal_feedin,
         mutable=True,
     )
-    model.tan_phi_load = timeinvariant_parameters["tan_phi_load"]
-    model.tan_phi_feedin = timeinvariant_parameters["tan_phi_feedin"]
+    model.tan_phi_load = fixed_parameters["tan_phi_load"]
+    model.tan_phi_feedin = fixed_parameters["tan_phi_feedin"]
     model.v_slack = v_slack
-    model.branches = timeinvariant_parameters["branches"]
+    model.branches = fixed_parameters["branches"]
     model.branch_set = pm.Set(initialize=model.branches.index)
-    model.underlying_branch_elements = timeinvariant_parameters[
-        "underlying_branch_elements"
-    ]
+    model.underlying_branch_elements = fixed_parameters["underlying_branch_elements"]
     model.power_factors = pm.Param(
         model.branch_set, model.time_set, initialize=init_power_factors, mutable=True
     )
@@ -662,7 +663,7 @@ def add_grid_model_lopf(
 
 def add_ev_model_bands(
     model,
-    timeinvariant_parameters,
+    fixed_parameters,
     grid_object,
     charging_efficiency,
     energy_level_start=None,
@@ -677,11 +678,11 @@ def add_ev_model_bands(
     """
     # Sets and parameters
     model.flexible_charging_points_set = pm.Set(
-        initialize=timeinvariant_parameters["optimized_charging_points"]
+        initialize=fixed_parameters["optimized_charging_points"]
     )
-    model.upper_ev_power = timeinvariant_parameters["ev_flex_bands"]["upper_power"]
-    model.upper_ev_energy = timeinvariant_parameters["ev_flex_bands"]["upper_energy"]
-    model.lower_ev_energy = timeinvariant_parameters["ev_flex_bands"]["lower_energy"]
+    model.upper_ev_power = fixed_parameters["ev_flex_bands"]["upper_power"]
+    model.upper_ev_energy = fixed_parameters["ev_flex_bands"]["upper_energy"]
+    model.lower_ev_energy = fixed_parameters["ev_flex_bands"]["lower_energy"]
     model.charging_efficiency = charging_efficiency
     model.lower_bound_ev = pm.Param(
         model.flexible_charging_points_set,
@@ -904,7 +905,7 @@ def get_attrs_rolling_horizon(comp_type, model):
 
 def add_heat_pump_model(
     model,
-    timeinvariant_parameters,
+    fixed_parameters,
     energy_level_start=None,
     energy_level_end=None,
     energy_level_beginning=None,
@@ -915,7 +916,7 @@ def add_heat_pump_model(
     Parameters
     ----------
     model :
-    timeinvariant_parameters :
+    fixed_parameters :
     energy_level_start :
     energy_level_end :
     energy_level_beginning :
@@ -941,12 +942,12 @@ def add_heat_pump_model(
 
     # add set of hps
     model.flexible_heat_pumps_set = pm.Set(
-        initialize=timeinvariant_parameters["optimized_heat_pumps"]
+        initialize=fixed_parameters["optimized_heat_pumps"]
     )
     # save fix parameters
-    model.heat_pumps = timeinvariant_parameters["heat_pumps"]
-    model.tes = timeinvariant_parameters["tes"]
-    model.cop = timeinvariant_parameters["cop"]
+    model.heat_pumps = fixed_parameters["heat_pumps"]
+    model.tes = fixed_parameters["tes"]
+    model.cop = fixed_parameters["cop"]
     model.cop_hp = pm.Param(
         model.flexible_heat_pumps_set,
         model.time_set,
@@ -954,7 +955,7 @@ def add_heat_pump_model(
         mutable=True,
         within=pm.Any,
     )
-    model.heat_demand = timeinvariant_parameters["heat_demand"]
+    model.heat_demand = fixed_parameters["heat_demand"]
     model.heat_demand_hp = pm.Param(
         model.flexible_heat_pumps_set,
         model.time_set,
@@ -995,7 +996,7 @@ def add_heat_pump_model(
 def update_model(
     model,
     timesteps,
-    parameters,
+    fixed_parameters,
     optimize_bess=True,
     optimize_emob=True,
     optimize_hp=True,
@@ -1009,7 +1010,7 @@ def update_model(
     ----------
     model
     timesteps
-    parameters
+    fixed_parameters
     optimize_bess
     optimize_emob
     kwargs
@@ -1030,31 +1031,31 @@ def update_model(
             indexer = timesteps[i]
         model.timeindex[i].set_value(timeindex)
         model.residual_load[i].set_value(
-            parameters["res_load_inflexible_units"][indexer]
+            fixed_parameters["res_load_inflexible_units"][indexer]
         )
         for bus in model.bus_set:
             model.nodal_active_power[bus, i].set_value(
-                parameters["nodal_active_power"].loc[bus, indexer]
+                fixed_parameters["nodal_active_power"].loc[bus, indexer]
             )
             model.nodal_reactive_power[bus, i].set_value(
-                parameters["nodal_reactive_power"].loc[bus, indexer]
+                fixed_parameters["nodal_reactive_power"].loc[bus, indexer]
             )
             model.nodal_active_load[bus, i].set_value(
-                parameters["nodal_active_load"].loc[bus, indexer]
+                fixed_parameters["nodal_active_load"].loc[bus, indexer]
             )
             model.nodal_reactive_load[bus, i].set_value(
-                parameters["nodal_reactive_load"].loc[bus, indexer]
+                fixed_parameters["nodal_reactive_load"].loc[bus, indexer]
             )
             model.nodal_active_feedin[bus, i].set_value(
-                parameters["nodal_active_feedin"].loc[bus, indexer]
+                fixed_parameters["nodal_active_feedin"].loc[bus, indexer]
             )
             model.nodal_reactive_feedin[bus, i].set_value(
-                parameters["nodal_reactive_feedin"].loc[bus, indexer]
+                fixed_parameters["nodal_reactive_feedin"].loc[bus, indexer]
             )
 
         for branch in model.branch_set:
             model.power_factors[branch, i].set_value(
-                parameters["power_factors"].loc[branch, indexer]
+                fixed_parameters["power_factors"].loc[branch, indexer]
             )
 
     if optimize_emob:
@@ -1420,7 +1421,7 @@ def fuse_parallel_branches(branches):
     return fused_branches
 
 
-def get_underlying_elements(parameters):
+def get_underlying_elements(fixed_parameters):
     """
 
     Parameters
@@ -1433,19 +1434,21 @@ def get_underlying_elements(parameters):
     """
 
     def _get_underlying_elements(
-        downstream_elements, power_factors, parameters, branch
+        downstream_elements, power_factors, fixed_parameters, branch
     ):
-        bus0 = parameters["branches"].loc[branch, "bus0"]
-        bus1 = parameters["branches"].loc[branch, "bus1"]
-        s_nom = parameters["branches"].loc[branch, parameters["pars"]["s_nom"]]
+        bus0 = fixed_parameters["branches"].loc[branch, "bus0"]
+        bus1 = fixed_parameters["branches"].loc[branch, "bus1"]
+        s_nom = fixed_parameters["branches"].loc[
+            branch, fixed_parameters["pars"]["s_nom"]
+        ]
         relevant_buses_bus0 = (
-            parameters["downstream_nodes_matrix"]
-            .loc[bus0][parameters["downstream_nodes_matrix"].loc[bus0] == 1]
+            fixed_parameters["downstream_nodes_matrix"]
+            .loc[bus0][fixed_parameters["downstream_nodes_matrix"].loc[bus0] == 1]
             .index.values
         )
         relevant_buses_bus1 = (
-            parameters["downstream_nodes_matrix"]
-            .loc[bus1][parameters["downstream_nodes_matrix"].loc[bus1] == 1]
+            fixed_parameters["downstream_nodes_matrix"]
+            .loc[bus1][fixed_parameters["downstream_nodes_matrix"].loc[bus1] == 1]
             .index.values
         )
         relevant_buses = list(
@@ -1453,7 +1456,7 @@ def get_underlying_elements(parameters):
         )
         downstream_elements.loc[branch, "buses"] = relevant_buses
         if (
-            parameters["nodal_reactive_power"]
+            fixed_parameters["nodal_reactive_power"]
             .loc[relevant_buses]
             .sum()
             .divide(s_nom)
@@ -1466,20 +1469,20 @@ def get_underlying_elements(parameters):
             )
         power_factors.loc[branch] = (
             1
-            - parameters["nodal_reactive_power"]
+            - fixed_parameters["nodal_reactive_power"]
             .loc[relevant_buses]
             .sum()
             .divide(s_nom)
             .apply(np.square)
         ).apply(np.sqrt)
-        if parameters["optimize_bess"]:
+        if fixed_parameters["optimize_bess"]:
             downstream_elements.loc[branch, "flexible_storage"] = (
-                parameters["grid_object"]
+                fixed_parameters["grid_object"]
                 .storage_units_df.loc[
-                    parameters["grid_object"].storage_units_df.index.isin(
-                        parameters["optimized_storage_units"]
+                    fixed_parameters["grid_object"].storage_units_df.index.isin(
+                        fixed_parameters["optimized_storage_units"]
                     )
-                    & parameters["grid_object"].storage_units_df.bus.isin(
+                    & fixed_parameters["grid_object"].storage_units_df.bus.isin(
                         relevant_buses
                     )
                 ]
@@ -1487,14 +1490,14 @@ def get_underlying_elements(parameters):
             )
         else:
             downstream_elements.loc[branch, "flexible_storage"] = []
-        if parameters["optimize_emob"]:
+        if fixed_parameters["optimize_emob"]:
             downstream_elements.loc[branch, "flexible_ev"] = (
-                parameters["grid_object"]
+                fixed_parameters["grid_object"]
                 .charging_points_df.loc[
-                    parameters["grid_object"].charging_points_df.index.isin(
-                        parameters["optimized_charging_points"]
+                    fixed_parameters["grid_object"].charging_points_df.index.isin(
+                        fixed_parameters["optimized_charging_points"]
                     )
-                    & parameters["grid_object"].charging_points_df.bus.isin(
+                    & fixed_parameters["grid_object"].charging_points_df.bus.isin(
                         relevant_buses
                     )
                 ]
@@ -1502,12 +1505,12 @@ def get_underlying_elements(parameters):
             )
         else:
             downstream_elements.loc[branch, "flexible_ev"] = []
-        if parameters["optimize_hp"]:
-            hps = parameters["grid_object"].loads_df.loc[
-                parameters["grid_object"].loads_df.type == "heat_pump"
+        if fixed_parameters["optimize_hp"]:
+            hps = fixed_parameters["grid_object"].loads_df.loc[
+                fixed_parameters["grid_object"].loads_df.type == "heat_pump"
             ]
             downstream_elements.loc[branch, "flexible_hp"] = hps.loc[
-                hps.index.isin(parameters["optimized_heat_pumps"])
+                hps.index.isin(fixed_parameters["optimized_heat_pumps"])
                 & hps.bus.isin(relevant_buses)
             ].index.values
         else:
@@ -1515,16 +1518,16 @@ def get_underlying_elements(parameters):
         return downstream_elements, power_factors
 
     downstream_elements = pd.DataFrame(
-        index=parameters["branches"].index,
+        index=fixed_parameters["branches"].index,
         columns=["buses", "flexible_storage", "flexible_ev", "flexible_hp"],
     )
     power_factors = pd.DataFrame(
-        index=parameters["branches"].index,
-        columns=parameters["nodal_active_power"].columns,
+        index=fixed_parameters["branches"].index,
+        columns=fixed_parameters["nodal_active_power"].columns,
     )
     for branch in downstream_elements.index:
         downstream_elements, power_factors = _get_underlying_elements(
-            downstream_elements, power_factors, parameters, branch
+            downstream_elements, power_factors, fixed_parameters, branch
         )
     if power_factors.isna().any().any():
         print(
