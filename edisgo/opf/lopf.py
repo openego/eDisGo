@@ -49,7 +49,7 @@ def prepare_time_invariant_parameters(
     edisgo,
     downstream_nodes_matrix,
     pu=True,
-    optimize_storage=True,
+    optimize_bess=True,
     optimize_ev_charging=True,
     optimize_hp=True,
     **kwargs,
@@ -71,12 +71,12 @@ def prepare_time_invariant_parameters(
     ) = setup_grid_object(edisgo)
     parameters["downstream_nodes_matrix"] = downstream_nodes_matrix
     parameters["optimize_ev_charging"] = optimize_ev_charging
-    parameters["optimize_storage"] = optimize_storage
+    parameters["optimize_bess"] = optimize_bess
     parameters["optimize_hp"] = optimize_hp
 
     flexible_loads = kwargs.get("flexible_loads", False)
 
-    if optimize_storage:
+    if optimize_bess:
         if isinstance(flexible_loads, pd.DataFrame):
             parameters["flexible_storage_units"] = flexible_loads.loc[
                 flexible_loads["type"] == "storage"
@@ -239,7 +239,7 @@ def setup_model(
 
     :param timeinvariant_parameters: parameters that stay the same for every iteration
     :param timesteps:
-    :param optimize_storage:
+    :param optimize_bess:
     :param optimize_ev_charging:
     :param objective: choose the objective that should be minimized, so far
             'curtailment' and 'peak_load' are implemented
@@ -291,7 +291,7 @@ def setup_model(
     if not any(char.isdigit() for char in model.time_increment):
         model.time_increment = "1" + model.time_increment
 
-    if timeinvariant_parameters["optimize_storage"]:
+    if timeinvariant_parameters["optimize_bess"]:
         model.storage_set = pm.Set(initialize=grid_object.storage_units_df.index)
         model.optimized_storage_set = pm.Set(
             initialize=timeinvariant_parameters["optimized_storage_units"]
@@ -315,7 +315,7 @@ def setup_model(
 
     # DEFINE VARIABLES
 
-    if timeinvariant_parameters["optimize_storage"]:
+    if timeinvariant_parameters["optimize_bess"]:
         model.soc = pm.Var(
             model.optimized_storage_set,
             model.time_set,
@@ -377,7 +377,7 @@ def setup_model(
 
     # DEFINE CONSTRAINTS
 
-    if timeinvariant_parameters["optimize_storage"]:
+    if timeinvariant_parameters["optimize_bess"]:
         model.BatteryCharging = pm.Constraint(
             model.storage_set, model.time_non_zero, rule=soc
         )
@@ -945,7 +945,7 @@ def update_model(
     model,
     timesteps,
     parameters,
-    optimize_storage=True,
+    optimize_bess=True,
     optimize_ev=True,
     optimize_hp=True,
     **kwargs,
@@ -959,7 +959,7 @@ def update_model(
     model
     timesteps
     parameters
-    optimize_storage
+    optimize_bess
     optimize_ev
     kwargs
 
@@ -1040,7 +1040,7 @@ def update_model(
                 model.cop_hp[hp, t].set_value(set_cop_hp(model, hp, indexer))
         model = update_rolling_horizon("hp", kwargs, model)
 
-    if optimize_storage:
+    if optimize_bess:
         raise NotImplementedError
     print("It took {} seconds to update the model.".format(perf_counter() - t1))
     return model
@@ -1383,7 +1383,7 @@ def get_underlying_elements(parameters):
             .divide(s_nom)
             .apply(np.square)
         ).apply(np.sqrt)
-        if parameters["optimize_storage"]:
+        if parameters["optimize_bess"]:
             downstream_elements.loc[branch, "flexible_storage"] = (
                 parameters["grid_object"]
                 .storage_units_df.loc[
