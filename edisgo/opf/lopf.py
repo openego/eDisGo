@@ -50,7 +50,7 @@ def prepare_time_invariant_parameters(
     downstream_nodes_matrix,
     pu=True,
     optimize_bess=True,
-    optimize_ev_charging=True,
+    optimize_emob=True,
     optimize_hp=True,
     **kwargs,
 ):
@@ -70,7 +70,7 @@ def prepare_time_invariant_parameters(
         parameters["slack"],
     ) = setup_grid_object(edisgo)
     parameters["downstream_nodes_matrix"] = downstream_nodes_matrix
-    parameters["optimize_ev_charging"] = optimize_ev_charging
+    parameters["optimize_emob"] = optimize_emob
     parameters["optimize_bess"] = optimize_bess
     parameters["optimize_hp"] = optimize_hp
 
@@ -89,7 +89,7 @@ def prepare_time_invariant_parameters(
         parameters["inflexible_storage_units"] = parameters[
             "grid_object"
         ].storage_units_df.index.drop(parameters["optimized_storage_units"])
-    if optimize_ev_charging:
+    if optimize_emob:
         # parameters["ev_flex_bands"] = kwargs.get("ev_flex_bands")
         parameters["ev_flex_bands"] = edisgo.electromobility.flexibility_bands
         parameters["optimized_charging_points"] = parameters["ev_flex_bands"][
@@ -240,7 +240,7 @@ def setup_model(
     :param timeinvariant_parameters: parameters that stay the same for every iteration
     :param timesteps:
     :param optimize_bess:
-    :param optimize_ev_charging:
+    :param optimize_emob:
     :param objective: choose the objective that should be minimized, so far
             'curtailment' and 'peak_load' are implemented
     :param kwargs:
@@ -333,7 +333,7 @@ def setup_model(
             ),
         )
 
-    if timeinvariant_parameters["optimize_ev_charging"]:
+    if timeinvariant_parameters["optimize_emob"]:
         print("Setup model: Adding EV model.")
         model = add_ev_model_bands(
             model=model,
@@ -946,7 +946,7 @@ def update_model(
     timesteps,
     parameters,
     optimize_bess=True,
-    optimize_ev=True,
+    optimize_emob=True,
     optimize_hp=True,
     **kwargs,
 ):
@@ -960,7 +960,7 @@ def update_model(
     timesteps
     parameters
     optimize_bess
-    optimize_ev
+    optimize_emob
     kwargs
 
     Returns
@@ -1006,7 +1006,7 @@ def update_model(
                 parameters["power_factors"].loc[branch, indexer]
             )
 
-    if optimize_ev:
+    if optimize_emob:
         for t in model.time_set:
             overlap = t - len(timesteps) + 1
             if overlap > 0:
@@ -1398,7 +1398,7 @@ def get_underlying_elements(parameters):
             )
         else:
             downstream_elements.loc[branch, "flexible_storage"] = []
-        if parameters["optimize_ev_charging"]:
+        if parameters["optimize_emob"]:
             downstream_elements.loc[branch, "flexible_ev"] = (
                 parameters["grid_object"]
                 .charging_points_df.loc[
