@@ -66,7 +66,7 @@ def prepare_time_invariant_parameters(
         optimize_bess : bool
         optimize_emob : bool
         optimize_hp : bool
-        flexible_loads : bool
+        flexible_loads : pd.DataFrame
             DataFrame containing ids of all flexible loads
 
     Returns
@@ -90,12 +90,14 @@ def prepare_time_invariant_parameters(
     parameters["optimize_bess"] = kwargs.get("optimize_bess", False)
     parameters["optimize_hp"] = kwargs.get("optimize_hp", False)
     parameters["per_unit"] = kwargs.get("per_unit", False)
-    flexible_loads = kwargs.get("flexible_loads", False)
+    parameters["flexible_loads"] = kwargs.get("flexible_loads", pd.DataFrame())
 
     if parameters["optimize_bess"]:
-        if isinstance(flexible_loads, pd.DataFrame):
-            parameters["flexible_storage_units"] = flexible_loads.loc[
-                flexible_loads["type"] == "storage"
+        if not parameters["flexible_loads"].empty:
+            parameters["flexible_storage_units"] = parameters[
+                "flexible_loads"].loc[
+                parameters[
+                    "flexible_loads"]["type"] == "storage"
             ].index
         else:
             parameters["optimized_storage_units"] = kwargs.get(
@@ -117,10 +119,10 @@ def prepare_time_invariant_parameters(
     else:
         parameters["optimized_charging_points"] = []
     if parameters["optimize_hp"]:
-        if isinstance(flexible_loads, pd.DataFrame):
-            parameters["optimized_heat_pumps"] = flexible_loads.loc[
-                flexible_loads["type"] == "heat_pump"
-            ].index
+        if not parameters["flexible_loads"].empty:
+            parameters["optimized_heat_pumps"] = parameters[
+                "flexible_loads"].loc[parameters[
+                "flexible_loads"]["type"] == "heat_pump"].index
         else:
             parameters["optimized_heat_pumps"] = kwargs.get(
                 "optimized_heat_pumps", parameters["heat_pumps"].index
@@ -136,9 +138,10 @@ def prepare_time_invariant_parameters(
         parameters["optimized_heat_pumps"] = []
     # save non flexible loads
     # Todo: add other flexible loads once relevant
-    if isinstance(flexible_loads, pd.DataFrame):
+    if not parameters["flexible_loads"].empty:
         parameters["inflexible_loads"] = parameters["grid_object"].loads_df.index.drop(
-            flexible_loads.index
+            parameters[
+                "flexible_loads"].index
         )
     else:
         parameters["inflexible_loads"] = (
