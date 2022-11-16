@@ -48,17 +48,28 @@ def import_flexibility_bands(dir, use_cases):
 def prepare_time_invariant_parameters(
     edisgo,
     downstream_nodes_matrix,
-    pu=True,
-    optimize_bess=True,
-    optimize_emob=True,
-    optimize_hp=True,
     **kwargs,
 ):
     """
     Prepare parameters that do not change within the iterations of the rolling horizon
-    approach.
-    These include topological parameters and timeseries of the inflexible units which
-    are not influenced by the optimisation.
+    approach. These include topological parameters and timeseries of the
+    inflexible units which are not influenced by the optimisation.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+        EDisGo object
+    downstream_nodes_matrix :
+    kwargs :
+        per_unit
+        optimize_bess
+        optimize_emob
+        optimize_hp
+        flexible_loads
+
+
+    Returns
+    -------
 
     """
     t1 = perf_counter()
@@ -70,13 +81,13 @@ def prepare_time_invariant_parameters(
         parameters["slack"],
     ) = setup_grid_object(edisgo)
     parameters["downstream_nodes_matrix"] = downstream_nodes_matrix
-    parameters["optimize_emob"] = optimize_emob
-    parameters["optimize_bess"] = optimize_bess
-    parameters["optimize_hp"] = optimize_hp
-
+    parameters["optimize_emob"] = kwargs.get("optimize_emob", False)
+    parameters["optimize_bess"] = kwargs.get("optimize_bess", False)
+    parameters["optimize_hp"] = kwargs.get("optimize_hp", False)
+    parameters["per_unit"] = kwargs.get("per_unit", False)
     flexible_loads = kwargs.get("flexible_loads", False)
 
-    if optimize_bess:
+    if parameters["optimize_bess"]:
         if isinstance(flexible_loads, pd.DataFrame):
             parameters["flexible_storage_units"] = flexible_loads.loc[
                 flexible_loads["type"] == "storage"
@@ -89,7 +100,7 @@ def prepare_time_invariant_parameters(
         parameters["inflexible_storage_units"] = parameters[
             "grid_object"
         ].storage_units_df.index.drop(parameters["optimized_storage_units"])
-    if optimize_emob:
+    if parameters["optimize_emob"]:
         # parameters["ev_flex_bands"] = kwargs.get("ev_flex_bands")
         parameters["ev_flex_bands"] = edisgo.electromobility.flexibility_bands
         parameters["optimized_charging_points"] = parameters["ev_flex_bands"][
@@ -100,7 +111,7 @@ def prepare_time_invariant_parameters(
         ].charging_points_df.index.drop(parameters["optimized_charging_points"])
     else:
         parameters["optimized_charging_points"] = []
-    if optimize_hp:
+    if parameters["optimize_hp"]:
         if isinstance(flexible_loads, pd.DataFrame):
             parameters["optimized_heat_pumps"] = flexible_loads.loc[
                 flexible_loads["type"] == "heat_pump"
@@ -175,7 +186,7 @@ def prepare_time_invariant_parameters(
     ).fillna(0)
     # get underlying branch elements and power factors
     # handle pu conversion
-    if pu:
+    if parameters["per_unit"]:
         print(
             "Optimisation in pu-system. Make sure the inserted energy "
             "bands are also converted to the same pu-system."
