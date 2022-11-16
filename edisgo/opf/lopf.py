@@ -59,17 +59,21 @@ def prepare_time_invariant_parameters(
     ----------
     edisgo_obj : :class:`~.EDisGo`
         EDisGo object
-    downstream_nodes_matrix :
-    kwargs :
-        per_unit
-        optimize_bess
-        optimize_emob
-        optimize_hp
-        flexible_loads
-
+    downstream_nodes_matrix : pd.DataFrame
+        Matrix describing the mutual dependencies of the nodes
+    kwargs : (default: False)
+        per_unit : bool
+        optimize_bess : bool
+        optimize_emob : bool
+        optimize_hp : bool
+        flexible_loads : bool
+            DataFrame containing ids of all flexible loads
 
     Returns
     -------
+    dict
+        Containing all necessary information for the optimization and
+        especially the time invariant parameters
 
     """
     t1 = perf_counter()
@@ -730,6 +734,21 @@ def add_rolling_horizon(
     energy_level_start,
     model,
 ):
+    """
+
+    Parameters
+    ----------
+    comp_type :
+    charging_starts :
+    energy_level_beginning :
+    energy_level_end :
+    energy_level_start :
+    model :
+
+    Returns
+    -------
+
+    """
     charging_attrs, energy_attrs, flex_set = get_attrs_rolling_horizon(comp_type, model)
     # set initial energy level
     for energy_attr in energy_attrs[comp_type.lower()]:
@@ -888,6 +907,22 @@ def add_heat_pump_model(
     energy_level_beginning=None,
     charging_starts={"hp": None, "tes": None},
 ):
+    """
+
+    Parameters
+    ----------
+    model :
+    timeinvariant_parameters :
+    energy_level_start :
+    energy_level_end :
+    energy_level_beginning :
+    charging_starts :
+
+    Returns
+    -------
+
+    """
+
     def energy_balance_hp_tes(model, hp, time):
         return (
             model.charging_hp[hp, time] * model.cop_hp[hp, time]
@@ -1060,6 +1095,18 @@ def update_model(
 
 
 def update_rolling_horizon(comp_type, kwargs, model):
+    """
+
+    Parameters
+    ----------
+    comp_type :
+    kwargs :
+    model :
+
+    Returns
+    -------
+
+    """
     charging_attrs, energy_attrs, flex_set = get_attrs_rolling_horizon(comp_type, model)
     for energy_attr in energy_attrs[comp_type.lower()]:
         # set initial energy level
@@ -1118,13 +1165,19 @@ def optimize(model, solver, load_solutions=True, mode=None):
     """
     Method to run the optimization and extract the results.
 
-    :param model: pyomo.environ.ConcreteModel
-    :param solver: str
-                    Solver type, e.g. 'glpk', 'gurobi', 'ipopt'
-    :param save_dir: str
-                    directory to which results are saved, default None will
-                    no saving of the results
-    :return:
+    Parameters
+    ----------
+    model : pyomo.environ.ConcreteModel
+    solver : str
+        Solver type, e.g. 'glpk', 'gurobi', 'ipopt'
+    load_solutions :
+    mode : str
+        directory to which results are saved, default None will no saving of
+        the results
+
+    Returns
+    -------
+
     """
     print("Starting optimisation")
     t1 = perf_counter()
@@ -1292,6 +1345,14 @@ def optimize(model, solver, load_solutions=True, mode=None):
 def setup_grid_object(object):
     """
     Set up the grid and edisgo object.
+
+    Parameters
+    ----------
+    object :
+
+    Returns
+    -------
+
     """
     if hasattr(object, "topology"):
         grid_object = deepcopy(object.topology)
@@ -1308,7 +1369,8 @@ def setup_grid_object(object):
 
 def concat_parallel_branch_elements(grid_object):
     """
-    Method to merge parallel lines and transformers into one element, respectively.
+    Method to merge parallel lines and transformers into one element,
+    respectively.
 
     Parameters
     ----------
@@ -1356,6 +1418,17 @@ def fuse_parallel_branches(branches):
 
 
 def get_underlying_elements(parameters):
+    """
+
+    Parameters
+    ----------
+    parameters :
+
+    Returns
+    -------
+
+    """
+
     def _get_underlying_elements(
         downstream_elements, power_factors, parameters, branch
     ):
@@ -1523,10 +1596,16 @@ def set_heat_demand(model, hp, time):
 def active_power(model, branch, time):
     """
     Constraint for active power at node
-    :param model:
-    :param bus:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    branch :
+    time :
+
+    Returns
+    -------
+
     """
     relevant_buses = model.underlying_branch_elements.loc[branch, "buses"]
     relevant_storage_units = model.underlying_branch_elements.loc[
@@ -1565,6 +1644,16 @@ def active_power(model, branch, time):
 def upper_active_power(model, branch, time):
     """
     Upper bound of active branch power
+
+    Parameters
+    ----------
+    model :
+    branch :
+    time :
+
+    Returns
+    -------
+
     """
     return (
         model.p_cum[branch, time]
@@ -1578,6 +1667,16 @@ def upper_active_power(model, branch, time):
 def lower_active_power(model, branch, time):
     """
     Lower bound of active branch power
+
+    Parameters
+    ----------
+    model :
+    branch :
+    time :
+
+    Returns
+    -------
+
     """
     return (
         model.p_cum[branch, time]
@@ -1591,10 +1690,16 @@ def lower_active_power(model, branch, time):
 def slack_voltage(model, bus, time):
     """
     Constraint that fixes voltage to nominal voltage
-    :param model:
-    :param bus:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    bus :
+    time :
+
+    Returns
+    -------
+
     """
     timeindex = model.timeindex[time]
     if isinstance(model.v_slack, pd.Series):
@@ -1606,10 +1711,16 @@ def slack_voltage(model, bus, time):
 def voltage_drop(model, branch, time):
     """
     Constraint that describes the voltage drop over one line
-    :param model:
-    :param branch:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    branch :
+    time :
+
+    Returns
+    -------
+
     """
     bus0 = model.branches.loc[branch, "bus0"]
     bus1 = model.branches.loc[branch, "bus1"]
@@ -1635,10 +1746,16 @@ def get_q_line(model, branch, time, get_results=False):
     """
     Method to extract reactive power flow on line.
 
-    :param model:
-    :param branch:
-    :param time:
-    :return:
+    Parameters
+    ----------
+    model :
+    branch :
+    time :
+    get_results :
+
+    Returns
+    -------
+
     """
     timeindex = model.timeindex[time]
     relevant_buses = model.underlying_branch_elements.loc[branch, "buses"]
@@ -1681,6 +1798,16 @@ def upper_voltage(model, bus, time):
 def lower_voltage(model, bus, time):
     """
     Lower bound on voltage at buses
+
+    Parameters
+    ----------
+    model :
+    bus :
+    time :
+
+    Returns
+    -------
+
     """
     return (
         model.v[bus, time]
@@ -1691,10 +1818,16 @@ def lower_voltage(model, bus, time):
 def soc(model, storage, time):
     """
     Constraint for battery charging #Todo: Check if time-1 or time for charging
-    :param model:
-    :param storage:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    storage :
+    time :
+
+    Returns
+    -------
+
     """
     return model.soc[storage, time] == model.soc[
         storage, time - 1
@@ -1709,10 +1842,16 @@ def fix_soc(model, bus, time):
     """
     Constraint with which state of charge at beginning and end of charging
     period is fixed at certain value
-    :param model:
-    :param bus:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    bus :
+    time :
+
+    Returns
+    -------
+
     """
     return (
         model.soc[bus, time]
@@ -1726,10 +1865,15 @@ def charging_ev(model, charging_point, time):
     Constraint for charging of EV that has to ly between the lower and upper
     energy band. #Todo: Check if time-1 or time for charging
 
-    :param model:
-    :param charging_point:
-    :param time:
-    :return:
+    Parameters
+    ----------
+    model :
+    charging_point :
+    time :
+
+    Returns
+    -------
+
     """
     return model.energy_level_ev[charging_point, time] == model.energy_level_ev[
         charging_point, time - 1
@@ -1793,10 +1937,17 @@ def upper_bound_curtailment_hp(model, bus, time):
 def initial_energy_level(model, comp_type, comp, time):
     """
     Constraint for initial value of energy
-    :param model:
-    :param charging_point:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    comp_type :
+    comp :
+    time :
+
+    Returns
+    -------
+
     """
     return (
         getattr(model, f"energy_level_{comp_type.lower()}")[comp, time]
@@ -1809,10 +1960,16 @@ def initial_energy_level(model, comp_type, comp, time):
 def initial_energy_level_ev(model, charging_point, time):
     """
     Constraint for initial value of energy
-    :param model:
-    :param charging_point:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    charging_point :
+    time :
+
+    Returns
+    -------
+
     """
     return initial_energy_level(model, "ev", charging_point, time)
 
@@ -1820,6 +1977,16 @@ def initial_energy_level_ev(model, charging_point, time):
 def initial_energy_level_tes(model, heat_pump, time):
     """
     Constraint for initial value of energy
+
+    Parameters
+    ----------
+    model :
+    heat_pump :
+    time :
+
+    Returns
+    -------
+
     """
     return initial_energy_level(model, "tes", heat_pump, time)
 
@@ -1827,10 +1994,16 @@ def initial_energy_level_tes(model, heat_pump, time):
 def fixed_energy_level_ev(model, charging_point, time):
     """
     Constraint for initial value of energy
-    :param model:
-    :param charging_point:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    charging_point :
+    time :
+
+    Returns
+    -------
+
     """
     initial_lower_band = model.lower_bound_ev[charging_point, time]
     initial_upper_band = model.upper_bound_ev[charging_point, time]
@@ -1841,6 +2014,18 @@ def fixed_energy_level_ev(model, charging_point, time):
 
 
 def fixed_energy_level_tes(model, hp, time):
+    """
+
+    Parameters
+    ----------
+    model :
+    hp :
+    time :
+
+    Returns
+    -------
+
+    """
     return (
         model.energy_level_tes[hp, time]
         == model.tes.loc[hp, "capacity"] * model.tes.loc[hp, "state_of_charge_initial"]
@@ -1850,10 +2035,17 @@ def fixed_energy_level_tes(model, hp, time):
 def final_energy_level(model, comp_type, comp, time):
     """
     Constraint for final value of energy in last iteration
-    :param model:
-    :param comp:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    comp_type :
+    comp :
+    time :
+
+    Returns
+    -------
+
     """
     return (
         getattr(model, f"energy_level_{comp_type.lower()}")[comp, time]
@@ -1865,6 +2057,16 @@ def final_energy_level(model, comp_type, comp, time):
 def final_energy_level_ev(model, charging_point, time):
     """
     Constraint for final value of energy in last iteration
+
+    Parameters
+    ----------
+    model :
+    charging_point :
+    time :
+
+    Returns
+    -------
+
     """
     return final_energy_level(model, "ev", charging_point, time)
 
@@ -1872,6 +2074,16 @@ def final_energy_level_ev(model, charging_point, time):
 def final_energy_level_tes(model, heat_pump, time):
     """
     Constraint for final value of energy in last iteration
+
+    Parameters
+    ----------
+    model :
+    heat_pump :
+    time :
+
+    Returns
+    -------
+
     """
     return final_energy_level(model, "tes", heat_pump, time)
 
@@ -1879,10 +2091,17 @@ def final_energy_level_tes(model, heat_pump, time):
 def final_charging_power(model, comp_type, comp, time):
     """
     Constraint for final value of charging power, setting it to 0
-    :param model:
-    :param comp:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    comp_type :
+    comp :
+    time :
+
+    Returns
+    -------
+
     """
     return getattr(model, f"charging_{comp_type.lower()}")[comp, time] == 0
 
@@ -1890,6 +2109,16 @@ def final_charging_power(model, comp_type, comp, time):
 def final_charging_power_ev(model, charging_point, time):
     """
     Constraint for final value of charging power, setting it to 0
+
+    Parameters
+    ----------
+    model :
+    charging_point :
+    time :
+
+    Returns
+    -------
+
     """
     return final_charging_power(model, "ev", charging_point, time)
 
@@ -1897,6 +2126,16 @@ def final_charging_power_ev(model, charging_point, time):
 def final_charging_power_hp(model, heat_pump, time):
     """
     Constraint for final value of charging power, setting it to 0
+
+    Parameters
+    ----------
+    model :
+    heat_pump :
+    time :
+
+    Returns
+    -------
+
     """
     return final_charging_power(model, "hp", heat_pump, time)
 
@@ -1904,6 +2143,16 @@ def final_charging_power_hp(model, heat_pump, time):
 def final_charging_power_tes(model, heat_pump, time):
     """
     Constraint for final value of charging power, setting it to 0
+
+    Parameters
+    ----------
+    model :
+    heat_pump :
+    time :
+
+    Returns
+    -------
+
     """
     return final_charging_power(model, "tes", heat_pump, time)
 
@@ -1911,10 +2160,17 @@ def final_charging_power_tes(model, heat_pump, time):
 def initial_charging_power(model, comp_type, comp, time):
     """
     Constraint for initial value of charging power
-    :param model:
-    :param comp:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    comp_type :
+    comp :
+    time :
+
+    Returns
+    -------
+
     """
     return (
         getattr(model, f"charging_{comp_type.lower()}")[comp, time]
@@ -1927,6 +2183,16 @@ def initial_charging_power(model, comp_type, comp, time):
 def initial_charging_power_ev(model, charging_point, time):
     """
     Constraint for initial value of charging power
+
+    Parameters
+    ----------
+    model :
+    charging_point :
+    time :
+
+    Returns
+    -------
+
     """
     return initial_charging_power(model, "ev", charging_point, time)
 
@@ -1934,6 +2200,16 @@ def initial_charging_power_ev(model, charging_point, time):
 def initial_charging_power_hp(model, heat_pump, time):
     """
     Constraint for initial value of charging power
+
+    Parameters
+    ----------
+    model :
+    heat_pump :
+    time :
+
+    Returns
+    -------
+
     """
     return initial_charging_power(model, "hp", heat_pump, time)
 
@@ -1941,13 +2217,32 @@ def initial_charging_power_hp(model, heat_pump, time):
 def initial_charging_power_tes(model, heat_pump, time):
     """
     Constraint for initial value of charging power
+
+    Parameters
+    ----------
+    model :
+    heat_pump :
+    time :
+
+    Returns
+    -------
+
     """
     return initial_charging_power(model, "tes", heat_pump, time)
 
 
 def aggregated_power(model, time):
     """
-    Todo: add docstring
+    Constraint aggregating the power of bess and emob charging?
+
+    Parameters
+    ----------
+    model :
+    time :
+
+    Returns
+    -------
+
     """
     if hasattr(model, "optimized_storage_set"):
         relevant_storage_units = model.optimized_storage_set
@@ -1965,9 +2260,15 @@ def aggregated_power(model, time):
 def load_factor_min(model, time):
     """
     Constraint that describes the minimum load factor.
-    :param model:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    time :
+
+    Returns
+    -------
+
     """
     if hasattr(model, "optimized_storage_set"):
         relevant_storage_units = model.optimized_storage_set
@@ -1988,9 +2289,15 @@ def load_factor_min(model, time):
 def load_factor_max(model, time):
     """
     Constraint that describes the maximum load factor.
-    :param model:
-    :param time:
-    :return:
+
+    Parameters
+    ----------
+    model :
+    time :
+
+    Returns
+    -------
+
     """
     if hasattr(model, "optimized_storage_set"):
         relevant_storage_units = model.optimized_storage_set
@@ -2011,8 +2318,14 @@ def load_factor_max(model, time):
 def minimize_max_residual_load(model):
     """
     Objective minimizing extreme load factors
-    :param model:
-    :return:
+
+    Parameters
+    ----------
+    model :
+
+    Returns
+    -------
+
     """
     slack_charging, slack_energy = extract_slack_charging(model)
     ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
@@ -2032,9 +2345,17 @@ def minimize_max_residual_load(model):
 
 def minimize_curtailment(model):
     """
-    Objective minimizing required curtailment. CAREFUL: Solution not unambiguous.
-    :param model:
-    :return:
+    Objective minimizing required curtailment.
+
+    !!! CAREFUL: Solution ambiguous.
+
+    Parameters
+    ----------
+    model :
+
+    Returns
+    -------
+
     """
     slack_charging, slack_energy = extract_slack_charging(model)
     ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
@@ -2057,8 +2378,14 @@ def minimize_energy_level(model):
     """
     Objective minimizing energy level of grid while also minimizing necessary
     curtailment
-    :param model:
-    :return:
+
+    Parameters
+    ----------
+    model :
+
+    Returns
+    -------
+
     """
     slack_charging, slack_energy = extract_slack_charging(model)
     ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
@@ -2084,8 +2411,14 @@ def maximize_energy_level(model):
     """
     Objective maximizing energy level of grid while also minimizing necessary
     curtailment
-    :param model:
-    :return:
+
+    Parameters
+    ----------
+    model :
+
+    Returns
+    -------
+
     """
     slack_charging, slack_energy = extract_slack_charging(model)
     ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
@@ -2108,6 +2441,17 @@ def maximize_energy_level(model):
 
 
 def grid_residual_load(model, time):
+    """
+
+    Parameters
+    ----------
+    model :
+    time :
+
+    Returns
+    -------
+
+    """
     if hasattr(model, "optimized_storage_set"):
         relevant_storage_units = model.optimized_storage_set
     else:
@@ -2132,8 +2476,14 @@ def grid_residual_load(model, time):
 def minimize_residual_load(model):
     """
     Objective minimizing curtailment and squared residual load
-    :param model:
-    :return:
+
+    Parameters
+    ----------
+    model :
+
+    Returns
+    -------
+
     """
     slack_charging, slack_energy = extract_slack_charging(model)
     ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
@@ -2160,8 +2510,14 @@ def minimize_residual_load(model):
 def minimize_loading(model):
     """
     Objective minimizing curtailment and squared term of component loading
-    :param model:
-    :return:
+
+    Parameters
+    ----------
+    model :
+
+    Returns
+    -------
+
     """
     slack_charging, slack_energy = extract_slack_charging(model)
     ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
@@ -2198,6 +2554,16 @@ def minimize_loading(model):
 
 
 def extract_curtailment_of_flexible_components(model):
+    """
+
+    Parameters
+    ----------
+    model :
+
+    Returns
+    -------
+
+    """
     if hasattr(model, "flexible_charging_points_set"):
         ev_curtailment = sum(
             model.curtailment_ev[bus, time]
@@ -2218,6 +2584,16 @@ def extract_curtailment_of_flexible_components(model):
 
 
 def extract_slack_charging(model):
+    """
+
+    Parameters
+    ----------
+    model :
+
+    Returns
+    -------
+
+    """
     if hasattr(model, "slack_initial_charging_pos"):
         slack_charging = sum(
             model.slack_initial_charging_pos_ev[cp]
@@ -2238,6 +2614,19 @@ def extract_slack_charging(model):
 
 
 def combine_results_for_grid(feeders, grid_id, res_dir, res_name):
+    """
+
+    Parameters
+    ----------
+    feeders :
+    grid_id :
+    res_dir :
+    res_name :
+
+    Returns
+    -------
+
+    """
     res_grid = pd.DataFrame()
     for feeder_id in feeders:
         res_feeder = pd.DataFrame()
