@@ -46,7 +46,7 @@ def import_flexibility_bands(dir, use_cases):
 
 
 def prepare_time_invariant_parameters(
-    edisgo,
+    edisgo_obj,
     downstream_nodes_matrix,
     **kwargs,
 ):
@@ -79,7 +79,8 @@ def prepare_time_invariant_parameters(
         parameters["edisgo_object"],
         parameters["grid_object"],
         parameters["slack"],
-    ) = setup_grid_object(edisgo)
+    ) = setup_grid_object(edisgo_obj)
+
     parameters["downstream_nodes_matrix"] = downstream_nodes_matrix
     parameters["optimize_emob"] = kwargs.get("optimize_emob", False)
     parameters["optimize_bess"] = kwargs.get("optimize_bess", False)
@@ -102,7 +103,7 @@ def prepare_time_invariant_parameters(
         ].storage_units_df.index.drop(parameters["optimized_storage_units"])
     if parameters["optimize_emob"]:
         # parameters["ev_flex_bands"] = kwargs.get("ev_flex_bands")
-        parameters["ev_flex_bands"] = edisgo.electromobility.flexibility_bands
+        parameters["ev_flex_bands"] = edisgo_obj.electromobility.flexibility_bands
         parameters["optimized_charging_points"] = parameters["ev_flex_bands"][
             "upper_power"
         ].columns
@@ -124,9 +125,9 @@ def prepare_time_invariant_parameters(
             parameters["grid_object"].loads_df.type == "heat_pump"
         ]
         # Todo: change to heat_pumps_df.index once exists
-        parameters["cop"] = edisgo.heat_pump.cop_df
-        parameters["heat_demand"] = edisgo.heat_pump.heat_demand_df
-        parameters["tes"] = edisgo.heat_pump.thermal_storage_units_df
+        parameters["cop"] = edisgo_obj.heat_pump.cop_df
+        parameters["heat_demand"] = edisgo_obj.heat_pump.heat_demand_df
+        parameters["tes"] = edisgo_obj.heat_pump.thermal_storage_units_df
     else:
         parameters["optimized_heat_pumps"] = []
     # save non flexible loads
@@ -273,7 +274,7 @@ def setup_model(
     ]:
         raise ValueError("The objective you inserted is not implemented yet.")
     # Todo: unnecessary?
-    edisgo_object, grid_object, slack = (
+    edisgo_obj, grid_object, slack = (
         timeinvariant_parameters["edisgo_object"],
         timeinvariant_parameters["grid_object"],
         timeinvariant_parameters["slack"],
@@ -375,7 +376,7 @@ def setup_model(
             model=model,
             timeinvariant_parameters=timeinvariant_parameters,
             timesteps=timesteps,
-            edisgo_object=edisgo_object,
+            edisgo_obj=edisgo_obj,
             grid_object=grid_object,
             slack=slack,
             v_min=kwargs.get("v_min", 0.9),
@@ -454,7 +455,7 @@ def add_grid_model_lopf(
     model,
     timeinvariant_parameters,
     timesteps,
-    edisgo_object,
+    edisgo_obj,
     grid_object,
     slack,
     v_min,
@@ -571,7 +572,7 @@ def add_grid_model_lopf(
     # add n-1 security # Todo: make optional?
     # adapt i_lines_allowed for radial feeders
     buses_in_cycles = list(
-        set(itertools.chain.from_iterable(edisgo_object.topology.rings))
+        set(itertools.chain.from_iterable(edisgo_obj.topology.rings))
     )
 
     # Find lines in cycles
@@ -585,7 +586,7 @@ def add_grid_model_lopf(
         index=model.time_set, columns=model.branch_set
     )
     model.branches_load_factors.loc[:, :] = 1
-    tmp_residual_load = edisgo_object.timeseries.residual_load.loc[timesteps]
+    tmp_residual_load = edisgo_obj.timeseries.residual_load.loc[timesteps]
     indices = pd.DataFrame(index=timesteps, columns=["index"])
     indices["index"] = [i for i in range(len(timesteps))]
     model.branches_load_factors.loc[
@@ -1462,7 +1463,7 @@ def get_underlying_elements(parameters):
 
 def get_residual_load_of_not_optimized_components(
     grid,
-    edisgo,
+    edisgo_obj,
     relevant_storage_units=None,
     relevant_generators=None,
     relevant_loads=None,
@@ -1473,7 +1474,7 @@ def get_residual_load_of_not_optimized_components(
     Parameters
     ----------
     grid
-    edisgo
+    edisgo_obj
     relevant_storage_units
     relevant_charging_points
     relevant_generators
@@ -1491,12 +1492,12 @@ def get_residual_load_of_not_optimized_components(
         relevant_storage_units = grid.storage_units_df.index
 
     return (
-        edisgo.timeseries.generators_active_power[relevant_generators].sum(axis=1)
-        + edisgo.timeseries.storage_units_active_power[relevant_storage_units].sum(
+        edisgo_obj.timeseries.generators_active_power[relevant_generators].sum(axis=1)
+        + edisgo_obj.timeseries.storage_units_active_power[relevant_storage_units].sum(
             axis=1
         )
-        - edisgo.timeseries.loads_active_power[relevant_loads].sum(axis=1)
-    ).loc[edisgo.timeseries.timeindex]
+        - edisgo_obj.timeseries.loads_active_power[relevant_loads].sum(axis=1)
+    ).loc[edisgo_obj.timeseries.timeindex]
 
 
 def set_lower_band_ev(model, cp, time):
