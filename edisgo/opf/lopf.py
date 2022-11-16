@@ -250,6 +250,7 @@ def setup_model(
     # Todo: Extract kwargs values from cfg?
     t1 = perf_counter()
     model = pm.ConcreteModel()
+    model.name = kwargs.get("name", objective)
     # check if correct value of objective is inserted
     if objective not in [
         "curtailment",
