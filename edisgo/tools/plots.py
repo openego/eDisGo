@@ -881,7 +881,8 @@ def color_map_color(
         Maximum value on color map
     cmap_name : str or list
         Name of color map to use, or the colormap
-
+    height : int
+        Height of the plot
     Returns
     -------
     str
@@ -910,6 +911,7 @@ def plot_plotly(
     center_coordinates: bool = False,
     pseudo_coordinates: bool = False,
     node_selection: list | bool = False,
+    height: int = 500,
 ) -> BaseFigure:
     """
     Draws a plotly html figure.
@@ -1046,17 +1048,17 @@ def plot_plotly(
         logger.warning("No power flow results to show. -> Run power flow.")
         node_color = None
 
-    if center_coordinates:
-        # Center transformer coordinates on (0,0).
-        if hasattr(grid, "transformers_df"):
-            node_root = grid.transformers_df.bus1.iat[0]
-            x_root, y_root = G.nodes[node_root]["pos"]
-        else:
-            node_root = edisgo_obj.topology.transformers_hvmv_df.bus1.iat[0]
-            x_root, y_root = G.nodes[node_root]["pos"]
+
+    # Center transformer coordinates on (0,0).
+    if hasattr(grid, "transformers_df"):
+        node_root = grid.transformers_df.bus1.iat[0]
+        x_center, y_center = G.nodes[node_root]["pos"]
     else:
-        x_root = 0
-        y_root = 0
+        node_root = edisgo_obj.topology.transformers_hvmv_df.bus1.iat[0]
+        x_center, y_center = G.nodes[node_root]["pos"]
+
+    x_root = 0
+    y_root = 0
 
     if pseudo_coordinates:
         G = make_pseudo_coordinates_graph(
@@ -1096,21 +1098,10 @@ def plot_plotly(
                 f"node_result_selection needs to be one of {result_selection_options}"
             )
 
-    # initialization coordinate transformation
-    transformer_4326_to_3035 = Transformer.from_crs(
-        "EPSG:4326",
-        "EPSG:3035",
-        always_xy=True,
-    )
-
     def get_coordinates_for_edge(edge):
         x0, y0 = G.nodes[edge[0]]["pos"]
         x1, y1 = G.nodes[edge[1]]["pos"]
-        x0, y0 = transformer_4326_to_3035.transform(x0, y0)
-        x1, y1 = transformer_4326_to_3035.transform(x1, y1)
         return x0, y0, x1, y1
-
-    x_root, y_root = transformer_4326_to_3035.transform(x_root, y_root)
 
     def plot_line_text():
         middle_node_x = []
@@ -1134,9 +1125,9 @@ def plot_plotly(
 
             middle_node_text.append(text)
 
-        middle_node_scatter = go.Scatter(
-            x=middle_node_x,
-            y=middle_node_y,
+        middle_node_scatter = go.Scattermapbox(
+            lon=middle_node_x,
+            lat=middle_node_y,
             text=middle_node_text,
             mode="markers",
             hoverinfo="text",
@@ -1230,10 +1221,10 @@ def plot_plotly(
             else:
                 color = "grey"
 
-            edge_scatter = go.Scatter(
+            edge_scatter = go.Scattermapbox(
                 mode="lines",
-                x=edge_x,
-                y=edge_y,
+                lon=edge_x,
+                lat=edge_y,
                 hoverinfo="none",
                 opacity=0.8,
                 showlegend=False,
@@ -1242,6 +1233,7 @@ def plot_plotly(
                     color=color,
                 ),
             )
+            #print(edge_scatter)
             data_line_plot.append(edge_scatter)
 
         if line_color:
@@ -1304,7 +1296,6 @@ def plot_plotly(
 
         for node in G.nodes():
             x, y = G.nodes[node]["pos"]
-            x, y = transformer_4326_to_3035.transform(x, y)
             node_x.append(x - x_root)
             node_y.append(y - y_root)
 
@@ -1369,9 +1360,9 @@ def plot_plotly(
 
             node_text.append(text)
 
-        node_scatter = go.Scatter(
-            x=node_x,
-            y=node_y,
+        node_scatter = go.Scattermapbox(
+            lon=node_x,
+            lat=node_y,
             mode="markers",
             hoverinfo="text",
             text=node_text,
@@ -1381,16 +1372,16 @@ def plot_plotly(
                 color=node_colors,
                 size=8,
                 cmid=cmid,
-                line_width=2,
                 colorbar=colorbar,
             ),
         )
+        # print(node_scatter)
         return [node_scatter]
 
     fig = go.Figure(
-        data=plot_line_text() + plot_lines() + plot_buses(),
+        data=plot_lines() + plot_buses() + plot_line_text(),
         layout=go.Layout(
-            height=500,
+            height=height,
             showlegend=False,
             hovermode="closest",
             margin=dict(b=20, l=5, r=5, t=40),
@@ -1405,6 +1396,16 @@ def plot_plotly(
                 showticklabels=True,
                 scaleanchor="x",
                 scaleratio=1,
+            ),
+            mapbox=dict(
+                # bearing=0,
+                center=dict(
+                    lat=y_center,
+                    lon=x_center,
+                ),
+                # pitch=0,
+                zoom=10,
+                style = 'open-street-map'
             ),
         ),
     )
@@ -1470,7 +1471,7 @@ def chosen_graph(
 
 
 def plot_dash_app(
-    edisgo_objects: EDisGo | dict[str, EDisGo], debug: bool = False
+    edisgo_objects: EDisGo | dict[str, EDisGo], debug: bool = False, height: int = 500,
 ) -> JupyterDash:
     """
     Generates a jupyter dash app from given eDisGo object(s).
@@ -1848,6 +1849,7 @@ def plot_dash_app(
                 selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
                 center_coordinates=True,
+                height=height,
             )
 
             edisgo_obj = edisgo_objects[selected_edisgo_object_2]
@@ -1863,6 +1865,7 @@ def plot_dash_app(
                 selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
                 center_coordinates=True,
+                height=height,
             )
 
             return fig_1, fig_2
@@ -2099,6 +2102,7 @@ def plot_dash_app(
                 selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
                 center_coordinates=True,
+                height=height,
             )
 
             return fig
@@ -2111,6 +2115,7 @@ def plot_dash(
     mode: str = "inline",
     debug: bool = False,
     port: int = 8050,
+    height: int = 820,
 ):
     """
     Shows the generated jupyter dash app from given eDisGo object(s).
@@ -2139,7 +2144,7 @@ def plot_dash(
         Port which the app uses. Default: 8050.
 
     """
-    app = plot_dash_app(edisgo_objects, debug=debug)
+    app = plot_dash_app(edisgo_objects, debug=debug, height=height-200)
     log = logging.getLogger("werkzeug")
     log.setLevel(logging.ERROR)
-    app.run_server(mode=mode, debug=debug, height=820, port=port)
+    app.run_server(mode=mode, debug=debug, height=height, port=port)
