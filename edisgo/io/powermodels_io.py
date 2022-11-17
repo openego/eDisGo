@@ -77,7 +77,7 @@ def to_powermodels(
     # Calculate line costs
     costs = line_expansion_costs(edisgo_object).drop(columns="voltage_level")
     # convert eDisGo object to pypsa network structure
-    psa_net = edisgo_object.to_pypsa(use_seed=True)
+    psa_net = edisgo_object.to_pypsa()
     # add line costs to psa_net
     psa_net.lines = psa_net.lines.merge(costs, left_index=True, right_index=True)
     psa_net.lines.capital_cost = (
@@ -107,7 +107,9 @@ def to_powermodels(
     if len(edisgo_object.topology.storage_units_df) > 0:
         _build_battery_storage(edisgo_object, psa_net, pm)
     if len(psa_net.loads) > 0:
-        _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads)
+        _build_load(
+            edisgo_object, psa_net, pm, flexible_cps, flexible_hps, flexible_loads
+        )
     else:
         logger.warning("No loads found in network.")
     if len(flexible_cps) > 0:
@@ -236,8 +238,11 @@ def _build_gen(edisgo_obj, psa_net, pm):
     for gen_i in np.arange(len(gen_disp.index)):
         idx_bus = _mapping(psa_net, gen_disp.bus[gen_i])
         # retrieve power factor and sign from config
-        pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "gen")
-        q = [pf_sign * gen_disp.p_nom[gen_i], pf_sign * gen_disp.p_nom_min[gen_i]]
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "gen")
+        q = [
+            sign * np.tan(np.arccos(pf)) * gen_disp.p_nom[gen_i],
+            sign * np.tan(np.arccos(pf)) * gen_disp.p_nom_min[gen_i],
+        ]
         pm["gen"][str(gen_i + 1)] = {
             "pg": psa_net.generators_t.p_set[gen_disp.index[gen_i]][0],
             "qg": psa_net.generators_t.q_set[gen_disp.index[gen_i]][0],
@@ -254,8 +259,11 @@ def _build_gen(edisgo_obj, psa_net, pm):
 
     for gen_i in np.arange(len(gen_nondisp.index)):
         idx_bus = _mapping(psa_net, gen_nondisp.bus[gen_i])
-        pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "gen")
-        q = [pf_sign * gen_nondisp.p_nom[gen_i], pf_sign * gen_nondisp.p_nom_min[gen_i]]
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "gen")
+        q = [
+            sign * np.tan(np.arccos(pf)) * gen_nondisp.p_nom[gen_i],
+            sign * np.tan(np.arccos(pf)) * gen_nondisp.p_nom_min[gen_i],
+        ]
         pm["gen_nd"][str(gen_i + 1)] = {
             "pg": psa_net.generators_t.p_set[gen_nondisp.index[gen_i]][0],
             "qg": psa_net.generators_t.q_set[gen_nondisp.index[gen_i]][0],
@@ -266,6 +274,8 @@ def _build_gen(edisgo_obj, psa_net, pm):
             "P": 0,
             "Q": 0,
             "vg": 1,
+            "pf": pf,
+            "sign": sign,
             "mbase": gen_nondisp.p_nom[gen_i],
             "gen_bus": idx_bus,
             "gen_status": 1,
@@ -274,8 +284,11 @@ def _build_gen(edisgo_obj, psa_net, pm):
 
         for gen_i in np.arange(len(gen_slack.index)):
             idx_bus = _mapping(psa_net, gen_slack.bus[gen_i])
-            pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "gen")
-            q = [pf_sign * gen_slack.p_nom[gen_i], pf_sign * gen_slack.p_nom_min[gen_i]]
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "gen")
+            q = [
+                sign * np.tan(np.arccos(pf)) * gen_slack.p_nom[gen_i],
+                sign * np.tan(np.arccos(pf)) * gen_slack.p_nom_min[gen_i],
+            ]
             pm["gen_slack"][str(gen_i + 1)] = {
                 "pg": psa_net.generators_t.p_set[gen_slack.index[gen_i]][0],
                 "qg": psa_net.generators_t.q_set[gen_slack.index[gen_i]][0],
@@ -309,7 +322,6 @@ def _build_branch(psa_net, pm):
     transformer = ~branches.tap_ratio.isna()
     tap = branches.tap_ratio.fillna(1)
     shift = branches.phase_shift.fillna(0)
-
     for branch_i in np.arange(len(branches.index)):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
@@ -338,7 +350,7 @@ def _build_branch(psa_net, pm):
         }
 
 
-def _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads):
+def _build_load(edisgo_obj, psa_net, pm, flexible_cps, flexible_hps, flexible_loads):
     """
     Builds load dictionary in PowerModels network data format and adds it to
     PowerModels dictionary 'pm'.
@@ -365,9 +377,20 @@ def _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads):
         loads_df = psa_net.loads.drop(flex_loads)
     for load_i in np.arange(len(loads_df.index)):
         idx_bus = _mapping(psa_net, loads_df.bus[load_i])
+        if loads_df.index.str.contains("Heat")[load_i]:
+            cop = edisgo_obj.heat_pump.cop_df[loads_df.index[load_i]][0]
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
+            p_d = psa_net.loads_t.p_set[loads_df.index[load_i]][0] / cop
+            q_d = p_d * np.tan(np.arccos(pf))
+        else:
+            p_d = psa_net.loads_t.p_set[loads_df.index[load_i]][0]
+            q_d = psa_net.loads_t.q_set[loads_df.index[load_i]][0]
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
         pm["load"][str(load_i + 1)] = {
-            "pd": psa_net.loads_t.p_set[loads_df.index[load_i]][0],
-            "qd": psa_net.loads_t.q_set[loads_df.index[load_i]][0],
+            "pd": p_d,
+            "qd": q_d,
+            "pf": pf,
+            "sign": sign,
             "load_bus": idx_bus,
             "status": True,
             "index": load_i + 1,
@@ -389,23 +412,21 @@ def _build_battery_storage(edisgo_obj, psa_net, pm):
     """
     for stor_i in np.arange(len(psa_net.storage_units.index)):
         idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
-        # retrieve power factor and sign from config
-        pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "storage")
-        q = [
-            -pf_sign * psa_net.storage_units.p_nom[stor_i],
-            pf_sign * psa_net.storage_units.p_nom[stor_i],
-        ]
+        # retrieve power factor from config
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
         pm["storage"][str(stor_i + 1)] = {
             "r": 0,
             "x": 0,
             "p_loss": 0,
             "q_loss": 0,
+            "pf": pf,
+            "sign": sign,
             "ps": psa_net.storage_units_t.p_set[psa_net.storage_units.index[stor_i]][0],
             "qs": psa_net.storage_units_t.q_set[psa_net.storage_units.index[stor_i]][0],
             "pmax": psa_net.storage_units.p_nom[stor_i],
             "pmin": -psa_net.storage_units.p_nom[stor_i],
-            "qmax": max(q),
-            "qmin": min(q),
+            "qmax": np.tan(np.arccos(pf)) * psa_net.storage_units.p_nom[stor_i],
+            "qmin": -np.tan(np.arccos(pf)) * psa_net.storage_units.p_nom[stor_i],
             "energy": psa_net.storage_units.state_of_charge_initial[stor_i],
             "energy_rating": psa_net.storage_units.p_nom[stor_i]
             * psa_net.storage_units.max_hours[stor_i],
@@ -438,12 +459,18 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps):
     flex_bands_df = edisgo_obj.electromobility.flexibility_bands
     for cp_i in np.arange(len(emob_df.index)):
         idx_bus = _mapping(psa_net, emob_df.bus[cp_i])
-        # retrieve power factor and sign from config
-        pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "cp")
-        q = pf_sign * flex_bands_df["upper_power"][emob_df.index[cp_i]][0]
+        # retrieve power factor from config
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "cp")
+        q = (
+            sign
+            * np.tan(np.arccos(pf))
+            * flex_bands_df["upper_power"][emob_df.index[cp_i]][0]
+        )
         pm["electromobility"][str(cp_i + 1)] = {
             "pd": 0,
             "qd": 0,
+            "pf": pf,
+            "sign": sign,
             "p_min": 0,
             "p_max": flex_bands_df["upper_power"][emob_df.index[cp_i]][0],
             "q_min": min(q, 0),
@@ -475,10 +502,12 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
-        pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "hp")
-        q = pf_sign * heat_df.p_set[hp_i]
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
+        q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
         pm["heatpumps"][str(hp_i + 1)] = {
             "pd": psa_net.loads_t.p_set[heat_df.index[hp_i]][0],  # heat demand
+            "pf": pf,
+            "sign": sign,
             "p_min": 0,
             "p_max": heat_df.p_set[hp_i],
             "q_min": min(q, 0),
@@ -538,14 +567,16 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads):
     for dsm_i in np.arange(len(dsm_df.index)):
         idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
         # retrieve power factor and sign from config
-        pf_sign = _calculate_q(edisgo_obj, pm, idx_bus, "load")
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
         q = [
-            pf_sign * edisgo_obj.dsm.p_max[dsm_df.index[dsm_i]][0],
-            pf_sign * edisgo_obj.dsm.p_min[dsm_df.index[dsm_i]][0],
+            sign * np.tan(np.arccos(pf)) * edisgo_obj.dsm.p_max[dsm_df.index[dsm_i]][0],
+            sign * np.tan(np.arccos(pf)) * edisgo_obj.dsm.p_min[dsm_df.index[dsm_i]][0],
         ]
         pm["dsm"][str(dsm_i + 1)] = {
             "pd": 0,
             "qd": 0,
+            "pf": pf,
+            "sign": sign,
             "energy": 0,  # TODO: am Anfang immer 0?
             "p_min": edisgo_obj.dsm.p_min[dsm_df.index[dsm_i]][0],
             "p_max": edisgo_obj.dsm.p_max[dsm_df.index[dsm_i]][0],
@@ -774,9 +805,20 @@ def _build_component_timeseries(
             comp_i = _mapping(
                 psa_net, comp, kind, flexible_cps, flexible_hps, flexible_loads
             )
+            if p_set.columns.str.contains("Heat")[comp_i - 1]:
+                cop = edisgo_obj.heat_pump.cop_df[comp]
+                p_d = p_set[comp].values / cop
+                q_d = (
+                    p_d
+                    * np.tan(np.arccos(pm["load"][str(comp_i)]["pf"]))
+                    * pm["load"][str(comp_i)]["sign"]
+                )
+            else:
+                p_d = p_set[comp].values
+                q_d = q_set[comp].values
             pm_comp[str(comp_i)] = {
-                "pd": p_set[comp].values.tolist(),
-                "qd": q_set[comp].values.tolist(),
+                "pd": p_d.tolist(),
+                "qd": q_d.tolist(),
             }
         elif kind == "storage":
             comp_i = _mapping(psa_net, comp, kind)
@@ -887,10 +929,9 @@ def aggregate_parallel_transformers(psa_net):
     psa_net.transformers = psa_trafos
 
 
-def _calculate_q(edisgo_obj, pm, idx_bus, kind):
+def _get_pf(edisgo_obj, pm, idx_bus, kind):
     """
-    Retrieves power factor and sign from edisgo config files to calculate reactive
-    power.
+    Retrieves and returns power factor from edisgo config files.
 
     Parameters
     ----------
@@ -904,25 +945,25 @@ def _calculate_q(edisgo_obj, pm, idx_bus, kind):
 
     Returns
     -------
-    pf_sign: float
-        Product of sign and tan(arccos(PF)).
+    pf: float
+        Returns power factor pf.
     """
 
     grid_level = pm["bus"][str(idx_bus)]["grid_level"]
     pf = edisgo_obj.config._data["reactive_power_factor"][
         "{}_{}".format(grid_level, kind)
     ]
-    mode = edisgo_obj.config._data["reactive_power_mode"][
+    sign = edisgo_obj.config._data["reactive_power_mode"][
         "{}_{}".format(grid_level, kind)
     ]
     if kind in ["gen", "storage"]:
-        if mode == "inductive":
-            pf_sign = -1 * np.tan(np.arccos(pf))
+        if sign == "inductive":
+            sign = -1
         else:
-            pf_sign = np.tan(np.arccos(pf))
-    elif kind in ["load", "cp", "hp"]:
-        if mode == "inductive":
-            pf_sign = np.tan(np.arccos(pf))
+            sign = 1
+    elif kind in ["load", "hp", "cp"]:
+        if sign == "inductive":
+            sign = 1
         else:
-            pf_sign = -1 * np.tan(np.arccos(pf))
-    return pf_sign
+            sign = -1
+    return pf, sign
