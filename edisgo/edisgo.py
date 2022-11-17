@@ -673,6 +673,21 @@ class EDisGo:
             hv_req_q,
         )
 
+    def from_powermodels(self, pm):
+        """
+        Converts results from optimization in PowerModels network data format to eDisGo
+        representation of the network topology and timeseries and updates values on
+        eDisGo object.
+
+        Parameters
+        ----------
+        pm: dict or str
+            Dictionary or path to JSON file that contains all network data in
+            PowerModels network data format.
+
+        """
+        return powermodels_io.from_powermodels(self, pm)
+
     def to_graph(self):
         """
         Returns networkx graph representation of the grid.
@@ -2239,7 +2254,6 @@ class EDisGo:
 
     def save_edisgo_to_json(
         self,
-        directory="",
         filename=None,
         flexible_cps=[],
         flexible_hps=[],
@@ -2255,9 +2269,6 @@ class EDisGo:
 
         Parameters
         -----------
-        directory : str
-            Directory the json file is saved to. Per default it takes the current
-            working directory.
         filename : str or None
             Filename the json file is saved under. If None, filename is
             'ding0_{grid_id}_t_{#timesteps}.json'.
@@ -2282,8 +2293,8 @@ class EDisGo:
                 Dictionary that contains all network data in PowerModels network data
                 format.
         """
-        abs_path = os.path.abspath(directory)
-        os.makedirs(abs_path, exist_ok=True)
+        opf_dir = os.path.dirname(os.path.abspath(__file__))
+        abs_path = os.path.join(opf_dir, "opf", "edisgo_scenario_data")
         pm = self.to_powermodels(
             flexible_cps,
             flexible_hps,

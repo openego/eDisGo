@@ -4,6 +4,7 @@ topology and timeseries to PowerModels network data format. Call :func:`to_power
 to retrieve the PowerModels network container.
 """
 
+import json
 import logging
 
 import numpy as np
@@ -14,6 +15,27 @@ from edisgo.flex_opt.costs import line_expansion_costs
 from edisgo.tools.tools import calculate_impedance_for_parallel_components
 
 logger = logging.getLogger(__name__)
+
+
+def from_powermodels(edisgo_object, pm):
+    """
+    Converts results from optimization in PowerModels network data format to eDisGo
+    representation of the network topology and timeseries and updates values on
+    eDisGo object.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    pm: dict
+        Dictionary that contains all network data in PowerModels network data
+        format.
+    """
+    if type(pm) == str:
+        with open(pm) as f:
+            pm = json.loads(json.load(f))
+
+    # TODO: Write results to eDisGo object
+    return pm
 
 
 def to_powermodels(
