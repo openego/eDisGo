@@ -143,7 +143,7 @@ def ssh_tunnel(cred: dict) -> str:
     server = SSHTunnelForwarder(
         ssh_address_or_host=(cred["SSH_HOST"], 22),
         ssh_username=cred["SSH_USER"],
-        ssh_private_key=cred["SSH_PKEY"],
+        ssh_pkey=cred["SSH_PKEY"],
         remote_bind_address=(cred["PGRES_HOST"], cred["PORT"]),
     )
     server.start()

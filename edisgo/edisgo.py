@@ -28,7 +28,9 @@ from edisgo.io.electromobility_import import (
     import_electromobility_from_database,
     integrate_charging_parks,
 )
+from edisgo.io.generators_import import generators_from_database
 from edisgo.io.generators_import import oedb as import_generators_oedb
+from edisgo.io.home_batteries_import import home_batteries_from_database
 
 # from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.network import timeseries
@@ -698,9 +700,28 @@ class EDisGo:
             See :func:`edisgo.io.generators_import.oedb`.
 
         """
-        import_generators_oedb(
-            edisgo_object=self, generator_scenario=generator_scenario, **kwargs
-        )
+        if generator_scenario in ["nep2035", "ego100"]:
+            import_generators_oedb(
+                edisgo_object=self, generator_scenario=generator_scenario, **kwargs
+            )
+        elif generator_scenario in ["eGon2035", "eGon100RE"]:
+            engine = kwargs.pop("engine")
+
+            if not isinstance(engine, Engine):
+                raise ValueError(
+                    "Please provide a valide sqlalchemy engine when loading scenarios "
+                    "'eGon2035' and 'eGon100RE'."
+                )
+
+            generators_from_database(
+                edisgo_object=self, engine=engine, scenario=generator_scenario, **kwargs
+            )
+        else:
+            raise ValueError(
+                f"Unknown generator scenario {generator_scenario}. The following "
+                f"scenarios are currently supported: 'nep2035', 'ego100', 'eGon2035' "
+                f"and 'eGon100RE'."
+            )
 
     def analyze(
         self,
@@ -1697,6 +1718,19 @@ class EDisGo:
 
     def import_dsm(self, engine: Engine, scenario: str = "eGon2035"):
         dsm_from_database(edisgo_obj=self, engine=engine, scenario=scenario)
+
+    def import_home_batteries(
+        self,
+        engine: Engine,
+        scenario: str = "eGon2035",
+        remove_existing: bool = True,
+    ):
+        home_batteries_from_database(
+            edisgo_obj=self,
+            engine=engine,
+            scenario=scenario,
+            remove_existing=remove_existing,
+        )
 
     def apply_heat_pump_operating_strategy(
         self, strategy="uncontrolled", heat_pump_names=None, **kwargs

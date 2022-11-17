@@ -25,6 +25,7 @@ from edisgo.tools.tools import (
 )
 
 if "READTHEDOCS" not in os.environ:
+    from shapely.errors import ShapelyDeprecationWarning
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
@@ -1179,14 +1180,18 @@ class Topology:
             "control": control,
         }
         data.update(kwargs)
-        new_df = (
-            pd.Series(
-                data,
-                name=generator_name,
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning)
+
+            new_df = (
+                pd.Series(
+                    data,
+                    name=generator_name,
+                )
+                .to_frame()
+                .T
             )
-            .to_frame()
-            .T
-        )
 
         # FIXME: casting non-numeric values with numeric values into one series changes
         #  the data type to 'Object'. Change the data type to numeric if possible
@@ -2200,7 +2205,7 @@ class Topology:
             # generate random list (unique elements) of possible target buses
             # to connect components to
             if comp_type == "generator":
-                random.seed(a=comp_data["generator_id"])
+                random.seed(a=int(comp_data["generator_id"]))
             else:
                 random.seed(
                     a="{}_{}_{}".format(

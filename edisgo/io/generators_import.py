@@ -20,7 +20,7 @@ from edisgo.io.egon_data_import import (
     sql_within,
 )
 from edisgo.tools import session_scope
-from edisgo.tools.geo import mv_grid_gdf, proj2equidistant
+from edisgo.tools.geo import find_nearest_bus, mv_grid_gdf, proj2equidistant
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -689,11 +689,29 @@ def _update_grids(
                 "and generator datasets."
             )
 
+    substations = edisgo_object.topology.buses_df.loc[
+        edisgo_object.topology.transformers_df.bus1.unique()
+    ]
+
+    new_gens_lv.geom = new_gens_lv.geom.apply(wkt_loads)
+
+    new_gens_lv = gpd.GeoDataFrame(
+        new_gens_lv,
+        geometry="geom",
+        crs=f"EPSG:{edisgo_object.topology.grid_district['srid']}",
+    )
+
     # iterate over new generators and create them
     for id in new_gens_lv.index.sort_values(ascending=True):
+        comp_data = dict(new_gens_lv.loc[id, :])
+
+        nearest_substation, _ = find_nearest_bus(comp_data["geom"], substations)
+
+        comp_data["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
+
         edisgo_object.topology.connect_to_lv(
             edisgo_object,
-            dict(new_gens_lv.loc[id, :]),
+            comp_data,
             allowed_number_of_comp_per_bus=allowed_number_of_comp_per_lv_bus,
         )
 
