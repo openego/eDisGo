@@ -69,10 +69,4 @@ def pm_optimize(
     if julia_process.returncode != 0:
         raise RuntimeError("Julia subprocess failed.")
 
-    pm_opt = edisgo_obj.from_powermodels(
-        os.path.join(solution_dir, pm["name"] + ".json")
-    )
-    # TODO: Read results and write to edisgo object (from_powermodels)
-
-    print(" ")
-    return pm_opt
+    edisgo_obj.from_powermodels(os.path.join(solution_dir, pm["name"] + ".json"))

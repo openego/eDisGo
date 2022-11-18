@@ -17,62 +17,6 @@ from edisgo.tools.tools import calculate_impedance_for_parallel_components
 logger = logging.getLogger(__name__)
 
 
-def from_powermodels(
-    edisgo_object,
-    pm_results,
-):
-    """
-    Converts results from optimization in PowerModels network data format to eDisGo
-    representation of the network topology and timeseries and updates values on
-    eDisGo object.
-
-    Parameters
-    ----------
-    edisgo_object : :class:`~.EDisGo`
-    pm_results: dict
-        Dictionary that contains all optimization results in PowerModels network data
-        format.
-    """
-    if type(pm_results) == str:
-        with open(pm_results) as f:
-            pm = json.loads(json.load(f))
-
-    flex_dicts = {
-        "gen_nd": ["pgc"],
-        "heatpumps": ["php"],
-        "electromobility": ["pcp"],
-        "storage": ["ps"],
-        "dsm": ["pdsm"],
-        "gen_slack": ["pgs", "qgs"],
-        "heat_storage": ["phs"],
-    }  # TODO: add HV_requirements
-    for flex in ["gen_nd"]:  # flex_dicts.keys():
-        timesteps = pm["nw"].keys()
-        for variable in flex_dicts.get(flex):
-            results = pd.DataFrame(index=timesteps)
-            for flex_comp in list(pm["nw"]["1"][flex].keys()):
-                name = pm["nw"]["1"][flex][flex_comp]["name"]
-                results[name] = np.nan
-                for t in timesteps:
-                    results[name][t] = pm["nw"][t][flex][flex_comp][variable]
-                if flex == "gen_nd":
-                    edisgo_object.timeseries._generators_active_power.loc[:, name] = (
-                        edisgo_object.timeseries.generators_active_power.loc[
-                            :, name
-                        ].values
-                        - results[name].values
-                    )
-                    # elif variable == "qgc":
-                    #     edisgo_object.timeseries._generators_reactive_power.loc[:,
-                    #     name] = edisgo_object.timeseries.generators_reactive_power.loc
-                    #     [
-                    #              :, name].values - results[name].values
-    print(" ")
-
-    # ToDo: q values anpassen für gen_nd, cp, hp, dsm, storage
-    return pm
-
-
 def to_powermodels(
     edisgo_object,
     flexible_cps=[],
@@ -191,6 +135,77 @@ def to_powermodels(
         hv_req_q,
     )
     return pm
+
+
+def from_powermodels(
+    edisgo_object,
+    pm_results,
+):
+    """
+    Converts results from optimization in PowerModels network data format to eDisGo
+    and updates timeseries values of flexibilities on eDisGo object.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    pm_results: dict
+        Dictionary that contains all optimization results in PowerModels network data
+        format.
+    """
+    if type(pm_results) == str:
+        with open(pm_results) as f:
+            pm = json.loads(json.load(f))
+
+    flex_dicts = {
+        "gen_nd": ["pgc"],
+        "heatpumps": ["php"],
+        "electromobility": ["pcp"],
+        "storage": ["ps"],
+        "dsm": ["pdsm"],
+        "gen_slack": ["pgs", "qgs"],
+        "heat_storage": ["phs"],
+    }  # TODO: add HV_requirements
+
+    for flex in flex_dicts.keys():
+        timesteps = pm["nw"].keys()
+        for variable in flex_dicts.get(flex):
+            results = pd.DataFrame(index=timesteps)
+            for flex_comp in list(pm["nw"]["1"][flex].keys()):
+                name = pm["nw"]["1"][flex][flex_comp]["name"]
+                results[name] = np.nan
+                for t in timesteps:
+                    results[name][t] = pm["nw"][t][flex][flex_comp][variable]
+                if flex in ["gen_nd"]:  # , "gen_slack"]:  # TODO: slack_gen results
+                    if variable != "qgs":
+                        edisgo_object.timeseries._generators_active_power.loc[
+                            :, name
+                        ] = (
+                            edisgo_object.timeseries.generators_active_power.loc[
+                                :, name
+                            ].values
+                            - results[name].values
+                        )
+                    else:
+                        edisgo_object.timeseries._generators_reactive_power.loc[
+                            :, name
+                        ] = (
+                            edisgo_object.timeseries.generators_reactive_power.loc[
+                                :, name
+                            ].values
+                            - results[name].values
+                        )
+                elif flex in ["dsm", "heatpumps", "electromobility"]:
+                    edisgo_object.timeseries._loads_active_power.loc[:, name] = results[
+                        name
+                    ].values
+                elif flex == "storage":
+                    edisgo_object.timeseries._storage_units_active_power.loc[
+                        :, name
+                    ] = results[name].values
+                elif flex == "heat_storage":  # TODO
+                    continue
+
+    edisgo_object.set_time_series_reactive_power_control()
 
 
 def _init_pm():
@@ -359,6 +374,7 @@ def _build_gen(edisgo_obj, psa_net, pm):
                 "vg": 1,
                 "mbase": gen_slack.p_nom[gen_i],
                 "gen_bus": idx_bus,
+                "name": gen_slack.index[gen_i],
                 "gen_status": 1,
                 "index": gen_i + 1,
             }
