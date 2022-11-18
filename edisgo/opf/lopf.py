@@ -1187,7 +1187,7 @@ def optimize(model, solver, load_solutions=True, mode=None, **kwargs):
     filename = kwargs.get("lp_filename", False)
     if filename:
         print(f"Save lp file to: {filename}")
-        model.write(filename=filename, io_options={"symbolic_solver_labels": True})
+        model.write(filename=str(filename), io_options={"symbolic_solver_labels": True})
 
     print("Starting optimisation")
     t1 = perf_counter()
