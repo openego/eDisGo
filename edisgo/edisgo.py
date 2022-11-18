@@ -38,6 +38,7 @@ from edisgo.network.electromobility import Electromobility
 from edisgo.network.heat import HeatPump
 from edisgo.network.results import Results
 from edisgo.network.topology import Topology
+from edisgo.opf import powermodels_opf
 from edisgo.opf.results.opf_result_class import OPFResults
 from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.tools import plots, tools
@@ -687,6 +688,29 @@ class EDisGo:
 
         """
         return powermodels_io.from_powermodels(self, pm)
+
+    def pm_optimize(
+        self,
+        flexible_cps=[],
+        flexible_hps=[],
+        flexible_loads=[],
+        opt_version=1,
+        opt_flex=["curt", "storage", "cp", "hp", "dsm"],
+        hv_req_p=pd.DataFrame(),
+        hv_req_q=pd.DataFrame(),
+        method="soc",
+    ):
+        return powermodels_opf.pm_optimize(
+            self,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            opt_version=opt_version,
+            opt_flex=opt_flex,
+            hv_req_p=hv_req_p,
+            hv_req_q=hv_req_q,
+            method=method,
+        )
 
     def to_graph(self):
         """

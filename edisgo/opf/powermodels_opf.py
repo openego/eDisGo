@@ -29,7 +29,7 @@ def pm_optimize(
     julia_env_dir = os.path.join(opf_dir, "PowerModels.jl")
     solution_dir = os.path.join(opf_dir, "opf_solutions")
 
-    # edisgo_obj: can be path to edisgo csv files, or edisgo obj, or pm json file
+    # edisgo_obj: can be path to edisgo csv files, or edisgo obj
     pm = edisgo_obj.to_powermodels(
         flexible_cps=flexible_cps,
         flexible_hps=flexible_hps,
