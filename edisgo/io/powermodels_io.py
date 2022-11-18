@@ -17,7 +17,10 @@ from edisgo.tools.tools import calculate_impedance_for_parallel_components
 logger = logging.getLogger(__name__)
 
 
-def from_powermodels(edisgo_object, pm):
+def from_powermodels(
+    edisgo_object,
+    pm_results,
+):
     """
     Converts results from optimization in PowerModels network data format to eDisGo
     representation of the network topology and timeseries and updates values on
@@ -26,15 +29,47 @@ def from_powermodels(edisgo_object, pm):
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
-    pm: dict
-        Dictionary that contains all network data in PowerModels network data
+    pm_results: dict
+        Dictionary that contains all optimization results in PowerModels network data
         format.
     """
-    if type(pm) == str:
-        with open(pm) as f:
+    if type(pm_results) == str:
+        with open(pm_results) as f:
             pm = json.loads(json.load(f))
 
-    # TODO: Write results to eDisGo object
+    flex_dicts = {
+        "gen_nd": ["pgc"],
+        "heatpumps": ["php"],
+        "electromobility": ["pcp"],
+        "storage": ["ps"],
+        "dsm": ["pdsm"],
+        "gen_slack": ["pgs", "qgs"],
+        "heat_storage": ["phs"],
+    }  # TODO: add HV_requirements
+    for flex in ["gen_nd"]:  # flex_dicts.keys():
+        timesteps = pm["nw"].keys()
+        for variable in flex_dicts.get(flex):
+            results = pd.DataFrame(index=timesteps)
+            for flex_comp in list(pm["nw"]["1"][flex].keys()):
+                name = pm["nw"]["1"][flex][flex_comp]["name"]
+                results[name] = np.nan
+                for t in timesteps:
+                    results[name][t] = pm["nw"][t][flex][flex_comp][variable]
+                if flex == "gen_nd":
+                    edisgo_object.timeseries._generators_active_power.loc[:, name] = (
+                        edisgo_object.timeseries.generators_active_power.loc[
+                            :, name
+                        ].values
+                        - results[name].values
+                    )
+                    # elif variable == "qgc":
+                    #     edisgo_object.timeseries._generators_reactive_power.loc[:,
+                    #     name] = edisgo_object.timeseries.generators_reactive_power.loc
+                    #     [
+                    #              :, name].values - results[name].values
+    print(" ")
+
+    # ToDo: q values anpassen für gen_nd, cp, hp, dsm, storage
     return pm
 
 
@@ -301,6 +336,7 @@ def _build_gen(edisgo_obj, psa_net, pm):
             "mbase": gen_nondisp.p_nom[gen_i],
             "gen_bus": idx_bus,
             "gen_status": 1,
+            "name": gen_nondisp.index[gen_i],
             "index": gen_i + 1,
         }
 
@@ -458,6 +494,7 @@ def _build_battery_storage(edisgo_obj, psa_net, pm):
             "charge_efficiency": 1,
             "discharge_efficiency": 1,
             "storage_bus": idx_bus,
+            "name": psa_net.storage_units.index[stor_i],
             "status": True,
             "index": stor_i + 1,
         }
@@ -500,6 +537,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps):
             "e_min": flex_bands_df["lower_energy"][emob_df.index[cp_i]][0],
             "e_max": flex_bands_df["upper_energy"][emob_df.index[cp_i]][0],
             "cp_bus": idx_bus,
+            "name": emob_df.index[cp_i],
             "index": cp_i + 1,
         }
 
@@ -536,6 +574,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
             "q_max": max(q, 0),
             "cop": edisgo_obj.heat_pump.cop_df[heat_df.index[hp_i]][0],
             "hp_bus": idx_bus,
+            "name": heat_df.index[hp_i],
             "index": hp_i + 1,
         }
 
@@ -565,6 +604,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj):
             "charge_efficiency": heat_storage_df.efficiency[stor_i],
             "discharge_efficiency": heat_storage_df.efficiency[stor_i],
             "storage_bus": idx_bus,
+            "name": heat_storage_df.index[stor_i],
             "status": True,
             "index": stor_i + 1,
         }
@@ -609,6 +649,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads):
             "charge_efficiency": 1,
             "discharge_efficiency": 1,
             "dsm_bus": idx_bus,
+            "name": dsm_df.index[dsm_i],
             "index": dsm_i + 1,
         }
 

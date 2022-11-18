@@ -8,8 +8,6 @@ from timeit import default_timer as timer
 import numpy as np
 import pandas as pd
 
-from edisgo.io.powermodels_io import from_powermodels
-
 logger = logging.getLogger(__name__)
 
 
@@ -71,8 +69,8 @@ def pm_optimize(
     if julia_process.returncode != 0:
         raise RuntimeError("Julia subprocess failed.")
 
-    pm_opt = from_powermodels(
-        edisgo_obj, os.path.join(solution_dir, pm["name"] + ".json")
+    pm_opt = edisgo_obj.from_powermodels(
+        os.path.join(solution_dir, pm["name"] + ".json")
     )
     # TODO: Read results and write to edisgo object (from_powermodels)
 

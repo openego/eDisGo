@@ -674,7 +674,10 @@ class EDisGo:
             hv_req_q,
         )
 
-    def from_powermodels(self, pm):
+    def from_powermodels(
+        self,
+        pm_results={},
+    ):
         """
         Converts results from optimization in PowerModels network data format to eDisGo
         representation of the network topology and timeseries and updates values on
@@ -687,7 +690,7 @@ class EDisGo:
             PowerModels network data format.
 
         """
-        return powermodels_io.from_powermodels(self, pm)
+        return powermodels_io.from_powermodels(self, pm_results=pm_results)
 
     def pm_optimize(
         self,
