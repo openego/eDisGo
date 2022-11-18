@@ -1165,7 +1165,7 @@ def update_rolling_horizon(comp_type, kwargs, model):
     return model
 
 
-def optimize(model, solver, load_solutions=True, mode=None):
+def optimize(model, solver, load_solutions=True, mode=None, **kwargs):
     """
     Method to run the optimization and extract the results.
 
@@ -1183,6 +1183,12 @@ def optimize(model, solver, load_solutions=True, mode=None):
     -------
 
     """
+
+    filename = kwargs.get("lp_filename", False)
+    if filename:
+        print(f"Save lp file to: {filename}")
+        model.write(filename=filename, io_options={"symbolic_solver_labels": True})
+
     print("Starting optimisation")
     t1 = perf_counter()
     opt = pm.SolverFactory(solver)
