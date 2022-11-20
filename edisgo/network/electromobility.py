@@ -588,6 +588,8 @@ class Electromobility:
         """
         Method to check the integrity of the Electromobility object.
 
+        Raises an error in case any of the checks fails.
+
         Currently only checks integrity of flexibility bands.
 
         """
