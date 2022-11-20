@@ -746,26 +746,77 @@ def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_
     return lines_changes
 
 
-def split_feeder_at_half_length(edisgo_obj, grid, crit_lines):
-    # ToDo: Type hinting
-
+def add_same_type_of_parallel_line(edisgo_obj, crit_lines):
     """
-
-    The critical string load is remedied by the following methods:
-    1-Find the point at the half-length of the feeder
-    2-If the half-length of the feeder is the first node that comes from the main
-    station,reinforce the lines by adding parallel lines since the first node
-    directly is connected to the main station.
-    3- Otherwise, find the next LV station comes after the mid-point of the
-    feeder and split the line from this point so that it is to be connected to
-    the main station.
-    4-Find the preceding LV station of the newly disconnected LV station and
-    remove the linebetween these two LV stations to create 2 independent feeders.
-    5- If grid: LV, do not count in the nodes in the building
+    Adds one parallel line of same type.
+    Adds number of added lines to `lines_changes` dictionary.
 
     Parameters
     ----------
-    edisgo_obj:class:`~.EDisGo`
+    crit_lines: pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing over-loaded lines, their maximum relative
+        over-loading (maximum calculated current over allowed current) and the
+        corresponding time step.
+        Index of the dataframe are the names of the over-loaded lines.
+        Columns are 'max_rel_overload' containing the maximum relative
+        over-loading as float, 'time_index' containing the corresponding
+        time step the over-loading occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
+        the voltage level the line is in (either 'mv' or 'lv').
+    edisgo_obj: class:`~.EDisGo`
+
+    Returns
+    -------
+    dict
+        Dictionary with name of lines as keys and the corresponding number of
+        lines added as values.
+
+    Notes
+    ------
+
+    """
+
+    lines_changes = {}
+    # add number of added lines to lines_changes
+    lines_changes.update(
+        pd.Series(index=crit_lines.index, data=[1] * len(crit_lines.index)).to_dict()
+    )
+
+    # update number of lines and accordingly line attributes
+
+    edisgo_obj.topology.update_number_of_parallel_lines(
+        pd.Series(
+            index=crit_lines.index,
+            data=(
+                edisgo_obj.topology.lines_df[
+                    edisgo_obj.topology.lines_df.index.isin(crit_lines.index)
+                ].num_parallel
+                + 1
+            ),
+        )
+    )
+
+    return lines_changes
+
+
+def split_feeder_at_half_length(edisgo_obj, grid, crit_lines):
+    """
+    Reinforce lines in MV or LV topology due to overloading.
+
+    1-The point at half the length of the feeder is found.
+    2-The first node following this point is chosen as the point where the new
+    connection will be made. This node can only be a station.
+    3-This node is disconnected from the previous node and connected to the main station
+
+    Notes:
+    In LV grids, the node inside the building is not considered.
+    If the node is the first node after the main station, the method is
+    not applied.
+
+
+    Parameters
+    ----------
+    edisgo_obj: class:`~.EDisGo`
     grid: class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
     crit_lines:  Dataframe containing over-loaded lines, their maximum relative
         over-loading (maximum calculated current over allowed current) and the
@@ -787,67 +838,70 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines):
 
     Notes
     -----
-    In this method, the division is done according to the longest route (not the feeder
-    has more load)
-
+    In this method, the separation is done according to the longest route
+    (not the feeder has more load)
     """
 
-    # TODO: to be integrated in the future outside of functions
     def get_weight(u, v, data):
         return data["length"]
 
     if isinstance(grid, LVGrid):
 
-        standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
-            "lv_line"
-        ]
         voltage_level = "lv"
-        G = grid.graph
-        station_node = list(G.nodes)[0]  # main station
-        # ToDo:implement the method in crit_lines_feeder to relevant lines
-        # find all the lv lines that have overloading issues in lines_df
         relevant_lines = edisgo_obj.topology.lines_df.loc[
             crit_lines[crit_lines.voltage_level == voltage_level].index
         ]
-
-        # find the most critical lines connected to different LV feeder in MV/LV station
-        crit_lines_feeder = relevant_lines[
-            relevant_lines["bus0"].str.contains("LV")
-            & relevant_lines["bus0"].str.contains(repr(grid).split("_")[1])
-        ]
-
+        """
+        # TODO:to be deleted after decision
+        if not relevant_lines.empty:
+            nominal_voltage = edisgo_obj.topology.buses_df.loc[
+                edisgo_obj.topology.lines_df.loc[relevant_lines.index[0], "bus0"],
+                "v_nom",
+            ]
+            standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
+                "lv_line"
+            ]
+        """
     elif isinstance(grid, MVGrid):
 
-        standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
-            "mv_line"
-        ]
         voltage_level = "mv"
-        G = grid.graph
-        # Todo: the overlading can occur not only between the main node and
-        #  its next node
-        station_node = grid.transformers_df.bus1.iat[0]
-
         # find all the mv lines that have overloading issues in lines_df
         relevant_lines = edisgo_obj.topology.lines_df.loc[
             crit_lines[crit_lines.voltage_level == voltage_level].index
         ]
-
-        # find the most critical lines connected to different LV feeder in MV/LV station
-        crit_lines_feeder = relevant_lines[relevant_lines["bus0"] == station_node]
-
-        # find the closed and open sides of switches
-        switch_df = edisgo_obj.topology.switches_df.loc[
-            :, "bus_closed":"bus_open"
-        ].values
-        switches = [node for nodes in switch_df for node in nodes]
+        # TODO:to be deleted after decision
+        """
+        if not relevant_lines.empty:
+            nominal_voltage = edisgo_obj.topology.buses_df.loc[
+                edisgo_obj.topology.lines_df.loc[relevant_lines.index[0], "bus0"],
+                "v_nom",
+            ]
+            standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
+                "lv_line"
+            ]
+        """
 
     else:
         raise ValueError(f"Grid Type {type(grid)} is not supported.")
+
+    G = grid.graph
+    station_node = list(G.nodes)[0]  # main station
+
+    # The most overloaded lines, generally first lines connected to the main station
+    crit_lines_feeder = relevant_lines[relevant_lines["bus0"] == station_node]
+
+    # the last node of each feeder of the ring networks (switches are open)
+    switch_df = edisgo_obj.topology.switches_df.loc[:, "bus_closed":"bus_open"].values
+    switches = [node for last_nodes in switch_df for node in last_nodes]
 
     if isinstance(grid, LVGrid):
         nodes = G
     else:
         nodes = switches
+        # for the radial feeders in MV grid
+        for node in G.nodes:
+            if node in crit_lines.index.values:
+                nodes.append(node)
 
     paths = {}
     nodes_feeder = {}
@@ -863,8 +917,10 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines):
 
     lines_changes = {}
 
-    for node_list in nodes_feeder.values():
-
+    for node_feeder, node_list in nodes_feeder.items():
+        feeder_first_line = crit_lines_feeder[
+            crit_lines_feeder.bus1 == node_feeder
+        ].index[0]
         farthest_node = node_list[-1]
 
         path_length_dict_tmp = dijkstra_shortest_path_length(
@@ -878,7 +934,7 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines):
             if path_length_dict_tmp[j] >= path_length_dict_tmp[farthest_node] * 1 / 2
         )
 
-        # if LVGrid: check if node_1_2 is outside of a house
+        # if LVGrid: check if node_1_2 is outside a house
         # and if not find next BranchTee outside the house
         if isinstance(grid, LVGrid):
             while (
@@ -888,84 +944,75 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines):
                 node_1_2 = path[path.index(node_1_2) - 1]
                 # break if node is station
                 if node_1_2 is path[0]:
-                    logger.error("Could not reinforce overloading issue.")
+                    logger.error(
+                        f" {feeder_first_line} and following lines could not "
+                        f"be reinforced due to insufficient number of node . "
+                    )
                     break
 
         # if MVGrid: check if node_1_2 is LV station and if not find
-        # next LV station
+        # next or preceding LV station
         else:
             while node_1_2 not in edisgo_obj.topology.transformers_df.bus0.values:
                 try:
-                    # try to find LVStation behind node_1_2
                     node_1_2 = path[path.index(node_1_2) + 1]
                 except IndexError:
-                    # if no LVStation between node_1_2 and node with
-                    # voltage problem, connect node
-                    # directly toMVStation
-                    node_1_2 = farthest_node
-                    break
+                    while (
+                        node_1_2 not in edisgo_obj.topology.transformers_df.bus0.values
+                    ):
+                        if path.index(node_1_2) > 1:
+                            node_1_2 = path[path.index(node_1_2) - 1]
+                        else:
+                            logger.error(
+                                f" {feeder_first_line} and following lines could not "
+                                f"be reinforced due to the lack of LV station . "
+                            )
+                            break
 
-        # if node_1_2 is a representative (meaning it is already
-        # directly connected to the station), line cannot be
-        # disconnected and must therefore be reinforced
-        # todo:add paralell line to all other lines in case
-        if node_1_2 in nodes_feeder.keys():
-            crit_line_name = G.get_edge_data(station_node, node_1_2)["branch_name"]
-            crit_line = edisgo_obj.topology.lines_df.loc[crit_line_name]
-
-            # if critical line is already a standard line install one
-            # more parallel line
-            if crit_line.type_info == standard_line:
-                edisgo_obj.topology.update_number_of_parallel_lines(
-                    pd.Series(
-                        index=[crit_line_name],
-                        data=[
-                            edisgo_obj.topology._lines_df.at[
-                                crit_line_name, "num_parallel"
-                            ]
-                            + 1
-                        ],
-                    )
-                )
-                lines_changes[crit_line_name] = 1
-
-            # if critical line is not yet a standard line replace old
-            # line by a standard line
-            else:
-                # number of parallel standard lines could be calculated
-                # following [2] p.103; for now number of parallel
-                # standard lines is iterated
-                edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
-                lines_changes[crit_line_name] = 1
-
-            # if node_1_2 is not a representative, disconnect line
-        else:
-            # get line between node_1_2 and predecessor node (that is
-            # closer to the station)
+        # if node_1_2 is a representative (meaning it is already directly connected
+        # to the station), line cannot be disconnected and reinforced
+        if node_1_2 not in nodes_feeder.keys():
+            # get line between node_1_2 and predecessor node
             pred_node = path[path.index(node_1_2) - 1]
-            crit_line_name = G.get_edge_data(node_1_2, pred_node)["branch_name"]
-            if grid.lines_df.at[crit_line_name, "bus0"] == pred_node:
-                edisgo_obj.topology._lines_df.at[crit_line_name, "bus0"] = station_node
-            elif grid.lines_df.at[crit_line_name, "bus1"] == pred_node:
-                edisgo_obj.topology._lines_df.at[crit_line_name, "bus1"] = station_node
+            line_removed = G.get_edge_data(node_1_2, pred_node)["branch_name"]
 
+            # note:line between node_1_2 and pred_node is not removed and the connection
+            # points of line ,changed from the node to main station,  is changed.
+            # Therefore, the line connected to the main station has the same name
+            # with the line to be removed.
+            # todo: the name of added line should be
+            #  created and name of removed line should be deleted from the lines_df
+
+            # change the connection of the node_1_2 from pred node to main station
+            if grid.lines_df.at[line_removed, "bus0"] == pred_node:
+
+                edisgo_obj.topology._lines_df.at[line_removed, "bus0"] = station_node
+                logger.info(
+                    f"==> {grid}--> the line {line_removed} disconnected from  "
+                    f"{pred_node} and connected to the main station {station_node} "
+                )
+            elif grid.lines_df.at[line_removed, "bus1"] == pred_node:
+
+                edisgo_obj.topology._lines_df.at[line_removed, "bus1"] = station_node
+                logger.info(
+                    f"==> {grid}-->the line {line_removed} disconnected from "
+                    f"{pred_node} and connected to the main station  {station_node} "
+                )
             else:
-
                 raise ValueError("Bus not in line buses. " "Please check.")
-
-            # change line length and type
-
+            # change the line length
+            # the properties of the added line are the same as the removed line
             edisgo_obj.topology._lines_df.at[
-                crit_line_name, "length"
+                line_removed, "length"
             ] = path_length_dict_tmp[node_1_2]
-            edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
-            lines_changes[crit_line_name] = 1
-
-    if not lines_changes:
-        logger.debug(
-            f"==> {len(lines_changes)} line(s) was/were reinforced due to loading "
-            "issues."
+            line_added = line_removed
+            lines_changes[line_added] = 1
+    if lines_changes:
+        logger.info(
+            f"{len(lines_changes)} line/s are reinforced by split feeder "
+            f"method in {grid}"
         )
+
     return lines_changes
 
 

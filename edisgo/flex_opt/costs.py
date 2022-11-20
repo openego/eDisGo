@@ -173,7 +173,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
                                 lines_added.index, "type_info"
                             ].values,
                             "total_costs": line_costs.costs.values,
-                            "length": (
+                            "total cable length": (
                                 lines_added.quantity * lines_added.length
                             ).values,
                             "quantity": lines_added.quantity.values,
@@ -281,3 +281,34 @@ def line_expansion_costs(edisgo_obj, lines_names):
         ]
     )
     return costs_lines.loc[lines_df.index]
+
+
+def cost_breakdown(edisgo_obj, lines):
+    # costs for lines
+    # get changed lines
+
+    lines_added = lines.iloc[
+        (
+            lines.equipment
+            == edisgo_obj.topology.lines_df.loc[lines.index, "type_info"]
+        ).values
+    ]["quantity"].to_frame()
+    lines_added_unique = lines_added.index.unique()
+    lines_added = (
+        lines_added.groupby(axis=0, level=0).sum().loc[lines_added_unique, ["quantity"]]
+    )
+    lines_added["length"] = edisgo_obj.topology.lines_df.loc[
+        lines_added.index, "length"
+    ]
+    if not lines_added.empty:
+        costs_lines = line_expansion_costs(edisgo_obj, lines_added.index)
+        costs_lines["costs"] = costs_lines.apply(
+            lambda x: x.costs_earthworks
+            + x.costs_cable * lines_added.loc[x.name, "quantity"],
+            axis=1,
+        )
+        costs_lines["costs_cable"] = costs_lines.apply(
+            lambda x: x.costs_cable * lines_added.loc[x.name, "quantity"],
+            axis=1,
+        )
+    return costs_lines
