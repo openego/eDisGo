@@ -494,6 +494,96 @@ class Electromobility:
 
         return self.flexibility_bands
 
+    def resample(self, freq: str = "15min"):
+        """
+        Resamples flexibility bands.
+
+        Parameters
+        ----------
+        freq : str, optional
+            Frequency that time series is resampled to. Offset aliases can be found
+            here:
+            https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases.
+            Default: '15min'.
+
+        """
+
+        flex_band = list(self.flexibility_bands.values())[0]
+        if flex_band.empty:
+            return
+
+        freq_orig = flex_band.index[1] - flex_band.index[0]
+        # in case of up-sampling, check if index is continuous
+        if pd.Timedelta(freq) < freq_orig:
+            check_index = pd.date_range(
+                start=flex_band.index.min(), end=flex_band.index.max(), freq=freq_orig
+            )
+            if not len(check_index) == len(flex_band.index):
+                logger.warning(
+                    "Index of flexibility bands is not continuous. This might lead "
+                    "to problems."
+                )
+
+        # add time step at the end of the time series in case of up-sampling so that
+        # last time interval in the original time series is still included
+        df_dict = {}
+        for band in self.flexibility_bands.keys():
+            df_dict[band] = getattr(self, "flexibility_bands")[band]
+            if pd.Timedelta(freq) < freq_orig:  # up-sampling
+                new_dates = pd.DatetimeIndex([df_dict[band].index[-1] + freq_orig])
+            else:  # down-sampling (nothing happens)
+                new_dates = pd.DatetimeIndex([df_dict[band].index[-1]])
+            df_dict[band] = (
+                df_dict[band]
+                .reindex(df_dict[band].index.union(new_dates).unique().sort_values())
+                .ffill()
+            )
+
+        # resample time series
+        if pd.Timedelta(freq) < freq_orig:  # up-sampling
+            for band in self.flexibility_bands.keys():
+                if band == "upper_power":
+                    df_dict[band] = df_dict[band].resample(freq, closed="left").ffill()
+                    # drop last time step, as closed left does somehow still include the
+                    # last time step
+                    df_dict[band] = df_dict[band].iloc[:-1, :]
+                else:
+                    df_dict[band].sort_index(inplace=True)
+                    index_pre = df_dict[band].index[0] - pd.Timedelta(freq)
+                    # check how often the new index fits into the old index
+                    num_times = int(freq_orig.total_seconds()) / int(
+                        pd.Timedelta(freq).total_seconds()
+                    )
+                    # shift index and re-append first time step
+                    df_dict[band].index = df_dict[band].index.shift(
+                        int(pd.Timedelta(freq).total_seconds()) * (num_times - 1), "s"
+                    )
+                    df_dict[band] = pd.concat(
+                        [
+                            pd.DataFrame(
+                                index=[index_pre], columns=df_dict[band].columns, data=0
+                            ),
+                            df_dict[band],
+                        ]
+                    )
+
+                    # resample by interpolating
+                    df_dict[band] = (
+                        df_dict[band].resample(freq, closed="left").interpolate()
+                    )
+
+                    # drop two last time steps, as closed left does somehow still
+                    # include the last time step and another time step was added
+                    # because of the shift
+                    df_dict[band] = df_dict[band].iloc[1:-2, :]
+        else:  # down-sampling
+            for band in self.flexibility_bands.keys():
+                if band == "upper_power":
+                    df_dict[band] = df_dict[band].resample(freq).mean()
+                else:
+                    df_dict[band] = df_dict[band].resample(freq).max()
+        self.flexibility_bands = df_dict
+
     def check_integrity(self):
         """
         Method to check the integrity of the Electromobility object.
