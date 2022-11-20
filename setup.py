@@ -39,7 +39,7 @@ requirements = [
     "geopandas >= 0.9.0",
     "pyproj >= 3.0.0",
     "shapely >= 1.7.0",
-    "pypsa >= 0.17.0, <=0.20.1",
+    "pypsa >= 0.17.0, <= 0.20.1",
     "pyomo >= 6.0",
     "multiprocess",
     "workalendar",
@@ -100,7 +100,7 @@ extras = {"dev": dev_requirements}
 
 setup(
     name="eDisGo",
-    version="0.2.0dev",
+    version="0.2.1dev",
     packages=find_packages(),
     url="https://github.com/openego/eDisGo",
     license="GNU Affero General Public License v3.0",
