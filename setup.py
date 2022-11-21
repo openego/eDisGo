@@ -78,7 +78,7 @@ extras = {"dev": dev_requirements}
 
 setup(
     name="eDisGo",
-    version="0.2.0dev",
+    version="0.2.1dev",
     packages=find_packages(),
     url="https://github.com/openego/eDisGo",
     license="GNU Affero General Public License v3.0",
