@@ -2201,12 +2201,17 @@ class EDisGo:
         Method to check the integrity of the EDisGo object.
 
         Checks for consistency of topology (see
-        :func:`edisgo.topology.check_integrity`), timeseries (see
-        :func:`edisgo.timeseries.check_integrity`) and the interplay of both.
+        :func:`edisgo.network.topology.Topology.check_integrity`), timeseries (see
+        :func:`edisgo.network.timeseries.TimeSeries.check_integrity`) and the interplay
+        of both.
+        Further checks integrity of electromobility object (see
+        :func:`edisgo.network.electromobility.Electromobility.check_integrity`) if
+        there is electromobility data.
 
         """
         self.topology.check_integrity()
         self.timeseries.check_integrity()
+        self.electromobility.check_integrity()
 
         # check consistency of topology and timeseries
         comp_types = ["generators", "loads", "storage_units"]
