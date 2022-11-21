@@ -500,7 +500,7 @@ class Electromobility:
 
         Parameters
         ----------
-        freq : str, optional
+        freq : str or :pandas:`pandas.Timedelta<Timedelta>`, optional
             Frequency that time series is resampled to. Offset aliases can be found
             here:
             https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases.
@@ -513,8 +513,10 @@ class Electromobility:
             return
 
         freq_orig = flex_band.index[1] - flex_band.index[0]
+        if not isinstance(freq, pd.Timedelta):
+            freq = pd.Timedelta(freq)
         # in case of up-sampling, check if index is continuous
-        if pd.Timedelta(freq) < freq_orig:
+        if freq < freq_orig:
             check_index = pd.date_range(
                 start=flex_band.index.min(), end=flex_band.index.max(), freq=freq_orig
             )
@@ -529,7 +531,7 @@ class Electromobility:
         df_dict = {}
         for band in self.flexibility_bands.keys():
             df_dict[band] = getattr(self, "flexibility_bands")[band]
-            if pd.Timedelta(freq) < freq_orig:  # up-sampling
+            if freq < freq_orig:  # up-sampling
                 new_dates = pd.DatetimeIndex([df_dict[band].index[-1] + freq_orig])
             else:  # down-sampling (nothing happens)
                 new_dates = pd.DatetimeIndex([df_dict[band].index[-1]])
@@ -540,7 +542,7 @@ class Electromobility:
             )
 
         # resample time series
-        if pd.Timedelta(freq) < freq_orig:  # up-sampling
+        if freq < freq_orig:  # up-sampling
             for band in self.flexibility_bands.keys():
                 if band == "upper_power":
                     df_dict[band] = df_dict[band].resample(freq, closed="left").ffill()
@@ -549,14 +551,14 @@ class Electromobility:
                     df_dict[band] = df_dict[band].iloc[:-1, :]
                 else:
                     df_dict[band].sort_index(inplace=True)
-                    index_pre = df_dict[band].index[0] - pd.Timedelta(freq)
+                    index_pre = df_dict[band].index[0] - freq
                     # check how often the new index fits into the old index
                     num_times = int(freq_orig.total_seconds()) / int(
-                        pd.Timedelta(freq).total_seconds()
+                        freq.total_seconds()
                     )
                     # shift index and re-append first time step
                     df_dict[band].index = df_dict[band].index.shift(
-                        int(pd.Timedelta(freq).total_seconds()) * (num_times - 1), "s"
+                        int(freq.total_seconds()) * (num_times - 1), "s"
                     )
                     df_dict[band] = pd.concat(
                         [
