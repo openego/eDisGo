@@ -572,10 +572,10 @@ class Electromobility:
                         df_dict[band].resample(freq, closed="left").interpolate()
                     )
 
-                    # drop two last time steps, as closed left does somehow still
-                    # include the last time step and another time step was added
-                    # because of the shift
-                    df_dict[band] = df_dict[band].iloc[1:-2, :]
+                    # drop time steps - time step that was added in the beginning
+                    # and time steps that were added due to the shift
+                    df_dict[band] = df_dict[band].loc[: new_dates[0], :]
+                    df_dict[band] = df_dict[band].iloc[1:-1, :]
         else:  # down-sampling
             for band in self.flexibility_bands.keys():
                 if band == "upper_power":
