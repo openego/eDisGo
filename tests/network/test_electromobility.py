@@ -15,6 +15,7 @@ from edisgo.io.electromobility_import import (
     integrate_charging_parks,
 )
 from edisgo.network.electromobility import Electromobility
+from edisgo.network.timeseries import TimeSeries
 
 
 class TestElectromobility:
@@ -147,6 +148,8 @@ class TestElectromobility:
         times.
 
         """
+        # reset Timeseries object to avoid automatic resampling of flex bands
+        self.edisgo_obj.timeseries = TimeSeries()
         self.edisgo_obj.electromobility.get_flexibility_bands(
             self.edisgo_obj, ["work", "public"]
         )
