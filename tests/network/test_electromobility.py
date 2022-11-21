@@ -127,6 +127,20 @@ class TestElectromobility:
                 flex_bands["lower_energy"].loc[:, [cp]].iloc[-1, 0],
             )
 
+        # ############# check with automatic resampling of flex bands ###############
+        self.edisgo_obj.set_time_series_worst_case_analysis()
+        self.edisgo_obj.electromobility.get_flexibility_bands(
+            self.edisgo_obj, ["work", "public"]
+        )
+        # check that integrity check does not fail
+        self.edisgo_obj.electromobility.check_integrity()
+
+        # check frequency
+        flex_bands_index = self.edisgo_obj.electromobility.flexibility_bands[
+            "upper_energy"
+        ].index
+        assert (flex_bands_index[1] - flex_bands_index[0]) == pd.Timedelta("1H")
+
     def test_resample(self):
         """
         Checks resampling function with flexibility bands determined using standing
