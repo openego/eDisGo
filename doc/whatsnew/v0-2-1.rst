@@ -6,4 +6,4 @@ Release date: <month> <day>, <year>
 Changes
 -------
 
-*
+* added functionality to resample and check integrity of flexibility bands `#341 <https://github.com/openego/eDisGo/pull/341>`_
