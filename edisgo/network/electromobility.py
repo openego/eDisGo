@@ -515,7 +515,8 @@ class Electromobility:
         freq_orig = flex_band.index[1] - flex_band.index[0]
         if not isinstance(freq, pd.Timedelta):
             freq = pd.Timedelta(freq)
-        # in case of up-sampling, check if index is continuous
+        # in case of up-sampling, check if index is continuous and if new index fits
+        # into old index a discrete number of times
         if freq < freq_orig:
             check_index = pd.date_range(
                 start=flex_band.index.min(), end=flex_band.index.max(), freq=freq_orig
@@ -525,6 +526,13 @@ class Electromobility:
                     "Index of flexibility bands is not continuous. This might lead "
                     "to problems."
                 )
+            num_times = int(freq_orig.total_seconds()) / int(freq.total_seconds())
+            if not int(num_times) == num_times:
+                logger.error(
+                    "Up-sampling to an uneven number of times the new index fits into "
+                    "the old index is not possible."
+                )
+                return
 
         # add time step at the end of the time series in case of up-sampling so that
         # last time interval in the original time series is still included

@@ -213,7 +213,7 @@ class TestElectromobility:
             == flex_bands_orig["lower_energy"].loc[:, [cp]].iloc[3::4, 0]
         ).all()
 
-    def test_resample_2(self):
+    def test_resample_2(self, caplog):
         """
         Checks resampling function with set up flexibility bands.
 
@@ -326,7 +326,7 @@ class TestElectromobility:
             assert (flex_bands[band].columns == flex_bands_new[band].columns).all()
             assert not flex_bands_new[band].isna().any().any()
 
-        # check resampling to uneven amount of times new index fits into old index
+        # check resampling back to 30 minutes
         self.edisgo_obj.electromobility.resample(freq="30min")
         # check that integrity check does not fail
         self.edisgo_obj.electromobility.check_integrity()
@@ -336,6 +336,14 @@ class TestElectromobility:
             assert len(flex_bands_new[band]) == 8
             assert (flex_bands[band].columns == flex_bands_new[band].columns).all()
             assert not flex_bands_new[band].isna().any().any()
+
+        # check that resampling to an uneven number of times new index fits into old
+        # index leads to error raising
+        self.edisgo_obj.electromobility.resample(freq="8min")
+        assert (
+            "Up-sampling to an uneven number of times the new index fits into "
+            "the old index is not possible." in caplog.text
+        )
 
     def test_to_csv(self):
         """Test for method to_csv."""
