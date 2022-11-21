@@ -289,12 +289,6 @@ def setup_model(
         "minimize_loading",
     ]:
         raise ValueError("The objective you inserted is not implemented yet.")
-    # Todo: unnecessary?
-    edisgo_obj, grid_object, slack = (
-        fixed_parameters["edisgo_object"],
-        fixed_parameters["grid_object"],
-        fixed_parameters["slack"],
-    )
 
     # DEFINE SETS AND FIX PARAMETERS
     print("Setup model: Defining sets and parameters.")
@@ -321,7 +315,9 @@ def setup_model(
         model.time_increment = "1" + model.time_increment
 
     if fixed_parameters["optimize_bess"]:
-        model.storage_set = pm.Set(initialize=grid_object.storage_units_df.index)
+        model.storage_set = pm.Set(
+            initialize=fixed_parameters["grid_object"].storage_units_df.index
+        )
         model.optimized_storage_set = pm.Set(
             initialize=fixed_parameters["optimized_storage_units"]
         )
@@ -363,11 +359,12 @@ def setup_model(
         )
 
     if fixed_parameters["optimize_emob"]:
+        # TODO check for EV in flex loads
         print("Setup model: Adding EV model.")
         model = add_ev_model_bands(
             model=model,
             fixed_parameters=fixed_parameters,
-            grid_object=grid_object,
+            grid_object=fixed_parameters["grid_object"],
             charging_efficiency=kwargs.get("charging_efficiency", 0.9),
             energy_level_start=kwargs.get("energy_level_start_ev", None),
             energy_level_end=kwargs.get("energy_level_end_ev", None),
@@ -392,9 +389,9 @@ def setup_model(
             model=model,
             fixed_parameters=fixed_parameters,
             timesteps=timesteps,
-            edisgo_obj=edisgo_obj,
-            grid_object=grid_object,
-            slack=slack,
+            edisgo_obj=fixed_parameters["edisgo_object"],
+            grid_object=fixed_parameters["grid_object"],
+            slack=fixed_parameters["slack"],
             v_min=kwargs.get("v_min", 0.9),
             v_max=kwargs.get("v_max", 1.1),
             thermal_limits=kwargs.get("thermal_limit", 1.0),
