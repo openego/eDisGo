@@ -142,19 +142,26 @@ def from_powermodels(
     pm_results,
 ):
     """
-    Converts results from optimization in PowerModels network data format to eDisGo
-    and updates timeseries values of flexibilities on eDisGo object.
+    Converts results from optimization in PowerModels network data format to eDisGo data
+    format and updates timeseries values of flexibilities on eDisGo object.
 
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
-    pm_results: dict
-        Dictionary that contains all optimization results in PowerModels network data
-        format.
+    pm_results: dict or str
+        Dictionary or path to json file that contains all optimization results in
+        PowerModels network data format.
     """
+
     if type(pm_results) == str:
         with open(pm_results) as f:
             pm = json.loads(json.load(f))
+    elif type(pm_results) == dict:
+        pm = pm_results
+    else:
+        raise ValueError(
+            "Parameter 'pm_results' must be either dictionary or path " "to json file."
+        )
 
     flex_dicts = {
         "gen_nd": ["pgc"],
@@ -164,7 +171,7 @@ def from_powermodels(
         "dsm": ["pdsm"],
         "gen_slack": ["pgs", "qgs"],
         "heat_storage": ["phs"],
-    }  # TODO: add HV_requirements
+    }  # TODO: add slacks for HV requirements
 
     for flex in flex_dicts.keys():
         timesteps = pm["nw"].keys()
