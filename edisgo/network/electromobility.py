@@ -352,7 +352,7 @@ class Electromobility:
     def flexibility_bands(self, flex_dict):
         self._flexibility_bands = flex_dict
 
-    def get_flexibility_bands(self, edisgo_obj, use_case):
+    def get_flexibility_bands(self, edisgo_obj, use_case, resample=True):
         """
         Method to determine flexibility bands (lower and upper energy band as well as
         upper power band).
@@ -365,6 +365,11 @@ class Electromobility:
         edisgo_obj : :class:`~.EDisGo`
         use_case : str or list(str)
             Charging point use case(s) to determine flexibility bands for.
+        resample : bool (optional)
+            If True, flexibility bands are resampled to the same frequency as time
+            series data in :class:`~.network.timeseries.TimeSeries` object. If False,
+            original frequency is kept.
+            Default: True.
 
         Returns
         --------
@@ -482,15 +487,16 @@ class Electromobility:
         # sanity check
         self.check_integrity()
 
-        # check if time index matches Timeseries.timeindex and if not resample flex
-        # bands
-        edisgo_timeindex = edisgo_obj.timeseries.timeindex
-        if len(edisgo_timeindex) > 1:
-            # check if frequencies match
-            freq_edisgo = edisgo_timeindex[1] - edisgo_timeindex[0]
-            if freq_edisgo != stepsize:
-                # resample
-                self.resample(freq=freq_edisgo)
+        if resample:
+            # check if time index matches Timeseries.timeindex and if not resample flex
+            # bands
+            edisgo_timeindex = edisgo_obj.timeseries.timeindex
+            if len(edisgo_timeindex) > 1:
+                # check if frequencies match
+                freq_edisgo = edisgo_timeindex[1] - edisgo_timeindex[0]
+                if freq_edisgo != pd.Timedelta(f"{stepsize}min"):
+                    # resample
+                    self.resample(freq=freq_edisgo)
 
         return self.flexibility_bands
 
