@@ -484,9 +484,6 @@ class Electromobility:
         }
         self.flexibility_bands = flex_band_dict
 
-        # sanity check
-        self.check_integrity()
-
         if resample:
             # check if time index matches Timeseries.timeindex and if not resample flex
             # bands
@@ -497,6 +494,9 @@ class Electromobility:
                 if freq_edisgo != pd.Timedelta(f"{stepsize}min"):
                     # resample
                     self.resample(freq=freq_edisgo)
+
+        # sanity check
+        self.check_integrity()
 
         return self.flexibility_bands
 
