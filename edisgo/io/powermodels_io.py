@@ -610,7 +610,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, flexible_hps):
 
     """
 
-    heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df[flexible_hps]
+    heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df.loc[flexible_hps]
     for stor_i in np.arange(len(heat_storage_df.index)):
         idx_bus = _mapping(psa_net, psa_net.loads.bus[stor_i])
         pm["heat_storage"][str(stor_i + 1)] = {
