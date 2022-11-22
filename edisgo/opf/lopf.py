@@ -264,15 +264,37 @@ def setup_model(
     Method to set up pyomo model for optimisation of storage procurement
     and/or ev charging with linear approximation of power flow from
     eDisGo-object.
+    Parameters
+    ----------
+    fixed_parameters :
+    timesteps :
+    objective :
+    kwargs :
+        name : default optimization objective
+        overlap_interations : default None
+        delta_min : default 0.9
+        delta_max : default 0.1
+        fix_relative_soc : default 0.5
+        charging_efficiency: default 0.9
+        energy_level_start_ev : default None
+        energy_level_end_ev : default None
+        energy_level_beginning_ev : default None
+        charging_start_ev : default None
+        energy_level_start_hp : default None
+        energy_level_end_hp : default None
+        energy_level_beginning_hp : default None
+        charging_starts_hp : default {"hp": None, "tes": None}
+        v_min : default 0.9
+        v_max : default 1.1
+        thermal_limit : default 1.0
+        v_slack : default fixed_parameters["v_nom"]
+        load_factor_rings : default 1.0
+        print_model : default False
 
-    :param fixed_parameters: parameters that stay the same for every iteration
-    :param timesteps:
-    :param optimize_bess:
-    :param optimize_emob:
-    :param objective: choose the objective that should be minimized, so far
-            'curtailment' and 'peak_load' are implemented
-    :param kwargs:
-    :return:
+
+    Returns
+    -------
+
     """
 
     # Todo: Extract kwargs values from cfg?
@@ -365,11 +387,16 @@ def setup_model(
             model=model,
             fixed_parameters=fixed_parameters,
             grid_object=fixed_parameters["grid_object"],
-            charging_efficiency=kwargs.get("charging_efficiency", 0.9),
-            energy_level_start=kwargs.get("energy_level_start_ev", None),
-            energy_level_end=kwargs.get("energy_level_end_ev", None),
-            energy_level_beginning=kwargs.get("energy_level_beginning_ev", None),
-            charging_start=kwargs.get("charging_start_ev", None),
+            charging_efficiency=kwargs.get("charging_efficiency",
+                                           0.9),
+            energy_level_start=kwargs.get("energy_level_start_ev",
+                                          None),
+            energy_level_end=kwargs.get("energy_level_end_ev",
+                                        None),
+            energy_level_beginning=kwargs.get("energy_level_beginning_ev",
+                                              None),
+            charging_start=kwargs.get("charging_start_ev",
+                                      None),
         )
 
     if fixed_parameters["optimize_hp"]:
@@ -377,13 +404,18 @@ def setup_model(
         model = add_heat_pump_model(
             model=model,
             fixed_parameters=fixed_parameters,
-            energy_level_start=kwargs.get("energy_level_start_hp", None),
-            energy_level_end=kwargs.get("energy_level_end_hp", None),
-            energy_level_beginning=kwargs.get("energy_level_beginning_hp", None),
-            charging_starts=kwargs.get("charging_starts_hp", {"hp": None, "tes": None}),
+            energy_level_start=kwargs.get("energy_level_start_hp",
+                                          None),
+            energy_level_end=kwargs.get("energy_level_end_hp",
+                                        None),
+            energy_level_beginning=kwargs.get("energy_level_beginning_hp",
+                                              None),
+            charging_starts=kwargs.get("charging_starts_hp",
+                                       {"hp": None, "tes": None}),
         )
 
-    if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
+    if not objective == "minimize_energy_level" or objective == \
+            "maximize_energy_level":
         print("Setup model: Adding grid model.")
         model = add_grid_model_lopf(
             model=model,
@@ -1005,12 +1037,16 @@ def update_model(
 
     Parameters
     ----------
-    model
-    timesteps
-    fixed_parameters
-    optimize_bess
-    optimize_emob
-    kwargs
+    model :
+    timesteps :
+    fixed_parameters :
+    kwargs :
+        energy_level_start_tes: default None
+        energy_level_start_ : default None
+        energy_level_start_ : default None
+        energy_level_beginning : default None
+        energy_level_end_ : default None
+        charging_starts : default None
 
     Returns
     -------
@@ -1095,15 +1131,20 @@ def update_model(
     return model
 
 
-def update_rolling_horizon(comp_type, kwargs, model):
+def update_rolling_horizon(comp_type, model, **kwargs):
     """
 
     Parameters
     ----------
     comp_type :
-    kwargs :
     model :
-
+    kwargs :
+        energy_level_start_tes: default None
+        energy_level_start_ : default None
+        energy_level_start_ : default None
+        energy_level_beginning : default None
+        energy_level_end_ : default None
+        charging_starts : default None
     Returns
     -------
 
