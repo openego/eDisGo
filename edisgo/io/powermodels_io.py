@@ -1,7 +1,9 @@
 """
 This module provides tools to convert eDisGo representation of the network
-topology and timeseries to PowerModels network data format. Call :func:`to_powermodels`
-to retrieve the PowerModels network container.
+topology and timeseries to PowerModels network data format and to retrieve results from
+PowerModels OPF in PowerModels network data format to eDisGo representation.
+Call :func:`to_powermodels` to retrieve the PowerModels network container and
+:func:`from_powermodels` to write OPF results to edisgo object.
 """
 
 import json
@@ -458,20 +460,11 @@ def _build_load(edisgo_obj, psa_net, pm, flexible_cps, flexible_hps, flexible_lo
         loads_df = psa_net.loads.drop(flex_loads)
     for load_i in np.arange(len(loads_df.index)):
         idx_bus = _mapping(psa_net, loads_df.bus[load_i])
-        if loads_df.index.str.contains("Heat")[load_i]:
-            cop = edisgo_obj.heat_pump.cop_df[loads_df.index[load_i]][0]
-            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
-            p_d = psa_net.loads_t.p_set[loads_df.index[load_i]][0] / cop
-            q_d = p_d * np.tan(np.arccos(pf))
-        else:
-            p_d = psa_net.loads_t.p_set[loads_df.index[load_i]][0]
-            q_d = psa_net.loads_t.q_set[loads_df.index[load_i]][0]
-            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
+        p_d = psa_net.loads_t.p_set[loads_df.index[load_i]][0]
+        q_d = psa_net.loads_t.q_set[loads_df.index[load_i]][0]
         pm["load"][str(load_i + 1)] = {
             "pd": p_d,
             "qd": q_d,
-            "pf": pf,
-            "sign": sign,
             "load_bus": idx_bus,
             "status": True,
             "index": load_i + 1,
@@ -581,14 +574,15 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps):
         attached heat storage.
 
     """
-    heat_df = psa_net.loads.loc[flexible_hps]
+    heat_df = psa_net.loads.loc[flexible_hps]  # electric load
+    heat_df2 = edisgo_obj.heat_pump.heat_demand_df[flexible_hps]  # thermal load
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
         q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
         pm["heatpumps"][str(hp_i + 1)] = {
-            "pd": psa_net.loads_t.p_set[heat_df.index[hp_i]][0],  # heat demand
+            "pd": heat_df2[heat_df.index[hp_i]][0],  # heat demand
             "pf": pf,
             "sign": sign,
             "p_min": 0,
@@ -805,34 +799,22 @@ def _build_component_timeseries(
             :,
             ~(psa_net.generators_t.p_set.columns.str.contains("solar"))
             & ~(psa_net.generators_t.p_set.columns.str.contains("wind"))
-            & ~(psa_net.generators_t.p_set.columns.str.contains("Generator_slack")),
+            & ~(psa_net.generators_t.p_set.columns.str.contains("slack")),
         ]
-        q_set = psa_net.generators_t.q_set.loc[
-            :,
-            ~(psa_net.generators_t.q_set.columns.str.contains("solar"))
-            & ~(psa_net.generators_t.q_set.columns.str.contains("wind"))
-            & ~(psa_net.generators_t.q_set.columns.str.contains("slack")),
-        ]
+        q_set = psa_net.generators_t.q_set[p_set.columns]
     elif kind == "gen_nd":
         p_set = psa_net.generators_t.p_set.loc[
             :,
             psa_net.generators_t.p_set.columns.str.contains("solar")
             | psa_net.generators_t.p_set.columns.str.contains("wind"),
         ]
-        q_set = psa_net.generators_t.q_set.loc[
-            :,
-            psa_net.generators_t.q_set.columns.str.contains("solar")
-            | psa_net.generators_t.q_set.columns.str.contains("wind"),
-        ]
+        q_set = psa_net.generators_t.q_set[p_set.columns]
     elif kind == "gen_slack":
         p_set = psa_net.generators_t.p_set.loc[
             :,
             psa_net.generators_t.p_set.columns.str.contains("slack"),
         ]
-        q_set = psa_net.generators_t.q_set.loc[
-            :,
-            psa_net.generators_t.q_set.columns.str.contains("slack"),
-        ]
+        q_set = psa_net.generators_t.q_set[p_set.columns]
     elif kind == "load":
         flex_loads = np.concatenate((flexible_hps, flexible_cps, flexible_loads))
         if len(flex_loads) == 0:
@@ -848,16 +830,21 @@ def _build_component_timeseries(
         if len(flexible_cps) == 0:
             p_set = pd.DataFrame()
         else:
-            p_set = psa_net.loads_t.p_set.loc[:, flexible_cps]
-            p_max = edisgo_obj.electromobility.flexibility_bands["upper_power"]
-            e_min = edisgo_obj.electromobility.flexibility_bands["lower_energy"]
-            e_max = edisgo_obj.electromobility.flexibility_bands["upper_energy"]
+            p_set = edisgo_obj.electromobility.flexibility_bands["upper_power"][
+                flexible_cps
+            ]
+            e_min = edisgo_obj.electromobility.flexibility_bands["lower_energy"][
+                flexible_cps
+            ]
+            e_max = edisgo_obj.electromobility.flexibility_bands["upper_energy"][
+                flexible_cps
+            ]
     elif kind == "heatpumps":
         if len(flexible_hps) == 0:
             p_set = pd.DataFrame()
         else:
-            p_set = psa_net.loads_t.p_set.loc[:, flexible_hps]
-            cop = edisgo_obj.heat_pump.cop_df
+            p_set = edisgo_obj.heat_pump.heat_demand_df[flexible_hps]
+            cop = edisgo_obj.heat_pump.cop_df[flexible_hps]
     elif kind == "dsm":
         if len(flexible_loads) == 0:
             p_set = pd.DataFrame()
@@ -891,17 +878,8 @@ def _build_component_timeseries(
             comp_i = _mapping(
                 psa_net, comp, kind, flexible_cps, flexible_hps, flexible_loads
             )
-            if p_set.columns.str.contains("Heat")[comp_i - 1]:
-                cop = edisgo_obj.heat_pump.cop_df[comp]
-                p_d = p_set[comp].values / cop
-                q_d = (
-                    p_d
-                    * np.tan(np.arccos(pm["load"][str(comp_i)]["pf"]))
-                    * pm["load"][str(comp_i)]["sign"]
-                )
-            else:
-                p_d = p_set[comp].values
-                q_d = q_set[comp].values
+            p_d = p_set[comp].values
+            q_d = q_set[comp].values
             pm_comp[str(comp_i)] = {
                 "pd": p_d.tolist(),
                 "qd": q_d.tolist(),
@@ -916,7 +894,7 @@ def _build_component_timeseries(
             comp_i = _mapping(psa_net, comp, kind, flexible_cps=flexible_cps)
             if len(flexible_cps) > 0:
                 pm_comp[str(comp_i)] = {
-                    "p_max": p_max[comp].values.tolist(),
+                    "p_max": p_set[comp].values.tolist(),
                     "e_min": e_min[comp].values.tolist(),
                     "e_max": e_max[comp].values.tolist(),
                 }
@@ -924,7 +902,7 @@ def _build_component_timeseries(
             comp_i = _mapping(psa_net, comp, kind, flexible_hps=flexible_hps)
             pm_comp[str(comp_i)] = {
                 "pd": p_set[comp].values.tolist(),
-                "cop": cop[comp].values.tolist(),  # ändert der sich über die Zeit?
+                "cop": cop[comp].values.tolist(),
             }
         elif kind == "dsm":
             comp_i = _mapping(psa_net, comp, kind, flexible_loads=flexible_loads)
