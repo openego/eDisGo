@@ -178,10 +178,9 @@ def from_powermodels(
     for flex in flex_dicts.keys():
         timesteps = pm["nw"].keys()
         for variable in flex_dicts.get(flex):
-            results = pd.DataFrame(index=timesteps)
             for flex_comp in list(pm["nw"]["1"][flex].keys()):
                 name = pm["nw"]["1"][flex][flex_comp]["name"]
-                results[name] = np.nan
+                results = pd.DataFrame(index=timesteps, columns=[name])
                 for t in timesteps:
                     results[name][t] = pm["nw"][t][flex][flex_comp][variable]
                 if flex in ["gen_nd"]:  # , "gen_slack"]:  # TODO: slack_gen results
