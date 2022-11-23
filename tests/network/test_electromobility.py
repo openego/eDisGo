@@ -2,6 +2,7 @@ import os
 import shutil
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -14,6 +15,7 @@ from edisgo.io.electromobility_import import (
     integrate_charging_parks,
 )
 from edisgo.network.electromobility import Electromobility
+from edisgo.network.timeseries import TimeSeries
 
 
 class TestElectromobility:
@@ -30,6 +32,8 @@ class TestElectromobility:
         charging_processes_df = self.edisgo_obj.electromobility.charging_processes_df
         assert len(charging_processes_df) == 48
         assert isinstance(charging_processes_df, pd.DataFrame)
+        assert charging_processes_df.at[45, "park_end_timesteps"] == 232
+        assert charging_processes_df.at[216, "charging_park_id"] == 1466
 
     def test_potential_charging_parks_gdf(self):
         potential_charging_parks_gdf = (
@@ -49,6 +53,18 @@ class TestElectromobility:
         )
         assert len(integrated_charging_parks_df) == 3
         assert isinstance(integrated_charging_parks_df, pd.DataFrame)
+        assert (
+            integrated_charging_parks_df.at[1391, "edisgo_id"]
+            == "Charging_Point_LVGrid_131957_public_1"
+        )
+        assert (
+            integrated_charging_parks_df.at[1466, "edisgo_id"]
+            == "Charging_Point_LVGrid_362451_public_1"
+        )
+        assert (
+            integrated_charging_parks_df.at[1602, "edisgo_id"]
+            == "Charging_Point_LVGrid_136124_work_1"
+        )
 
     def test_stepsize(self):
         stepsize = self.edisgo_obj.electromobility.stepsize
@@ -61,6 +77,290 @@ class TestElectromobility:
     def test_eta_charging_points(self):
         eta_charging_points = self.edisgo_obj.electromobility.eta_charging_points
         assert eta_charging_points == 0.9
+
+    def test_get_flexibility_bands(self):
+        self.edisgo_obj.electromobility.get_flexibility_bands(
+            self.edisgo_obj, ["work", "public"]
+        )
+
+        integrated_charging_parks = (
+            self.edisgo_obj.electromobility.integrated_charging_parks_df
+        )
+        charging_processes = self.edisgo_obj.electromobility.charging_processes_df
+        flex_bands = self.edisgo_obj.electromobility.flexibility_bands
+
+        # check concrete values
+        cp = "Charging_Point_LVGrid_131957_public_1"
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122222
+        ).all()
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 0.0
+        ).all()
+
+        tmp = flex_bands["upper_energy"].loc[:, [cp]]
+        assert np.isclose(tmp.iloc[648, 0] + 11 / 4 / 1000, tmp.iloc[649, 0])
+        assert np.isclose(tmp.iloc[654, 0], tmp.iloc[655, 0])
+
+        tmp = flex_bands["lower_energy"].loc[:, [cp]]
+        assert np.isclose(tmp.iloc[648, 0], tmp.iloc[649, 0])
+        assert np.isclose(tmp.iloc[654, 0] + 11 / 4 / 1000, tmp.iloc[655, 0])
+
+        # check charging demand
+        for cp in [
+            "Charging_Point_LVGrid_131957_public_1",
+            "Charging_Point_LVGrid_362451_public_1",
+            "Charging_Point_LVGrid_136124_work_1",
+        ]:
+
+            charging_park_id = integrated_charging_parks.loc[
+                integrated_charging_parks.edisgo_id == cp
+            ].index
+            charging_processes_cp = charging_processes.loc[
+                charging_processes.charging_park_id.isin(charging_park_id)
+            ]
+            assert np.isclose(
+                charging_processes_cp.loc[:, "chargingdemand_kWh"].sum() / 1e3,
+                flex_bands["upper_energy"].loc[:, [cp]].iloc[-1, 0],
+            )
+            assert np.isclose(
+                charging_processes_cp.loc[:, "chargingdemand_kWh"].sum() / 1e3,
+                flex_bands["lower_energy"].loc[:, [cp]].iloc[-1, 0],
+            )
+
+        # ############# check with automatic resampling of flex bands ###############
+        self.edisgo_obj.set_time_series_worst_case_analysis()
+        self.edisgo_obj.electromobility.get_flexibility_bands(
+            self.edisgo_obj, ["work", "public"]
+        )
+        # check that integrity check does not fail
+        self.edisgo_obj.electromobility.check_integrity()
+
+        # check frequency
+        flex_bands_index = self.edisgo_obj.electromobility.flexibility_bands[
+            "upper_energy"
+        ].index
+        assert (flex_bands_index[1] - flex_bands_index[0]) == pd.Timedelta("1H")
+
+    def test_resample(self):
+        """
+        Checks resampling function with flexibility bands determined using standing
+        times.
+
+        """
+        # reset Timeseries object to avoid automatic resampling of flex bands
+        self.edisgo_obj.timeseries = TimeSeries()
+        self.edisgo_obj.electromobility.get_flexibility_bands(
+            self.edisgo_obj, ["work", "public"]
+        )
+        flex_bands_orig = self.edisgo_obj.electromobility.flexibility_bands.copy()
+
+        # ##################### check down-sampling #####################
+        self.edisgo_obj.electromobility.resample(freq="1h")
+
+        # check that integrity check does not fail
+        self.edisgo_obj.electromobility.check_integrity()
+
+        # check shape
+        flex_bands = self.edisgo_obj.electromobility.flexibility_bands
+        assert (
+            len(flex_bands["upper_energy"].index)
+            == len(flex_bands_orig["upper_energy"].index) / 4
+        )
+        assert len(flex_bands["upper_energy"].columns) == len(
+            flex_bands_orig["upper_energy"].columns
+        )
+
+        # check concrete values
+        cp = "Charging_Point_LVGrid_131957_public_1"
+
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[19:27, 0].values, 0.0122222
+        ).all()
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[0:19, 0].values, 0.0
+        ).all()
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[63, 0], 0.0122222 * 3 / 4
+        )
+
+        assert np.isclose(
+            flex_bands["upper_energy"].loc[:, [cp]].iloc[19, 0],
+            flex_bands_orig["upper_energy"].loc[:, [cp]].iloc[76:80, 0].max(),
+        )
+        assert np.isclose(
+            flex_bands["lower_energy"].loc[:, [cp]].iloc[26, 0],
+            flex_bands_orig["lower_energy"].loc[:, [cp]].iloc[104:108, 0].max(),
+        )
+
+        # ##################### check up-sampling #####################
+        self.edisgo_obj.electromobility.resample(freq="15min")
+
+        # check that integrity check does not fail
+        self.edisgo_obj.electromobility.check_integrity()
+
+        # check index and columns
+        flex_bands = self.edisgo_obj.electromobility.flexibility_bands
+        assert (
+            flex_bands["upper_energy"].index == flex_bands_orig["upper_energy"].index
+        ).all()
+        assert (
+            flex_bands["upper_energy"].columns
+            == flex_bands_orig["upper_energy"].columns
+        ).all()
+
+        # check concrete values
+        cp = "Charging_Point_LVGrid_131957_public_1"
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122222
+        ).all()
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 0.0
+        ).all()
+        assert np.isclose(
+            flex_bands["upper_power"].loc[:, [cp]].iloc[252:260, 0], 0.0122222 * 3 / 4
+        ).all()
+
+        assert (
+            flex_bands["upper_energy"].loc[:, [cp]].iloc[3::4, 0]
+            == flex_bands_orig["upper_energy"].loc[:, [cp]].iloc[3::4, 0]
+        ).all()
+        assert (
+            flex_bands["lower_energy"].loc[:, [cp]].iloc[3::4, 0]
+            == flex_bands_orig["lower_energy"].loc[:, [cp]].iloc[3::4, 0]
+        ).all()
+
+    def test_resample_2(self, caplog):
+        """
+        Checks resampling function with set up flexibility bands.
+
+        """
+        # CP1 - charge 12 kWh between time steps [1, 4]
+        # CP2 - charge 2 kWh between time steps [0, 1] and 2 kWh between
+        #       time steps [4, 5]
+
+        # set charging efficiency to 1 to make things easier
+        self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 1.0
+
+        # set up flexibility bands
+        timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
+        flex_bands = {}
+        flex_bands["upper_power"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 12.0, 12.0, 12.0, 12.0, 0.0],
+                "CP2": [3.0, 3.0, 0.0, 0.0, 3.0, 3.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["upper_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 6.0, 12.0, 12.0, 12.0, 12.0],
+                "CP2": [1.5, 2.0, 2.0, 2.0, 3.5, 4.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["lower_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 0.0, 0.0, 6.0, 12.0, 12.0],
+                "CP2": [0.5, 2.0, 2.0, 2.0, 2.5, 4.0],
+            },
+            index=timeindex,
+        )
+
+        self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+        self.edisgo_obj.electromobility.check_integrity()
+
+        # ##################### check up-sampling ####################
+
+        self.edisgo_obj.electromobility.resample(freq="15min")
+
+        # check that integrity check does not fail
+        self.edisgo_obj.electromobility.check_integrity()
+
+        # check concrete values
+        timeindex = pd.date_range("1/1/1970", periods=12, freq="15min")
+        flex_bands_checking = {}
+        flex_bands_checking["upper_power"] = pd.DataFrame(
+            data={
+                "CP1": [
+                    0.0,
+                    0.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    0.0,
+                    0.0,
+                ],
+                "CP2": [3.0, 3.0, 3.0, 3.0, 0.0, 0.0, 0.0, 0.0, 3.0, 3.0, 3.0, 3.0],
+            },
+            index=timeindex,
+        )
+        flex_bands_checking["upper_energy"] = pd.DataFrame(
+            data={
+                "CP1": [
+                    0.0,
+                    0.0,
+                    3.0,
+                    6.0,
+                    9.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                ],
+                "CP2": [0.75, 1.5, 1.75, 2.0, 2.0, 2.0, 2.0, 2.0, 2.75, 3.5, 3.75, 4.0],
+            },
+            index=timeindex,
+        )
+        flex_bands_checking["lower_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0, 6.0, 9.0, 12.0, 12.0, 12.0],
+                "CP2": [0.25, 0.5, 1.25, 2.0, 2.0, 2.0, 2.0, 2.0, 2.25, 2.5, 3.25, 4.0],
+            },
+            index=timeindex,
+        )
+
+        flex_bands_new = self.edisgo_obj.electromobility.flexibility_bands
+        for band in flex_bands_checking.keys():
+            assert_frame_equal(flex_bands_checking[band], flex_bands_new[band])
+
+        # check resampling to 2 hours
+        self.edisgo_obj.electromobility.resample(freq="2H")
+        # check that integrity check does not fail
+        self.edisgo_obj.electromobility.check_integrity()
+        # check shape and no NaN values
+        flex_bands_new = self.edisgo_obj.electromobility.flexibility_bands
+        for band in flex_bands_new.keys():
+            assert len(flex_bands_new[band]) == 2
+            assert (flex_bands[band].columns == flex_bands_new[band].columns).all()
+            assert not flex_bands_new[band].isna().any().any()
+
+        # check resampling back to 30 minutes
+        self.edisgo_obj.electromobility.resample(freq="30min")
+        # check that integrity check does not fail
+        self.edisgo_obj.electromobility.check_integrity()
+        # check shape and no NaN values
+        flex_bands_new = self.edisgo_obj.electromobility.flexibility_bands
+        for band in flex_bands_new.keys():
+            assert len(flex_bands_new[band]) == 8
+            assert (flex_bands[band].columns == flex_bands_new[band].columns).all()
+            assert not flex_bands_new[band].isna().any().any()
+
+        # check that resampling to an uneven number of times new index fits into old
+        # index leads to error raising
+        self.edisgo_obj.electromobility.resample(freq="8min")
+        assert (
+            "Up-sampling to an uneven number of times the new index fits into "
+            "the old index is not possible." in caplog.text
+        )
 
     def test_to_csv(self):
         """Test for method to_csv."""
