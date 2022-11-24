@@ -51,9 +51,10 @@ def prepare_time_invariant_parameters(
     **kwargs,
 ):
     """
-    Prepare parameters that do not change within the iterations of the rolling horizon
-    approach. These include topological parameters and timeseries of the
-    inflexible units which are not influenced by the optimisation.
+    Prepare parameters that do not change within the iterations of the
+    rolling horizon approach. These include topological parameters and
+    timeseries of the inflexible units which are not influenced by the
+    optimisation.
 
     Parameters
     ----------
@@ -132,8 +133,7 @@ def prepare_time_invariant_parameters(
             if not fixed_parameters["flexible_loads"].empty:
                 fixed_parameters["optimized_charging_points"] = (
                     fixed_parameters["flexible_loads"]
-                    .loc[fixed_parameters["flexible_loads"]["type"] ==
-                         "charging_point"]
+                    .loc[fixed_parameters["flexible_loads"]["type"] == "charging_point"]
                     .index
                 )
             else:
@@ -143,8 +143,9 @@ def prepare_time_invariant_parameters(
 
                 fixed_parameters["inflexible_charging_points"] = fixed_parameters[
                     "grid_object"
-                ].charging_points_df.index.drop(fixed_parameters[
-                    "optimized_charging_points"])
+                ].charging_points_df.index.drop(
+                    fixed_parameters["optimized_charging_points"]
+                )
     else:
         # Add empty list to later define inflexible loads
         fixed_parameters["optimized_charging_points"] = []
@@ -438,16 +439,11 @@ def setup_model(
             model=model,
             fixed_parameters=fixed_parameters,
             grid_object=fixed_parameters["grid_object"],
-            charging_efficiency=kwargs.get("charging_efficiency",
-                                           0.9),
-            energy_level_start=kwargs.get("energy_level_start_ev",
-                                          None),
-            energy_level_end=kwargs.get("energy_level_end_ev",
-                                        None),
-            energy_level_beginning=kwargs.get("energy_level_beginning_ev",
-                                              None),
-            charging_start=kwargs.get("charging_start_ev",
-                                      None),
+            charging_efficiency=kwargs.get("charging_efficiency", 0.9),
+            energy_level_start=kwargs.get("energy_level_start_ev", None),
+            energy_level_end=kwargs.get("energy_level_end_ev", None),
+            energy_level_beginning=kwargs.get("energy_level_beginning_ev", None),
+            charging_start=kwargs.get("charging_start_ev", None),
         )
 
     if fixed_parameters["optimize_hp"]:
@@ -455,18 +451,13 @@ def setup_model(
         model = add_heat_pump_model(
             model=model,
             fixed_parameters=fixed_parameters,
-            energy_level_start=kwargs.get("energy_level_start_hp",
-                                          None),
-            energy_level_end=kwargs.get("energy_level_end_hp",
-                                        None),
-            energy_level_beginning=kwargs.get("energy_level_beginning_hp",
-                                              None),
-            charging_starts=kwargs.get("charging_starts_hp",
-                                       {"hp": None, "tes": None}),
+            energy_level_start=kwargs.get("energy_level_start_hp", None),
+            energy_level_end=kwargs.get("energy_level_end_hp", None),
+            energy_level_beginning=kwargs.get("energy_level_beginning_hp", None),
+            charging_starts=kwargs.get("charging_starts_hp", {"hp": None, "tes": None}),
         )
 
-    if not objective == "minimize_energy_level" or objective == \
-            "maximize_energy_level":
+    if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
         print("Setup model: Adding grid model.")
         model = add_grid_model_lopf(
             model=model,
@@ -488,20 +479,33 @@ def setup_model(
 
     if fixed_parameters["optimize_bess"]:
         model.BatteryCharging = pm.Constraint(
-            model.storage_set, model.time_non_zero, rule=soc
+            model.storage_set,
+            model.time_non_zero,
+            rule=soc
         )
         model.FixedSOC = pm.Constraint(
-            model.storage_set, model.times_fixed_soc, rule=fix_soc
+            model.storage_set,
+            model.times_fixed_soc,
+            rule=fix_soc
         )
 
     if objective == "minimize_energy_level" or objective == "maximize_energy_level":
-        model.AggrGrid = pm.Constraint(model.time_set, rule=aggregated_power)
+        model.AggrGrid = pm.Constraint(
+            model.time_set,
+            rule=aggregated_power
+        )
 
     # DEFINE OBJECTIVE
     print("Setup model: Setting objective.")
     if objective == "peak_load":
-        model.LoadFactorMin = pm.Constraint(model.time_set, rule=load_factor_min)
-        model.LoadFactorMax = pm.Constraint(model.time_set, rule=load_factor_max)
+        model.LoadFactorMin = pm.Constraint(
+            model.time_set,
+            rule=load_factor_min
+        )
+        model.LoadFactorMax = pm.Constraint(
+            model.time_set,
+            rule=load_factor_max
+        )
         model.objective = pm.Objective(
             rule=minimize_max_residual_load,
             sense=pm.minimize,
@@ -527,7 +531,10 @@ def setup_model(
         )
     elif objective == "residual_load":
         model.grid_residual_load = pm.Var(model.time_set)
-        model.GridResidualLoad = pm.Constraint(model.time_set, rule=grid_residual_load)
+        model.GridResidualLoad = pm.Constraint(
+            model.time_set,
+            rule=grid_residual_load
+        )
         model.objective = pm.Objective(
             rule=minimize_residual_load,
             sense=pm.minimize,
@@ -535,7 +542,9 @@ def setup_model(
         )
     elif objective == "minimize_loading":
         model.objective = pm.Objective(
-            rule=minimize_loading, sense=pm.minimize, doc="Define objective function"
+            rule=minimize_loading,
+            sense=pm.minimize,
+            doc="Define objective function"
         )
     else:
         raise Exception("Unknown objective.")
@@ -1441,6 +1450,7 @@ def optimize(model, solver, load_solutions=True, mode=None, **kwargs):
 def setup_grid_object(object):
     """
     Set up the grid and edisgo object.
+
 
     Parameters
     ----------
