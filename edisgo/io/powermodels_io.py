@@ -187,6 +187,8 @@ def from_powermodels(
         raise ValueError(
             "Parameter 'pm_results' must be either dictionary or path " "to json file."
         )
+    # ToDo: Summe Abweichung HV rea an edisgo übergeben
+    # ToDo: ab gewisser Höhe der Abweichung warning ausgeben
 
     flex_dicts = {
         "gen_nd": ["pgc"],
@@ -241,17 +243,60 @@ def from_powermodels(
 
     edisgo_object.set_time_series_reactive_power_control()
 
-    if save_HV_slack:  # TODO
-        pass
-        # df = pd.DataFrame(index=timesteps, columns=["p"])
+    # Check values of slack variables for HV requirement constraint
+    names = [
+        pm["nw"]["1"]["HV_requirements"][flex]["flexibility"]
+        for flex in list(pm["nw"]["1"]["HV_requirements"].keys())
+    ]
+    data = [
+        [
+            pm["nw"][t]["HV_requirements"][flex]["phvs"]
+            for flex in list(pm["nw"]["1"]["HV_requirements"].keys())
+        ]
+        for t in timesteps
+    ]
+    data2 = [
+        [
+            pm["nw"][t]["HV_requirements"][flex]["phvs2"]
+            for flex in list(pm["nw"]["1"]["HV_requirements"].keys())
+        ]
+        for t in timesteps
+    ]
+    df = pd.DataFrame(
+        index=edisgo_object.timeseries.timeindex,
+        columns=names,
+        data=np.array(data) + np.array(data2),
+    ).round(4)
+    df2 = pd.DataFrame(
+        columns=[
+            "Highest negative error",
+            "Highest positive error",
+            "Mean absolute error",
+            "Sum absolute error",
+        ],
+        index=names,
+    )
+    # highest negative error
+    df2["Highest negative error"] = df.min()
+    # highest positive error
+    df2["Highest positive error"] = df.max()
+    # mean absolute error
+    df2["Mean absolute error"] = df.abs().sum() / len(df)
+    # sum of absolut error -> an edisgo übergeben
+    df2["Sum absolute error"] = df.abs().sum()
+    if (df2["Highest positive error"].values > 0.00001).any():  # ToDo: value of error
+        logger.warning("Highest absolute error of HV slack variables exceed 0.00001")
+    # ToDo: write sum absolute error to edisgo object
+    if save_HV_slack:
+        df2.to_csv(os.path.join(abs_path, "hv_requirements_slack.csv"))
     if save_slack_gen:
-        df = pd.DataFrame(index=timesteps, columns=["pg", "qg"])
+        df = pd.DataFrame(
+            index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"]
+        )
         for gen in list(pm["nw"]["1"]["gen_slack"].keys()):
             df["pg"] = [pm["nw"][t]["gen_slack"][gen]["pgs"] for t in timesteps]
             df["qg"] = [pm["nw"][t]["gen_slack"][gen]["qgs"] for t in timesteps]
-        df.set_index(edisgo_object.timeseries.timeindex).to_csv(
-            os.path.join(abs_path, "gen_slack.csv")
-        )
+        df.to_csv(os.path.join(abs_path, "gen_slack.csv"))
     if save_heat_storage:
         for variable in ["phs", "hse"]:
             names = [
@@ -265,8 +310,11 @@ def from_powermodels(
                 ]
                 for t in timesteps
             ]
-            pd.DataFrame(index=timesteps, columns=names, data=data).to_csv(
-                os.path.join(abs_path, str(variable + ".csv"))
+            name = {"phs": "p", "hse": "e"}
+            pd.DataFrame(
+                index=edisgo_object.timeseries.timeindex, columns=names, data=data
+            ).to_csv(
+                os.path.join(abs_path, str("heat_storage_" + name[variable] + ".csv"))
             )
 
 

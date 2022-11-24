@@ -3,8 +3,6 @@ import logging
 import os
 import subprocess
 
-from timeit import default_timer as timer
-
 import numpy as np
 import pandas as pd
 
@@ -74,7 +72,7 @@ def pm_optimize(
         Directory the csv file is saved to. Per default it takes the current
         working directory.
     """
-
+    # TODO: add logging: runtime usw als logging (aus stdout), error grund
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     julia_env_dir = os.path.join(opf_dir, "PowerModels.jl")
     solution_dir = os.path.join(opf_dir, "opf_solutions")
@@ -100,7 +98,6 @@ def pm_optimize(
     json_str = json.dumps(pm, default=_convert)
 
     logger.info("starting julia process")
-    start = timer()
     julia_process = subprocess.run(
         [
             "julia",
@@ -114,18 +111,26 @@ def pm_optimize(
         text=True,
         capture_output=True,
     )
-    end = timer()
-    run_time = end - start
-    logger.info("julia terminated after {} s".format(run_time))
-    if julia_process.returncode != 0:
-        raise RuntimeError("Julia subprocess failed.")
 
-    pm_opf = json.loads(julia_process.stdout.split("\n")[-1])
-    # write results to edisgo object
-    edisgo_obj.from_powermodels(
-        pm_opf,
-        save_heat_storage=save_heat_storage,
-        save_slack_gen=save_slack_gen,
-        save_HV_slack=save_HV_slack,
-        path=path,
-    )
+    if julia_process.returncode != 0:
+        logger.warning("Julia subprocess failed:")
+        logger.warning(julia_process.stderr)
+        logger.warning("eDisGo object wasn't updated.")
+    else:
+        julia_message = [
+            message
+            for message in julia_process.stdout.split("\n")
+            if message.startswith("pm")
+        ]
+        logger.info(julia_message[0])
+        logger.info(julia_message[1])
+        logger.info("Julia process was successful.")
+        pm_opf = json.loads(julia_process.stdout.split("\n")[-1])
+        # write results to edisgo object
+        edisgo_obj.from_powermodels(
+            pm_opf,
+            save_heat_storage=save_heat_storage,
+            save_slack_gen=save_slack_gen,
+            save_HV_slack=save_HV_slack,
+            path=path,
+        )
