@@ -198,21 +198,21 @@ def from_powermodels(
     timesteps = pm["nw"].keys()
 
     for flexibility in flexibilities:  # flex_dicts.keys():
-        for flex in flex_dicts.get(flexibility):
+        for flex in flex_dicts[flexibility][0]:
             names = [
-                pm["nw"]["1"][flex[0]][flex_comp]["name"]
-                for flex_comp in list(pm["nw"]["1"][flex[0]].keys())
+                pm["nw"]["1"][flex][flex_comp]["name"]
+                for flex_comp in list(pm["nw"]["1"][flex].keys())
             ]
             data = [
                 [
-                    pm["nw"][t][flex[0]][flex_comp][flex[1]]
-                    for flex_comp in list(pm["nw"]["1"][flex[0]].keys())
+                    pm["nw"][t][flex][flex_comp][flex_dicts.get(flexibility)[1]]
+                    for flex_comp in list(pm["nw"]["1"][flex].keys())
                 ]
                 for t in timesteps
             ]
             results = pd.DataFrame(index=timesteps, columns=names, data=data)
-            if flex[0] in ["gen_nd"]:
-                if flex[1] != "qgs":
+            if flex in ["gen_nd"]:
+                if flex_dicts.get(flexibility)[1] != "qgs":
                     edisgo_object.timeseries._generators_active_power.loc[:, names] = (
                         edisgo_object.timeseries.generators_active_power.loc[
                             :, names
@@ -228,11 +228,11 @@ def from_powermodels(
                         ].values
                         - results[names].values
                     )
-            elif flex[0] in ["dsm", "heatpumps", "electromobility"]:
+            elif flex in ["dsm", "heatpumps", "electromobility"]:
                 edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
                     names
                 ].values
-            elif flex[0] == "storage":
+            elif flex == "storage":
                 edisgo_object.timeseries._storage_units_active_power.loc[
                     :, names
                 ] = results[names].values
