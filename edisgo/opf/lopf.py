@@ -94,11 +94,15 @@ def prepare_time_invariant_parameters(
 
     if fixed_parameters["optimize_bess"]:
         if not fixed_parameters["flexible_loads"].empty:
-            fixed_parameters["flexible_storage_units"] = (
+            fixed_parameters["optimized_storage_units"] = (
                 fixed_parameters["flexible_loads"]
                 .loc[fixed_parameters["flexible_loads"]["type"] == "storage"]
                 .index
             )
+            fixed_parameters["inflexible_storage_units"] = fixed_parameters[
+                "grid_object"
+            ].storage_units_df.index.drop(
+                fixed_parameters["optimized_storage_units"])
         else:
             fixed_parameters["optimized_storage_units"] = kwargs.get(
                 "flexible_storage_units",
