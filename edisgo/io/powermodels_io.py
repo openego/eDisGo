@@ -783,10 +783,10 @@ def _build_HV_requirements(pm, opt_flex, edisgo_obj):
     ----------
     pm : dict
         (PowerModels) dictionary.
-    opt_flex: list
+    opt_flex : list
         List of flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]
-    edisgo_obj:
+    edisgo_obj : :class:`~.EDisGo`
     """
 
     flex_dict = {
