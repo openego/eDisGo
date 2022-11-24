@@ -107,18 +107,46 @@ def prepare_time_invariant_parameters(
         fixed_parameters["inflexible_storage_units"] = fixed_parameters[
             "grid_object"
         ].storage_units_df.index.drop(fixed_parameters["optimized_storage_units"])
+
+        # If no storage available set optimization to false
+        if fixed_parameters["optimized_storage_units"].empty:
+            fixed_parameters["optimize_bess"] = False
+    else:
+        # Add empty list to later define inflexible loads
+        fixed_parameters["optimized_storage_units"] = []
+
     if fixed_parameters["optimize_emob"]:
         # fixed_parameters["ev_flex_bands"] = kwargs.get("ev_flex_bands")
         fixed_parameters["ev_flex_bands"] = edisgo_obj.electromobility.flexibility_bands
-        fixed_parameters["optimized_charging_points"] = fixed_parameters[
-            "ev_flex_bands"
-        ]["upper_power"].columns
-        fixed_parameters["inflexible_charging_points"] = fixed_parameters[
-            "grid_object"
-        ].charging_points_df.index.drop(fixed_parameters["optimized_charging_points"])
+
+        if any([i.empty for i in fixed_parameters["ev_flex_bands"].values()]):
+            # TODO check if necessary to pass empty list
+            fixed_parameters["optimized_charging_points"] = []
+            fixed_parameters["optimize_emob"] = False
+            print("Emob optimization is set to False as flex bands empty.")
+        else:
+            if not fixed_parameters["flexible_loads"].empty:
+                fixed_parameters["optimized_charging_points"] = (
+                    fixed_parameters["flexible_loads"]
+                    .loc[fixed_parameters["flexible_loads"]["type"] ==
+                         "charging_point"]
+                    .index
+                )
+            else:
+                fixed_parameters["optimized_charging_points"] = fixed_parameters[
+                    "ev_flex_bands"
+                ]["upper_power"].columns
+
+                fixed_parameters["inflexible_charging_points"] = fixed_parameters[
+                    "grid_object"
+                ].charging_points_df.index.drop(fixed_parameters[
+                    "optimized_charging_points"])
     else:
+        # Add empty list to later define inflexible loads
         fixed_parameters["optimized_charging_points"] = []
+
     if fixed_parameters["optimize_hp"]:
+
         if not fixed_parameters["flexible_loads"].empty:
             fixed_parameters["optimized_heat_pumps"] = (
                 fixed_parameters["flexible_loads"]
