@@ -294,34 +294,54 @@ def setup_model(
 ):
     """
     Method to set up pyomo model for optimisation of storage procurement
-    and/or ev charging with linear approximation of power flow from
-    eDisGo-object.
+    and/or ev charging and/or heat pumps including thermal storage with linear
+    approximation of power flow from eDisGo-object.
+
     Parameters
     ----------
-    fixed_parameters :
+    fixed_parameters : dict
+        All fixed parameters which are needed to setup the model
     timesteps :
+        Number of timesteps for which the model is set up
     objective :
+        Optimization objectives. Possible keys: "curtailment", "peak_load",
+        "residual_load", "minimize_energy_level", "maximize_energy_level",
+        "minimize_loading",
     kwargs :
-        name : default optimization objective
-        overlap_interations : default None
-        delta_min : default 0.9
-        delta_max : default 0.1
-        fix_relative_soc : default 0.5
-        charging_efficiency: default 0.9
-        energy_level_start_ev : default None
-        energy_level_end_ev : default None
-        energy_level_beginning_ev : default None
-        charging_start_ev : default None
-        energy_level_start_hp : default None
-        energy_level_end_hp : default None
-        energy_level_beginning_hp : default None
-        charging_starts_hp : default {"hp": None, "tes": None}
-        v_min : default 0.9
-        v_max : default 1.1
-        thermal_limit : default 1.0
-        v_slack : default fixed_parameters["v_nom"]
-        load_factor_rings : default 1.0
-        print_model : default False
+        name :
+            Name of the model (default: optimization objective)
+        overlap_iterations :
+            Number of timesteps which the iteration windows overlap
+            (default: None)
+        charging_efficiency: (default: 0.9)
+        energy_level_start_ev : (default: None)
+        charging_start_ev : (default: None
+            startwert ab 2te iteration, dynamisch
+        charging_starts_hp : (default: {"hp": None, "tes": None}
+            startwert ab 2ter Iteration, dynamisch
+        energy_level_start_hp : (default: None
+            ab 2ter iteration
+        energy_level_end_ev : (default: None
+        energy_level_end_hp : (default: None
+        energy_level_beginning_ev : (default: None
+            wurde eingeführt um Differenz zu referenzladen zu beheben
+            letzter Iterationsschritt auf mean energyband if True
+        energy_level_beginning_hp : (default: None
+            wurde eingeführt um Differenz zu referenzladen zu beheben
+        fix_relative_soc : (default: 0.5
+            Wärmespeicher, bei Bander vermutlich mean
+        delta_min : (default: 0.9
+        delta_max : (default: 0.1
+        v_min : (default: 0.9
+        v_max : (default: 1.1
+            SPannungsgrenzwerte
+        thermal_limit : (default: 1.0
+            für Lines und Transformer
+        v_slack : (default: fixed_parameters["v_nom"]
+            Spannungsnennwert am Umspannwerk
+        load_factor_rings : (default: 1.0
+            n-1 kriterium bei 0.5
+        print_model : (default: False
 
 
     Returns
@@ -393,7 +413,6 @@ def setup_model(
         model.grid_power_flexible = pm.Var(model.time_set)
 
     # DEFINE VARIABLES
-
     if fixed_parameters["optimize_bess"]:
         model.soc = pm.Var(
             model.optimized_storage_set,
@@ -1058,9 +1077,6 @@ def update_model(
     model,
     timesteps,
     fixed_parameters,
-    optimize_bess=True,
-    optimize_emob=True,
-    optimize_hp=True,
     **kwargs,
 ):
     """
