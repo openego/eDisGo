@@ -30,6 +30,7 @@ from edisgo.io.electromobility_import import (
     integrate_charging_parks,
 )
 from edisgo.io.generators_import import oedb as import_generators_oedb
+from edisgo.io.powermodels_io import Etrago  # ToDo: delete as soon as etrago class is
 
 # from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.network import timeseries
@@ -44,6 +45,8 @@ from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
+
+# implemented
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
@@ -151,6 +154,7 @@ class EDisGo:
         # set up results and time series container
         self.results = Results(self)
         self.opf_results = OPFResults()
+        self.etrago = Etrago()  # ToDo: delete as soon as etrago class is implemented
         self.timeseries = timeseries.TimeSeries(
             timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
         )
@@ -634,7 +638,6 @@ class EDisGo:
         flexible_loads=[],
         opt_version=1,
         opt_flex=[],
-        hv_req_p=pd.DataFrame(),
     ):
         """
         Converts eDisGo representation of the network topology and timeseries to
@@ -670,7 +673,6 @@ class EDisGo:
             flexible_loads,
             opt_version,
             opt_flex,
-            hv_req_p,
         )
 
     def from_powermodels(
@@ -729,7 +731,6 @@ class EDisGo:
         flexible_loads=[],
         opt_version=1,
         opt_flex=["curt", "storage", "cp", "hp", "dsm"],
-        hv_req_p=pd.DataFrame(),
         method="soc",
         save_heat_storage=False,
         save_slack_gen=False,
@@ -793,7 +794,6 @@ class EDisGo:
             flexible_loads=flexible_loads,
             opt_version=opt_version,
             opt_flex=opt_flex,
-            hv_req_p=hv_req_p,
             method=method,
             save_heat_storage=save_heat_storage,
             save_slack_gen=save_slack_gen,
@@ -2374,7 +2374,6 @@ class EDisGo:
         flexible_loads=[],
         opt_version=1,
         opt_flex=[],
-        hv_req_p=pd.DataFrame(),
     ):
         """
         Saves EDisGo object in PowerModels network data format to json file.
@@ -2410,7 +2409,6 @@ class EDisGo:
             flexible_loads,
             opt_version,
             opt_flex,
-            hv_req_p,
         )
 
         def _convert(o):

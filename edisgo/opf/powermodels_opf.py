@@ -4,7 +4,6 @@ import os
 import subprocess
 
 import numpy as np
-import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +15,6 @@ def pm_optimize(
     flexible_loads=[],
     opt_version=1,
     opt_flex=["curt", "storage", "cp", "hp", "dsm"],
-    hv_req_p=pd.DataFrame(),
     method="soc",
     save_heat_storage=False,
     save_slack_gen=False,
@@ -72,7 +70,6 @@ def pm_optimize(
         Directory the csv file is saved to. Per default it takes the current
         working directory.
     """
-    # TODO: add logging: runtime usw als logging (aus stdout), error grund
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     julia_env_dir = os.path.join(opf_dir, "PowerModels.jl")
     solution_dir = os.path.join(opf_dir, "opf_solutions")
@@ -83,7 +80,6 @@ def pm_optimize(
         flexible_loads=flexible_loads,
         opt_version=opt_version,
         opt_flex=opt_flex,
-        hv_req_p=hv_req_p,
     )
 
     def _convert(o):

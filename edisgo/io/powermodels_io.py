@@ -20,6 +20,16 @@ from edisgo.tools.tools import calculate_impedance_for_parallel_components
 logger = logging.getLogger(__name__)
 
 
+class Etrago:  # ToDo: delete as soon as etrago class is implemented
+    def __init__(self):
+        self.renewables_curtailment = pd.Series()
+        self.storage_units_active_power = pd.Series()
+        self.dsm_active_power = pd.Series()
+        self.electromobility_active_power = pd.Series()
+        self.heat_pump_rural_active_power = pd.Series()
+        self.heat_central_active_power = pd.Series()
+
+
 def to_powermodels(
     edisgo_object,
     flexible_cps=[],
@@ -27,7 +37,6 @@ def to_powermodels(
     flexible_loads=[],
     opt_version=1,
     opt_flex=[],
-    hv_req_p=pd.DataFrame(),
 ):
     """
     Converts eDisGo representation of the network topology and timeseries to
@@ -122,7 +131,7 @@ def to_powermodels(
     if len(flexible_loads) > 0:
         _build_dsm(edisgo_object, psa_net, pm, flexible_loads)
     if (opt_version == 1) | (opt_version == 2):
-        _build_HV_requirements(pm, opt_flex, hv_req_p)
+        _build_HV_requirements(pm, opt_flex, edisgo_object)
     _build_timeseries(
         psa_net,
         pm,
@@ -131,7 +140,6 @@ def to_powermodels(
         flexible_hps,
         flexible_loads,
         opt_flex,
-        hv_req_p,
     )
     return pm
 
@@ -766,7 +774,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads):
         }
 
 
-def _build_HV_requirements(pm, opt_flex, hv_req_p):
+def _build_HV_requirements(pm, opt_flex, edisgo_obj):
     """
     Builds dictionary for HV requirement data in PowerModels network data format and
     adds it to PowerModels dictionary 'pm'.
@@ -778,10 +786,23 @@ def _build_HV_requirements(pm, opt_flex, hv_req_p):
     opt_flex: list
         List of flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]
+    edisgo_obj:
     """
+
+    flex_dict = {
+        "curt": edisgo_obj.etrago.renewables_curtailment,
+        "storage": edisgo_obj.etrago.storage_units_active_power,
+        "cp": edisgo_obj.etrago.electromobility_active_power,
+        "hp": (
+            edisgo_obj.etrago.heat_pump_rural_active_power
+            + edisgo_obj.etrago.heat_central_active_power
+        ),
+        "dsm": edisgo_obj.etrago.dsm_active_power,
+    }
+
     for i in np.arange(len(opt_flex)):
         pm["HV_requirements"][str(i + 1)] = {
-            "P": hv_req_p[opt_flex[i]][0],
+            "P": flex_dict[opt_flex[i]][0],
             "flexibility": opt_flex[i],
         }
 
@@ -794,7 +815,6 @@ def _build_timeseries(
     flexible_hps,
     flexible_loads,
     opt_flex,
-    hv_req_p,
 ):
     """
     Builds timeseries dictionary in PowerModels network data format and adds it to
@@ -841,7 +861,6 @@ def _build_timeseries(
             flexible_hps,
             flexible_loads,
             opt_flex,
-            hv_req_p,
         )
     pm["time_series"]["num_steps"] = len(psa_net.snapshots)
 
@@ -855,7 +874,6 @@ def _build_component_timeseries(
     flexible_hps=None,
     flexible_loads=None,
     opt_flex=None,
-    hv_req_p=None,
 ):
     """
     Builds timeseries dictionary for given kind and adds it to 'time_series'
@@ -1006,10 +1024,19 @@ def _build_component_timeseries(
     if (kind == "HV_requirements") & (
         (pm["opt_version"] == 1) | (pm["opt_version"] == 2)
     ):
-        # TODO: add correct time series from edisgo.etrago
+        flex_dict = {
+            "curt": edisgo_obj.etrago.renewables_curtailment,
+            "storage": edisgo_obj.etrago.storage_units_active_power,
+            "cp": edisgo_obj.etrago.electromobility_active_power,
+            "hp": (
+                edisgo_obj.etrago.heat_pump_rural_active_power
+                + edisgo_obj.etrago.heat_central_active_power
+            ),
+            "dsm": edisgo_obj.etrago.dsm_active_power,
+        }
         for i in np.arange(len(opt_flex)):
             pm_comp[(str(i + 1))] = {
-                "P": hv_req_p[opt_flex[i]].tolist(),
+                "P": flex_dict[opt_flex[i]].tolist(),
             }
 
     pm["time_series"][kind] = pm_comp
