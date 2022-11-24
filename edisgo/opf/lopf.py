@@ -1450,16 +1450,17 @@ def setup_grid_object(object):
     -------
 
     """
-    if hasattr(object, "topology"):
+    if hasattr(object, "topology"): #EDisGo object
         grid_object = deepcopy(object.topology)
         edisgo_object = deepcopy(object)
         slack = grid_object.mv_grid.station.index
-    else:
+    else:  # Grid object
         grid_object = deepcopy(object)
         edisgo_object = deepcopy(object.edisgo_obj)
-        slack = [
-            grid_object.transformers_df.bus1.iloc[0]
-        ]  # Todo: careful with MV grid, does not work with that right?
+        # slack = [
+        #     grid_object.transformers_df.bus1.iloc[0]
+        # ]  # Todo: careful with MV grid, does not work with that right?
+        slack = grid_object.station.index
     return edisgo_object, grid_object, slack
 
 
