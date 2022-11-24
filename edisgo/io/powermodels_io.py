@@ -198,44 +198,42 @@ def from_powermodels(
     timesteps = pm["nw"].keys()
 
     for flexibility in flexibilities:  # flex_dicts.keys():
-        for flex in flex_dicts[flexibility][0]:
-            names = [
-                pm["nw"]["1"][flex][flex_comp]["name"]
+        flex, variable = flex_dicts[flexibility]
+        names = [
+            pm["nw"]["1"][flex][flex_comp]["name"]
+            for flex_comp in list(pm["nw"]["1"][flex].keys())
+        ]
+        data = [
+            [
+                pm["nw"][t][flex][flex_comp][variable]
                 for flex_comp in list(pm["nw"]["1"][flex].keys())
             ]
-            data = [
-                [
-                    pm["nw"][t][flex][flex_comp][flex_dicts.get(flexibility)[1]]
-                    for flex_comp in list(pm["nw"]["1"][flex].keys())
-                ]
-                for t in timesteps
-            ]
-            results = pd.DataFrame(index=timesteps, columns=names, data=data)
-            if flex in ["gen_nd"]:
-                if flex_dicts.get(flexibility)[1] != "qgs":
-                    edisgo_object.timeseries._generators_active_power.loc[:, names] = (
-                        edisgo_object.timeseries.generators_active_power.loc[
-                            :, names
-                        ].values
-                        - results[names].values
-                    )
-                else:
-                    edisgo_object.timeseries._generators_reactive_power.loc[
+            for t in timesteps
+        ]
+        results = pd.DataFrame(index=timesteps, columns=names, data=data)
+        if flex in ["gen_nd"]:
+            if variable != "qgs":
+                edisgo_object.timeseries._generators_active_power.loc[:, names] = (
+                    edisgo_object.timeseries.generators_active_power.loc[
                         :, names
-                    ] = (
-                        edisgo_object.timeseries.generators_reactive_power.loc[
-                            :, names
-                        ].values
-                        - results[names].values
-                    )
-            elif flex in ["dsm", "heatpumps", "electromobility"]:
-                edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
-                    names
-                ].values
-            elif flex == "storage":
-                edisgo_object.timeseries._storage_units_active_power.loc[
-                    :, names
-                ] = results[names].values
+                    ].values
+                    - results[names].values
+                )
+            else:
+                edisgo_object.timeseries._generators_reactive_power.loc[:, names] = (
+                    edisgo_object.timeseries.generators_reactive_power.loc[
+                        :, names
+                    ].values
+                    - results[names].values
+                )
+        elif flex in ["dsm", "heatpumps", "electromobility"]:
+            edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
+                names
+            ].values
+        elif flex == "storage":
+            edisgo_object.timeseries._storage_units_active_power.loc[
+                :, names
+            ] = results[names].values
 
     edisgo_object.set_time_series_reactive_power_control()
 
