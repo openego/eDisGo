@@ -1139,7 +1139,7 @@ def update_model(
                 fixed_parameters["power_factors"].loc[branch, indexer]
             )
 
-    if optimize_emob:
+    if fixed_parameters["optimize_emob"]:
         for t in model.time_set:
             overlap = t - len(timesteps) + 1
             if overlap > 0:
@@ -1158,7 +1158,7 @@ def update_model(
                 )
         model = update_rolling_horizon("ev", kwargs, model)
 
-    if optimize_hp:
+    if fixed_parameters["optimize_hp"]:
         for t in model.time_set:
             overlap = t - len(timesteps) + 1
             if overlap > 0:
@@ -1171,9 +1171,9 @@ def update_model(
                     set_heat_demand(model, hp, indexer)
                 )
                 model.cop_hp[hp, t].set_value(set_cop_hp(model, hp, indexer))
-        model = update_rolling_horizon("hp", kwargs, model)
+        model = update_rolling_horizon("hp", model, **kwargs)
 
-    if optimize_bess:
+    if fixed_parameters["optimize_bess"]:
         raise NotImplementedError
     print("It took {} seconds to update the model.".format(perf_counter() - t1))
     return model
