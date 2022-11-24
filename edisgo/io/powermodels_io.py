@@ -187,7 +187,7 @@ def from_powermodels(
         raise ValueError(
             "Parameter 'pm_results' must be either dictionary or path " "to json file."
         )
-    flexibilities = pm_results["nw"]["1"]["flexibilities"]
+
     flex_dicts = {
         "curt": ["gen_nd", "pgc"],
         "hp": ["heatpumps", "php"],
@@ -197,7 +197,7 @@ def from_powermodels(
     }
     timesteps = pm["nw"].keys()
 
-    for flexibility in flexibilities:  # flex_dicts.keys():
+    for flexibility in pm_results["nw"]["1"]["flexibilities"]:
         flex, variable = flex_dicts[flexibility]
         names = [
             pm["nw"]["1"][flex][flex_comp]["name"]
