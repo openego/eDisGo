@@ -19,8 +19,11 @@ def pm_optimize(
     opt_version=1,
     opt_flex=["curt", "storage", "cp", "hp", "dsm"],
     hv_req_p=pd.DataFrame(),
-    hv_req_q=pd.DataFrame(),
     method="soc",
+    save_heat_storage=False,
+    save_slack_gen=False,
+    save_HV_slack=False,
+    path="",
 ):
     """
     Runs OPF for edisgo object in julia subprocess and writes results of OPF to edisgo
@@ -50,6 +53,26 @@ def pm_optimize(
         relaxation of equality constraint P²+Q² = V²*I². If method is "nc", OPF is run
         with Ipopt solver as a non-convex problem due to quadratic equality constraint
         P²+Q² = V²*I².
+    save_heat_storage: bool
+        Indicates whether to save results of heat storage variables from the
+        optimization to csv file in the current working directory. Set parameter
+        "path" to change the directory the file is saved to.
+        directory.
+            Default: False
+    save_slack_gen: bool
+        Indicates whether to save results of slack generator variables from the
+        optimization to csv file in the current working directory. Set parameter
+        "path" to change the directory the file is saved to.
+        Default: False
+    save_HV_slack: bool
+        Indicates whether to save results of slack variables for high voltage
+        requirements (sum, minimal and maximal and mean deviation) from the optimization
+        to csv file in the current working directory. Set parameter "path" to change the
+        directory the file is saved to.
+        Default: False
+    path : str
+        Directory the csv file is saved to. Per default it takes the current
+        working directory.
     """
 
     opf_dir = os.path.dirname(os.path.abspath(__file__))
@@ -63,7 +86,6 @@ def pm_optimize(
         opt_version=opt_version,
         opt_flex=opt_flex,
         hv_req_p=hv_req_p,
-        hv_req_q=hv_req_q,
     )
 
     def _convert(o):
@@ -100,4 +122,10 @@ def pm_optimize(
 
     pm_opf = json.loads(julia_process.stdout.split("\n")[-1])
     # write results to edisgo object
-    edisgo_obj.from_powermodels(pm_opf)
+    edisgo_obj.from_powermodels(
+        pm_opf,
+        save_heat_storage=save_heat_storage,
+        save_slack_gen=save_slack_gen,
+        save_HV_slack=save_HV_slack,
+        path=path,
+    )

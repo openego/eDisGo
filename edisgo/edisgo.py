@@ -635,7 +635,6 @@ class EDisGo:
         opt_version=1,
         opt_flex=[],
         hv_req_p=pd.DataFrame(),
-        hv_req_q=pd.DataFrame(),
     ):
         """
         Converts eDisGo representation of the network topology and timeseries to
@@ -672,12 +671,15 @@ class EDisGo:
             opt_version,
             opt_flex,
             hv_req_p,
-            hv_req_q,
         )
 
     def from_powermodels(
         self,
         pm_results={},
+        save_heat_storage=False,
+        save_slack_gen=False,
+        save_HV_slack=False,
+        path="",
     ):
         """
         Converts results from optimization in PowerModels network data format to eDisGo
@@ -686,13 +688,39 @@ class EDisGo:
 
         Parameters
         ----------
-        pm: dict or str
+        pm_results: dict or str
             Dictionary or path to JSON file that contains all network data in
             PowerModels network data format.
-
+        save_heat_storage: bool
+            Indicates whether to save results of heat storage variables from the
+            optimization to csv file in the current working directory. Set parameter
+            "path" to change the directory the file is saved to.
+            directory.
+                Default: False
+        save_slack_gen: bool
+            Indicates whether to save results of slack generator variables from the
+            optimization to csv file in the current working directory. Set parameter
+            "path" to change the directory the file is saved to.
+            Default: False
+        save_HV_slack: bool
+            Indicates whether to save results of slack variables for high voltage
+            requirements (sum, minimal and maximal and mean deviation) from the
+            optimization to csv file in the current working directory. Set parameter
+            "path" to change the directory the file is saved to.
+            Default: False
+        path : str
+            Directory the csv file is saved to. Per default it takes the current
+            working directory.
         """
 
-        return powermodels_io.from_powermodels(self, pm_results=pm_results)
+        return powermodels_io.from_powermodels(
+            self,
+            pm_results=pm_results,
+            save_heat_storage=save_heat_storage,
+            save_HV_slack=save_HV_slack,
+            save_slack_gen=save_slack_gen,
+            path=path,
+        )
 
     def pm_optimize(
         self,
@@ -702,8 +730,11 @@ class EDisGo:
         opt_version=1,
         opt_flex=["curt", "storage", "cp", "hp", "dsm"],
         hv_req_p=pd.DataFrame(),
-        hv_req_q=pd.DataFrame(),
         method="soc",
+        save_heat_storage=False,
+        save_slack_gen=False,
+        save_HV_slack=False,
+        path="",
     ):
         """
         Runs OPF for edisgo object in julia subprocess and writes results of OPF to
@@ -712,7 +743,6 @@ class EDisGo:
 
         Parameters
         ----------
-        edisgo_obj : :class:`~.EDisGo`
         flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
             Array containing all charging points that allow for flexible charging.
         flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
@@ -734,6 +764,26 @@ class EDisGo:
             relaxation of equality constraint P²+Q² = V²*I². If method is "nc", OPF is
             run with Ipopt solver as a non-convex problem due to quadratic equality
             constraint P²+Q² = V²*I².
+        save_heat_storage: bool
+            Indicates whether to save results of heat storage variables from the
+            optimization to csv file in the current working directory. Set parameter
+            "path" to change the directory the file is saved to.
+            directory.
+                Default: False
+        save_slack_gen: bool
+            Indicates whether to save results of slack generator variables from the
+            optimization to csv file in the current working directory. Set parameter
+            "path" to change the directory the file is saved to.
+            Default: False
+        save_HV_slack: bool
+            Indicates whether to save results of slack variables for high voltage
+            requirements (sum, minimal and maximal and mean deviation) from the
+            optimization to csv file in the current working directory. Set parameter
+            "path" to change the directory the file is saved to.
+            Default: False
+        path : str
+            Directory the csv file is saved to. Per default it takes the current
+            working directory.
         """
 
         return powermodels_opf.pm_optimize(
@@ -744,8 +794,11 @@ class EDisGo:
             opt_version=opt_version,
             opt_flex=opt_flex,
             hv_req_p=hv_req_p,
-            hv_req_q=hv_req_q,
             method=method,
+            save_heat_storage=save_heat_storage,
+            save_slack_gen=save_slack_gen,
+            save_HV_slack=save_HV_slack,
+            path=path,
         )
 
     def to_graph(self):
@@ -2322,7 +2375,6 @@ class EDisGo:
         opt_version=1,
         opt_flex=[],
         hv_req_p=pd.DataFrame(),
-        hv_req_q=pd.DataFrame(),
     ):
         """
         Saves EDisGo object in PowerModels network data format to json file.
@@ -2359,7 +2411,6 @@ class EDisGo:
             opt_version,
             opt_flex,
             hv_req_p,
-            hv_req_q,
         )
 
         def _convert(o):

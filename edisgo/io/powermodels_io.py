@@ -8,6 +8,7 @@ Call :func:`to_powermodels` to retrieve the PowerModels network container and
 
 import json
 import logging
+import os
 
 import numpy as np
 import pandas as pd
@@ -27,7 +28,6 @@ def to_powermodels(
     opt_version=1,
     opt_flex=[],
     hv_req_p=pd.DataFrame(),
-    hv_req_q=pd.DataFrame(),
 ):
     """
     Converts eDisGo representation of the network topology and timeseries to
@@ -110,9 +110,7 @@ def to_powermodels(
     if len(edisgo_object.topology.storage_units_df) > 0:
         _build_battery_storage(edisgo_object, psa_net, pm)
     if len(psa_net.loads) > 0:
-        _build_load(
-            edisgo_object, psa_net, pm, flexible_cps, flexible_hps, flexible_loads
-        )
+        _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads)
     else:
         logger.warning("No loads found in network.")
     if len(flexible_cps) > 0:
@@ -124,7 +122,7 @@ def to_powermodels(
     if len(flexible_loads) > 0:
         _build_dsm(edisgo_object, psa_net, pm, flexible_loads)
     if (opt_version == 1) | (opt_version == 2):
-        _build_HV_requirements(pm, opt_flex, hv_req_p, hv_req_q)
+        _build_HV_requirements(pm, opt_flex, hv_req_p)
     _build_timeseries(
         psa_net,
         pm,
@@ -134,7 +132,6 @@ def to_powermodels(
         flexible_loads,
         opt_flex,
         hv_req_p,
-        hv_req_q,
     )
     return pm
 
@@ -142,6 +139,10 @@ def to_powermodels(
 def from_powermodels(
     edisgo_object,
     pm_results,
+    save_heat_storage=False,
+    save_slack_gen=False,
+    save_HV_slack=False,
+    path="",
 ):
     """
     Converts results from optimization in PowerModels network data format to eDisGo data
@@ -153,7 +154,29 @@ def from_powermodels(
     pm_results: dict or str
         Dictionary or path to json file that contains all optimization results in
         PowerModels network data format.
+    save_heat_storage: bool
+        Indicates whether to save results of heat storage variables from the
+        optimization to csv file in the current working directory. Set parameter
+        "path" to change the directory the file is saved to.
+        directory.
+            Default: False
+    save_slack_gen: bool
+        Indicates whether to save results of slack generator variables from the
+        optimization to csv file in the current working directory. Set parameter
+        "path" to change the directory the file is saved to.
+        Default: False
+    save_HV_slack: bool
+        Indicates whether to save results of slack variables for high voltage
+        requirements (sum, minimal and maximal and mean deviation) from the optimization
+        to csv file in the current working directory. Set parameter "path" to change the
+        directory the file is saved to.
+        Default: False
+    path : str
+        Directory the csv file is saved to. Per default it takes the current
+        working directory.
     """
+
+    abs_path = os.path.abspath(path)
 
     if type(pm_results) == str:
         with open(pm_results) as f:
@@ -173,47 +196,78 @@ def from_powermodels(
         "dsm": ["pdsm"],
         "gen_slack": ["pgs", "qgs"],
         "heat_storage": ["phs"],
-    }  # TODO: add slacks for HV requirements
+    }
 
     for flex in flex_dicts.keys():
         timesteps = pm["nw"].keys()
         for variable in flex_dicts.get(flex):
-            for flex_comp in list(pm["nw"]["1"][flex].keys()):
-                name = pm["nw"]["1"][flex][flex_comp]["name"]
-                results = pd.DataFrame(index=timesteps, columns=[name])
-                for t in timesteps:
-                    results[name][t] = pm["nw"][t][flex][flex_comp][variable]
-                if flex in ["gen_nd"]:  # , "gen_slack"]:  # TODO: slack_gen results
-                    if variable != "qgs":
-                        edisgo_object.timeseries._generators_active_power.loc[
-                            :, name
-                        ] = (
-                            edisgo_object.timeseries.generators_active_power.loc[
-                                :, name
-                            ].values
-                            - results[name].values
-                        )
-                    else:
-                        edisgo_object.timeseries._generators_reactive_power.loc[
-                            :, name
-                        ] = (
-                            edisgo_object.timeseries.generators_reactive_power.loc[
-                                :, name
-                            ].values
-                            - results[name].values
-                        )
-                elif flex in ["dsm", "heatpumps", "electromobility"]:
-                    edisgo_object.timeseries._loads_active_power.loc[:, name] = results[
-                        name
-                    ].values
-                elif flex == "storage":
-                    edisgo_object.timeseries._storage_units_active_power.loc[
-                        :, name
-                    ] = results[name].values
-                elif flex == "heat_storage":  # TODO
-                    continue
+            names = [
+                pm["nw"]["1"][flex][flex_comp]["name"]
+                for flex_comp in list(pm["nw"]["1"][flex].keys())
+            ]
+            data = [
+                [
+                    pm["nw"][t][flex][flex_comp][variable]
+                    for flex_comp in list(pm["nw"]["1"][flex].keys())
+                ]
+                for t in timesteps
+            ]
+            results = pd.DataFrame(index=timesteps, columns=names, data=data)
+            if flex in ["gen_nd"]:
+                if variable != "qgs":
+                    edisgo_object.timeseries._generators_active_power.loc[:, names] = (
+                        edisgo_object.timeseries.generators_active_power.loc[
+                            :, names
+                        ].values
+                        - results[names].values
+                    )
+                else:
+                    edisgo_object.timeseries._generators_reactive_power.loc[
+                        :, names
+                    ] = (
+                        edisgo_object.timeseries.generators_reactive_power.loc[
+                            :, names
+                        ].values
+                        - results[names].values
+                    )
+            elif flex in ["dsm", "heatpumps", "electromobility"]:
+                edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
+                    names
+                ].values
+            elif flex == "storage":
+                edisgo_object.timeseries._storage_units_active_power.loc[
+                    :, names
+                ] = results[names].values
 
     edisgo_object.set_time_series_reactive_power_control()
+
+    if save_HV_slack:  # TODO
+        pass
+        # df = pd.DataFrame(index=timesteps, columns=["p"])
+    if save_slack_gen:
+        df = pd.DataFrame(index=timesteps, columns=["pg", "qg"])
+        for gen in list(pm["nw"]["1"]["gen_slack"].keys()):
+            df["pg"] = [pm["nw"][t]["gen_slack"][gen]["pgs"] for t in timesteps]
+            df["qg"] = [pm["nw"][t]["gen_slack"][gen]["qgs"] for t in timesteps]
+        df.set_index(edisgo_object.timeseries.timeindex).to_csv(
+            os.path.join(abs_path, "gen_slack.csv")
+        )
+    if save_heat_storage:
+        for variable in ["phs", "hse"]:
+            names = [
+                pm["nw"]["1"]["heat_storage"][hs]["name"]
+                for hs in list(pm["nw"]["1"]["heat_storage"].keys())
+            ]
+            data = [
+                [
+                    pm["nw"][t]["heat_storage"][hs][variable]
+                    for hs in list(pm["nw"]["1"]["heat_storage"].keys())
+                ]
+                for t in timesteps
+            ]
+            pd.DataFrame(index=timesteps, columns=names, data=data).to_csv(
+                os.path.join(abs_path, str(variable + ".csv"))
+            )
 
 
 def _init_pm():
@@ -432,7 +486,7 @@ def _build_branch(psa_net, pm):
         }
 
 
-def _build_load(edisgo_obj, psa_net, pm, flexible_cps, flexible_hps, flexible_loads):
+def _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads):
     """
     Builds load dictionary in PowerModels network data format and adds it to
     PowerModels dictionary 'pm'.
@@ -670,7 +724,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads):
         }
 
 
-def _build_HV_requirements(pm, opt_flex, hv_req_p, hv_req_q):
+def _build_HV_requirements(pm, opt_flex, hv_req_p):
     """
     Builds dictionary for HV requirement data in PowerModels network data format and
     adds it to PowerModels dictionary 'pm'.
@@ -686,7 +740,6 @@ def _build_HV_requirements(pm, opt_flex, hv_req_p, hv_req_q):
     for i in np.arange(len(opt_flex)):
         pm["HV_requirements"][str(i + 1)] = {
             "P": hv_req_p[opt_flex[i]][0],
-            "Q": hv_req_q[opt_flex[i]][0],
             "flexibility": opt_flex[i],
         }
 
@@ -700,7 +753,6 @@ def _build_timeseries(
     flexible_loads,
     opt_flex,
     hv_req_p,
-    hv_req_q,
 ):
     """
     Builds timeseries dictionary in PowerModels network data format and adds it to
@@ -748,7 +800,6 @@ def _build_timeseries(
             flexible_loads,
             opt_flex,
             hv_req_p,
-            hv_req_q,
         )
     pm["time_series"]["num_steps"] = len(psa_net.snapshots)
 
@@ -763,7 +814,6 @@ def _build_component_timeseries(
     flexible_loads=None,
     opt_flex=None,
     hv_req_p=None,
-    hv_req_q=None,
 ):
     """
     Builds timeseries dictionary for given kind and adds it to 'time_series'
@@ -918,7 +968,6 @@ def _build_component_timeseries(
         for i in np.arange(len(opt_flex)):
             pm_comp[(str(i + 1))] = {
                 "P": hv_req_p[opt_flex[i]].tolist(),
-                "Q": hv_req_q[opt_flex[i]].tolist(),
             }
 
     pm["time_series"][kind] = pm_comp
