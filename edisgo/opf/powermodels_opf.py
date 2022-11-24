@@ -114,6 +114,7 @@ def pm_optimize(
 
     if julia_process.returncode != 0:
         logger.warning("Julia subprocess failed:")
+        logger.warning(julia_process.stdout)
         logger.warning(julia_process.stderr)
         logger.warning("eDisGo object wasn't updated.")
     else:
