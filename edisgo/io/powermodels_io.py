@@ -84,6 +84,16 @@ def to_powermodels(
             )
             opt_flex.append(flex)
 
+    hv_flex_dict = {
+        "curt": edisgo_object.etrago.renewables_curtailment,
+        "storage": edisgo_object.etrago.storage_units_active_power,
+        "cp": edisgo_object.etrago.electromobility_active_power,
+        "hp": (
+            edisgo_object.etrago.heat_pump_rural_active_power
+            + edisgo_object.etrago.heat_central_active_power
+        ),
+        "dsm": edisgo_object.etrago.dsm_active_power,
+    }
     # Sorts buses such that bus0 is always the upstream bus
     edisgo_object.topology.sort_buses()
     # Calculate line costs
@@ -131,7 +141,9 @@ def to_powermodels(
     if len(flexible_loads) > 0:
         _build_dsm(edisgo_object, psa_net, pm, flexible_loads)
     if (opt_version == 1) | (opt_version == 2):
-        _build_HV_requirements(pm, opt_flex, edisgo_object)
+        _build_HV_requirements(
+            psa_net, pm, opt_flex, flexible_cps, flexible_hps, hv_flex_dict
+        )
     _build_timeseries(
         psa_net,
         pm,
@@ -140,6 +152,7 @@ def to_powermodels(
         flexible_hps,
         flexible_loads,
         opt_flex,
+        hv_flex_dict,
     )
     return pm
 
@@ -203,6 +216,7 @@ def from_powermodels(
         "storage": ["storage", "ps"],
         "dsm": ["dsm", "pdsm"],
     }
+
     timesteps = pm["nw"].keys()
 
     for flexibility in pm_results["nw"]["1"]["flexibilities"]:
@@ -591,6 +605,10 @@ def _build_battery_storage(edisgo_obj, psa_net, pm):
         idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
         # retrieve power factor from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
+        e_max = (
+            psa_net.storage_units.p_nom[stor_i]
+            * psa_net.storage_units.max_hours[stor_i]
+        )
         pm["storage"][str(stor_i + 1)] = {
             "r": 0,
             "x": 0,
@@ -604,9 +622,8 @@ def _build_battery_storage(edisgo_obj, psa_net, pm):
             "pmin": -psa_net.storage_units.p_nom[stor_i],
             "qmax": np.tan(np.arccos(pf)) * psa_net.storage_units.p_nom[stor_i],
             "qmin": -np.tan(np.arccos(pf)) * psa_net.storage_units.p_nom[stor_i],
-            "energy": psa_net.storage_units.state_of_charge_initial[stor_i],
-            "energy_rating": psa_net.storage_units.p_nom[stor_i]
-            * psa_net.storage_units.max_hours[stor_i],
+            "energy": psa_net.storage_units.state_of_charge_initial[stor_i] * e_max,
+            "energy_rating": e_max,
             "thermal_rating": 1,  # TODO unbegrenzt
             "charge_rating": psa_net.storage_units.p_nom[stor_i],
             "discharge_rating": psa_net.storage_units.p_nom[stor_i],
@@ -777,35 +794,57 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads):
         }
 
 
-def _build_HV_requirements(pm, opt_flex, edisgo_obj):
+def _build_HV_requirements(
+    psa_net, pm, opt_flex, flexible_cps, flexible_hps, hv_flex_dict
+):
     """
     Builds dictionary for HV requirement data in PowerModels network data format and
     adds it to PowerModels dictionary 'pm'.
 
     Parameters
     ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
         (PowerModels) dictionary.
     opt_flex : list
         List of flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]
-    edisgo_obj : :class:`~.EDisGo`
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
+        Array containing all charging points that allow for flexible charging.
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
+        Array containing all heat pumps that allow for flexible operation due to an
+        attached heat storage.
+    hv_flex_dict: dict
+        Dictionary containing time series of HV requirement for each flexibility
+        retrieved from etrago component of edisgo object.
     """
 
-    flex_dict = {
-        "curt": edisgo_obj.etrago.renewables_curtailment,
-        "storage": edisgo_obj.etrago.storage_units_active_power,
-        "cp": edisgo_obj.etrago.electromobility_active_power,
-        "hp": (
-            edisgo_obj.etrago.heat_pump_rural_active_power
-            + edisgo_obj.etrago.heat_central_active_power
-        ),
-        "dsm": edisgo_obj.etrago.dsm_active_power,
-    }
-
+    inflexible_cps = [
+        cp
+        for cp in psa_net.loads.loc[
+            psa_net.loads.index.str.contains("Charging")
+        ].index.values
+        if cp not in flexible_cps
+    ]
+    inflexible_hps = [
+        hp
+        for hp in psa_net.loads.loc[
+            psa_net.loads.index.str.contains("Heat")
+        ].index.values
+        if hp not in flexible_hps
+    ]
+    if len(inflexible_cps) > 0:
+        hv_flex_dict["cp"] = hv_flex_dict["cp"] - psa_net.loads_t.p_set.loc[
+            :, inflexible_cps
+        ].sum(axis=1)
+    if len(inflexible_hps) > 0:
+        hv_flex_dict["hp"] = hv_flex_dict["hp"] - psa_net.loads_t.p_set.loc[
+            :, inflexible_hps
+        ].sum(axis=1)
     for i in np.arange(len(opt_flex)):
         pm["HV_requirements"][str(i + 1)] = {
-            "P": flex_dict[opt_flex[i]][0],
+            "P": hv_flex_dict[opt_flex[i]][0],
             "flexibility": opt_flex[i],
         }
 
@@ -818,6 +857,7 @@ def _build_timeseries(
     flexible_hps,
     flexible_loads,
     opt_flex,
+    hv_flex_dict,
 ):
     """
     Builds timeseries dictionary in PowerModels network data format and adds it to
@@ -843,6 +883,9 @@ def _build_timeseries(
     opt_flex: list
         List of flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]
+    hv_flex_dict: dict
+        Dictionary containing time series of HV requirement for each flexibility
+        retrieved from etrago component of edisgo object.
     """
     for kind in [
         "gen",
@@ -864,6 +907,7 @@ def _build_timeseries(
             flexible_hps,
             flexible_loads,
             opt_flex,
+            hv_flex_dict,
         )
     pm["time_series"]["num_steps"] = len(psa_net.snapshots)
 
@@ -877,6 +921,7 @@ def _build_component_timeseries(
     flexible_hps=None,
     flexible_loads=None,
     opt_flex=None,
+    hv_flex_dict=None,
 ):
     """
     Builds timeseries dictionary for given kind and adds it to 'time_series'
@@ -903,7 +948,9 @@ def _build_component_timeseries(
     opt_flex: list
         List of flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]
-
+    hv_flex_dict: dict
+        Dictionary containing time series of HV requirement for each flexibility
+        retrieved from etrago component of edisgo object.
     """
     pm_comp = dict()
     if kind == "gen":
@@ -1027,19 +1074,9 @@ def _build_component_timeseries(
     if (kind == "HV_requirements") & (
         (pm["opt_version"] == 1) | (pm["opt_version"] == 2)
     ):
-        flex_dict = {
-            "curt": edisgo_obj.etrago.renewables_curtailment,
-            "storage": edisgo_obj.etrago.storage_units_active_power,
-            "cp": edisgo_obj.etrago.electromobility_active_power,
-            "hp": (
-                edisgo_obj.etrago.heat_pump_rural_active_power
-                + edisgo_obj.etrago.heat_central_active_power
-            ),
-            "dsm": edisgo_obj.etrago.dsm_active_power,
-        }
         for i in np.arange(len(opt_flex)):
             pm_comp[(str(i + 1))] = {
-                "P": flex_dict[opt_flex[i]].tolist(),
+                "P": hv_flex_dict[opt_flex[i]].tolist(),
             }
 
     pm["time_series"][kind] = pm_comp
