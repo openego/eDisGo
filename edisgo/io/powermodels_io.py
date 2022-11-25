@@ -719,7 +719,10 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, flexible_hps):
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
             "p_loss": 0,
-            "energy": heat_storage_df.state_of_charge_initial[stor_i],
+            "energy": (
+                heat_storage_df.state_of_charge_initial[stor_i]
+                * heat_storage_df.capacity[stor_i]
+            ),
             "capacity": heat_storage_df.capacity[stor_i],
             "charge_efficiency": heat_storage_df.efficiency[stor_i],
             "discharge_efficiency": heat_storage_df.efficiency[stor_i],
@@ -1127,7 +1130,7 @@ def _get_pf(edisgo_obj, pm, idx_bus, kind):
     Returns
     -------
     pf: float
-        Returns power factor pf.
+    sign: int
     """
 
     grid_level = pm["bus"][str(idx_bus)]["grid_level"]
