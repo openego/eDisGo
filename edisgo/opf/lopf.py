@@ -160,16 +160,21 @@ def prepare_time_invariant_parameters(
             )
         else:
             fixed_parameters["optimized_heat_pumps"] = kwargs.get(
-                "optimized_heat_pumps", fixed_parameters["heat_pumps"].index
+                "optimized_heat_pumps", edisgo_obj.heat_pump.heat_demand_df.index
             )
         fixed_parameters["heat_pumps"] = fixed_parameters["grid_object"].loads_df.loc[
             fixed_parameters["grid_object"].loads_df.type == "heat_pump"
         ]
-        # Todo: change to heat_pumps_df.index once exists
+
         fixed_parameters["cop"] = edisgo_obj.heat_pump.cop_df
         fixed_parameters["heat_demand"] = edisgo_obj.heat_pump.heat_demand_df
         fixed_parameters["tes"] = edisgo_obj.heat_pump.thermal_storage_units_df
+
+        if fixed_parameters["optimized_heat_pumps"].empty:
+            fixed_parameters["optimize_hp"] = False
+            print("Emob optimization is set to False as flex bands empty.")
     else:
+        # Add empty list to later define inflexible loads
         fixed_parameters["optimized_heat_pumps"] = []
     # save non flexible loads
     # Todo: add other flexible loads once relevant
