@@ -22,12 +22,12 @@ logger = logging.getLogger(__name__)
 
 class Etrago:  # ToDo: delete as soon as etrago class is implemented
     def __init__(self):
-        self.renewables_curtailment = pd.Series()
-        self.storage_units_active_power = pd.Series()
-        self.dsm_active_power = pd.Series()
-        self.electromobility_active_power = pd.Series()
-        self.heat_pump_rural_active_power = pd.Series()
-        self.heat_central_active_power = pd.Series()
+        self.renewables_curtailment = pd.Series(dtype="float64")
+        self.storage_units_active_power = pd.Series(dtype="float64")
+        self.dsm_active_power = pd.Series(dtype="float64")
+        self.electromobility_active_power = pd.Series(dtype="float64")
+        self.heat_pump_rural_active_power = pd.Series(dtype="float64")
+        self.heat_central_active_power = pd.Series(dtype="float64")
 
 
 def to_powermodels(
