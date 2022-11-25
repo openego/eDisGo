@@ -332,6 +332,20 @@ def from_powermodels(
             ).to_csv(
                 os.path.join(abs_path, str("heat_storage_" + name[variable] + ".csv"))
             )
+        names = [
+            pm["nw"]["1"]["heatpumps"][hp]["name"]
+            for hp in list(pm["nw"]["1"]["heatpumps"].keys())
+        ]
+        data = [
+            [
+                pm["nw"][t]["heatpumps"][hp]["phps"]
+                for hp in list(pm["nw"]["1"]["heatpumps"].keys())
+            ]
+            for t in timesteps
+        ]
+        pd.DataFrame(
+            index=edisgo_object.timeseries.timeindex, columns=names, data=data
+        ).to_csv(os.path.join(abs_path, "heat_pump_p_slack.csv"))
 
 
 def _init_pm():

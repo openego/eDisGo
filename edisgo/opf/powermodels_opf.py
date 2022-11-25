@@ -142,3 +142,10 @@ def pm_optimize(
             save_HV_slack=save_HV_slack,
             path=path,
         )
+
+        soc = json.loads(julia_process.stdout.split("\n")[-2])
+        with open(
+            os.path.join(solution_dir, "soc_results_" + pm["name"] + ".json"),
+            "w",
+        ) as outfile:
+            json.dump(soc, outfile, default=_convert)
