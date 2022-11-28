@@ -196,7 +196,8 @@ def prepare_time_invariant_parameters(
         grid=fixed_parameters["grid_object"],
         edisgo_obj=fixed_parameters["edisgo_object"],
         # TODO add relevant storages/generators
-        relevant_storage_units=fixed_parameters["inflexible_storage_units"],
+        relevant_storage_units=fixed_parameters.get(
+            "inflexible_storage_units", None),
         # relevant_generators=None,
         relevant_loads=fixed_parameters["inflexible_loads"],
     )
