@@ -80,6 +80,7 @@ def prepare_time_invariant_parameters(
     t1 = perf_counter()
     fixed_parameters = {}
     # set grid and edisgo objects as well as slack
+    # TODO is this necesary?
     (
         fixed_parameters["edisgo_object"],
         fixed_parameters["grid_object"],
@@ -102,8 +103,7 @@ def prepare_time_invariant_parameters(
             )
             fixed_parameters["inflexible_storage_units"] = fixed_parameters[
                 "grid_object"
-            ].storage_units_df.index.drop(
-                fixed_parameters["optimized_storage_units"])
+            ].storage_units_df.index.drop(fixed_parameters["optimized_storage_units"])
         else:
             fixed_parameters["optimized_storage_units"] = kwargs.get(
                 "flexible_storage_units",
@@ -176,8 +176,8 @@ def prepare_time_invariant_parameters(
     else:
         # Add empty list to later define inflexible loads
         fixed_parameters["optimized_heat_pumps"] = []
+
     # save non flexible loads
-    # Todo: add other flexible loads once relevant
     if not fixed_parameters["flexible_loads"].empty:
         fixed_parameters["inflexible_loads"] = fixed_parameters[
             "grid_object"
@@ -193,12 +193,11 @@ def prepare_time_invariant_parameters(
     fixed_parameters[
         "res_load_inflexible_units"
     ] = get_residual_load_of_not_optimized_components(
-        fixed_parameters["grid_object"],
-        fixed_parameters["edisgo_object"],
-        relevant_storage_units=fixed_parameters.get(
-            "inflexible_storage_units",
-            fixed_parameters["grid_object"].storage_units_df.index,
-        ),
+        grid=fixed_parameters["grid_object"],
+        edisgo_obj=fixed_parameters["edisgo_object"],
+        # TODO add relevant storages/generators
+        relevant_storage_units=fixed_parameters["inflexible_storage_units"],
+        # relevant_generators=None,
         relevant_loads=fixed_parameters["inflexible_loads"],
     )
     # get nodal active and reactive powers of non optimised components
@@ -213,13 +212,14 @@ def prepare_time_invariant_parameters(
         nodal_active_storage,
         nodal_reactive_storage,
     ) = get_nodal_residual_load(
-        fixed_parameters["grid_object"],
-        fixed_parameters["edisgo_object"],
+        grid=fixed_parameters["grid_object"],
+        edisgo=fixed_parameters["edisgo_object"],
         considered_storage=fixed_parameters.get(
             "inflexible_storage_units",
             fixed_parameters["grid_object"].storage_units_df.index,
         ),
         considered_loads=fixed_parameters["inflexible_loads"],
+        # considered_generators=
     )
     fixed_parameters["nodal_active_power"] = nodal_active_power.T
     fixed_parameters["nodal_reactive_power"] = nodal_reactive_power.T
@@ -484,33 +484,20 @@ def setup_model(
 
     if fixed_parameters["optimize_bess"]:
         model.BatteryCharging = pm.Constraint(
-            model.storage_set,
-            model.time_non_zero,
-            rule=soc
+            model.storage_set, model.time_non_zero, rule=soc
         )
         model.FixedSOC = pm.Constraint(
-            model.storage_set,
-            model.times_fixed_soc,
-            rule=fix_soc
+            model.storage_set, model.times_fixed_soc, rule=fix_soc
         )
 
     if objective == "minimize_energy_level" or objective == "maximize_energy_level":
-        model.AggrGrid = pm.Constraint(
-            model.time_set,
-            rule=aggregated_power
-        )
+        model.AggrGrid = pm.Constraint(model.time_set, rule=aggregated_power)
 
     # DEFINE OBJECTIVE
     print("Setup model: Setting objective.")
     if objective == "peak_load":
-        model.LoadFactorMin = pm.Constraint(
-            model.time_set,
-            rule=load_factor_min
-        )
-        model.LoadFactorMax = pm.Constraint(
-            model.time_set,
-            rule=load_factor_max
-        )
+        model.LoadFactorMin = pm.Constraint(model.time_set, rule=load_factor_min)
+        model.LoadFactorMax = pm.Constraint(model.time_set, rule=load_factor_max)
         model.objective = pm.Objective(
             rule=minimize_max_residual_load,
             sense=pm.minimize,
@@ -536,10 +523,7 @@ def setup_model(
         )
     elif objective == "residual_load":
         model.grid_residual_load = pm.Var(model.time_set)
-        model.GridResidualLoad = pm.Constraint(
-            model.time_set,
-            rule=grid_residual_load
-        )
+        model.GridResidualLoad = pm.Constraint(model.time_set, rule=grid_residual_load)
         model.objective = pm.Objective(
             rule=minimize_residual_load,
             sense=pm.minimize,
@@ -547,9 +531,7 @@ def setup_model(
         )
     elif objective == "minimize_loading":
         model.objective = pm.Objective(
-            rule=minimize_loading,
-            sense=pm.minimize,
-            doc="Define objective function"
+            rule=minimize_loading, sense=pm.minimize, doc="Define objective function"
         )
     else:
         raise Exception("Unknown objective.")
@@ -758,7 +740,7 @@ def add_grid_model_lopf(
 def add_ev_model_bands(
     model,
     fixed_parameters,
-    grid_object,
+    # grid_object,
     charging_efficiency,
     energy_level_start=None,
     energy_level_end=None,
@@ -1116,6 +1098,7 @@ def update_model(
     """
     print("Updating model")
     t1 = perf_counter()
+    # TODO Warum iteration über jeden Zeitschritt?
     for i in model.time_set:
         overlap = i - len(timesteps) + 1
         if overlap > 0:
@@ -1465,7 +1448,7 @@ def setup_grid_object(object):
     -------
 
     """
-    if hasattr(object, "topology"): #EDisGo object
+    if hasattr(object, "topology"):  # EDisGo object
         grid_object = deepcopy(object.topology)
         edisgo_object = deepcopy(object)
         slack = grid_object.mv_grid.station.index
@@ -1663,7 +1646,6 @@ def get_residual_load_of_not_optimized_components(
     grid
     edisgo_obj
     relevant_storage_units
-    relevant_charging_points
     relevant_generators
     relevant_loads
 
