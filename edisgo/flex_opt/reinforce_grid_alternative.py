@@ -26,7 +26,19 @@ def reinforce_line_overloading_alternative(
     Evaluates network reinforcement needs and performs measures.
 
     This function is the parent function for all network reinforcements.
+    MV Grid Reinforcement:
+    1-
+    2-
 
+    LV Grid Reinforcement:
+    1- Split+add station method is implemented into all the lv grids if there are more
+    than 3 overloaded lines in the grid.
+    2- Split method is implemented into the grids which are not reinforced by split+add
+     station method
+
+    MV_LV Grid Reinforcement
+    1- The remaining overloaded lines are reinforced by add same type of parallel line
+    method
     Parameters
     ----------
     edisgo: class:`~.EDisGo`
@@ -86,6 +98,7 @@ def reinforce_line_overloading_alternative(
     2-One type of line cost is used for mv and lv
     3-Line Reinforcements are done with the same type of lines as lines reinforced
 
+
     """
 
     def _add_lines_changes_to_equipment_changes():
@@ -106,9 +119,26 @@ def reinforce_line_overloading_alternative(
             ],
         )
 
+    def _add_transformer_changes_to_equipment_changes(mode: str | None):
+        df_list = [edisgo_reinforce.results.equipment_changes]
+        df_list.extend(
+            pd.DataFrame(
+                {
+                    "iteration_step": [iteration_step] * len(transformer_list),
+                    "change": [mode] * len(transformer_list),
+                    "equipment": transformer_list,
+                    "quantity": [1] * len(transformer_list),
+                },
+                index=[station] * len(transformer_list),
+            )
+            for station, transformer_list in transformer_changes[mode].items()
+        )
+
+        edisgo_reinforce.results.equipment_changes = pd.concat(df_list)
+
     # check if provided mode is valid
     if mode and mode not in ["mv", "lv"]:
-        raise ValueError(f"Provided mode {mode} is not a valid mode.")
+        raise ValueError(f"Provided mode {mode} is not valid.")
     # in case reinforcement needs to be conducted on a copied graph the
     # edisgo object is deep copied
     if copy_grid is True:
@@ -149,9 +179,9 @@ def reinforce_line_overloading_alternative(
     crit_lines_mv = checks.mv_line_load(edisgo_reinforce)
     crit_lines_lv = checks.lv_line_load(edisgo_reinforce)
 
-    # 1.1 Method: Split the feeder at the half-length of feeder (applied only once to
+    # 1.1 Voltage level= MV
+    # 1.1.1 Method:Split the feeder at the half-length of feeder (applied only once to
     # secure n-1).
-    # 1.1.1- MV grid
     if (not mode or mode == "mv") and not crit_lines_mv.empty:
         # TODO: add method resiting of CB
         logger.debug(
@@ -162,23 +192,38 @@ def reinforce_line_overloading_alternative(
             edisgo_reinforce, edisgo_reinforce.topology.mv_grid, crit_lines_mv
         )
         _add_lines_changes_to_equipment_changes()
-        # if not lines_changes:
 
         logger.debug("==> Run power flow analysis.")
         edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa)
 
-    # 1.1.2- LV grid
+    # 1.2- Voltage level= LV
     if (not mode or mode == "lv") and not crit_lines_lv.empty:
-        # TODO: add method split the feeder + add substation
         for lv_grid in list(edisgo_reinforce.topology.mv_grid.lv_grids):
-
+            # 1.2.1  Method: Split the feeder at the half-length of feeder and add
+            # new station( applied only once )
+            # if the number of overloaded lines is more than 2
             logger.debug(
-                f"==>feeder splitting method is running for LV grid {lv_grid}: "
+                f"==>split+add substation method is running for LV grid {lv_grid}: "
             )
-            lines_changes = reinforce_measures.split_feeder_at_half_length(
+            (
+                transformer_changes,
+                lines_changes,
+            ) = reinforce_measures.add_station_at_half_length(
                 edisgo_reinforce, lv_grid, crit_lines_lv
             )
-            _add_lines_changes_to_equipment_changes()
+            if transformer_changes and lines_changes:
+                _add_transformer_changes_to_equipment_changes("added")
+                _add_lines_changes_to_equipment_changes()
+            else:
+                # 1.2.2 Method:Split the feeder at the half-length of feeder (applied
+                # only once)
+                logger.debug(
+                    f"==>feeder splitting method is running for LV grid {lv_grid}: "
+                )
+                lines_changes = reinforce_measures.split_feeder_at_half_length(
+                    edisgo_reinforce, lv_grid, crit_lines_lv
+                )
+                _add_lines_changes_to_equipment_changes()
 
         logger.debug("==> Run power flow analysis.")
         edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa)

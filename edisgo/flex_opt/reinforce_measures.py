@@ -1354,6 +1354,8 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
                 f"{grid} and located in new grid{repr(grid)+str(1001)} by split feeder+"
                 f"add transformer method"
             )
+    if len(lines_changes) < 3:
+        lines_changes = {}
 
     return transformers_changes, lines_changes
 
