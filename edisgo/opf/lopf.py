@@ -172,7 +172,7 @@ def prepare_time_invariant_parameters(
 
         if fixed_parameters["optimized_heat_pumps"].empty:
             fixed_parameters["optimize_hp"] = False
-            print("Emob optimization is set to False as flex bands empty.")
+            print("HP optimization is set to False as optimized hps empty.")
     else:
         # Add empty list to later define inflexible loads
         fixed_parameters["optimized_heat_pumps"] = []
