@@ -144,7 +144,6 @@ def to_powermodels(
         _build_HV_requirements(
             psa_net, pm, opt_flex, flexible_cps, flexible_hps, hv_flex_dict
         )
-
     _build_timeseries(
         psa_net,
         pm,
@@ -272,12 +271,11 @@ def from_powermodels(
         ]
         for t in timesteps
     ]
-
     df = pd.DataFrame(
         index=edisgo_object.timeseries.timeindex,
         columns=names,
         data=data,
-    )  # .round(4)
+    )
     df2 = pd.DataFrame(
         columns=[
             "Highest negative error",

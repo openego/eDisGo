@@ -2,10 +2,13 @@ import json
 import logging
 import os
 import subprocess
+import sys
 
 import numpy as np
 
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
+logger_julia = logging.getLogger("julia")
 
 
 def pm_optimize(
@@ -94,7 +97,28 @@ def pm_optimize(
     json_str = json.dumps(pm, default=_convert)
 
     logger.info("starting julia process")
-    julia_process = subprocess.run(
+    # julia_process = subprocess.run(
+    #     [
+    #         "julia",
+    #         "--project={}".format(julia_env_dir),
+    #         os.path.join(opf_dir, "PowerModels.jl/Main.jl"),
+    #         pm["name"],
+    #         solution_dir,
+    #         method,
+    #     ],
+    #     input=json_str,
+    #     text=True,
+    #     capture_output=False,
+    # )
+    read, write = os.pipe()
+    os.write(write, json_str.encode())
+    os.close(write)
+
+    def log_subprocess_output(pipe):
+        for line in iter(pipe.readline, b""):  # b'\n'-separated lines
+            logging.info("got line from subprocess: %r", line)
+
+    julia_process = subprocess.Popen(
         [
             "julia",
             "--project={}".format(julia_env_dir),
@@ -103,50 +127,34 @@ def pm_optimize(
             solution_dir,
             method,
         ],
-        input=json_str,
+        stdin=read,
         text=True,
-        capture_output=True,
+        stdout=subprocess.PIPE,
     )
 
-    if julia_process.returncode != 0:
-        logger.warning("Julia subprocess failed:")
-        julia_message = [
-            message
-            for message in julia_process.stdout.split("\n")
-            if message.startswith("pm") or message.startswith("[warn")
-        ]
-        for message in julia_message:
-            logger.warning(message)
-        error_message = [
-            message
-            for message in julia_process.stderr.split("\n")
-            if message.startswith("ERROR")
-        ]
-        logger.warning(error_message[0])
-        logger.warning("eDisGo object wasn't updated.")
-    else:
-        julia_message = [
-            message
-            for message in julia_process.stdout.split("\n")
-            if message.startswith("pm") or message.startswith("Warning")
-        ]
-        for message in julia_message:
-            logger.info(message)  # ToDo: logger.info doesn't work
-            logger.warning(message)
-        logger.info("Julia process was successful.")
-        pm_opf = json.loads(julia_process.stdout.split("\n")[-1])
-        # write results to edisgo object
-        edisgo_obj.from_powermodels(
-            pm_opf,
-            save_heat_storage=save_heat_storage,
-            save_slack_gen=save_slack_gen,
-            save_HV_slack=save_HV_slack,
-            path=path,
-        )
+    while True:
+        out = julia_process.stdout.readline()
+        if out == "" and julia_process.poll() is not None:
+            break
+        if out.rstrip().startswith('{"name"'):
+            logger.info("Julia process was successful.")
+            pm_opf = json.loads(out)
+            # write results to edisgo object
+            edisgo_obj.from_powermodels(
+                pm_opf,
+                save_heat_storage=save_heat_storage,
+                save_slack_gen=save_slack_gen,
+                save_HV_slack=save_HV_slack,
+                path=path,
+            )
+        elif out != "":
+            sys.stdout.write(out)
+            sys.stdout.flush()
+    # TODO: error printen
 
-        soc = json.loads(julia_process.stdout.split("\n")[-2])
-        with open(
-            os.path.join(solution_dir, "soc_results_" + pm["name"] + ".json"),
-            "w",
-        ) as outfile:
-            json.dump(soc, outfile, default=_convert)
+    # soc = json.loads(julia_process.stdout.split("\n")[-2])
+    # with open(
+    #     os.path.join(solution_dir, "soc_results_" + pm["name"] + ".json"),
+    #     "w",
+    # ) as outfile:
+    #     json.dump(soc, outfile, default=_convert)
