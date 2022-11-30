@@ -196,8 +196,7 @@ def prepare_time_invariant_parameters(
         grid=fixed_parameters["grid_object"],
         edisgo_obj=fixed_parameters["edisgo_object"],
         # TODO add relevant storages/generators
-        relevant_storage_units=fixed_parameters.get(
-            "inflexible_storage_units", None),
+        relevant_storage_units=fixed_parameters.get("inflexible_storage_units", None),
         # relevant_generators=None,
         relevant_loads=fixed_parameters["inflexible_loads"],
     )
@@ -444,7 +443,6 @@ def setup_model(
         model = add_ev_model_bands(
             model=model,
             fixed_parameters=fixed_parameters,
-            grid_object=fixed_parameters["grid_object"],
             charging_efficiency=kwargs.get("charging_efficiency", 0.9),
             energy_level_start=kwargs.get("energy_level_start_ev", None),
             energy_level_end=kwargs.get("energy_level_end_ev", None),
@@ -958,17 +956,17 @@ def add_rolling_horizon(
         if charging_starts[charging_attr] is None:
             getattr(model, f"InitialChargingPower{charging_attr.upper()}").deactivate()
 
-        setattr(
-            model,
-            f"FinalChargingPower{charging_attr.upper()}",
-            pm.Constraint(
-                flex_set,
-                model.time_end,
-                rule=globals()[f"final_charging_power_{charging_attr}"],
-            ),
-        )
-        if energy_level_end is None:
-            getattr(model, f"FinalChargingPower{charging_attr.upper()}").deactivate()
+        # setattr(
+        #     model,
+        #     f"FinalChargingPower{charging_attr.upper()}",
+        #     pm.Constraint(
+        #         flex_set,
+        #         model.time_end,
+        #         rule=globals()[f"final_charging_power_{charging_attr}"],
+        #     ),
+        # )
+        # if energy_level_end is None:
+        #     getattr(model, f"FinalChargingPower{charging_attr.upper()}").deactivate()
     return model
 
 
@@ -1242,10 +1240,11 @@ def update_rolling_horizon(comp_type, model, **kwargs):
                     charging_initial[charging_attr][comp]
                 )
             getattr(model, f"InitialChargingPower{charging_attr.upper()}").activate()
-        if energy_level_end is None:
-            getattr(model, f"FinalChargingPower{charging_attr.upper()}").deactivate()
-        else:
-            getattr(model, f"FinalChargingPower{charging_attr.upper()}").activate()
+        # remove as not needed anymore with new formulation
+        # if energy_level_end is None:
+        #     getattr(model, f"FinalChargingPower{charging_attr.upper()}").deactivate()
+        # else:
+        #     getattr(model, f"FinalChargingPower{charging_attr.upper()}").activate()
     return model
 
 
