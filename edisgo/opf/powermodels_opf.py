@@ -128,10 +128,11 @@ def pm_optimize(
         julia_message = [
             message
             for message in julia_process.stdout.split("\n")
-            if message.startswith("pm")
+            if message.startswith("pm") or message.startswith("Warning")
         ]
         for message in julia_message:
-            logger.info(message)
+            logger.info(message)  # ToDo: logger.info doesn't work
+            logger.warning(message)
         logger.info("Julia process was successful.")
         pm_opf = json.loads(julia_process.stdout.split("\n")[-1])
         # write results to edisgo object

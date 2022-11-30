@@ -2373,7 +2373,7 @@ class EDisGo:
         flexible_hps=[],
         flexible_loads=[],
         opt_version=1,
-        opt_flex=[],
+        opt_flex=["curt", "storage", "cp", "hp", "dsm"],
     ):
         """
         Saves EDisGo object in PowerModels network data format to json file.
