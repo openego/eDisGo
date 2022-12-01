@@ -6,7 +6,7 @@ import sys
 
 import numpy as np
 
-logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -100,11 +100,8 @@ def pm_optimize(
         raise TypeError
 
     json_str = json.dumps(pm, default=_convert)
-    read, write = os.pipe()
-    os.write(write, json_str.encode())
-    os.close(write)
 
-    logger.debug("starting julia process")
+    logger.info("starting julia process")
     julia_process = subprocess.Popen(
         [
             "julia",
@@ -114,17 +111,18 @@ def pm_optimize(
             method,
             str(silence_moi),
         ],
-        stdin=read,
+        stdin=subprocess.PIPE,
         text=True,
         stdout=subprocess.PIPE,
     )
-
+    julia_process.stdin.write(json_str)
+    julia_process.stdin.close()
     while True:
         out = julia_process.stdout.readline()
         if out == "" and julia_process.poll() is not None:
             break
         if out.rstrip().startswith('{"name"'):
-            logger.debug("Julia process was successful.")
+            logger.info("Julia process was successful.")
             pm_opf = json.loads(out)
             # write results to edisgo object
             edisgo_obj.from_powermodels(
