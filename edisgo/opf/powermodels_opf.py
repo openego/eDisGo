@@ -8,7 +8,6 @@ import numpy as np
 
 logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
-logger_julia = logging.getLogger("julia")
 
 
 def pm_optimize(
@@ -19,9 +18,10 @@ def pm_optimize(
     opt_version=1,
     opt_flex=["curt", "storage", "cp", "hp", "dsm"],
     method="soc",
+    silence_moi=True,
     save_heat_storage=False,
-    save_slack_gen=False,
-    save_HV_slack=False,
+    save_gen_slack=False,
+    save_hv_slack=False,
     path="",
 ):
     """
@@ -52,18 +52,24 @@ def pm_optimize(
         relaxation of equality constraint P²+Q² = V²*I². If method is "nc", OPF is run
         with Ipopt solver as a non-convex problem due to quadratic equality constraint
         P²+Q² = V²*I².
+    silence_moi: bool
+        If set to True, MathOptInterface's optimizer attribute "MOI.Silent" is set
+        to True in julia subprocess. This attribute is for silencing the output of
+        an optimizer. When set to True, it requires the solver to produce no output,
+        hence there will be no logging coming from julia subprocess in python
+        process.
     save_heat_storage: bool
         Indicates whether to save results of heat storage variables from the
         optimization to csv file in the current working directory. Set parameter
         "path" to change the directory the file is saved to.
         directory.
             Default: False
-    save_slack_gen: bool
+    save_gen_slack: bool
         Indicates whether to save results of slack generator variables from the
         optimization to csv file in the current working directory. Set parameter
         "path" to change the directory the file is saved to.
         Default: False
-    save_HV_slack: bool
+    save_hv_slack: bool
         Indicates whether to save results of slack variables for high voltage
         requirements (sum, minimal and maximal and mean deviation) from the optimization
         to csv file in the current working directory. Set parameter "path" to change the
@@ -95,29 +101,11 @@ def pm_optimize(
         raise TypeError
 
     json_str = json.dumps(pm, default=_convert)
-
-    logger.info("starting julia process")
-    # julia_process = subprocess.run(
-    #     [
-    #         "julia",
-    #         "--project={}".format(julia_env_dir),
-    #         os.path.join(opf_dir, "PowerModels.jl/Main.jl"),
-    #         pm["name"],
-    #         solution_dir,
-    #         method,
-    #     ],
-    #     input=json_str,
-    #     text=True,
-    #     capture_output=False,
-    # )
     read, write = os.pipe()
     os.write(write, json_str.encode())
     os.close(write)
 
-    def log_subprocess_output(pipe):
-        for line in iter(pipe.readline, b""):  # b'\n'-separated lines
-            logging.info("got line from subprocess: %r", line)
-
+    logger.info("starting julia process")
     julia_process = subprocess.Popen(
         [
             "julia",
@@ -126,6 +114,7 @@ def pm_optimize(
             pm["name"],
             solution_dir,
             method,
+            str(silence_moi),
         ],
         stdin=read,
         text=True,
@@ -143,18 +132,10 @@ def pm_optimize(
             edisgo_obj.from_powermodels(
                 pm_opf,
                 save_heat_storage=save_heat_storage,
-                save_slack_gen=save_slack_gen,
-                save_HV_slack=save_HV_slack,
+                save_gen_slack=save_gen_slack,
+                save_hv_slack=save_hv_slack,
                 path=path,
             )
         elif out != "":
             sys.stdout.write(out)
             sys.stdout.flush()
-    # TODO: error printen
-
-    # soc = json.loads(julia_process.stdout.split("\n")[-2])
-    # with open(
-    #     os.path.join(solution_dir, "soc_results_" + pm["name"] + ".json"),
-    #     "w",
-    # ) as outfile:
-    #     json.dump(soc, outfile, default=_convert)

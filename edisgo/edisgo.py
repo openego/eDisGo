@@ -679,8 +679,8 @@ class EDisGo:
         self,
         pm_results={},
         save_heat_storage=False,
-        save_slack_gen=False,
-        save_HV_slack=False,
+        save_gen_slack=False,
+        save_hv_slack=False,
         path="",
     ):
         """
@@ -699,12 +699,12 @@ class EDisGo:
             "path" to change the directory the file is saved to.
             directory.
                 Default: False
-        save_slack_gen: bool
+        save_gen_slack: bool
             Indicates whether to save results of slack generator variables from the
             optimization to csv file in the current working directory. Set parameter
             "path" to change the directory the file is saved to.
             Default: False
-        save_HV_slack: bool
+        save_hv_slack: bool
             Indicates whether to save results of slack variables for high voltage
             requirements (sum, minimal and maximal and mean deviation) from the
             optimization to csv file in the current working directory. Set parameter
@@ -719,8 +719,8 @@ class EDisGo:
             self,
             pm_results=pm_results,
             save_heat_storage=save_heat_storage,
-            save_HV_slack=save_HV_slack,
-            save_slack_gen=save_slack_gen,
+            save_hv_slack=save_hv_slack,
+            save_gen_slack=save_gen_slack,
             path=path,
         )
 
@@ -732,9 +732,10 @@ class EDisGo:
         opt_version=1,
         opt_flex=["curt", "storage", "cp", "hp", "dsm"],
         method="soc",
+        silence_moi=False,
         save_heat_storage=False,
-        save_slack_gen=False,
-        save_HV_slack=False,
+        save_gen_slack=False,
+        save_hv_slack=False,
         path="",
     ):
         """
@@ -765,18 +766,24 @@ class EDisGo:
             relaxation of equality constraint P²+Q² = V²*I². If method is "nc", OPF is
             run with Ipopt solver as a non-convex problem due to quadratic equality
             constraint P²+Q² = V²*I².
+        silence_moi: bool
+            If set to True, MathOptInterface's optimizer attribute "MOI.Silent" is set
+            to True in julia subprocess. This attribute is for silencing the output of
+            an optimizer. When set to True, it requires the solver to produce no output,
+            hence there will be no logging coming from julia subprocess in python
+            process.
         save_heat_storage: bool
             Indicates whether to save results of heat storage variables from the
             optimization to csv file in the current working directory. Set parameter
             "path" to change the directory the file is saved to.
             directory.
                 Default: False
-        save_slack_gen: bool
+        save_gen_slack: bool
             Indicates whether to save results of slack generator variables from the
             optimization to csv file in the current working directory. Set parameter
             "path" to change the directory the file is saved to.
             Default: False
-        save_HV_slack: bool
+        save_hv_slack: bool
             Indicates whether to save results of slack variables for high voltage
             requirements (sum, minimal and maximal and mean deviation) from the
             optimization to csv file in the current working directory. Set parameter
@@ -795,9 +802,10 @@ class EDisGo:
             opt_version=opt_version,
             opt_flex=opt_flex,
             method=method,
+            silence_moi=silence_moi,
             save_heat_storage=save_heat_storage,
-            save_slack_gen=save_slack_gen,
-            save_HV_slack=save_HV_slack,
+            save_gen_slack=save_gen_slack,
+            save_hv_slack=save_hv_slack,
             path=path,
         )
 

@@ -161,8 +161,8 @@ def from_powermodels(
     edisgo_object,
     pm_results,
     save_heat_storage=False,
-    save_slack_gen=False,
-    save_HV_slack=False,
+    save_gen_slack=False,
+    save_hv_slack=False,
     path="",
 ):
     """
@@ -181,12 +181,12 @@ def from_powermodels(
         "path" to change the directory the file is saved to.
         directory.
             Default: False
-    save_slack_gen: bool
+    save_gen_slack: bool
         Indicates whether to save results of slack generator variables from the
         optimization to csv file in the current working directory. Set parameter
         "path" to change the directory the file is saved to.
         Default: False
-    save_HV_slack: bool
+    save_hv_slack: bool
         Indicates whether to save results of slack variables for high voltage
         requirements (sum, minimal and maximal and mean deviation) from the optimization
         to csv file in the current working directory. Set parameter "path" to change the
@@ -296,9 +296,9 @@ def from_powermodels(
     if (df2["Highest positive error"].values > 0.00001).any():  # ToDo: value of error
         logger.warning("Highest absolute error of HV slack variables exceed 0.00001")
     # ToDo: write sum absolute error to edisgo object
-    if save_HV_slack:
+    if save_hv_slack:
         df2.to_csv(os.path.join(abs_path, "hv_requirements_slack.csv"))
-    if save_slack_gen:
+    if save_gen_slack:
         df = pd.DataFrame(
             index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"]
         )
