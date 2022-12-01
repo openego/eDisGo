@@ -6,7 +6,7 @@ import sys
 
 import numpy as np
 
-logging.getLogger().setLevel(logging.INFO)
+logging.getLogger().setLevel(logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
@@ -80,7 +80,6 @@ def pm_optimize(
         working directory.
     """
     opf_dir = os.path.dirname(os.path.abspath(__file__))
-    julia_env_dir = os.path.join(opf_dir, "PowerModels.jl")
     solution_dir = os.path.join(opf_dir, "opf_solutions")
 
     pm = edisgo_obj.to_powermodels(
@@ -105,11 +104,10 @@ def pm_optimize(
     os.write(write, json_str.encode())
     os.close(write)
 
-    logger.info("starting julia process")
+    logger.debug("starting julia process")
     julia_process = subprocess.Popen(
         [
             "julia",
-            "--project={}".format(julia_env_dir),
             os.path.join(opf_dir, "PowerModels.jl/Main.jl"),
             pm["name"],
             solution_dir,
@@ -126,7 +124,7 @@ def pm_optimize(
         if out == "" and julia_process.poll() is not None:
             break
         if out.rstrip().startswith('{"name"'):
-            logger.info("Julia process was successful.")
+            logger.debug("Julia process was successful.")
             pm_opf = json.loads(out)
             # write results to edisgo object
             edisgo_obj.from_powermodels(
@@ -136,6 +134,10 @@ def pm_optimize(
                 save_hv_slack=save_hv_slack,
                 path=path,
             )
+        elif out.rstrip().startswith("Set parameter") or out.rstrip().startswith(
+            "Academic"
+        ):
+            continue
         elif out != "":
             sys.stdout.write(out)
             sys.stdout.flush()
