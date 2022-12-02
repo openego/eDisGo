@@ -70,8 +70,7 @@ def remove_1m_end_line(edisgo, line):
 
 
 def extract_feeders_nx(
-    edisgo_obj, save_dir=None, only_flex_ev=True, flexible_loads:
-        pd.DataFrame = None
+    edisgo_obj, save_dir=None, only_flex_ev=True, flexible_loads: pd.DataFrame = None
 ):
     """
     Method to extract and optionally save MV-feeders.
@@ -158,8 +157,7 @@ def extract_feeders_nx(
 
 
 def create_feeder_edisgo_object(
-    buses_with_feeders, edisgo_obj, feeder_id,
-        flexible_loads: pd.DataFrame = None
+    buses_with_feeders, edisgo_obj, feeder_id, flexible_loads: pd.DataFrame = None
 ):
     """
     Method to create feeder edisgo object.
@@ -200,16 +198,12 @@ def create_feeder_edisgo_object(
             attr_new = attr_old.loc[attr_old.bus.isin(feeder_buses)]
             setattr(edisgo_feeder.topology, attr_name, attr_new)
 
-    # get switches connected to a line of this feeder with either open or
-    # closed bus of this feeder
+    # get switches connected to a line of this feeder with open bus
     edisgo_feeder.topology.switches_df = edisgo_obj.topology.switches_df.loc[
         edisgo_obj.topology.switches_df.branch.isin(
             edisgo_feeder.topology.lines_df.index
         )
         & edisgo_obj.topology.switches_df.bus_open.isin(
-            edisgo_feeder.topology.buses_df.index
-        )
-        & edisgo_obj.topology.switches_df.bus_closed.isin(
             edisgo_feeder.topology.buses_df.index
         )
     ]
@@ -247,8 +241,9 @@ def create_feeder_edisgo_object(
 
     # select emob attributes
     emob_ids = flexible_loads.loc[
-                    (flexible_loads["type"] == "charging_point") & (
-                        flexible_loads["bus"].isin(feeder_buses))].index
+        (flexible_loads["type"] == "charging_point")
+        & (flexible_loads["bus"].isin(feeder_buses))
+    ].index
 
     for band, df in edisgo_obj.electromobility.flexibility_bands.items():
         if not df.empty:
