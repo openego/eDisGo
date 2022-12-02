@@ -32,11 +32,11 @@ class Etrago:  # ToDo: delete as soon as etrago class is implemented
 
 def to_powermodels(
     edisgo_object,
-    flexible_cps=[],
-    flexible_hps=[],
-    flexible_loads=[],
+    flexible_cps=None,
+    flexible_hps=None,
+    flexible_loads=None,
     opt_version=1,
-    opt_flex=[],
+    opt_flex=None,
 ):
     """
     Converts eDisGo representation of the network topology and timeseries to
@@ -66,6 +66,14 @@ def to_powermodels(
         Dictionary that contains all network data in PowerModels network data
         format.
     """
+    if opt_flex is None:
+        opt_flex = ["curt"]
+    if flexible_cps is None:
+        flexible_cps = []
+    if flexible_hps is None:
+        flexible_hps = []
+    if flexible_loads is None:
+        flexible_loads = []
     # Check if names of flexible loads for optimization are supplied
     for (flex, loads, text) in [
         ("cp", flexible_cps, "flexible charging parks"),
@@ -83,17 +91,7 @@ def to_powermodels(
                 " {} found in network, {} will be optimized.".format(text, text)
             )
             opt_flex.append(flex)
-
-    hv_flex_dict = {
-        "curt": edisgo_object.etrago.renewables_curtailment,
-        "storage": edisgo_object.etrago.storage_units_active_power,
-        "cp": edisgo_object.etrago.electromobility_active_power,
-        "hp": (
-            edisgo_object.etrago.heat_pump_rural_active_power
-            + edisgo_object.etrago.heat_central_active_power
-        ),
-        "dsm": edisgo_object.etrago.dsm_active_power,
-    }
+    hv_flex_dict = dict()
     # Sorts buses such that bus0 is always the upstream bus
     edisgo_object.topology.sort_buses()
     # Calculate line costs
@@ -121,7 +119,6 @@ def to_powermodels(
     )  # length of timesteps in hours
     pm["baseMVA"] = 1
     pm["source_version"] = 2
-    pm["opt_version"] = opt_version
     pm["flexibilities"] = opt_flex
     _build_bus(psa_net, pm)
     _build_gen(edisgo_object, psa_net, pm)
@@ -141,9 +138,30 @@ def to_powermodels(
     if len(flexible_loads) > 0:
         _build_dsm(edisgo_object, psa_net, pm, flexible_loads)
     if (opt_version == 1) | (opt_version == 2):
-        _build_HV_requirements(
-            psa_net, pm, opt_flex, flexible_cps, flexible_hps, hv_flex_dict
-        )
+        hv_flex_dict = {
+            "curt": edisgo_object.etrago.renewables_curtailment,
+            "storage": edisgo_object.etrago.storage_units_active_power,
+            "cp": edisgo_object.etrago.electromobility_active_power,
+            "hp": (
+                edisgo_object.etrago.heat_pump_rural_active_power
+                + edisgo_object.etrago.heat_central_active_power
+            ),
+            "dsm": edisgo_object.etrago.dsm_active_power,
+        }
+        try:
+            _build_HV_requirements(
+                psa_net, pm, opt_flex, flexible_cps, flexible_hps, hv_flex_dict
+            )
+        except IndexError:
+            logger.warning(
+                "Etrago component of eDisGo object has no entries."
+                " Changing optimization version to '3' (without high voltage"
+                " requirements)."
+            )
+            opt_version = 3
+
+    pm["opt_version"] = opt_version
+
     _build_timeseries(
         psa_net,
         pm,

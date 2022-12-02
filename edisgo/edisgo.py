@@ -633,11 +633,11 @@ class EDisGo:
 
     def to_powermodels(
         self,
-        flexible_cps=[],
-        flexible_hps=[],
-        flexible_loads=[],
+        flexible_cps=None,
+        flexible_hps=None,
+        flexible_loads=None,
         opt_version=1,
-        opt_flex=[],
+        opt_flex=None,
     ):
         """
         Converts eDisGo representation of the network topology and timeseries to
@@ -666,6 +666,7 @@ class EDisGo:
             Dictionary that contains all network data in PowerModels network data
             format.
         """
+
         return powermodels_io.to_powermodels(
             self,
             flexible_cps,
@@ -677,7 +678,7 @@ class EDisGo:
 
     def from_powermodels(
         self,
-        pm_results={},
+        pm_results,
         save_heat_storage=False,
         save_gen_slack=False,
         save_hv_slack=False,
@@ -726,11 +727,11 @@ class EDisGo:
 
     def pm_optimize(
         self,
-        flexible_cps=[],
-        flexible_hps=[],
-        flexible_loads=[],
+        flexible_cps=None,
+        flexible_hps=None,
+        flexible_loads=None,
         opt_version=1,
-        opt_flex=["curt", "storage", "cp", "hp", "dsm"],
+        opt_flex=None,
         method="soc",
         silence_moi=False,
         save_heat_storage=False,
@@ -2377,11 +2378,11 @@ class EDisGo:
         self,
         filename=None,
         path="",
-        flexible_cps=[],
-        flexible_hps=[],
-        flexible_loads=[],
+        flexible_cps=None,
+        flexible_hps=None,
+        flexible_loads=None,
         opt_version=1,
-        opt_flex=["curt", "storage", "cp", "hp", "dsm"],
+        opt_flex=None,
     ):
         """
         Saves EDisGo object in PowerModels network data format to json file.
