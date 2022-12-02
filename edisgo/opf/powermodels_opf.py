@@ -12,11 +12,11 @@ logger = logging.getLogger(__name__)
 
 def pm_optimize(
     edisgo_obj,
-    flexible_cps=[],
-    flexible_hps=[],
-    flexible_loads=[],
+    flexible_cps=None,
+    flexible_hps=None,
+    flexible_loads=None,
     opt_version=1,
-    opt_flex=["curt", "storage", "cp", "hp", "dsm"],
+    opt_flex=None,
     method="soc",
     silence_moi=True,
     save_heat_storage=False,
