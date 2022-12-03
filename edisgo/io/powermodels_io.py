@@ -66,7 +66,7 @@ def to_powermodels(
         Dictionary that contains all network data in PowerModels network data
         format.
     """
-    tol = 1e-6
+    tol = 1e-4
     if opt_flex is None:
         opt_flex = ["curt"]
     if flexible_cps is None:
