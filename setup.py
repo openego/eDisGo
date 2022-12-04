@@ -40,7 +40,7 @@ requirements = [
     "pyproj >= 3.0.0",
     "shapely >= 1.7.0",
     "pypsa >= 0.17.0, <= 0.20.1",
-    "pyomo >= 6.0",
+    "pyomo <= 6.4.2", # Problem with PyPSA 20.1 fixed in newest PyPSA release
     "multiprocess",
     "workalendar",
     "sqlalchemy < 1.4.0",
