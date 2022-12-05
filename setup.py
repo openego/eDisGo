@@ -39,7 +39,7 @@ requirements = [
     "pyproj >= 3.0.0",
     "shapely >= 1.7.0",
     "pypsa >= 0.17.0, <= 0.20.1",
-    "pyomo >= 6.0",
+    "pyomo <= 6.4.2", # Problem with PyPSA 20.1 fixed in newest PyPSA release
     "multiprocess",
     "workalendar",
     "sqlalchemy < 1.4.0",
@@ -78,7 +78,7 @@ extras = {"dev": dev_requirements}
 
 setup(
     name="eDisGo",
-    version="0.2.0",
+    version="0.2.1dev",
     packages=find_packages(),
     url="https://github.com/openego/eDisGo",
     license="GNU Affero General Public License v3.0",

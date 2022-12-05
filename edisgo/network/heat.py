@@ -100,7 +100,7 @@ class HeatPump:
                 Charging and discharging efficiency in p.u..
 
             state_of_charge_initial : float
-                Initial state of charge in MWh.
+                Initial state of charge in p.u..
 
         Returns
         -------
