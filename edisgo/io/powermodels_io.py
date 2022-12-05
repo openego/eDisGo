@@ -68,7 +68,7 @@ def to_powermodels(
     """
     tol = 1e-4
     if opt_flex is None:
-        opt_flex = ["curt"]
+        opt_flex = ["curt"]  # ToDo: adden falls nicht drin
     if flexible_cps is None:
         flexible_cps = []
     if flexible_hps is None:
@@ -537,29 +537,29 @@ def _build_gen(edisgo_obj, psa_net, pm, tol):
             "index": gen_i + 1,
         }
 
-        for gen_i in np.arange(len(gen_slack.index)):
-            idx_bus = _mapping(psa_net, gen_slack.bus[gen_i])
-            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "gen")
-            q = [
-                sign * np.tan(np.arccos(pf)) * gen_slack.p_nom[gen_i],
-                sign * np.tan(np.arccos(pf)) * gen_slack.p_nom_min[gen_i],
-            ]
-            pm["gen_slack"][str(gen_i + 1)] = {
-                "pg": psa_net.generators_t.p_set[gen_slack.index[gen_i]][0],
-                "qg": psa_net.generators_t.q_set[gen_slack.index[gen_i]][0],
-                "pmax": gen_slack.p_nom[gen_i],
-                "pmin": gen_slack.p_nom_min[gen_i],
-                "qmax": max(q),
-                "qmin": min(q),
-                "P": 0,
-                "Q": 0,
-                "vg": 1,
-                "mbase": gen_slack.p_nom[gen_i],
-                "gen_bus": idx_bus,
-                "name": gen_slack.index[gen_i],
-                "gen_status": 1,
-                "index": gen_i + 1,
-            }
+    for gen_i in np.arange(len(gen_slack.index)):
+        idx_bus = _mapping(psa_net, gen_slack.bus[gen_i])
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "gen")
+        q = [
+            sign * np.tan(np.arccos(pf)) * gen_slack.p_nom[gen_i],
+            sign * np.tan(np.arccos(pf)) * gen_slack.p_nom_min[gen_i],
+        ]
+        pm["gen_slack"][str(gen_i + 1)] = {
+            "pg": psa_net.generators_t.p_set[gen_slack.index[gen_i]][0],
+            "qg": psa_net.generators_t.q_set[gen_slack.index[gen_i]][0],
+            "pmax": gen_slack.p_nom[gen_i],
+            "pmin": gen_slack.p_nom_min[gen_i],
+            "qmax": max(q),
+            "qmin": min(q),
+            "P": 0,
+            "Q": 0,
+            "vg": 1,
+            "mbase": gen_slack.p_nom[gen_i],
+            "gen_bus": idx_bus,
+            "name": gen_slack.index[gen_i],
+            "gen_status": 1,
+            "index": gen_i + 1,
+        }
 
 
 def _build_branch(psa_net, pm, tol):
