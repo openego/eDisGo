@@ -224,9 +224,9 @@ def remove_lines_under_one_meter(edisgo_root):
     generators_df = generators_df.apply(apply_busmap, axis="columns")
     edisgo_obj.topology.generators_df = generators_df
 
-    charging_points_df = edisgo_obj.topology.charging_points_df.copy()
-    charging_points_df = charging_points_df.apply(apply_busmap, axis="columns")
-    edisgo_obj.topology.charging_points_df = charging_points_df
+    #charging_points_df = edisgo_obj.topology.charging_points_df.copy()
+    #charging_points_df = charging_points_df.apply(apply_busmap, axis="columns")
+    #edisgo_obj.topology.charging_points_df = charging_points_df
 
     logger.info("Finished in {}s".format(time() - start_time))
     return edisgo_obj
@@ -904,10 +904,10 @@ def make_busmap_from_main_feeders(
             edisgo_obj.topology.generators_df.bus.isin(buses), "p_nom"
         ].sum()
         p_load = edisgo_obj.topology.loads_df.loc[
-            edisgo_obj.topology.loads_df.bus.isin(buses), "peak_load"
+            edisgo_obj.topology.loads_df.bus.isin(buses), "p_set"
         ].sum()
         p_charge = edisgo_obj.topology.charging_points_df.loc[
-            edisgo_obj.topology.charging_points_df.bus.isin(buses), "p_nom"
+            edisgo_obj.topology.charging_points_df.bus.isin(buses), "p_set"
         ].sum()
         if str(grid).split("_")[0] == "MVGrid":
             s_tran = edisgo_obj.topology.transformers_df.loc[
@@ -1202,7 +1202,7 @@ def make_busmap_from_main_feeders(
                                     graph_root, bus, cutoff=None, weight="length"
                                 )
                             )
-                            dijkstra_distances_df.loc[:, bus] = path_series
+                            dijkstra_distances_df[bus] = path_series
 
                         feeder_buses_df.loc[:, "medoid"] = dijkstra_distances_df.idxmin(
                             axis=1
@@ -1569,6 +1569,7 @@ def reduce_edisgo(edisgo_root, busmap_df, aggregate_charging_points_mode=True):
         series.loc["bus1"] = bus1
         series.loc["x"] = x
         series.loc["r"] = r
+        series.loc["b"] = 0.0
         series.loc["s_nom"] = df["s_nom"].sum()
         series.loc["num_parallel"] = int(df.loc[:, "num_parallel"].sum())
         series.loc["type_info"] = type_info
@@ -1615,7 +1616,7 @@ def reduce_edisgo(edisgo_root, busmap_df, aggregate_charging_points_mode=True):
     def aggregate_loads(df):
         series = pd.Series(index=df.columns, dtype="object")  # l.values[0],
         series.loc["bus"] = df.loc[:, "bus"].values[0]
-        series.loc["peak_load"] = df.loc[:, "peak_load"].sum()
+        series.loc["p_set"] = df.loc[:, "p_set"].sum()
         series.loc["annual_consumption"] = df.loc[:, "annual_consumption"].sum()
         if load_aggregation_mode == "sector":
             series.loc["sector"] = df.loc[:, "sector"].values[0]
@@ -1783,7 +1784,7 @@ def reduce_edisgo(edisgo_root, busmap_df, aggregate_charging_points_mode=True):
         def aggregate_charging_points_df(df):
             series = pd.Series(dtype="object")
             series.loc["bus"] = df.loc[:, "bus"].values[0]
-            series.loc["p_nom"] = df.loc[:, "p_nom"].sum()
+            series.loc["p_set"] = df.loc[:, "p_set"].sum()
             series.loc["use_case"] = df.loc[:, "use_case"].values[0]
             series.loc["old_charging_point_name"] = df.index.tolist()
             return series
@@ -2113,7 +2114,7 @@ def find_buses_of_interest(edisgo_root):
 
     edisgo_wc = copy.deepcopy(edisgo_root)
     edisgo_wc.timeseries = timeseries.TimeSeries()
-    timeseries.get_component_timeseries(edisgo_obj=edisgo_wc, mode="worst-case")
+    edisgo_wc.timeseries.set_worst_case(edisgo_wc, ['feed-in_case', 'load_case'] )
     edisgo_wc.analyze()
 
     buses_of_interest = set()
