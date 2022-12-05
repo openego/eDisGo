@@ -733,6 +733,11 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps, tol):
         p_max.loc[p_max < tol] = 0
         e_min.loc[e_min < tol] = 0
         e_max.loc[e_max < tol] = 0
+        if (e_min > e_max).any():
+            logger.warning(
+                "Upper energy level is smaller than lower energy level for "
+                "some charging parks!"
+            )
         pm["electromobility"][str(cp_i + 1)] = {
             "pd": 0,
             "qd": 0,
@@ -852,6 +857,16 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads, tol):
         p_min.loc[e_min < tol] = 0
         e_min.loc[e_min < tol] = 0
         e_max.loc[e_max < tol] = 0
+        if (e_min > e_max).any():
+            logger.warning(
+                "Upper energy level is smaller than lower energy level for "
+                "some DSM loads!"
+            )
+        if (p_min > p_max).any():
+            logger.warning(
+                "Upper power level is smaller than lower power level for "
+                "some DSM loads!"
+            )
         q = [
             sign * np.tan(np.arccos(pf)) * p_max[0],
             sign * np.tan(np.arccos(pf)) * p_min[0],

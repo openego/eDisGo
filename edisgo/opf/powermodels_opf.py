@@ -18,7 +18,7 @@ def pm_optimize(
     opt_version=1,
     opt_flex=None,
     method="soc",
-    silence_moi=True,
+    silence_moi=False,
     save_heat_storage=False,
     save_gen_slack=False,
     save_hv_slack=False,
