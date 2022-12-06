@@ -736,23 +736,26 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps, tol):
         if (e_min > e_max).any():
             logger.warning(
                 "Upper energy level is smaller than lower energy level for "
-                "some charging parks!"
+                "charging park {}! Charging Park will be removed.".format(
+                    emob_df.index[cp_i]
+                )
             )
-        pm["electromobility"][str(cp_i + 1)] = {
-            "pd": 0,
-            "qd": 0,
-            "pf": pf,
-            "sign": sign,
-            "p_min": 0,
-            "p_max": p_max[0],
-            "q_min": min(q, 0),
-            "q_max": max(q, 0),
-            "e_min": e_min[0],
-            "e_max": e_max[0],
-            "cp_bus": idx_bus,
-            "name": emob_df.index[cp_i],
-            "index": cp_i + 1,
-        }
+        else:
+            pm["electromobility"][str(cp_i + 1)] = {
+                "pd": 0,
+                "qd": 0,
+                "pf": pf,
+                "sign": sign,
+                "p_min": 0,
+                "p_max": p_max[0],
+                "q_min": min(q, 0),
+                "q_max": max(q, 0),
+                "e_min": e_min[0],
+                "e_max": e_max[0],
+                "cp_bus": idx_bus,
+                "name": emob_df.index[cp_i],
+                "index": cp_i + 1,
+            }
 
 
 def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps, tol):
@@ -853,42 +856,43 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads, tol):
         p_min = edisgo_obj.dsm.p_min[dsm_df.index[dsm_i]]
         e_min = edisgo_obj.dsm.e_min[dsm_df.index[dsm_i]]
         e_max = edisgo_obj.dsm.e_max[dsm_df.index[dsm_i]]
-        p_max.loc[p_max < tol] = 0
-        p_min.loc[e_min < tol] = 0
-        e_min.loc[e_min < tol] = 0
-        e_max.loc[e_max < tol] = 0
+        # p_max.loc[p_max < tol] = 0
+        # p_min.loc[e_min < tol] = 0
+        # e_min.loc[e_min < tol] = 0
+        # e_max.loc[e_max < tol] = 0
         if (e_min > e_max).any():
             logger.warning(
                 "Upper energy level is smaller than lower energy level for "
-                "some DSM loads!"
+                "DSM load {}! Load will be removed.".format(dsm_df.index[dsm_i])
             )
-        if (p_min > p_max).any():
+        elif (p_min > p_max).any():
             logger.warning(
                 "Upper power level is smaller than lower power level for "
-                "some DSM loads!"
+                "DSM load {}! Load will be removed.".format(dsm_df.index[dsm_i])
             )
-        q = [
-            sign * np.tan(np.arccos(pf)) * p_max[0],
-            sign * np.tan(np.arccos(pf)) * p_min[0],
-        ]
-        pm["dsm"][str(dsm_i + 1)] = {
-            "pd": 0,
-            "qd": 0,
-            "pf": pf,
-            "sign": sign,
-            "energy": 0,  # TODO: am Anfang immer 0?
-            "p_min": p_min[0],
-            "p_max": p_max[0],
-            "q_max": max(q),
-            "q_min": min(q),
-            "e_min": e_min[0],
-            "e_max": e_max[0],
-            "charge_efficiency": 1,
-            "discharge_efficiency": 1,
-            "dsm_bus": idx_bus,
-            "name": dsm_df.index[dsm_i],
-            "index": dsm_i + 1,
-        }
+        else:
+            q = [
+                sign * np.tan(np.arccos(pf)) * p_max[0],
+                sign * np.tan(np.arccos(pf)) * p_min[0],
+            ]
+            pm["dsm"][str(dsm_i + 1)] = {
+                "pd": 0,
+                "qd": 0,
+                "pf": pf,
+                "sign": sign,
+                "energy": 0,  # TODO: am Anfang immer 0?
+                "p_min": p_min[0],
+                "p_max": p_max[0],
+                "q_max": max(q),
+                "q_min": min(q),
+                "e_min": e_min[0],
+                "e_max": e_max[0],
+                "charge_efficiency": 1,
+                "discharge_efficiency": 1,
+                "dsm_bus": idx_bus,
+                "name": dsm_df.index[dsm_i],
+                "index": dsm_i + 1,
+            }
 
 
 def _build_HV_requirements(
