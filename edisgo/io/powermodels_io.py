@@ -716,8 +716,31 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps, tol):
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
     """
-    emob_df = psa_net.loads.loc[flexible_cps]
+
     flex_bands_df = edisgo_obj.electromobility.flexibility_bands
+    if (
+        len(
+            flexible_cps[
+                (flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]).any()
+            ]
+        )
+        > 0
+    ):
+        logger.warning(
+            "Upper energy level is smaller than lower energy level for "
+            "charging parks {}! Charging Parks will be changed into inflexible "
+            "loads.".format(
+                flexible_cps[
+                    (
+                        flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]
+                    ).any()
+                ]
+            )
+        )
+        flexible_cps = flexible_cps[
+            ~(flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]).any()
+        ]
+    emob_df = psa_net.loads.loc[flexible_cps]
     for cp_i in np.arange(len(emob_df.index)):
         idx_bus = _mapping(psa_net, emob_df.bus[cp_i])
         # retrieve power factor and sign from config
@@ -733,32 +756,21 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps, tol):
         # p_max.loc[p_max < tol] = 0
         # e_min.loc[e_min < tol] = 0
         # e_max.loc[e_max < tol] = 0
-        if (e_min > e_max).any():
-            logger.warning(
-                "Upper energy level is smaller than lower energy level for "
-                "charging park {}! Charging Park will be removed.".format(
-                    emob_df.index[cp_i]
-                )
-            )
-            flexible_cps = np.delete(
-                flexible_cps, np.argwhere(flexible_cps == emob_df.index[cp_i])
-            )
-        else:
-            pm["electromobility"][str(cp_i + 1)] = {
-                "pd": 0,
-                "qd": 0,
-                "pf": pf,
-                "sign": sign,
-                "p_min": 0,
-                "p_max": p_max[0],
-                "q_min": min(q, 0),
-                "q_max": max(q, 0),
-                "e_min": e_min[0],
-                "e_max": e_max[0],
-                "cp_bus": idx_bus,
-                "name": emob_df.index[cp_i],
-                "index": cp_i + 1,
-            }
+        pm["electromobility"][str(cp_i + 1)] = {
+            "pd": 0,
+            "qd": 0,
+            "pf": pf,
+            "sign": sign,
+            "p_min": 0,
+            "p_max": p_max[0],
+            "q_min": min(q, 0),
+            "q_max": max(q, 0),
+            "e_min": e_min[0],
+            "e_max": e_max[0],
+            "cp_bus": idx_bus,
+            "name": emob_df.index[cp_i],
+            "index": cp_i + 1,
+        }
 
 
 def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps, tol):
@@ -850,6 +862,26 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads, tol):
         Array containing all flexible loads that allow for application of demand side
         management strategy.
     """
+    if len(flexible_loads[(edisgo_obj.dsm.p_min > edisgo_obj.dsm.p_max).any()]) > 0:
+        logger.warning(
+            "Upper power level is smaller than lower power level for "
+            "DSM loads {}! DSM loads will be changed into inflexible loads.".format(
+                flexible_loads[(edisgo_obj.dsm.p_min > edisgo_obj.dsm.p_max).any()]
+            )
+        )
+        flexible_loads = flexible_loads[
+            ~(edisgo_obj.dsm.p_min > edisgo_obj.dsm.p_max).any()
+        ]
+    if len(flexible_loads[(edisgo_obj.dsm.e_min > edisgo_obj.dsm.e_max).any()]) > 0:
+        logger.warning(
+            "Upper energy level is smaller than lower energy level for "
+            "DSM loads {}! DSM loads will be changed into inflexible loads.".format(
+                flexible_loads[(edisgo_obj.dsm.e_min > edisgo_obj.dsm.e_max).any()]
+            )
+        )
+        flexible_loads = flexible_loads[
+            ~(edisgo_obj.dsm.e_min > edisgo_obj.dsm.e_max).any()
+        ]
     dsm_df = psa_net.loads.loc[flexible_loads]
     for dsm_i in np.arange(len(dsm_df.index)):
         idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
@@ -863,45 +895,29 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads, tol):
         # p_min.loc[e_min < tol] = 0
         # e_min.loc[e_min < tol] = 0
         # e_max.loc[e_max < tol] = 0
-        if (e_min > e_max).any():
-            logger.warning(
-                "Upper energy level is smaller than lower energy level for "
-                "DSM load {}! Load will be removed.".format(dsm_df.index[dsm_i])
-            )
-            flexible_loads = np.delete(
-                flexible_loads, np.argwhere(flexible_loads == dsm_df.index[dsm_i])
-            )
-        elif (p_min > p_max).any():
-            logger.warning(
-                "Upper power level is smaller than lower power level for "
-                "DSM load {}! Load will be removed.".format(dsm_df.index[dsm_i])
-            )
-            flexible_loads = np.delete(
-                flexible_loads, np.argwhere(flexible_loads == dsm_df.index[dsm_i])
-            )
-        else:
-            q = [
-                sign * np.tan(np.arccos(pf)) * p_max[0],
-                sign * np.tan(np.arccos(pf)) * p_min[0],
-            ]
-            pm["dsm"][str(dsm_i + 1)] = {
-                "pd": 0,
-                "qd": 0,
-                "pf": pf,
-                "sign": sign,
-                "energy": 0,  # TODO: am Anfang immer 0?
-                "p_min": p_min[0],
-                "p_max": p_max[0],
-                "q_max": max(q),
-                "q_min": min(q),
-                "e_min": e_min[0],
-                "e_max": e_max[0],
-                "charge_efficiency": 1,
-                "discharge_efficiency": 1,
-                "dsm_bus": idx_bus,
-                "name": dsm_df.index[dsm_i],
-                "index": dsm_i + 1,
-            }
+
+        q = [
+            sign * np.tan(np.arccos(pf)) * p_max[0],
+            sign * np.tan(np.arccos(pf)) * p_min[0],
+        ]
+        pm["dsm"][str(dsm_i + 1)] = {
+            "pd": 0,
+            "qd": 0,
+            "pf": pf,
+            "sign": sign,
+            "energy": 0,  # TODO: am Anfang immer 0?
+            "p_min": p_min[0],
+            "p_max": p_max[0],
+            "q_max": max(q),
+            "q_min": min(q),
+            "e_min": e_min[0],
+            "e_max": e_max[0],
+            "charge_efficiency": 1,
+            "discharge_efficiency": 1,
+            "dsm_bus": idx_bus,
+            "name": dsm_df.index[dsm_i],
+            "index": dsm_i + 1,
+        }
 
 
 def _build_HV_requirements(
