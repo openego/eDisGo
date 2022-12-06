@@ -127,13 +127,15 @@ def to_powermodels(
     if len(edisgo_object.topology.storage_units_df) > 0:
         _build_battery_storage(edisgo_object, psa_net, pm)
     if len(flexible_cps) > 0:
-        _build_electromobility(edisgo_object, psa_net, pm, flexible_cps, tol)
+        flexible_cps = _build_electromobility(
+            edisgo_object, psa_net, pm, flexible_cps, tol
+        )
     if len(flexible_hps) > 0:
         _build_heatpump(psa_net, pm, edisgo_object, flexible_hps, tol)
     if "hp" in opt_flex:
         _build_heat_storage(psa_net, pm, edisgo_object, flexible_hps)
     if len(flexible_loads) > 0:
-        _build_dsm(edisgo_object, psa_net, pm, flexible_loads, tol)
+        flexible_loads = _build_dsm(edisgo_object, psa_net, pm, flexible_loads, tol)
     if len(psa_net.loads) > 0:
         _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads, tol)
     else:
@@ -771,6 +773,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps, tol):
             "name": emob_df.index[cp_i],
             "index": cp_i + 1,
         }
+    return flexible_cps
 
 
 def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps, tol):
@@ -918,6 +921,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads, tol):
             "name": dsm_df.index[dsm_i],
             "index": dsm_i + 1,
         }
+    return flexible_loads
 
 
 def _build_HV_requirements(
