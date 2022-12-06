@@ -740,7 +740,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps, tol):
                     emob_df.index[cp_i]
                 )
             )
-            flexible_cps.remove(emob_df.index[cp_i])
+            flexible_cps.delete(emob_df.index[cp_i])
         else:
             pm["electromobility"][str(cp_i + 1)] = {
                 "pd": 0,
@@ -866,13 +866,13 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads, tol):
                 "Upper energy level is smaller than lower energy level for "
                 "DSM load {}! Load will be removed.".format(dsm_df.index[dsm_i])
             )
-            flexible_loads.remove(dsm_df.index[dsm_i])
+            flexible_loads.delete(dsm_df.index[dsm_i])
         elif (p_min > p_max).any():
             logger.warning(
                 "Upper power level is smaller than lower power level for "
                 "DSM load {}! Load will be removed.".format(dsm_df.index[dsm_i])
             )
-            flexible_loads.remove(dsm_df.index[dsm_i])
+            flexible_loads.delete(dsm_df.index[dsm_i])
         else:
             q = [
                 sign * np.tan(np.arccos(pf)) * p_max[0],
