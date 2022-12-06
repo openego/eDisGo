@@ -224,15 +224,17 @@ def create_feeder_edisgo_object(
         attr_old = getattr(edisgo_obj.timeseries, attr_name)
         if not attr_old.empty:
 
-            # get ids for attribute but remove flexible loads
-            if isinstance(flexible_loads, pd.DataFrame) & (id_attr == "loads_df"):
-                id_attr = getattr(edisgo_feeder.topology, id_attr)
-                # remove flexible loads
-                id_attr = id_attr.drop(
-                    id_attr.loc[id_attr.index.isin(flexible_loads.index)].index
-                )
-            else:
-                id_attr = getattr(edisgo_feeder.topology, id_attr)
+            # # get ids for attribute but remove flexible loads
+            # if isinstance(flexible_loads, pd.DataFrame) & (id_attr == "loads_df"):
+            #     id_attr = getattr(edisgo_feeder.topology, id_attr)
+            #     # remove flexible loads
+            #     id_attr = id_attr.drop(
+            #         id_attr.loc[id_attr.index.isin(flexible_loads.index)].index
+            #     )
+            # else:
+            #     id_attr = getattr(edisgo_feeder.topology, id_attr)
+            # keep all loads ts
+            id_attr = getattr(edisgo_feeder.topology, id_attr)
 
             # reduce attribute
             attr_new = attr_old.loc[:, id_attr.index]
