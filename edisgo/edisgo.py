@@ -2203,12 +2203,17 @@ class EDisGo:
         Method to check the integrity of the EDisGo object.
 
         Checks for consistency of topology (see
-        :func:`edisgo.topology.check_integrity`), timeseries (see
-        :func:`edisgo.timeseries.check_integrity`) and the interplay of both.
+        :func:`edisgo.network.topology.Topology.check_integrity`), timeseries (see
+        :func:`edisgo.network.timeseries.TimeSeries.check_integrity`) and the interplay
+        of both.
+        Further checks integrity of electromobility object (see
+        :func:`edisgo.network.electromobility.Electromobility.check_integrity`) if
+        there is electromobility data.
 
         """
         self.topology.check_integrity()
         self.timeseries.check_integrity()
+        self.electromobility.check_integrity()
 
         # check consistency of topology and timeseries
         comp_types = ["generators", "loads", "storage_units"]
@@ -2260,7 +2265,7 @@ class EDisGo:
 
     def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
         """
-        Resamples all generator, load and storage time series to a desired resolution.
+        Resamples all time series to a desired resolution.
 
         The following time series are affected by this:
 
@@ -2276,15 +2281,20 @@ class EDisGo:
 
         * :attr:`~.network.timeseries.TimeSeries.storage_units_reactive_power`
 
+        * :attr:`~.network.electromobility.Electromobility.flexibility_bands`
+
         Both up- and down-sampling methods are possible.
 
         Parameters
         ----------
         method : str, optional
-            Method to choose from to fill missing values when resampling.
+            Method to choose from to fill missing values when resampling time series
+            data in :class:`~.network.timeseries.TimeSeries` object (method for
+            flexibility bands in :class:`~.network.electromobility.Electromobility`
+            object cannot be chosen to assure consistency of flexibility band data).
             Possible options are:
 
-            * 'ffill'
+            * 'ffill' (default)
                 Propagate last valid observation forward to next valid
                 observation. See :pandas:`pandas.DataFrame.ffill<DataFrame.ffill>`.
             * 'bfill'
@@ -2303,6 +2313,7 @@ class EDisGo:
 
         """
         self.timeseries.resample_timeseries(method=method, freq=freq)
+        self.electromobility.resample(freq=freq)
 
 
 def import_edisgo_from_pickle(filename, path=""):
