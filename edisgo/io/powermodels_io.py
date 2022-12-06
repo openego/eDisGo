@@ -730,9 +730,9 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps, tol):
         p_max = flex_bands_df["upper_power"][emob_df.index[cp_i]]
         e_min = flex_bands_df["lower_energy"][emob_df.index[cp_i]]
         e_max = flex_bands_df["upper_energy"][emob_df.index[cp_i]]
-        p_max.loc[p_max < tol] = 0
-        e_min.loc[e_min < tol] = 0
-        e_max.loc[e_max < tol] = 0
+        # p_max.loc[p_max < tol] = 0
+        # e_min.loc[e_min < tol] = 0
+        # e_max.loc[e_max < tol] = 0
         if (e_min > e_max).any():
             logger.warning(
                 "Upper energy level is smaller than lower energy level for "
