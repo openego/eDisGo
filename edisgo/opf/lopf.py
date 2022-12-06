@@ -1152,7 +1152,7 @@ def update_model(
                 model.upper_bound_ev[cp, t].set_value(
                     set_upper_band_ev(model, cp, indexer)
                 )
-        model = update_rolling_horizon("ev", kwargs, model)
+        model = update_rolling_horizon("ev", model, **kwargs)
 
     if fixed_parameters["optimize_hp"]:
         for t in model.time_set:
