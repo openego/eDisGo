@@ -490,7 +490,7 @@ class Electromobility:
         self.flexibility_bands = flex_band_dict
 
         # fix rounding errors
-        self._fix_flex_band_rounding_errors()
+        self.fix_flexibility_bands_rounding_errors(tol=tol)
 
         if resample:
             # check if time index matches Timeseries.timeindex and if not resample flex
@@ -508,7 +508,7 @@ class Electromobility:
 
         return self.flexibility_bands
 
-    def _fix_flex_band_rounding_errors(self, tol=1e-6):
+    def fix_flexibility_bands_rounding_errors(self, tol=1e-6):
         """
         Fixes possible rounding errors that may lead to failing integrity checks.
 
