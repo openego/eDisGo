@@ -905,6 +905,10 @@ class Electromobility:
                         df, geometry="geometry", crs={"init": "epsg:4326"}
                     )
 
+            if attr == "simbev_config_df":
+                for col in ["start_date", "end_date"]:
+                    df[col] = pd.to_datetime(df[col])
+
             setattr(self, attr, df)
 
         if from_zip_archive:

@@ -482,6 +482,7 @@ class TestElectromobility:
             "lower_energy": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
         }
         self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+        config_df = self.edisgo_obj.electromobility.simbev_config_df.copy()
         self.edisgo_obj.electromobility.to_csv(dir)
 
         # reset Electromobility
@@ -508,5 +509,8 @@ class TestElectromobility:
             flex_bands["upper_power"],
             check_freq=False,
         )
-
+        assert_frame_equal(
+            self.edisgo_obj.electromobility.simbev_config_df,
+            config_df,
+        )
         shutil.rmtree(dir)
