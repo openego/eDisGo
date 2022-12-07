@@ -93,10 +93,10 @@ class TestElectromobility:
         # check concrete values
         cp = "Charging_Point_LVGrid_131957_public_1"
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122222
+            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122232
         ).all()
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 0.0
+            flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 1e-6
         ).all()
 
         tmp = flex_bands["upper_energy"].loc[:, [cp]]
@@ -176,13 +176,15 @@ class TestElectromobility:
         cp = "Charging_Point_LVGrid_131957_public_1"
 
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[19:27, 0].values, 0.0122222
+            flex_bands["upper_power"].loc[:, [cp]].iloc[19:27, 0].values, 0.0122232
         ).all()
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[0:19, 0].values, 0.0
+            flex_bands["upper_power"].loc[:, [cp]].iloc[0:19, 0].values, 1e-6
         ).all()
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[63, 0], 0.0122222 * 3 / 4
+            flex_bands["upper_power"].loc[:, [cp]].iloc[63, 0],
+            0.0122232 * 3 / 4,
+            atol=1e-6,
         )
 
         assert np.isclose(
@@ -213,13 +215,15 @@ class TestElectromobility:
         # check concrete values
         cp = "Charging_Point_LVGrid_131957_public_1"
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122222
+            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122232
         ).all()
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 0.0
+            flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 1e-6
         ).all()
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[252:260, 0], 0.0122222 * 3 / 4
+            flex_bands["upper_power"].loc[:, [cp]].iloc[252:260, 0],
+            0.0122222 * 3 / 4,
+            atol=1e-6,
         ).all()
 
         assert (
