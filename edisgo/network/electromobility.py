@@ -484,6 +484,9 @@ class Electromobility:
         }
         self.flexibility_bands = flex_band_dict
 
+        # fix rounding errors
+        self._fix_flex_band_rounding_errors()
+
         if resample:
             # check if time index matches Timeseries.timeindex and if not resample flex
             # bands
@@ -499,6 +502,92 @@ class Electromobility:
         self.check_integrity()
 
         return self.flexibility_bands
+
+    def _fix_flex_band_rounding_errors(self, tol=1e-6):
+        """
+        Fixes possible rounding errors that may lead to failing integrity checks.
+
+        Due to rounding errors it may occur, that e.g. the upper energy band is lower
+        than the lower energy band. This does in some cases lead to infeasibilities
+        when used to optimise charging processes.
+
+        Parameters
+        -----------
+        tol : float
+            Tolerance to reduce or increase values by to fix rounding errors.
+
+        """
+        # self.flexibility_bands["upper_power"] += tol
+        # self.flexibility_bands["upper_energy"] += tol
+        # self.flexibility_bands["lower_energy"] -= tol
+
+        flex_band = list(self.flexibility_bands.values())[0]
+        # if there are no flex bands, skip
+        if flex_band.empty:
+            return
+
+        efficiency = self.eta_charging_points
+        freq_orig = flex_band.index[1] - flex_band.index[0]
+        hourly_steps = int(60 / (freq_orig.total_seconds() / 60))
+
+        # increase upper power, if there are cases where upper power is not sufficient
+        # to meet charged upper energy
+        if (
+            (
+                (
+                    self.flexibility_bands["upper_energy"].diff()
+                    - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
+                )
+                > 0.0
+            )
+            .any()
+            .any()
+        ):
+            logger.debug(
+                "There are cases when upper power is not sufficient to meet charged "
+                "upper energy. Upper power band is therefore increased to avoid "
+                "infeasibilities arising from rounding errors."
+            )
+            self.flexibility_bands["upper_power"] += tol
+
+        # reduce lower energy band where it is larger than upper energy band
+        if (
+            (
+                (
+                    self.flexibility_bands["upper_energy"]
+                    - self.flexibility_bands["lower_energy"]
+                )
+                < 0.0
+            )
+            .any()
+            .any()
+        ):
+            logger.debug(
+                "There are cases when lower energy band is larger than upper energy "
+                "band. Lower energy band is therefore reduced to avoid infeasibilities "
+                "arising from rounding errors."
+            )
+            self.flexibility_bands["lower_energy"] -= tol
+
+        # increase upper power, if there are cases where upper power is not sufficient
+        # to meet charged lower energy
+        if (
+            (
+                (
+                    self.flexibility_bands["lower_energy"].diff()
+                    - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
+                )
+                > 0.0
+            )
+            .any()
+            .any()
+        ):
+            logger.debug(
+                "There are cases when upper power is not sufficient to meet charged "
+                "lower energy. Upper power band is therefore increased to avoid "
+                "infeasibilities arising from rounding errors."
+            )
+            self.flexibility_bands["upper_power"] += tol
 
     def resample(self, freq: str = "15min"):
         """
