@@ -352,7 +352,7 @@ class Electromobility:
     def flexibility_bands(self, flex_dict):
         self._flexibility_bands = flex_dict
 
-    def get_flexibility_bands(self, edisgo_obj, use_case, resample=True):
+    def get_flexibility_bands(self, edisgo_obj, use_case, resample=True, tol=1e-6):
         """
         Method to determine flexibility bands (lower and upper energy band as well as
         upper power band).
@@ -370,6 +370,13 @@ class Electromobility:
             series data in :class:`~.network.timeseries.TimeSeries` object. If False,
             original frequency is kept.
             Default: True.
+        tol : float
+            Tolerance to reduce or increase flexibility band values by to fix
+            possible rounding errors that may lead to failing integrity checks
+            and infeasibility when used to optimise charging.
+            See :py:attr:`~fix_flexibility_bands_rounding_errors`
+            for more information. To avoid this behaviour, set `tol` to 0.0.
+            Default: 1e-6.
 
         Returns
         --------
