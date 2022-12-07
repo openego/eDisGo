@@ -620,49 +620,47 @@ class Electromobility:
         freq_orig = flex_band.index[1] - flex_band.index[0]
         hourly_steps = int(60 / (freq_orig.total_seconds() / 60))
 
-        if (
+        tmp = (
             (
+                self.flexibility_bands["upper_energy"]
+                - self.flexibility_bands["lower_energy"]
+            )
+            < 0.0
+        ).any()
+        if tmp.any():
+            print(
                 (
                     self.flexibility_bands["upper_energy"]
                     - self.flexibility_bands["lower_energy"]
-                )
-                < -1e-6
+                ).max()
             )
-            .any()
-            .any()
-        ):
             raise ValueError(
-                "Lower energy bound is higher than upper energy bound. Please check."
+                f"Lower energy bound is higher than upper energy bound for the "
+                f"following charging points: {list(tmp[tmp].index)}. Please check."
             )
-        if (
+        tmp = (
             (
-                (
-                    self.flexibility_bands["upper_energy"].diff()
-                    - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
-                )
-                > 1e-6
+                self.flexibility_bands["upper_energy"].diff()
+                - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
             )
-            .any()
-            .any()
-        ):
+            > 0.0
+        ).any()
+        if tmp.any():
             raise ValueError(
-                "Upper energy band has power values higher than nominal power. "
-                "Please check."
+                f"Upper energy band has power values higher than nominal power for the "
+                f"following charging points: {list(tmp[tmp].index)}. Please check."
             )
-        if (
+        tmp = (
             (
-                (
-                    self.flexibility_bands["lower_energy"].diff()
-                    - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
-                )
-                > 1e-6
+                self.flexibility_bands["lower_energy"].diff()
+                - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
             )
-            .any()
-            .any()
-        ):
+            > 1e-6
+        ).any()
+        if tmp.any():
             raise ValueError(
-                "Lower energy band has power values higher than nominal power. "
-                "Please check."
+                f"Lower energy band has power values higher than nominal power for the "
+                f"following charging points: {list(tmp[tmp].index)}. Please check."
             )
 
     def to_csv(self, directory, attributes=None):
