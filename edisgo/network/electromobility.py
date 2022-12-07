@@ -382,8 +382,6 @@ class Electromobility:
 
         """
 
-        # Todo: change such that first day is replaced by (365+1)th day
-
         if isinstance(use_case, str):
             use_case = [use_case]
 
