@@ -517,9 +517,6 @@ class Electromobility:
             Tolerance to reduce or increase values by to fix rounding errors.
 
         """
-        # self.flexibility_bands["upper_power"] += tol
-        # self.flexibility_bands["upper_energy"] += tol
-        # self.flexibility_bands["lower_energy"] -= tol
 
         flex_band = list(self.flexibility_bands.values())[0]
         # if there are no flex bands, skip
