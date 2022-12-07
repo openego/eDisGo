@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 
 import geopandas as gpd
@@ -361,6 +362,80 @@ class TestElectromobility:
             "Up-sampling to an uneven number of times the new index fits into "
             "the old index is not possible." in caplog.text
         )
+
+    def test_integrity_check(self):
+        """
+        Checks resampling function with set up flexibility bands.
+
+        """
+        # CP1 - charge 12 kWh between time steps [1, 4]
+        # CP2 - charge 2 kWh between time steps [0, 1] and 2 kWh between
+        #       time steps [4, 5]
+
+        # set charging efficiency to 1 to make things easier
+        self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 1.0
+
+        # set up valid flexibility bands
+        timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
+        flex_bands = {}
+        flex_bands["upper_power"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 12.0, 12.0, 12.0, 12.0, 0.0],
+                "CP2": [3.0, 3.0, 0.0, 0.0, 3.0, 3.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["upper_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 6.0, 12.0, 12.0, 12.0, 12.0],
+                "CP2": [1.5, 2.0, 2.0, 2.0, 3.5, 4.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["lower_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 0.0, 0.0, 6.0, 12.0, 12.0],
+                "CP2": [0.5, 2.0, 2.0, 2.0, 2.5, 4.0],
+            },
+            index=timeindex,
+        )
+
+        # ######### check upper energy and lower than lower energy band ############
+        # modify flex band such that error is raised
+        flex_bands["upper_energy"].at[timeindex[1], "CP2"] = 1.0
+        self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+        msg = re.escape(
+            "Lower energy bound is higher than upper energy bound for the "
+            "following charging points: ['CP2']. Please check."
+        )
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo_obj.electromobility.check_integrity()
+
+        # ######### check upper energy higher than charging power ############
+        # reset previously modified value
+        flex_bands["upper_energy"].at[timeindex[1], "CP2"] = 2.0
+        # modify flex band such that error is raised
+        flex_bands["upper_energy"].at[timeindex[1], "CP1"] = 7.0
+        self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+        msg = re.escape(
+            "Upper energy band has power values higher than nominal power for the "
+            "following charging points: ['CP1']. Please check."
+        )
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo_obj.electromobility.check_integrity()
+
+        # ######### check lower energy higher than charging power ############
+        # reset previously modified value
+        flex_bands["upper_energy"].at[timeindex[1], "CP1"] = 6.0
+        # modify flex band such that error is raised
+        flex_bands["lower_energy"].at[timeindex[3], "CP1"] = 7.0
+        self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+        msg = re.escape(
+            "Lower energy band has power values higher than nominal power for the "
+            "following charging points: ['CP1']. Please check."
+        )
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo_obj.electromobility.check_integrity()
 
     def test_to_csv(self):
         """Test for method to_csv."""
