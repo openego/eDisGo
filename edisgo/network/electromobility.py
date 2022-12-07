@@ -492,10 +492,10 @@ class Electromobility:
         # fix rounding errors
         self.fix_flexibility_bands_rounding_errors(tol=tol)
 
+        edisgo_timeindex = edisgo_obj.timeseries.timeindex
         if resample:
             # check if time index matches Timeseries.timeindex and if not resample flex
             # bands
-            edisgo_timeindex = edisgo_obj.timeseries.timeindex
             if len(edisgo_timeindex) > 1:
                 # check if frequencies match
                 freq_edisgo = edisgo_timeindex[1] - edisgo_timeindex[0]
@@ -505,7 +505,15 @@ class Electromobility:
 
         # sanity check
         self.check_integrity()
-
+        # check time index
+        if len(edisgo_timeindex) > 1:
+            missing_indices = [_ for _ in edisgo_timeindex if _ not in flex_band_index]
+            if len(missing_indices) > 0:
+                logger.warning(
+                    "There are time steps in timeindex of TimeSeries object that "
+                    "are not in the index of the flexibility bands. This may lead "
+                    "to problems."
+                )
         return self.flexibility_bands
 
     def fix_flexibility_bands_rounding_errors(self, tol=1e-6):
