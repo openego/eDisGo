@@ -997,7 +997,7 @@ def _get_matching_dict_of_attributes_and_file_names():
 
     Is used in functions
     :attr:`~.network.electromobility.Electromobility.from_csv` and
-    attr:`~.network.electromobility.Electromobility.to_csv`.
+    :attr:`~.network.electromobility.Electromobility.to_csv`.
 
     Returns
     -------
