@@ -516,10 +516,24 @@ class Electromobility:
         than the lower energy band. This does in some cases lead to infeasibilities
         when used to optimise charging processes.
 
+        This function increases or reduces a flexibility band by the specified tolerance
+        in case an integrity check fails as follows:
+
+        * If there are cases where the upper power band is not sufficient to meet
+          the charged upper energy, the upper power band is increased for all
+          charging points and all time steps.
+        * If there are cases where the lower energy band is larger than the upper
+          energy band, the lower energy band is reduced for all charging points and
+          all time steps.
+        * If there are cases where upper power band is not sufficient
+          to meet charged lower energy, the upper power band is increased for all
+          charging points and all time steps.
+
         Parameters
         -----------
         tol : float
             Tolerance to reduce or increase values by to fix rounding errors.
+            Default: 1e-6.
 
         """
 
@@ -552,7 +566,8 @@ class Electromobility:
             )
             self.flexibility_bands["upper_power"] += tol
 
-        # reduce lower energy band where it is larger than upper energy band
+        # reduce lower energy band if there are cases where it is larger than upper
+        # energy band
         if (
             (
                 (
