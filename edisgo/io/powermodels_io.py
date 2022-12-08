@@ -306,7 +306,7 @@ def from_powermodels(
 
     edisgo_object.set_time_series_reactive_power_control()
 
-    if pm["opt_version"] in [1, 2]:
+    if pm["nw"]["1"]["opt_version"] in [1, 2]:
         # Check values of slack variables for HV requirement constraint
         names = [
             pm["nw"]["1"]["HV_requirements"][flex]["flexibility"]
@@ -376,7 +376,7 @@ def from_powermodels(
             ).to_csv(
                 os.path.join(abs_path, str("heat_storage_" + name[variable] + ".csv"))
             )
-        if pm["opt_version"] in [2, 4]:
+        if pm["nw"]["1"]["opt_version"] in [2, 4]:
             names = [
                 pm["nw"]["1"]["heatpumps"][hp]["name"]
                 for hp in list(pm["nw"]["1"]["heatpumps"].keys())
