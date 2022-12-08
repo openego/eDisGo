@@ -122,9 +122,12 @@ def pm_optimize(
     while True:
         out = julia_process.stdout.readline()
         if out == "" and julia_process.poll() is not None:
+            if julia_process.poll() == 0:
+                logger.info("Julia process was successful.")
+            else:
+                logger.warning("Julia process failed!")
             break
         if out.rstrip().startswith('{"name"'):
-            logger.info("Julia process was successful.")
             pm_opf = json.loads(out)
             # write results to edisgo object
             edisgo_obj.from_powermodels(
