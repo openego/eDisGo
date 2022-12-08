@@ -29,6 +29,8 @@ class Etrago:  # ToDo: delete as soon as etrago class is implemented
         self.heat_pump_rural_active_power = pd.Series(dtype="float64")
         self.heat_central_active_power = pd.Series(dtype="float64")
         self.opf_results = pd.DataFrame(dtype="float64")
+        self.geothermal_energy_feedin_district_heating = pd.Series(dtype="float64")
+        self.solarthermal_energy_feedin_district_heating = pd.Series(dtype="float64")
 
 
 def to_powermodels(
@@ -69,7 +71,9 @@ def to_powermodels(
     """
     tol = 1e-4
     if opt_flex is None:
-        opt_flex = ["curt"]  # ToDo: adden falls nicht drin
+        opt_flex = ["curt"]
+    if "curt" not in opt_flex:
+        opt_flex.append("curt")
     if flexible_cps is None:
         flexible_cps = []
     if flexible_hps is None:
@@ -194,12 +198,13 @@ def to_powermodels(
         opt_flex,
         hv_flex_dict,
     )
-    return pm
+    return pm, hv_flex_dict
 
 
 def from_powermodels(
     edisgo_object,
     pm_results,
+    hv_flex_dict,
     save_heat_storage=False,
     save_gen_slack=False,
     save_hv_slack=False,
@@ -316,27 +321,31 @@ def from_powermodels(
         columns=names,
         data=data,
     )
+    if save_hv_slack:
+        df.to_csv(os.path.join(abs_path, "hv_requirements_slack.csv"))
+
+    # calculate relative error
+    for flex in names:
+        df[flex] = abs(df[flex].values - hv_flex_dict[flex]) / hv_flex_dict[flex]
+
     df2 = pd.DataFrame(
         columns=[
-            "Highest negative error",
-            "Highest positive error",
-            "Mean absolute error",
-            "Sum absolute error",
+            "Highest relative error",
+            "Mean relative error",
+            "Sum relative error",
         ],
         index=names,
     )
-    # highest negative error
-    df2["Highest negative error"] = df.min()
-    # highest positive error
-    df2["Highest positive error"] = df.max()
-    # mean absolute error
-    df2["Mean absolute error"] = df.abs().sum() / len(df)
-    # write sum of absolut error to edisgo_object
-    edisgo_object.etrago.opf_results = df.abs().sum()
-    if (df2["Highest positive error"].values > 0.05).any():  # ToDo: value of error
-        logger.warning("Highest absolute error of HV slack variables exceed 0.05")
-    if save_hv_slack:
-        df2.to_csv(os.path.join(abs_path, "hv_requirements_slack.csv"))
+    df2["Highest relative error"] = df.max()
+    df2["Mean relative error"] = df.sum() / len(df)
+    df2["Sum relative error"] = df.sum()
+    edisgo_object.etrago.opf_results = df2  # write results to edisgo object
+    for flex in names:
+        if (df2["Highest relative error"][flex] > 0.05).any():
+            logger.warning(
+                "Highest relative error of {} variable exceeds 5%.".format(flex)
+            )
+
     if save_gen_slack:
         df = pd.DataFrame(
             index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"]

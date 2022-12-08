@@ -18,6 +18,7 @@ def pm_optimize(
     opt_version=1,
     opt_flex=None,
     method="soc",
+    solver_tol=1e-6,
     silence_moi=False,
     save_heat_storage=False,
     save_gen_slack=False,
@@ -82,7 +83,7 @@ def pm_optimize(
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
 
-    pm = edisgo_obj.to_powermodels(
+    pm, hv_flex_dict = edisgo_obj.to_powermodels(
         flexible_cps=flexible_cps,
         flexible_hps=flexible_hps,
         flexible_loads=flexible_loads,
@@ -110,6 +111,7 @@ def pm_optimize(
             solution_dir,
             method,
             str(silence_moi),
+            str(solver_tol),
         ],
         stdin=subprocess.PIPE,
         text=True,
@@ -127,6 +129,7 @@ def pm_optimize(
             # write results to edisgo object
             edisgo_obj.from_powermodels(
                 pm_opf,
+                hv_flex_dict,
                 save_heat_storage=save_heat_storage,
                 save_gen_slack=save_gen_slack,
                 save_hv_slack=save_hv_slack,

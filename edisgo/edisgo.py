@@ -679,6 +679,7 @@ class EDisGo:
     def from_powermodels(
         self,
         pm_results,
+        hv_flex_dict,
         save_heat_storage=False,
         save_gen_slack=False,
         save_hv_slack=False,
@@ -719,6 +720,7 @@ class EDisGo:
         return powermodels_io.from_powermodels(
             self,
             pm_results=pm_results,
+            hv_flex_dict=hv_flex_dict,
             save_heat_storage=save_heat_storage,
             save_hv_slack=save_hv_slack,
             save_gen_slack=save_gen_slack,
@@ -733,6 +735,7 @@ class EDisGo:
         opt_version=1,
         opt_flex=None,
         method="soc",
+        solver_tol=1e-6,
         silence_moi=False,
         save_heat_storage=False,
         save_gen_slack=False,
@@ -803,6 +806,7 @@ class EDisGo:
             opt_version=opt_version,
             opt_flex=opt_flex,
             method=method,
+            solver_tol=solver_tol,
             silence_moi=silence_moi,
             save_heat_storage=save_heat_storage,
             save_gen_slack=save_gen_slack,
