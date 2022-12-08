@@ -2416,7 +2416,7 @@ class EDisGo:
 
         """
         abs_path = os.path.abspath(path)
-        pm = self.to_powermodels(
+        pm, hv_flex_dict = self.to_powermodels(
             flexible_cps,
             flexible_hps,
             flexible_loads,

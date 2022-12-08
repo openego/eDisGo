@@ -142,7 +142,9 @@ def to_powermodels(
     if len(flexible_loads) > 0:
         flexible_loads = _build_dsm(edisgo_object, psa_net, pm, flexible_loads, tol)
     if len(psa_net.loads) > 0:
-        _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads, tol)
+        _build_load(
+            edisgo_object, psa_net, pm, flexible_cps, flexible_hps, flexible_loads, tol
+        )
     else:
         logger.warning("No loads found in network.")
     if (opt_version == 1) | (opt_version == 2):
@@ -625,13 +627,16 @@ def _build_branch(psa_net, pm, tol):
         }
 
 
-def _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads, tol):
+def _build_load(
+    edisgo_obj, psa_net, pm, flexible_cps, flexible_hps, flexible_loads, tol
+):
     """
     Builds load dictionary in PowerModels network data format and adds it to
     PowerModels dictionary 'pm'.
 
     Parameters
     ----------
+    edisgo_obj : :class:`~.EDisGo`
     psa_net : :pypsa:`PyPSA.Network<network>`
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
@@ -652,6 +657,7 @@ def _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads, tol):
         loads_df = psa_net.loads.drop(flex_loads)
     for load_i in np.arange(len(loads_df.index)):
         idx_bus = _mapping(psa_net, loads_df.bus[load_i])
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
         q_d = psa_net.loads_t.q_set[loads_df.index[load_i]]
         p_d.loc[p_d < tol] = 0
@@ -661,6 +667,8 @@ def _build_load(psa_net, pm, flexible_cps, flexible_hps, flexible_loads, tol):
             "qd": q_d[0],
             "load_bus": idx_bus,
             "status": True,
+            "pf": pf,
+            "sign": sign,
             "index": load_i + 1,
         }
 
