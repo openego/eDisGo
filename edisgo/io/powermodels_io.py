@@ -28,6 +28,7 @@ class Etrago:  # ToDo: delete as soon as etrago class is implemented
         self.electromobility_active_power = pd.Series(dtype="float64")
         self.heat_pump_rural_active_power = pd.Series(dtype="float64")
         self.heat_central_active_power = pd.Series(dtype="float64")
+        self.opf_results = pd.DataFrame(dtype="float64")
 
 
 def to_powermodels(
@@ -330,11 +331,10 @@ def from_powermodels(
     df2["Highest positive error"] = df.max()
     # mean absolute error
     df2["Mean absolute error"] = df.abs().sum() / len(df)
-    # sum of absolut error -> an edisgo übergeben
-    df2["Sum absolute error"] = df.abs().sum()
-    if (df2["Highest positive error"].values > 0.00001).any():  # ToDo: value of error
-        logger.warning("Highest absolute error of HV slack variables exceed 0.00001")
-    # ToDo: write sum absolute error to edisgo object
+    # write sum of absolut error to edisgo_object
+    edisgo_object.etrago.opf_results = df.abs().sum()
+    if (df2["Highest positive error"].values > 0.05).any():  # ToDo: value of error
+        logger.warning("Highest absolute error of HV slack variables exceed 0.05")
     if save_hv_slack:
         df2.to_csv(os.path.join(abs_path, "hv_requirements_slack.csv"))
     if save_gen_slack:
@@ -717,6 +717,11 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps, tol):
         (PowerModels) dictionary.
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
+
+    Returns
+     ----------
+     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
+        Updated array containing all charging points that allow for flexible charging.
     """
 
     flex_bands_df = edisgo_obj.electromobility.flexibility_bands
@@ -755,9 +760,9 @@ def _build_electromobility(edisgo_obj, psa_net, pm, flexible_cps, tol):
         p_max = flex_bands_df["upper_power"][emob_df.index[cp_i]]
         e_min = flex_bands_df["lower_energy"][emob_df.index[cp_i]]
         e_max = flex_bands_df["upper_energy"][emob_df.index[cp_i]]
-        # p_max.loc[p_max < tol] = 0
-        # e_min.loc[e_min < tol] = 0
-        # e_max.loc[e_max < tol] = 0
+        p_max.loc[p_max < tol] = 0
+        e_min.loc[e_min < tol] = 0
+        e_max.loc[e_max < tol] = 0
         pm["electromobility"][str(cp_i + 1)] = {
             "pd": 0,
             "qd": 0,
@@ -864,7 +869,13 @@ def _build_dsm(edisgo_obj, psa_net, pm, flexible_loads, tol):
     flexible_loads : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
+    Returns
+     ----------
+     flexible_loads : :numpy:`numpy.ndarray<ndarray>` or list
+        Updated array containing all flexible loads that allow for application of demand
+        side management strategy.
     """
+
     if len(flexible_loads[(edisgo_obj.dsm.p_min > edisgo_obj.dsm.p_max).any()]) > 0:
         logger.warning(
             "Upper power level is smaller than lower power level for "

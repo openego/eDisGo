@@ -6,7 +6,7 @@ import sys
 
 import numpy as np
 
-logging.getLogger().setLevel(logging.INFO)
+# logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
