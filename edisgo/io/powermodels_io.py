@@ -306,47 +306,48 @@ def from_powermodels(
 
     edisgo_object.set_time_series_reactive_power_control()
 
-    # Check values of slack variables for HV requirement constraint
-    names = [
-        pm["nw"]["1"]["HV_requirements"][flex]["flexibility"]
-        for flex in list(pm["nw"]["1"]["HV_requirements"].keys())
-    ]
-    data = [
-        [
-            pm["nw"][t]["HV_requirements"][flex]["phvs"]
+    if pm["opt_version"] in [1, 2]:
+        # Check values of slack variables for HV requirement constraint
+        names = [
+            pm["nw"]["1"]["HV_requirements"][flex]["flexibility"]
             for flex in list(pm["nw"]["1"]["HV_requirements"].keys())
         ]
-        for t in timesteps
-    ]
-    df = pd.DataFrame(
-        index=edisgo_object.timeseries.timeindex,
-        columns=names,
-        data=data,
-    )
-    if save_hv_slack:
-        df.to_csv(os.path.join(abs_path, "hv_requirements_slack.csv"))
+        data = [
+            [
+                pm["nw"][t]["HV_requirements"][flex]["phvs"]
+                for flex in list(pm["nw"]["1"]["HV_requirements"].keys())
+            ]
+            for t in timesteps
+        ]
+        df = pd.DataFrame(
+            index=edisgo_object.timeseries.timeindex,
+            columns=names,
+            data=data,
+        )
+        if save_hv_slack:
+            df.to_csv(os.path.join(abs_path, "hv_requirements_slack.csv"))
 
-    # calculate relative error
-    for flex in names:
-        df[flex] = abs(df[flex].values - hv_flex_dict[flex]) / hv_flex_dict[flex]
+        # calculate relative error
+        for flex in names:
+            df[flex] = abs(df[flex].values - hv_flex_dict[flex]) / hv_flex_dict[flex]
 
-    df2 = pd.DataFrame(
-        columns=[
-            "Highest relative error",
-            "Mean relative error",
-            "Sum relative error",
-        ],
-        index=names,
-    )
-    df2["Highest relative error"] = df.max()
-    df2["Mean relative error"] = df.sum() / len(df)
-    df2["Sum relative error"] = df.sum()
-    edisgo_object.etrago.opf_results = df2  # write results to edisgo object
-    for flex in names:
-        if (df2["Highest relative error"][flex] > 0.05).any():
-            logger.warning(
-                "Highest relative error of {} variable exceeds 5%.".format(flex)
-            )
+        df2 = pd.DataFrame(
+            columns=[
+                "Highest relative error",
+                "Mean relative error",
+                "Sum relative error",
+            ],
+            index=names,
+        )
+        df2["Highest relative error"] = df.max()
+        df2["Mean relative error"] = df.sum() / len(df)
+        df2["Sum relative error"] = df.sum()
+        edisgo_object.etrago.opf_results = df2  # write results to edisgo object
+        for flex in names:
+            if (df2["Highest relative error"][flex] > 0.05).any():
+                logger.warning(
+                    "Highest relative error of {} variable exceeds 5%.".format(flex)
+                )
 
     if save_gen_slack:
         df = pd.DataFrame(
@@ -375,20 +376,22 @@ def from_powermodels(
             ).to_csv(
                 os.path.join(abs_path, str("heat_storage_" + name[variable] + ".csv"))
             )
-        names = [
-            pm["nw"]["1"]["heatpumps"][hp]["name"]
-            for hp in list(pm["nw"]["1"]["heatpumps"].keys())
-        ]
-        data = [
-            [
-                pm["nw"][t]["heatpumps"][hp]["phps"]
+        if pm["opt_version"] in [2, 4]:
+            names = [
+                pm["nw"]["1"]["heatpumps"][hp]["name"]
                 for hp in list(pm["nw"]["1"]["heatpumps"].keys())
             ]
-            for t in timesteps
-        ]
-        pd.DataFrame(
-            index=edisgo_object.timeseries.timeindex, columns=names, data=data
-        ).to_csv(os.path.join(abs_path, "heat_pump_p_slack.csv"))
+            data = [
+                [
+                    pm["nw"][t]["heatpumps"][hp]["phps"]
+                    for hp in list(pm["nw"]["1"]["heatpumps"].keys())
+                ]
+                for t in timesteps
+            ]
+            pd.DataFrame(
+                index=edisgo_object.timeseries.timeindex, columns=names, data=data
+            ).to_csv(os.path.join(abs_path, "heat_pump_p_slack.csv"))
+    # ToDo: save gen_curt_slack and save_load_slack
 
 
 def _init_pm():
