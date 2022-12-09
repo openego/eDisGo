@@ -19,10 +19,11 @@ def pm_optimize(
     opt_flex=None,
     method="soc",
     solver_tol=1e-6,
+    warm_start=False,
     silence_moi=False,
     save_heat_storage=False,
-    save_gen_slack=False,
-    save_hv_slack=False,
+    save_slack_gen=False,
+    save_slacks=False,
     path="",
 ):
     """
@@ -65,12 +66,12 @@ def pm_optimize(
         "path" to change the directory the file is saved to.
         directory.
             Default: False
-    save_gen_slack: bool
+    save_slack_gen: bool
         Indicates whether to save results of slack generator variables from the
         optimization to csv file in the current working directory. Set parameter
         "path" to change the directory the file is saved to.
         Default: False
-    save_hv_slack: bool
+    save_slacks: bool
         Indicates whether to save results of slack variables for high voltage
         requirements (sum, minimal and maximal and mean deviation) from the optimization
         to csv file in the current working directory. Set parameter "path" to change the
@@ -112,6 +113,7 @@ def pm_optimize(
             method,
             str(silence_moi),
             str(solver_tol),
+            str(warm_start),
         ],
         stdin=subprocess.PIPE,
         text=True,
@@ -134,8 +136,8 @@ def pm_optimize(
                 pm_opf,
                 hv_flex_dict,
                 save_heat_storage=save_heat_storage,
-                save_gen_slack=save_gen_slack,
-                save_hv_slack=save_hv_slack,
+                save_slack_gen=save_slack_gen,
+                save_slacks=save_slacks,
                 path=path,
             )
         elif out.rstrip().startswith("Set parameter") or out.rstrip().startswith(

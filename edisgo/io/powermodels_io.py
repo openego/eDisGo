@@ -208,8 +208,8 @@ def from_powermodels(
     pm_results,
     hv_flex_dict,
     save_heat_storage=False,
-    save_gen_slack=False,
-    save_hv_slack=False,
+    save_slack_gen=False,
+    save_slacks=False,
     path="",
 ):
     """
@@ -228,12 +228,12 @@ def from_powermodels(
         "path" to change the directory the file is saved to.
         directory.
             Default: False
-    save_gen_slack: bool
+    save_slack_gen: bool
         Indicates whether to save results of slack generator variables from the
         optimization to csv file in the current working directory. Set parameter
         "path" to change the directory the file is saved to.
         Default: False
-    save_hv_slack: bool
+    save_slacks: bool
         Indicates whether to save results of slack variables for high voltage
         requirements (sum, minimal and maximal and mean deviation) from the optimization
         to csv file in the current working directory. Set parameter "path" to change the
@@ -324,7 +324,7 @@ def from_powermodels(
             columns=names,
             data=data,
         )
-        if save_hv_slack:
+        if save_slacks:
             df.to_csv(os.path.join(abs_path, "hv_requirements_slack.csv"))
 
         # calculate relative error
@@ -349,15 +349,16 @@ def from_powermodels(
                     "Highest relative error of {} variable exceeds 5%.".format(flex)
                 )
 
-    if save_gen_slack:
+    if save_slack_gen:  # save slack generator variable to csv file
         df = pd.DataFrame(
             index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"]
         )
         for gen in list(pm["nw"]["1"]["gen_slack"].keys()):
             df["pg"] = [pm["nw"][t]["gen_slack"][gen]["pgs"] for t in timesteps]
             df["qg"] = [pm["nw"][t]["gen_slack"][gen]["qgs"] for t in timesteps]
-        df.to_csv(os.path.join(abs_path, "gen_slack.csv"))
-    if save_heat_storage:
+        df.to_csv(os.path.join(abs_path, "slack_gen.csv"))
+
+    if save_heat_storage:  # save heat storage variables to csv file
         for variable in ["phs", "hse"]:
             names = [
                 pm["nw"]["1"]["heat_storage"][hs]["name"]
@@ -376,22 +377,71 @@ def from_powermodels(
             ).to_csv(
                 os.path.join(abs_path, str("heat_storage_" + name[variable] + ".csv"))
             )
-        if pm["nw"]["1"]["opt_version"] in [2, 4]:
-            names = [
-                pm["nw"]["1"]["heatpumps"][hp]["name"]
+
+    if (pm["nw"]["1"]["opt_version"] in [2, 4]) & save_slacks:
+        # save heatpump slacks to csv file
+        names = [
+            pm["nw"]["1"]["heatpumps"][hp]["name"]
+            for hp in list(pm["nw"]["1"]["heatpumps"].keys())
+        ]
+        data = [
+            [
+                pm["nw"][t]["heatpumps"][hp]["phps"]
                 for hp in list(pm["nw"]["1"]["heatpumps"].keys())
             ]
-            data = [
-                [
-                    pm["nw"][t]["heatpumps"][hp]["phps"]
-                    for hp in list(pm["nw"]["1"]["heatpumps"].keys())
-                ]
-                for t in timesteps
+            for t in timesteps
+        ]
+        pd.DataFrame(
+            index=edisgo_object.timeseries.timeindex, columns=names, data=data
+        ).to_csv(os.path.join(abs_path, "heat_pump_p_slack.csv"))
+
+        # save dispatchable generator slacks (slack curtailment)
+        names = [
+            pm["nw"]["1"]["gen"][gen]["name"]
+            for gen in list(pm["nw"]["1"]["gen"].keys())
+        ]
+        data = [
+            [
+                pm["nw"][t]["gen"][gen]["pgens"]
+                for gen in list(pm["nw"]["1"]["gen"].keys())
             ]
-            pd.DataFrame(
-                index=edisgo_object.timeseries.timeindex, columns=names, data=data
-            ).to_csv(os.path.join(abs_path, "heat_pump_p_slack.csv"))
-    # ToDo: save gen_curt_slack and save_load_slack
+            for t in timesteps
+        ]
+        pd.DataFrame(
+            index=edisgo_object.timeseries.timeindex, columns=names, data=data
+        ).to_csv(os.path.join(abs_path, "disp_generator_slack.csv"))
+
+        # save non-dispatchable generator slacks (curtailment)
+        names = [
+            pm["nw"]["1"]["gen_nd"][gen]["name"]
+            for gen in list(pm["nw"]["1"]["gen_nd"].keys())
+        ]
+        data = [
+            [
+                pm["nw"][t]["gen_nd"][gen]["pgc"]
+                for gen in list(pm["nw"]["1"]["gen_nd"].keys())
+            ]
+            for t in timesteps
+        ]
+        pd.DataFrame(
+            index=edisgo_object.timeseries.timeindex, columns=names, data=data
+        ).to_csv(os.path.join(abs_path, "nondisp_generator_curtailment.csv"))
+
+        # save load slacks (load shedding)
+        names = [
+            pm["nw"]["1"]["load"][load]["name"]
+            for load in list(pm["nw"]["1"]["load"].keys())
+        ]
+        data = [
+            [
+                pm["nw"][t]["load"][load]["pds"]
+                for load in list(pm["nw"]["1"]["load"].keys())
+            ]
+            for t in timesteps
+        ]
+        pd.DataFrame(
+            index=edisgo_object.timeseries.timeindex, columns=names, data=data
+        ).to_csv(os.path.join(abs_path, "load_shedding.csv"))
 
 
 def _init_pm():
@@ -517,6 +567,7 @@ def _build_gen(edisgo_obj, psa_net, pm, tol):
             "vg": 1,
             "mbase": gen_disp.p_nom[gen_i],
             "gen_bus": idx_bus,
+            "name": gen_disp.index[gen_i],
             "gen_status": 1,
             "index": gen_i + 1,
         }
@@ -672,6 +723,7 @@ def _build_load(
             "status": True,
             "pf": pf,
             "sign": sign,
+            "name": loads_df.index[load_i],
             "index": load_i + 1,
         }
 
