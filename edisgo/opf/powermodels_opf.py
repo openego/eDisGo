@@ -6,7 +6,6 @@ import sys
 
 import numpy as np
 
-# logging.getLogger().setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -15,7 +14,7 @@ def pm_optimize(
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
-    opt_version=1,
+    opt_version=4,
     opt_flex=None,
     method="soc",
     solver_tol=1e-6,
@@ -33,20 +32,42 @@ def pm_optimize(
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all charging points that allow for flexible charging.
-    flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
+        Default: None
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
-    flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
+        Default: None
+    flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all flexible loads that allow for application of demand side
         management strategy.
+        Default: None
     opt_version: Int
-        Version of optimization models to choose from. For more information see MA.
-        Must be one of [1, 2, 3].
-    opt_flex: list
-        List of flexibilities that should be considered in the optimization. Must be any
-        subset of ["storage", "cp", "hp", "dsm"]
+        Version of optimization models to choose from. The grid model is a radial branch
+        flow model (BFM). Optimization versions differ in lifted or additional
+        constraints and the objective function.
+        Implemented version are:
+        1 : - Additional constraints: high voltage requirements
+            - Lifted constraints: grid restrictions
+            - Objective: minimize line losses and bus voltage magnitudes
+            # ToDo: add HV slacks to objective (see `Gurobi's multiple objectives
+            <https://www.gurobi.com/documentation/9.1/refman/multiple_objectives.html>`_
+            ).
+        2 : - Additional constraints: high voltage requirements
+            - Objective: minimize line losses and grid related slacks
+            # ToDo: add HV slacks to objective cf. version 1.
+        3 : - Lifted constraints: grid restrictions
+            - Objective: minimize line losses and bus voltage magnitudes
+        4 : - Objective: minimize line losses and grid related slacks
+        Must be one of [1, 2, 3, 4].
+        Default: 4
+    opt_flex: list or None
+        List of flexibilities that should be considered in the optimization. Possible
+        flexibilities are battery storages ("storage"), charging parks ("cp"), heat
+        pumps and heat storages ("hp") and demand side management ("dsm").
+        Must be any subset of ["storage", "cp", "hp", "dsm"].
+        Default: None
     method: str
         Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
         (Non Convex).
@@ -54,28 +75,36 @@ def pm_optimize(
         relaxation of equality constraint P²+Q² = V²*I². If method is "nc", OPF is run
         with Ipopt solver as a non-convex problem due to quadratic equality constraint
         P²+Q² = V²*I².
+        Default: "soc"
+    solver_tol: float
+        Feasibility tolerance for solvers. Default: 1e-6
+    warm_start: bool
+        If set to True and if method is set to "soc", non-convex IPOPT OPF will be run
+        additionally and will be warm started with Gurobi SOC solution. Warm-start will
+        only be run if results for Gurobi's SOC relaxation is exact.
+        Default: False
     silence_moi: bool
         If set to True, MathOptInterface's optimizer attribute "MOI.Silent" is set
         to True in julia subprocess. This attribute is for silencing the output of
         an optimizer. When set to True, it requires the solver to produce no output,
         hence there will be no logging coming from julia subprocess in python
         process.
+        Default: False
     save_heat_storage: bool
         Indicates whether to save results of heat storage variables from the
         optimization to csv file in the current working directory. Set parameter
         "path" to change the directory the file is saved to.
         directory.
-            Default: False
+        Default: False
     save_slack_gen: bool
         Indicates whether to save results of slack generator variables from the
         optimization to csv file in the current working directory. Set parameter
         "path" to change the directory the file is saved to.
         Default: False
     save_slacks: bool
-        Indicates whether to save results of slack variables for high voltage
-        requirements (sum, minimal and maximal and mean deviation) from the optimization
-        to csv file in the current working directory. Set parameter "path" to change the
-        directory the file is saved to.
+        Indicates whether to save results of slack variables of OPF. Depending on
+         chosen opt_version, different slacks are used. For more information see
+         :func:`edisgo.io.powermodels_io.from_powermodels`.
         Default: False
     path : str
         Directory the csv file is saved to. Per default it takes the current

@@ -636,7 +636,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
-        opt_version=1,
+        opt_version=4,
         opt_flex=None,
     ):
         """
@@ -654,8 +654,9 @@ class EDisGo:
             Array containing all flexible loads that allow for application of demand
             side management strategy.
         opt_version: Int
-            Version of optimization models to choose from. For more information see MA.
-            Must be one of [1, 2, 3].
+            Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+            For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: 4
         opt_flex: list
             List of flexibilities that should be considered in the optimization. Must be
             any subset of ["storage", "cp", "hp", "dsm"]
@@ -669,11 +670,11 @@ class EDisGo:
 
         return powermodels_io.to_powermodels(
             self,
-            flexible_cps,
-            flexible_hps,
-            flexible_loads,
-            opt_version,
-            opt_flex,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            opt_version=opt_version,
+            opt_flex=opt_flex,
         )
 
     def from_powermodels(
@@ -695,6 +696,9 @@ class EDisGo:
         pm_results: dict or str
             Dictionary or path to JSON file that contains all network data in
             PowerModels network data format.
+        hv_flex_dict: dict
+            Dictionary containing time series of HV requirement for each flexibility
+            retrieved from etrago component of edisgo object.
         save_heat_storage: bool
             Indicates whether to save results of heat storage variables from the
             optimization to csv file in the current working directory. Set parameter
@@ -707,10 +711,9 @@ class EDisGo:
             "path" to change the directory the file is saved to.
             Default: False
         save_slacks: bool
-            Indicates whether to save results of slack variables for high voltage
-            requirements (sum, minimal and maximal and mean deviation) from the
-            optimization to csv file in the current working directory. Set parameter
-            "path" to change the directory the file is saved to.
+            Indicates whether to save results of slack variables of OPF. Depending on
+             chosen opt_version, different slacks are used. For more information see
+             :func:`edisgo.io.powermodels_io.from_powermodels`
             Default: False
         path : str
             Directory the csv file is saved to. Per default it takes the current
@@ -732,7 +735,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
-        opt_version=1,
+        opt_version=4,
         opt_flex=None,
         method="soc",
         solver_tol=1e-6,
@@ -750,49 +753,61 @@ class EDisGo:
 
         Parameters
         ----------
-        flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
+        flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list or None
             Array containing all charging points that allow for flexible charging.
-        flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
+            Default: None
+        flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list or None
             Array containing all heat pumps that allow for flexible operation due to an
             attached heat storage.
-        flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
+            Default: None
+        flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list or None
             Array containing all flexible loads that allow for application of demand
             side management strategy.
+            Default: None
         opt_version: Int
-            Version of optimization models to choose from. For more information see MA.
-            Must be one of [1, 2, 3].
-        opt_flex: list
+            Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+            For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: 4
+        opt_flex: list or None
             List of flexibilities that should be considered in the optimization. Must be
-            any subset of ["storage", "cp", "hp", "dsm"]
+            any subset of ["storage", "cp", "hp", "dsm"] or None. For more information
+            see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: None
         method: str
             Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
-            (Non Convex).
-            If method is "soc", OPF is run in PowerModels with Gurobi solver with SOC
-            relaxation of equality constraint P²+Q² = V²*I². If method is "nc", OPF is
-            run with Ipopt solver as a non-convex problem due to quadratic equality
-            constraint P²+Q² = V²*I².
+            (Non Convex). For more information see
+            :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: "soc"
+        solver_tol: float
+            Feasibility tolerance for solvers.
+            Default: 1e-6
+        warm_start: bool
+            If set to True and if method is set to "soc", non-convex IPOPT OPF will be
+            run additionally and will be warm started with Gurobi SOC solution.
+            Warm-start will only be run if results for Gurobi's SOC relaxation is exact.
+            Default: False
         silence_moi: bool
             If set to True, MathOptInterface's optimizer attribute "MOI.Silent" is set
             to True in julia subprocess. This attribute is for silencing the output of
             an optimizer. When set to True, it requires the solver to produce no output,
             hence there will be no logging coming from julia subprocess in python
             process.
+            Default: False
         save_heat_storage: bool
             Indicates whether to save results of heat storage variables from the
             optimization to csv file in the current working directory. Set parameter
             "path" to change the directory the file is saved to.
             directory.
-                Default: False
+            Default: False
         save_slack_gen: bool
             Indicates whether to save results of slack generator variables from the
             optimization to csv file in the current working directory. Set parameter
             "path" to change the directory the file is saved to.
             Default: False
         save_slacks: bool
-            Indicates whether to save results of slack variables for high voltage
-            requirements (sum, minimal and maximal and mean deviation) from the
-            optimization to csv file in the current working directory. Set parameter
-            "path" to change the directory the file is saved to.
+            Indicates whether to save results of slack variables of OPF. Depending on
+             chosen opt_version, different slacks are used. For more information see
+             :func:`edisgo.io.powermodels_io.from_powermodels`.
             Default: False
         path : str
             Directory the csv file is saved to. Per default it takes the current
@@ -2387,7 +2402,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
-        opt_version=1,
+        opt_version=4,
         opt_flex=None,
     ):
         """
@@ -2410,8 +2425,9 @@ class EDisGo:
             Array containing all flexible loads that allow for application of demand
             side management strategy.
         opt_version: Int
-            Version of optimization models to choose from. For more information see MA.
-            Must be one of [1, 2].
+            Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+            For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: 4
         opt_flex: list
             List of flexibilities that should be considered in the optimization. Must be
             any subset of ["storage", "cp", "hp", "dsm"]

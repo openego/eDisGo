@@ -38,7 +38,7 @@ def to_powermodels(
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
-    opt_version=1,
+    opt_version=4,
     opt_flex=None,
 ):
     """
@@ -57,8 +57,9 @@ def to_powermodels(
         Array containing all flexible loads that allow for application of demand side
         management strategy.
     opt_version: Int
-        Version of optimization models to choose from. For more information see MA.
-        Must be one of [1, 2].
+        Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+        For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+        Default: 4
     opt_flex: list
         List of flexibilities that should be considered in the optimization. Must be any
         subset of ["storage", "cp", "hp", "dsm"]
@@ -68,6 +69,9 @@ def to_powermodels(
     pm: dict
         Dictionary that contains all network data in PowerModels network data
         format.
+    hv_flex_dict: dict
+        Dictionary containing time series of HV requirement for each flexibility
+        retrieved from etrago component of edisgo object.
     """
     tol = 1e-4
     if opt_flex is None:
@@ -234,10 +238,15 @@ def from_powermodels(
         "path" to change the directory the file is saved to.
         Default: False
     save_slacks: bool
-        Indicates whether to save results of slack variables for high voltage
-        requirements (sum, minimal and maximal and mean deviation) from the optimization
-        to csv file in the current working directory. Set parameter "path" to change the
-        directory the file is saved to.
+        Indicates whether to save results of slack variables from the OPF run to csv
+        files in the current working directory. Set parameter "path" to change the
+        directory the file is saved to. Depending on the chosen opt_version, different
+        slacks are created and saved:
+        1 : high voltage requirement slacks
+        2 : high voltage requirements slacks and grid related slacks (load shedding,
+            dispatchable and non-dispatchable generator curtailment, heat pump slack)
+        3 : -
+        4 : grid related slacks cf. version 2
         Default: False
     path : str
         Directory the csv file is saved to. Per default it takes the current
@@ -1034,7 +1043,8 @@ def _build_HV_requirements(
         (PowerModels) dictionary.
     opt_flex : list
         List of flexibilities that should be considered in the optimization. Must be any
-        subset of ["curt", "storage", "cp", "hp", "dsm"]
+        subset of ["curt", "storage", "cp", "hp", "dsm"]. For more information see
+        :func:`edisgo.opf.powermodels_opf.pm_optimize`.
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
     flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
