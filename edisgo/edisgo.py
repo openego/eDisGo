@@ -658,7 +658,7 @@ class EDisGo:
             Must be one of [1, 2, 3].
         opt_flex: list
             List of flexibilities that should be considered in the optimization. Must be
-            any subset of ["curt", "storage", "cp", "hp", "dsm"]
+            any subset of ["storage", "cp", "hp", "dsm"]
 
         Returns
         -------
@@ -763,7 +763,7 @@ class EDisGo:
             Must be one of [1, 2, 3].
         opt_flex: list
             List of flexibilities that should be considered in the optimization. Must be
-            any subset of ["curt", "storage", "cp", "hp", "dsm"]
+            any subset of ["storage", "cp", "hp", "dsm"]
         method: str
             Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
             (Non Convex).
@@ -2414,7 +2414,7 @@ class EDisGo:
             Must be one of [1, 2].
         opt_flex: list
             List of flexibilities that should be considered in the optimization. Must be
-            any subset of ["curt", "storage", "cp", "hp", "dsm"]
+            any subset of ["storage", "cp", "hp", "dsm"]
 
         """
         abs_path = os.path.abspath(path)

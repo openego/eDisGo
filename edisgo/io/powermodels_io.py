@@ -61,7 +61,7 @@ def to_powermodels(
         Must be one of [1, 2].
     opt_flex: list
         List of flexibilities that should be considered in the optimization. Must be any
-        subset of ["curt", "storage", "cp", "hp", "dsm"]
+        subset of ["storage", "cp", "hp", "dsm"]
 
     Returns
     -------
@@ -511,6 +511,7 @@ def _build_bus(psa_net, pm):
             "vmin": v_min[bus_i],
             "va": 0,
             "vm": 1,
+            "name": psa_net.buses.index[bus_i],
             "base_kv": psa_net.buses.v_nom[bus_i],
             "grid_level": grid_level[psa_net.buses.v_nom[bus_i]],
         }
@@ -877,7 +878,18 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps, tol):
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
         q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
         p_d = heat_df2[heat_df.index[hp_i]]
-        p_d.loc[p_d < tol] = 0
+        p_d[p_d < tol] = 0
+        if (
+            max(p_d)
+            > heat_df.p_set[hp_i] * edisgo_obj.heat_pump.cop_df[heat_df.index[hp_i]][0]
+        ):
+            logger.warning(
+                "Heat demand at bus {} is higher than maximum heatpump power"
+                " of heatpump {}. Demand can not be covered if no sufficient"
+                " heat storage capaciies are available. This will cause "
+                "problems in the optimization process if OPF version is"
+                "set to 3".format(pm["bus"][str(idx_bus)]["name"], heat_df.index[hp_i])
+            )
         pm["heatpumps"][str(hp_i + 1)] = {
             "pd": p_d[0],  # heat demand
             "pf": pf,
