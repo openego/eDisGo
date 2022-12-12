@@ -224,9 +224,9 @@ def remove_lines_under_one_meter(edisgo_root):
     generators_df = generators_df.apply(apply_busmap, axis="columns")
     edisgo_obj.topology.generators_df = generators_df
 
-    #charging_points_df = edisgo_obj.topology.charging_points_df.copy()
-    #charging_points_df = charging_points_df.apply(apply_busmap, axis="columns")
-    #edisgo_obj.topology.charging_points_df = charging_points_df
+    # charging_points_df = edisgo_obj.topology.charging_points_df.copy()
+    # charging_points_df = charging_points_df.apply(apply_busmap, axis="columns")
+    # edisgo_obj.topology.charging_points_df = charging_points_df
 
     logger.info("Finished in {}s".format(time() - start_time))
     return edisgo_obj
@@ -1403,7 +1403,7 @@ def make_remaining_busmap(busmap_df, edisgo_root):
     return busmap_df
 
 
-def reduce_edisgo(edisgo_root, busmap_df, aggregate_charging_points_mode=True):
+def reduce_edisgo(edisgo_root, busmap_df, aggregation_mode=True):
     logger = logging.getLogger("edisgo.cr_reduce_edisgo")
     start_time = time()
     logger.info("Start - Reducing edisgo object")
@@ -1422,7 +1422,7 @@ def reduce_edisgo(edisgo_root, busmap_df, aggregate_charging_points_mode=True):
     lines_df = edisgo_obj.topology.lines_df
     loads_changed_df = edisgo_obj.topology.loads_df
     generators_changed_df = edisgo_obj.topology.generators_df
-    charging_points_df = edisgo_obj.topology.charging_points_df
+    # charging_points_df = edisgo_obj.topology.charging_points_df
     slack_bus = edisgo_obj.topology.transformers_hvmv_df.bus1[0]
 
     # manipulate buses_df
@@ -1628,55 +1628,58 @@ def reduce_edisgo(edisgo_root, busmap_df, aggregate_charging_points_mode=True):
     if not loads_changed_df.empty:
         logger.info("Manipulate loads")
         loads_changed_df = loads_changed_df.apply(apply_busmap, axis="columns")
-
-        if load_aggregation_mode == "sector":
-            loads_changed_df = loads_changed_df.groupby(by=["bus", "sector"]).apply(
-                aggregate_loads
-            )
-            loads_changed_df.index = (
-                "Load_"
-                + loads_changed_df.loc[:, "bus"]
-                + "_"
-                + loads_changed_df.loc[:, "sector"]
-            )
-        elif load_aggregation_mode == "bus":
-            loads_changed_df = loads_changed_df.groupby("bus").apply(aggregate_loads)
-            loads_changed_df.index = "Load_" + loads_changed_df.loc[:, "bus"]
+        if aggregation_mode:
+            if load_aggregation_mode == "sector":
+                loads_changed_df = loads_changed_df.groupby(by=["bus", "sector"]).apply(
+                    aggregate_loads
+                )
+                loads_changed_df.index = (
+                    "Load_"
+                    + loads_changed_df.loc[:, "bus"]
+                    + "_"
+                    + loads_changed_df.loc[:, "sector"]
+                )
+            elif load_aggregation_mode == "bus":
+                loads_changed_df = loads_changed_df.groupby("bus").apply(
+                    aggregate_loads
+                )
+                loads_changed_df.index = "Load_" + loads_changed_df.loc[:, "bus"]
 
         edisgo_obj.topology.loads_df = loads_changed_df
-        edisgo_obj.topology.loads_df.index.name = "name"
+        if aggregation_mode:
+            edisgo_obj.topology.loads_df.index.name = "name"
 
-        # aggregate load timeseries
-        load_name_map_df = edisgo_obj.topology.loads_df.loc[
-            :, "old_load_name"
-        ].to_dict()
-        load_name_map = {}
-        for i in range(0, len(load_name_map_df.keys())):
-            for j in range(0, len(list(load_name_map_df.values())[i])):
-                load_name_map[list(load_name_map_df.values())[i][j]] = list(
-                    load_name_map_df.keys()
-                )[i]
-        # return load_name_map
+            # aggregate load timeseries
+            load_name_map_df = edisgo_obj.topology.loads_df.loc[
+                :, "old_load_name"
+            ].to_dict()
+            load_name_map = {}
+            for i in range(0, len(load_name_map_df.keys())):
+                for j in range(0, len(list(load_name_map_df.values())[i])):
+                    load_name_map[list(load_name_map_df.values())[i][j]] = list(
+                        load_name_map_df.keys()
+                    )[i]
+            # return load_name_map
 
-        timeseries_loads_p_df = edisgo_obj.timeseries.loads_active_power.T
-        timeseries_loads_q_df = edisgo_obj.timeseries.loads_reactive_power.T
+            timeseries_loads_p_df = edisgo_obj.timeseries.loads_active_power.T
+            timeseries_loads_q_df = edisgo_obj.timeseries.loads_reactive_power.T
 
-        new_index = []
-        for i in range(0, timeseries_loads_p_df.shape[0]):
-            new_load_name = load_name_map[timeseries_loads_p_df.index[i]]
-            new_index.append(new_load_name)
+            new_index = []
+            for i in range(0, timeseries_loads_p_df.shape[0]):
+                new_load_name = load_name_map[timeseries_loads_p_df.index[i]]
+                new_index.append(new_load_name)
 
-        old_index = timeseries_loads_p_df.index.tolist()
-        rename_index = dict(zip(old_index, new_index))
+            old_index = timeseries_loads_p_df.index.tolist()
+            rename_index = dict(zip(old_index, new_index))
 
-        timeseries_loads_p_df = timeseries_loads_p_df.rename(index=rename_index)
-        timeseries_loads_q_df = timeseries_loads_q_df.rename(index=rename_index)
-        edisgo_obj.timeseries.loads_active_power = (
-            timeseries_loads_p_df.groupby(level=0).sum().T
-        )
-        edisgo_obj.timeseries.loads_reactive_power = (
-            timeseries_loads_q_df.groupby(level=0).sum().T
-        )
+            timeseries_loads_p_df = timeseries_loads_p_df.rename(index=rename_index)
+            timeseries_loads_q_df = timeseries_loads_q_df.rename(index=rename_index)
+            edisgo_obj.timeseries.loads_active_power = (
+                timeseries_loads_p_df.groupby(level=0).sum().T
+            )
+            edisgo_obj.timeseries.loads_reactive_power = (
+                timeseries_loads_q_df.groupby(level=0).sum().T
+            )
 
     # aggregate generators
     generator_aggregation_mode = "type"
@@ -1716,142 +1719,147 @@ def reduce_edisgo(edisgo_root, busmap_df, aggregate_charging_points_mode=True):
             apply_busmap, axis="columns"
         )
 
-        if generator_aggregation_mode == "bus":
-            generators_changed_df = generators_changed_df.groupby("bus").apply(
-                aggregate_generators_df
-            )
-            generators_changed_df.index = (
-                "Generator_" + generators_changed_df.loc[:, "bus"]
-            )
-        elif generator_aggregation_mode == "type":
-            generators_changed_df = generators_changed_df.groupby(
-                by=["bus", "type", "weather_cell_id"], dropna=False
-            ).apply(aggregate_generators_df)
-            generators_changed_df.index = (
-                "Generator_"
-                + generators_changed_df.loc[:, "bus"].values
-                + "_"
-                + generators_changed_df.loc[:, "type"].values
-                + "_weather_cell_id_"
-                + generators_changed_df.loc[:, "weather_cell_id"]
-                .apply(extract_weather_cell_id)
-                .values
-            )
+        if aggregation_mode:
+            if generator_aggregation_mode == "bus":
+                generators_changed_df = generators_changed_df.groupby("bus").apply(
+                    aggregate_generators_df
+                )
+                generators_changed_df.index = (
+                    "Generator_" + generators_changed_df.loc[:, "bus"]
+                )
+            elif generator_aggregation_mode == "type":
+                generators_changed_df = generators_changed_df.groupby(
+                    by=["bus", "type", "weather_cell_id"], dropna=False
+                ).apply(aggregate_generators_df)
+                generators_changed_df.index = (
+                    "Generator_"
+                    + generators_changed_df.loc[:, "bus"].values
+                    + "_"
+                    + generators_changed_df.loc[:, "type"].values
+                    + "_weather_cell_id_"
+                    + generators_changed_df.loc[:, "weather_cell_id"]
+                    .apply(extract_weather_cell_id)
+                    .values
+                )
 
         edisgo_obj.topology.generators_df = generators_changed_df
-
-        timeseries_generators_p_df = edisgo_obj.timeseries.generators_active_power.T
-        timeseries_generators_q_df = edisgo_obj.timeseries.generators_reactive_power.T
-
-        generator_name_map_df = edisgo_obj.topology.generators_df.loc[
-            :, "old_generator_name"
-        ].to_dict()
-        # return generator_name_map_df
-        generator_name_map = {}
-        for i in range(0, len(generator_name_map_df.keys())):
-            for j in range(0, len(list(generator_name_map_df.values())[i])):
-                generator_name_map[list(generator_name_map_df.values())[i][j]] = list(
-                    generator_name_map_df.keys()
-                )[i]
-
-        # return generator_name_map
-        new_index = []
-        for i in range(0, timeseries_generators_p_df.shape[0]):
-            new_generator_name = generator_name_map[timeseries_generators_p_df.index[i]]
-            new_index.append(new_generator_name)
-
-        old_index = timeseries_generators_p_df.index.tolist()
-        rename_index = dict(zip(old_index, new_index))
-
-        timeseries_generators_p_df = timeseries_generators_p_df.rename(
-            index=rename_index
-        )
-        timeseries_generators_q_df = timeseries_generators_q_df.rename(
-            index=rename_index
-        )
-
-        edisgo_obj.timeseries.generators_active_power = (
-            timeseries_generators_p_df.groupby(level=0).sum().T
-        )
-
-        edisgo_obj.timeseries.generators_reactive_power = (
-            timeseries_generators_q_df.groupby(level=0).sum().T
-        )
-
-    if not charging_points_df.empty:
-        logger.info("Manipulate charging points")
-
-        def aggregate_charging_points_df(df):
-            series = pd.Series(dtype="object")
-            series.loc["bus"] = df.loc[:, "bus"].values[0]
-            series.loc["p_set"] = df.loc[:, "p_set"].sum()
-            series.loc["use_case"] = df.loc[:, "use_case"].values[0]
-            series.loc["old_charging_point_name"] = df.index.tolist()
-            return series
-
-        charging_points_df = edisgo_obj.topology.charging_points_df
-        charging_points_df = charging_points_df.apply(apply_busmap, axis="columns")
-
-        if aggregate_charging_points_mode:
-            charging_points_df = charging_points_df.groupby(
-                by=["bus", "use_case"], dropna=False
-            ).apply(aggregate_charging_points_df)
-
-        edisgo_obj.topology.charging_points_df = charging_points_df
-
-        if aggregate_charging_points_mode:
-            charging_points_df.index = (
-                "ChargingPoint_"
-                + charging_points_df.loc[:, "bus"].values
-                + "_"
-                + charging_points_df.loc[:, "use_case"].values
+        if aggregation_mode:
+            timeseries_generators_p_df = edisgo_obj.timeseries.generators_active_power.T
+            timeseries_generators_q_df = (
+                edisgo_obj.timeseries.generators_reactive_power.T
             )
 
-            timeseries_charging_points_p_df = (
-                edisgo_obj.timeseries.charging_points_active_power.T
-            )
-            timeseries_charging_points_q_df = (
-                edisgo_obj.timeseries.charging_points_reactive_power.T
-            )
-
-            charging_point_name_map_df = charging_points_df.loc[
-                :, "old_charging_point_name"
+            generator_name_map_df = edisgo_obj.topology.generators_df.loc[
+                :, "old_generator_name"
             ].to_dict()
+            # return generator_name_map_df
+            generator_name_map = {}
+            for i in range(0, len(generator_name_map_df.keys())):
+                for j in range(0, len(list(generator_name_map_df.values())[i])):
+                    generator_name_map[
+                        list(generator_name_map_df.values())[i][j]
+                    ] = list(generator_name_map_df.keys())[i]
 
-            charging_point_name_map = {}
-            for i in range(0, len(charging_point_name_map_df.keys())):
-                for j in range(0, len(list(charging_point_name_map_df.values())[i])):
-                    charging_point_name_map[
-                        list(charging_point_name_map_df.values())[i][j]
-                    ] = list(charging_point_name_map_df.keys())[i]
-
+            # return generator_name_map
             new_index = []
-            for index in timeseries_charging_points_p_df.index.tolist():
-                new_index.append(charging_point_name_map[index])
+            for i in range(0, timeseries_generators_p_df.shape[0]):
+                new_generator_name = generator_name_map[
+                    timeseries_generators_p_df.index[i]
+                ]
+                new_index.append(new_generator_name)
 
-            old_index = timeseries_charging_points_p_df.index.tolist()
+            old_index = timeseries_generators_p_df.index.tolist()
             rename_index = dict(zip(old_index, new_index))
 
-            timeseries_charging_points_p_df = timeseries_charging_points_p_df.rename(
+            timeseries_generators_p_df = timeseries_generators_p_df.rename(
                 index=rename_index
             )
-            timeseries_charging_points_q_df = timeseries_charging_points_q_df.rename(
+            timeseries_generators_q_df = timeseries_generators_q_df.rename(
                 index=rename_index
             )
 
-            timeseries_charging_points_p_df = (
-                timeseries_charging_points_p_df.groupby(level=0).sum().T
-            )
-            timeseries_charging_points_q_df = (
-                timeseries_charging_points_q_df.groupby(level=0).sum().T
+            edisgo_obj.timeseries.generators_active_power = (
+                timeseries_generators_p_df.groupby(level=0).sum().T
             )
 
-            edisgo_obj.timeseries.charging_points_active_power = (
-                timeseries_charging_points_p_df
+            edisgo_obj.timeseries.generators_reactive_power = (
+                timeseries_generators_q_df.groupby(level=0).sum().T
             )
-            edisgo_obj.timeseries.charging_points_reactive_power = (
-                timeseries_charging_points_q_df
-            )
+
+    # if not charging_points_df.empty:
+    #     logger.info("Manipulate charging points")
+    #
+    #     def aggregate_charging_points_df(df):
+    #         series = pd.Series(dtype="object")
+    #         series.loc["bus"] = df.loc[:, "bus"].values[0]
+    #         series.loc["p_set"] = df.loc[:, "p_set"].sum()
+    #         series.loc["use_case"] = df.loc[:, "use_case"].values[0]
+    #         series.loc["old_charging_point_name"] = df.index.tolist()
+    #         return series
+    #
+    #     charging_points_df = edisgo_obj.topology.charging_points_df
+    #     charging_points_df = charging_points_df.apply(apply_busmap, axis="columns")
+    #
+    #     if aggregate_charging_points_mode:
+    #         charging_points_df = charging_points_df.groupby(
+    #             by=["bus", "use_case"], dropna=False
+    #         ).apply(aggregate_charging_points_df)
+    #
+    #     edisgo_obj.topology.charging_points_df = charging_points_df
+    #
+    #     if aggregate_charging_points_mode:
+    #         charging_points_df.index = (
+    #             "ChargingPoint_"
+    #             + charging_points_df.loc[:, "bus"].values
+    #             + "_"
+    #             + charging_points_df.loc[:, "use_case"].values
+    #         )
+    #
+    #         timeseries_charging_points_p_df = (
+    #             edisgo_obj.timeseries.charging_points_active_power.T
+    #         )
+    #         timeseries_charging_points_q_df = (
+    #             edisgo_obj.timeseries.charging_points_reactive_power.T
+    #         )
+    #
+    #         charging_point_name_map_df = charging_points_df.loc[
+    #             :, "old_charging_point_name"
+    #         ].to_dict()
+    #
+    #         charging_point_name_map = {}
+    #         for i in range(0, len(charging_point_name_map_df.keys())):
+    #             for j in range(0, len(list(charging_point_name_map_df.values())[i])):
+    #                 charging_point_name_map[
+    #                     list(charging_point_name_map_df.values())[i][j]
+    #                 ] = list(charging_point_name_map_df.keys())[i]
+    #
+    #         new_index = []
+    #         for index in timeseries_charging_points_p_df.index.tolist():
+    #             new_index.append(charging_point_name_map[index])
+    #
+    #         old_index = timeseries_charging_points_p_df.index.tolist()
+    #         rename_index = dict(zip(old_index, new_index))
+    #
+    #         timeseries_charging_points_p_df = timeseries_charging_points_p_df.rename(
+    #             index=rename_index
+    #         )
+    #         timeseries_charging_points_q_df = timeseries_charging_points_q_df.rename(
+    #             index=rename_index
+    #         )
+    #
+    #         timeseries_charging_points_p_df = (
+    #             timeseries_charging_points_p_df.groupby(level=0).sum().T
+    #         )
+    #         timeseries_charging_points_q_df = (
+    #             timeseries_charging_points_q_df.groupby(level=0).sum().T
+    #         )
+    #
+    #         edisgo_obj.timeseries.charging_points_active_power = (
+    #             timeseries_charging_points_p_df
+    #         )
+    #         edisgo_obj.timeseries.charging_points_reactive_power = (
+    #             timeseries_charging_points_q_df
+    #         )
 
     # apply busmap on transformers_df
     logger.info("Manipulate transformers_df")
