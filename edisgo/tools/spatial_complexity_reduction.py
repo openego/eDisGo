@@ -1,7 +1,6 @@
 import copy
 import logging
 import math
-import os
 
 from time import time
 
@@ -58,7 +57,8 @@ def remove_one_meter_lines(edisgo_root):
                 )
             )
         if row.length == 0.001:
-            # find lines that have at one bus only one neighbor and at the other more than one
+            # find lines that have at one bus only one neighbor
+            # and at the other more than one
             number_of_neighbors_bus0 = G.degree(row.bus0)
             number_of_neighbors_bus1 = G.degree(row.bus1)
             if (
@@ -538,7 +538,6 @@ def make_busmap_from_clustering(
     busmap_df = pd.DataFrame()
 
     for grid in grid_list:
-        grid_id = grid.id
         v_grid = grid.nominal_voltage
         logger.debug("Make busmap for grid: {}, v_nom={}".format(grid, v_grid))
 
@@ -1451,9 +1450,8 @@ def reduce_edisgo(edisgo_root, busmap_df, aggregation_mode=True):
             and series.bus1.lstrip("virtual_") == slack_bus
         ):
             logger.debug(
-                "Drop line because it is connected to the virtual_slack bus \n{}".format(
-                    series.name
-                )
+                "Drop line because it is connected to "
+                "the virtual_slack bus \n{}".format(series.name)
             )
 
             return
@@ -1904,7 +1902,8 @@ def reduce_edisgo(edisgo_root, busmap_df, aggregation_mode=True):
     #         switches_to_drop.append(index)
     #
     # if len(switches_to_drop) > 0:
-    #     logger.info('Drop switches which are not connected to any lines: {}'.format(switches_to_drop))
+    #      logger.info('Drop switches which are '
+    #                  'not connected to any lines: {}'.format(switches_to_drop))
     #     switches_df = switches_df.drop(switches_to_drop)
 
     # update the branches in switches_df
@@ -1936,8 +1935,12 @@ def reduce_edisgo(edisgo_root, busmap_df, aggregation_mode=True):
     # G = edisgo_obj.topology.mv_grid.graph
     # isolated_nodes = list(nx.algorithms.isolate.isolates(G))
     # if len(isolated_nodes) > 0:
-    #     logger.warning('The following isolated nodes are droped: {}'.format(isolated_nodes))
-    #     edisgo_obj.topology.buses_df = edisgo_obj.topology.buses_df.drop(isolated_nodes)
+    #     logger.warning(
+    #         "The following isolated nodes are droped: {}".format(isolated_nodes)
+    #     )
+    #     edisgo_obj.topology.buses_df = (
+    #         edisgo_obj.topology.buses_df.drop(isolated_nodes)
+    #     )
 
     # make line_map_df
     logger.info("Make line_map_df")
@@ -2045,9 +2048,8 @@ def voltage_mapping(edisgo_root, edisgo_reduced, busmap_df, timestep):
         )
     )
     logger.info(
-        "Root mean square value between edisgo_root voltages and edisgo_reduced: v_rms = {:.2%}".format(
-            rms
-        )
+        "Root mean square value between edisgo_root "
+        "voltages and edisgo_reduced: v_rms = {:.2%}".format(rms)
     )
 
     logger.info("Finished in {}s".format(time() - start_time))
@@ -2083,9 +2085,8 @@ def line_apparent_power_mapping(edisgo_root, edisgo_reduced, linemap_df, timeste
     s_df.loc[:, "s_diff"] = s_df.loc[:, "s_root"] - s_df.loc[:, "s_reduced"]
     rms = np.sqrt(mean_squared_error(s_df.loc[:, "s_root"], s_df.loc[:, "s_reduced"]))
     logger.info(
-        "Root mean square value between edisgo_root s_res and edisgo_reduced: s_rms = {:.2}".format(
-            rms
-        )
+        "Root mean square value between edisgo_root "
+        "s_res and edisgo_reduced: s_rms = {:.2}".format(rms)
     )
 
     logger.info("Finished in {}s".format(time() - start_time))
@@ -2122,7 +2123,7 @@ def find_buses_of_interest(edisgo_root):
 
     edisgo_wc = copy.deepcopy(edisgo_root)
     edisgo_wc.timeseries = timeseries.TimeSeries()
-    edisgo_wc.timeseries.set_worst_case(edisgo_wc, ['feed-in_case', 'load_case'] )
+    edisgo_wc.timeseries.set_worst_case(edisgo_wc, ["feed-in_case", "load_case"])
     edisgo_wc.analyze()
 
     buses_of_interest = set()
