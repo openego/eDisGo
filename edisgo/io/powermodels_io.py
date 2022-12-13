@@ -29,8 +29,8 @@ class Etrago:  # ToDo: delete as soon as etrago class is implemented
         self.heat_pump_rural_active_power = pd.Series(dtype="float64")
         self.heat_central_active_power = pd.Series(dtype="float64")
         self.opf_results = pd.DataFrame(dtype="float64")
-        self.geothermal_energy_feedin_district_heating = pd.Series(dtype="float64")
-        self.solarthermal_energy_feedin_district_heating = pd.Series(dtype="float64")
+        self.geothermal_energy_feedin_district_heating = pd.DataFrame(dtype="float64")
+        self.solarthermal_energy_feedin_district_heating = pd.DataFrame(dtype="float64")
 
 
 def to_powermodels(
@@ -146,9 +146,7 @@ def to_powermodels(
     if len(flexible_loads) > 0:
         flexible_loads = _build_dsm(edisgo_object, psa_net, pm, flexible_loads, tol)
     if len(psa_net.loads) > 0:
-        _build_load(
-            edisgo_object, psa_net, pm, flexible_cps, flexible_hps, flexible_loads, tol
-        )
+        _build_load(edisgo_object, psa_net, pm, flexible_cps, flexible_hps, tol)
     else:
         logger.warning("No loads found in network.")
     if (opt_version == 1) | (opt_version == 2):
@@ -275,6 +273,7 @@ def from_powermodels(
 
     timesteps = pm["nw"].keys()
 
+    # write active power OPF results to edisgo object
     for flexibility in pm_results["nw"]["1"]["flexibilities"]:
         flex, variable = flex_dicts[flexibility]
         names = [
@@ -289,34 +288,30 @@ def from_powermodels(
             for t in timesteps
         ]
         results = pd.DataFrame(index=timesteps, columns=names, data=data)
-        if flex in ["gen_nd"]:
-            if variable != "qgs":
-                edisgo_object.timeseries._generators_active_power.loc[:, names] = (
-                    edisgo_object.timeseries.generators_active_power.loc[
-                        :, names
-                    ].values
-                    - results[names].values
-                )
-            else:
-                edisgo_object.timeseries._generators_reactive_power.loc[:, names] = (
-                    edisgo_object.timeseries.generators_reactive_power.loc[
-                        :, names
-                    ].values
-                    - results[names].values
-                )
-        elif flex in ["dsm", "heatpumps", "electromobility"]:
+        if flex == "gen_nd":
+            edisgo_object.timeseries._generators_active_power.loc[:, names] = (
+                edisgo_object.timeseries.generators_active_power.loc[:, names].values
+                - results[names].values
+            )
+        elif flex in ["heatpumps", "electromobility"]:
             edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
                 names
             ].values
+        elif flex == "dsm":
+            edisgo_object.timeseries._loads_active_power.loc[:, names] = (
+                edisgo_object.timeseries._loads_active_power.loc[:, names].values
+                + results[names].values
+            )
         elif flex == "storage":
             edisgo_object.timeseries._storage_units_active_power.loc[
                 :, names
             ] = results[names].values
 
+    # calculate corresponding reactive power values
     edisgo_object.set_time_series_reactive_power_control()
 
+    # Check values of slack variables for HV requirement constraint
     if pm["nw"]["1"]["opt_version"] in [1, 2]:
-        # Check values of slack variables for HV requirement constraint
         names = [
             pm["nw"]["1"]["HV_requirements"][flex]["flexibility"]
             for flex in list(pm["nw"]["1"]["HV_requirements"].keys())
@@ -333,6 +328,7 @@ def from_powermodels(
             columns=names,
             data=data,
         )
+        # save HV slack results to csv
         if save_slacks:
             df.to_csv(os.path.join(abs_path, "hv_requirements_slack.csv"))
 
@@ -420,7 +416,7 @@ def from_powermodels(
             index=edisgo_object.timeseries.timeindex, columns=names, data=data
         ).to_csv(os.path.join(abs_path, "disp_generator_slack.csv"))
 
-        # save non-dispatchable generator slacks (curtailment)
+        # save non-dispatchable generator slacks (curtailment) to csv file
         names = [
             pm["nw"]["1"]["gen_nd"][gen]["name"]
             for gen in list(pm["nw"]["1"]["gen_nd"].keys())
@@ -691,9 +687,7 @@ def _build_branch(psa_net, pm, tol):
         }
 
 
-def _build_load(
-    edisgo_obj, psa_net, pm, flexible_cps, flexible_hps, flexible_loads, tol
-):
+def _build_load(edisgo_obj, psa_net, pm, flexible_cps, flexible_hps, tol):
     """
     Builds load dictionary in PowerModels network data format and adds it to
     PowerModels dictionary 'pm'.
@@ -710,11 +704,8 @@ def _build_load(
     flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
-    flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
-        Array containing all flexible loads that allow for application of demand side
-        management strategy.
     """
-    flex_loads = np.concatenate((flexible_hps, flexible_cps, flexible_loads))
+    flex_loads = np.concatenate((flexible_hps, flexible_cps))
     if len(flex_loads) == 0:
         loads_df = psa_net.loads
     else:
@@ -777,8 +768,8 @@ def _build_battery_storage(edisgo_obj, psa_net, pm):
             "thermal_rating": 1,  # TODO unbegrenzt
             "charge_rating": psa_net.storage_units.p_nom[stor_i],
             "discharge_rating": psa_net.storage_units.p_nom[stor_i],
-            "charge_efficiency": 1,
-            "discharge_efficiency": 1,
+            "charge_efficiency": 0.9,  # ToDo
+            "discharge_efficiency": 0.9,  # ToDo
             "storage_bus": idx_bus,
             "name": psa_net.storage_units.index[stor_i],
             "status": True,
@@ -874,13 +865,15 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps, tol):
     pm : dict
         (PowerModels) dictionary.
     edisgo_obj : :class:`~.EDisGo`
-    flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
+    flexible_hps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
 
     """
     heat_df = psa_net.loads.loc[flexible_hps]  # electric load
     heat_df2 = edisgo_obj.heat_pump.heat_demand_df[flexible_hps]  # thermal load
+    # solarthermal_feedin = edisgo_obj.etrago.geothermal_energy_feedin_district_heating
+    # geothermal_feedin = edisgo_obj.etrago.solarthermal_energy_feedin_district_heating
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
@@ -888,6 +881,9 @@ def _build_heatpump(psa_net, pm, edisgo_obj, flexible_hps, tol):
         q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
         p_d = heat_df2[heat_df.index[hp_i]]
         p_d[p_d < tol] = 0
+        # TODO: hier den Demand um das solar/geothermal feedin verringern
+        # TODO: check einbauen ob Einspeisung höher als Verbrauch. Dann Verbrauch auf 0
+        # setzen
         if (
             max(p_d)
             > heat_df.p_set[hp_i] * edisgo_obj.heat_pump.cop_df[heat_df.index[hp_i]][0]
@@ -925,7 +921,9 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, flexible_hps):
     pm : dict
         (PowerModels) dictionary.
     edisgo_obj : :class:`~.EDisGo`
-
+    flexible_hps : :numpy:`numpy.ndarray<ndarray>` or list
+        Array containing all heat pumps that allow for flexible operation due to an
+        attached heat storage.
     """
 
     heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df.loc[flexible_hps]
@@ -933,7 +931,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, flexible_hps):
         idx_bus = _mapping(psa_net, psa_net.loads.bus[stor_i])
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
-            "p_loss": 0,
+            "p_loss": 0.05,  # ToDo
             "energy": (
                 heat_storage_df.state_of_charge_initial[stor_i]
                 * heat_storage_df.capacity[stor_i]
@@ -1210,7 +1208,7 @@ def _build_component_timeseries(
         ]
         q_set = psa_net.generators_t.q_set[p_set.columns]
     elif kind == "load":
-        flex_loads = np.concatenate((flexible_hps, flexible_cps, flexible_loads))
+        flex_loads = np.concatenate((flexible_hps, flexible_cps))
         if len(flex_loads) == 0:
             p_set = psa_net.loads_t.p_set
             q_set = psa_net.loads_t.q_set
@@ -1338,7 +1336,7 @@ def _mapping(
     elif kind == "storage":
         df = psa_net.storage_units
     elif kind == "load":
-        flex_loads = np.concatenate((flexible_hps, flexible_cps, flexible_loads))
+        flex_loads = np.concatenate((flexible_hps, flexible_cps))
         if len(flex_loads) == 0:
             df = psa_net.loads
         else:
