@@ -633,6 +633,7 @@ class EDisGo:
 
     def to_powermodels(
         self,
+        s_base=100,
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
@@ -645,6 +646,9 @@ class EDisGo:
 
         Parameters
         ----------
+        s_base : int
+            Base value of apparent power for per unit system.
+            Default: 100 MVA
         flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
             Array containing all charging points that allow for flexible charging.
         flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
@@ -670,6 +674,7 @@ class EDisGo:
 
         return powermodels_io.to_powermodels(
             self,
+            s_base=s_base,
             flexible_cps=flexible_cps,
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
@@ -681,6 +686,7 @@ class EDisGo:
         self,
         pm_results,
         hv_flex_dict,
+        s_base=100,
         save_heat_storage=False,
         save_slack_gen=False,
         save_slacks=False,
@@ -699,6 +705,9 @@ class EDisGo:
         hv_flex_dict: dict
             Dictionary containing time series of HV requirement for each flexibility
             retrieved from etrago component of edisgo object.
+        s_base : int
+            Base value of apparent power for per unit system.
+            Default: 100 MVA
         save_heat_storage: bool
             Indicates whether to save results of heat storage variables from the
             optimization to csv file in the current working directory. Set parameter
@@ -724,6 +733,7 @@ class EDisGo:
             self,
             pm_results=pm_results,
             hv_flex_dict=hv_flex_dict,
+            s_base=s_base,
             save_heat_storage=save_heat_storage,
             save_slack_gen=save_slack_gen,
             save_slacks=save_slacks,
@@ -732,6 +742,7 @@ class EDisGo:
 
     def pm_optimize(
         self,
+        s_base=100,
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
@@ -753,6 +764,9 @@ class EDisGo:
 
         Parameters
         ----------
+        s_base : int
+            Base value of apparent power for per unit system.
+            Default: 100 MVA
         flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list or None
             Array containing all charging points that allow for flexible charging.
             Default: None
@@ -816,6 +830,7 @@ class EDisGo:
 
         return powermodels_opf.pm_optimize(
             self,
+            s_base=s_base,
             flexible_cps=flexible_cps,
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
@@ -2399,6 +2414,7 @@ class EDisGo:
         self,
         filename=None,
         path="",
+        s_base=100,
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
@@ -2416,6 +2432,9 @@ class EDisGo:
         path : str
             Directory the json file is saved to. Per default it takes the current
             working directory.
+        s_base : int
+            Base value of apparent power for per unit system.
+            Default: 100 MVA
         flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
             Array containing all charging points that allow for flexible charging.
         flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
@@ -2435,11 +2454,12 @@ class EDisGo:
         """
         abs_path = os.path.abspath(path)
         pm, hv_flex_dict = self.to_powermodels(
-            flexible_cps,
-            flexible_hps,
-            flexible_loads,
-            opt_version,
-            opt_flex,
+            s_base=s_base,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            opt_version=opt_version,
+            opt_flex=opt_flex,
         )
 
         def _convert(o):

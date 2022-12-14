@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 def pm_optimize(
     edisgo_obj,
+    s_base=100,
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
@@ -32,6 +33,9 @@ def pm_optimize(
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+    s_base : int
+        Base value of apparent power for per unit system.
+        Default: 100 MVA
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all charging points that allow for flexible charging.
         Default: None
@@ -114,6 +118,7 @@ def pm_optimize(
     solution_dir = os.path.join(opf_dir, "opf_solutions")
 
     pm, hv_flex_dict = edisgo_obj.to_powermodels(
+        s_base=s_base,
         flexible_cps=flexible_cps,
         flexible_hps=flexible_hps,
         flexible_loads=flexible_loads,
@@ -162,8 +167,9 @@ def pm_optimize(
             pm_opf = json.loads(out)
             # write results to edisgo object
             edisgo_obj.from_powermodels(
-                pm_opf,
-                hv_flex_dict,
+                pm_results=pm_opf,
+                hv_flex_dict=hv_flex_dict,
+                s_base=s_base,
                 save_heat_storage=save_heat_storage,
                 save_slack_gen=save_slack_gen,
                 save_slacks=save_slacks,
