@@ -689,12 +689,12 @@ def _build_branch(psa_net, pm, s_base):
     min_r = np.round(
         min(branches.r_pu.loc[branches.r_pu > branches.r_pu.quantile(0.002)]), 6
     )
-    # max_x = np.round(
-    #     max(branches.x_pu.loc[branches.r_pu < branches.x_pu.quantile(0.998)]), 4
-    # )
-    # min_x = np.round(
-    #     min(branches.x_pu.loc[branches.x_pu > branches.x_pu.quantile(0.002)]), 6
-    # )
+    max_x = np.round(
+        max(branches.x_pu.loc[branches.x_pu < branches.x_pu.quantile(0.998)]), 4
+    )
+    min_x = np.round(
+        min(branches.x_pu.loc[branches.x_pu > branches.x_pu.quantile(0.002)]), 6
+    )
     for branch_i in np.arange(len(branches.index)):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
@@ -720,22 +720,30 @@ def _build_branch(psa_net, pm, s_base):
             r = max(branches.r_pu[branch_i], min_r)
         else:
             r = branches.r_pu[branch_i]
-        # if branches.x_pu[branch_i] > np.round(branches.x_pu.quantile(0.998), 4):
-        #     logger.warning("Reactance of branch {} is higher than {} p.u. Reactance "
-        #                    "will be set to {} for optimization process.".format(
-        #         branches.index[branch_i], np.round(branches.x_pu.quantile(0.998), 4),
-        #         max_x))
-        #     x = min(branches.x_pu[branch_i], max_x)
-        # elif branches.x_pu[branch_i] < np.round(branches.x_pu.quantile(0.002), 6):
-        #     logger.warning("Reactance of branch {} is smaller than {} p.u. Reactance "
-        #                    "will be set to {} for optimization process.".format(
-        #         branches.index[branch_i], np.round(branches.x_pu.quantile(0.002), 6),
-        #         min_x))
-        #     x = max(branches.x_pu[branch_i], min_x)
-        # else:
-        #     x = branches.x_pu[branch_i]
-        x = branches.x_pu[branch_i]
-        r = branches.r_pu[branch_i]
+        if branches.x_pu[branch_i] > np.round(branches.x_pu.quantile(0.998), 4):
+            logger.warning(
+                "Reactance of branch {} is higher than {} p.u. Reactance "
+                "will be set to {} for optimization process.".format(
+                    branches.index[branch_i],
+                    np.round(branches.x_pu.quantile(0.998), 4),
+                    max_x,
+                )
+            )
+            x = min(branches.x_pu[branch_i], max_x)
+        elif branches.x_pu[branch_i] < np.round(branches.x_pu.quantile(0.002), 6):
+            logger.warning(
+                "Reactance of branch {} is smaller than {} p.u. Reactance "
+                "will be set to {} for optimization process.".format(
+                    branches.index[branch_i],
+                    np.round(branches.x_pu.quantile(0.002), 6),
+                    min_x,
+                )
+            )
+            x = max(branches.x_pu[branch_i], min_x)
+        else:
+            x = branches.x_pu[branch_i]
+        # x = branches.x_pu[branch_i]
+        # r = branches.r_pu[branch_i]
         # if branches.r_pu[branch_i] < tol:
         #     branches.r_pu.loc[branch_i] = 0
         # if branches.x_pu[branch_i] < tol:
