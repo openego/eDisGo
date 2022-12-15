@@ -1884,16 +1884,32 @@ def get_q_line(model, branch, time, get_results=False):
 def upper_voltage(model, bus, time):
     """
     Upper bound on voltage at buses
+
+    Parameters
+    ----------
+    model :
+    bus :
+    time :
+
+    Returns
+    -------
     """
+
+    try:
+        v_max = model.v_min[bus]
+    except KeyError as e:
+        # logging.debug(f"No Series passed for v_max: {e}")
+        v_max = model.v_max
+
     return (
         model.v[bus, time]
-        <= np.square(model.v_max * model.v_nom) + model.slack_v_pos[bus, time]
+        <= np.square(v_max * model.v_nom) + model.slack_v_pos[bus, time]
     )
 
 
 def lower_voltage(model, bus, time):
     """
-    Lower bound on voltage at buses
+    Lower bound on voltage at buses.
 
     Parameters
     ----------
@@ -1905,9 +1921,15 @@ def lower_voltage(model, bus, time):
     -------
 
     """
+    try:
+        v_min = model.v_min[bus]
+    except KeyError as e:
+        # logging.debug(f"No Series passed for v_min: {e}")
+        v_min = model.v_min
+
     return (
         model.v[bus, time]
-        >= np.square(model.v_min * model.v_nom) - model.slack_v_neg[bus, time]
+        >= np.square(v_min * model.v_nom) - model.slack_v_neg[bus, time]
     )
 
 
