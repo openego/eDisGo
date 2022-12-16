@@ -1494,7 +1494,7 @@ def fuse_parallel_branches(branches):
     if branches_tmp.duplicated().any():
         duplicated_branches = branches_tmp.loc[branches_tmp.duplicated(keep=False)]
         duplicated_branches["visited"] = False
-        branches_tmp.drop(duplicated_branches.index, inplace=True)
+        branches_tmp = branches_tmp.drop(duplicated_branches.index)
         for name, buses in duplicated_branches.iterrows():
             if duplicated_branches.loc[name, "visited"]:
                 continue
