@@ -16,6 +16,8 @@ from edisgo.tools.tools import (
     get_nodal_residual_load,
 )
 
+logger = logging.getLogger(__name__)
+
 BANDS = ["upper_power", "upper_energy", "lower_energy"]
 
 
@@ -129,7 +131,7 @@ def prepare_time_invariant_parameters(
             # TODO check if necessary to pass empty list
             fixed_parameters["optimized_charging_points"] = []
             fixed_parameters["optimize_emob"] = False
-            print("Emob optimization is set to False as flex bands empty.")
+            logger.info("Emob optimization is set to False as flex bands empty.")
         else:
             if not fixed_parameters["flexible_loads"].empty:
                 fixed_parameters["optimized_charging_points"] = (
@@ -173,7 +175,7 @@ def prepare_time_invariant_parameters(
 
         if fixed_parameters["optimized_heat_pumps"].empty:
             fixed_parameters["optimize_hp"] = False
-            print("HP optimization is set to False as optimized hps empty.")
+            logger.info("HP optimization is set to False as optimized hps empty.")
     else:
         # Add empty list to later define inflexible loads
         fixed_parameters["optimized_heat_pumps"] = []
@@ -237,7 +239,7 @@ def prepare_time_invariant_parameters(
     # get underlying branch elements and power factors
     # handle pu conversion
     if fixed_parameters["per_unit"]:
-        print(
+        logger.info(
             "Optimisation in pu-system. Make sure the inserted energy "
             "bands are also converted to the same pu-system."
         )
@@ -285,11 +287,11 @@ def prepare_time_invariant_parameters(
     ) = get_underlying_elements(
         fixed_parameters
     )  # Todo: time invariant
-    print(
-        "It took {} seconds to extract timeinvariant parameters.".format(
-            perf_counter() - t1
-        )
+    logger.info(
+        f"It took {perf_counter() - t1} seconds to extract timeinvariant "
+        f"parameters."
     )
+
     return fixed_parameters
 
 
@@ -372,7 +374,7 @@ def setup_model(
         raise ValueError("The objective you inserted is not implemented yet.")
 
     # DEFINE SETS AND FIX PARAMETERS
-    print("Setup model: Defining sets and parameters.")
+    logger.info("Setup model: Defining sets and parameters.")
     model.time_set = pm.RangeSet(0, len(timesteps) - 1)
     model.time_zero = [model.time_set.at(1)]
     overlap_interations = kwargs.get("overlap_interations", None)
@@ -440,7 +442,7 @@ def setup_model(
 
     if fixed_parameters["optimize_emob"]:
         # TODO check for EV in flex loads
-        print("Setup model: Adding EV model.")
+        logger.info("Setup model: Adding EV model.")
         model = add_ev_model_bands(
             model=model,
             fixed_parameters=fixed_parameters,
@@ -452,7 +454,7 @@ def setup_model(
         )
 
     if fixed_parameters["optimize_hp"]:
-        print("Setup model: Adding HP model.")
+        logger.info("Setup model: Adding HP model.")
         model = add_heat_pump_model(
             model=model,
             fixed_parameters=fixed_parameters,
@@ -463,7 +465,7 @@ def setup_model(
         )
 
     if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
-        print("Setup model: Adding grid model.")
+        logger.info("Setup model: Adding grid model.")
         model = add_grid_model_lopf(
             model=model,
             fixed_parameters=fixed_parameters,
@@ -494,7 +496,7 @@ def setup_model(
         model.AggrGrid = pm.Constraint(model.time_set, rule=aggregated_power)
 
     # DEFINE OBJECTIVE
-    print("Setup model: Setting objective.")
+    logger.info("Setup model: Setting objective.")
     if objective == "peak_load":
         model.LoadFactorMin = pm.Constraint(model.time_set, rule=load_factor_min)
         model.LoadFactorMax = pm.Constraint(model.time_set, rule=load_factor_max)
@@ -538,8 +540,8 @@ def setup_model(
 
     if kwargs.get("print_model", False):
         model.pprint()
-    print("Successfully set up optimisation model.")
-    print(f"It took {perf_counter() - t1} seconds to set up model.")
+    logger.info("Successfully set up optimisation model.")
+    logger.info(f"It took {perf_counter() - t1} seconds to set up model.")
     return model
 
 
@@ -606,7 +608,7 @@ def add_grid_model_lopf(
 
     # check if multiple voltage levels are present
     if len(grid_object.buses_df.v_nom.unique()) > 1:
-        print(
+        logger.info(
             "More than one voltage level included. Please make sure to "
             "adapt all impedance values to one reference system."
         )
@@ -1097,7 +1099,7 @@ def update_model(
     -------
 
     """
-    print("Updating model")
+    logger.info("Updating model")
     t1 = perf_counter()
     # TODO Warum iteration über jeden Zeitschritt?
     for i in model.time_set:
@@ -1173,7 +1175,7 @@ def update_model(
 
     if fixed_parameters["optimize_bess"]:
         raise NotImplementedError
-    print("It took {} seconds to update the model.".format(perf_counter() - t1))
+    logger.info(f"It took {perf_counter() - t1} seconds to update the model.")
     return model
 
 
@@ -1271,10 +1273,11 @@ def optimize(model, solver, load_solutions=True, mode=None, **kwargs):
 
     filename = kwargs.get("lp_filename", False)
     if filename:
-        print(f"Save lp file to: {filename}")
+        logger.info(f"Save lp file to: {filename}")
         model.write(filename=str(filename), io_options={"symbolic_solver_labels": True})
 
-    print("Starting optimisation")
+    logger.info("Starting optimisation")
+
     t1 = perf_counter()
     opt = pm.SolverFactory(solver)
     opt.options["threads"] = 16
@@ -1285,7 +1288,7 @@ def optimize(model, solver, load_solutions=True, mode=None, **kwargs):
     if (results.solver.status == SolverStatus.ok) and (
         results.solver.termination_condition == TerminationCondition.optimal
     ):
-        print("Model Solved to Optimality")
+        logger.info("Model Solved to Optimality")
         # Extract results
         time_dict = {t: model.timeindex[t].value for t in model.time_set}
         result_dict = {}
@@ -1426,14 +1429,14 @@ def optimize(model, solver, load_solutions=True, mode=None, **kwargs):
             .dropna(how="all")
         )
 
-        print("It took {} seconds to optimize model.".format(perf_counter() - t1))
+        logger.info(f"It took {perf_counter() - t1} seconds to optimize model.")
         return result_dict
     elif results.solver.termination_condition == TerminationCondition.infeasible:
-        print("Model is infeasible")
+        logger.info("Model is infeasible")
         return
         # Do something when model in infeasible
     else:
-        print("Solver Status: ", results.solver.status)
+        logger.info(f"Solver Status: {results.solver.status}")
         return
 
 
@@ -1556,9 +1559,9 @@ def get_underlying_elements(fixed_parameters):
             .apply(abs)
             > 1
         ).any():
-            print(
-                "Careful: Reactive power already exceeding line capacity for branch "
-                "{}.".format(branch)
+            logger.info(
+                f"Careful: Reactive power already exceeding line "
+                f"capacity for branch {branch}."
             )
         power_factors.loc[branch] = (
             1
@@ -1623,9 +1626,9 @@ def get_underlying_elements(fixed_parameters):
             downstream_elements, power_factors, fixed_parameters, branch
         )
     if power_factors.isna().any().any():
-        print(
-            "WARNING: Branch {} is overloaded with reactive power. Still needs "
-            "handling.".format(branch)
+        logger.info(
+            f"WARNING: Branch {branch} is overloaded with reactive "
+            f"power. Still needs handling."
         )
         power_factors = power_factors.fillna(
             0.01
@@ -2762,14 +2765,13 @@ def combine_results_for_grid(feeders, grid_id, res_dir, res_name):
                 )
                 res_feeder = pd.concat([res_feeder, res_feeder_tmp], sort=False)
             except ImportError:
-                print(
-                    "Results for feeder {} in grid {} could not be loaded.".format(
-                        feeder_id, grid_id
-                    )
+                logger.info(
+                    f"Results for feeder {feeder_id} in grid "
+                    f"{grid_id} could not be loaded."
                 )
         try:
             res_grid = pd.concat([res_grid, res_feeder], axis=1, sort=False)
         except ValueError:
-            print("Feeder {} not added".format(feeder_id))
+            logger.info(f"Feeder {feeder_id} not added")
     res_grid = res_grid.loc[~res_grid.index.duplicated(keep="last")]
     return res_grid
