@@ -1,5 +1,6 @@
 # Methods to perform linearised DistFlow
 import itertools
+import logging
 
 from copy import deepcopy
 from time import perf_counter
@@ -322,11 +323,11 @@ def setup_model(
         charging_efficiency: (default: 0.9)
         energy_level_start_ev : (default: None)
         charging_start_ev : (default: None
-            startwert ab 2te iteration, dynamisch
+            starting value after 1st Iteration, dynamic
         charging_starts_hp : (default: {"hp": None, "tes": None}
-            startwert ab 2ter Iteration, dynamisch
+            starting value after 1st Iteration, dynamic
         energy_level_start_hp : (default: None
-            ab 2ter iteration
+             starting value after 1st Iteration, dynamic
         energy_level_end_ev : (default: None
         energy_level_end_hp : (default: None
         energy_level_beginning_ev : (default: None
@@ -340,14 +341,14 @@ def setup_model(
         delta_max : (default: 0.1
         v_min : (default: 0.9
         v_max : (default: 1.1
-            SPannungsgrenzwerte
+            Spannungsgrenzwerte
         thermal_limit : (default: 1.0
             für Lines und Transformer
         v_slack : (default: fixed_parameters["v_nom"]
             Spannungsnennwert am Umspannwerk
         load_factor_rings : (default: 1.0
             n-1 kriterium bei 0.5
-        print_model : (default: False
+        print_model : (default: False)
 
 
     Returns
@@ -614,6 +615,7 @@ def add_grid_model_lopf(
     model.slack_bus = pm.Set(initialize=slack)
     model.v_min = v_min
     model.v_max = v_max
+
     model.v_nom = fixed_parameters["v_nom"]
     model.thermal_limit = thermal_limits
     model.pars = fixed_parameters["pars"]
@@ -1088,7 +1090,7 @@ def update_model(
         energy_level_start_ : default None
         energy_level_start_ : default None
         energy_level_beginning : default None
-        energy_level_end_ : default None
+        energy_level_end_tes : default None
         charging_starts : default None
 
     Returns
@@ -1184,10 +1186,10 @@ def update_rolling_horizon(comp_type, model, **kwargs):
     model :
     kwargs :
         energy_level_start_tes: default None
-        energy_level_start_ : default None
-        energy_level_start_ : default None
+        energy_level_start_ev : default None
         energy_level_beginning : default None
-        energy_level_end_ : default None
+        energy_level_end_tes : default None
+        energy_level_end_ev : default None
         charging_starts : default None
     Returns
     -------
