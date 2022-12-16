@@ -12,6 +12,8 @@ def setup_logger(
     log_dir=None,
     loggers=None,
     stream_output=sys.stdout,
+    file_formatter=None,
+    stream_formatter=None,
     debug_message=False,
     reset_loggers=False,
 ):
@@ -99,6 +101,12 @@ def setup_logger(
     stream_output : stream
         Default sys.stdout is used. sys.stderr is also possible.
 
+    stream_formatter : logging.Formatter
+        Logging format for stream output.
+
+    file_formatter : logging.Formatter
+        Logging format for file output.
+
     debug_message : bool
         If True the handlers of every configured logger is printed.
 
@@ -162,10 +170,13 @@ def setup_logger(
         None: logging.CRITICAL + 1,
     }
 
-    file_formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s: %(message)s"
-    )
-    stream_formatter = logging.Formatter("%(name)s - %(levelname)s: %(message)s")
+    if file_formatter is None:
+        file_formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s: %(message)s"
+        )
+
+    if stream_formatter is None:
+        stream_formatter = logging.Formatter("%(name)s - %(levelname)s: %(message)s")
 
     if loggers is None:
         loggers = [
