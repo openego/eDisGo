@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 
 import geopandas as gpd
@@ -92,10 +93,10 @@ class TestElectromobility:
         # check concrete values
         cp = "Charging_Point_LVGrid_131957_public_1"
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122222
+            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122232
         ).all()
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 0.0
+            flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 1e-6
         ).all()
 
         tmp = flex_bands["upper_energy"].loc[:, [cp]]
@@ -175,13 +176,15 @@ class TestElectromobility:
         cp = "Charging_Point_LVGrid_131957_public_1"
 
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[19:27, 0].values, 0.0122222
+            flex_bands["upper_power"].loc[:, [cp]].iloc[19:27, 0].values, 0.0122232
         ).all()
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[0:19, 0].values, 0.0
+            flex_bands["upper_power"].loc[:, [cp]].iloc[0:19, 0].values, 1e-6
         ).all()
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[63, 0], 0.0122222 * 3 / 4
+            flex_bands["upper_power"].loc[:, [cp]].iloc[63, 0],
+            0.0122232 * 3 / 4,
+            atol=1e-6,
         )
 
         assert np.isclose(
@@ -212,13 +215,15 @@ class TestElectromobility:
         # check concrete values
         cp = "Charging_Point_LVGrid_131957_public_1"
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122222
+            flex_bands["upper_power"].loc[:, [cp]].iloc[76:108, 0].values, 0.0122232
         ).all()
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 0.0
+            flex_bands["upper_power"].loc[:, [cp]].iloc[0:76, 0].values, 1e-6
         ).all()
         assert np.isclose(
-            flex_bands["upper_power"].loc[:, [cp]].iloc[252:260, 0], 0.0122222 * 3 / 4
+            flex_bands["upper_power"].loc[:, [cp]].iloc[252:260, 0],
+            0.0122222 * 3 / 4,
+            atol=1e-6,
         ).all()
 
         assert (
@@ -362,6 +367,80 @@ class TestElectromobility:
             "the old index is not possible." in caplog.text
         )
 
+    def test_integrity_check(self):
+        """
+        Checks resampling function with set up flexibility bands.
+
+        """
+        # CP1 - charge 12 kWh between time steps [1, 4]
+        # CP2 - charge 2 kWh between time steps [0, 1] and 2 kWh between
+        #       time steps [4, 5]
+
+        # set charging efficiency to 1 to make things easier
+        self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 1.0
+
+        # set up valid flexibility bands
+        timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
+        flex_bands = {}
+        flex_bands["upper_power"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 12.0, 12.0, 12.0, 12.0, 0.0],
+                "CP2": [3.0, 3.0, 0.0, 0.0, 3.0, 3.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["upper_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 6.0, 12.0, 12.0, 12.0, 12.0],
+                "CP2": [1.5, 2.0, 2.0, 2.0, 3.5, 4.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["lower_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 0.0, 0.0, 6.0, 12.0, 12.0],
+                "CP2": [0.5, 2.0, 2.0, 2.0, 2.5, 4.0],
+            },
+            index=timeindex,
+        )
+
+        # ######### check upper energy and lower than lower energy band ############
+        # modify flex band such that error is raised
+        flex_bands["upper_energy"].at[timeindex[1], "CP2"] = 1.0
+        self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+        msg = re.escape(
+            "Lower energy bound is higher than upper energy bound for the "
+            "following charging points: ['CP2']. Please check."
+        )
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo_obj.electromobility.check_integrity()
+
+        # ######### check upper energy higher than charging power ############
+        # reset previously modified value
+        flex_bands["upper_energy"].at[timeindex[1], "CP2"] = 2.0
+        # modify flex band such that error is raised
+        flex_bands["upper_energy"].at[timeindex[1], "CP1"] = 7.0
+        self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+        msg = re.escape(
+            "Upper energy band has power values higher than nominal power for the "
+            "following charging points: ['CP1']. Please check."
+        )
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo_obj.electromobility.check_integrity()
+
+        # ######### check lower energy higher than charging power ############
+        # reset previously modified value
+        flex_bands["upper_energy"].at[timeindex[1], "CP1"] = 6.0
+        # modify flex band such that error is raised
+        flex_bands["lower_energy"].at[timeindex[3], "CP1"] = 7.0
+        self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+        msg = re.escape(
+            "Lower energy band has power values higher than nominal power for the "
+            "following charging points: ['CP1']. Please check."
+        )
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo_obj.electromobility.check_integrity()
+
     def test_to_csv(self):
         """Test for method to_csv."""
         dir = os.path.join(os.getcwd(), "electromobility")
@@ -407,6 +486,7 @@ class TestElectromobility:
             "lower_energy": pd.DataFrame({"cp_1": [1, 2]}, index=timeindex),
         }
         self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+        config_df = self.edisgo_obj.electromobility.simbev_config_df.copy()
         self.edisgo_obj.electromobility.to_csv(dir)
 
         # reset Electromobility
@@ -433,5 +513,8 @@ class TestElectromobility:
             flex_bands["upper_power"],
             check_freq=False,
         )
-
+        assert_frame_equal(
+            self.edisgo_obj.electromobility.simbev_config_df,
+            config_df,
+        )
         shutil.rmtree(dir)
