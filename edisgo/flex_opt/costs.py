@@ -183,6 +183,43 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
                     ),
                 ]
             )
+        # costs for circuit breakers
+        # get changed cbs
+        circuit_breakers = equipment_changes.loc[
+            equipment_changes.index.isin(edisgo_obj.topology.switches_df.index)
+        ]
+
+        cb_changed = circuit_breakers.iloc[
+            (
+                circuit_breakers.equipment
+                == edisgo_obj.topology.switches_df.loc[
+                    circuit_breakers.index, "type_info"
+                ]
+            ).values
+        ]["quantity"].to_frame()
+
+        if not cb_changed.empty:
+            cb_costs = float(
+                edisgo_obj.config["costs_circuit_breakers"][
+                    "circuit_breaker_installation_work"
+                ]
+            )
+            costs = pd.concat(
+                [
+                    costs,
+                    pd.DataFrame(
+                        {
+                            "type": edisgo_obj.topology.switches_df.loc[
+                                cb_changed.index, "type_info"
+                            ].values,
+                            "total_costs": cb_costs,
+                            "quantity": cb_changed.quantity.values,
+                            "voltage_level": "mv",
+                        },
+                        index=cb_changed.index,
+                    ),
+                ]
+            )
 
     # if no costs incurred write zero costs to DataFrame
     if costs.empty:
