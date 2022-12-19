@@ -1,6 +1,7 @@
 import datetime
 import multiprocessing as mp
 import os
+from pathlib import Path
 
 from time import perf_counter
 
@@ -23,12 +24,12 @@ optimize_ev = True
 
 
 def run_optimized_charging_feeder_parallel(
-    grid_feeder_tuple, run="_SEST", load_results=False, iteration=0
+    grid_feeder_tuple, run="anya_emob", load_results=False, iteration=0
 ):
     objective = "minimize_loading"
-    timesteps_per_iteration = 24 * 4
+    timesteps_per_iteration = 24
     iterations_per_era = 7
-    overlap_iterations = 24
+    overlap_iterations = 6
     solver = "gurobi"
     kwargs = {}  # {'v_min':0.91, 'v_max':1.09, 'thermal_limit':0.9}
     config_dict = {
@@ -43,11 +44,15 @@ def run_optimized_charging_feeder_parallel(
 
     grid_id = grid_feeder_tuple[0]
     feeder_id = grid_feeder_tuple[1]
-    root_dir = r"H:\Grids"
-    grid_dir = root_dir + r"\{}".format(grid_id)
-    feeder_dir = root_dir + r"\{}\feeder\{}".format(grid_id, feeder_id)
-    result_dir = "results/{}/{}/{}".format(objective + run, grid_id, feeder_id)
-
+    # root_dir = r"H:\Grids"
+    root_dir = "/home/local/RL-INSTITUT/julian.endres/Projekte/eDisGo-lobaflex/data/load_n_gen_n_emob_n_hp_grids_extracted"
+    root_dir = Path(root_dir)
+    grid_dir = root_dir / str(grid_id)
+    feeder_dir = root_dir / str(grid_id) / "feeder" / f"{feeder_id:02}"
+    results_dir = "/home/local/RL-INSTITUT/julian.endres/Projekte/eDisGo-lobaflex/results/"
+    results_dir = Path(results_dir)
+    # result_dir = "results/{}/{}/{}".format(objective + run, grid_id, feeder_id)
+    result_dir = results_dir / run / str(grid_id) / f"{feeder_id:02}"
     os.makedirs(result_dir, exist_ok=True)
 
     if (len(os.listdir(result_dir)) > 239) and load_results:
@@ -72,10 +77,14 @@ def run_optimized_charging_feeder_parallel(
         charging_start = None
         energy_level_start = None
         start_iter = 0
-    config.to_csv(result_dir + "/config.csv")
+    config.to_csv(result_dir / "config.csv")
 
-    try:
-        edisgo_orig = import_edisgo_from_files(feeder_dir, import_timeseries=True)
+    # try:
+    if True:
+        edisgo_orig = import_edisgo_from_files(feeder_dir,
+                                               import_timeseries=True,
+                                               import_topology=True,
+                                               import_electromobility=True)
 
         print("eDisGo object imported.")
 
@@ -84,7 +93,7 @@ def run_optimized_charging_feeder_parallel(
         downstream_nodes_matrix = pd.read_csv(
             os.path.join(
                 feeder_dir,
-                "downstream_node_matrix_{}_{}.csv".format(grid_id, feeder_id),
+                f"downstream_node_matrix_{grid_id}_{feeder_id:02}.csv"
             ),
             index_col=0,
         )
@@ -97,8 +106,10 @@ def run_optimized_charging_feeder_parallel(
         ]
         print("Downstream node matrix imported.")
 
-        flexibility_bands = import_flexibility_bands(grid_dir, ["home", "work"])
+        # flexibility_bands = import_flexibility_bands(feeder_dir, ["home", "work"])
+        flexibility_bands = edisgo_obj.electromobility.flexibility_bands
         print("Flexibility bands imported.")
+
 
         # extract data for feeder
         for band in BANDS:
@@ -117,6 +128,7 @@ def run_optimized_charging_feeder_parallel(
             pu=False,
             optimize_storage=False,
             optimize_ev_charging=True,
+            optimize_hp=False,
             ev_flex_bands=flexibility_bands,
         )
         print("Time-invariant parameters extracted.")
@@ -126,7 +138,8 @@ def run_optimized_charging_feeder_parallel(
 
         for iteration in range(
             start_iter,
-            int(len(edisgo_obj.timeseries.timeindex) / timesteps_per_iteration),
+            # int(len(edisgo_obj.timeseries.timeindex) / timesteps_per_iteration),
+            7
         ):  # edisgo_obj.timeseries.timeindex.week.unique()
 
             print("Starting optimisation for iteration {}.".format(iteration))
@@ -284,13 +297,13 @@ def run_optimized_charging_feeder_parallel(
                 if not res.empty:
                     res.astype(np.float16).to_csv(
                         result_dir
-                        + "/{}_{}_{}_{}.csv".format(
+                        / "{}_{}_{}_{}.csv".format(
                             res_name, grid_id, feeder_id, iteration
                         )
                     )
             print("Saved results for week {}.".format(iteration))
-
-    except Exception as e:
+    else:
+    # except Exception as e:
         print(
             "Something went wrong with feeder {} of grid {}".format(feeder_id, grid_id)
         )
@@ -300,7 +313,7 @@ def run_optimized_charging_feeder_parallel(
                 charging_start = charging_ev[iteration - 1].iloc[-overlap_iterations]
                 charging_start.to_csv(
                     result_dir
-                    + "/charging_start_{}_{}_{}.csv".format(
+                    / "charging_start_{}_{}_{}.csv".format(
                         grid_id, feeder_id, iteration
                     )
                 )
@@ -309,7 +322,7 @@ def run_optimized_charging_feeder_parallel(
                 ]
                 energy_level_start.to_csv(
                     result_dir
-                    + "/energy_level_start_{}_{}_{}.csv".format(
+                    / "energy_level_start_{}_{}_{}.csv".format(
                         grid_id, feeder_id, iteration
                     )
                 )
@@ -385,29 +398,32 @@ if __name__ == "__main__":
     # print('It took {} seconds to run the full optimisation.'.format(
     #     perf_counter()-t1))
     # print('SUCCESS')
-    t1 = perf_counter()
+    # t1 = perf_counter()
 
-    grid_ids = [2534]
-    root_dir = r"H:\Grids"
-    grid_id_feeder_tuples = []  # [(2534,0), (2534,1), (2534,6)](176, 6)
-    run_id = datetime.datetime.now().strftime("%Y%m%d-%H%M")
-    for grid_id in grid_ids:
-        edisgo_dir = root_dir + r"\{}\feeder".format(grid_id)
-        for feeder in os.listdir(edisgo_dir):
-            grid_id_feeder_tuples.append((grid_id, feeder))
+    # grid_ids = [1056]
+    # # root_dir = r"H:\Grids"
+    # root_dir = "/home/local/RL-INSTITUT/julian.endres/Projekte/eDisGo-lobaflex/data/load_n_gen_n_emob_n_hp_grids_extracted/1056"
+    # grid_id_feeder_tuples = []  # [(2534,0), (2534,1), (2534,6)](176, 6)
+    # run_id = datetime.datetime.now().strftime("%Y%m%d-%H%M")
+    # for grid_id in grid_ids:
+    #     edisgo_dir = root_dir + r"\{}\feeder".format(grid_id)
+    #     for feeder in os.listdir(edisgo_dir):
+    #         grid_id_feeder_tuples.append((grid_id, feeder))
+    #
+    # pool = mp.Pool(
+    #     min(len(grid_id_feeder_tuples), int(mp.cpu_count() / 2))
+    # )  # int(mp.cpu_count()/2)
+    #
+    # # results = [pool.apply_async(func=run_optimized_charging_feeder_parallel,
+    # #                             args=(grid_feeder_tuple, run_id))
+    # #            for grid_feeder_tuple in grid_id_feeder_tuples]
+    # results = pool.map_async(
+    #     run_optimized_charging_feeder_parallel, grid_id_feeder_tuples
+    # ).get()
+    # pool.close()
+    # print(
+    #     "It took {} seconds to run the full optimisation.".format(perf_counter() - t1)
+    # )
+    # print("SUCCESS")
 
-    pool = mp.Pool(
-        min(len(grid_id_feeder_tuples), int(mp.cpu_count() / 2))
-    )  # int(mp.cpu_count()/2)
-
-    # results = [pool.apply_async(func=run_optimized_charging_feeder_parallel,
-    #                             args=(grid_feeder_tuple, run_id))
-    #            for grid_feeder_tuple in grid_id_feeder_tuples]
-    results = pool.map_async(
-        run_optimized_charging_feeder_parallel, grid_id_feeder_tuples
-    ).get()
-    pool.close()
-    print(
-        "It took {} seconds to run the full optimisation.".format(perf_counter() - t1)
-    )
-    print("SUCCESS")
+    run_optimized_charging_feeder_parallel(grid_feeder_tuple=(1056,1))
