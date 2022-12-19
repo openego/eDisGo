@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from time import perf_counter
+from lobaflex import config_dir, data_dir, logs_dir, results_dir
 
 import numpy as np
 import pandas as pd
@@ -45,12 +46,13 @@ def run_optimized_charging_feeder_parallel(
     grid_id = grid_feeder_tuple[0]
     feeder_id = grid_feeder_tuple[1]
     # root_dir = r"H:\Grids"
-    root_dir = "/home/local/RL-INSTITUT/julian.endres/Projekte/eDisGo-lobaflex/data/load_n_gen_n_emob_n_hp_grids_extracted"
-    root_dir = Path(root_dir)
+    # root_dir = "/home/local/RL-INSTITUT/julian.endres/Projekte/eDisGo-lobaflex/data/load_n_gen_n_emob_n_hp_grids_extracted"
+    # root_dir = Path(root_dir)
+    root_dir = data_dir / "load_n_gen_n_emob_n_hp_grids_extracted"
     grid_dir = root_dir / str(grid_id)
     feeder_dir = root_dir / str(grid_id) / "feeder" / f"{feeder_id:02}"
-    results_dir = "/home/local/RL-INSTITUT/julian.endres/Projekte/eDisGo-lobaflex/results/"
-    results_dir = Path(results_dir)
+    # results_dir = "/home/local/RL-INSTITUT/julian.endres/Projekte/eDisGo-lobaflex/results/"
+    # results_dir = Path(results_dir)
     # result_dir = "results/{}/{}/{}".format(objective + run, grid_id, feeder_id)
     result_dir = results_dir / run / str(grid_id) / f"{feeder_id:02}"
     os.makedirs(result_dir, exist_ok=True)
