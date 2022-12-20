@@ -35,7 +35,7 @@ class Etrago:  # ToDo: delete as soon as etrago class is implemented
 
 def to_powermodels(
     edisgo_object,
-    s_base=100,
+    s_base=1,
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
@@ -51,7 +51,7 @@ def to_powermodels(
     edisgo_object : :class:`~.EDisGo`
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
+        Default: 1 MVA
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
     flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
@@ -219,7 +219,7 @@ def from_powermodels(
     edisgo_object,
     pm_results,
     hv_flex_dict,
-    s_base=100,
+    s_base=1,
     save_heat_storage=False,
     save_slack_gen=False,
     save_slacks=False,
@@ -234,7 +234,7 @@ def from_powermodels(
     edisgo_object : :class:`~.EDisGo`
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
+        Default: 1 MVA
     pm_results: dict or str
         Dictionary or path to json file that contains all optimization results in
         PowerModels network data format.
@@ -465,6 +465,22 @@ def from_powermodels(
         pd.DataFrame(
             index=edisgo_object.timeseries.timeindex, columns=names, data=data
         ).to_csv(os.path.join(abs_path, "load_shedding.csv"))
+
+        # save cp load slacks (cp load shedding)
+        names = [
+            pm["nw"]["1"]["electromobility"][cp]["name"]
+            for cp in list(pm["nw"]["1"]["electromobility"].keys())
+        ]
+        data = [
+            [
+                pm["nw"][t]["electromobility"][cp]["pcps"] * s_base
+                for cp in list(pm["nw"]["1"]["electromobility"].keys())
+            ]
+            for t in timesteps
+        ]
+        pd.DataFrame(
+            index=edisgo_object.timeseries.timeindex, columns=names, data=data
+        ).to_csv(os.path.join(abs_path, "cp_load_shedding.csv"))
 
 
 def _init_pm():

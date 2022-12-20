@@ -633,7 +633,7 @@ class EDisGo:
 
     def to_powermodels(
         self,
-        s_base=100,
+        s_base=1,
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
@@ -648,7 +648,7 @@ class EDisGo:
         ----------
         s_base : int
             Base value of apparent power for per unit system.
-            Default: 100 MVA
+            Default: 1 MVA
         flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
             Array containing all charging points that allow for flexible charging.
         flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
@@ -686,7 +686,7 @@ class EDisGo:
         self,
         pm_results,
         hv_flex_dict,
-        s_base=100,
+        s_base=1,
         save_heat_storage=False,
         save_slack_gen=False,
         save_slacks=False,
@@ -707,7 +707,7 @@ class EDisGo:
             retrieved from etrago component of edisgo object.
         s_base : int
             Base value of apparent power for per unit system.
-            Default: 100 MVA
+            Default: 1 MVA
         save_heat_storage: bool
             Indicates whether to save results of heat storage variables from the
             optimization to csv file in the current working directory. Set parameter
@@ -742,7 +742,7 @@ class EDisGo:
 
     def pm_optimize(
         self,
-        s_base=100,
+        s_base=1,
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
@@ -766,7 +766,7 @@ class EDisGo:
         ----------
         s_base : int
             Base value of apparent power for per unit system.
-            Default: 100 MVA
+            Default: 1 MVA
         flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list or None
             Array containing all charging points that allow for flexible charging.
             Default: None
@@ -2414,7 +2414,7 @@ class EDisGo:
         self,
         filename=None,
         path="",
-        s_base=100,
+        s_base=1,
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
@@ -2434,7 +2434,7 @@ class EDisGo:
             working directory.
         s_base : int
             Base value of apparent power for per unit system.
-            Default: 100 MVA
+            Default: 1 MVA
         flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
             Array containing all charging points that allow for flexible charging.
         flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list

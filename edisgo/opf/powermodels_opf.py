@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def pm_optimize(
     edisgo_obj,
-    s_base=100,
+    s_base=1,
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
@@ -35,7 +35,7 @@ def pm_optimize(
     edisgo_obj : :class:`~.EDisGo`
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
+        Default: 1 MVA
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all charging points that allow for flexible charging.
         Default: None
