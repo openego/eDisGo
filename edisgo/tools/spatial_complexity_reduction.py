@@ -118,7 +118,22 @@ def remove_one_meter_lines(edisgo_root):
     return edisgo_obj
 
 
-def remove_lines_under_one_meter(edisgo_root):
+def remove_short_lines(edisgo_root, length=1):
+    """
+    Remove Lines smaller and equal to `length` meter
+
+    Parameters
+    ----------
+    edisgo_root :
+    length : int
+        Threshold value to remove lines in meter.
+
+    Returns
+    -------
+    edisgo_root :
+
+    """
+
     def apply_busmap_on_buses_df(series):
         if series.name in busmap:
             series.loc["new_bus"] = busmap[series.name]
@@ -140,9 +155,9 @@ def remove_lines_under_one_meter(edisgo_root):
 
         return series
 
-    logger = logging.getLogger("edisgo.cr_remove_lines_under_one_meter")
+    logger = logging.getLogger("edisgo.cr_remove_short_lines")
     start_time = time()
-    logger.info("Start - Removing lines under 1m")
+    logger.info(f"Start - Removing lines smaller equal to {length}m")
 
     edisgo_obj = copy.deepcopy(edisgo_root)
 
@@ -160,7 +175,7 @@ def remove_lines_under_one_meter(edisgo_root):
         lines_df = grid.lines_df.copy()
 
         for index, row in lines_df.iterrows():
-            if row.length < 0.001:
+            if row.length <= length / 1e3:
 
                 distance_bus_0, path = nx.single_source_dijkstra(
                     G, source=transformer_node, target=row.bus0, weight="length"
@@ -183,12 +198,12 @@ def remove_lines_under_one_meter(edisgo_root):
 
                 if distance_bus_0 < distance_bus_1:
                     busmap[row.bus1] = row.bus0
-                    if distance_bus_0 < 0.001:
+                    if distance_bus_0 <= length / 1e3:
                         busmap[row.bus0] = transformer_node
                         busmap[row.bus1] = transformer_node
                 elif distance_bus_0 > distance_bus_1:
-                    busmap[row.bus0] = row.bus1
-                    if distance_bus_1 < 0.001:
+                    busmap[row.bus0] <= row.bus1
+                    if distance_bus_1 <= length / 1e3:
                         busmap[row.bus0] = transformer_node
                         busmap[row.bus1] = transformer_node
                 else:
@@ -197,7 +212,13 @@ def remove_lines_under_one_meter(edisgo_root):
                 unused_lines.append(index)
 
     logger.debug("Busmap: {}".format(busmap))
-
+    logger.info(
+        "Drop {} of {} lines ({:.1f}%)".format(
+            len(unused_lines),
+            lines_df.shape[0],
+            (len(unused_lines) / lines_df.shape[0] * 100),
+        )
+    )
     transformers_df = edisgo_obj.topology.transformers_df.copy()
     transformers_df = transformers_df.apply(apply_busmap_on_lines_df, axis="columns")
     edisgo_obj.topology.transformers_df = transformers_df
