@@ -322,7 +322,7 @@ def setup_model(
         overlap_iterations :
             Number of timesteps which the iteration windows overlap
             (default: None)
-        charging_efficiency: (default: 0.9)
+        charging_efficiency: (default: from simbev config file)
         energy_level_start_ev : (default: None)
         charging_start_ev : (default: None
             starting value after 1st Iteration, dynamic
@@ -446,7 +446,10 @@ def setup_model(
         model = add_ev_model_bands(
             model=model,
             fixed_parameters=fixed_parameters,
-            charging_efficiency=kwargs.get("charging_efficiency", 0.9),
+            charging_efficiency=kwargs.get(
+                "charging_efficiency",
+                fixed_parameters["grid_object"].electromobility.eta_charging_points,
+            ),
             energy_level_start=kwargs.get("energy_level_start_ev", None),
             energy_level_end=kwargs.get("energy_level_end_ev", None),
             energy_level_beginning=kwargs.get("energy_level_beginning_ev", None),
