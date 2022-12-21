@@ -163,7 +163,7 @@ def remove_short_lines(edisgo_root, length=1):
 
     busmap = {}
     unused_lines = []
-
+    total_lines = 0
     grid_list = [edisgo_obj.topology.mv_grid]
     grid_list = grid_list + list(edisgo_obj.topology.mv_grid.lv_grids)
 
@@ -202,7 +202,7 @@ def remove_short_lines(edisgo_root, length=1):
                         busmap[row.bus0] = transformer_node
                         busmap[row.bus1] = transformer_node
                 elif distance_bus_0 > distance_bus_1:
-                    busmap[row.bus0] <= row.bus1
+                    busmap[row.bus0] = row.bus1
                     if distance_bus_1 <= length / 1e3:
                         busmap[row.bus0] = transformer_node
                         busmap[row.bus1] = transformer_node
@@ -210,13 +210,14 @@ def remove_short_lines(edisgo_root, length=1):
                     raise ValueError("ERROR")
 
                 unused_lines.append(index)
+                total_lines += lines_df.shape[0]
 
     logger.debug("Busmap: {}".format(busmap))
     logger.info(
-        "Drop {} of {} lines ({:.1f}%)".format(
+        "Drop {:,} of {:,} lines ({:.1f}%)".format(
             len(unused_lines),
-            lines_df.shape[0],
-            (len(unused_lines) / lines_df.shape[0] * 100),
+            total_lines,
+            (len(unused_lines) / total_lines * 100),
         )
     )
     transformers_df = edisgo_obj.topology.transformers_df.copy()
@@ -249,7 +250,7 @@ def remove_short_lines(edisgo_root, length=1):
     # charging_points_df = charging_points_df.apply(apply_busmap, axis="columns")
     # edisgo_obj.topology.charging_points_df = charging_points_df
 
-    logger.info("Finished in {}s".format(time() - start_time))
+    logger.info("Finished in {:.1f}s".format(time() - start_time))
     return edisgo_obj
 
 
