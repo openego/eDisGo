@@ -960,6 +960,7 @@ def add_rolling_horizon(
         if charging_starts[charging_attr] is None:
             getattr(model, f"InitialChargingPower{charging_attr.upper()}").deactivate()
 
+        # uncommented as subjected to old emob formulation
         # setattr(
         #     model,
         #     f"FinalChargingPower{charging_attr.upper()}",
