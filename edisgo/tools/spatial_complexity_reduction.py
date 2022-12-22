@@ -173,6 +173,7 @@ def remove_short_lines(edisgo_root, length=1):
         transformer_node = grid.transformers_df.bus1.values[0]
 
         lines_df = grid.lines_df.copy()
+        total_lines += lines_df.shape[0]
 
         for index, row in lines_df.iterrows():
             if row.length <= length / 1e3:
@@ -210,7 +211,6 @@ def remove_short_lines(edisgo_root, length=1):
                     raise ValueError("ERROR")
 
                 unused_lines.append(index)
-                total_lines += lines_df.shape[0]
 
     logger.debug("Busmap: {}".format(busmap))
     logger.info(
