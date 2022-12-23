@@ -170,7 +170,7 @@ def to_powermodels(
             "dsm": edisgo_object.etrago.dsm_active_power / s_base,
         }
         try:
-            _build_HV_requirements(
+            _build_hv_requirements(
                 psa_net, pm, s_base, opt_flex, flexible_cps, flexible_hps, hv_flex_dict
             )
         except IndexError:
@@ -214,12 +214,15 @@ def from_powermodels(
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
-    s_base : int
-        Base value of apparent power for per unit system.
-        Default: 1 MVA
     pm_results: dict or str
         Dictionary or path to json file that contains all optimization results in
         PowerModels network data format.
+    hv_flex_dict: dict
+        Dictionary containing time series of HV requirement for each flexibility
+        retrieved from etrago component of edisgo object.
+    s_base : int
+        Base value of apparent power for per unit system.
+        Default: 1 MVA
     save_heat_storage: bool
         Indicates whether to save results of heat storage variables from the
         optimization to csv file in the current working directory. Set parameter
@@ -698,6 +701,9 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
     s_base : int
         Base value of apparent power for per unit system.
         Default: 100 MVA
+    flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
+        Array containing all flexible loads that allow for application of demand side
+        management strategy.
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
     transformer = ~branches.tap_ratio.isna()
@@ -817,8 +823,8 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
         idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
         pm["branch"][str(stor_i + len(branches.index) + len(flexible_loads) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
-            "br_r": 0,  # ToDo: berechnen wie groß r als äquivalenter Verlust sein muss
-            "br_x": 0,  # ToDo
+            "br_r": 0.1,  # ToDo
+            "br_x": 0,
             "f_bus": idx_bus,
             "t_bus": stor_i + len(psa_net.buses.index) + len(flexible_loads) + 1,
             "g_to": 0,
@@ -827,7 +833,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
             "b_fr": 0,
             "shift": 0,
             "br_status": 1.0,
-            "rate_a": 250 / s_base,
+            "rate_a": psa_net.storage_units.p_nom[stor_i] / s_base,
             "rate_b": 250 / s_base,
             "rate_c": 250 / s_base,
             "angmin": -np.pi / 6,
@@ -871,8 +877,6 @@ def _build_load(edisgo_obj, psa_net, pm, s_base, flexible_cps, flexible_hps):
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
         q_d = psa_net.loads_t.q_set[loads_df.index[load_i]]
-        # p_d.loc[p_d < tol] = 0
-        # q_d.loc[q_d < tol] = 0
         pm["load"][str(load_i + 1)] = {
             "pd": p_d[0] / s_base,
             "qd": q_d[0] / s_base,
@@ -1053,7 +1057,6 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
         q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
         p_d = heat_df2[heat_df.index[hp_i]]
-        # p_d[p_d < tol] = 0
         # TODO: hier den Demand um das solar/geothermal feedin verringern
         # TODO: check einbauen ob Einspeisung höher als Verbrauch. Dann Verbrauch auf 0
         # setzen
@@ -1201,7 +1204,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
     return flexible_loads
 
 
-def _build_HV_requirements(
+def _build_hv_requirements(
     psa_net, pm, s_base, opt_flex, flexible_cps, flexible_hps, hv_flex_dict
 ):
     """
@@ -1452,7 +1455,7 @@ def _build_component_timeseries(
             p_min = edisgo_obj.dsm.p_min / s_base
             e_min = edisgo_obj.dsm.e_min / s_base
             e_max = edisgo_obj.dsm.e_max / s_base
-    elif kind == "HV_requirements":
+    else:
         p_set = pd.DataFrame()
     for comp in p_set.columns:
         if kind == "gen":
@@ -1555,6 +1558,7 @@ def _mapping(
     elif kind == "dsm":
         df = psa_net.loads.loc[flexible_loads]
     else:
+        df = pd.DataFrame()
         logging.warning("Mapping for '{}' not implemented.".format(kind))
     idx = df.reset_index()[df.index == name].index[0] + 1
     return idx
