@@ -958,6 +958,9 @@ class Topology:
             warnings.warn(
                 "Bus of name {} not in Topology. Cannot be removed.".format(bus_name)
             )
+            logger.warning(
+                "Bus of name {} not in Topology. Cannot be removed.".format(bus_name)
+            )
             return False
 
         conn_comp = self.get_connected_components_from_bus(bus_name)
@@ -998,6 +1001,10 @@ class Topology:
         # check if line is part of topology
         if line_name not in self.lines_df.index:
             warnings.warn(
+                "Line of name {} not in Topology. Cannot be "
+                "removed.".format(line_name)
+            )
+            loggger.warning(
                 "Line of name {} not in Topology. Cannot be "
                 "removed.".format(line_name)
             )
@@ -1558,6 +1565,12 @@ class Topology:
                     "line, x, r, b and s_nom are calculated and provided "
                     "parameters are overwritten."
                 )
+                logger.warning(
+                    "When line 'type_info' is provided when creating a new "
+                    "line, x, r, b and s_nom are calculated and provided "
+                    "parameters are overwritten."
+                )
+
             line_data = _get_line_data()
             if isinstance(line_data, pd.DataFrame) and len(line_data) > 1:
                 line_data = (
@@ -1587,6 +1600,7 @@ class Topology:
             )
         if s_nom is None:
             warnings.warn("Newly added line has no nominal power.")
+            logger.warning("Newly added line has no nominal power.")
 
         new_line_df = pd.DataFrame(
             data={
@@ -1774,6 +1788,10 @@ class Topology:
                     f"Removal of line {name} would create isolated node. Remove all "
                     "connected elements first to remove bus."
                 )
+                logger.warning(
+                    f"Removal of line {name} would create isolated node. Remove all "
+                    "connected elements first to remove bus."
+                )
                 return
         else:
             logger.debug(
@@ -1830,6 +1848,10 @@ class Topology:
         conn_comp_types = [k for k, v in conn_comp.items() if not v.empty]
         if len(conn_comp_types) > 0 and not force_remove:
             warnings.warn(
+                f"Bus {name} is not isolated and therefore not removed. Remove all "
+                f"connected elements ({conn_comp_types}) first to remove bus."
+            )
+            logger.warning(
                 f"Bus {name} is not isolated and therefore not removed. Remove all "
                 f"connected elements ({conn_comp_types}) first to remove bus."
             )
@@ -2355,6 +2377,9 @@ class Topology:
                 "Component has no mvlv_subst_id. It is therefore allocated "
                 f"to a random LV Grid ({lv_grid.id})."
             )
+            logger.warning(
+                "Component has no mvlv_subst_id. It is therefore allocated "
+                f"to a random LV Grid ({lv_grid.id}).")
 
         # v_level 6 -> connect to grid's LV station
         if voltage_level == 6:
