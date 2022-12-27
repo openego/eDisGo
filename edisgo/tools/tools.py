@@ -729,10 +729,8 @@ def battery_storage_reference_operation(
     # add data to processing data frame. Battery model handles generation positive,
     # demand negative
     df["house_demand"] = -1 * df
-    lst_storage = []
-    lst_demand = []
+    lst_storage_power = []
     storage_charge = init_storage_charge
-    rest = 0  # reset
 
     for i, d in df.iterrows():
 
@@ -745,17 +743,19 @@ def battery_storage_reference_operation(
                 storage_charge = storage_charge + (
                     d.house_demand * efficiency_charge * time_base
                 )
-                rest = 0
+                storage_power = -d.house_demand
             # If it does, feed the rest to the grid
             else:
                 storage_charge = storage_charge + (
                     charger_power * efficiency_charge * time_base
                 )
-                rest = d.house_demand - charger_power
+                storage_power = -charger_power
 
             # If the storage would be overcharged, feed the 'rest' to the grid
             if storage_charge > storage_max:
-                rest = (storage_charge - storage_max) / time_base
+                storage_power = (
+                    storage_power + (storage_charge - storage_max) / time_base
+                )
                 storage_charge = storage_max
 
         # If the house needs electricity from the grid, discharge the storage first.
@@ -767,32 +767,30 @@ def battery_storage_reference_operation(
             # Check if energy demand exceeds charger power
             if d.house_demand < (charger_power * -1):
                 storage_charge = storage_charge - (
-                    charger_power * efficiency_discharge * time_base
+                    charger_power / efficiency_discharge * time_base
                 )
-                rest = d.house_demand + charger_power
+                storage_power = charger_power
 
             else:
                 storage_charge = storage_charge + (
-                    d.house_demand * efficiency_discharge * time_base
+                    d.house_demand / efficiency_discharge * time_base
                 )
-                rest = 0
+                storage_power = -d.house_demand
 
             # If the storage would be undercharged, take the 'rest' from the grid
             if storage_charge < 0:
                 # since storage_charge is negative in this case it can be taken as
                 # demand
-                rest = storage_charge / time_base  # kWh / h = kW
+                storage_power = storage_power - storage_charge / time_base
                 storage_charge = 0
 
         # If the storage is full or empty, the demand is not affected
         # elif(storage_charge == 0) | (storage_charge == storage_max):
         else:
-            rest = d.house_demand
+            storage_power = 0
 
-        lst_storage.append(storage_charge)
-        lst_demand.append(rest * -1)
+        lst_storage_power.append(storage_power)
 
-    df["house_demand"] = lst_demand
-    df["storage_charge"] = lst_storage
+    df["storage_power"] = lst_storage_power
 
-    return -df
+    return df
