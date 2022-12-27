@@ -2378,7 +2378,7 @@ class Topology:
                 f"to a random LV Grid ({lv_grid.id})."
             )
             logger.warning(
-                "Component has no mvlv_subst_id. It is therefore allocated "
+                f"{comp_type} has no mvlv_subst_id. It is therefore allocated "
                 f"to a random LV Grid ({lv_grid.id}).")
 
         # v_level 6 -> connect to grid's LV station
