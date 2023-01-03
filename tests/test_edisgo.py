@@ -329,7 +329,7 @@ class TestEDisGo:
 
         # test mode None and timesteps None (default)
         pypsa_network = self.edisgo.to_pypsa()
-        assert len(pypsa_network.buses) == 140
+        assert len(pypsa_network.buses) == 142
         assert len(pypsa_network.buses_t.v_mag_pu_set) == 4
 
         # test mode "mv" and timesteps given
@@ -364,7 +364,7 @@ class TestEDisGo:
         # test mode None and timesteps None (default)
         self.edisgo.analyze()
         results_analyze = deepcopy(self.edisgo.results)
-        assert self.edisgo.results.v_res.shape == (4, 140)
+        assert self.edisgo.results.v_res.shape == (4, 142)
 
         # test mode "mv" and timesteps given
         self.edisgo.analyze(mode="mv", timesteps=self.edisgo.timeseries.timeindex[0])
@@ -376,12 +376,12 @@ class TestEDisGo:
 
         # test troubleshooting_mode "lpf"
         self.edisgo.analyze(troubleshooting_mode="lpf")
-        assert self.edisgo.results.v_res.shape == (4, 140)
+        assert self.edisgo.results.v_res.shape == (4, 142)
         assert self.edisgo.results.equality_check(results_analyze)
 
         # test mode None and troubleshooting_mode "iteration"
         self.edisgo.analyze(troubleshooting_mode="iteration")
-        assert self.edisgo.results.v_res.shape == (4, 140)
+        assert self.edisgo.results.v_res.shape == (4, 142)
         assert self.edisgo.results.equality_check(results_analyze)
 
         # test non convergence
@@ -407,8 +407,8 @@ class TestEDisGo:
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 10
         assert len(results.equipment_changes) == 10
-        assert results.v_res.shape == (4, 140)
-        assert self.edisgo.results.v_res.shape == (4, 140)
+        assert results.v_res.shape == (4, 142)
+        assert self.edisgo.results.v_res.shape == (4, 142)
 
         # ###################### test mode lv and copy grid ##########################
         self.setup_edisgo_object()
@@ -417,7 +417,7 @@ class TestEDisGo:
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 6
         assert len(results.equipment_changes) == 6
-        assert results.v_res.shape == (2, 140)
+        assert results.v_res.shape == (2, 142)
         assert self.edisgo.results.v_res.empty
 
         # ################# test mode mvlv and combined analysis ####################

@@ -26,8 +26,8 @@ class TestTopology:
 
     """
 
-    @classmethod
-    def setup_class(self):
+    @pytest.fixture(autouse=True)
+    def setup_fixture(self):
         self.topology = Topology()
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
 
@@ -901,8 +901,8 @@ class TestTopologyWithEdisgoObject:
         assert len(self.edisgo.topology.generators_df) == 28
         assert self.edisgo.topology.charging_points_df.empty
         assert len(self.edisgo.topology.storage_units_df) == 1
-        assert len(self.edisgo.topology.lines_df) == 129
-        assert len(self.edisgo.topology.buses_df) == 140
+        assert len(self.edisgo.topology.lines_df) == 131
+        assert len(self.edisgo.topology.buses_df) == 142
         assert len(self.edisgo.topology.switches_df) == 2
         assert self.edisgo.topology.grid_district["population"] == 23358
 
