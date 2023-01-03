@@ -115,15 +115,19 @@ def charging_strategy(
     )
     simbev_timedelta = timeindex[1] - timeindex[0]
 
-    if edisgo_timedelta != simbev_timedelta:
+    resample = edisgo_timedelta != simbev_timedelta
+
+    if resample:
         logger.warning(
             "The step size of the time series of the edisgo object differs from the"
             f"simbev step size. The edisgo time delta is {edisgo_timedelta}, while"
             f" the simbev time delta is {simbev_timedelta}. The edisgo time series "
-            f"will be resampled accordingly."
+            f"will be resampled accordingly before applying the charging strategy. "
+            f"After applying the charging strategy the time series will be resampled "
+            f"to it's original state."
         )
 
-        edisgo_obj.resample_timeseries(freq=f"{edisgo_obj.electromobility.stepsize}Min")
+        edisgo_obj.resample_timeseries(freq=simbev_timedelta)
 
     if strategy == "dumb":
         # "dumb" charging
@@ -302,6 +306,9 @@ def charging_strategy(
 
     else:
         raise ValueError(f"Strategy {strategy} has not yet been implemented.")
+
+    if resample:
+        edisgo_obj.resample_timeseries(freq=edisgo_timedelta)
 
     # set reactive power time series to 0 Mvar
     # fmt: off

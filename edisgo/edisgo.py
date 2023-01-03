@@ -2262,7 +2262,9 @@ class EDisGo:
 
             logging.info("Integrity check finished. Please pay attention to warnings.")
 
-    def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
+    def resample_timeseries(
+        self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
+    ):
         """
         Resamples all generator, load and storage time series to a desired resolution.
 
