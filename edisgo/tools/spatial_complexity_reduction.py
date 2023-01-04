@@ -120,7 +120,7 @@ def remove_one_meter_lines(edisgo_root):
 
 def remove_short_lines(edisgo_root, length=1):
     """
-    Remove Lines smaller and equal to `length` meter
+    Remove Lines smaller than `length` meter
 
     Parameters
     ----------
@@ -157,7 +157,7 @@ def remove_short_lines(edisgo_root, length=1):
 
     logger = logging.getLogger("edisgo.cr_remove_short_lines")
     start_time = time()
-    logger.info(f"Start - Removing lines smaller equal to {length}m")
+    logger.info(f"Start - Removing lines smaller to {length}m")
 
     edisgo_obj = copy.deepcopy(edisgo_root)
 
@@ -176,7 +176,7 @@ def remove_short_lines(edisgo_root, length=1):
         total_lines += lines_df.shape[0]
 
         for index, row in lines_df.iterrows():
-            if row.length <= length / 1e3:
+            if row.length < length / 1e3:
 
                 distance_bus_0, path = nx.single_source_dijkstra(
                     G, source=transformer_node, target=row.bus0, weight="length"
@@ -199,12 +199,14 @@ def remove_short_lines(edisgo_root, length=1):
 
                 if distance_bus_0 < distance_bus_1:
                     busmap[row.bus1] = row.bus0
-                    if distance_bus_0 <= length / 1e3:
+                    if distance_bus_0 < length / 1e3:
+                        # line will connected to transformer as
+                        # <= 1m
                         busmap[row.bus0] = transformer_node
                         busmap[row.bus1] = transformer_node
                 elif distance_bus_0 > distance_bus_1:
                     busmap[row.bus0] = row.bus1
-                    if distance_bus_1 <= length / 1e3:
+                    if distance_bus_1 < length / 1e3:
                         busmap[row.bus0] = transformer_node
                         busmap[row.bus1] = transformer_node
                 else:
