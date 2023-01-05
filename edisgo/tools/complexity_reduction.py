@@ -1,3 +1,4 @@
+import logging
 import os
 
 from copy import deepcopy
@@ -7,12 +8,14 @@ import pandas as pd
 
 from edisgo.network.components import Switch
 
+logger = logging.getLogger(__name__)
+
 
 def remove_1m_lines_from_edisgo(edisgo):
     """
     Method to remove 1m lines to reduce size of edisgo object.
     """
-    print("Removing 1m lines for grid {}".format(repr(edisgo)))
+    logger.info("Removing 1m lines for grid {}".format(repr(edisgo)))
 
     # close switches such that lines with connected switches are not removed
     switches = [
@@ -49,7 +52,7 @@ def remove_1m_end_line(edisgo, line):
     else:
         end_bus = None
         neighbor_bus = None
-        print("No end bus found. Implement method.")
+        logger.info("No end bus found. Implement method.")
         return
     # Move connected elements of end bus to the other bus
     connected_elements = edisgo.topology.get_connected_components_from_bus(
@@ -66,7 +69,7 @@ def remove_1m_end_line(edisgo, line):
             )
     # remove line
     edisgo.topology.remove_line(line.name)
-    print("{} removed.".format(line.name))
+    logger.info("{} removed.".format(line.name))
 
 
 def extract_feeders_nx(
@@ -102,7 +105,7 @@ def extract_feeders_nx(
                         "flexibility_bands",
                     ],
                 )
-                print(f"Saved feeder: {feeder_id} to {export_dir}")
+                logger.info(f"Saved feeder: {feeder_id} to {export_dir}")
             feeder_id += 1
             return edisgo_feeder
         return None
