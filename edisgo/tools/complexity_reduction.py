@@ -108,7 +108,12 @@ def extract_feeders_nx(
                 logger.info(f"Saved feeder: {feeder_id} to {export_dir}")
             feeder_id += 1
             return edisgo_feeder
-        return None
+        else:
+            logger.info(
+                f"Feeder {feeder_id} is ignored as it doesn't have any "
+                f"significant subgraph nodes."
+            )
+            return None
 
     edisgo_orig = deepcopy(edisgo_obj)
     buses_with_feeders = edisgo_orig.topology.buses_df
@@ -127,8 +132,12 @@ def extract_feeders_nx(
     graph = edisgo_obj.topology.to_graph()
     subgraphs = list(graph.subgraph(c) for c in nx.connected_components(graph))
     feeders = []
+    ignored_feeder = []
+    if only_flex_ev:
+        logger.info("Only flex ev active for feeder extraction")
     for feeder_id, subgraph in enumerate(subgraphs):
         if only_flex_ev:
+
             cp_feeder = edisgo_obj.topology.charging_points_df.loc[
                 edisgo_obj.topology.charging_points_df.bus.isin(list(subgraph.nodes))
                 & edisgo_obj.topology.charging_points_df.sector.isin(
@@ -154,8 +163,12 @@ def extract_feeders_nx(
                 buses_with_feeders=buses_with_feeders,
                 flexible_loads=flexible_loads,
             )
-        if feeder:
+        if feeder is None:
+            ignored_feeder += [str(feeder_id)]
+        else:
             feeders.append(feeder)
+
+    logger.info(f"Ignored feeder: {', '.join(ignored_feeder)}.")
     return feeders, buses_with_feeders
 
 
