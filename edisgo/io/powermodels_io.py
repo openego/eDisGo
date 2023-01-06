@@ -710,13 +710,13 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
     tap = branches.tap_ratio.fillna(1)
     shift = branches.phase_shift.fillna(0)
     max_r = np.round(
-        max(branches.r_pu.loc[branches.r_pu < branches.r_pu.quantile(0.998)]), 4
+        max(branches.r_pu.loc[branches.r_pu < branches.r_pu.quantile(0.998)]), 6
     )
     min_r = np.round(
         min(branches.r_pu.loc[branches.r_pu > branches.r_pu.quantile(0.002)]), 6
     )
     max_x = np.round(
-        max(branches.x_pu.loc[branches.x_pu < branches.x_pu.quantile(0.998)]), 4
+        max(branches.x_pu.loc[branches.x_pu < branches.x_pu.quantile(0.998)]), 6
     )
     min_x = np.round(
         min(branches.x_pu.loc[branches.x_pu > branches.x_pu.quantile(0.002)]), 6
@@ -724,7 +724,10 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
     for branch_i in np.arange(len(branches.index)):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
-        if branches.r_pu[branch_i] > np.round(branches.r_pu.quantile(0.998), 4):
+        # only modify r and x values if values are too small for Gurobi (i.e. < 1e-6)
+        if (np.round(max_r, 6) == 0) & (
+            branches.r_pu[branch_i] > np.round(branches.r_pu.quantile(0.998), 4)
+        ):
             logger.warning(
                 "Resistance of branch {} is higher than {} p.u. Resistance "
                 "will be set to {} p.u. for optimization process.".format(
@@ -734,7 +737,9 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
                 )
             )
             r = min(branches.r_pu[branch_i], max_r)
-        elif branches.r_pu[branch_i] < np.round(branches.r_pu.quantile(0.002), 6):
+        elif (np.round(min_r, 6) == 0) & (
+            branches.r_pu[branch_i] < np.round(branches.r_pu.quantile(0.002), 6)
+        ):
             logger.warning(
                 "Resistance of branch {} is smaller than {} p.u. Resistance "
                 "will be set to {} p.u. for optimization process.".format(
@@ -746,7 +751,9 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
             r = max(branches.r_pu[branch_i], min_r)
         else:
             r = branches.r_pu[branch_i]
-        if branches.x_pu[branch_i] > np.round(branches.x_pu.quantile(0.998), 4):
+        if (np.round(max_x, 6) == 0) & (
+            branches.x_pu[branch_i] > np.round(branches.x_pu.quantile(0.998), 4)
+        ):
             logger.warning(
                 "Reactance of branch {} is higher than {} p.u. Reactance "
                 "will be set to {} p.u. for optimization process.".format(
@@ -756,7 +763,9 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
                 )
             )
             x = min(branches.x_pu[branch_i], max_x)
-        elif branches.x_pu[branch_i] < np.round(branches.x_pu.quantile(0.002), 6):
+        elif (np.round(min_x, 6) == 0) & (
+            branches.x_pu[branch_i] < np.round(branches.x_pu.quantile(0.002), 6)
+        ):
             logger.warning(
                 "Reactance of branch {} is smaller than {} p.u. Reactance "
                 "will be set to {} p.u. for optimization process.".format(
