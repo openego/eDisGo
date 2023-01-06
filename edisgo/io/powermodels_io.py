@@ -727,7 +727,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
         if branches.r_pu[branch_i] > np.round(branches.r_pu.quantile(0.998), 4):
             logger.warning(
                 "Resistance of branch {} is higher than {} p.u. Resistance "
-                "will be set to {} for optimization process.".format(
+                "will be set to {} p.u. for optimization process.".format(
                     branches.index[branch_i],
                     np.round(branches.r_pu.quantile(0.998), 4),
                     max_r,
@@ -737,7 +737,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
         elif branches.r_pu[branch_i] < np.round(branches.r_pu.quantile(0.002), 6):
             logger.warning(
                 "Resistance of branch {} is smaller than {} p.u. Resistance "
-                "will be set to {} for optimization process.".format(
+                "will be set to {} p.u. for optimization process.".format(
                     branches.index[branch_i],
                     np.round(branches.r_pu.quantile(0.002), 6),
                     min_r,
@@ -749,7 +749,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
         if branches.x_pu[branch_i] > np.round(branches.x_pu.quantile(0.998), 4):
             logger.warning(
                 "Reactance of branch {} is higher than {} p.u. Reactance "
-                "will be set to {} for optimization process.".format(
+                "will be set to {} p.u. for optimization process.".format(
                     branches.index[branch_i],
                     np.round(branches.x_pu.quantile(0.998), 4),
                     max_x,
@@ -759,7 +759,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
         elif branches.x_pu[branch_i] < np.round(branches.x_pu.quantile(0.002), 6):
             logger.warning(
                 "Reactance of branch {} is smaller than {} p.u. Reactance "
-                "will be set to {} for optimization process.".format(
+                "will be set to {} p.u. for optimization process.".format(
                     branches.index[branch_i],
                     np.round(branches.x_pu.quantile(0.002), 6),
                     min_x,
@@ -1007,9 +1007,6 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         p_max = flex_bands_df["upper_power"][emob_df.index[cp_i]]
         e_min = flex_bands_df["lower_energy"][emob_df.index[cp_i]]
         e_max = flex_bands_df["upper_energy"][emob_df.index[cp_i]]
-        # p_max.loc[p_max < tol] = 0
-        # e_min.loc[e_min < tol] = 0
-        # e_max.loc[e_max < tol] = 0
         pm["electromobility"][str(cp_i + 1)] = {
             "pd": 0,
             "qd": 0,
