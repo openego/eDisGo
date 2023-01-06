@@ -324,32 +324,32 @@ def setup_model(
             (default: None)
         charging_efficiency: (default: 0.9)
             Depends on Simbev data
-        energy_level_start_ev : (default: None)
-        charging_start_ev : (default: None
-            starting value after 1st Iteration, dynamic
-        charging_starts_hp : (default: {"hp": None, "tes": None}
-            starting value after 1st Iteration, dynamic
-        energy_level_start_hp : (default: None
-             starting value after 1st Iteration, dynamic
-        energy_level_end_ev : (default: None
-        energy_level_end_hp : (default: None
-        energy_level_beginning_ev : (default: None
+
+        energy_level_starts : dict('ev':pd.Series, 'tes':pd.Series)
+            initial energy level of component (first timestep)
+        charging_starts : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
+            initial charging value of component (first timestep)
+
+        energy_level_end_ev : (default: None)
+        energy_level_end_hp : (default: None)
+        energy_level_beginning_ev : (default: None)
             wurde eingeführt um Differenz zu referenzladen zu beheben
             letzter Iterationsschritt auf mean energyband if True
-        energy_level_beginning_hp : (default: None
+        energy_level_beginning_hp : (default: None)
             wurde eingeführt um Differenz zu referenzladen zu beheben
-        fix_relative_soc : (default: 0.5
+
+        fix_relative_soc : (default: 0.5)
             Wärmespeicher, bei Bander vermutlich mean
-        delta_min : (default: 0.9
-        delta_max : (default: 0.1
-        v_min : (default: 0.9
-        v_max : (default: 1.1
+        delta_min : (default: 0.9)
+        delta_max : (default: 0.1)
+        v_min : (default: 0.9)
+        v_max : (default: 1.1)
             Spannungsgrenzwerte
-        thermal_limit : (default: 1.0
+        thermal_limit : (default: 1.0)
             für Lines und Transformer
         v_slack : (default: fixed_parameters["v_nom"]
             Spannungsnennwert am Umspannwerk
-        load_factor_rings : (default: 1.0
+        load_factor_rings : (default: 1.0)
             n-1 kriterium bei 0.5
         print_model : (default: False)
 
@@ -449,10 +449,12 @@ def setup_model(
             charging_efficiency=fixed_parameters[
                 "edisgo_object"
             ].electromobility.eta_charging_points,
-            energy_level_start=kwargs.get("energy_level_start_ev", None),
+            # energy_level_start=kwargs.get("energy_level_start_ev", None),
+            energy_level_starts=kwargs.get("energy_level_start", {"ev": None}),
             energy_level_end=kwargs.get("energy_level_end_ev", None),
             energy_level_beginning=kwargs.get("energy_level_beginning_ev", None),
-            charging_start=kwargs.get("charging_start_ev", None),
+            # charging_start=kwargs.get("charging_start_ev", None),
+            charging_starts=kwargs.get("charging_starts", {"ev": None}),
         )
 
     if fixed_parameters["optimize_hp"]:
@@ -460,10 +462,11 @@ def setup_model(
         model = add_heat_pump_model(
             model=model,
             fixed_parameters=fixed_parameters,
-            energy_level_start=kwargs.get("energy_level_start_hp", None),
+            # energy_level_start=kwargs.get("energy_level_start_hp", None),
+            energy_level_starts=kwargs.get("energy_level_start", {"tes": None}),
             energy_level_end=kwargs.get("energy_level_end_hp", None),
             energy_level_beginning=kwargs.get("energy_level_beginning_hp", None),
-            charging_starts=kwargs.get("charging_starts_hp", {"hp": None, "tes": None}),
+            charging_starts=kwargs.get("charging_starts", {"hp": None, "tes": None}),
         )
 
     if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
@@ -745,17 +748,27 @@ def add_grid_model_lopf(
 def add_ev_model_bands(
     model,
     fixed_parameters,
-    # grid_object,
     charging_efficiency,
-    energy_level_start=None,
+    energy_level_starts={"ev": None},
     energy_level_end=None,
     energy_level_beginning=None,
-    charging_start=None,
+    charging_starts={"ev": None},
 ):
     """
     Method to add sets, variables and constraints for including EV flexibility in terms
     of energy bands.
-    Todo: add docstrings
+
+    Parameters
+    ----------
+    model :
+    fixed_parameters :
+    energy_level_starts : dict('ev':pd.Series)
+    energy_level_end :
+    energy_level_beginning :
+    charging_starts : dict('ev':pd.Series)
+
+    Returns
+    -------
     """
     # Sets and parameters
     model.flexible_charging_points_set = pm.Set(
@@ -801,10 +814,10 @@ def add_ev_model_bands(
     )
     model = add_rolling_horizon(
         comp_type="ev",
-        charging_starts={"ev": charging_start},
+        charging_starts=charging_starts,
         energy_level_beginning=energy_level_beginning,
         energy_level_end=energy_level_end,
-        energy_level_start=energy_level_start,
+        energy_level_starts=energy_level_starts,
         model=model,
     )
 
@@ -816,18 +829,18 @@ def add_rolling_horizon(
     charging_starts,
     energy_level_beginning,
     energy_level_end,
-    energy_level_start,
+    energy_level_starts,
     model,
 ):
     """
 
     Parameters
     ----------
-    comp_type :
-    charging_starts :
+    comp_type : "ev" or "hp"
+    charging_starts : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
     energy_level_beginning :
     energy_level_end :
-    energy_level_start :
+    energy_level_starts : dict('ev':pd.Series, 'tes':pd.Series)
     model :
 
     Returns
@@ -842,7 +855,7 @@ def add_rolling_horizon(
             f"energy_level_start_{energy_attr}",
             pm.Param(
                 flex_set,
-                initialize=energy_level_start,
+                initialize=energy_level_starts[energy_attr],
                 mutable=True,
                 within=pm.Any,
             ),
@@ -875,7 +888,7 @@ def add_rolling_horizon(
                 rule=globals()[f"fixed_energy_level_{energy_attr}"],
             ),
         )
-        if energy_level_start is None:
+        if energy_level_starts[energy_attr] is None:
             getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").deactivate()
         else:
             getattr(model, f"InitialEnergyLevelStart{energy_attr.upper()}").deactivate()
@@ -928,6 +941,7 @@ def add_rolling_horizon(
                 getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
             elif comp_type(energy_level_end) == bool:
                 getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
+
     # set initial charging power
     for charging_attr in charging_attrs[comp_type.lower()]:
         setattr(
@@ -988,7 +1002,7 @@ def get_attrs_rolling_horizon(comp_type, model):
 def add_heat_pump_model(
     model,
     fixed_parameters,
-    energy_level_start=None,
+    energy_level_starts={"tes": None},
     energy_level_end=None,
     energy_level_beginning=None,
     charging_starts={"hp": None, "tes": None},
@@ -999,10 +1013,10 @@ def add_heat_pump_model(
     ----------
     model :
     fixed_parameters :
-    energy_level_start :
+    energy_level_starts : dict('ev':pd.Series, 'tes':pd.Series)
     energy_level_end :
     energy_level_beginning :
-    charging_starts :
+    charging_starts : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
 
     Returns
     -------
@@ -1069,7 +1083,7 @@ def add_heat_pump_model(
         charging_starts=charging_starts,
         energy_level_beginning=energy_level_beginning,
         energy_level_end=energy_level_end,
-        energy_level_start=energy_level_start,
+        energy_level_starts=energy_level_starts,
         model=model,
     )
     return model
@@ -1091,12 +1105,14 @@ def update_model(
     timesteps :
     fixed_parameters :
     kwargs :
-        energy_level_start_tes: default None
-        energy_level_start_ : default None
-        energy_level_start_ : default None
         energy_level_beginning : default None
         energy_level_end_tes : default None
-        charging_starts : default None
+        energy_level_end_ev : default None
+
+        charging_start : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
+            starting value after 1st Iteration, dynamic
+        energy_level_starts : dict('ev':pd.Series, 'tes':pd.Series)
+            starting value after 1st Iteration, dynamic
 
     Returns
     -------
@@ -1190,39 +1206,47 @@ def update_rolling_horizon(comp_type, model, **kwargs):
     comp_type :
     model :
     kwargs :
-        energy_level_start_tes: default None
-        energy_level_start_ev : default None
         energy_level_beginning : default None
         energy_level_end_tes : default None
         energy_level_end_ev : default None
-        charging_starts : default None
+
+        charging_start : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
+        energy_level_start : dict('ev':pd.Series, 'tes':pd.Series)
     Returns
     -------
 
     """
     charging_attrs, energy_attrs, flex_set = get_attrs_rolling_horizon(comp_type, model)
+
+    # set energy level start
     for energy_attr in energy_attrs[comp_type.lower()]:
-        # set initial energy level
-        energy_level_start = kwargs.get(f"energy_level_start_{energy_attr}", None)
+
+        energy_level_starts = kwargs.get(
+            "energy_level_starts", {"ev": None, "tes": None}
+        )
         # if run is new start of era deactivate initial energy level,
         # otherwise activate initial energy and charging
-        if energy_level_start is None:
+        if energy_level_starts[energy_attr] is None:
             getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").deactivate()
             getattr(model, f"InitialEnergyLevelStart{energy_attr.upper()}").activate()
         else:
             for comp in flex_set:
                 getattr(model, f"energy_level_start_{energy_attr}")[comp].set_value(
-                    energy_level_start[comp]
+                    energy_level_starts[energy_attr][comp]
                 )
             getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").activate()
             getattr(model, f"InitialEnergyLevelStart{energy_attr.upper()}").deactivate()
+
         # set energy level beginning if necessary
+        # this is implemented to compensate difference to reference charging
+        # scenario
         energy_level_beginning = kwargs.get("energy_level_beginning", None)
         if energy_level_beginning is not None:
             for comp in flex_set:
                 getattr(model, f"energy_level_beginning_{energy_attr}")[comp].set_value(
                     energy_level_beginning[comp]
                 )
+
         # set final energy level and if necessary charging power
         energy_level_end = kwargs.get(f"energy_level_end_{energy_attr}", None)
         if energy_level_end is None:
@@ -1238,13 +1262,22 @@ def update_rolling_horizon(comp_type, model, **kwargs):
                 )
             getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").activate()
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
-    # set initial charging
+
+    # set initial charging value
     for charging_attr in charging_attrs[comp_type.lower()]:
-        charging_initial = kwargs.get("charging_starts", {charging_attr: None})
-        if charging_initial[charging_attr] is not None:
+        charging_starts = kwargs.get(
+            "charging_starts",
+            {
+                "ev": None,
+                "tes": None,
+                "hp": None,
+            },
+        )
+
+        if charging_starts[charging_attr] is not None:
             for comp in flex_set:
                 getattr(model, f"charging_initial_{charging_attr}")[comp].set_value(
-                    charging_initial[charging_attr][comp]
+                    charging_starts[charging_attr][comp]
                 )
             getattr(model, f"InitialChargingPower{charging_attr.upper()}").activate()
         # remove as not needed anymore with new formulation
