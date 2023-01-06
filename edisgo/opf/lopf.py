@@ -1289,7 +1289,7 @@ def update_rolling_horizon(comp_type, model, **kwargs):
 
 
 def optimize(model, solver, load_solutions=True, mode=None,
-             tee=True, logfile=None, **kwargs):
+             tee=True, **kwargs):
     """
     Method to run the optimization and extract the results.
 
@@ -1302,18 +1302,21 @@ def optimize(model, solver, load_solutions=True, mode=None,
     mode : str
         directory to which results are saved, default None will no saving of
         the results
-    logfile : str
-        dir/name of logfile for solver
+    kwargs
+        logfile : str
+            dir/name of logfile for solver
+        lp_filename : str
+            dir/name of logfile for solver
 
     Returns
     -------
 
     """
 
-    filename = kwargs.get("lp_filename", False)
-    if filename:
-        logger.info(f"Save lp file to: {filename}")
-        model.write(filename=str(filename), io_options={"symbolic_solver_labels": True})
+    lp_filename = kwargs.get("lp_filename", None)
+    if lp_filename is not None:
+        logger.info(f"Save lp file to: {lp_filename}")
+        model.write(filename=str(lp_filename), io_options={"symbolic_solver_labels": True})
 
     logger.info("Starting optimisation")
 
@@ -1325,7 +1328,7 @@ def optimize(model, solver, load_solutions=True, mode=None,
     results = opt.solve(model,
                         tee=tee,
                         load_solutions=load_solutions,
-                        logfile=logfile)
+                        logfile=kwargs.get("logfile", None))
 
     if (results.solver.status == SolverStatus.ok) and (
         results.solver.termination_condition == TerminationCondition.optimal
