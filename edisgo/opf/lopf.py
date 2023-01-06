@@ -1288,7 +1288,8 @@ def update_rolling_horizon(comp_type, model, **kwargs):
     return model
 
 
-def optimize(model, solver, load_solutions=True, mode=None, **kwargs):
+def optimize(model, solver, load_solutions=True, mode=None, logfile=None,
+                                                                    **kwargs):
     """
     Method to run the optimization and extract the results.
 
@@ -1301,6 +1302,8 @@ def optimize(model, solver, load_solutions=True, mode=None, **kwargs):
     mode : str
         directory to which results are saved, default None will no saving of
         the results
+    logfile : str
+        dir/name of logfile for solver
 
     Returns
     -------
@@ -1319,7 +1322,10 @@ def optimize(model, solver, load_solutions=True, mode=None, **kwargs):
     opt.options["threads"] = 16
 
     # Optimize
-    results = opt.solve(model, tee=True, load_solutions=load_solutions)
+    results = opt.solve(model,
+                        tee=True,
+                        load_solutions=load_solutions,
+                        logfile=logfile)
 
     if (results.solver.status == SolverStatus.ok) and (
         results.solver.termination_condition == TerminationCondition.optimal
