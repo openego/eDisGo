@@ -1288,8 +1288,8 @@ def update_rolling_horizon(comp_type, model, **kwargs):
     return model
 
 
-def optimize(model, solver, load_solutions=True, mode=None, logfile=None,
-                                                                    **kwargs):
+def optimize(model, solver, load_solutions=True, mode=None,
+             tee=True, logfile=None, **kwargs):
     """
     Method to run the optimization and extract the results.
 
@@ -1323,7 +1323,7 @@ def optimize(model, solver, load_solutions=True, mode=None, logfile=None,
 
     # Optimize
     results = opt.solve(model,
-                        tee=True,
+                        tee=tee,
                         load_solutions=load_solutions,
                         logfile=logfile)
 
