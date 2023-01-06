@@ -121,6 +121,7 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
     dsm_df.bus = edisgo_obj.topology.loads_df.bus[0 : len(dsm_loads)].values
     dsm_df.type = "conventional_load"
     dsm_df.sector = "industrial"
+    dsm_df.p_set = dsm_data.p_nom[0:amount_dsm_loads].values
     dsm_df.voltage_level = edisgo_obj.topology.loads_df.voltage_level[
         0 : len(dsm_loads)
     ].values
@@ -154,15 +155,17 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
     for factor in simultaneties:
         edisgo_obj.config._data["worst_case_scale_factor"][factor] = 0
 
+    edisgo_obj.set_time_series_worst_case_analysis()
     edisgo_obj.reinforce()
 
-    for factor in simultaneties:
-        edisgo_obj.config._data["worst_case_scale_factor"][
-            factor
-        ] = edisgo_obj_copy.config._data["worst_case_scale_factor"][factor]
+    edisgo_obj_copy.topology.lines_df = edisgo_obj.topology.lines_df
+    edisgo_obj_copy.topology.transformers_df = edisgo_obj.topology.transformers_df
+    edisgo_obj_copy.topology.transformers_hvmv_df = (
+        edisgo_obj.topology.transformers_hvmv_df
+    )
 
     if save_edisgo:
-        edisgo_obj.save(
+        edisgo_obj_copy.save(
             os.path.join(f"{directory}"),
             save_results=False,
             save_timeseries=True,
