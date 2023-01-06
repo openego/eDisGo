@@ -90,24 +90,30 @@ def extract_feeders_nx(
                 feeder_id,
                 flexible_loads=flexible_loads,
             )
-            if save_dir:
-                export_dir = save_dir / "feeder" / f"{feeder_id:02}"
-                os.makedirs(export_dir, exist_ok=True)
-                edisgo_feeder.save(
-                    export_dir,
-                    save_topology=True,
-                    save_timeseries=True,
-                    save_heatpump=True,
-                    save_electromobility=True,
-                    electromobility_attributes=[
-                        "integrated_charging_parks_df",
-                        "simbev_config_df",
-                        "flexibility_bands",
-                    ],
-                )
-                logger.info(f"Saved feeder: {feeder_id} to {export_dir}")
-            feeder_id += 1
-            return edisgo_feeder
+            if edisgo_feeder is None:
+                # edisgo_feeder == None if loads_df is empty
+                return None
+
+            else:
+                if save_dir:
+                    export_dir = save_dir / "feeder" / f"{feeder_id:02}"
+                    os.makedirs(export_dir, exist_ok=True)
+                    edisgo_feeder.save(
+                        export_dir,
+                        save_topology=True,
+                        save_timeseries=True,
+                        save_heatpump=True,
+                        save_electromobility=True,
+                        electromobility_attributes=[
+                            "integrated_charging_parks_df",
+                            "simbev_config_df",
+                            "flexibility_bands",
+                        ],
+                    )
+                    logger.info(f"Saved feeder: {feeder_id} to {export_dir}")
+                feeder_id += 1
+                return edisgo_feeder
+
         else:
             logger.info(
                 f"Feeder {feeder_id} is ignored as it doesn't have any "
@@ -199,6 +205,8 @@ def create_feeder_edisgo_object(
             attr_new = attr_old.loc[
                 attr_old.bus0.isin(feeder_buses) & attr_old.bus1.isin(feeder_buses)
             ]
+            if attr_new.empty:
+                logger.info(f"{attr_name} of feeder {feeder_id} is empty.")
             setattr(edisgo_feeder.topology, attr_name, attr_new)
 
     attr_list = [
@@ -212,9 +220,12 @@ def create_feeder_edisgo_object(
         attr_old = getattr(edisgo_obj.topology, attr_name)
         if not attr_old.empty:
             attr_new = attr_old.loc[attr_old.bus.isin(feeder_buses)]
+            if attr_new.empty:
+                logger.info(f"{attr_name} of feeder {feeder_id} is empty.")
             setattr(edisgo_feeder.topology, attr_name, attr_new)
 
     # get switches connected to a line of this feeder with open bus
+    # TODO switches get lost?!
     edisgo_feeder.topology.switches_df = edisgo_obj.topology.switches_df.loc[
         edisgo_obj.topology.switches_df.branch.isin(
             edisgo_feeder.topology.lines_df.index
@@ -240,6 +251,7 @@ def create_feeder_edisgo_object(
         attr_old = getattr(edisgo_obj.timeseries, attr_name)
         if not attr_old.empty:
 
+            # uncommented to keep all loads ts
             # # get ids for attribute but remove flexible loads
             # if isinstance(flexible_loads, pd.DataFrame) & (id_attr == "loads_df"):
             #     id_attr = getattr(edisgo_feeder.topology, id_attr)
@@ -249,11 +261,13 @@ def create_feeder_edisgo_object(
             #     )
             # else:
             #     id_attr = getattr(edisgo_feeder.topology, id_attr)
-            # keep all loads ts
+
             id_attr = getattr(edisgo_feeder.topology, id_attr)
 
             # reduce attribute
             attr_new = attr_old.loc[:, id_attr.index]
+            if attr_new.empty:
+                logger.info(f"{attr_name} of feeder {feeder_id} is empty.")
             # set attribute
             setattr(edisgo_feeder.timeseries, attr_name, attr_new)
 
@@ -283,6 +297,8 @@ def create_feeder_edisgo_object(
             else:
                 attr_new = attr_old.loc[:, hp_ids]
 
+            if attr_new.empty:
+                logger.info(f"{attr_name} of feeder {feeder_id} is empty.")
             setattr(edisgo_feeder.heat_pump, attr_name, attr_new)
 
     return edisgo_feeder
