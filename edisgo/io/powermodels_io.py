@@ -550,27 +550,27 @@ def _build_bus(psa_net, pm, flexible_loads):
             "base_kv": psa_net.buses.v_nom[bus_i],
             "grid_level": grid_level[psa_net.buses.v_nom[bus_i]],
         }
-    dsm_df = psa_net.loads.loc[flexible_loads]
-    for dsm_i in np.arange(len(dsm_df.index)):
-        idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
-        pm["bus"][str(dsm_i + len(psa_net.buses.index) + 1)] = {
-            "index": dsm_i + len(psa_net.buses.index) + 1,
-            "bus_i": dsm_i + len(psa_net.buses.index) + 1,
-            "zone": 1,
-            "bus_type": bus_types_int[idx_bus],
-            "vmax": v_max[idx_bus],
-            "vmin": v_min[idx_bus],
-            "va": 0,
-            "vm": 1,
-            "name": psa_net.buses.index[idx_bus] + "_dsm",
-            "base_kv": psa_net.buses.v_nom[idx_bus],
-            "grid_level": grid_level[psa_net.buses.v_nom[idx_bus]],
-        }
+    # dsm_df = psa_net.loads.loc[flexible_loads]
+    # for dsm_i in np.arange(len(dsm_df.index)):
+    #     idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
+    #     pm["bus"][str(dsm_i + len(psa_net.buses.index) + 1)] = {
+    #         "index": dsm_i + len(psa_net.buses.index) + 1,
+    #         "bus_i": dsm_i + len(psa_net.buses.index) + 1,
+    #         "zone": 1,
+    #         "bus_type": bus_types_int[idx_bus],
+    #         "vmax": v_max[idx_bus],
+    #         "vmin": v_min[idx_bus],
+    #         "va": 0,
+    #         "vm": 1,
+    #         "name": psa_net.buses.index[idx_bus] + "_dsm",
+    #         "base_kv": psa_net.buses.v_nom[idx_bus],
+    #         "grid_level": grid_level[psa_net.buses.v_nom[idx_bus]],
+    #     }
     for stor_i in np.arange(len(psa_net.storage_units.index)):
         idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
-        pm["bus"][str(stor_i + len(psa_net.buses.index) + len(dsm_df.index) + 1)] = {
-            "index": stor_i + len(psa_net.buses.index) + len(dsm_df.index) + 1,
-            "bus_i": stor_i + len(psa_net.buses.index) + len(dsm_df.index) + 1,
+        pm["bus"][str(stor_i + len(psa_net.buses.index) + 1)] = {
+            "index": stor_i + len(psa_net.buses.index) + 1,
+            "bus_i": stor_i + len(psa_net.buses.index) + 1,
             "zone": 1,
             "bus_type": bus_types_int[idx_bus],
             "vmax": v_max[idx_bus],
@@ -709,6 +709,8 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
     transformer = ~branches.tap_ratio.isna()
     tap = branches.tap_ratio.fillna(1)
     shift = branches.phase_shift.fillna(0)
+    # ToDo: wir wollen hier zusätzlich die kleinsten Werte größer und kleiner 0!!
+    # und die dann auf den nächsthöheren Wert setzen
     max_r = np.round(
         max(branches.r_pu.loc[branches.r_pu < branches.r_pu.quantile(0.998)]), 6
     )
@@ -725,7 +727,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
         # only modify r and x values if values are too small for Gurobi (i.e. < 1e-6)
-        if (np.round(max_r, 6) == 0) & (
+        if (np.round(max_r, 4) > 10) & (
             branches.r_pu[branch_i] > np.round(branches.r_pu.quantile(0.998), 4)
         ):
             logger.warning(
@@ -737,7 +739,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
                 )
             )
             r = min(branches.r_pu[branch_i], max_r)
-        elif (np.round(min_r, 6) == 0) & (
+        elif (np.round(min_r, 4) <= 0.0001) & (
             branches.r_pu[branch_i] < np.round(branches.r_pu.quantile(0.002), 6)
         ):
             logger.warning(
@@ -751,7 +753,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
             r = max(branches.r_pu[branch_i], min_r)
         else:
             r = branches.r_pu[branch_i]
-        if (np.round(max_x, 6) == 0) & (
+        if (np.round(max_x, 4) > 10) & (
             branches.x_pu[branch_i] > np.round(branches.x_pu.quantile(0.998), 4)
         ):
             logger.warning(
@@ -763,7 +765,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
                 )
             )
             x = min(branches.x_pu[branch_i], max_x)
-        elif (np.round(min_x, 6) == 0) & (
+        elif (np.round(min_x, 4) <= 0.0001) & (
             branches.x_pu[branch_i] < np.round(branches.x_pu.quantile(0.002), 6)
         ):
             logger.warning(
@@ -801,41 +803,41 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
             "index": branch_i + 1,
         }
 
-    dsm_df = psa_net.loads.loc[flexible_loads]
-    for dsm_i in np.arange(len(dsm_df.index)):
-        idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
-        pm["branch"][str(dsm_i + len(branches.index) + 1)] = {
-            "name": "dsm_branch_" + str(dsm_i + 1),
-            "br_r": 0,
-            "br_x": 0,
-            "f_bus": idx_bus,
-            "t_bus": dsm_i + len(psa_net.buses.index) + 1,
-            "g_to": 0,
-            "g_fr": 0,
-            "b_to": 0,
-            "b_fr": 0,
-            "shift": 0,
-            "br_status": 1.0,
-            "rate_a": 250 / s_base,
-            "rate_b": 250 / s_base,
-            "rate_c": 250 / s_base,
-            "angmin": -np.pi / 6,
-            "angmax": np.pi / 6,
-            "transformer": False,
-            "tap": 1,
-            "length": 0,
-            "cost": 0,
-            "index": dsm_i + len(branches.index) + 1,
-        }
+    # dsm_df = psa_net.loads.loc[flexible_loads]
+    # for dsm_i in np.arange(len(dsm_df.index)):
+    #     idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
+    #     pm["branch"][str(dsm_i + len(branches.index) + 1)] = {
+    #         "name": "dsm_branch_" + str(dsm_i + 1),
+    #         "br_r": 0,
+    #         "br_x": 0,
+    #         "f_bus": idx_bus,
+    #         "t_bus": dsm_i + len(psa_net.buses.index) + 1,
+    #         "g_to": 0,
+    #         "g_fr": 0,
+    #         "b_to": 0,
+    #         "b_fr": 0,
+    #         "shift": 0,
+    #         "br_status": 1.0,
+    #         "rate_a": 250 / s_base,
+    #         "rate_b": 250 / s_base,
+    #         "rate_c": 250 / s_base,
+    #         "angmin": -np.pi / 6,
+    #         "angmax": np.pi / 6,
+    #         "transformer": False,
+    #         "tap": 1,
+    #         "length": 0,
+    #         "cost": 0,
+    #         "index": dsm_i + len(branches.index) + 1,
+    #     }
 
     for stor_i in np.arange(len(psa_net.storage_units.index)):
         idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
-        pm["branch"][str(stor_i + len(branches.index) + len(flexible_loads) + 1)] = {
+        pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
             "br_r": 0.1,  # ToDo
             "br_x": 0,
             "f_bus": idx_bus,
-            "t_bus": stor_i + len(psa_net.buses.index) + len(flexible_loads) + 1,
+            "t_bus": stor_i + len(psa_net.buses.index) + 1,
             "g_to": 0,
             "g_fr": 0,
             "b_to": 0,
@@ -851,7 +853,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
             "tap": 1,
             "length": 0,
             "cost": 0,
-            "index": stor_i + len(branches.index) + len(flexible_loads) + 1,
+            "index": stor_i + len(branches.index) + 1,
         }
 
 
@@ -950,7 +952,7 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, s_base, flexible_loads):
             "discharge_rating": psa_net.storage_units.p_nom[stor_i] / s_base,
             "charge_efficiency": 0.9,  # ToDo
             "discharge_efficiency": 0.9,  # ToDo
-            "storage_bus": stor_i + len(psa_net.buses.index) + len(flexible_loads) + 1,
+            "storage_bus": stor_i + len(psa_net.buses.index) + 1,
             "name": psa_net.storage_units.index[stor_i],
             "status": True,
             "index": stor_i + 1,
@@ -1203,7 +1205,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
             "e_max": e_max[0] / s_base,
             "charge_efficiency": 1,
             "discharge_efficiency": 1,
-            "dsm_bus": dsm_i + len(psa_net.buses.index) + 1,
+            "dsm_bus": idx_bus,
             "name": dsm_df.index[dsm_i],
             "index": dsm_i + 1,
         }

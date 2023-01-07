@@ -64,70 +64,150 @@ def create_storage_data(edisgo_obj, directory=None, save_edisgo=False):
 
 
 def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo=False):
-    amount_dsm_loads = 5
+    lv_loads = edisgo_obj.topology.loads_df.loc[
+        edisgo_obj.topology.loads_df.voltage_level == "lv"
+    ]
+    # amount of dsm loads
+    amount_retail_dsm_loads = int(
+        np.ceil(0.25 * len(lv_loads.loc[lv_loads.sector == "retail"]))
+    )
+    amount_industrial_dsm_loads = int(
+        np.ceil(0.25 * len(lv_loads.loc[lv_loads.sector == "industrial"]))
+    )
+    amount_mv_dsm_loads = int(
+        np.ceil(0.1 * (amount_retail_dsm_loads + amount_industrial_dsm_loads))
+    )
+    # name of lv loads to be replaced by dsm loads
+    retail_dsm_loads = lv_loads.loc[lv_loads.sector == "retail"][
+        0:amount_retail_dsm_loads
+    ].index.values
+    industrial_dsm_loads = lv_loads.loc[lv_loads.sector == "industrial"][
+        0:amount_industrial_dsm_loads
+    ].index.values
+
     dsm_data["name"] = [str("dsm_load_" + str(i)) for i in range(len(dsm_data))]
-    # ToDo: richtige DSM loads anhängen
+    # p_max
     data = [
         np.fromstring(dsm_data.p_max_pu[i].strip("[]"), sep=",")[0 : len(timeindex)]
         * dsm_data.p_nom.iloc[i]
         for i in range(len(dsm_data))
     ]
+    dsm_data["peak_load"] = [max(p) for p in data]
+    lv_data = dsm_data.loc[dsm_data.peak_load < 0.3]
+    mv_data = dsm_data.loc[dsm_data.peak_load >= 0.3]
     df2 = pd.DataFrame(columns=timeindex, index=dsm_data["name"], data=data).transpose()
-    dsm_loads = df2.columns[0:amount_dsm_loads]
-    edisgo_obj.dsm.p_max = df2[dsm_loads]
-
+    # name of dsm loads
+    lv_dsm_loads_retail = lv_data.name[0:amount_retail_dsm_loads].values
+    lv_dsm_loads_industrial = lv_data.name[
+        amount_retail_dsm_loads : amount_retail_dsm_loads + amount_industrial_dsm_loads
+    ].values
+    mv_dsm_loads = mv_data.name[0:amount_mv_dsm_loads].values
+    if amount_mv_dsm_loads > len(mv_data):
+        mv_dsm_loads2 = lv_data.name[len(mv_data) - amount_mv_dsm_loads - 1 : -1].values
+        mv_dsm_loads = np.concatenate([mv_dsm_loads, mv_dsm_loads2])
+    edisgo_obj.dsm.p_max = df2[
+        np.concatenate([lv_dsm_loads_retail, lv_dsm_loads_industrial, mv_dsm_loads])
+    ]
+    # e_max
     data = [
         np.fromstring(dsm_data.e_max_pu[i].strip("[]"), sep=",")[0 : len(timeindex)]
         * dsm_data.e_nom.iloc[i]
         for i in range(len(dsm_data))
     ]
     df2 = pd.DataFrame(columns=timeindex, index=dsm_data["name"], data=data).transpose()
-    edisgo_obj.dsm.e_max = df2[dsm_loads]
-
+    edisgo_obj.dsm.e_max = df2[
+        np.concatenate([lv_dsm_loads_retail, lv_dsm_loads_industrial, mv_dsm_loads])
+    ]
+    # p_min
     data = [
         np.fromstring(dsm_data.p_min_pu[i].strip("[]"), sep=",")[0 : len(timeindex)]
         * dsm_data.p_nom.iloc[i]
         for i in range(len(dsm_data))
     ]
     df2 = pd.DataFrame(columns=timeindex, index=dsm_data["name"], data=data).transpose()
-    edisgo_obj.dsm.p_min = df2[dsm_loads]
-
+    edisgo_obj.dsm.p_min = df2[
+        np.concatenate([lv_dsm_loads_retail, lv_dsm_loads_industrial, mv_dsm_loads])
+    ]
+    # e_min
     data = [
         np.fromstring(dsm_data.e_min_pu[i].strip("[]"), sep=",")[0 : len(timeindex)]
         * dsm_data.e_nom.iloc[i]
         for i in range(len(dsm_data))
     ]
     df2 = pd.DataFrame(columns=timeindex, index=dsm_data["name"], data=data).transpose()
-    edisgo_obj.dsm.e_min = df2[dsm_loads]
-
+    edisgo_obj.dsm.e_min = df2[
+        np.concatenate([lv_dsm_loads_retail, lv_dsm_loads_industrial, mv_dsm_loads])
+    ]
+    # timeseries p
     data = [
         np.fromstring(dsm_data.p_set[i].strip("[]"), sep=",")[0 : len(timeindex)]
         for i in range(len(dsm_data))
     ]
     df2 = pd.DataFrame(columns=timeindex, index=dsm_data["name"], data=data).transpose()
+    # drop lv retail and industrial loads that will be replaced by dsm loads
+    edisgo_obj.timeseries._loads_active_power = (
+        edisgo_obj.timeseries.loads_active_power.drop(
+            np.concatenate([retail_dsm_loads, industrial_dsm_loads]), axis=1
+        )
+    )
+    edisgo_obj.timeseries._loads_reactive_power = (
+        edisgo_obj.timeseries.loads_reactive_power.drop(
+            np.concatenate([retail_dsm_loads, industrial_dsm_loads]), axis=1
+        )
+    )
+    # add lv and mv dsm loads
     edisgo_obj.timeseries._loads_active_power = pd.concat(
         [
             edisgo_obj.timeseries.loads_active_power,
             pd.DataFrame(
-                df2[dsm_loads].values,
+                df2[
+                    np.concatenate(
+                        [lv_dsm_loads_retail, lv_dsm_loads_industrial, mv_dsm_loads]
+                    )
+                ].values,
                 index=edisgo_obj.timeseries.loads_active_power.index,
-                columns=dsm_loads,
+                columns=np.concatenate(
+                    [lv_dsm_loads_retail, lv_dsm_loads_industrial, mv_dsm_loads]
+                ),
             ),
         ],
         axis=1,
     )
 
-    dsm_df = pd.DataFrame(index=dsm_loads, columns=edisgo_obj.topology.loads_df.columns)
-    dsm_df.bus = edisgo_obj.topology.loads_df.bus[0 : len(dsm_loads)].values
-    dsm_df.type = "conventional_load"
-    dsm_df.sector = "industrial"
-    dsm_df.p_set = dsm_data.p_nom[0:amount_dsm_loads].values
-    dsm_df.voltage_level = edisgo_obj.topology.loads_df.voltage_level[
-        0 : len(dsm_loads)
-    ].values
-    edisgo_obj.topology.loads_df = pd.concat([edisgo_obj.topology.loads_df, dsm_df])
-
+    for vl in ["mv", "lv"]:
+        if vl == "mv":
+            dsm_df = pd.DataFrame(
+                index=mv_dsm_loads, columns=edisgo_obj.topology.loads_df.columns
+            )
+            dsm_df.bus = edisgo_obj.topology.buses_df.loc[
+                edisgo_obj.topology.buses_df.v_nom > 0.4
+            ].index.values[0:amount_mv_dsm_loads]
+            dsm_df.p_set = dsm_data.loc[dsm_data.name.isin(mv_dsm_loads)].p_nom.values
+            dsm_df.sector = "industrial"
+        elif vl == "lv":
+            dsm_df = pd.DataFrame(
+                index=np.concatenate([lv_dsm_loads_retail, lv_dsm_loads_industrial]),
+                columns=edisgo_obj.topology.loads_df.columns,
+            )
+            dsm_df.bus = edisgo_obj.topology.loads_df.loc[
+                np.concatenate([retail_dsm_loads, industrial_dsm_loads])
+            ].bus.values
+            dsm_df.p_set = edisgo_obj.topology.loads_df.loc[
+                np.concatenate([retail_dsm_loads, industrial_dsm_loads])
+            ].p_set.values
+            dsm_df.sector = edisgo_obj.topology.loads_df.loc[
+                np.concatenate([retail_dsm_loads, industrial_dsm_loads])
+            ].sector.values
+        dsm_df.type = "conventional_load"
+        dsm_df.voltage_level = vl
+        edisgo_obj.topology.loads_df = pd.concat([edisgo_obj.topology.loads_df, dsm_df])
+    # drop lv loads that have been replaced by dsm loads
+    edisgo_obj.topology.loads_df = edisgo_obj.topology.loads_df.drop(
+        np.concatenate([retail_dsm_loads, industrial_dsm_loads])
+    )
+    # set reactive power timeseries
     edisgo_obj.set_time_series_reactive_power_control()
+    # Reinforce grid to accommodate for additional mv dsm loads
     edisgo_obj_copy = deepcopy(edisgo_obj)
     simultaneties = [
         "mv_feed-in_case_cp_home",
