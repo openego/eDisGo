@@ -77,7 +77,6 @@ def to_powermodels(
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from etrago component of edisgo object.
     """
-    # tol = 1e-4
     if opt_flex is None:
         opt_flex = ["curt"]
     if "curt" not in opt_flex:
@@ -790,7 +789,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
         idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
         pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
-            "br_r": 0.1,  # ToDo
+            "br_r": 0.017 * s_base / (psa_net.buses.v_nom[idx_bus] ** 2),
             "br_x": 0,
             "f_bus": idx_bus,
             "t_bus": stor_i + len(psa_net.buses.index) + 1,
