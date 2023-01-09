@@ -764,6 +764,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
             "br_r": r * s_base,
+            "r": branches.r[branch_i],
             "br_x": x * s_base,
             "f_bus": idx_f_bus,
             "t_bus": idx_t_bus,
@@ -790,6 +791,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
         pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
             "br_r": 0.017 * s_base / (psa_net.buses.v_nom[idx_bus] ** 2),
+            "r": 0.017,
             "br_x": 0,
             "f_bus": idx_bus,
             "t_bus": stor_i + len(psa_net.buses.index) + 1,
