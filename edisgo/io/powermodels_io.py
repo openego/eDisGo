@@ -709,7 +709,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
         # only modify r and x values if values are too small for Gurobi (i.e. < 1e-6)
-        if (np.round(max_r, 4) > 1000) & (
+        if (np.round(max_r, 4) > 10) & (
             branches.r_pu[branch_i] > np.round(branches.r_pu.quantile(0.998), 4)
         ):
             logger.warning(
@@ -721,7 +721,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
                 )
             )
             r = min(branches.r_pu[branch_i], max_r)
-        elif (np.round(min_r, 4) <= 0.000001) & (
+        elif (np.round(min_r, 4) <= 0.0001) & (
             branches.r_pu[branch_i] < np.round(branches.r_pu.quantile(0.002), 6)
         ):
             logger.warning(
@@ -735,7 +735,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
             r = max(branches.r_pu[branch_i], min_r)
         else:
             r = branches.r_pu[branch_i]
-        if (np.round(max_x, 4) > 1000) & (
+        if (np.round(max_x, 4) > 10) & (
             branches.x_pu[branch_i] > np.round(branches.x_pu.quantile(0.998), 4)
         ):
             logger.warning(
@@ -747,7 +747,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
                 )
             )
             x = min(branches.x_pu[branch_i], max_x)
-        elif (np.round(min_x, 4) <= 0.000001) & (
+        elif (np.round(min_x, 4) <= 0.0001) & (
             branches.x_pu[branch_i] < np.round(branches.x_pu.quantile(0.002), 6)
         ):
             logger.warning(
