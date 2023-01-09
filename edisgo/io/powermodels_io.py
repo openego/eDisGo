@@ -133,7 +133,7 @@ def to_powermodels(
     pm["baseMVA"] = s_base
     pm["source_version"] = 2
     pm["flexibilities"] = opt_flex
-    _build_bus(psa_net, pm, flexible_loads)
+    _build_bus(psa_net, pm)
     _build_gen(edisgo_object, psa_net, pm, s_base)
     _build_branch(psa_net, pm, s_base, flexible_loads)
     if len(edisgo_object.topology.storage_units_df) > 0:
@@ -512,7 +512,7 @@ def _init_pm():
     return pm
 
 
-def _build_bus(psa_net, pm, flexible_loads):
+def _build_bus(psa_net, pm):
     """
     Builds bus dictionary in PowerModels network data format and adds it to
     PowerModels dictionary 'pm'.
@@ -523,9 +523,6 @@ def _build_bus(psa_net, pm, flexible_loads):
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
         (PowerModels) dictionary.
-    flexible_loads : :numpy:`numpy.ndarray<ndarray>` or list
-        Array containing all flexible loads that allow for application of demand side
-        management strategy.
     """
     bus_types = ["PQ", "PV", "Slack", "None"]
     bus_types_int = np.array(
@@ -904,7 +901,7 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, s_base, flexible_loads):
             * e_max
             / s_base,
             "energy_rating": e_max / s_base,
-            "thermal_rating": 1,  # TODO unbegrenzt
+            "thermal_rating": 100,  # TODO unbegrenzt
             "charge_rating": psa_net.storage_units.p_nom[stor_i] / s_base,
             "discharge_rating": psa_net.storage_units.p_nom[stor_i] / s_base,
             "charge_efficiency": 0.9,  # ToDo
