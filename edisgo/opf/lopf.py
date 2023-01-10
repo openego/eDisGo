@@ -131,7 +131,8 @@ def prepare_time_invariant_parameters(
             # TODO check if necessary to pass empty list
             fixed_parameters["optimized_charging_points"] = []
             fixed_parameters["optimize_emob"] = False
-            logger.info("Emob optimization is set to False as flex bands empty.")
+            logger.warning("Emob optimization is set to False as flex bands "
+                        "empty.")
         else:
             if not fixed_parameters["flexible_loads"].empty:
                 fixed_parameters["optimized_charging_points"] = (
@@ -175,7 +176,8 @@ def prepare_time_invariant_parameters(
 
         if fixed_parameters["optimized_heat_pumps"].empty:
             fixed_parameters["optimize_hp"] = False
-            logger.info("HP optimization is set to False as optimized hps empty.")
+            logger.warning("HP optimization is set to False as optimized hps "
+                       "empty.")
     else:
         # Add empty list to later define inflexible loads
         fixed_parameters["optimized_heat_pumps"] = []
