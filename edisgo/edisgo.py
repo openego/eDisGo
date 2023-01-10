@@ -1601,6 +1601,15 @@ class EDisGo:
             capacity of 22 kW and a minimum_charging_capacity_factor of 0.1 this would
             result in a minimum charging power of 2.2 kW. Default: 0.1.
 
+        Notes
+        ------
+        If the frequency of time series data in :class:`~.network.timeseries.TimeSeries`
+        (checked using :attr:`~.network.timeseries.TimeSeries.timeindex`) differs from
+        the frequency of SimBEV data, then the time series in
+        :class:`~.network.timeseries.TimeSeries` is first automatically resampled to
+        match the SimBEV data frequency and after determining the charging demand time
+        series resampled back to the original frequency.
+
         """
         charging_strategy(self, strategy=strategy, **kwargs)
 
@@ -2256,7 +2265,9 @@ class EDisGo:
 
             logging.info("Integrity check finished. Please pay attention to warnings.")
 
-    def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
+    def resample_timeseries(
+        self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
+    ):
         """
         Resamples all generator, load and storage time series to a desired resolution.
 
