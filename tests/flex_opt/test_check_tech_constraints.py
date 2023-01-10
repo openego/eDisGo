@@ -108,7 +108,7 @@ class TestCheckTechConstraints:
         # check for LV
         df = check_tech_constraints.lines_allowed_load(self.edisgo, "lv")
         # check shape of dataframe
-        assert (4, 99) == df.shape
+        assert (4, 101) == df.shape
         # check in feed-in case
         assert np.isclose(
             df.at[self.timesteps[2], "Line_50000002"],

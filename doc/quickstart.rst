@@ -6,7 +6,7 @@ Getting started
 Installation using Linux
 -------------------------
 
-.. warning:: Make sure to use python 3.7 or higher!
+.. warning:: Make sure to use python 3.8 or higher!
 
 Install latest eDisGo version through pip. Therefore, we highly recommend using
 a virtual environment and its pip.
@@ -15,25 +15,13 @@ a virtual environment and its pip.
 
     python -m pip install edisgo
 
-The above will install all packages for the basic usage of eDisGo. To install
-additional packages e.g. needed to create plots with background maps or to run
-the jupyter notebook examples, we provide installation with extra packages:
-
-.. code-block:: bash
-
-    python -m pip install edisgo[geoplot]  # for plotting with background maps
-    python -m pip install edisgo[examples]  # to run examples
-    python -m pip install edisgo[dev]  # developer packages
-    python -m pip install edisgo[full]  # combines all of the extras above
-
-
 You may also consider installing a developer version as detailed in
 :ref:`dev-notes`.
 
 Installation using Windows
 --------------------------
 
-.. warning:: Make sure to use python 3.7 or higher!
+.. warning:: Make sure to use python 3.8 or higher!
 
 For Windows users we recommend using Anaconda and to install the geo stack
 using the conda-forge channel prior to installing eDisGo. You may use the provided
@@ -49,8 +37,6 @@ Activate the newly created environment with:
 .. code-block:: bash
 
     conda activate eDisGo_env
-
-This will install eDisGo with all it's dependencies ([full] flag).
 
 Installation using MacOS
 --------------------------
