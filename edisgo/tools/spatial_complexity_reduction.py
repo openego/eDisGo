@@ -48,7 +48,7 @@ def remove_one_meter_lines(edisgo_root):
     G = edisgo_obj.to_graph()
     lines_df = edisgo_obj.topology.lines_df.copy()
     busmap = {}
-    unused_lines = []
+    lines_to_drop = []
     for index, row in lines_df.iterrows():
         if row.length < 0.001:
             logger.info(
@@ -69,12 +69,12 @@ def remove_one_meter_lines(edisgo_root):
                 if (number_of_neighbors_bus0 > number_of_neighbors_bus1) and (
                     number_of_neighbors_bus1 == 1
                 ):
-                    unused_lines.append(index)
+                    lines_to_drop.append(index)
                     busmap[row.bus1] = row.bus0
                 elif (
                     number_of_neighbors_bus1 > number_of_neighbors_bus0
                 ) and number_of_neighbors_bus0 == 1:
-                    unused_lines.append(index)
+                    lines_to_drop.append(index)
                     busmap[row.bus0] = row.bus1
             else:
                 logger.info(
@@ -84,12 +84,12 @@ def remove_one_meter_lines(edisgo_root):
                 )
     logger.info(
         "Drop {} of {} short lines ({:.0f}%)".format(
-            len(unused_lines),
+            len(lines_to_drop),
             lines_df.shape[0],
-            (len(unused_lines) / lines_df.shape[0] * 100),
+            (len(lines_to_drop) / lines_df.shape[0] * 100),
         )
     )
-    lines_df = lines_df.drop(unused_lines)
+    lines_df = lines_df.drop(lines_to_drop)
     lines_df = lines_df.apply(apply_busmap_on_lines_df, axis="columns")
 
     buses_df = edisgo_obj.topology.buses_df.copy()
@@ -162,7 +162,7 @@ def remove_short_lines(edisgo_root, length=1):
     edisgo_obj = copy.deepcopy(edisgo_root)
 
     busmap = {}
-    unused_lines = []
+    lines_to_drop = []
     total_lines = 0
     grid_list = [edisgo_obj.topology.mv_grid]
     grid_list = grid_list + list(edisgo_obj.topology.mv_grid.lv_grids)
@@ -212,14 +212,14 @@ def remove_short_lines(edisgo_root, length=1):
                 else:
                     raise ValueError("ERROR")
 
-                unused_lines.append(index)
+                lines_to_drop.append(index)
 
     logger.debug("Busmap: {}".format(busmap))
     logger.info(
         "Drop {:,} of {:,} lines ({:.1f}%)".format(
-            len(unused_lines),
+            len(lines_to_drop),
             total_lines,
-            (len(unused_lines) / total_lines * 100),
+            (len(lines_to_drop) / total_lines * 100),
         )
     )
     transformers_df = edisgo_obj.topology.transformers_df.copy()
@@ -227,7 +227,7 @@ def remove_short_lines(edisgo_root, length=1):
     edisgo_obj.topology.transformers_df = transformers_df
 
     lines_df = edisgo_obj.topology.lines_df.copy()
-    lines_df = lines_df.drop(unused_lines)
+    lines_df = lines_df.drop(lines_to_drop)
     lines_df = lines_df.apply(apply_busmap_on_lines_df, axis="columns")
     edisgo_obj.topology.lines_df = lines_df
 
