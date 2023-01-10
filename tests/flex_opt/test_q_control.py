@@ -113,7 +113,7 @@ class TestQControl:
 
         # test for component_type="loads"
         pf = q_control._fixed_cosphi_default_power_factor(
-            comp_df=df, component_type="loads", configs=config
+            comp_df=df, component_type="conventional_loads", configs=config
         )
 
         assert pf.shape == (3,)
@@ -176,9 +176,9 @@ class TestQControl:
             [-1.0, -1.0, -1.0],
         ).all()
 
-        # test for component_type="loads"
+        # test for component_type="conventional_loads"
         pf = q_control._fixed_cosphi_default_reactive_power_sign(
-            comp_df=df, component_type="loads", configs=config
+            comp_df=df, component_type="conventional_loads", configs=config
         )
 
         assert pf.shape == (3,)

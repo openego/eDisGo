@@ -496,7 +496,7 @@ def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
             f"Grid district geometry is of type {type(mv_geom)}."
             " Only Shapely Polygon or MultiPolygon are accepted."
         )
-    mv_geom_gdf = gpd.GeoDataFrame(m, crs=f"EPSG:{srid}", columns=["geometry"])
+    mv_geom_gdf = gpd.GeoDataFrame(data={"geometry": [m]}, crs=f"EPSG:{srid}")
 
     return set(
         np.append(
