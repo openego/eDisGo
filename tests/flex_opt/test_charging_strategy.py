@@ -25,13 +25,13 @@ class TestChargingStrategy:
 
         cls.edisgo_obj.import_electromobility(cls.simbev_path, cls.tracbev_path)
 
-    def test_charging_strategy(self):
+    def test_charging_strategy(self, caplog):
         charging_demand_lst = []
+
+        ts = self.edisgo_obj.timeseries
 
         for strategy in self.charging_strategies:
             charging_strategy(self.edisgo_obj, strategy=strategy)
-
-            ts = self.edisgo_obj.timeseries
 
             # Check if all charging points have a valid chargingdemand_kWh > 0
             df = ts.charging_points_active_power(self.edisgo_obj).loc[
@@ -49,7 +49,8 @@ class TestChargingStrategy:
             self.edisgo_obj, strategy="dumb", timestamp_share_threshold=0.5
         )
 
-        ts = self.edisgo_obj.timeseries
+        # Check if resampling warning is raised
+        assert "The frequency of the time series data of the edisgo object differs" in caplog.text
 
         # Check if all charging points have a valid chargingdemand_kWh > 0
         df = ts.charging_points_active_power(self.edisgo_obj).loc[
@@ -62,8 +63,6 @@ class TestChargingStrategy:
         charging_strategy(
             self.edisgo_obj, strategy="reduced", minimum_charging_capacity_factor=0.5
         )
-
-        ts = self.edisgo_obj.timeseries
 
         # Check if all charging points have a valid chargingdemand_kWh > 0
         df = ts.charging_points_active_power(self.edisgo_obj).loc[
@@ -82,3 +81,13 @@ class TestChargingStrategy:
             (_.round(4) == charging_demand_lst[0].round(4)).all()
             for _ in charging_demand_lst
         )
+
+        # ##################### check time index #####################
+        assert ts._loads_active_power.index.freqstr == "H"
+        # change time index to quarter-hourly
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="0.25H")
+        self.edisgo_obj.set_timeindex(timeindex)
+        charging_strategy(
+            self.edisgo_obj, strategy="dumb"
+        )
+        assert ts._loads_active_power.index.freqstr == "15T"
