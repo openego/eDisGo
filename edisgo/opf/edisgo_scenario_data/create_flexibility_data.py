@@ -38,7 +38,9 @@ def create_storage_data(edisgo_obj, directory=None, save_edisgo=False):
         if len(loads) == 0:
             pass
         else:
-            house_demand = edisgo_obj.timeseries.loads_active_power[loads].sum(axis=1)
+            house_demand = deepcopy(
+                edisgo_obj.timeseries.loads_active_power[loads].sum(axis=1)
+            )
             storage_ts = battery_storage_reference_operation(
                 pd.DataFrame(house_demand - pv_feedin), 0, row[1].p_nom, row[1].p_nom, 1
             )
@@ -147,6 +149,21 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
     ]
     df2 = pd.DataFrame(columns=timeindex, index=dsm_data["name"], data=data).transpose()
     # drop lv retail and industrial loads that will be replaced by dsm loads
+    print(
+        "sum power edisgo before: "
+        + str(edisgo_obj.timeseries.loads_active_power.sum().sum())
+    )
+
+    print(
+        "sum power of dropped loads: "
+        + str(
+            edisgo_obj.timeseries.loads_active_power.filter(
+                np.concatenate([retail_dsm_loads, industrial_dsm_loads]), axis=1
+            )
+            .sum()
+            .sum()
+        )
+    )
     edisgo_obj.timeseries._loads_active_power = (
         edisgo_obj.timeseries.loads_active_power.drop(
             np.concatenate([retail_dsm_loads, industrial_dsm_loads]), axis=1
@@ -158,9 +175,27 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
         )
     )
     # add lv and mv dsm loads
+    print(
+        "sum power of added loads: "
+        + str(
+            pd.DataFrame(
+                df2[
+                    np.concatenate(
+                        [lv_dsm_loads_retail, lv_dsm_loads_industrial, mv_dsm_loads]
+                    )
+                ].values,
+                index=edisgo_obj.timeseries.loads_active_power.index,
+                columns=np.concatenate(
+                    [lv_dsm_loads_retail, lv_dsm_loads_industrial, mv_dsm_loads]
+                ),
+            )
+            .sum()
+            .sum()
+        )
+    )
     edisgo_obj.timeseries._loads_active_power = pd.concat(
         [
-            edisgo_obj.timeseries.loads_active_power,
+            edisgo_obj.timeseries.loads_active_power,  # ToDo deepcopy?
             pd.DataFrame(
                 df2[
                     np.concatenate(
@@ -174,6 +209,10 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
             ),
         ],
         axis=1,
+    )
+    print(
+        "sum power edisgo after: "
+        + str(edisgo_obj.timeseries.loads_active_power.sum().sum())
     )
 
     for vl in ["mv", "lv"]:
@@ -235,19 +274,23 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
     ]
 
     for factor in simultaneties:
-        edisgo_obj.config._data["worst_case_scale_factor"][factor] = 0
+        edisgo_obj_copy.config._data["worst_case_scale_factor"][factor] = 0
 
-    edisgo_obj.set_time_series_worst_case_analysis()
-    edisgo_obj.reinforce()
+    edisgo_obj_copy.set_time_series_worst_case_analysis()
+    edisgo_obj_copy.reinforce()
 
-    edisgo_obj_copy.topology.lines_df = edisgo_obj.topology.lines_df
-    edisgo_obj_copy.topology.transformers_df = edisgo_obj.topology.transformers_df
-    edisgo_obj_copy.topology.transformers_hvmv_df = (
-        edisgo_obj.topology.transformers_hvmv_df
+    edisgo_obj.topology.lines_df = edisgo_obj_copy.topology.lines_df
+    edisgo_obj.topology.transformers_df = edisgo_obj_copy.topology.transformers_df
+    edisgo_obj.topology.transformers_hvmv_df = (
+        edisgo_obj_copy.topology.transformers_hvmv_df
+    )
+    print(
+        "sum power edisgo end: "
+        + str(edisgo_obj.timeseries.loads_active_power.sum().sum())
     )
 
     if save_edisgo:
-        edisgo_obj_copy.save(
+        edisgo_obj.save(
             os.path.join(f"{directory}"),
             save_results=False,
             save_timeseries=True,
