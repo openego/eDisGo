@@ -1309,6 +1309,8 @@ def optimize(model, solver, load_solutions=True, mode=None,
             dir/name of logfile for solver
         lp_filename : str
             dir/name of logfile for solver
+        tolerance : float
+            Tollerance for optimality
 
     Returns
     -------
@@ -1325,7 +1327,10 @@ def optimize(model, solver, load_solutions=True, mode=None,
     t1 = perf_counter()
     opt = pm.SolverFactory(solver)
     opt.options["threads"] = 16
-
+    tolerance = kwargs.get("tolerance", None)
+    if tolerance is not None:
+        opt.options["OptimalityTol"] = tolerance
+        logger.info(f"tolerance for optimality set to: {tolerance}")
     # Optimize
     results = opt.solve(model,
                         tee=tee,
