@@ -200,10 +200,10 @@ def remove_short_lines(edisgo_root, length=1):
                 if distance_bus_0 < distance_bus_1:
                     busmap[row.bus1] = row.bus0
                     if distance_bus_0 < length / 1e3:
-                        # line will connected to transformer as
-                        # <= 1m
+                        # line will get connected to transformer as <= 1m
                         busmap[row.bus0] = transformer_node
                         busmap[row.bus1] = transformer_node
+                        # TODO maybe not necessary at all
                 elif distance_bus_0 > distance_bus_1:
                     busmap[row.bus0] = row.bus1
                     if distance_bus_1 < length / 1e3:
@@ -223,6 +223,8 @@ def remove_short_lines(edisgo_root, length=1):
         )
     )
     transformers_df = edisgo_obj.topology.transformers_df.copy()
+    # apply_busmap_on_lines_df function is similar for transfomers and lines
+    # as both have two ends
     transformers_df = transformers_df.apply(apply_busmap_on_lines_df, axis="columns")
     edisgo_obj.topology.transformers_df = transformers_df
 
@@ -234,6 +236,7 @@ def remove_short_lines(edisgo_root, length=1):
     buses_df = edisgo_obj.topology.buses_df.copy()
     buses_df.index.name = "bus"
     buses_df = buses_df.apply(apply_busmap_on_buses_df, axis="columns")
+    # after dropping lines, duplicated buses could exist. Only keep first
     buses_df = buses_df.groupby(
         by=["new_bus"], dropna=False, as_index=False, sort=False
     ).first()
@@ -247,6 +250,8 @@ def remove_short_lines(edisgo_root, length=1):
     generators_df = edisgo_obj.topology.generators_df.copy()
     generators_df = generators_df.apply(apply_busmap, axis="columns")
     edisgo_obj.topology.generators_df = generators_df
+
+    # TODO switches missing
 
     # charging_points_df = edisgo_obj.topology.charging_points_df.copy()
     # charging_points_df = charging_points_df.apply(apply_busmap, axis="columns")
