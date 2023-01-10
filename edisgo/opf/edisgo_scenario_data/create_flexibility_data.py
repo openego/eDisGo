@@ -97,13 +97,15 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
     mv_data = dsm_data.loc[dsm_data.peak_load >= 0.3]
     df2 = pd.DataFrame(columns=timeindex, index=dsm_data["name"], data=data).transpose()
     # name of dsm loads
-    lv_dsm_loads_retail = lv_data.name[0:amount_retail_dsm_loads].values
-    lv_dsm_loads_industrial = lv_data.name[
+    lv_dsm_loads_retail = lv_data.name.iloc[0:amount_retail_dsm_loads].values
+    lv_dsm_loads_industrial = lv_data.name.iloc[
         amount_retail_dsm_loads : amount_retail_dsm_loads + amount_industrial_dsm_loads
     ].values
-    mv_dsm_loads = mv_data.name[0:amount_mv_dsm_loads].values
+    mv_dsm_loads = mv_data.name.iloc[0:amount_mv_dsm_loads].values
     if amount_mv_dsm_loads > len(mv_data):
-        mv_dsm_loads2 = lv_data.name[len(mv_data) - amount_mv_dsm_loads - 1 : -1].values
+        mv_dsm_loads2 = lv_data.name.iloc[
+            len(mv_data) - amount_mv_dsm_loads - 1 : -1
+        ].values
         mv_dsm_loads = np.concatenate([mv_dsm_loads, mv_dsm_loads2])
     edisgo_obj.dsm.p_max = df2[
         np.concatenate([lv_dsm_loads_retail, lv_dsm_loads_industrial, mv_dsm_loads])

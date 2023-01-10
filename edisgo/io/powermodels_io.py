@@ -610,6 +610,8 @@ def _build_gen(edisgo_obj, psa_net, pm, s_base):
             "qmax": max(q) / s_base,
             "qmin": min(q) / s_base,
             "vg": 1,
+            "pf": pf,
+            "sign": sign,
             "mbase": gen_disp.p_nom[gen_i] / s_base,
             "gen_bus": idx_bus,
             "name": gen_disp.index[gen_i],
