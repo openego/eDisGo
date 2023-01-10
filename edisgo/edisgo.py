@@ -1559,12 +1559,6 @@ class EDisGo:
         in :attr:`~.network.timeseries.TimeSeries.loads_reactive_power` is
         set to 0 Mvar.
 
-        If the frequency of time series data in :class:`~.network.timeseries.TimeSeries`
-        (checked using :attr:`~.network.timeseries.timeindex`) differs from the
-        frequency of SimBEV data, then the time series in
-        :class:`~.network.timeseries.TimeSeries` automatically resampled to match the
-        SimBEV data frequency.
-
         Parameters
         ----------
         strategy : str
@@ -1606,6 +1600,15 @@ class EDisGo:
             charging strategy 'reduced'. E.g. for a charging point with a nominal
             capacity of 22 kW and a minimum_charging_capacity_factor of 0.1 this would
             result in a minimum charging power of 2.2 kW. Default: 0.1.
+
+        Notes
+        ------
+        If the frequency of time series data in :class:`~.network.timeseries.TimeSeries`
+        (checked using :attr:`~.network.timeseries.TimeSeries.timeindex`) differs from
+        the frequency of SimBEV data, then the time series in
+        :class:`~.network.timeseries.TimeSeries` is first automatically resampled to
+        match the SimBEV data frequency and after determining the charging demand time
+        series resampled back to the original frequency.
 
         """
         charging_strategy(self, strategy=strategy, **kwargs)
