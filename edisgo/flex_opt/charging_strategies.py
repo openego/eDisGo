@@ -119,12 +119,13 @@ def charging_strategy(
 
     if resample:
         logger.warning(
-            "The step size of the time series of the edisgo object differs from the"
-            f"simbev step size. The edisgo time delta is {edisgo_timedelta}, while"
-            f" the simbev time delta is {simbev_timedelta}. The edisgo time series "
+            f"The frequency of the time series data of the edisgo object differs from "
+            f"the simbev time series frequency. The edisgo frequency is "
+            f"{edisgo_timedelta}, while the simbev frequency is {simbev_timedelta}. "
+            f"The edisgo time series data "
             f"will be resampled accordingly before applying the charging strategy. "
-            f"After applying the charging strategy the time series will be resampled "
-            f"to it's original state."
+            f"After applying the charging strategy all time series will be resampled "
+            f"to the original frequency of the edisgo time series data."
         )
 
         edisgo_obj.resample_timeseries(freq=simbev_timedelta)
