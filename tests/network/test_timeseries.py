@@ -1882,6 +1882,41 @@ class TestTimeSeries:
         self.edisgo.set_time_series_manual(
             storage_units_p=pd.DataFrame({"Storage_1": ts_wind}, index=timeindex)
         )
+        # create heat pumps and charging points in MV and LV
+        df_cp = pd.DataFrame(
+            {
+                "bus": [
+                    "Bus_BranchTee_MVGrid_1_2",
+                    "Bus_BranchTee_MVGrid_1_2",
+                    "Bus_BranchTee_LVGrid_1_5",
+                    "Bus_BranchTee_LVGrid_1_5",
+                ],
+                "p_set": [0.1, 0.2, 0.3, 0.4],
+                "type": [
+                    "charging_point",
+                    "heat_pump",
+                    "charging_point",
+                    "heat_pump",
+                ],
+            },
+            index=["CP1", "HP1", "CP2", "HP2"],
+        )
+        self.edisgo.topology.loads_df = pd.concat(
+            [
+                self.edisgo.topology.loads_df,
+                df_cp,
+            ]
+        )
+        self.edisgo.set_time_series_manual(
+            loads_p=pd.DataFrame(
+                {
+                    "CP1": ts_wind,
+                    "HP1": ts_wind,
+                    "CP2": ts_wind,
+                    "HP2": ts_wind
+                 },
+                index=timeindex)
+        )
 
         # test different options (default, Dataframe with default, Dataframe with
         # different settings) - None is already tested in eDisGo class tests
@@ -1900,7 +1935,8 @@ class TestTimeSeries:
             ),
             loads_parametrisation=pd.DataFrame(
                 {
-                    "components": [[load_1], [load_2, load_3]],
+                    "components": [[load_1, "CP1", "HP1", "CP2", "HP2"],
+                                   [load_2, load_3]],
                     "mode": ["default", "capacitive"],
                     "power_factor": ["default", 0.98],
                 },
@@ -1909,7 +1945,7 @@ class TestTimeSeries:
             storage_units_parametrisation="default",
         )
         assert self.edisgo.timeseries.generators_reactive_power.shape == (3, 1)
-        assert self.edisgo.timeseries.loads_reactive_power.shape == (3, 3)
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (3, 7)
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (3, 1)
         assert (
             np.isclose(
@@ -1922,6 +1958,13 @@ class TestTimeSeries:
                 self.edisgo.timeseries.loads_reactive_power.loc[:, load_1],
                 self.edisgo.timeseries.loads_active_power.loc[:, load_1]
                 * np.tan(np.arccos(0.95)),
+            )
+        ).all()
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.loads_reactive_power.loc[
+                    :, ["CP1", "HP1", "CP2", "HP2"]],
+                0.0
             )
         ).all()
         assert (

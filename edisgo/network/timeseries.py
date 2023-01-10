@@ -898,10 +898,10 @@ class TimeSeries:
         # reactive power
         # get worst case configurations for each load
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "loads", configs
+            df, "conventional_loads", configs
         )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "loads", configs
+            df, "conventional_loads", configs
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
@@ -1570,12 +1570,35 @@ class TimeSeries:
                     components_df, edisgo_object.topology.buses_df
                 )
                 components_names = df.index
-                q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-                    df, type, edisgo_object.config
-                )
-                power_factor = q_control._fixed_cosphi_default_power_factor(
-                    df, type, edisgo_object.config
-                )
+                if type == "loads":
+                    q_sign = pd.Series(dtype=float)
+                    power_factor = pd.Series(dtype=float)
+                    for load_type in df["type"].unique():
+                        q_sign = pd.concat(
+                            [
+                                q_sign,
+                                q_control._fixed_cosphi_default_reactive_power_sign(
+                                    df[df["type"] == load_type], f"{load_type}s",
+                                    edisgo_object.config
+                                ),
+                            ]
+                        )
+                        power_factor = pd.concat(
+                            [
+                                power_factor,
+                                q_control._fixed_cosphi_default_power_factor(
+                                    df[df["type"] == load_type], f"{load_type}s",
+                                    edisgo_object.config
+                                ),
+                            ]
+                        )
+                else:
+                    q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
+                        df, type, edisgo_object.config
+                    )
+                    power_factor = q_control._fixed_cosphi_default_power_factor(
+                        df, type, edisgo_object.config
+                    )
             elif isinstance(parametrisation, pd.DataFrame):
                 # check if all given components exist in network and only use existing
                 components_names = list(
@@ -1597,14 +1620,26 @@ class TimeSeries:
                                 components_df.loc[comps, :],
                                 edisgo_object.topology.buses_df,
                             )
-                            q_sign = pd.concat(
-                                [
-                                    q_sign,
-                                    q_control._fixed_cosphi_default_reactive_power_sign(
-                                        df, type, edisgo_object.config
-                                    ),
-                                ]
-                            )
+                            if type == "loads":
+                                for load_type in df["type"].unique():
+                                    q_sign = pd.concat(
+                                        [
+                                            q_sign,
+                                            q_control._fixed_cosphi_default_reactive_power_sign(
+                                                df[df["type"] == load_type], f"{load_type}s",
+                                                edisgo_object.config
+                                            ),
+                                        ]
+                                    )
+                            else:
+                                q_sign = pd.concat(
+                                    [
+                                        q_sign,
+                                        q_control._fixed_cosphi_default_reactive_power_sign(
+                                            df, type, edisgo_object.config
+                                        ),
+                                    ]
+                                )
                         else:
                             q_sign = pd.concat(
                                 [
@@ -1618,14 +1653,26 @@ class TimeSeries:
                                 components_df.loc[comps, :],
                                 edisgo_object.topology.buses_df,
                             )
-                            power_factor = pd.concat(
-                                [
-                                    power_factor,
-                                    q_control._fixed_cosphi_default_power_factor(
-                                        df, type, edisgo_object.config
-                                    ),
-                                ]
-                            )
+                            if type == "loads":
+                                for load_type in df["type"].unique():
+                                    power_factor = pd.concat(
+                                        [
+                                            power_factor,
+                                            q_control._fixed_cosphi_default_power_factor(
+                                                df[df["type"] == load_type], f"{load_type}s",
+                                                edisgo_object.config
+                                            ),
+                                        ]
+                                    )
+                            else:
+                                power_factor = pd.concat(
+                                    [
+                                        power_factor,
+                                        q_control._fixed_cosphi_default_power_factor(
+                                            df, type, edisgo_object.config
+                                        ),
+                                    ]
+                                )
                         else:
                             power_factor = pd.concat(
                                 [
