@@ -38,8 +38,8 @@ requirements = [
     "geopandas >= 0.9.0",
     "pyproj >= 3.0.0",
     "shapely >= 1.7.0",
-    "pypsa >= 0.17.0",
-    "pyomo >= 6.0",
+    "pypsa >= 0.17.0, <= 0.20.1",
+    "pyomo <= 6.4.2", # Problem with PyPSA 20.1 fixed in newest PyPSA release
     "multiprocess",
     "workalendar",
     "sqlalchemy < 1.4.0",
@@ -47,7 +47,7 @@ requirements = [
     "egoio >= 0.4.7",
     "matplotlib >= 3.3.0",
     "pypower",
-    "sklearn",
+    "scikit-learn",
     "pydot",
     "pygeos",
     "beautifulsoup4",
@@ -64,7 +64,8 @@ requirements = [
 dev_requirements = [
     "pytest",
     "pytest-notebook",
-    "sphinx_rtd_theme",
+    "sphinx >= 4.3.0, < 5.1.0",
+    "sphinx_rtd_theme >=0.5.2",
     "sphinx-autodoc-typehints",
     "pre-commit",
     "black",
@@ -78,7 +79,7 @@ extras = {"dev": dev_requirements}
 
 setup(
     name="eDisGo",
-    version="0.2.0dev",
+    version="0.2.1dev",
     packages=find_packages(),
     url="https://github.com/openego/eDisGo",
     license="GNU Affero General Public License v3.0",

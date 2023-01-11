@@ -1,9 +1,9 @@
-name: eDisGo_env_dev
+name: eDisGo_env
 channels:
   - conda-forge
   - defaults
 dependencies:
-  - python = 3.8
+  - python >= 3.8, < 3.10
   - pip
   - pandas >= 1.2
   - conda-forge::fiona
@@ -16,5 +16,6 @@ dependencies:
   - conda-forge::pygeos
   - conda-forge::contextily
   - conda-forge::descartes
+  - conda-forge::pypsa >= 0.17.0, <= 0.20.1
   - pip:
       - eDisGo

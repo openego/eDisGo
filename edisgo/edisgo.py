@@ -13,6 +13,9 @@ import numpy as np
 import pandas as pd
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
+from edisgo.flex_opt.heat_pump_operation import (
+    operating_strategy as hp_operating_strategy,
+)
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
@@ -22,8 +25,11 @@ from edisgo.io.electromobility_import import (
     integrate_charging_parks,
 )
 from edisgo.io.generators_import import oedb as import_generators_oedb
+
+# from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.network import timeseries
 from edisgo.network.electromobility import Electromobility
+from edisgo.network.heat import HeatPump
 from edisgo.network.results import Results
 from edisgo.network.topology import Topology
 from edisgo.opf.results.opf_result_class import OPFResults
@@ -106,15 +112,23 @@ class EDisGo:
     Attributes
     ----------
     topology : :class:`~.network.topology.Topology`
-        The topology is a container object holding the topology of the grids.
+        The topology is a container object holding the topology of the grids including
+        buses, lines, transformers, switches and components connected to the grid
+        including generators, loads and storage units.
     timeseries : :class:`~.network.timeseries.TimeSeries`
-        Container for component time series.
+        Container for active and reactive power time series of generators, loads and
+        storage units.
     results : :class:`~.network.results.Results`
         This is a container holding all calculation results from power flow
-        analyses, curtailment, storage integration, etc.
+        analyses and grid reinforcement.
     electromobility : :class:`~.network.electromobility.Electromobility`
-        Data container for all electromobility data on e.g. charging processes,
-        information on potential charging sites and integrated charging parks.
+        This class holds data on charging processes (how long cars are parking at a
+        charging station, how much they need to charge, etc.) necessary to apply
+        different charging strategies, as well as information on potential charging
+        sites and integrated charging parks.
+    heat_pump : :class:`~.network.heat.HeatPump`
+        This is a container holding heat pump data such as COP, heat demand to be
+        served and heat storage information.
 
     """
 
@@ -127,9 +141,6 @@ class EDisGo:
         self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
 
-        # instantiate electromobility object and load charging processes and sites
-        self.electromobility = Electromobility(edisgo_obj=self)
-
         # set up results and time series container
         self.results = Results(self)
         self.opf_results = OPFResults()
@@ -137,11 +148,45 @@ class EDisGo:
             timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
         )
 
+        # instantiate electromobility and heat pump object
+        self.electromobility = Electromobility(edisgo_obj=self)
+        self.heat_pump = HeatPump()
+
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
             self.import_generators(
                 generator_scenario=kwargs.pop("generator_scenario"), **kwargs
             )
+
+        # add MVGrid id to logging messages of logger "edisgo"
+        log_grid_id = kwargs.get("log_grid_id", True)
+        if log_grid_id:
+
+            def add_grid_id_filter(record):
+                record.grid_id = self.topology.id
+                return True
+
+            file_formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - "
+                "MVGrid(%(grid_id)s): %(message)s"
+            )
+            stream_formatter = logging.Formatter(
+                "%(name)s - %(levelname)s - MVGrid(%(grid_id)s): %(message)s"
+            )
+
+            logger_edisgo = logging.getLogger("edisgo")
+            for handler in logger_edisgo.handlers:
+                if isinstance(logger_edisgo.handlers[0], logging.StreamHandler):
+                    handler.setFormatter(stream_formatter)
+                elif isinstance(logger_edisgo.handlers[0], logging.FileHandler):
+                    handler.setFormatter(file_formatter)
+                else:
+                    raise ValueError(
+                        "Disable the log_grid_id function when using other"
+                        " handlers than StreamHandler or FileHandler"
+                    )
+                handler.filters.clear()
+                handler.addFilter(add_grid_id_filter)
 
     @property
     def config(self):
@@ -1135,12 +1180,16 @@ class EDisGo:
         """
         Adds single component to topology based on geolocation.
 
-        Currently components can be generators or charging points.
+        Currently components can be generators, charging points and heat pumps.
+
+        See :attr:`~.network.topology.Topology.connect_to_mv` and
+        :attr:`~.network.topology.Topology.connect_to_lv` for more information.
 
         Parameters
         ----------
         comp_type : str
-            Type of added component. Can be 'generator' or 'charging_point'.
+            Type of added component. Can be 'generator', 'charging_point' or
+            'heat_pump'.
         geolocation : :shapely:`shapely.Point<Point>` or tuple
             Geolocation of the new component. In case of tuple, the geolocation
             must be given in the form (longitude, latitude).
@@ -1148,7 +1197,7 @@ class EDisGo:
             Specifies the voltage level the new component is integrated in.
             Possible options are 4 (MV busbar), 5 (MV grid), 6 (LV busbar) or
             7 (LV grid). If no voltage level is provided the voltage level
-            is determined based on the nominal power `p_nom` (given as kwarg)
+            is determined based on the nominal power `p_nom` or `p_set` (given as kwarg)
             as follows:
 
             * voltage level 4 (MV busbar): nominal power between 4.5 MW and
@@ -1182,9 +1231,9 @@ class EDisGo:
         kwargs :
             Attributes of added component.
             See :attr:`~.network.topology.Topology.add_generator` respectively
-            :attr:`~.network.topology.Topology.add_charging_point` methods
+            :attr:`~.network.topology.Topology.add_load` methods
             for more information on required and optional parameters of
-            generators and charging points.
+            generators respectively charging points and heat pumps.
 
         """
         supported_voltage_levels = {4, 5, 6, 7}
@@ -1226,11 +1275,12 @@ class EDisGo:
 
         # Connect in LV
         else:
-            substations = self.topology.buses_df.loc[
-                self.topology.transformers_df.bus1.unique()
-            ]
-            nearest_substation, _ = find_nearest_bus(geolocation, substations)
-            kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
+            if kwargs.get("mvlv_subst_id", None) is None:
+                substations = self.topology.buses_df.loc[
+                    self.topology.transformers_df.bus1.unique()
+                ]
+                nearest_substation, _ = find_nearest_bus(geolocation, substations)
+                kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
             kwargs["geom"] = geolocation
             kwargs["voltage_level"] = voltage_level
             comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
@@ -1581,8 +1631,126 @@ class EDisGo:
             capacity of 22 kW and a minimum_charging_capacity_factor of 0.1 this would
             result in a minimum charging power of 2.2 kW. Default: 0.1.
 
+        Notes
+        ------
+        If the frequency of time series data in :class:`~.network.timeseries.TimeSeries`
+        (checked using :attr:`~.network.timeseries.TimeSeries.timeindex`) differs from
+        the frequency of SimBEV data, then the time series in
+        :class:`~.network.timeseries.TimeSeries` is first automatically resampled to
+        match the SimBEV data frequency and after determining the charging demand time
+        series resampled back to the original frequency.
+
         """
         charging_strategy(self, strategy=strategy, **kwargs)
+
+    def import_heat_pumps(self, scenario=None, **kwargs):
+        """
+        Gets heat pump capacities for specified scenario from oedb and integrates them
+        into the grid.
+
+        Besides heat pump capacity the heat pump's COP and heat demand to be served
+        are as well retrieved.
+
+        Currently, the only supported data source is scenario data generated
+        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        between two scenarios: 'eGon2035' and 'eGon100RE'.
+
+        The data is retrieved from the
+        `open energy platform <https://openenergy-platform.org/>`_.
+
+        # ToDo Add information on scenarios and from which tables data is retrieved.
+
+        The following steps are conducted in this function:
+
+            * Spatially disaggregated data on heat pump capacities in individual and
+              district heating are obtained from the database for the specified
+              scenario.
+            * Heat pumps are integrated into the grid (added to
+              :attr:`~.network.topology.Topology.loads_df`).
+
+              * Grid connection points of heat pumps for individual heating are
+                determined based on the corresponding building ID.
+              * Grid connection points of heat pumps for district heating are determined
+                based on their geolocation and installed capacity.
+                See :attr:`~.network.topology.Topology.connect_to_mv` and
+                :attr:`~.network.topology.Topology.connect_to_lv` for more information.
+            * COP and heat demand for each heat pump are retrieved from the database
+              and stored in the :class:`~.network.heat.HeatPump` class that can be
+              accessed through :attr:`~.edisgo.EDisGo.heat_pump`.
+
+        Be aware that this function does not yield electricity load time series for the
+        heat pumps. The actual time series are determined through applying an
+        operation strategy or optimising heat pump dispatch.
+
+        After the heat pumps are integrated there may be grid issues due to the
+        additional load. These are not solved automatically. If you want to
+        have a stable grid without grid issues you can invoke the automatic
+        grid expansion through the function :attr:`~.EDisGo.reinforce`.
+
+        Parameters
+        ----------
+        scenario : str
+            Scenario for which to retrieve heat pump data. Possible options
+            are 'eGon2035' and 'eGon100RE'.
+
+        Other Parameters
+        ----------------
+        kwargs :
+            See :func:`edisgo.io.heat_pump_import.oedb`.
+
+        """
+        raise NotImplementedError
+        # integrated_heat_pumps = import_heat_pumps_oedb(
+        #     edisgo_object=self, scenario=scenario, **kwargs
+        # )
+        # self.heat_pump.set_heat_demand(
+        #     self, "oedb", heat_pump_names=integrated_heat_pumps
+        # )
+        # self.heat_pump.set_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
+
+    def apply_heat_pump_operating_strategy(
+        self, strategy="uncontrolled", heat_pump_names=None, **kwargs
+    ):
+        """
+        Applies operating strategy to set electrical load time series of heat pumps.
+
+        This function requires that COP and heat demand time series, and depending on
+        the operating strategy also information on thermal storage units,
+        were previously set in :attr:`~.edisgo.EDisGo.heat_pump`. COP and heat demand
+        information is automatically set when using
+        :attr:`~.edisgo.EDisGo.import_heat_pumps`. When not using this function it can
+        be manually set using :attr:`~.network.heat.HeatPump.set_cop` and
+        :attr:`~.network.heat.HeatPump.set_heat_demand`.
+
+        The electrical load time series of each heat pump are written to
+        :attr:`~.network.timeseries.TimeSeries.loads_active_power`. Reactive power
+        in :attr:`~.network.timeseries.TimeSeries.loads_reactive_power` is
+        set to 0 Mvar.
+
+        Parameters
+        ----------
+        strategy : str
+            Defines the operating strategy to apply. The following strategies are valid:
+
+            * 'uncontrolled'
+
+                The heat demand is directly served by the heat pump without buffering
+                heat using a thermal storage. The electrical load of the heat pump is
+                determined as follows:
+
+                .. math::
+
+                    P_{el} = P_{th} / COP
+
+            Default: 'uncontrolled'.
+
+        heat_pump_names : list(str) or None
+            Defines for which heat pumps to apply operating strategy. If None, all heat
+            pumps for which COP information in :attr:`~.edisgo.EDisGo.heat_pump` is
+            given are used. Default: None.
+
+        """
+        hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
@@ -1873,6 +2041,7 @@ class EDisGo:
         save_timeseries=True,
         save_results=True,
         save_electromobility=False,
+        save_heatpump=False,
         **kwargs,
     ):
         """
@@ -1914,16 +2083,19 @@ class EDisGo:
             not saved. If set to True, it is saved to subdirectory 'electromobility'.
             See :attr:`~.network.electromobility.Electromobility.to_csv` for more
             information.
-            Default: False.
+        save_heatpump : bool, optional
+            Indicates whether to save
+            :class:`~.network.heat.HeatPump` object. Per default it is not saved.
+            If set to True, it is saved to subdirectory 'heat_pump'.
+            See :attr:`~.network.heat.HeatPump.to_csv` for more information.
 
         Other Parameters
         ------------------
         reduce_memory : bool, optional
             If True, size of dataframes containing time series in
-            :class:`~.network.results.Results` and
-            :class:`~.network.timeseries.TimeSeries`
-            is reduced. See :attr:`~.network.results.Results.reduce_memory`
-            and :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
+            :class:`~.network.results.Results`, :class:`~.network.timeseries.TimeSeries`
+            and :class:`~.network.heat.HeatPump`
+            is reduced. See respective classes `reduce_memory` functions for more
             information. Type to convert to can be specified by providing
             `to_type` as keyword argument. Further parameters of reduce_memory
             functions cannot be passed here. Call these functions directly to
@@ -1937,6 +2109,12 @@ class EDisGo:
             To only store certain results provide a dictionary. See function docstring
             `parameters` parameter in :func:`~.network.results.Results.to_csv`
             for more information.
+        electromobility_attributes : None or list(str)
+            Specifies which electromobility attributes to store. By default this is set
+            to None, in which case all attributes are stored.
+            See function docstring `attributes` parameter in
+            :attr:`~.network.electromobility.Electromobility.to_csv` for more
+            information.
         archive : bool, optional
             Save disk storage capacity by archiving the csv files. The
             archiving takes place after the generation of the CSVs and
@@ -1969,10 +2147,20 @@ class EDisGo:
             )
 
         if save_electromobility:
-            self.electromobility.to_csv(os.path.join(directory, "electromobility"))
+            self.electromobility.to_csv(
+                os.path.join(directory, "electromobility"),
+                attributes=kwargs.get("electromobility_attributes", None),
+            )
 
         # save configs
         self.config.to_json(directory)
+
+        if save_heatpump:
+            self.heat_pump.to_csv(
+                os.path.join(directory, "heat_pump"),
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32"),
+            )
 
         if kwargs.get("archive", False):
             archive_type = kwargs.get("archive_type", "zip")
@@ -2107,7 +2295,9 @@ class EDisGo:
 
             logging.info("Integrity check finished. Please pay attention to warnings.")
 
-    def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
+    def resample_timeseries(
+        self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
+    ):
         """
         Resamples all generator, load and storage time series to a desired resolution.
 
@@ -2177,6 +2367,7 @@ def import_edisgo_from_files(
     import_timeseries=False,
     import_results=False,
     import_electromobility=False,
+    import_heat_pump=False,
     from_zip_archive=False,
     **kwargs,
 ):
@@ -2224,6 +2415,14 @@ def import_edisgo_from_files(
         'electromobility'. A different directory can be specified through keyword
         argument `electromobility_directory`.
         Default: False.
+    import_heat_pump : bool
+        Indicates whether to import :class:`~.network.heat.HeatPump` object.
+        Per default it is set to False, in which case heat pump data containing
+        information on COP, heat demand time series, etc. is not imported.
+        The default directory heat pump data is imported from is the sub-directory
+        'heat_pump'. A different directory can be specified through keyword
+        argument `heat_pump_directory`.
+        Default: False.
     from_zip_archive : bool
         Set to True if data needs to be imported from an archive, e.g. a zip
         archive. Default: False.
@@ -2246,6 +2445,10 @@ def import_edisgo_from_files(
         Indicates directory :class:`~.network.electromobility.Electromobility` object is
         imported from. Per default electromobility data is imported from `edisgo_path`
         sub-directory 'electromobility'.
+    heat_pump_directory : str
+        Indicates directory :class:`~.network.heat.HeatPump` object is
+        imported from. Per default heat pump data is imported from `edisgo_path`
+        sub-directory 'heat_pump'.
     dtype : str
         Numerical data type for time series and results data to be imported,
         e.g. "float32". Per default this is None in which case data type is inferred.
@@ -2262,6 +2465,10 @@ def import_edisgo_from_files(
         Restored EDisGo object.
 
     """
+
+    if not os.path.exists(edisgo_path):
+        raise ValueError("Given edisgo_path does not exist.")
+
     if not from_zip_archive and str(edisgo_path).endswith(".zip"):
         from_zip_archive = True
         logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
@@ -2341,5 +2548,17 @@ def import_edisgo_from_files(
             logging.warning(
                 "No electromobility data found. Electromobility not imported."
             )
+
+    if import_heat_pump:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "heat_pump_directory",
+                os.path.join(edisgo_path, "heat_pump"),
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
+        else:
+            logging.warning("No heat pump data found. Heat pump data not imported.")
 
     return edisgo_obj
