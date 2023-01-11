@@ -25,6 +25,9 @@ The class :class:`~.network.electromobility.Electromobility` holds data on charg
 processes (how long cars are parking at a charging station, how much they need to charge,
 etc.) necessary to apply different charging strategies, as well as information on
 potential charging sites and integrated charging parks.
+The class :class:`~.network.heat.HeatPump` holds data on
+heat pump COP, heat demand to be served by the heat pumps and thermal storage units, which is
+necessary to determine flexibility potential of heat pumps.
 Results data holding results e.g. from the power flow analysis and grid
 expansion is stored in the :class:`~.network.results.Results` class.
 Configuration data from the config files (see :ref:`default_configs`) is stored
@@ -43,6 +46,9 @@ code examples `edisgo` constitues an :class:`~.EDisGo` object.
 
     # Access Electromobility data container object
     edisgo.electromobility
+
+    # Access HeatPump data container object
+    edisgo.heat_pump
 
     # Access Results data container object
     edisgo.results
@@ -251,7 +257,8 @@ by using the function :attr:`~.edisgo.EDisGo.set_timeindex`.
 Optimised
 ..........
 
-Use this mode to optimise flexibilities, e.g. charging of electric vehicles.
+Use this mode to optimise flexibilities, e.g. charging of electric vehicles or
+dispatch of heat pumps with thermal storage units.
 
 .. todo:: Add more details once the optimisation is merged.
 
@@ -266,7 +273,20 @@ The charging strategies can be invoked as follows:
 
     edisgo.apply_charging_strategy()
 
-See :attr:`~.edisgo.EDisGo.apply_charging_strategy` for more information.
+See function docstring of :attr:`~.edisgo.EDisGo.apply_charging_strategy` or
+documentation section :ref:`charging_strategies-label` for more information.
+
+Further, there is currently one operating strategy for heat pumps implemented where
+the heat demand is directly served by the heat pump without buffering heat using a
+thermal storage.
+The operating strategy can be invoked as follows:
+
+.. code-block:: python
+
+    edisgo.apply_heat_pump_operating_strategy()
+
+See function docstring of :attr:`~.edisgo.EDisGo.apply_heat_pump_operating_strategy`
+for more information.
 
 Reactive power time series
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -349,7 +369,150 @@ Further information on the grid reinforcement methodology can be found in sectio
 Electromobility
 -----------------
 
-.. todo:: Add
+Electromobility data including charging processes as well as information on potential charging sites and
+integrated charging parks are stored in the
+:class:`~.network.electromobility.Electromobility` object.
+
+You can access these data as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with all SimBEV charging processes
+    edisgo.electromobility.charging_processes_df
+
+    # Access GeoDataFrame with all TracBEV potential charging parks
+    edisgo.electromobility.potential_charging_parks_gdf
+
+    # Access DataFrame with all charging parks that got integrated
+    edisgo.electromobility.integrated_charging_parks_df
+
+The integrated charging points are also stored in the :class:`~.network.topology.Topology`
+object and can be accessed as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with all integrated charging points.
+    edisgo.topology.charging_points_df
+
+
+So far, adding electromobility data to an eDisGo object requires electromobility
+data from `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
+`3083c5a <https://github.com/rl-institut/simbev/commit/
+86076c936940365587c9fba98a5b774e13083c5a>`_)
+and `TracBEV <https://github.com/rl-institut/tracbev>`_ (required version:
+`14d864c <https://github.com/rl-institut/tracbev/commit/
+03e335655770a377166c05293a966052314d864c>`_) to be stored in the directories
+specified through the parameters simbev_directory and tracbev_directory.
+SimBEV provides data on standing times, charging demand, etc. per vehicle,
+whereas TracBEV provides potential charging point locations.
+
+.. todo:: Add information on how to retrieve SimBEV and TracBEV data
+
+Here is a small example on how to import electromobility data and apply a
+charging strategy. A more extensive example can be found in
+the example jupyter notebook
+`electromobility_example <https://github.com/openego/eDisGo/blob/dev/examples/electromobility_example.ipynb>`_.
+
+.. code-block:: python
+
+    import pandas as pd
+    from edisgo import EDisGo
+
+    # Set up the EDisGo object
+    timeindex = pd.date_range("1/1/2011", periods=24*7, freq="H")
+    edisgo = EDisGo(
+        ding0_grid=dingo_grid_path,
+        timeindex=timeindex
+    )
+    edisgo.set_time_series_active_power_predefined(
+        fluctuating_generators_ts="oedb",
+        dispatchable_generators_ts=pd.DataFrame(
+            data=1, columns=["other"], index=timeindex),
+        conventional_loads_ts="demandlib",
+    )
+
+    edisgo.set_time_series_reactive_power_control()
+
+    # Resample edisgo timeseries to 15-minute resolution to match with SimBEV and
+    # TracBEV data
+    edisgo.resample_timeseries()
+
+    # Import electromobility data
+    edisgo.import_electromobility(
+        simbev_directory=simbev_path,
+        tracbev_directory=tracbev_path,
+    )
+
+    # Apply charging strategy
+    edisgo.apply_charging_strategy(strategy="dumb")
+
+Further information on the electromobility integration methodology and the charging
+strategies can be found in section :ref:`electromobility-integration-label`.
+
+Heat pumps
+-----------------
+
+Heat pump data including the heat pump's time variant COP, heat demand to be served
+as well as thermal storage capacities are stored in the
+:class:`~.network.heat.HeatPump` object.
+
+You can access these data as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with COP time series
+    edisgo.heat_pump.cop_df
+
+    # Access DataFrame with heat demand time series
+    edisgo.heat_pump.heat_demand_df
+
+    # Access DataFrame with information on thermal storage capacities
+    edisgo.heat_pump.thermal_storage_units_df
+
+The heat pumps themselves are also stored in the :class:`~.network.topology.Topology`
+object and can be accessed as follows:
+
+.. code-block:: python
+
+    # Access DataFrame with all integrated heat pumps
+    edisgo.topology.loads_df[edisgo.topology.loads_df.type == "heat_pump"]
+
+Here is a small example on how to integrate a heat pump and apply an
+operating strategy.
+
+.. code-block:: python
+
+    import pandas as pd
+    from edisgo import EDisGo
+
+    # Set up the EDisGo object
+    timeindex = pd.date_range("1/1/2011", periods=4, freq="H")
+    edisgo = EDisGo(
+        ding0_grid=dingo_grid_path,
+        timeindex=timeindex
+    )
+
+    # Set up dummy heat pump data
+    bus = edisgo.topology.loads_df[
+        edisgo.topology.loads_df.sector == "residential"].bus[0]
+    heat_pump_params = {"bus": bus, "p_set": 0.015, "type": "heat_pump"}
+
+    cop = pd.Series([1.0, 2.0, 1.5, 3.4], index=timeindex)
+    heat_demand = pd.Series([0.01, 0.03, 0.015, 0.0], index=timeindex)
+
+    # Add heat pump to grid topology
+    hp_name = edisgo.add_component("load", **heat_pump_params)
+
+    # Add heat pump COP and heat demand to be served
+    edisgo.heat_pump.set_cop(edisgo, cop.to_frame(name=hp_name))
+    edisgo.heat_pump.set_heat_demand(edisgo, heat_demand.to_frame(name=hp_name))
+
+    # Apply operating strategy - this sets the heat pump's dispatch time series
+    # in timeseries.loads_active_power
+    edisgo.apply_heat_pump_operating_strategy()
+
+    hp_dispatch = edisgo.timeseries.loads_active_power.loc[:, hp_name]
+    hp_dispatch.plot()
 
 Battery storage systems
 ------------------------

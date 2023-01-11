@@ -22,7 +22,7 @@ class TestTools:
     def test_calculate_relative_line_load(self):
         # test without providing lines and time steps
         rel_line_load = tools.calculate_relative_line_load(self.edisgo)
-        assert rel_line_load.shape == (4, 129)
+        assert rel_line_load.shape == (4, 131)
 
         # test with providing lines
         rel_line_load = tools.calculate_relative_line_load(
