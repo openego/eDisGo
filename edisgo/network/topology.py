@@ -1627,7 +1627,7 @@ class Topology:
 
         Parameters
         ------------
-        lines_num_parallel : :pandas:`pandas.Series<series>`
+        lines_num_parallel : :pandas:`pandas.Series<Series>`
             Index contains identifiers of lines to update as in index of
             :py:attr:`~lines_df` and values of series contain corresponding
             new number of parallel lines.
@@ -2470,7 +2470,7 @@ class Topology:
 
         Returns
         -------
-        :networkx:`networkx.Graph<network.Graph>`
+        :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
             where lines are represented by edges in the graph, and buses and
             transformers are represented by nodes.

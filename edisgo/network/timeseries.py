@@ -1188,7 +1188,7 @@ class TimeSeries:
         Parameters
         ----------
         edisgo_object : :class:`~.EDisGo`
-        ts_generators : str or :pandas:`pandas.DataFrame<dataframe>`
+        ts_generators : str or :pandas:`pandas.DataFrame<DataFrame>`
             Defines which technology-specific or technology and weather cell specific
             active power time series to use.
             Possible options are:
@@ -1203,7 +1203,7 @@ class TimeSeries:
                 :func:`edisgo.io.timeseries_import.import_feedin_timeseries` for more
                 information.
 
-            * :pandas:`pandas.DataFrame<dataframe>`
+            * :pandas:`pandas.DataFrame<DataFrame>`
 
                 DataFrame with self-provided feed-in time series per technology or
                 per technology and weather cell ID normalized to a nominal capacity
@@ -1307,7 +1307,7 @@ class TimeSeries:
         Parameters
         ----------
         edisgo_object : :class:`~.EDisGo`
-        ts_generators : :pandas:`pandas.DataFrame<dataframe>`
+        ts_generators : :pandas:`pandas.DataFrame<DataFrame>`
             DataFrame with self-provided active power time series of each
             type of dispatchable generator normalized to a nominal capacity of 1.
             Columns contain the technology type as string, e.g. 'gas', 'coal'.
@@ -1507,7 +1507,7 @@ class TimeSeries:
 
         Parameters
         -----------
-        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or \
+        generators_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>` or \
             None
             Sets fixed cosphi parameters for generators. Possible options are:
 
@@ -1519,7 +1519,7 @@ class TimeSeries:
                 components behave inductive or capacitive, given in the config section
                 `reactive_power_mode`, are used.
 
-            * :pandas:`pandas.DataFrame<dataframe>`
+            * :pandas:`pandas.DataFrame<DataFrame>`
 
                 DataFrame with fix cosphi parametrisation for specified generators.
                 Columns are:
@@ -1546,10 +1546,10 @@ class TimeSeries:
                 No reactive power time series are set.
 
             Default: None.
-        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` or None
+        loads_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>` or None
             Sets fixed cosphi parameters for loads. The same options as for parameter
             `generators_parametrisation` apply.
-        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>` \
+        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>` \
             or None
             Sets fixed cosphi parameters for storage units. The same options as for
             parameter `generators_parametrisation` apply.

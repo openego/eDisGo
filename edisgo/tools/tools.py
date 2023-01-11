@@ -508,7 +508,7 @@ def get_directory_size(start_dir):
 
     Walks through all files and sub-directories within a given directory and
     calculate the sum of size of all files in the directory.
-    See: https://stackoverflow.com/a/1392549/13491957
+    See https://stackoverflow.com/questions/1392413/calculating-a-directorys-size-using-python/1392549#1392549
 
     Parameters
     ----------
