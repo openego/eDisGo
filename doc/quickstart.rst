@@ -91,7 +91,7 @@ The steps required to set up HSL  are also described in the
 Here is a short version for reference:
 
 First, you need to obtain an academic license for HSL Solvers.
-Under http://www.hsl.rl.ac.uk/ipopt/ download the sources for Coin-HSL Full (Stable).
+Under https://www.hsl.rl.ac.uk/ipopt/ download the sources for Coin-HSL Full (Stable).
 You will need to provide an institutional e-mail to gain access.
 
 Unpack the tar.gz:
@@ -188,12 +188,12 @@ Aside from grid topology data you may eventually need a dataset on future
 installation of power plants. You may therefore use the scenarios developed in
 the `open_eGo <https://openegoproject.wordpress.com>`_ project that
 are available in the
-`OpenEnergy DataBase (oedb) <https://openenergy-platform.org/dataedit/>`_
-hosted on the `OpenEnergy Platform (OEP) <https://oep.iks.cs.ovgu.de/>`_.
+`OpenEnergy DataBase (oedb) <https://openenergy-platform.org/dataedit/schemas>`_
+hosted on the `OpenEnergy Platform (OEP) <https://openenergy-platform.org/>`_.
 eDisGo provides an interface to the oedb using the package
 `ego.io <https://github.com/openego/ego.io>`_. ego.io gives you a python
 SQL-Alchemy representations of the oedb and access to it by using the
-`oedialect <https://github.com/openego/oedialect>`_, an SQL-Alchemy dialect
+`oedialect <https://github.com/OpenEnergyPlatform/oedialect>`_, an SQL-Alchemy dialect
 used by the OEP.
 
 You can run a worst-case scenario as follows:

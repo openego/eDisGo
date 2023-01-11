@@ -164,7 +164,7 @@ class HeatPump:
         Parameters
         ----------
         edisgo_object : :class:`~.EDisGo`
-        ts_cop : str or :pandas:`pandas.DataFrame<dataframe>`
+        ts_cop : str or :pandas:`pandas.DataFrame<DataFrame>`
             Defines option used to set COP time series.
             Possible options are:
 
@@ -179,7 +179,7 @@ class HeatPump:
                 Using information on which weather cell each heat pump is in, the
                 weather cell specific time series are mapped to each heat pump.
 
-            * :pandas:`pandas.DataFrame<dataframe>`
+            * :pandas:`pandas.DataFrame<DataFrame>`
 
                 DataFrame with self-provided COP time series per heat pump.
                 See :py:attr:`~cop_df` on information on the required dataframe format.
@@ -219,7 +219,7 @@ class HeatPump:
         Parameters
         ----------
         edisgo_object : :class:`~.EDisGo`
-        ts_heat_demand : str or :pandas:`pandas.DataFrame<dataframe>`
+        ts_heat_demand : str or :pandas:`pandas.DataFrame<DataFrame>`
             Defines option used to set heat demand time series.
             Possible options are:
 
@@ -232,7 +232,7 @@ class HeatPump:
                 :func:`edisgo.io.timeseries_import.heat_demand_oedb` for more
                 information.
 
-            * :pandas:`pandas.DataFrame<dataframe>`
+            * :pandas:`pandas.DataFrame<DataFrame>`
 
                 DataFrame with self-provided heat demand time series per heat pump.
                 See :py:attr:`~heat_demand_df` on information on the required

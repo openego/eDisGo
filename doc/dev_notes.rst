@@ -63,7 +63,7 @@ Code standards
 * **pytest**: Make sure that all pytest tests are passing and add tests for every new code base
 * **Documentation of `@property` functions**: Put documentation of getter and setter
   both in Docstring of getter, see
-  `on Stackoverflow <https://stackoverflow.com/a/16025754/6385207>`_
+  `on Stackoverflow <https://stackoverflow.com/questions/16025462/what-is-the-right-way-to-put-a-docstring-on-python-property/16025754#16025754>`_
 * Order of public/private/protected methods, property decorators, etc. in a class: TBD
 
 

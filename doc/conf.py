@@ -5,7 +5,7 @@ distribution grids based on open data.
 It is developed in the project open_eGo: https://openegoproject.wordpress.com
 
 DINGO lives at github: https://github.com/openego/dingo/
-The documentation is available on RTD: http://edisgo.readthedocs.io"""
+The documentation is available on RTD: https://edisgo.readthedocs.io/en/dev/"""
 
 __copyright__ = "Reiner Lemoine Institut gGmbH"
 __license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
