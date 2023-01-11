@@ -83,13 +83,8 @@ And then you build the html docs on your computer with
 
     sphinx-build -E -a doc/ doc/_html
     
-To check if external links in the documentation work, change into the doc repository
- 
-.. code-block:: bash
-
-   cd doc
-  
-and run the following command
+To manually check if external links in the documentation work, change into the doc
+repository and run the following command (internal links are not checked by this):
   
 .. code-block:: bash
 
