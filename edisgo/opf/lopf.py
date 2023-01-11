@@ -1304,13 +1304,15 @@ def optimize(model, solver, load_solutions=True, mode=None,
     mode : str
         directory to which results are saved, default None will no saving of
         the results
+    tee: bool
+        If True, then the solver log will be printed.
     kwargs
         logfile : str
             dir/name of logfile for solver
         lp_filename : str
             dir/name of logfile for solver
         tolerance : float
-            Tollerance for optimality
+            Tolerance for optimality
 
     Returns
     -------
@@ -1330,7 +1332,7 @@ def optimize(model, solver, load_solutions=True, mode=None,
     tolerance = kwargs.get("tolerance", None)
     if tolerance is not None:
         opt.options["OptimalityTol"] = tolerance
-        logger.info(f"tolerance for optimality set to: {tolerance}")
+        logger.info(f"Tolerance for optimality set to: {tolerance}")
     # Optimize
     results = opt.solve(model,
                         tee=tee,
