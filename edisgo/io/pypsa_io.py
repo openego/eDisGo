@@ -257,12 +257,18 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         else:
             generators_timeseries_active = (
                 edisgo_object.timeseries.generators_active_power.loc[
-                    timesteps, components["Generator"].index
+                    timesteps,
+                    edisgo_object.timeseries.generators_active_power.columns.isin(
+                        components["Generator"].index
+                    ),
                 ]
             )
             generators_timeseries_reactive = (
                 edisgo_object.timeseries.generators_reactive_power.loc[
-                    timesteps, components["Generator"].index
+                    timesteps,
+                    edisgo_object.timeseries.generators_reactive_power.columns.isin(
+                        components["Generator"].index
+                    ),
                 ]
             )
 
@@ -287,11 +293,17 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
             )
         else:
             loads_timeseries_active = edisgo_object.timeseries.loads_active_power.loc[
-                timesteps, components["Load"].index
+                timesteps,
+                edisgo_object.timeseries.loads_active_power.columns.isin(
+                    components["Load"].index
+                ),
             ]
             loads_timeseries_reactive = (
                 edisgo_object.timeseries.loads_reactive_power.loc[
-                    timesteps, components["Load"].index
+                    timesteps,
+                    edisgo_object.timeseries.loads_reactive_power.columns.isin(
+                        components["Load"].index
+                    ),
                 ]
             )
         import_series_from_dataframe(
@@ -316,12 +328,18 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         else:
             storages_timeseries_active = (
                 edisgo_object.timeseries.storage_units_active_power.loc[
-                    timesteps, components["StorageUnit"].index
+                    timesteps,
+                    edisgo_object.timeseries.storage_units_active_power.columns.isin(
+                        components["StorageUnit"].index
+                    ),
                 ]
             )
             storages_timeseries_reactive = (
                 edisgo_object.timeseries.storage_units_reactive_power.loc[
-                    timesteps, components["StorageUnit"].index
+                    timesteps,
+                    edisgo_object.timeseries.storage_units_reactive_power.columns.isin(
+                        components["StorageUnit"].index
+                    ),
                 ]
             )
         import_series_from_dataframe(
