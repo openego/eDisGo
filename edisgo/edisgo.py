@@ -2293,7 +2293,7 @@ class EDisGo:
                     f" the following {comp_type}: {exceeding.values}"
                 )
 
-            logging.info("Integrity check finished. Please pay attention to warnings.")
+        logging.info("Integrity check finished. Please pay attention to warnings.")
 
     def resample_timeseries(
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
