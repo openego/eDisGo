@@ -1,7 +1,7 @@
 Release v0.2.0
 ================
 
-Release date: <Month> <Day>, <Year>
+Release date: November 10, 2022
 
 Changes
 -------
@@ -11,7 +11,7 @@ Changes
 * added Windows installation yml and documentation
 * added automatic testing for Windows `#317 <https://github.com/openego/eDisGo/pull/317>`_
 * dropped support for python 3.7
-* added functionality to set up different loggers with individual logging levels and where to write output `#295 <https://github.com/openego/eDisGo/issues/295>`_
+* added functionality to set up different loggers with individual logging levels and where to write output `#295 <https://github.com/openego/eDisGo/pull/295>`_
 * added integrity checks of eDisGo object `#231 <https://github.com/openego/eDisGo/issues/231>`_
 * added functionality to save to and load from zip archive `#216 <https://github.com/openego/eDisGo/pull/216>`_
 * added option to not raise error in case power flow did not converge `#207 <https://github.com/openego/eDisGo/issues/207>`_

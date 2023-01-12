@@ -347,7 +347,7 @@ def set_seed(edisgo_obj, pypsa_network):
     """
     Set initial guess for the Newton-Raphson algorithm.
 
-    In `PyPSA <https://pypsa.readthedocs.io/en/latest/index.html/>`_ an
+    In `PyPSA <https://pypsa.readthedocs.io/en/latest/>`_ an
     initial guess for the Newton-Raphson algorithm used in the power flow
     analysis can be provided to speed up calculations.
     For PQ buses, which besides the slack bus, is the only bus type in
@@ -804,8 +804,7 @@ def process_pfa_results(edisgo, pypsa, timesteps, dtype="float"):
     ----------
     edisgo : :class:`~.EDisGo`
     pypsa : :pypsa:`pypsa.Network<network>`
-        The PyPSA `Network container
-        <https://www.pypsa.org/doc/components.html#network>`_
+        The PyPSA network to retrieve results from.
     timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
         Time steps for which latest power flow analysis was conducted and

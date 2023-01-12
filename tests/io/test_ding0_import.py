@@ -13,19 +13,17 @@ class TestImportFromDing0:
     def setup_class(self):
         self.topology = Topology()
 
-    def test_import_ding0_grid(self, caplog):
+    def test_import_ding0_grid(self):
         """Test successful import of ding0 network."""
 
-        with caplog.at_level(logging.DEBUG):
-            ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
-            assert "Removed 2 1 m end lines." in caplog.text
+        ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
 
         # buses, generators, loads, lines, transformers dataframes
         # check number of imported components
-        assert self.topology.buses_df.shape[0] == 140
+        assert self.topology.buses_df.shape[0] == 142
         assert self.topology.generators_df.shape[0] == 28
         assert self.topology.loads_df.shape[0] == 50
-        assert self.topology.lines_df.shape[0] == 129
+        assert self.topology.lines_df.shape[0] == 131
         assert self.topology.transformers_df.shape[0] == 14
         assert self.topology.transformers_hvmv_df.shape[0] == 1
         assert self.topology.switches_df.shape[0] == 2
@@ -69,3 +67,13 @@ class TestImportFromDing0:
                     index=self.topology.transformers_df.bus0
                 ).v_nom.values
             ).all()
+
+    def test_remove_1m_end_lines(self, caplog):
+        ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
+        with caplog.at_level(logging.DEBUG):
+            ding0_import.remove_1m_end_lines(self)
+            assert "Removed 2 1 m end lines." in caplog.text
+
+        # check number of lines and buses
+        assert self.topology.buses_df.shape[0] == 140
+        assert self.topology.lines_df.shape[0] == 129

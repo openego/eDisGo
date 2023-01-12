@@ -398,7 +398,7 @@ class TestTopology:
         with pytest.raises(ValueError, match=msg):
             self.topology.add_storage_unit(bus="Unknown_bus", p_nom=1, control="PQ")
 
-    def test_add_line(self):
+    def test_add_line(self, caplog):
         """Test add_line method"""
 
         len_df_before = len(self.topology.lines_df)
@@ -422,7 +422,7 @@ class TestTopology:
             "line, x, r, b and s_nom are calculated and provided "
             "parameters are overwritten."
         )
-        with pytest.warns(UserWarning, match=msg):
+        with caplog.at_level(logging.WARNING):
             name = self.topology.add_line(
                 bus0=bus0,
                 bus1=bus1,
@@ -431,6 +431,7 @@ class TestTopology:
                 type_info="NA2XS2Y 3x1x185 RM/25",
                 x=2,
             )
+        assert msg in caplog.text
         assert len_df_before + 2 == len(self.topology.lines_df)
         assert name == "Line_Bus_BranchTee_MVGrid_1_8_Bus_BranchTee_LVGrid_1_10"
         assert np.isclose(self.topology.lines_df.at[name, "s_nom"], 6.18342)
@@ -502,11 +503,12 @@ class TestTopology:
         assert self.topology.buses_df.at[name, "lv_grid_id"] == 1
         assert self.topology.buses_df.at[name, "mv_grid_id"] == 1
 
-    def test_check_bus_for_removal(self):
+    def test_check_bus_for_removal(self, caplog):
         # test warning if line does not exist
         msg = "Bus of name TestBus not in Topology. Cannot be removed."
-        with pytest.warns(UserWarning, match=msg):
+        with caplog.at_level(logging.WARNING):
             self.topology._check_bus_for_removal("TestBus")
+        assert msg in caplog.text
         return_value = self.topology._check_bus_for_removal("TestBus")
         assert not return_value
 
@@ -532,12 +534,13 @@ class TestTopology:
         )
         assert return_value
 
-    def test_check_line_for_removal(self):
+    def test_check_line_for_removal(self, caplog):
 
         # test warning if line does not exist
         msg = "Line of name TestLine not in Topology. Cannot be removed."
-        with pytest.warns(UserWarning, match=msg):
+        with caplog.at_level(logging.WARNING):
             self.topology._check_line_for_removal("TestLine")
+        assert msg in caplog.text
         return_value = self.topology._check_line_for_removal("TestLine")
         assert not return_value
 
@@ -673,13 +676,14 @@ class TestTopology:
         assert bus in self.topology.buses_df.index
         assert (connected_lines.index.isin(self.topology.lines_df.index)).all()
 
-    def test_remove_line(self):
+    def test_remove_line(self, caplog):
         """Test remove_line method"""
 
         # test try removing line that cannot be removed
         msg = "Removal of line Line_30000010 would create isolated node."
-        with pytest.warns(UserWarning, match=msg):
+        with caplog.at_level(logging.WARNING):
             self.topology.remove_line("Line_30000010")
+        assert msg in caplog.text
 
         # test remove line in cycle (no bus is removed)
         # add line to create ring
@@ -715,16 +719,17 @@ class TestTopology:
         assert "Bus_BranchTee_LVGrid_3_6" not in self.topology.buses_df.index
         assert "Bus_BranchTee_LVGrid_3_5" in self.topology.buses_df.index
 
-    def test_remove_bus(self):
+    def test_remove_bus(self, caplog):
         """Test remove_bus method"""
 
         # test bus cannot be removed
         msg = (
             "Bus Bus_BranchTee_LVGrid_4_2 is not isolated and "
-            "therefore not removed. Remove all connected elements *"
+            "therefore not removed. Remove all connected elements "
         )
-        with pytest.warns(UserWarning, match=msg):
+        with caplog.at_level(logging.WARNING):
             self.topology.remove_bus("Bus_BranchTee_LVGrid_4_2")
+        assert msg in caplog.text
 
         # test bus can be removed
         # create isolated bus
@@ -921,8 +926,8 @@ class TestTopologyWithEdisgoObject:
         assert len(self.edisgo.topology.generators_df) == 28
         assert self.edisgo.topology.charging_points_df.empty
         assert len(self.edisgo.topology.storage_units_df) == 1
-        assert len(self.edisgo.topology.lines_df) == 129
-        assert len(self.edisgo.topology.buses_df) == 140
+        assert len(self.edisgo.topology.lines_df) == 131
+        assert len(self.edisgo.topology.buses_df) == 142
         assert len(self.edisgo.topology.switches_df) == 2
         assert self.edisgo.topology.grid_district["population"] == 23358
 
