@@ -637,8 +637,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
-        opt_version=4,
-        opt_flex=None,
+        opf_version=4,
     ):
         """
         Converts eDisGo representation of the network topology and timeseries to
@@ -657,13 +656,10 @@ class EDisGo:
         flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
             Array containing all flexible loads that allow for application of demand
             side management strategy.
-        opt_version: Int
+        opf_version: Int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: 4
-        opt_flex: list
-            List of flexibilities that should be considered in the optimization. Must be
-            any subset of ["storage", "cp", "hp", "dsm"]
 
         Returns
         -------
@@ -678,8 +674,7 @@ class EDisGo:
             flexible_cps=flexible_cps,
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
-            opt_version=opt_version,
-            opt_flex=opt_flex,
+            opf_version=opf_version,
         )
 
     def from_powermodels(
@@ -721,7 +716,7 @@ class EDisGo:
             Default: False
         save_slacks: bool
             Indicates whether to save results of slack variables of OPF. Depending on
-             chosen opt_version, different slacks are used. For more information see
+             chosen opf_version, different slacks are used. For more information see
              :func:`edisgo.io.powermodels_io.from_powermodels`
             Default: False
         path : str
@@ -746,8 +741,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
-        opt_version=4,
-        opt_flex=None,
+        opf_version=4,
         method="soc",
         solver_tol=1e-6,
         warm_start=False,
@@ -778,15 +772,10 @@ class EDisGo:
             Array containing all flexible loads that allow for application of demand
             side management strategy.
             Default: None
-        opt_version: Int
+        opf_version: Int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: 4
-        opt_flex: list or None
-            List of flexibilities that should be considered in the optimization. Must be
-            any subset of ["storage", "cp", "hp", "dsm"] or None. For more information
-            see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
-            Default: None
         method: str
             Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
             (Non Convex). For more information see
@@ -820,7 +809,7 @@ class EDisGo:
             Default: False
         save_slacks: bool
             Indicates whether to save results of slack variables of OPF. Depending on
-             chosen opt_version, different slacks are used. For more information see
+             chosen opf_version, different slacks are used. For more information see
              :func:`edisgo.io.powermodels_io.from_powermodels`.
             Default: False
         path : str
@@ -834,8 +823,7 @@ class EDisGo:
             flexible_cps=flexible_cps,
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
-            opt_version=opt_version,
-            opt_flex=opt_flex,
+            opf_version=opf_version,
             method=method,
             solver_tol=solver_tol,
             warm_start=warm_start,
@@ -2418,8 +2406,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
-        opt_version=4,
-        opt_flex=None,
+        opf_version=4,
     ):
         """
         Saves EDisGo object in PowerModels network data format to json file.
@@ -2443,13 +2430,10 @@ class EDisGo:
         flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
             Array containing all flexible loads that allow for application of demand
             side management strategy.
-        opt_version: Int
+        opf_version: Int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: 4
-        opt_flex: list
-            List of flexibilities that should be considered in the optimization. Must be
-            any subset of ["storage", "cp", "hp", "dsm"]
 
         """
         abs_path = os.path.abspath(path)
@@ -2458,8 +2442,7 @@ class EDisGo:
             flexible_cps=flexible_cps,
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
-            opt_version=opt_version,
-            opt_flex=opt_flex,
+            opf_version=opf_version,
         )
 
         def _convert(o):

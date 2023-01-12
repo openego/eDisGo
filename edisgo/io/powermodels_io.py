@@ -39,8 +39,7 @@ def to_powermodels(
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
-    opt_version=4,
-    opt_flex=None,
+    opf_version=4,
 ):
     """
     Converts eDisGo representation of the network topology and timeseries to
@@ -60,14 +59,10 @@ def to_powermodels(
     flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
-    opt_version: Int
+    opf_version: Int
         Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
         For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
         Default: 4
-    opt_flex: list
-        List of flexibilities that should be considered in the optimization. Must be any
-        subset of ["storage", "cp", "hp", "dsm"]
-
     Returns
     -------
     pm: dict
@@ -77,33 +72,23 @@ def to_powermodels(
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from etrago component of edisgo object.
     """
-    if opt_flex is None:
-        opt_flex = ["curt"]
-    if "curt" not in opt_flex:
-        opt_flex.append("curt")
+    opf_flex = ["curt"]
     if flexible_cps is None:
         flexible_cps = []
     if flexible_hps is None:
         flexible_hps = []
     if flexible_loads is None:
         flexible_loads = []
-    # Check if names of flexible loads for optimization are supplied
+    # Append names of flexibilities for OPF
     for (flex, loads, text) in [
-        ("cp", flexible_cps, "flexible charging parks"),
-        ("hp", flexible_hps, "flexible heatpumps"),
-        ("dsm", flexible_loads, "flexible loads"),
-        ("storage", edisgo_object.topology.storage_units_df, "storage units"),
+        ("cp", flexible_cps, "Flexible charging parks"),
+        ("hp", flexible_hps, "Flexible heatpumps"),
+        ("dsm", flexible_loads, "Flexible loads"),
+        ("storage", edisgo_object.topology.storage_units_df, "Storage units"),
     ]:
-        if (flex in opt_flex) & (len(loads) == 0):
-            logger.warning(
-                " No {} found in network, {} will not be optimized.".format(text, text)
-            )
-            opt_flex.remove(flex)
-        elif (flex not in opt_flex) & (len(loads) != 0):
-            logger.warning(
-                " {} found in network, {} will be optimized.".format(text, text)
-            )
-            opt_flex.append(flex)
+        if (flex not in opf_flex) & (len(loads) != 0):
+            logger.info("{} will be optimized.".format(text))
+            opf_flex.append(flex)
     hv_flex_dict = dict()
     # Sorts buses such that bus0 is always the upstream bus
     edisgo_object.topology.sort_buses()
@@ -132,7 +117,7 @@ def to_powermodels(
     )  # length of timesteps in hours
     pm["baseMVA"] = s_base
     pm["source_version"] = 2
-    pm["flexibilities"] = opt_flex
+    pm["flexibilities"] = opf_flex
     _build_bus(psa_net, pm)
     _build_gen(edisgo_object, psa_net, pm, s_base)
     _build_branch(psa_net, pm, s_base, flexible_loads)
@@ -148,7 +133,6 @@ def to_powermodels(
         )
     if len(flexible_hps) > 0:
         _build_heatpump(psa_net, pm, edisgo_object, s_base, flexible_hps)
-    if "hp" in opt_flex:
         _build_heat_storage(psa_net, pm, edisgo_object, s_base, flexible_hps)
     if len(flexible_loads) > 0:
         flexible_loads = _build_dsm(edisgo_object, psa_net, pm, s_base, flexible_loads)
@@ -156,7 +140,7 @@ def to_powermodels(
         _build_load(edisgo_object, psa_net, pm, s_base, flexible_cps, flexible_hps)
     else:
         logger.warning("No loads found in network.")
-    if (opt_version == 1) | (opt_version == 2):
+    if (opf_version == 1) | (opf_version == 2):
         hv_flex_dict = {
             "curt": edisgo_object.etrago.renewables_curtailment / s_base,
             "storage": edisgo_object.etrago.storage_units_active_power / s_base,
@@ -170,7 +154,7 @@ def to_powermodels(
         }
         try:
             _build_hv_requirements(
-                psa_net, pm, s_base, opt_flex, flexible_cps, flexible_hps, hv_flex_dict
+                psa_net, pm, s_base, opf_flex, flexible_cps, flexible_hps, hv_flex_dict
             )
         except IndexError:
             logger.warning(
@@ -178,9 +162,9 @@ def to_powermodels(
                 " Changing optimization version to '4' (without high voltage"
                 " requirements)."
             )
-            opt_version = 4
+            opf_version = 4
 
-    pm["opt_version"] = opt_version
+    pm["opf_version"] = opf_version
 
     _build_timeseries(
         psa_net,
@@ -190,7 +174,7 @@ def to_powermodels(
         flexible_cps,
         flexible_hps,
         flexible_loads,
-        opt_flex,
+        opf_flex,
         hv_flex_dict,
     )
     return pm, hv_flex_dict
@@ -236,7 +220,7 @@ def from_powermodels(
     save_slacks: bool
         Indicates whether to save results of slack variables from the OPF run to csv
         files in the current working directory. Set parameter "path" to change the
-        directory the file is saved to. Depending on the chosen opt_version, different
+        directory the file is saved to. Depending on the chosen opf_version, different
         slacks are created and saved:
         1 : high voltage requirement slacks
         2 : high voltage requirements slacks and grid related slacks (load shedding,
@@ -309,7 +293,7 @@ def from_powermodels(
     edisgo_object.set_time_series_reactive_power_control()
 
     # Check values of slack variables for HV requirement constraint
-    if pm["nw"]["1"]["opt_version"] in [1, 2]:
+    if pm["nw"]["1"]["opf_version"] in [1, 2]:
         names = [
             pm["nw"]["1"]["HV_requirements"][flex]["flexibility"]
             for flex in list(pm["nw"]["1"]["HV_requirements"].keys())
@@ -385,7 +369,7 @@ def from_powermodels(
                 os.path.join(abs_path, str("heat_storage_" + name[variable] + ".csv"))
             )
 
-    if (pm["nw"]["1"]["opt_version"] in [2, 4]) & save_slacks:
+    if (pm["nw"]["1"]["opf_version"] in [2, 4]) & save_slacks:
         # save heatpump slacks to csv file
         names = [
             pm["nw"]["1"]["heatpumps"][hp]["name"]
@@ -1481,7 +1465,7 @@ def _build_component_timeseries(
                 "e_max": e_max[comp].values.tolist(),
             }
     if (kind == "HV_requirements") & (
-        (pm["opt_version"] == 1) | (pm["opt_version"] == 2)
+        (pm["opf_version"] == 1) | (pm["opf_version"] == 2)
     ):
         for i in np.arange(len(opt_flex)):
             pm_comp[(str(i + 1))] = {
