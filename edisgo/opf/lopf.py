@@ -1378,10 +1378,30 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
                     pd.Series(model.slack_initial_charging_pos_ev.extract_values())
                     + pd.Series(model.slack_initial_charging_neg_ev.extract_values())
                 )
+            result_dict["slack_initial_charging_hp"] = (
+                    pd.Series(
+                        model.slack_initial_charging_pos_hp.extract_values())
+                    + pd.Series(
+                model.slack_initial_charging_neg_hp.extract_values())
+                )
+            result_dict["slack_initial_charging_tes"] = (
+                    pd.Series(
+                        model.slack_initial_charging_pos_tes.extract_values())
+                    + pd.Series(
+                model.slack_initial_charging_neg_tes.extract_values())
+                )
+
             result_dict["slack_initial_energy_ev"] = (
                     pd.Series(model.slack_initial_energy_pos_ev.extract_values())
                     + pd.Series(model.slack_initial_energy_neg_ev.extract_values())
             )
+            result_dict["slack_initial_energy_tes"] = (
+                    pd.Series(
+                        model.slack_initial_energy_pos_tes.extract_values())
+                    + pd.Series(
+                model.slack_initial_energy_neg_tes.extract_values())
+            )
+
 
             result_dict["curtailment_ev"] = (
                 pd.Series(model.curtailment_ev.extract_values())
@@ -2793,8 +2813,27 @@ def extract_slack_charging(model):
             + model.slack_initial_energy_neg_ev[cp]
             for cp in model.flexible_charging_points_set
         )
-    else:
-        slack_energy = 0
+
+    if hasattr(model, "slack_initial_charging_pos_hp"):
+        slack_charging += sum(
+            model.slack_initial_charging_pos_hp[cp]
+            + model.slack_initial_charging_neg_hp[cp]
+            for cp in model.flexible_heat_pumps_set
+        )
+    if hasattr(model, "slack_initial_charging_pos_tes"):
+        slack_charging += sum(
+            model.slack_initial_charging_pos_tes[cp]
+            + model.slack_initial_charging_neg_tes[cp]
+            for cp in model.flexible_heat_pumps_set
+        )
+
+    if hasattr(model, "slack_initial_energy_pos_tes"):
+        slack_energy += sum(
+            model.slack_initial_energy_pos_tes[cp]
+            + model.slack_initial_energy_neg_tes[cp]
+            for cp in model.flexible_heat_pumps_set
+        )
+
     return slack_charging, slack_energy
 
 
