@@ -316,7 +316,7 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
 
     Returns
     -------
-    :geopandas:`geodataframe`
+    :geopandas:`GeoDataFrame`
         GeoDataFrame with AGS, charging use case (home, work, public or
         hpc), user centric weight and geometry.
 
