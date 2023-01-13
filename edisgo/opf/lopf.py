@@ -1420,8 +1420,14 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
                 .rename(columns=time_dict)
                 .T
             )
-            result_dict["energy_tes"] = (
+            result_dict["energy_level_tes"] = (
                 pd.Series(model.energy_level_tes.extract_values())
+                .unstack()
+                .rename(columns=time_dict)
+                .T
+            )
+            result_dict["curtailment_hp"] = (
+                pd.Series(model.curtailment_hp.extract_values())
                 .unstack()
                 .rename(columns=time_dict)
                 .T
