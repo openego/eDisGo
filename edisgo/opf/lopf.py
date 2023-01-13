@@ -1290,8 +1290,7 @@ def update_rolling_horizon(comp_type, model, **kwargs):
     return model
 
 
-def optimize(model, solver, load_solutions=True, mode=None,
-             tee=True, **kwargs):
+def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
     """
     Method to run the optimization and extract the results.
 
@@ -1318,11 +1317,12 @@ def optimize(model, solver, load_solutions=True, mode=None,
     -------
 
     """
-
     lp_filename = kwargs.get("lp_filename", None)
     if lp_filename is not None:
         logger.info(f"Save lp file to: {lp_filename}")
-        model.write(filename=str(lp_filename), io_options={"symbolic_solver_labels": True})
+        model.write(
+            filename=str(lp_filename), io_options={"symbolic_solver_labels": True}
+        )
 
     logger.info("Starting optimisation")
 
@@ -1334,10 +1334,12 @@ def optimize(model, solver, load_solutions=True, mode=None,
         opt.options["OptimalityTol"] = tolerance
         logger.info(f"Tolerance for optimality set to: {tolerance}")
     # Optimize
-    results = opt.solve(model,
-                        tee=tee,
-                        load_solutions=load_solutions,
-                        logfile=kwargs.get("logfile", None))
+    results = opt.solve(
+        model,
+        tee=tee,
+        load_solutions=load_solutions,
+        logfile=kwargs.get("logfile", None),
+    )
 
     if (results.solver.status == SolverStatus.ok) and (
         results.solver.termination_condition == TerminationCondition.optimal
@@ -1347,7 +1349,7 @@ def optimize(model, solver, load_solutions=True, mode=None,
         time_dict = {t: model.timeindex[t].value for t in model.time_set}
         result_dict = {}
         if hasattr(model, "optimized_storage_set"):
-            result_dict["x_charge"] = (
+            result_dict["charging_bess"] = (
                 pd.Series(model.charging.extract_values())
                 .unstack()
                 .rename(columns=time_dict)
@@ -1360,24 +1362,27 @@ def optimize(model, solver, load_solutions=True, mode=None,
                 .T
             )
         if hasattr(model, "flexible_charging_points_set"):
-            result_dict["x_charge_ev"] = (
+            result_dict["charging_ev"] = (
                 pd.Series(model.charging_ev.extract_values())
                 .unstack()
                 .rename(columns=time_dict)
                 .T
             )
-            result_dict["energy_level_cp"] = (
+            result_dict["energy_level_ev"] = (
                 pd.Series(model.energy_level_ev.extract_values())
                 .unstack()
                 .rename(columns=time_dict)
                 .T
             )
-            result_dict["slack_charging"] = pd.Series(
-                model.slack_initial_charging_pos_ev.extract_values()
-            ) + pd.Series(model.slack_initial_charging_neg_ev.extract_values())
-            result_dict["slack_energy"] = pd.Series(
-                model.slack_initial_energy_pos_ev.extract_values()
-            ) + pd.Series(model.slack_initial_energy_neg_ev.extract_values())
+            result_dict["slack_initial_charging_ev"] = (
+                    pd.Series(model.slack_initial_charging_pos_ev.extract_values())
+                    + pd.Series(model.slack_initial_charging_neg_ev.extract_values())
+                )
+            result_dict["slack_initial_energy_ev"] = (
+                    pd.Series(model.slack_initial_energy_pos_ev.extract_values())
+                    + pd.Series(model.slack_initial_energy_neg_ev.extract_values())
+            )
+
             result_dict["curtailment_ev"] = (
                 pd.Series(model.curtailment_ev.extract_values())
                 .unstack()
@@ -2771,16 +2776,19 @@ def extract_slack_charging(model):
     -------
 
     """
-    if hasattr(model, "slack_initial_charging_pos"):
-        slack_charging = sum(
+    slack_charging = 0
+    slack_energy = 0
+
+    # TODO schleife
+    if hasattr(model, "slack_initial_charging_pos_ev"):
+        slack_charging += sum(
             model.slack_initial_charging_pos_ev[cp]
             + model.slack_initial_charging_neg_ev[cp]
             for cp in model.flexible_charging_points_set
         )
-    else:
-        slack_charging = 0
-    if hasattr(model, "slack_initial_energy_pos"):
-        slack_energy = sum(
+
+    if hasattr(model, "slack_initial_energy_pos_ev"):
+        slack_energy += sum(
             model.slack_initial_energy_pos_ev[cp]
             + model.slack_initial_energy_neg_ev[cp]
             for cp in model.flexible_charging_points_set
