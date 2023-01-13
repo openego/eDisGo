@@ -856,7 +856,7 @@ class TestTopology:
         # check number of lines where buses were exchanged
         assert (lines_df_before.bus0 == self.topology.lines_df.bus0).value_counts().loc[
             False
-        ] == 11
+        ] == 9
 
     def test_to_csv(self):
         """Test for method to_csv."""
