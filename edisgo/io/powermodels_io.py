@@ -485,80 +485,36 @@ def _build_gen(edisgo_obj, psa_net, pm, s_base):
     for bus in slack_gens_bus:
         pm["bus"][str(_mapping(psa_net, bus))]["bus_type"] = 3
 
-    for gen_i in np.arange(len(gen_disp.index)):
-        idx_bus = _mapping(psa_net, gen_disp.bus[gen_i])
-        # retrieve power factor and sign from config
-        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "gen")
-        q = [
-            sign * np.tan(np.arccos(pf)) * gen_disp.p_nom[gen_i],
-            sign * np.tan(np.arccos(pf)) * gen_disp.p_nom_min[gen_i],
-        ]
-        pm["gen"][str(gen_i + 1)] = {
-            "pg": psa_net.generators_t.p_set[gen_disp.index[gen_i]][0] / s_base,
-            "qg": psa_net.generators_t.q_set[gen_disp.index[gen_i]][0] / s_base,
-            "pmax": gen_disp.p_nom[gen_i] / s_base,
-            "pmin": gen_disp.p_nom_min[gen_i] / s_base,
-            "qmax": max(q) / s_base,
-            "qmin": min(q) / s_base,
-            "vg": 1,
-            "pf": pf,
-            "sign": sign,
-            "mbase": gen_disp.p_nom[gen_i] / s_base,
-            "gen_bus": idx_bus,
-            "name": gen_disp.index[gen_i],
-            "gen_status": 1,
-            "index": gen_i + 1,
-        }
-
-    for gen_i in np.arange(len(gen_nondisp.index)):
-        idx_bus = _mapping(psa_net, gen_nondisp.bus[gen_i])
-        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "gen")
-        q = [
-            sign * np.tan(np.arccos(pf)) * gen_nondisp.p_nom[gen_i],
-            sign * np.tan(np.arccos(pf)) * gen_nondisp.p_nom_min[gen_i],
-        ]
-        pm["gen_nd"][str(gen_i + 1)] = {
-            "pg": psa_net.generators_t.p_set[gen_nondisp.index[gen_i]][0] / s_base,
-            "qg": psa_net.generators_t.q_set[gen_nondisp.index[gen_i]][0] / s_base,
-            "pmax": gen_nondisp.p_nom[gen_i] / s_base,
-            "pmin": gen_nondisp.p_nom_min[gen_i] / s_base,
-            "qmax": max(q) / s_base,
-            "qmin": min(q) / s_base,
-            "P": 0,
-            "Q": 0,
-            "vg": 1,
-            "pf": pf,
-            "sign": sign,
-            "mbase": gen_nondisp.p_nom[gen_i] / s_base,
-            "gen_bus": idx_bus,
-            "gen_status": 1,
-            "name": gen_nondisp.index[gen_i],
-            "index": gen_i + 1,
-        }
-
-    for gen_i in np.arange(len(gen_slack.index)):
-        idx_bus = _mapping(psa_net, gen_slack.bus[gen_i])
-        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "gen")
-        q = [
-            sign * np.tan(np.arccos(pf)) * gen_slack.p_nom[gen_i],
-            sign * np.tan(np.arccos(pf)) * gen_slack.p_nom_min[gen_i],
-        ]
-        pm["gen_slack"][str(gen_i + 1)] = {
-            "pg": psa_net.generators_t.p_set[gen_slack.index[gen_i]][0] / s_base,
-            "qg": psa_net.generators_t.q_set[gen_slack.index[gen_i]][0] / s_base,
-            "pmax": gen_slack.p_nom[gen_i] / s_base,
-            "pmin": gen_slack.p_nom_min[gen_i] / s_base,
-            "qmax": max(q) / s_base,
-            "qmin": min(q) / s_base,
-            "P": 0,
-            "Q": 0,
-            "vg": 1,
-            "mbase": gen_slack.p_nom[gen_i] / s_base,
-            "gen_bus": idx_bus,
-            "name": gen_slack.index[gen_i],
-            "gen_status": 1,
-            "index": gen_i + 1,
-        }
+    for gen, text in [
+        (gen_disp, "gen"),
+        (gen_nondisp, "gen_nd"),
+        (gen_slack, "gen_slack"),
+    ]:
+        for gen_i in np.arange(len(gen.index)):
+            idx_bus = _mapping(psa_net, gen.bus[gen_i])
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "gen")
+            q = [
+                sign * np.tan(np.arccos(pf)) * gen.p_nom[gen_i],
+                sign * np.tan(np.arccos(pf)) * gen.p_nom_min[gen_i],
+            ]
+            pm[text][str(gen_i + 1)] = {
+                "pg": psa_net.generators_t.p_set[gen.index[gen_i]][0] / s_base,
+                "qg": psa_net.generators_t.q_set[gen.index[gen_i]][0] / s_base,
+                "pmax": gen.p_nom[gen_i] / s_base,
+                "pmin": gen.p_nom_min[gen_i] / s_base,
+                "qmax": max(q) / s_base,
+                "qmin": min(q) / s_base,
+                "P": 0,
+                "Q": 0,
+                "vg": 1,
+                "pf": pf,
+                "sign": sign,
+                "mbase": gen.p_nom[gen_i] / s_base,
+                "gen_bus": idx_bus,
+                "gen_status": 1,
+                "name": gen.index[gen_i],
+                "index": gen_i + 1,
+            }
 
 
 def _build_branch(psa_net, pm, s_base):
@@ -744,11 +700,11 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, s_base, flexible_loads):
             * e_max
             / s_base,
             "energy_rating": e_max / s_base,
-            "thermal_rating": 100,  # TODO unbegrenzt
+            "thermal_rating": 100,
             "charge_rating": psa_net.storage_units.p_nom[stor_i] / s_base,
             "discharge_rating": psa_net.storage_units.p_nom[stor_i] / s_base,
-            "charge_efficiency": 0.9,  # ToDo
-            "discharge_efficiency": 0.9,  # ToDo
+            "charge_efficiency": 0.9,
+            "discharge_efficiency": 0.9,
             "storage_bus": stor_i + len(psa_net.buses.index) + 1,
             "name": psa_net.storage_units.index[stor_i],
             "status": True,
