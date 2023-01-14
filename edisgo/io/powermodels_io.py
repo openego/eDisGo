@@ -120,7 +120,7 @@ def to_powermodels(
     pm["flexibilities"] = opf_flex
     _build_bus(psa_net, pm)
     _build_gen(edisgo_object, psa_net, pm, s_base)
-    _build_branch(psa_net, pm, s_base, flexible_loads)
+    _build_branch(psa_net, pm, s_base)
     if len(edisgo_object.topology.storage_units_df) > 0:
         _build_battery_storage(edisgo_object, psa_net, pm, s_base, flexible_loads)
     if len(flexible_cps) > 0:
@@ -654,7 +654,7 @@ def _build_gen(edisgo_obj, psa_net, pm, s_base):
         }
 
 
-def _build_branch(psa_net, pm, s_base, flexible_loads):
+def _build_branch(psa_net, pm, s_base):
     """
     Builds branch dictionary in PowerModels network data format and adds it to
     PowerModels dictionary 'pm'.
@@ -667,88 +667,33 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
         (PowerModels) dictionary.
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
-    flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
-        Array containing all flexible loads that allow for application of demand side
-        management strategy.
+        Default: 1 MVA
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
     transformer = ~branches.tap_ratio.isna()
     tap = branches.tap_ratio.fillna(1)
     shift = branches.phase_shift.fillna(0)
-    max_r = np.round(
-        max(branches.r_pu.loc[branches.r_pu < branches.r_pu.quantile(0.998)]), 6
-    )
-    min_r = np.round(
-        min(branches.r_pu.loc[branches.r_pu > branches.r_pu.quantile(0.002)]), 6
-    )
-    max_x = np.round(
-        max(branches.x_pu.loc[branches.x_pu < branches.x_pu.quantile(0.998)]), 6
-    )
-    min_x = np.round(
-        min(branches.x_pu.loc[branches.x_pu > branches.x_pu.quantile(0.002)]), 6
-    )
+    length = branches.length.fillna(1)
+    for par, val, decimal, decade in [
+        ("r_pu", branches.r_pu, 6, 1e5),
+        ("x_pu", branches.x_pu, 6, 1e5),
+        ("length", length, 3, 1e3),
+    ]:
+        max_value = np.round(max(val.loc[val < val.quantile(0.998)]), decimal)
+        min_value = np.round(min(val.loc[val > val.quantile(0.002)]), decimal)
+        if val.max() / val.min() > decade:
+            # only modify r, x and l values if min/max value differences are too big
+            branches[par] = val.clip(min_value, max_value)
+            # ToDo: Add logger.warning/info
+
     for branch_i in np.arange(len(branches.index)):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
-        # only modify r and x values if values are too small for Gurobi (i.e. < 1e-6)
-        if (np.round(max_r, 4) > 10) & (
-            branches.r_pu[branch_i] > np.round(branches.r_pu.quantile(0.998), 4)
-        ):
-            logger.warning(
-                "Resistance of branch {} is higher than {} p.u. Resistance "
-                "will be set to {} p.u. for optimization process.".format(
-                    branches.index[branch_i],
-                    np.round(branches.r_pu.quantile(0.998), 4),
-                    max_r,
-                )
-            )
-            r = min(branches.r_pu[branch_i], max_r)
-        elif (np.round(min_r, 4) <= 0.0001) & (
-            branches.r_pu[branch_i] < np.round(branches.r_pu.quantile(0.002), 6)
-        ):
-            logger.warning(
-                "Resistance of branch {} is smaller than {} p.u. Resistance "
-                "will be set to {} p.u. for optimization process.".format(
-                    branches.index[branch_i],
-                    np.round(branches.r_pu.quantile(0.002), 6),
-                    min_r,
-                )
-            )
-            r = max(branches.r_pu[branch_i], min_r)
-        else:
-            r = branches.r_pu[branch_i]
-        if (np.round(max_x, 4) > 10) & (
-            branches.x_pu[branch_i] > np.round(branches.x_pu.quantile(0.998), 4)
-        ):
-            logger.warning(
-                "Reactance of branch {} is higher than {} p.u. Reactance "
-                "will be set to {} p.u. for optimization process.".format(
-                    branches.index[branch_i],
-                    np.round(branches.x_pu.quantile(0.998), 4),
-                    max_x,
-                )
-            )
-            x = min(branches.x_pu[branch_i], max_x)
-        elif (np.round(min_x, 4) <= 0.0001) & (
-            branches.x_pu[branch_i] < np.round(branches.x_pu.quantile(0.002), 6)
-        ):
-            logger.warning(
-                "Reactance of branch {} is smaller than {} p.u. Reactance "
-                "will be set to {} p.u. for optimization process.".format(
-                    branches.index[branch_i],
-                    np.round(branches.x_pu.quantile(0.002), 6),
-                    min_x,
-                )
-            )
-            x = max(branches.x_pu[branch_i], min_x)
-        else:
-            x = branches.x_pu[branch_i]
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
-            "br_r": r * s_base,
+            "br_r": branches.r_pu[branch_i] * s_base,
             "r": branches.r[branch_i],
-            "br_x": x * s_base,
+            "br_x": branches.x_pu[branch_i] * s_base,
             "f_bus": idx_f_bus,
             "t_bus": idx_t_bus,
             "g_to": branches.g_pu[branch_i] / 2 * s_base,
@@ -765,8 +710,9 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
             "transformer": bool(transformer[branch_i]),
             "storage": False,
             "tap": tap[branch_i],
-            "length": branches.length.fillna(1)[branch_i],
+            "length": branches.length[branch_i],
             "cost": branches.capital_cost[branch_i],
+            "cost_factor": 10,  # TODO: 10 für MV, 1 sonst
             "index": branch_i + 1,
         }
 
@@ -795,6 +741,7 @@ def _build_branch(psa_net, pm, s_base, flexible_loads):
             "tap": 1,
             "length": 0,
             "cost": 0,
+            "cost_factor": 0,
             "index": stor_i + len(branches.index) + 1,
         }
 
