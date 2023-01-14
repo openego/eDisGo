@@ -323,7 +323,7 @@ class Results:
 
         Returns
         -------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe holding information on added, changed and removed
             lines and transformers. For more information on the dataframe see
             input parameter `df`.

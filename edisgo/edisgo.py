@@ -170,6 +170,36 @@ class EDisGo:
                 generator_scenario=kwargs.pop("generator_scenario"), **kwargs
             )
 
+        # add MVGrid id to logging messages of logger "edisgo"
+        log_grid_id = kwargs.get("log_grid_id", True)
+        if log_grid_id:
+
+            def add_grid_id_filter(record):
+                record.grid_id = self.topology.id
+                return True
+
+            file_formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - "
+                "MVGrid(%(grid_id)s): %(message)s"
+            )
+            stream_formatter = logging.Formatter(
+                "%(name)s - %(levelname)s - MVGrid(%(grid_id)s): %(message)s"
+            )
+
+            logger_edisgo = logging.getLogger("edisgo")
+            for handler in logger_edisgo.handlers:
+                if isinstance(logger_edisgo.handlers[0], logging.StreamHandler):
+                    handler.setFormatter(stream_formatter)
+                elif isinstance(logger_edisgo.handlers[0], logging.FileHandler):
+                    handler.setFormatter(file_formatter)
+                else:
+                    raise ValueError(
+                        "Disable the log_grid_id function when using other"
+                        " handlers than StreamHandler or FileHandler"
+                    )
+                handler.filters.clear()
+                handler.addFilter(add_grid_id_filter)
+
     @property
     def config(self):
         """
@@ -462,15 +492,15 @@ class EDisGo:
             Type of reactive power control to apply. Currently the only option is
             'fixed_coshpi'. See :func:`~.network.timeseries.TimeSeries.fixed_cosphi`
             for further information.
-        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        generators_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `generators_parametrisation` in
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
-        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        loads_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `loads_parametrisation` in
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
-        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `storage_units_parametrisation` in
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
@@ -840,7 +870,7 @@ class EDisGo:
 
         Returns
         -------
-        :networkx:`networkx.Graph<network.Graph>`
+        :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
             where lines are represented by edges in the graph, and buses and
             transformers are represented by nodes.
@@ -1227,16 +1257,16 @@ class EDisGo:
         comp_type : str
             Type of added component. Can be 'bus', 'line', 'load', 'generator', or
             'storage_unit'.
-        ts_active_power : :pandas:`pandas.Series<series>` or None
+        ts_active_power : :pandas:`pandas.Series<Series>` or None
             Active power time series of added component.
             Index of the series must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
             Values are active power per time step in MW.
             Defaults to None in which case no time series is set.
-        ts_reactive_power : :pandas:`pandas.Series<series>` or str or None
+        ts_reactive_power : :pandas:`pandas.Series<Series>` or str or None
             Possible options are:
 
-            * :pandas:`pandas.Series<series>`
+            * :pandas:`pandas.Series<Series>`
 
                 Reactive power time series of added component. Index of the series must
                 contain all time steps in
@@ -1827,6 +1857,15 @@ class EDisGo:
             charging strategy 'reduced'. E.g. for a charging point with a nominal
             capacity of 22 kW and a minimum_charging_capacity_factor of 0.1 this would
             result in a minimum charging power of 2.2 kW. Default: 0.1.
+
+        Notes
+        ------
+        If the frequency of time series data in :class:`~.network.timeseries.TimeSeries`
+        (checked using :attr:`~.network.timeseries.TimeSeries.timeindex`) differs from
+        the frequency of SimBEV data, then the time series in
+        :class:`~.network.timeseries.TimeSeries` is first automatically resampled to
+        match the SimBEV data frequency and after determining the charging demand time
+        series resampled back to the original frequency.
 
         """
         charging_strategy(self, strategy=strategy, **kwargs)
@@ -2560,9 +2599,11 @@ class EDisGo:
                     f" the following {comp_type}: {exceeding.values}"
                 )
 
-            logging.info("Integrity check finished. Please pay attention to warnings.")
+        logging.info("Integrity check finished. Please pay attention to warnings.")
 
-    def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
+    def resample_timeseries(
+        self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
+    ):
         """
         Resamples all time series to a desired resolution.
 

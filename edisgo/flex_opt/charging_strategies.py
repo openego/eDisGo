@@ -1,7 +1,15 @@
+from __future__ import annotations
+
 import logging
+
+from numbers import Number
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 RELEVANT_CHARGING_STRATEGIES_COLUMNS = {
     "dumb": [
@@ -40,10 +48,10 @@ logger = logging.getLogger(__name__)
 #  wrong results if the timeindex of the edisgo object is not continuously
 #  (e.g. 2 weeks of the year)
 def charging_strategy(
-    edisgo_obj,
-    strategy="dumb",
-    timestamp_share_threshold=0.2,
-    minimum_charging_capacity_factor=0.1,
+    edisgo_obj: EDisGo,
+    strategy: str = "dumb",
+    timestamp_share_threshold: Number = 0.2,
+    minimum_charging_capacity_factor: Number = 0.1,
 ):
     """
     Applies charging strategy to set EV charging time series at charging parks.
@@ -107,12 +115,20 @@ def charging_strategy(
     )
     simbev_timedelta = timeindex[1] - timeindex[0]
 
-    assert edisgo_timedelta == simbev_timedelta, (
-        "The step size of the time series of the edisgo object differs from the"
-        f"simbev step size. The edisgo time delta is {edisgo_timedelta}, while"
-        f" the simbev time delta is {simbev_timedelta}. Make sure to use a "
-        f"matching step size."
-    )
+    resample = edisgo_timedelta != simbev_timedelta
+
+    if resample:
+        logger.warning(
+            f"The frequency of the time series data of the edisgo object differs from "
+            f"the simbev time series frequency. The edisgo frequency is "
+            f"{edisgo_timedelta}, while the simbev frequency is {simbev_timedelta}. "
+            f"The edisgo time series data "
+            f"will be resampled accordingly before applying the charging strategy. "
+            f"After applying the charging strategy all time series will be resampled "
+            f"to the original frequency of the edisgo time series data."
+        )
+
+        edisgo_obj.resample_timeseries(freq=simbev_timedelta)
 
     if strategy == "dumb":
         # "dumb" charging
@@ -291,6 +307,9 @@ def charging_strategy(
 
     else:
         raise ValueError(f"Strategy {strategy} has not yet been implemented.")
+
+    if resample:
+        edisgo_obj.resample_timeseries(freq=edisgo_timedelta)
 
     # set reactive power time series to 0 Mvar
     # fmt: off

@@ -257,12 +257,18 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         else:
             generators_timeseries_active = (
                 edisgo_object.timeseries.generators_active_power.loc[
-                    timesteps, components["Generator"].index
+                    timesteps,
+                    edisgo_object.timeseries.generators_active_power.columns.isin(
+                        components["Generator"].index
+                    ),
                 ]
             )
             generators_timeseries_reactive = (
                 edisgo_object.timeseries.generators_reactive_power.loc[
-                    timesteps, components["Generator"].index
+                    timesteps,
+                    edisgo_object.timeseries.generators_reactive_power.columns.isin(
+                        components["Generator"].index
+                    ),
                 ]
             )
 
@@ -287,11 +293,17 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
             )
         else:
             loads_timeseries_active = edisgo_object.timeseries.loads_active_power.loc[
-                timesteps, components["Load"].index
+                timesteps,
+                edisgo_object.timeseries.loads_active_power.columns.isin(
+                    components["Load"].index
+                ),
             ]
             loads_timeseries_reactive = (
                 edisgo_object.timeseries.loads_reactive_power.loc[
-                    timesteps, components["Load"].index
+                    timesteps,
+                    edisgo_object.timeseries.loads_reactive_power.columns.isin(
+                        components["Load"].index
+                    ),
                 ]
             )
         import_series_from_dataframe(
@@ -316,12 +328,18 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         else:
             storages_timeseries_active = (
                 edisgo_object.timeseries.storage_units_active_power.loc[
-                    timesteps, components["StorageUnit"].index
+                    timesteps,
+                    edisgo_object.timeseries.storage_units_active_power.columns.isin(
+                        components["StorageUnit"].index
+                    ),
                 ]
             )
             storages_timeseries_reactive = (
                 edisgo_object.timeseries.storage_units_reactive_power.loc[
-                    timesteps, components["StorageUnit"].index
+                    timesteps,
+                    edisgo_object.timeseries.storage_units_reactive_power.columns.isin(
+                        components["StorageUnit"].index
+                    ),
                 ]
             )
         import_series_from_dataframe(
@@ -347,7 +365,7 @@ def set_seed(edisgo_obj, pypsa_network):
     """
     Set initial guess for the Newton-Raphson algorithm.
 
-    In `PyPSA <https://pypsa.readthedocs.io/en/latest/index.html/>`_ an
+    In `PyPSA <https://pypsa.readthedocs.io/en/latest/>`_ an
     initial guess for the Newton-Raphson algorithm used in the power flow
     analysis can be provided to speed up calculations.
     For PQ buses, which besides the slack bus, is the only bus type in
@@ -806,8 +824,7 @@ def process_pfa_results(edisgo, pypsa, timesteps, dtype="float"):
     ----------
     edisgo : :class:`~.EDisGo`
     pypsa : :pypsa:`pypsa.Network<network>`
-        The PyPSA `Network container
-        <https://www.pypsa.org/doc/components.html#network>`_
+        The PyPSA network to retrieve results from.
     timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
         Time steps for which latest power flow analysis was conducted and
