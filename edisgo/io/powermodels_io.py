@@ -242,7 +242,7 @@ def from_powermodels(
         pm = pm_results
     else:
         raise ValueError(
-            "Parameter 'pm_results' must be either dictionary or path " "to json file."
+            "Parameter 'pm_results' must be either dictionary or path to json file."
         )
 
     flex_dicts = {
@@ -294,44 +294,33 @@ def from_powermodels(
 
     # Check values of slack variables for HV requirement constraint
     if pm["nw"]["1"]["opf_version"] in [1, 2]:
-        names = [
-            pm["nw"]["1"]["HV_requirements"][flex]["flexibility"]
-            for flex in list(pm["nw"]["1"]["HV_requirements"].keys())
-        ]
-        data = [
-            [
-                pm["nw"][t]["HV_requirements"][flex]["phvs"] * s_base
-                for flex in list(pm["nw"]["1"]["HV_requirements"].keys())
-            ]
-            for t in timesteps
-        ]
-        df = pd.DataFrame(
-            index=edisgo_object.timeseries.timeindex,
-            columns=names,
-            data=data,
+        df = _result_df(
+            pm, "HV_requirements", "phvs", edisgo_object.timeseries.timeindex, s_base
         )
         # save HV slack results to csv
         if save_slacks:
             df.to_csv(os.path.join(abs_path, "hv_requirements_slack.csv"))
 
         # calculate relative error
-        for flex in names:
+        for flex in df.columns:
             df[flex] = abs(df[flex].values - hv_flex_dict[flex]) / hv_flex_dict[flex]
-
-        df2 = pd.DataFrame(
+        # write results to edisgo object
+        edisgo_object.etrago.opf_results = pd.DataFrame(
             columns=[
                 "Highest relative error",
                 "Mean relative error",
                 "Sum relative error",
             ],
-            index=names,
+            index=df.columns,
+            data=np.asarray(
+                [df.max().values, (df.sum() / len(df)).values, df.sum().values]
+            ).transpose(),
         )
-        df2["Highest relative error"] = df.max()
-        df2["Mean relative error"] = df.sum() / len(df)
-        df2["Sum relative error"] = df.sum()
-        edisgo_object.etrago.opf_results = df2  # write results to edisgo object
-        for flex in names:
-            if (df2["Highest relative error"][flex] > 0.05).any():
+
+        for flex in df.columns:
+            if (
+                edisgo_object.etrago.opf_results["Highest relative error"][flex] > 0.05
+            ).any():
                 logger.warning(
                     "Highest relative error of {} variable exceeds 5%.".format(flex)
                 )
@@ -350,105 +339,23 @@ def from_powermodels(
         df.to_csv(os.path.join(abs_path, "slack_gen.csv"))
 
     if save_heat_storage:  # save heat storage variables to csv file
-        for variable in ["phs", "hse"]:
-            names = [
-                pm["nw"]["1"]["heat_storage"][hs]["name"]
-                for hs in list(pm["nw"]["1"]["heat_storage"].keys())
-            ]
-            data = [
-                [
-                    pm["nw"][t]["heat_storage"][hs][variable] * s_base
-                    for hs in list(pm["nw"]["1"]["heat_storage"].keys())
-                ]
-                for t in timesteps
-            ]
-            name = {"phs": "p", "hse": "e"}
-            pd.DataFrame(
-                index=edisgo_object.timeseries.timeindex, columns=names, data=data
-            ).to_csv(
-                os.path.join(abs_path, str("heat_storage_" + name[variable] + ".csv"))
-            )
+        for var, filename in [("phs", "p"), ("hse", "e")]:
+            _result_df(
+                pm, "heat_storage", var, edisgo_object.timeseries.timeindex, s_base
+            ).to_csv(os.path.join(abs_path, "heat_storage_" + str(filename) + ".csv"))
 
     if (pm["nw"]["1"]["opf_version"] in [2, 4]) & save_slacks:
-        # save heatpump slacks to csv file
-        names = [
-            pm["nw"]["1"]["heatpumps"][hp]["name"]
-            for hp in list(pm["nw"]["1"]["heatpumps"].keys())
+        slacks = [
+            ("gen", "pgens", "disp_gen_curtailment"),
+            ("gen_nd", "pgc", "nondisp_gen_curtailment"),
+            ("load", "pds", "load_shedding"),
+            ("electromobility", "pcps", "cp_load_shedding"),
         ]
-        data = [
-            [
-                pm["nw"][t]["heatpumps"][hp]["phps"] * s_base
-                for hp in list(pm["nw"]["1"]["heatpumps"].keys())
-            ]
-            for t in timesteps
-        ]
-        pd.DataFrame(
-            index=edisgo_object.timeseries.timeindex, columns=names, data=data
-        ).to_csv(os.path.join(abs_path, "heat_pump_p_slack.csv"))
-
-        # save dispatchable generator slacks (slack curtailment)
-        names = [
-            pm["nw"]["1"]["gen"][gen]["name"]
-            for gen in list(pm["nw"]["1"]["gen"].keys())
-        ]
-        data = [
-            [
-                pm["nw"][t]["gen"][gen]["pgens"] * s_base
-                for gen in list(pm["nw"]["1"]["gen"].keys())
-            ]
-            for t in timesteps
-        ]
-        pd.DataFrame(
-            index=edisgo_object.timeseries.timeindex, columns=names, data=data
-        ).to_csv(os.path.join(abs_path, "disp_generator_slack.csv"))
-
-        # save non-dispatchable generator slacks (curtailment) to csv file
-        names = [
-            pm["nw"]["1"]["gen_nd"][gen]["name"]
-            for gen in list(pm["nw"]["1"]["gen_nd"].keys())
-        ]
-        data = [
-            [
-                pm["nw"][t]["gen_nd"][gen]["pgc"] * s_base
-                for gen in list(pm["nw"]["1"]["gen_nd"].keys())
-            ]
-            for t in timesteps
-        ]
-        pd.DataFrame(
-            index=edisgo_object.timeseries.timeindex, columns=names, data=data
-        ).to_csv(os.path.join(abs_path, "nondisp_generator_curtailment.csv"))
-
-        # save load slacks (load shedding)
-        names = [
-            pm["nw"]["1"]["load"][load]["name"]
-            for load in list(pm["nw"]["1"]["load"].keys())
-        ]
-        data = [
-            [
-                pm["nw"][t]["load"][load]["pds"] * s_base
-                for load in list(pm["nw"]["1"]["load"].keys())
-            ]
-            for t in timesteps
-        ]
-        pd.DataFrame(
-            index=edisgo_object.timeseries.timeindex, columns=names, data=data
-        ).to_csv(os.path.join(abs_path, "load_shedding.csv"))
-
-        # save cp load slacks (cp load shedding)
-        names = [
-            pm["nw"]["1"]["electromobility"][cp]["name"]
-            for cp in list(pm["nw"]["1"]["electromobility"].keys())
-        ]
-        data = [
-            [
-                pm["nw"][t]["electromobility"][cp]["pcps"] * s_base
-                for cp in list(pm["nw"]["1"]["electromobility"].keys())
-            ]
-            for t in timesteps
-        ]
-        pd.DataFrame(
-            index=edisgo_object.timeseries.timeindex, columns=names, data=data
-        ).to_csv(os.path.join(abs_path, "cp_load_shedding.csv"))
+        for comp, var, filename in slacks:
+            # save slacks to csv file
+            _result_df(
+                pm, comp, var, edisgo_object.timeseries.timeindex, s_base
+            ).to_csv(os.path.join(abs_path, str(filename) + ".csv"))
 
 
 def _init_pm():
@@ -689,6 +596,7 @@ def _build_branch(psa_net, pm, s_base):
     for branch_i in np.arange(len(branches.index)):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
+        cost_factor = {"mv": 10, "lv": 1}
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
             "br_r": branches.r_pu[branch_i] * s_base,
@@ -710,9 +618,9 @@ def _build_branch(psa_net, pm, s_base):
             "transformer": bool(transformer[branch_i]),
             "storage": False,
             "tap": tap[branch_i],
-            "length": branches.length[branch_i],
+            "length": branches.length.fillna(1)[branch_i],
             "cost": branches.capital_cost[branch_i],
-            "cost_factor": 10,  # TODO: 10 für MV, 1 sonst
+            "cost_factor": cost_factor[pm["bus"][str(idx_f_bus)]["grid_level"]],
             "index": branch_i + 1,
         }
 
@@ -1158,7 +1066,7 @@ def _build_hv_requirements(
     for i in np.arange(len(opt_flex)):
         pm["HV_requirements"][str(i + 1)] = {
             "P": hv_flex_dict[opt_flex[i]][0],
-            "flexibility": opt_flex[i],
+            "name": opt_flex[i],
         }
 
 
@@ -1529,3 +1437,18 @@ def _get_pf(edisgo_obj, pm, idx_bus, kind):
         else:
             sign = -1
     return pf, sign
+
+
+def _result_df(pm, component, variable, index, s_base):
+    cols = [
+        pm["nw"]["1"][component][n]["name"]
+        for n in list(pm["nw"]["1"][component].keys())
+    ]
+    data = [
+        [
+            pm["nw"][t][component][n][variable] * s_base
+            for n in list(pm["nw"]["1"][component].keys())
+        ]
+        for t in pm["nw"].keys()
+    ]
+    return pd.DataFrame(index=index, columns=cols, data=data)
