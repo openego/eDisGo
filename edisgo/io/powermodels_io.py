@@ -120,9 +120,9 @@ def to_powermodels(
     pm["flexibilities"] = opf_flex
     _build_bus(psa_net, pm)
     _build_gen(edisgo_object, psa_net, pm, s_base)
-    _build_branch(psa_net, pm, s_base)
+    _build_branch(edisgo_object, psa_net, pm, s_base)
     if len(edisgo_object.topology.storage_units_df) > 0:
-        _build_battery_storage(edisgo_object, psa_net, pm, s_base, flexible_loads)
+        _build_battery_storage(edisgo_object, psa_net, pm, s_base)
     if len(flexible_cps) > 0:
         flexible_cps = _build_electromobility(
             edisgo_object,
@@ -517,13 +517,14 @@ def _build_gen(edisgo_obj, psa_net, pm, s_base):
             }
 
 
-def _build_branch(psa_net, pm, s_base):
+def _build_branch(edisgo_obj, psa_net, pm, s_base):
     """
     Builds branch dictionary in PowerModels network data format and adds it to
     PowerModels dictionary 'pm'.
 
     Parameters
     ----------
+    edisgo_object : :class:`~.EDisGo`
     psa_net : :pypsa:`PyPSA.Network<network>`
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
@@ -577,11 +578,15 @@ def _build_branch(psa_net, pm, s_base):
             "length": branches.length.fillna(1)[branch_i],
             "cost": branches.capital_cost[branch_i],
             "cost_factor": cost_factor[pm["bus"][str(idx_f_bus)]["grid_level"]],
+            "storage_pf": 0,
             "index": branch_i + 1,
         }
 
     for stor_i in np.arange(len(psa_net.storage_units.index)):
         idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
+        # retrieve power factor from config
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
+
         pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
             "br_r": 0.017 * s_base / (psa_net.buses.v_nom[idx_bus] ** 2),
@@ -606,6 +611,7 @@ def _build_branch(psa_net, pm, s_base):
             "length": 0,
             "cost": 0,
             "cost_factor": 0,
+            "storage_pf": np.tan(np.arccos(pf)) * sign,
             "index": stor_i + len(branches.index) + 1,
         }
 
@@ -653,7 +659,7 @@ def _build_load(edisgo_obj, psa_net, pm, s_base, flexible_cps, flexible_hps):
         }
 
 
-def _build_battery_storage(edisgo_obj, psa_net, pm, s_base, flexible_loads):
+def _build_battery_storage(edisgo_obj, psa_net, pm, s_base):
     """
     Builds (battery) storage  dictionary in PowerModels network data format and adds
     it to PowerModels dictionary 'pm'.
