@@ -524,7 +524,7 @@ def _build_branch(edisgo_obj, psa_net, pm, s_base):
 
     Parameters
     ----------
-    edisgo_object : :class:`~.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
     psa_net : :pypsa:`PyPSA.Network<network>`
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
@@ -1156,6 +1156,12 @@ def _build_component_timeseries(
             / s_base
         )
         q_set = psa_net.generators_t.q_set[p_set.columns] / s_base
+        for comp in p_set.columns:
+            comp_i = _mapping(psa_net, comp, kind)
+            pm_comp[str(comp_i)] = {
+                "pg": p_set[comp].values.tolist(),
+                "qg": q_set[comp].values.tolist(),
+            }
     elif kind == "gen_nd":
         p_set = (
             psa_net.generators_t.p_set.loc[
@@ -1166,6 +1172,12 @@ def _build_component_timeseries(
             / s_base
         )
         q_set = psa_net.generators_t.q_set[p_set.columns] / s_base
+        for comp in p_set.columns:
+            comp_i = _mapping(psa_net, comp, kind)
+            pm_comp[str(comp_i)] = {
+                "pg": p_set[comp].values.tolist(),
+                "qg": q_set[comp].values.tolist(),
+            }
     elif kind == "gen_slack":
         p_set = (
             psa_net.generators_t.p_set.loc[
@@ -1175,6 +1187,12 @@ def _build_component_timeseries(
             / s_base
         )
         q_set = psa_net.generators_t.q_set[p_set.columns] / s_base
+        for comp in p_set.columns:
+            comp_i = _mapping(psa_net, comp, kind)
+            pm_comp[str(comp_i)] = {
+                "pg": p_set[comp].values.tolist(),
+                "qg": q_set[comp].values.tolist(),
+            }
     elif kind == "load":
         flex_loads = np.concatenate((flexible_hps, flexible_cps))
         if len(flex_loads) == 0:
@@ -1183,13 +1201,27 @@ def _build_component_timeseries(
         else:
             p_set = psa_net.loads_t.p_set.drop(columns=flex_loads) / s_base
             q_set = psa_net.loads_t.q_set.drop(columns=flex_loads) / s_base
+        for comp in p_set.columns:
+            comp_i = _mapping(
+                psa_net, comp, kind, flexible_cps, flexible_hps, flexible_loads
+            )
+            p_d = p_set[comp].values
+            q_d = q_set[comp].values
+            pm_comp[str(comp_i)] = {
+                "pd": p_d.tolist(),
+                "qd": q_d.tolist(),
+            }
     elif kind == "storage":
         p_set = psa_net.storage_units_t.p_set / s_base
         q_set = psa_net.storage_units_t.q_set / s_base
+        for comp in p_set.columns:
+            comp_i = _mapping(psa_net, comp, kind)
+            pm_comp[str(comp_i)] = {
+                "ps": p_set[comp].values.tolist(),
+                "qs": q_set[comp].values.tolist(),
+            }
     elif kind == "electromobility":
-        if len(flexible_cps) == 0:
-            p_set = pd.DataFrame()
-        else:
+        if len(flexible_cps) > 0:
             p_set = (
                 edisgo_obj.electromobility.flexibility_bands["upper_power"][
                     flexible_cps
@@ -1208,79 +1240,38 @@ def _build_component_timeseries(
                 ]
                 / s_base
             )
-    elif kind == "heatpumps":
-        if len(flexible_hps) == 0:
-            p_set = pd.DataFrame()
-        else:
-            p_set = edisgo_obj.heat_pump.heat_demand_df[flexible_hps] / s_base
-            cop = edisgo_obj.heat_pump.cop_df[flexible_hps]
-    elif kind == "dsm":
-        if len(flexible_loads) == 0:
-            p_set = pd.DataFrame()
-        else:
-            p_set = edisgo_obj.dsm.p_max / s_base
-            p_min = edisgo_obj.dsm.p_min / s_base
-            e_min = edisgo_obj.dsm.e_min / s_base
-            e_max = edisgo_obj.dsm.e_max / s_base
-    else:
-        p_set = pd.DataFrame()
-    for comp in p_set.columns:
-        if kind == "gen":
-            comp_i = _mapping(psa_net, comp, kind)
-            pm_comp[str(comp_i)] = {
-                "pg": p_set[comp].values.tolist(),
-                "qg": q_set[comp].values.tolist(),
-            }
-        elif kind == "gen_nd":
-            comp_i = _mapping(psa_net, comp, kind)
-            pm_comp[str(comp_i)] = {
-                "pg": p_set[comp].values.tolist(),
-                "qg": q_set[comp].values.tolist(),
-            }
-        elif kind == "gen_slack":
-            comp_i = _mapping(psa_net, comp, kind)
-            pm_comp[str(comp_i)] = {
-                "pg": p_set[comp].values.tolist(),
-                "qg": q_set[comp].values.tolist(),
-            }
-        elif kind == "load":
-            comp_i = _mapping(
-                psa_net, comp, kind, flexible_cps, flexible_hps, flexible_loads
-            )
-            p_d = p_set[comp].values
-            q_d = q_set[comp].values
-            pm_comp[str(comp_i)] = {
-                "pd": p_d.tolist(),
-                "qd": q_d.tolist(),
-            }
-        elif kind == "storage":
-            comp_i = _mapping(psa_net, comp, kind)
-            pm_comp[str(comp_i)] = {
-                "ps": p_set[comp].values.tolist(),
-                "qs": q_set[comp].values.tolist(),
-            }
-        elif kind == "electromobility":
-            comp_i = _mapping(psa_net, comp, kind, flexible_cps=flexible_cps)
-            if len(flexible_cps) > 0:
+            for comp in p_set.columns:
+                comp_i = _mapping(psa_net, comp, kind, flexible_cps=flexible_cps)
                 pm_comp[str(comp_i)] = {
                     "p_max": p_set[comp].values.tolist(),
                     "e_min": e_min[comp].values.tolist(),
                     "e_max": e_max[comp].values.tolist(),
                 }
-        elif kind == "heatpumps":
-            comp_i = _mapping(psa_net, comp, kind, flexible_hps=flexible_hps)
-            pm_comp[str(comp_i)] = {
-                "pd": p_set[comp].values.tolist(),
-                "cop": cop[comp].values.tolist(),
-            }
-        elif kind == "dsm":
-            comp_i = _mapping(psa_net, comp, kind, flexible_loads=flexible_loads)
-            pm_comp[str(comp_i)] = {
-                "p_max": p_set[comp].values.tolist(),
-                "p_min": p_min[comp].values.tolist(),
-                "e_min": e_min[comp].values.tolist(),
-                "e_max": e_max[comp].values.tolist(),
-            }
+    elif kind == "heatpumps":
+        if len(flexible_hps) > 0:
+            p_set = edisgo_obj.heat_pump.heat_demand_df[flexible_hps] / s_base
+            cop = edisgo_obj.heat_pump.cop_df[flexible_hps]
+            for comp in p_set.columns:
+                comp_i = _mapping(psa_net, comp, kind, flexible_hps=flexible_hps)
+                pm_comp[str(comp_i)] = {
+                    "pd": p_set[comp].values.tolist(),
+                    "cop": cop[comp].values.tolist(),
+                }
+    elif kind == "dsm":
+        if len(flexible_loads) > 0:
+            p_set = edisgo_obj.dsm.p_max / s_base
+            p_min = edisgo_obj.dsm.p_min / s_base
+            e_min = edisgo_obj.dsm.e_min / s_base
+            e_max = edisgo_obj.dsm.e_max / s_base
+            for comp in p_set.columns:
+                comp_i = _mapping(psa_net, comp, kind, flexible_loads=flexible_loads)
+                pm_comp[str(comp_i)] = {
+                    "p_max": p_set[comp].values.tolist(),
+                    "p_min": p_min[comp].values.tolist(),
+                    "e_min": e_min[comp].values.tolist(),
+                    "e_max": e_max[comp].values.tolist(),
+                }
+
     if (kind == "HV_requirements") & (
         (pm["opf_version"] == 1) | (pm["opf_version"] == 2)
     ):
