@@ -1,9 +1,9 @@
 # Methods to perform linearised DistFlow
 import itertools
 import logging
+import time
 
 from copy import deepcopy
-from time import perf_counter
 
 import numpy as np
 import pandas as pd
@@ -19,6 +19,17 @@ from edisgo.tools.tools import (
 logger = logging.getLogger(__name__)
 
 BANDS = ["upper_power", "upper_energy", "lower_energy"]
+
+
+def get_exec_time(start_time):
+    """Computes execution time in h:m:s format or ms if <2seconds"""
+    exec_time = time.perf_counter() - start_time
+    if exec_time > 2:
+        exec_time = time.gmtime(exec_time)
+        exec_time = time.strftime("%Hh:%Mm:%Ss", exec_time)
+    else:
+        exec_time = str(int(exec_time * 100)) + "ms"
+    return exec_time
 
 
 def import_flexibility_bands(dir, use_cases):
@@ -80,7 +91,7 @@ def prepare_time_invariant_parameters(
         especially the time invariant parameters
 
     """
-    t1 = perf_counter()
+    t1 = time.perf_counter()
     fixed_parameters = {}
     # set grid and edisgo objects as well as slack
     # TODO is this necesary?
@@ -287,10 +298,7 @@ def prepare_time_invariant_parameters(
     ) = get_underlying_elements(
         fixed_parameters
     )  # Todo: time invariant
-    logger.info(
-        f"It took {perf_counter() - t1} seconds to extract timeinvariant "
-        f"parameters."
-    )
+    logger.info(f"It took {get_exec_time(t1)} to extract timeinvariant parameters.")
 
     return fixed_parameters
 
@@ -359,7 +367,7 @@ def setup_model(
 
     """
 
-    t1 = perf_counter()
+    t1 = time.perf_counter()
     model = pm.ConcreteModel()
     model.name = kwargs.get("name", objective)
     # check if correct value of objective is inserted
@@ -546,7 +554,7 @@ def setup_model(
     if kwargs.get("print_model", False):
         model.pprint()
     logger.info("Successfully set up optimisation model.")
-    logger.info(f"It took {perf_counter() - t1} seconds to set up model.")
+    logger.info(f"It took {get_exec_time(t1)} to set up model.")
     return model
 
 
@@ -1119,7 +1127,7 @@ def update_model(
 
     """
     logger.info("Updating model")
-    t1 = perf_counter()
+    t1 = time.perf_counter()
     # TODO Warum iteration über jeden Zeitschritt?
     for i in model.time_set:
         overlap = i - len(timesteps) + 1
@@ -1194,7 +1202,7 @@ def update_model(
 
     if fixed_parameters["optimize_bess"]:
         raise NotImplementedError
-    logger.info(f"It took {perf_counter() - t1} seconds to update the model.")
+    logger.info(f"It took {get_exec_time(t1)} to update the model.")
     return model
 
 
@@ -1324,7 +1332,7 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
 
     logger.info("Starting optimisation")
 
-    t1 = perf_counter()
+    t1 = time.perf_counter()
     opt = pm.SolverFactory(solver)
     opt.options["threads"] = 16
     tolerance = kwargs.get("tolerance", None)
@@ -1515,7 +1523,8 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
             .dropna(how="all")
         )
 
-        logger.info(f"It took {perf_counter() - t1} seconds to optimize model.")
+
+        logger.info(f"It took {get_exec_time(t1)} to optimize model.")
         return result_dict
     elif results.solver.termination_condition == TerminationCondition.infeasible:
         logger.info("Model is infeasible")
