@@ -782,14 +782,13 @@ def battery_storage_reference_operation(
             if storage_charge < 0:
                 # since storage_charge is negative in this case it can be taken as
                 # demand
-                storage_power = storage_power - storage_charge / time_base
+                storage_power = storage_power + storage_charge / time_base
                 storage_charge = 0
 
         # If the storage is full or empty, the demand is not affected
         # elif(storage_charge == 0) | (storage_charge == storage_max):
         else:
             storage_power = 0
-
         lst_storage_power.append(storage_power)
 
     df["storage_power"] = lst_storage_power
