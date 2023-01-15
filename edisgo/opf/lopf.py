@@ -1376,31 +1376,10 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
                     pd.Series(model.slack_initial_charging_pos_ev.extract_values())
                     + pd.Series(model.slack_initial_charging_neg_ev.extract_values())
                 )
-            result_dict["slack_initial_charging_hp"] = (
-                    pd.Series(
-                        model.slack_initial_charging_pos_hp.extract_values())
-                    + pd.Series(
-                model.slack_initial_charging_neg_hp.extract_values())
-                )
-            result_dict["slack_initial_charging_tes"] = (
-                    pd.Series(
-                        model.slack_initial_charging_pos_tes.extract_values())
-                    + pd.Series(
-                model.slack_initial_charging_neg_tes.extract_values())
-                )
-
             result_dict["slack_initial_energy_ev"] = (
                     pd.Series(model.slack_initial_energy_pos_ev.extract_values())
                     + pd.Series(model.slack_initial_energy_neg_ev.extract_values())
             )
-            result_dict["slack_initial_energy_tes"] = (
-                    pd.Series(
-                        model.slack_initial_energy_pos_tes.extract_values())
-                    + pd.Series(
-                model.slack_initial_energy_neg_tes.extract_values())
-            )
-
-
             result_dict["curtailment_ev"] = (
                 pd.Series(model.curtailment_ev.extract_values())
                 .unstack()
@@ -1425,6 +1404,30 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
                 .unstack()
                 .rename(columns=time_dict)
                 .T
+            )
+            result_dict["curtailment_hp"] = (
+                pd.Series(model.curtailment_hp.extract_values())
+                .unstack()
+                .rename(columns=time_dict)
+                .T
+            )
+            result_dict["slack_initial_charging_hp"] = (
+                    pd.Series(
+                        model.slack_initial_charging_pos_hp.extract_values())
+                    + pd.Series(
+                model.slack_initial_charging_neg_hp.extract_values())
+                )
+            result_dict["slack_initial_charging_tes"] = (
+                    pd.Series(
+                        model.slack_initial_charging_pos_tes.extract_values())
+                    + pd.Series(
+                model.slack_initial_charging_neg_tes.extract_values())
+                )
+            result_dict["slack_initial_energy_tes"] = (
+                    pd.Series(
+                        model.slack_initial_energy_pos_tes.extract_values())
+                    + pd.Series(
+                model.slack_initial_energy_neg_tes.extract_values())
             )
             result_dict["curtailment_hp"] = (
                 pd.Series(model.curtailment_hp.extract_values())
