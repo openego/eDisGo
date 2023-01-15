@@ -1984,7 +1984,7 @@ def upper_voltage(model, bus, time):
     """
 
     try:
-        v_max = model.v_min[bus]
+        v_max = model.v_max[bus]
     except KeyError as e:
         # logging.debug(f"No Series passed for v_max: {e}")
         v_max = model.v_max
