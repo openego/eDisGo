@@ -1316,9 +1316,10 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
             dir/name of logfile for solver
         lp_filename : str
             dir/name of logfile for solver
-        tolerance : float
-            Tolerance for optimality
-
+        options : dict
+            threads:
+            OptimalityTol: Tolerance for optimality
+            BarHomogeneous: less sensitive barrier algorithm
     Returns
     -------
 
@@ -1334,11 +1335,13 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
 
     t1 = time.perf_counter()
     opt = pm.SolverFactory(solver)
-    opt.options["threads"] = 16
-    tolerance = kwargs.get("tolerance", None)
-    if tolerance is not None:
-        opt.options["OptimalityTol"] = tolerance
-        logger.info(f"Tolerance for optimality set to: {tolerance}")
+    options = kwargs.get("options", None)
+    # Set solver options
+    if options is not None:
+        opt.set_options(options)
+        for key, value in options.items():
+            logger.info(f"{solver} - {key} set to: {value}")
+
     # Optimize
     results = opt.solve(
         model,
