@@ -2822,7 +2822,7 @@ class Topology:
                 logger.warning(
                     f"Very small values for impedance of {branch_component}: "
                     f"{z[z < 1e-6].index.values}. This might cause problems in the "
-                    f"power flow."
+                    f"power flow or optimisation."
                 )
 
         # check line length
@@ -2833,6 +2833,13 @@ class Topology:
                 f"{max_length} km). This might be due to grid integration of a "
                 f"component that is outside the grid district or whose coordinates "
                 f"are in a different reference system."
+            )
+        if (self.lines_df.length <= 0.001).any():
+            min_length = min(self.lines_df.length)
+            logger.warning(
+                f"There are lines with very short line lengths (shortest line length "
+                f"{min_length} km). This might cause problems in the power flow or "
+                f"optimisation."
             )
 
     def __repr__(self):
