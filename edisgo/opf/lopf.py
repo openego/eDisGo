@@ -1038,7 +1038,7 @@ def add_heat_pump_model(
         )
 
     def charging_tes(model, hp, time):
-        return model.energy_level_tes[hp, time] == model.energy_level_tes[
+        return model.energy_level_tes[hp, time] == 0.9 * model.energy_level_tes[
             hp, time - 1
         ] + model.charging_tes[hp, time] * (
             pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h")
