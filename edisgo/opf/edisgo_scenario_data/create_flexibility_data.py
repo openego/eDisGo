@@ -111,6 +111,7 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
         mv_dsm_loads = np.concatenate([mv_dsm_loads, mv_dsm_loads2])
 
     loads = np.concatenate([lv_dsm_loads_retail, lv_dsm_loads_industrial, mv_dsm_loads])
+    loads = dsm_data["name"]
     for parameter, parameter_nom, parameter_str in [
         (dsm_data.p_set, dsm_data.p_set_nom, "p_set"),
         (dsm_data.e_min_pu, dsm_data.e_nom, "e_min"),

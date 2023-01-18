@@ -26,7 +26,7 @@ def pm_optimize(
     path="",
 ):
     """
-    Runs OPF for edisgo object in julia subprocess and writes results of OPF to edisgo
+    Run OPF for edisgo object in julia subprocess and write results of OPF to edisgo
     object. Results of OPF are time series of operation schedules of flexibilities.
 
     Parameters
@@ -119,10 +119,7 @@ def pm_optimize(
     )
 
     def _convert(o):
-        """
-        Helper function for json dump, as int64 cannot be dumped.
-
-        """
+        """Helper function for json dump, as int64 cannot be dumped."""
         if isinstance(o, np.int64):
             return int(o)
         raise TypeError

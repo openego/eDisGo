@@ -670,7 +670,7 @@ class EDisGo:
         opf_version=4,
     ):
         """
-        Converts eDisGo representation of the network topology and timeseries to
+        Convert eDisGo representation of the network topology and timeseries to
         PowerModels network data format.
 
         Parameters
@@ -697,7 +697,6 @@ class EDisGo:
             Dictionary that contains all network data in PowerModels network data
             format.
         """
-
         return powermodels_io.to_powermodels(
             self,
             s_base=s_base,
@@ -718,8 +717,8 @@ class EDisGo:
         path="",
     ):
         """
-        Converts results from optimization in PowerModels network data format to eDisGo
-        representation of the network topology and timeseries and updates values on
+        Convert results from optimization in PowerModels network data format to eDisGo
+        representation of the network topology and timeseries and update values on
         eDisGo object.
 
         Parameters
@@ -753,7 +752,6 @@ class EDisGo:
             Directory the csv file is saved to. Per default it takes the current
             working directory.
         """
-
         return powermodels_io.from_powermodels(
             self,
             pm_results=pm_results,
@@ -782,7 +780,7 @@ class EDisGo:
         path="",
     ):
         """
-        Runs OPF for edisgo object in julia subprocess and writes results of OPF to
+        Run OPF for edisgo object in julia subprocess and write results of OPF to
         edisgo object. Results of OPF are time series of operation schedules of
         flexibilities.
 
@@ -846,7 +844,6 @@ class EDisGo:
             Directory the csv file is saved to. Per default it takes the current
             working directory.
         """
-
         return powermodels_opf.pm_optimize(
             self,
             s_base=s_base,

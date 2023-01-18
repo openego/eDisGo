@@ -794,3 +794,44 @@ def battery_storage_reference_operation(
     df["storage_power"] = lst_storage_power
 
     return df
+
+
+def get_sample_using_time(edisgo_obj, start_date, end_date):
+    edisgo_obj.timeseries._timeindex = edisgo_obj.timeseries.timeindex[
+        start_date:end_date
+    ]
+    edisgo_obj.timeseries._generators_active_power = (
+        edisgo_obj.timeseries.generators_active_power[start_date:end_date]
+    )
+    edisgo_obj.timeseries._generators_reactive_power = (
+        edisgo_obj.timeseries.generators_reactive_power[start_date:end_date]
+    )
+    edisgo_obj.timeseries._loads_active_power = (
+        edisgo_obj.timeseries.loads_active_power[start_date:end_date]
+    )
+    edisgo_obj.timeseries._loads_reactive_power = (
+        edisgo_obj.timeseries.loads_reactive_power[start_date:end_date]
+    )
+    edisgo_obj.timeseries._storage_units_active_power = (
+        edisgo_obj.timeseries.storage_units_active_power[start_date:end_date]
+    )
+    edisgo_obj.timeseries._storage_units_reactive_power = (
+        edisgo_obj.timeseries.storage_units_reactive_power[start_date:end_date]
+    )
+    edisgo_obj.electromobility.flexibility_bands[
+        "upper_power"
+    ] = edisgo_obj.electromobility.flexibility_bands["upper_power"][start_date:end_date]
+    edisgo_obj.electromobility.flexibility_bands[
+        "upper_energy"
+    ] = edisgo_obj.electromobility.flexibility_bands["upper_energy"][
+        start_date:end_date
+    ]
+    edisgo_obj.electromobility.flexibility_bands[
+        "lower_energy"
+    ] = edisgo_obj.electromobility.flexibility_bands["lower_energy"][
+        start_date:end_date
+    ]
+    edisgo_obj.heat_pump.cop_df = edisgo_obj.heat_pump.cop_df[start_date:end_date]
+    edisgo_obj.heat_pump.heat_demand_df = edisgo_obj.heat_pump.heat_demand_df[
+        start_date:end_date
+    ]

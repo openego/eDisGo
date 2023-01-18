@@ -42,7 +42,7 @@ def to_powermodels(
     opf_version=4,
 ):
     """
-    Converts eDisGo representation of the network topology and timeseries to
+    Convert eDisGo representation of the network topology and timeseries to
     PowerModels network data format.
 
     Parameters
@@ -191,7 +191,7 @@ def from_powermodels(
     path="",
 ):
     """
-    Converts results from optimization in PowerModels network data format to eDisGo data
+    Convert results from optimization in PowerModels network data format to eDisGo data
     format and updates timeseries values of flexibilities on eDisGo object.
 
     Parameters
@@ -232,7 +232,6 @@ def from_powermodels(
         Directory the csv file is saved to. Per default it takes the current
         working directory.
     """
-
     abs_path = os.path.abspath(path)
 
     if type(pm_results) == str:
@@ -246,7 +245,7 @@ def from_powermodels(
         )
 
     flex_dicts = {
-        "curt": ["gen_nd", "pgc"],
+        # "curt": ["gen_nd", "pgc"],
         "hp": ["heatpumps", "php"],
         "cp": ["electromobility", "pcp"],
         "storage": ["storage", "ps"],
@@ -270,7 +269,7 @@ def from_powermodels(
             for t in timesteps
         ]
         results = pd.DataFrame(index=timesteps, columns=names, data=data)
-        if flex == "gen_nd":
+        if flex == "gen_nd":  # ToDo: kommt raus!!
             edisgo_object.timeseries._generators_active_power.loc[:, names] = (
                 edisgo_object.timeseries.generators_active_power.loc[:, names].values
                 - results[names].values
@@ -360,7 +359,7 @@ def from_powermodels(
 
 def _init_pm():
     """
-    Initializes empty PowerModels dictionary.
+    Initialize empty PowerModels dictionary.
 
     Returns
     -------
@@ -405,7 +404,7 @@ def _init_pm():
 
 def _build_bus(psa_net, pm):
     """
-    Builds bus dictionary in PowerModels network data format and adds it to
+    Build bus dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'.
 
     Parameters
@@ -457,8 +456,8 @@ def _build_bus(psa_net, pm):
 
 def _build_gen(edisgo_obj, psa_net, pm, s_base):
     """
-    Builds dispatchable and non-dispatchable generator dictionaries in PowerModels
-    network data format and adds both to PowerModels dictionary 'pm'.
+    Build slack, dispatchable and non-dispatchable generator dictionaries in PowerModels
+    network data format and add them to PowerModels dictionary 'pm'.
 
     Parameters
     ----------
@@ -519,7 +518,7 @@ def _build_gen(edisgo_obj, psa_net, pm, s_base):
 
 def _build_branch(edisgo_obj, psa_net, pm, s_base):
     """
-    Builds branch dictionary in PowerModels network data format and adds it to
+    Build branch dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'.
 
     Parameters
@@ -538,22 +537,26 @@ def _build_branch(edisgo_obj, psa_net, pm, s_base):
     tap = branches.tap_ratio.fillna(1)
     shift = branches.phase_shift.fillna(0)
     length = branches.length.fillna(1)
-    for par, val, decimal, decade in [
-        ("r_pu", branches.r_pu, 6, 1e5),
-        ("x_pu", branches.x_pu, 6, 1e5),
-        ("length", length, 3, 1e3),
+    for par, val, decimal, decade, text in [
+        ("r_pu", branches.r_pu, 6, 1e5, "resistance"),
+        ("x_pu", branches.x_pu, 6, 1e5, "reactance"),
+        ("length", length, 3, 1e3, "branch length"),
     ]:
         max_value = np.round(max(val.loc[val < val.quantile(0.998)]), decimal)
         min_value = np.round(min(val.loc[val > val.quantile(0.002)]), decimal)
         if val.max() / val.min() > decade:
             # only modify r, x and l values if min/max value differences are too big
             branches[par] = val.clip(min_value, max_value)
-            # ToDo: Add logger.warning/info
+            logger.info(
+                "Range between min and max {} values is too high. Highest and "
+                "lowest 0.2% of resistance values will be set to {} p.u./m and"
+                " {} p.u./m, respectively.".format(text, max_value, min_value)
+            )
 
     for branch_i in np.arange(len(branches.index)):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
-        cost_factor = {"mv": 1000, "lv": 100}
+        cost_factor = {"mv": 1000, "lv": 10}
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
             "br_r": branches.r_pu[branch_i] * s_base,
@@ -618,7 +621,7 @@ def _build_branch(edisgo_obj, psa_net, pm, s_base):
 
 def _build_load(edisgo_obj, psa_net, pm, s_base, flexible_cps, flexible_hps):
     """
-    Builds load dictionary in PowerModels network data format and adds it to
+    Build load dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'.
 
     Parameters
@@ -661,7 +664,7 @@ def _build_load(edisgo_obj, psa_net, pm, s_base, flexible_cps, flexible_hps):
 
 def _build_battery_storage(edisgo_obj, psa_net, pm, s_base):
     """
-    Builds (battery) storage  dictionary in PowerModels network data format and adds
+    Build battery storage dictionary in PowerModels network data format and add
     it to PowerModels dictionary 'pm'.
 
     Parameters
@@ -720,7 +723,7 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, s_base):
 
 def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
     """
-    Builds electromobility dictionary and adds it to PowerModels dictionary 'pm'.
+    Build electromobility dictionary and add it to PowerModels dictionary 'pm'.
 
     Parameters
     ----------
@@ -740,7 +743,6 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
      flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Updated array containing all charging points that allow for flexible charging.
     """
-
     flex_bands_df = edisgo_obj.electromobility.flexibility_bands
     if (
         len(
@@ -797,7 +799,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
 
 def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     """
-    Builds heat pump dictionary and adds it to PowerModels dictionary 'pm'.
+    Build heat pump dictionary and add it to PowerModels dictionary 'pm'.
 
     Parameters
     ----------
@@ -855,7 +857,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
 
 def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     """
-    Builds heat storage dictionary and adds it to PowerModels dictionary 'pm'.
+    Build heat storage dictionary and add it to PowerModels dictionary 'pm'.
 
     Parameters
     ----------
@@ -871,7 +873,6 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
     """
-
     heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df.loc[flexible_hps]
     for stor_i in np.arange(len(heat_storage_df.index)):
         idx_bus = _mapping(psa_net, psa_net.loads.bus[stor_i])
@@ -895,7 +896,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
 
 def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
     """
-    Builds dsm 'storage' dictionary and adds it to PowerModels dictionary 'pm'.
+    Build dsm 'storage' dictionary and add it to PowerModels dictionary 'pm'.
 
     Parameters
     ----------
@@ -916,7 +917,6 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
         Updated array containing all flexible loads that allow for application of demand
         side management strategy.
     """
-
     if len(flexible_loads[(edisgo_obj.dsm.p_min > edisgo_obj.dsm.p_max).any()]) > 0:
         logger.warning(
             "Upper power level is smaller than lower power level for "
@@ -975,8 +975,8 @@ def _build_hv_requirements(
     psa_net, pm, s_base, opt_flex, flexible_cps, flexible_hps, hv_flex_dict
 ):
     """
-    Builds dictionary for HV requirement data in PowerModels network data format and
-    adds it to PowerModels dictionary 'pm'.
+    Build dictionary for HV requirement data in PowerModels network data format and
+    add it to PowerModels dictionary 'pm'.
 
     Parameters
     ----------
@@ -1000,7 +1000,6 @@ def _build_hv_requirements(
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from etrago component of edisgo object.
     """
-
     inflexible_cps = [
         cp
         for cp in psa_net.loads.loc[
@@ -1044,9 +1043,9 @@ def _build_timeseries(
     hv_flex_dict,
 ):
     """
-    Builds timeseries dictionary in PowerModels network data format and adds it to
+    Build timeseries dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'. PowerModels' timeseries dictionary contains one
-    timeseries dictionary each for: gen, load, (battery) storage,
+    timeseries dictionary each for: gen, load, battery storage,
     electromobility, heat pumps and dsm storage.
 
     Parameters
@@ -1113,7 +1112,7 @@ def _build_component_timeseries(
     hv_flex_dict=None,
 ):
     """
-    Builds timeseries dictionary for given kind and adds it to 'time_series'
+    Build timeseries dictionary for given kind and add it to 'time_series'
     dictionary in PowerModels dictionary 'pm'.
 
     Parameters
@@ -1324,7 +1323,7 @@ def _mapping(
 
 def aggregate_parallel_transformers(psa_net):
     """
-    Calculates impedance for parallel transformers and aggregates them. Replaces
+    Calculate impedance for parallel transformers and aggregate them. Replace
     psa_net.transformers dataframe by aggregated transformer dataframe.
 
     Parameters
@@ -1333,7 +1332,6 @@ def aggregate_parallel_transformers(psa_net):
         :pypsa:`PyPSA.Network<network>` representation of network.
 
     """
-
     # TODO: what about b, g?
     psa_trafos = psa_net.transformers
     trafo_df = (
@@ -1354,7 +1352,7 @@ def aggregate_parallel_transformers(psa_net):
 
 def _get_pf(edisgo_obj, pm, idx_bus, kind):
     """
-    Retrieves and returns power factor from edisgo config files.
+    Retrieve and return power factor from edisgo config files.
 
     Parameters
     ----------
@@ -1371,7 +1369,6 @@ def _get_pf(edisgo_obj, pm, idx_bus, kind):
     pf: float
     sign: int
     """
-
     grid_level = pm["bus"][str(idx_bus)]["grid_level"]
     pf = edisgo_obj.config._data["reactive_power_factor"][
         "{}_{}".format(grid_level, kind)

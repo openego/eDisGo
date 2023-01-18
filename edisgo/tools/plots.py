@@ -2144,3 +2144,24 @@ def plot_dash(
     log = logging.getLogger("werkzeug")
     log.setLevel(logging.ERROR)
     app.run_server(mode=mode, debug=debug, height=820, port=port)
+
+
+def plot_opf_results(
+    edisgo_objects: EDisGo | dict[str, EDisGo],
+    component,
+):
+    edisgo_objects.timeseries.loads_active_power.plot()
+    if component == "hp":
+        edisgo_objects["before OPF"].timeseries.loads_active_power.loc[
+            :,
+            edisgo_objects[
+                "before OPF"
+            ].timeseries.loads_active_power.columns.str.contains("HP"),
+        ].sum(axis=1).plot()
+        edisgo_objects["after OPF"].timeseries.loads_active_power.loc[
+            :,
+            edisgo_objects[
+                "after OPF"
+            ].timeseries.loads_active_power.columns.str.contains("HP"),
+        ].sum(axis=1).plot()
+        edisgo_objects["after OPF"].heat_pump.heat_demand_df.sum(axis=1).plot()
