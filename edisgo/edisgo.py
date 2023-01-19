@@ -2470,7 +2470,11 @@ class EDisGo:
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: 4
-
+        Returns
+        -------
+        pm: dict
+            Dictionary that contains all network data in PowerModels network data
+            format.
         """
         abs_path = os.path.abspath(path)
         pm, hv_flex_dict = self.to_powermodels(
@@ -2498,6 +2502,7 @@ class EDisGo:
             "w",
         ) as outfile:
             json.dump(pm, outfile, default=_convert)
+        return pm
 
     def reduce_memory(self, **kwargs):
         """

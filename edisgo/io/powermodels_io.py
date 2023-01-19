@@ -790,6 +790,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
             "q_max": max(q, 0) / s_base,
             "e_min": e_min[0] / s_base,
             "e_max": e_max[0] / s_base,
+            "energy": 0,  # ToDo: hier 1/2 (e_min+ e_max) aus timestep t-1!
             "cp_bus": idx_bus,
             "name": emob_df.index[cp_i],
             "index": cp_i + 1,

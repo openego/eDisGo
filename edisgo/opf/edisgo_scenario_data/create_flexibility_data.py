@@ -102,16 +102,15 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
     lv_dsm_loads_industrial = lv_data.name.iloc[
         amount_retail_dsm_loads : amount_retail_dsm_loads + amount_industrial_dsm_loads
     ].values
+
+    if amount_mv_dsm_loads > len(mv_data):
+        n = int(np.ceil(amount_mv_dsm_loads / len(mv_data)))
+        mv_data = pd.concat([mv_data] * n)
+        mv_name = ["mv_dsm_load_" + str(i) for i in range(len(mv_data))]
+        mv_data.name = mv_name
     mv_dsm_loads = mv_data.name.iloc[0:amount_mv_dsm_loads].values
 
-    if amount_mv_dsm_loads > len(mv_data):  # ToDo: MV loads häufiger verwenden!
-        mv_dsm_loads2 = lv_data.name.iloc[
-            len(mv_data) - amount_mv_dsm_loads - 1 : -1
-        ].values
-        mv_dsm_loads = np.concatenate([mv_dsm_loads, mv_dsm_loads2])
-
     loads = np.concatenate([lv_dsm_loads_retail, lv_dsm_loads_industrial, mv_dsm_loads])
-    loads = dsm_data["name"]
     for parameter, parameter_nom, parameter_str in [
         (dsm_data.p_set, dsm_data.p_set_nom, "p_set"),
         (dsm_data.e_min_pu, dsm_data.e_nom, "e_min"),
@@ -154,6 +153,22 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
                     ),
                 ],
                 axis=1,
+            )
+
+    # check if p_max/min is higher than p_set in first timestep
+    dsm_check = (
+        edisgo_obj.timeseries._loads_active_power.loc[
+            :, edisgo_obj.timeseries._loads_active_power.columns.str.contains("dsm")
+        ]
+        < edisgo_obj.dsm.p_max
+    )
+    for load in dsm_check:
+        if dsm_check[load][0]:
+            logger.warning(
+                "Max shiftable power (p_max) of dsm load "
+                + str(load)
+                + " is higher than total power (p_set) of dsm load at first "
+                "timestep."
             )
 
     # add dsm loads to topology_df
