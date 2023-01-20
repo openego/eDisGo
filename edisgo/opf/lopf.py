@@ -2442,7 +2442,7 @@ def initial_charging_power_tes(model, heat_pump, time):
 
 def aggregated_power(model, time):
     """
-    Constraint aggregating the power of bess and emob charging?
+    Constraint aggregating the power of bess and emob and hp charging
 
     Parameters
     ----------
@@ -2461,9 +2461,16 @@ def aggregated_power(model, time):
         relevant_charging_points = model.flexible_charging_points_set
     else:
         relevant_charging_points = []
+    if hasattr(model, "flexible_heat_pumps_set"):
+        relevant_heat_pumps = model.flexible_heat_pumps_set
+    else:
+        relevant_heat_pumps = []
+
     return model.grid_power_flexible[time] == -sum(
         model.charging[storage, time] for storage in relevant_storage_units
-    ) + sum(model.charging_ev[cp, time] for cp in relevant_charging_points)
+    ) + sum(model.charging_ev[cp, time] for cp in relevant_charging_points) + sum(
+        model.charging_hp[cp, time] for cp in relevant_heat_pumps
+    )
 
 
 def load_factor_min(model, time):
@@ -2601,18 +2608,27 @@ def minimize_energy_level(model):
     return (
         (
             sum(
-                model.curtailment_load[bus, time]
-                + model.curtailment_feedin[bus, time]
-                + 0.5 * model.curtailment_ev[bus, time]
+                model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time]
+                # + 0.5 * model.curtailment_ev[bus, time]
                 for bus in model.bus_set
                 for time in model.time_set
             )
-            + 0.5 * ev_curtailment
+            # + 0.5 * ev_curtailment
+            + ev_curtailment
             + hp_curtailment
         )
         * 1e6
         + sum(model.grid_power_flexible[time] for time in model.time_set)
+        #    TODO check if hp in grid_power_flexible - Done
         + 1000 * (slack_charging + slack_energy)
+        #     #TODO not needed as grid model not added for this objective
+        #     + 1000
+        #     * sum(
+        #     model.slack_p_cum_pos[branch, time] + model.slack_p_cum_neg[
+        #         branch, time]
+        #     for branch in model.branch_set
+        #     for time in model.time_set
+        # )
     )
 
 
