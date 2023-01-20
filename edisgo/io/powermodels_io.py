@@ -245,7 +245,7 @@ def from_powermodels(
         )
 
     flex_dicts = {
-        # "curt": ["gen_nd", "pgc"],
+        "curt": ["gen_nd", "pgc"],
         "hp": ["heatpumps", "php"],
         "cp": ["electromobility", "pcp"],
         "storage": ["storage", "ps"],
@@ -269,11 +269,12 @@ def from_powermodels(
             for t in timesteps
         ]
         results = pd.DataFrame(index=timesteps, columns=names, data=data)
-        if flex == "gen_nd":  # ToDo: kommt raus!!
-            edisgo_object.timeseries._generators_active_power.loc[:, names] = (
-                edisgo_object.timeseries.generators_active_power.loc[:, names].values
-                - results[names].values
-            )
+        if flex == "gen_nd":
+            # edisgo_object.timeseries._generators_active_power.loc[:, names] = (
+            #     edisgo_object.timeseries.generators_active_power.loc[:, names].values
+            #     - results[names].values
+            # )
+            pass
         elif flex in ["heatpumps", "electromobility"]:
             edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
                 names
@@ -556,7 +557,7 @@ def _build_branch(edisgo_obj, psa_net, pm, s_base):
     for branch_i in np.arange(len(branches.index)):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
-        cost_factor = {"mv": 1000, "lv": 10}
+        cost_factor = {"mv": 100, "lv": 1}
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
             "br_r": branches.r_pu[branch_i] * s_base,
@@ -790,7 +791,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
             "q_max": max(q, 0) / s_base,
             "e_min": e_min[0] / s_base,
             "e_max": e_max[0] / s_base,
-            "energy": 0,  # ToDo: hier 1/2 (e_min+ e_max) aus timestep t-1!
+            "energy": edisgo_obj.electromobility.initial_soc_df[emob_df.index[cp_i]],
             "cp_bus": idx_bus,
             "name": emob_df.index[cp_i],
             "index": cp_i + 1,

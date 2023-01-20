@@ -2146,22 +2146,35 @@ def plot_dash(
     app.run_server(mode=mode, debug=debug, height=820, port=port)
 
 
-def plot_opf_results(
+def plot_opf_results(  # ToDo: Plots für andere Komponenten hinzufügen + schön machen
     edisgo_objects: EDisGo | dict[str, EDisGo],
     component,
 ):
-    edisgo_objects.timeseries.loads_active_power.plot()
     if component == "hp":
-        edisgo_objects["before OPF"].timeseries.loads_active_power.loc[
-            :,
-            edisgo_objects[
-                "before OPF"
-            ].timeseries.loads_active_power.columns.str.contains("HP"),
-        ].sum(axis=1).plot()
-        edisgo_objects["after OPF"].timeseries.loads_active_power.loc[
-            :,
-            edisgo_objects[
-                "after OPF"
-            ].timeseries.loads_active_power.columns.str.contains("HP"),
-        ].sum(axis=1).plot()
-        edisgo_objects["after OPF"].heat_pump.heat_demand_df.sum(axis=1).plot()
+        plt.plot(
+            edisgo_objects["before OPF"]
+            .timeseries.loads_active_power.loc[
+                :,
+                edisgo_objects[
+                    "before OPF"
+                ].timeseries.loads_active_power.columns.str.contains("HP"),
+            ]
+            .sum(axis=1),
+            label="hp before OPF",
+        )
+        plt.plot(
+            edisgo_objects["after OPF"]
+            .timeseries.loads_active_power.loc[
+                :,
+                edisgo_objects[
+                    "after OPF"
+                ].timeseries.loads_active_power.columns.str.contains("HP"),
+            ]
+            .sum(axis=1),
+            label="hp after OPF",
+        )
+        plt.plot(
+            edisgo_objects["after OPF"].heat_pump.heat_demand_df.sum(axis=1),
+            label="heat demand",
+        )
+        plt.legend()
