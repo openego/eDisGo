@@ -370,6 +370,7 @@ def setup_model(
     t1 = time.perf_counter()
     model = pm.ConcreteModel()
     model.name = kwargs.get("name", objective)
+    fixed_parameters["objective"] = objective
     # check if correct value of objective is inserted
     if objective not in [
         "curtailment",
@@ -477,7 +478,8 @@ def setup_model(
             charging_starts=kwargs.get("charging_starts", {"hp": None, "tes": None}),
         )
 
-    if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
+    # if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
+    if True:
         logger.info("Setup model: Adding grid model.")
         model = add_grid_model_lopf(
             model=model,
@@ -663,41 +665,56 @@ def add_grid_model_lopf(
     model.tan_phi_load = fixed_parameters["tan_phi_load"]
     model.tan_phi_feedin = fixed_parameters["tan_phi_feedin"]
     model.v_slack = v_slack
-    model.branches = fixed_parameters["branches"]
-    model.branch_set = pm.Set(initialize=model.branches.index)
-    model.underlying_branch_elements = fixed_parameters["underlying_branch_elements"]
-    model.power_factors = pm.Param(
-        model.branch_set, model.time_set, initialize=init_power_factors, mutable=True
-    )
-    # add n-1 security # Todo: make optional?
-    # adapt i_lines_allowed for radial feeders
-    buses_in_cycles = list(
-        set(itertools.chain.from_iterable(edisgo_obj.topology.rings))
-    )
 
-    # Find lines in cycles
-    lines_in_cycles = list(
-        grid_object.lines_df.loc[
-            grid_object.lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
-        ].index.values
-    )
+    # if objective == "minimize_energy_level" or objective == \
+    # "maximize_energy_level":
+    if True:
+        model.branches = fixed_parameters["branches"]
+        model.branch_set = pm.Set(initialize=model.branches.index)
+        model.underlying_branch_elements = fixed_parameters[
+            "underlying_branch_elements"
+        ]
+        model.power_factors = pm.Param(
+            model.branch_set,
+            model.time_set,
+            initialize=init_power_factors,
+            mutable=True,
+        )
+        # add n-1 security # Todo: make optional?
+        # adapt i_lines_allowed for radial feeders
+        buses_in_cycles = list(
+            set(itertools.chain.from_iterable(edisgo_obj.topology.rings))
+        )
 
-    model.branches_load_factors = pd.DataFrame(
-        index=model.time_set, columns=model.branch_set
-    )
-    model.branches_load_factors.loc[:, :] = 1
-    tmp_residual_load = edisgo_obj.timeseries.residual_load.loc[timesteps]
-    indices = pd.DataFrame(index=timesteps, columns=["index"])
-    indices["index"] = [i for i in range(len(timesteps))]
-    model.branches_load_factors.loc[
-        indices.loc[tmp_residual_load.loc[timesteps] < 0].values.T[0], lines_in_cycles
-    ] = load_factor_rings  # Todo: distinction of mv and lv?
-    # Note: So far LV does not contain rings
-    # Variables
-    model.p_cum = pm.Var(model.branch_set, model.time_set)
-    model.slack_p_cum_pos = pm.Var(model.branch_set, model.time_set, bounds=(0, None))
-    model.slack_p_cum_neg = pm.Var(model.branch_set, model.time_set, bounds=(0, None))
-    model.q_cum = pm.Var(model.branch_set, model.time_set)
+        # Find lines in cycles
+        lines_in_cycles = list(
+            grid_object.lines_df.loc[
+                grid_object.lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
+            ].index.values
+        )
+
+        model.branches_load_factors = pd.DataFrame(
+            index=model.time_set, columns=model.branch_set
+        )
+        model.branches_load_factors.loc[:, :] = 1
+        tmp_residual_load = edisgo_obj.timeseries.residual_load.loc[timesteps]
+        indices = pd.DataFrame(index=timesteps, columns=["index"])
+        indices["index"] = [i for i in range(len(timesteps))]
+        model.branches_load_factors.loc[
+            indices.loc[tmp_residual_load.loc[timesteps] < 0].values.T[0],
+            lines_in_cycles,
+        ] = load_factor_rings  # Todo: distinction of mv and lv?
+        # Note: So far LV does not contain rings
+        # Variables
+        model.p_cum = pm.Var(model.branch_set, model.time_set)
+        model.slack_p_cum_pos = pm.Var(
+            model.branch_set, model.time_set, bounds=(0, None)
+        )
+        model.slack_p_cum_neg = pm.Var(
+            model.branch_set, model.time_set, bounds=(0, None)
+        )
+        model.q_cum = pm.Var(model.branch_set, model.time_set)
+
     model.v = pm.Var(model.bus_set, model.time_set)
     model.slack_v_pos = pm.Var(model.bus_set, model.time_set, bounds=(0, None))
     model.slack_v_neg = pm.Var(model.bus_set, model.time_set, bounds=(0, None))
@@ -724,23 +741,27 @@ def add_grid_model_lopf(
         model.UpperCurtHP = pm.Constraint(
             model.bus_set, model.time_set, rule=upper_bound_curtailment_hp
         )
-    # Constraints
-    model.ActivePower = pm.Constraint(
-        model.branch_set, model.time_set, rule=active_power
-    )
-    model.UpperActive = pm.Constraint(
-        model.branch_set, model.time_set, rule=upper_active_power
-    )
-    model.LowerActive = pm.Constraint(
-        model.branch_set, model.time_set, rule=lower_active_power
-    )
-    # model.ReactivePower = pm.Constraint(model.branch_set, model.time_set,
-    #                                     rule=reactive_power)
+
+    # if objective == "minimize_energy_level" or objective ==  \
+    #         "maximize_energy_level":
+    if True:
+        # Constraints
+        model.ActivePower = pm.Constraint(
+            model.branch_set, model.time_set, rule=active_power
+        )
+        model.UpperActive = pm.Constraint(
+            model.branch_set, model.time_set, rule=upper_active_power
+        )
+        model.LowerActive = pm.Constraint(
+            model.branch_set, model.time_set, rule=lower_active_power
+        )
+        # model.ReactivePower = pm.Constraint(model.branch_set, model.time_set,
+        #                                     rule=reactive_power)
+        model.VoltageDrop = pm.Constraint(
+            model.branch_set, model.time_set, rule=voltage_drop
+        )
     model.SlackVoltage = pm.Constraint(
         model.slack_bus, model.time_set, rule=slack_voltage
-    )
-    model.VoltageDrop = pm.Constraint(
-        model.branch_set, model.time_set, rule=voltage_drop
     )
     model.UpperVoltage = pm.Constraint(
         model.bus_set, model.time_set, rule=upper_voltage
