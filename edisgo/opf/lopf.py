@@ -2629,7 +2629,8 @@ def minimize_energy_level(model):
     return (
         (
             sum(
-                model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time]
+                model.curtailment_load[bus, time]
+                + model.curtailment_feedin[bus, time]
                 # + 0.5 * model.curtailment_ev[bus, time]
                 for bus in model.bus_set
                 for time in model.time_set
@@ -2673,11 +2674,12 @@ def maximize_energy_level(model):
             sum(
                 model.curtailment_load[bus, time]
                 + model.curtailment_feedin[bus, time]
-                + 0.5 * model.curtailment_ev[bus, time]
+                # + 0.5 * model.curtailment_ev[bus, time]
                 for bus in model.bus_set
                 for time in model.time_set
             )
-            + 0.5 * ev_curtailment
+            # + 0.5 * ev_curtailment
+            + ev_curtailment
             + hp_curtailment
         )
         * 1e6
