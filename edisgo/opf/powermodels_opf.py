@@ -15,6 +15,7 @@ def pm_optimize(
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
+    flexible_storages=None,
     opf_version=4,
     method="soc",
     solver_tol=1e-6,
@@ -45,6 +46,10 @@ def pm_optimize(
     flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all flexible loads that allow for application of demand side
         management strategy.
+        Default: None
+    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+        Array containing all flexible storages. Non-flexible storages operate to
+        optimize self consumption.
         Default: None
     opf_version: Int
         Version of optimization models to choose from. The grid model is a radial branch
@@ -109,12 +114,16 @@ def pm_optimize(
     """
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
-
+    edisgo_obj.topology.loads_df["opt"] = [
+        load in np.concatenate([flexible_hps, flexible_cps])
+        for load in edisgo_obj.topology.loads_df.index
+    ]
     pm, hv_flex_dict = edisgo_obj.to_powermodels(
         s_base=s_base,
         flexible_cps=flexible_cps,
         flexible_hps=flexible_hps,
         flexible_loads=flexible_loads,
+        flexible_storages=flexible_storages,
         opf_version=opf_version,
     )
 

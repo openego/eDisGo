@@ -39,6 +39,7 @@ def to_powermodels(
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
+    flexible_storages=None,
     opf_version=4,
 ):
     """
@@ -59,6 +60,10 @@ def to_powermodels(
     flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
+    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+        Array containing all flexible storages. Non-flexible storages operate to
+        optimize self consumption.
+        Default: None
     opf_version: Int
         Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
         For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
@@ -79,12 +84,18 @@ def to_powermodels(
         flexible_hps = []
     if flexible_loads is None:
         flexible_loads = []
+    if flexible_storages is None:
+        flexible_storages = []
     # Append names of flexibilities for OPF
     for (flex, loads, text) in [
         ("cp", flexible_cps, "Flexible charging parks"),
         ("hp", flexible_hps, "Flexible heatpumps"),
         ("dsm", flexible_loads, "Flexible loads"),
-        ("storage", edisgo_object.topology.storage_units_df, "Storage units"),
+        (
+            "storage",
+            flexible_storages,
+            "Storage units",
+        ),  # edisgo_object.topology.storage_units_df
     ]:
         if (flex not in opf_flex) & (len(loads) != 0):
             logger.info("{} will be optimized.".format(text))
@@ -121,8 +132,8 @@ def to_powermodels(
     _build_bus(psa_net, pm)
     _build_gen(edisgo_object, psa_net, pm, s_base)
     _build_branch(edisgo_object, psa_net, pm, s_base)
-    if len(edisgo_object.topology.storage_units_df) > 0:
-        _build_battery_storage(edisgo_object, psa_net, pm, s_base)
+    if len(flexible_storages) > 0:
+        _build_battery_storage(edisgo_object, psa_net, pm, flexible_storages, s_base)
     if len(flexible_cps) > 0:
         flexible_cps = _build_electromobility(
             edisgo_object,
@@ -137,7 +148,15 @@ def to_powermodels(
     if len(flexible_loads) > 0:
         flexible_loads = _build_dsm(edisgo_object, psa_net, pm, s_base, flexible_loads)
     if len(psa_net.loads) > 0:
-        _build_load(edisgo_object, psa_net, pm, s_base, flexible_cps, flexible_hps)
+        _build_load(
+            edisgo_object,
+            psa_net,
+            pm,
+            s_base,
+            flexible_cps,
+            flexible_hps,
+            flexible_storages,
+        )
     else:
         logger.warning("No loads found in network.")
     if (opf_version == 1) | (opf_version == 2):
@@ -154,7 +173,14 @@ def to_powermodels(
         }
         try:
             _build_hv_requirements(
-                psa_net, pm, s_base, opf_flex, flexible_cps, flexible_hps, hv_flex_dict
+                psa_net,
+                pm,
+                s_base,
+                opf_flex,
+                flexible_cps,
+                flexible_hps,
+                flexible_storages,
+                hv_flex_dict,
             )
         except IndexError:
             logger.warning(
@@ -174,6 +200,7 @@ def to_powermodels(
         flexible_cps,
         flexible_hps,
         flexible_loads,
+        flexible_storages,
         opf_flex,
         hv_flex_dict,
     )
@@ -620,7 +647,9 @@ def _build_branch(edisgo_obj, psa_net, pm, s_base):
         }
 
 
-def _build_load(edisgo_obj, psa_net, pm, s_base, flexible_cps, flexible_hps):
+def _build_load(
+    edisgo_obj, psa_net, pm, s_base, flexible_cps, flexible_hps, flexible_storages
+):
     """
     Build load dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'.
@@ -640,8 +669,15 @@ def _build_load(edisgo_obj, psa_net, pm, s_base, flexible_cps, flexible_hps):
     flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
+    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+        Array containing all flexible storages. Non-flexible storages operate to
+        optimize self consumption.
+        Default: None
     """
     flex_loads = np.concatenate((flexible_hps, flexible_cps))
+    inflexible_storages = psa_net.storage_units.index[
+        [storage not in flexible_storages for storage in psa_net.storage_units.index]
+    ]
     if len(flex_loads) == 0:
         loads_df = psa_net.loads
     else:
@@ -662,8 +698,26 @@ def _build_load(edisgo_obj, psa_net, pm, s_base, flexible_cps, flexible_hps):
             "index": load_i + 1,
         }
 
+    for stor_i in np.arange(len(inflexible_storages)):
+        idx_bus = _mapping(
+            psa_net, psa_net.storage_units.bus.loc[inflexible_storages[stor_i]]
+        )
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
+        p_d = psa_net.storage_units_t.p_set[inflexible_storages[stor_i]]
+        q_d = psa_net.storage_units_t.q_set[inflexible_storages[stor_i]]
+        pm["load"][str(stor_i + len(loads_df.index) + 1)] = {
+            "pd": p_d[0] / s_base,
+            "qd": q_d[0] / s_base,
+            "load_bus": idx_bus,
+            "status": True,
+            "pf": pf,
+            "sign": sign,
+            "name": inflexible_storages[stor_i],
+            "index": stor_i + len(loads_df.index) + 1,
+        }
 
-def _build_battery_storage(edisgo_obj, psa_net, pm, s_base):
+
+def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     """
     Build battery storage dictionary in PowerModels network data format and add
     it to PowerModels dictionary 'pm'.
@@ -675,17 +729,23 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, s_base):
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
         (PowerModels) dictionary.
+    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+        Array containing all flexible storages. Non-flexible storages operate to
+        optimize self consumption.
+        Default: None
     s_base : int
         Base value of apparent power for per unit system.
         Default: 100 MVA
     """
-    for stor_i in np.arange(len(psa_net.storage_units.index)):
-        idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
+    for stor_i in np.arange(len(flexible_storages)):
+        idx_bus = _mapping(
+            psa_net, psa_net.storage_units.bus.loc[flexible_storages[stor_i]]
+        )
         # retrieve power factor from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
         e_max = (
-            psa_net.storage_units.p_nom[stor_i]
-            * psa_net.storage_units.max_hours[stor_i]
+            psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            * psa_net.storage_units.max_hours.loc[flexible_storages[stor_i]]
         )
         pm["storage"][str(stor_i + 1)] = {
             "r": 0,
@@ -694,29 +754,34 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, s_base):
             "q_loss": 0,
             "pf": pf,
             "sign": sign,
-            "ps": psa_net.storage_units_t.p_set[psa_net.storage_units.index[stor_i]][0]
+            "ps": psa_net.storage_units_t.p_set[flexible_storages[stor_i]][0] / s_base,
+            "qs": psa_net.storage_units_t.q_set[flexible_storages[stor_i]][0] / s_base,
+            "pmax": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]] / s_base,
+            "pmin": -psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
             / s_base,
-            "qs": psa_net.storage_units_t.q_set[psa_net.storage_units.index[stor_i]][0]
-            / s_base,
-            "pmax": psa_net.storage_units.p_nom[stor_i] / s_base,
-            "pmin": -psa_net.storage_units.p_nom[stor_i] / s_base,
             "qmax": np.tan(np.arccos(pf))
-            * psa_net.storage_units.p_nom[stor_i]
+            * psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
             / s_base,
             "qmin": -np.tan(np.arccos(pf))
-            * psa_net.storage_units.p_nom[stor_i]
+            * psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
             / s_base,
-            "energy": psa_net.storage_units.state_of_charge_initial[stor_i]
+            "energy": psa_net.storage_units.state_of_charge_initial.loc[
+                flexible_storages[stor_i]
+            ]
             * e_max
             / s_base,
             "energy_rating": e_max / s_base,
             "thermal_rating": 100,
-            "charge_rating": psa_net.storage_units.p_nom[stor_i] / s_base,
-            "discharge_rating": psa_net.storage_units.p_nom[stor_i] / s_base,
+            "charge_rating": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            / s_base,
+            "discharge_rating": psa_net.storage_units.p_nom.loc[
+                flexible_storages[stor_i]
+            ]
+            / s_base,
             "charge_efficiency": 0.9,
             "discharge_efficiency": 0.9,
             "storage_bus": stor_i + len(psa_net.buses.index) + 1,
-            "name": psa_net.storage_units.index[stor_i],
+            "name": flexible_storages[stor_i],
             "status": True,
             "index": stor_i + 1,
         }
@@ -974,7 +1039,14 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
 
 
 def _build_hv_requirements(
-    psa_net, pm, s_base, opt_flex, flexible_cps, flexible_hps, hv_flex_dict
+    psa_net,
+    pm,
+    s_base,
+    opf_flex,
+    flexible_cps,
+    flexible_hps,
+    flexible_storages,
+    hv_flex_dict,
 ):
     """
     Build dictionary for HV requirement data in PowerModels network data format and
@@ -989,7 +1061,7 @@ def _build_hv_requirements(
     s_base : int
         Base value of apparent power for per unit system.
         Default: 100 MVA
-    opt_flex : list
+    opf_flex : list
         List of flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]. For more information see
         :func:`edisgo.opf.powermodels_opf.pm_optimize`.
@@ -998,6 +1070,10 @@ def _build_hv_requirements(
     flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
+    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+        Array containing all flexible storages. Non-flexible storages operate to
+        optimize self consumption.
+        Default: None
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from etrago component of edisgo object.
@@ -1016,6 +1092,9 @@ def _build_hv_requirements(
         ].index.values
         if hp not in flexible_hps
     ]
+    inflexible_storages = psa_net.storage_units.index[
+        [storage not in flexible_storages for storage in psa_net.storage_units.index]
+    ]
     if len(inflexible_cps) > 0:
         hv_flex_dict["cp"] = (
             hv_flex_dict["cp"]
@@ -1026,10 +1105,16 @@ def _build_hv_requirements(
             hv_flex_dict["hp"]
             - psa_net.loads_t.p_set.loc[:, inflexible_hps].sum(axis=1) / s_base
         )
-    for i in np.arange(len(opt_flex)):
+    if len(inflexible_storages) > 0:
+        hv_flex_dict["storage"] = (
+            hv_flex_dict["storage"]
+            - psa_net.storage_units_t.p_set.loc[:, inflexible_storages].sum(axis=1)
+            / s_base
+        )
+    for i in np.arange(len(opf_flex)):
         pm["HV_requirements"][str(i + 1)] = {
-            "P": hv_flex_dict[opt_flex[i]][0],
-            "name": opt_flex[i],
+            "P": hv_flex_dict[opf_flex[i]][0],
+            "name": opf_flex[i],
         }
 
 
@@ -1041,7 +1126,8 @@ def _build_timeseries(
     flexible_cps,
     flexible_hps,
     flexible_loads,
-    opt_flex,
+    flexible_storages,
+    opf_flex,
     hv_flex_dict,
 ):
     """
@@ -1068,7 +1154,11 @@ def _build_timeseries(
     flexible_loads : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
-    opt_flex: list
+    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+        Array containing all flexible storages. Non-flexible storages operate to
+        optimize self consumption.
+        Default: None
+    opf_flex: list
         List of flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]
     hv_flex_dict: dict
@@ -1095,7 +1185,8 @@ def _build_timeseries(
             flexible_cps,
             flexible_hps,
             flexible_loads,
-            opt_flex,
+            flexible_storages,
+            opf_flex,
             hv_flex_dict,
         )
     pm["time_series"]["num_steps"] = len(psa_net.snapshots)
@@ -1110,7 +1201,8 @@ def _build_component_timeseries(
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
-    opt_flex=None,
+    flexible_storages=None,
+    opf_flex=None,
     hv_flex_dict=None,
 ):
     """
@@ -1138,7 +1230,11 @@ def _build_component_timeseries(
     flexible_loads : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
-    opt_flex: list
+    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+        Array containing all flexible storages. Non-flexible storages operate to
+        optimize self consumption.
+        Default: None
+    opf_flex: list
         List of flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]
     hv_flex_dict: dict
@@ -1196,15 +1292,63 @@ def _build_component_timeseries(
             }
     elif kind == "load":
         flex_loads = np.concatenate((flexible_hps, flexible_cps))
+        inflexible_storages = psa_net.storage_units.index[
+            [
+                storage not in flexible_storages
+                for storage in psa_net.storage_units.index
+            ]
+        ]
         if len(flex_loads) == 0:
-            p_set = psa_net.loads_t.p_set / s_base
-            q_set = psa_net.loads_t.q_set / s_base
+            p_set = (
+                pd.concat(
+                    [
+                        psa_net.loads_t.p_set,
+                        psa_net.storage_units_t.p_set[inflexible_storages],
+                    ],
+                    axis=1,
+                )
+                / s_base
+            )
+            q_set = (
+                pd.concat(
+                    [
+                        psa_net.loads_t.q_set,
+                        psa_net.storage_units_t.q_set[inflexible_storages],
+                    ],
+                    axis=1,
+                )
+                / s_base
+            )
         else:
-            p_set = psa_net.loads_t.p_set.drop(columns=flex_loads) / s_base
-            q_set = psa_net.loads_t.q_set.drop(columns=flex_loads) / s_base
+            p_set = (
+                pd.concat(
+                    [
+                        psa_net.loads_t.p_set.drop(columns=flex_loads),
+                        psa_net.storage_units_t.p_set[inflexible_storages],
+                    ],
+                    axis=1,
+                )
+                / s_base
+            )
+            q_set = (
+                pd.concat(
+                    [
+                        psa_net.loads_t.q_set.drop(columns=flex_loads),
+                        psa_net.storage_units_t.q_set[inflexible_storages],
+                    ],
+                    axis=1,
+                )
+                / s_base
+            )
         for comp in p_set.columns:
             comp_i = _mapping(
-                psa_net, comp, kind, flexible_cps, flexible_hps, flexible_loads
+                psa_net,
+                comp,
+                kind,
+                flexible_cps=flexible_cps,
+                flexible_hps=flexible_hps,
+                flexible_loads=flexible_loads,
+                flexible_storages=flexible_storages,
             )
             p_d = p_set[comp].values
             q_d = q_set[comp].values
@@ -1213,10 +1357,10 @@ def _build_component_timeseries(
                 "qd": q_d.tolist(),
             }
     elif kind == "storage":
-        p_set = psa_net.storage_units_t.p_set / s_base
-        q_set = psa_net.storage_units_t.q_set / s_base
+        p_set = psa_net.storage_units_t.p_set[flexible_storages] / s_base
+        q_set = psa_net.storage_units_t.q_set[flexible_storages] / s_base
         for comp in p_set.columns:
-            comp_i = _mapping(psa_net, comp, kind)
+            comp_i = _mapping(psa_net, comp, kind, flexible_storages=flexible_storages)
             pm_comp[str(comp_i)] = {
                 "ps": p_set[comp].values.tolist(),
                 "qs": q_set[comp].values.tolist(),
@@ -1276,16 +1420,22 @@ def _build_component_timeseries(
     if (kind == "HV_requirements") & (
         (pm["opf_version"] == 1) | (pm["opf_version"] == 2)
     ):
-        for i in np.arange(len(opt_flex)):
+        for i in np.arange(len(opf_flex)):
             pm_comp[(str(i + 1))] = {
-                "P": hv_flex_dict[opt_flex[i]].tolist(),
+                "P": hv_flex_dict[opf_flex[i]].tolist(),
             }
 
     pm["time_series"][kind] = pm_comp
 
 
 def _mapping(
-    psa_net, name, kind="bus", flexible_cps=None, flexible_hps=None, flexible_loads=None
+    psa_net,
+    name,
+    kind="bus",
+    flexible_cps=None,
+    flexible_hps=None,
+    flexible_loads=None,
+    flexible_storages=None,
 ):
     if kind == "bus":
         df = psa_net.buses
@@ -1303,13 +1453,26 @@ def _mapping(
     elif kind == "gen_slack":
         df = psa_net.generators.loc[(psa_net.generators.index.str.contains("slack"))]
     elif kind == "storage":
-        df = psa_net.storage_units
+        df = psa_net.storage_units.loc[flexible_storages]
     elif kind == "load":
         flex_loads = np.concatenate((flexible_hps, flexible_cps))
+        inflexible_storages = psa_net.storage_units.index[
+            [
+                storage not in flexible_storages
+                for storage in psa_net.storage_units.index
+            ]
+        ]
         if len(flex_loads) == 0:
-            df = psa_net.loads
+            df = pd.concat(
+                [psa_net.loads, psa_net.storage_units.loc[inflexible_storages]]
+            )
         else:
-            df = psa_net.loads.drop(flex_loads)
+            df = pd.concat(
+                [
+                    psa_net.loads.drop(flex_loads),
+                    psa_net.storage_units.loc[inflexible_storages],
+                ]
+            )
     elif kind == "electromobility":
         df = psa_net.loads.loc[flexible_cps]
     elif (kind == "heatpumps") | (kind == "heat_storage"):

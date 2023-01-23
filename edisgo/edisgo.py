@@ -667,6 +667,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
+        flexible_storages=None,
         opf_version=4,
     ):
         """
@@ -686,6 +687,10 @@ class EDisGo:
         flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
             Array containing all flexible loads that allow for application of demand
             side management strategy.
+        flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+            Array containing all flexible storages. Non-flexible storages operate to
+            optimize self consumption.
+            Default: None
         opf_version: Int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
@@ -703,6 +708,7 @@ class EDisGo:
             flexible_cps=flexible_cps,
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
+            flexible_storages=flexible_storages,
             opf_version=opf_version,
         )
 
@@ -769,6 +775,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
+        flexible_storages=None,
         opf_version=4,
         method="soc",
         solver_tol=1e-6,
@@ -799,6 +806,10 @@ class EDisGo:
         flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list or None
             Array containing all flexible loads that allow for application of demand
             side management strategy.
+            Default: None
+        flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+            Array containing all flexible storages. Non-flexible storages operate to
+            optimize self consumption.
             Default: None
         opf_version: Int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
@@ -850,6 +861,7 @@ class EDisGo:
             flexible_cps=flexible_cps,
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
+            flexible_storages=flexible_storages,
             opf_version=opf_version,
             method=method,
             solver_tol=solver_tol,
@@ -2442,6 +2454,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
+        flexible_storages=None,
         opf_version=4,
     ):
         """
@@ -2466,6 +2479,10 @@ class EDisGo:
         flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
             Array containing all flexible loads that allow for application of demand
             side management strategy.
+        flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+            Array containing all flexible storages. Non-flexible storages operate to
+            optimize self consumption.
+            Default: None
         opf_version: Int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
@@ -2482,6 +2499,7 @@ class EDisGo:
             flexible_cps=flexible_cps,
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
+            flexible_storages=flexible_storages,
             opf_version=opf_version,
         )
 

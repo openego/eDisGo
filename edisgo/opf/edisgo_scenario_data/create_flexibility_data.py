@@ -162,7 +162,7 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
         ]
         < edisgo_obj.dsm.p_max
     )
-    for load in dsm_check:
+    for load in dsm_check.columns.values:
         if dsm_check[load][0]:
             logger.warning(
                 "Max shiftable power (p_max) of dsm load "
