@@ -1059,9 +1059,22 @@ def add_heat_pump_model(
         )
 
     def charging_tes(model, hp, time):
-        return model.energy_level_tes[hp, time] == 0.9 * model.energy_level_tes[
-            hp, time - 1
-        ] + model.charging_tes[hp, time] * (
+        """
+        Charging balance with tes standing losses of 5% per day
+
+        Parameters
+        ----------
+        model :
+        hp :
+        time :
+
+        Returns
+        -------
+
+        """
+        return model.energy_level_tes[hp, time] == (
+            1 - 0.05 * pd.to_timedelta(model.time_increment) / pd.to_timedelta("24h")
+        ) * model.energy_level_tes[hp, time - 1] + model.charging_tes[hp, time] * (
             pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h")
         )
 
@@ -2629,8 +2642,7 @@ def minimize_energy_level(model):
     return (
         (
             sum(
-                model.curtailment_load[bus, time]
-                + model.curtailment_feedin[bus, time]
+                model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time]
                 # + 0.5 * model.curtailment_ev[bus, time]
                 for bus in model.bus_set
                 for time in model.time_set
@@ -2672,8 +2684,7 @@ def maximize_energy_level(model):
     return (
         (
             sum(
-                model.curtailment_load[bus, time]
-                + model.curtailment_feedin[bus, time]
+                model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time]
                 # + 0.5 * model.curtailment_ev[bus, time]
                 for bus in model.bus_set
                 for time in model.time_set
