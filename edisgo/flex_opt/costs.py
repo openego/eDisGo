@@ -1,5 +1,6 @@
 import os
 
+import numpy as np
 import pandas as pd
 
 if "READTHEDOCS" not in os.environ:
@@ -262,6 +263,39 @@ def line_expansion_costs(edisgo_obj, lines_names):
         'costs_earthworks', 'costs_cable', 'voltage_level' for each line
 
     """
+
+    def cost_cable_types(mode):
+        # TODO: rewrite it with pd.merge or pd.concat
+        costs_cable = []
+        for equip_name1 in equipment_df.equipment:
+            if mode == "mv":
+                mv_cable_df = (
+                    edisgo_obj.topology.equipment_data[f"{mode}_cables"]
+                    .loc[
+                        edisgo_obj.topology.equipment_data[f"{mode}_cables"].U_n == 10.0
+                    ]
+                    .loc[:, ["cost"]]
+                )
+                mv_overhead_lines = (
+                    edisgo_obj.topology.equipment_data[f"{mode}_overhead_lines"]
+                    .loc[
+                        edisgo_obj.topology.equipment_data[f"{mode}_overhead_lines"].U_n
+                        == 10.0
+                    ]
+                    .loc[:, ["cost"]]
+                )
+                cost_df = pd.concat([mv_cable_df, mv_overhead_lines])
+            else:
+                cost_df = edisgo_obj.topology.equipment_data[f"{mode}_cables"].loc[
+                    :, ["cost"]
+                ]
+
+            for equip_name2 in cost_df.index:
+                if equip_name1 == equip_name2:
+                    cost = cost_df.loc[cost_df.index.isin([equip_name1])].cost[0]
+                    costs_cable.append(cost)
+        return costs_cable
+
     lines_df = edisgo_obj.topology.lines_df.loc[lines_names, ["length"]]
     mv_lines = lines_df[
         lines_df.index.isin(edisgo_obj.topology.mv_grid.lines_df.index)
@@ -280,22 +314,26 @@ def line_expansion_costs(edisgo_obj, lines_names):
     else:
         population_density = "urban"
 
-    costs_cable_mv = float(edisgo_obj.config["costs_cables"]["mv_cable"])
-    costs_cable_lv = float(edisgo_obj.config["costs_cables"]["lv_cable"])
+    equipment_df = edisgo_obj.results.equipment_changes
+
+    costs_cable_mv = np.array(cost_cable_types("mv"))
+    costs_cable_lv = np.array(cost_cable_types("lv"))
     costs_cable_earthwork_mv = float(
         edisgo_obj.config["costs_cables"][
-            "mv_cable_incl_earthwork_{}".format(population_density)
+            f"mv_cable_incl_earthwork_{population_density}"
         ]
     )
     costs_cable_earthwork_lv = float(
         edisgo_obj.config["costs_cables"][
-            "lv_cable_incl_earthwork_{}".format(population_density)
+            f"lv_cable_incl_earthwork_{population_density}"
         ]
     )
 
     costs_lines = pd.DataFrame(
         {
-            "costs_earthworks": (costs_cable_earthwork_mv - costs_cable_mv)
+            "costs_earthworks": (
+                [costs_cable_earthwork_mv] * len(costs_cable_mv) - costs_cable_mv
+            )
             * lines_df.loc[mv_lines].length,
             "costs_cable": costs_cable_mv * lines_df.loc[mv_lines].length,
             "voltage_level": ["mv"] * len(mv_lines),
@@ -308,7 +346,10 @@ def line_expansion_costs(edisgo_obj, lines_names):
             costs_lines,
             pd.DataFrame(
                 {
-                    "costs_earthworks": (costs_cable_earthwork_lv - costs_cable_lv)
+                    "costs_earthworks": (
+                        [costs_cable_earthwork_lv] * len(costs_cable_lv)
+                        - costs_cable_lv
+                    )
                     * lines_df.loc[lv_lines].length,
                     "costs_cable": costs_cable_lv * lines_df.loc[lv_lines].length,
                     "voltage_level": ["lv"] * len(lv_lines),
