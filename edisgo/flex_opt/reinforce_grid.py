@@ -28,6 +28,7 @@ def reinforce_grid(
     combined_analysis: bool = False,
     mode: str | None = None,
     without_generator_import: bool = False,
+    **kwargs,
 ) -> Results:
     """
     Evaluates network reinforcement needs and performs measures.
@@ -179,7 +180,8 @@ def reinforce_grid(
     iteration_step = 1
     analyze_mode = None if mode == "lv" else mode
 
-    edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa)
+    edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa,
+                             **kwargs)
 
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
     logger.debug("==> Check station load.")

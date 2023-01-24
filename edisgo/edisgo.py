@@ -978,6 +978,7 @@ class EDisGo:
                     combined_analysis=combined_analysis,
                     mode=reinforce_mode,
                     without_generator_import=without_generator_import,
+                    **kwargs
                 )
 
             if mode not in ["mv", "lv"]:
