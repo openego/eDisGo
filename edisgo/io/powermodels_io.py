@@ -577,8 +577,8 @@ def _build_branch(edisgo_obj, psa_net, pm, s_base):
             branches[par] = val.clip(min_value, max_value)
             logger.info(
                 "Range between min and max {} values is too high. Highest and "
-                "lowest 0.2% of resistance values will be set to {} p.u./m and"
-                " {} p.u./m, respectively.".format(text, max_value, min_value)
+                "lowest 0.2% of {} values will be set to {} p.u./m and"
+                " {} p.u./m, respectively.".format(text, text, max_value, min_value)
             )
 
     for branch_i in np.arange(len(branches.index)):

@@ -114,10 +114,10 @@ def pm_optimize(
     """
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
-    edisgo_obj.topology.loads_df["opt"] = [
-        load in np.concatenate([flexible_hps, flexible_cps])
-        for load in edisgo_obj.topology.loads_df.index
-    ]
+    # edisgo_obj.topology.loads_df["opt"] = [
+    #     load in np.concatenate([flexible_hps, flexible_cps, flexible_loads])
+    #     for load in edisgo_obj.topology.loads_df.index
+    # ]
     pm, hv_flex_dict = edisgo_obj.to_powermodels(
         s_base=s_base,
         flexible_cps=flexible_cps,
