@@ -845,6 +845,10 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         p_max = flex_bands_df["upper_power"][emob_df.index[cp_i]]
         e_min = flex_bands_df["lower_energy"][emob_df.index[cp_i]]
         e_max = flex_bands_df["upper_energy"][emob_df.index[cp_i]]
+        try:
+            soc_initial = edisgo_obj.electromobility.initial_soc_df[emob_df.index[cp_i]]
+        except AttributeError:
+            soc_initial = 1 / 2 * (e_min[0] + e_max[0])
         pm["electromobility"][str(cp_i + 1)] = {
             "pd": 0,
             "qd": 0,
@@ -856,7 +860,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
             "q_max": max(q, 0) / s_base,
             "e_min": e_min[0] / s_base,
             "e_max": e_max[0] / s_base,
-            "energy": edisgo_obj.electromobility.initial_soc_df[emob_df.index[cp_i]],
+            "energy": soc_initial,
             "cp_bus": idx_bus,
             "name": emob_df.index[cp_i],
             "index": cp_i + 1,

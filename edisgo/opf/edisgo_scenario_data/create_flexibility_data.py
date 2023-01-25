@@ -119,7 +119,7 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
         (dsm_data.e_max_pu, dsm_data.e_nom, "e_max"),
     ]:
         df = _create_dsm_parameter_data(
-            dsm_data, parameter, parameter_nom, loads, timeindex
+            dsm_data, parameter, parameter_nom, parameter_str, loads, timeindex
         )
         if parameter_str == "e_min":
             edisgo_obj.dsm.e_min = df
@@ -155,7 +155,7 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
                 axis=1,
             )
 
-    # check if p_max/min is higher than p_set in first timestep
+    # check if p_max is higher than p_set in first timestep
     dsm_check = (
         edisgo_obj.timeseries._loads_active_power.loc[
             :, edisgo_obj.timeseries._loads_active_power.columns.str.contains("dsm")
@@ -256,12 +256,30 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
         )
 
 
-def _create_dsm_parameter_data(dsm_data, parameter, parameter_nom, loads, timeindex):
+def _create_dsm_parameter_data(
+    dsm_data, parameter, parameter_nom, parameter_str, loads, timeindex
+):
     data = [
         np.fromstring(parameter[i].strip("[]"), sep=",")[0 : len(timeindex)]
         * parameter_nom.iloc[i]
         for i in range(len(dsm_data))
     ]
+    # Check if min/max values are below/above 0
+    if parameter_str == "e_min":
+        if (pd.DataFrame(data) > 0).any().any():
+            logger.warning("e_min is bigger than 0 for some DSM loads.")
+    elif parameter_str == "e_max":
+        if (pd.DataFrame(data) < 0).any().any():
+            logger.warning("e_max is smaller than 0 for some DSM loads.")
+    elif parameter_str == "p_min":
+        if (pd.DataFrame(data) > 0).any().any():
+            logger.warning("p_min is bigger than 0 for some DSM loads.")
+    elif parameter_str == "p_max":
+        if (pd.DataFrame(data) < 0).any().any():
+            logger.warning("p_max is smaller than 0 for some DSM loads.")
+    elif parameter_str == "p_set":
+        if (pd.DataFrame(data) < 0).any().any():
+            logger.warning("p_set is smaller than 0 for some DSM loads.")
     return pd.DataFrame(
         columns=timeindex, index=dsm_data["name"], data=data
     ).transpose()[loads]
