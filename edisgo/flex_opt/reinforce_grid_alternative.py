@@ -238,7 +238,7 @@ def reinforce_line_overloading_alternative(
             logger.debug("==> Run power flow analysis.")
             edisgo_reinforce.analyze(timesteps=timesteps_pfa)
 
-        elif "split_feeder_at_half_length" in add_method or add_method is None:
+        if "split_feeder_at_half_length" in add_method or add_method is None:
             # method-2: split_feeder_at_half_length
             logger.info(
                 f"==>method:split_feeder_at_half_length is running for MV grid "
@@ -315,10 +315,14 @@ def reinforce_line_overloading_alternative(
         # Method: Add same type of parallel line
         while_counter = 0
         while not crit_lines.empty and while_counter < max_while_iterations:
+            if mode is None:
+                grid_level = "MV and LV "
+            else:
+                grid_level = mode
 
             logger.info(
                 f"==>method:add_same_type_of_parallel_line is "
-                f"running_Step{iteration_step}"
+                f"running for {grid_level} grid/s_Step{iteration_step}"
             )
             lines_changes = reinforce_measures.add_same_type_of_parallel_line(
                 edisgo_reinforce, crit_lines
