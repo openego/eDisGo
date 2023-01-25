@@ -266,30 +266,35 @@ def line_expansion_costs(edisgo_obj, lines_names):
 
     def cost_cable_types(mode):
         # TODO: rewrite it with pd.merge or pd.concat
+        equipment_df = edisgo_obj.topology.lines_df[
+            edisgo_obj.topology.lines_df.index.isin(lines_names)
+        ]
         costs_cable = []
-        for equip_name1 in equipment_df.equipment:
-            if mode == "mv":
-                mv_cable_df = (
-                    edisgo_obj.topology.equipment_data[f"{mode}_cables"]
-                    .loc[
-                        edisgo_obj.topology.equipment_data[f"{mode}_cables"].U_n == 10.0
-                    ]
-                    .loc[:, ["cost"]]
-                )
-                mv_overhead_lines = (
-                    edisgo_obj.topology.equipment_data[f"{mode}_overhead_lines"]
-                    .loc[
-                        edisgo_obj.topology.equipment_data[f"{mode}_overhead_lines"].U_n
-                        == 10.0
-                    ]
-                    .loc[:, ["cost"]]
-                )
-                cost_df = pd.concat([mv_cable_df, mv_overhead_lines])
-            else:
-                cost_df = edisgo_obj.topology.equipment_data[f"{mode}_cables"].loc[
-                    :, ["cost"]
+        if mode == "mv":
+            voltage_mv_grid = edisgo_obj.topology.mv_grid.buses_df.v_nom[0]
+            mv_cable_df = (
+                edisgo_obj.topology.equipment_data[f"{mode}_cables"]
+                .loc[
+                    edisgo_obj.topology.equipment_data[f"{mode}_cables"].U_n
+                    == voltage_mv_grid
                 ]
+                .loc[:, ["cost"]]
+            )
+            mv_overhead_lines = (
+                edisgo_obj.topology.equipment_data[f"{mode}_overhead_lines"]
+                .loc[
+                    edisgo_obj.topology.equipment_data[f"{mode}_overhead_lines"].U_n
+                    == voltage_mv_grid
+                ]
+                .loc[:, ["cost"]]
+            )
+            cost_df = pd.concat([mv_cable_df, mv_overhead_lines])
+        else:
+            cost_df = edisgo_obj.topology.equipment_data[f"{mode}_cables"].loc[
+                :, ["cost"]
+            ]
 
+        for equip_name1 in equipment_df.type_info:
             for equip_name2 in cost_df.index:
                 if equip_name1 == equip_name2:
                     cost = cost_df.loc[cost_df.index.isin([equip_name1])].cost[0]
@@ -313,8 +318,6 @@ def line_expansion_costs(edisgo_obj, lines_names):
         population_density = "rural"
     else:
         population_density = "urban"
-
-    equipment_df = edisgo_obj.results.equipment_changes
 
     costs_cable_mv = np.array(cost_cable_types("mv"))
     costs_cable_lv = np.array(cost_cable_types("lv"))
