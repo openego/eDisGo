@@ -1146,7 +1146,7 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
         new_transformer_name[grid_id_ind] = str(grid.id) + "1001"
 
         transformer_s.s_nom = standard_transformer.S_nom
-        transformer_s.type_info = standard_transformer.name
+        transformer_s.type_info = standard_transformer.type_info
         transformer_s.r_pu = standard_transformer.r_pu
         transformer_s.x_pu = standard_transformer.x_pu
         transformer_s.name = "_".join([str(_) for _ in new_transformer_name])
@@ -1349,8 +1349,8 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
 
             logger.info(
                 f"{len(nodes_tb_relocated.keys())} feeders are removed from the grid "
-                f"{grid} and located in new grid{repr(grid) + str(1001)} by split "
-                f"feeder+add transformer method"
+                f"{grid} and located in new grid{repr(grid) + str(1001)} by method: "
+                f"add_station_at_half_length "
             )
     if len(lines_changes) < 3:
         lines_changes = {}
