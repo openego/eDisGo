@@ -27,9 +27,12 @@ def reinforce_line_overloading_alternative(
     Evaluates network reinforcement needs and performs measures.
 
     This function is the parent function for all network reinforcements.
+    todo: docstring is to be updated
     MV Grid Reinforcement:
-    1-
-    2-
+    1- Circuit Breakers are relocated based on the least load/gen difference between
+    the feeders
+    2- Split method is implemented into the grids which are not reinforced by split+add
+     station method
 
     LV Grid Reinforcement:
     1- Split+add station method is implemented into all the lv grids if there are more
@@ -44,6 +47,13 @@ def reinforce_line_overloading_alternative(
     ----------
     edisgo: class:`~.EDisGo`
         The eDisGo API object
+    add_method: The following methods can be used:
+        [
+            "relocate_circuit_breaker",
+            "add_station_at_half_length",
+            "split_feeder_at_half_length",
+            "add_same_type_of_parallel_line",
+        ]
     timesteps_pfa: str or \
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
@@ -79,7 +89,7 @@ def reinforce_line_overloading_alternative(
           and LV network topology. LV load and generation is aggregated per
           LV network and directly connected to the primary side of the
           respective MV/LV station.
-        * 'lv' to reinforce LV networks including MV/LV stations.
+        * 'lv' to reinforce LV networks.
     max_while_iterations : int
         Maximum number of times each while loop is conducted.
     without_generator_import: bool
@@ -311,7 +321,7 @@ def reinforce_line_overloading_alternative(
             ]
         )
     if "add_same_type_of_parallel_line" in add_method or add_method is None:
-        # 2- Remanining crit_lines- Voltage level MV and LV
+        # 2- Remaining crit_lines- Voltage level MV and LV
         # Method: Add same type of parallel line
         while_counter = 0
         while not crit_lines.empty and while_counter < max_while_iterations:
