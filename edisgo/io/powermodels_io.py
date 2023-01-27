@@ -129,9 +129,9 @@ def to_powermodels(
     pm["baseMVA"] = s_base
     pm["source_version"] = 2
     pm["flexibilities"] = opf_flex
-    _build_bus(psa_net, pm)
-    _build_gen(edisgo_object, psa_net, pm, s_base)
-    _build_branch(edisgo_object, psa_net, pm, s_base)
+    _build_bus(psa_net, pm, flexible_storages)
+    _build_gen(edisgo_object, psa_net, pm, flexible_storages, s_base)
+    _build_branch(edisgo_object, psa_net, pm, flexible_storages, s_base)
     if len(flexible_storages) > 0:
         _build_battery_storage(edisgo_object, psa_net, pm, flexible_storages, s_base)
     if len(flexible_cps) > 0:
@@ -430,7 +430,7 @@ def _init_pm():
     return pm
 
 
-def _build_bus(psa_net, pm):
+def _build_bus(psa_net, pm, flexible_storages):
     """
     Build bus dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'.
@@ -465,8 +465,10 @@ def _build_bus(psa_net, pm):
             "grid_level": grid_level[psa_net.buses.v_nom[bus_i]],
         }
 
-    for stor_i in np.arange(len(psa_net.storage_units.index)):
-        idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
+    for stor_i in np.arange(len(flexible_storages)):
+        idx_bus = _mapping(
+            psa_net, psa_net.storage_units.bus.loc[flexible_storages[stor_i]]
+        )
         pm["bus"][str(stor_i + len(psa_net.buses.index) + 1)] = {
             "index": stor_i + len(psa_net.buses.index) + 1,
             "bus_i": stor_i + len(psa_net.buses.index) + 1,
@@ -482,7 +484,7 @@ def _build_bus(psa_net, pm):
         }
 
 
-def _build_gen(edisgo_obj, psa_net, pm, s_base):
+def _build_gen(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     """
     Build slack, dispatchable and non-dispatchable generator dictionaries in PowerModels
     network data format and add them to PowerModels dictionary 'pm'.
@@ -543,8 +545,43 @@ def _build_gen(edisgo_obj, psa_net, pm, s_base):
                 "index": gen_i + 1,
             }
 
+    inflexible_storages = psa_net.storage_units.index[
+        [storage not in flexible_storages for storage in psa_net.storage_units.index]
+    ]
+    for stor_i in np.arange(len(inflexible_storages)):
+        idx_bus = _mapping(
+            psa_net, psa_net.storage_units.bus.loc[inflexible_storages[stor_i]]
+        )
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
+        p_g = max(psa_net.storage_units_t.p_set[inflexible_storages[stor_i]], 0)
+        q_g = min(psa_net.storage_units_t.q_set[inflexible_storages[stor_i]], 0)
+        pm[text][str(stor_i + len(gen_disp.index) + 1)] = {
+            "pg": p_g / s_base,
+            "qg": q_g / s_base,
+            "pmax": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]] / s_base,
+            "pmin": -psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            / s_base,
+            "qmax": np.tan(np.arccos(pf))
+            * psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            / s_base,
+            "qmin": -np.tan(np.arccos(pf))
+            * psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            / s_base,
+            "P": 0,
+            "Q": 0,
+            "vg": 1,
+            "pf": pf,
+            "sign": sign,
+            "mbase": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            / s_base,
+            "gen_bus": idx_bus,
+            "gen_status": 1,
+            "name": inflexible_storages[stor_i],
+            "index": stor_i + len(gen_disp.index) + 1,
+        }
 
-def _build_branch(edisgo_obj, psa_net, pm, s_base):
+
+def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     """
     Build branch dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'.
@@ -613,8 +650,10 @@ def _build_branch(edisgo_obj, psa_net, pm, s_base):
             "index": branch_i + 1,
         }
 
-    for stor_i in np.arange(len(psa_net.storage_units.index)):
-        idx_bus = _mapping(psa_net, psa_net.storage_units.bus[stor_i])
+    for stor_i in np.arange(len(flexible_storages)):
+        idx_bus = _mapping(
+            psa_net, psa_net.storage_units.bus.loc[flexible_storages[stor_i]]
+        )
         # retrieve power factor from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
 
@@ -631,7 +670,8 @@ def _build_branch(edisgo_obj, psa_net, pm, s_base):
             "b_fr": 0,
             "shift": 0,
             "br_status": 1.0,
-            "rate_a": psa_net.storage_units.p_nom[stor_i] / s_base,
+            "rate_a": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            / s_base,
             "rate_b": 250 / s_base,
             "rate_c": 250 / s_base,
             "angmin": -np.pi / 6,
@@ -703,8 +743,8 @@ def _build_load(
             psa_net, psa_net.storage_units.bus.loc[inflexible_storages[stor_i]]
         )
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
-        p_d = psa_net.storage_units_t.p_set[inflexible_storages[stor_i]]
-        q_d = psa_net.storage_units_t.q_set[inflexible_storages[stor_i]]
+        p_d = -min(psa_net.storage_units_t.p_set[inflexible_storages[stor_i]], 0)
+        q_d = -max(psa_net.storage_units_t.q_set[inflexible_storages[stor_i]], 0)
         pm["load"][str(stor_i + len(loads_df.index) + 1)] = {
             "pd": p_d[0] / s_base,
             "qd": q_d[0] / s_base,
