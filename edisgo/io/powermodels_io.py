@@ -566,25 +566,25 @@ def _build_branch(edisgo_obj, psa_net, pm, s_base):
     shift = branches.phase_shift.fillna(0)
     length = branches.length.fillna(1)
     for par, val, decimal, decade, text in [
-        ("r_pu", branches.r_pu, 6, 1e5, "resistance"),
-        ("x_pu", branches.x_pu, 6, 1e5, "reactance"),
+        ("r_pu", branches.r_pu, 4, 1e5, "resistance"),
+        ("x_pu", branches.x_pu, 4, 1e5, "reactance"),
         ("length", length, 3, 1e3, "branch length"),
     ]:
-        max_value = np.round(max(val.loc[val < val.quantile(0.998)]), decimal)
-        min_value = np.round(min(val.loc[val > val.quantile(0.002)]), decimal)
+        max_value = np.round(max(val.loc[val < val.quantile(0.98)]), decimal)
+        min_value = np.round(min(val.loc[val > val.quantile(0.02)]), decimal)
         if val.max() / val.min() > decade:
             # only modify r, x and l values if min/max value differences are too big
-            branches[par] = val.clip(min_value, max_value)
+            branches[par] = val.clip(lower=min_value)  # , max_value)
             logger.info(
                 "Range between min and max {} values is too high. Highest and "
-                "lowest 0.2% of {} values will be set to {} p.u./m and"
+                "lowest 2% of {} values will be set to {} p.u./m and"
                 " {} p.u./m, respectively.".format(text, text, max_value, min_value)
             )
 
     for branch_i in np.arange(len(branches.index)):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
-        cost_factor = {"mv": 100, "lv": 1}
+        cost_factor = {"mv": 1, "lv": 100}
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
             "br_r": branches.r_pu[branch_i] * s_base,
