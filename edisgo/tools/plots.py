@@ -1112,6 +1112,36 @@ def plot_plotly(
 
     x_root, y_root = transformer_4326_to_3035.transform(x_root, y_root)
 
+    def get_load_factor(s_res, branch_name):
+
+        s_res_branch = edisgo_obj.results.s_res.loc[selected_timesteps, s_res_view].T[
+            edisgo_obj.results.s_res.loc[selected_timesteps, s_res_view].T.index.isin(
+                [branch_name]
+            )
+        ]
+        s_res_time_index = s_res_branch.apply(
+            lambda row: row[row == s_res_branch.max(axis=1)[0]].index, axis=1
+        ).item()[0]
+
+        if str(s_res_time_index) == "1970-01-01 00:00:00":
+            load_factor = edisgo_obj.config["grid_expansion_load_factors"][
+                "mv_load_case_line"
+            ]
+        elif str(s_res_time_index) == "1970-01-01 01:00:00":
+            load_factor = edisgo_obj.config["grid_expansion_load_factors"][
+                "lv_load_case_line"
+            ]
+        elif str(s_res_time_index) == "1970-01-01 02:00:00":
+            load_factor = edisgo_obj.config["grid_expansion_load_factors"][
+                "mv_feed-in_case_line"
+            ]
+        elif str(s_res_time_index) == "1970-01-01 03:00:00":
+            load_factor = edisgo_obj.config["grid_expansion_load_factors"][
+                "lv_feed-in_case_line"
+            ]
+
+        return load_factor
+
     def plot_line_text():
         middle_node_x = []
         middle_node_y = []
@@ -1126,7 +1156,11 @@ def plot_plotly(
 
             text = str(branch_name)
             if power_flow_results:
-                text += "<br>" + "Loading = " + str(s_res.loc[branch_name])
+
+                load_factor = get_load_factor(s_res, branch_name)
+                text += (
+                    "<br>" + "Loading = " + str(s_res.loc[branch_name] / load_factor)
+                )
 
             line_parameters = edisgo_obj.topology.lines_df.loc[branch_name, :]
             for index, value in line_parameters.iteritems():
@@ -1208,7 +1242,8 @@ def plot_plotly(
                     color = "black"
 
             elif line_color == "loading":
-                loading = s_res.loc[branch_name]
+                load_factor = get_load_factor(s_res, branch_name)
+                loading = s_res.loc[branch_name] / load_factor
                 color = color_map_color(
                     loading,
                     vmin=color_min,
@@ -1217,7 +1252,8 @@ def plot_plotly(
                 )
 
             elif line_color == "relative_loading":
-                loading = s_res.loc[branch_name]
+                load_factor = get_load_factor(s_res, branch_name)
+                loading = s_res.loc[branch_name] / load_factor
                 s_nom = edisgo_obj.topology.lines_df.s_nom.loc[branch_name]
                 color = color_map_color(
                     loading / s_nom * 0.9,
