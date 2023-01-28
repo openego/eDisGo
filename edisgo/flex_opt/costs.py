@@ -265,6 +265,16 @@ def line_expansion_costs(edisgo_obj, lines_names):
     """
 
     def cost_cable_types(mode):
+        """
+
+        Parameters
+        ----------
+        mode: mv or lv
+
+        Returns
+        -------
+        The cost of each line type
+        """
         # TODO: rewrite it with pd.merge or pd.concat
         equipment_df = edisgo_obj.topology.lines_df[
             edisgo_obj.topology.lines_df.index.isin(lines_names)
@@ -364,14 +374,32 @@ def line_expansion_costs(edisgo_obj, lines_names):
     return costs_lines.loc[lines_df.index]
 
 
-def cost_breakdown(edisgo_obj, lines):
-    # costs for lines
+def cost_breakdown(edisgo_obj, lines_df):
+    """
+
+    Parameters
+    ----------
+    edisgo_obj:    class:`~.edisgo.EDisGo`
+        eDisGo object of which lines of lines_df are part
+    lines: pandas.core.frame.DataFrame
+        the changed lines
+
+    Returns
+    -------
+    `pandas.DataFrame<DataFrame>`
+
+        Example
+                    costs_earthworks 	costs_cable 	voltage_level 	costs
+    Line name	12.3840 	2.0160 	lv 	14.40
+
+    """
+    # cost-breakdown of changed lines
     # get changed lines
 
-    lines_added = lines.iloc[
+    lines_added = lines_df.iloc[
         (
-            lines.equipment
-            == edisgo_obj.topology.lines_df.loc[lines.index, "type_info"]
+            lines_df.equipment
+            == edisgo_obj.topology.lines_df.loc[lines_df.index, "type_info"]
         ).values
     ]["quantity"].to_frame()
     lines_added_unique = lines_added.index.unique()
