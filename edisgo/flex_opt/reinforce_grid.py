@@ -143,6 +143,8 @@ def reinforce_grid(
 
         edisgo_reinforce.results.equipment_changes = pd.concat(df_list)
 
+    raise_not_converged = kwargs.get("raise_not_converged", False)
+    troubleshooting_mode = kwargs.get("troubleshooting_mode", None)
     # check if provided mode is valid
     if mode and mode not in ["mv", "mvlv", "lv"]:
         raise ValueError(f"Provided mode {mode} is not a valid mode.")
@@ -180,8 +182,12 @@ def reinforce_grid(
     iteration_step = 1
     analyze_mode = None if mode == "lv" else mode
 
-    edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa,
-                             **kwargs)
+    edisgo_reinforce.analyze(
+        mode=analyze_mode,
+        timesteps=timesteps_pfa,
+        raise_not_converged=raise_not_converged,
+        troubleshooting_mode=troubleshooting_mode,
+    )
 
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
     logger.debug("==> Check station load.")
@@ -253,7 +259,12 @@ def reinforce_grid(
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
         logger.debug("==> Run power flow analysis.")
-        edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa)
+        edisgo_reinforce.analyze(
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            raise_not_converged=raise_not_converged,
+            troubleshooting_mode=troubleshooting_mode,
+        )
 
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = (
@@ -338,7 +349,12 @@ def reinforce_grid(
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-voltage problems were solved
         logger.debug("==> Run power flow analysis.")
-        edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa)
+        edisgo_reinforce.analyze(
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            raise_not_converged=raise_not_converged,
+            troubleshooting_mode=troubleshooting_mode,
+        )
 
         logger.debug("==> Recheck voltage in MV topology.")
         crit_nodes = checks.mv_voltage_deviation(
@@ -391,7 +407,12 @@ def reinforce_grid(
             # run power flow analysis again (after updating pypsa object) and
             # check if all over-voltage problems were solved
             logger.debug("==> Run power flow analysis.")
-            edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa)
+            edisgo_reinforce.analyze(
+                mode=analyze_mode,
+                timesteps=timesteps_pfa,
+                raise_not_converged=raise_not_converged,
+                troubleshooting_mode=troubleshooting_mode,
+            )
 
             logger.debug("==> Recheck voltage at secondary side of LV stations.")
             crit_stations = checks.lv_voltage_deviation(
@@ -445,7 +466,12 @@ def reinforce_grid(
             # run power flow analysis again (after updating pypsa object)
             # and check if all over-voltage problems were solved
             logger.debug("==> Run power flow analysis.")
-            edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa)
+            edisgo_reinforce.analyze(
+                mode=analyze_mode,
+                timesteps=timesteps_pfa,
+                raise_not_converged=raise_not_converged,
+                troubleshooting_mode=troubleshooting_mode,
+            )
 
             logger.debug("==> Recheck voltage in LV grids.")
             crit_nodes = checks.lv_voltage_deviation(
@@ -542,7 +568,12 @@ def reinforce_grid(
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
         logger.debug("==> Run power flow analysis.")
-        edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa)
+        edisgo_reinforce.analyze(
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            raise_not_converged=raise_not_converged,
+            troubleshooting_mode=troubleshooting_mode,
+        )
 
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = (

@@ -930,6 +930,23 @@ class EDisGo:
             Is used to overwrite the return value from
             :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case`. If True
             reinforcement is calculated for worst-case MV and LV cases separately.
+        troubleshooting_mode : str or None
+            Two optional troubleshooting methods in case of nonconvergence of nonlinear
+            power flow (cf. [1])
+
+            * None (default)
+                Power flow analysis is conducted using nonlinear power flow method.
+            * 'lpf'
+                Non-linear power flow initial guess is seeded with the voltage angles
+                from the linear power flow.
+            * 'iteration'
+                Power flow analysis is conducted by reducing all power values of
+                generators and loads to a fraction, e.g. 10%, solving the load flow and
+                using it as a seed for the power at 20%, iteratively up to 100%.
+        raise_not_converged : bool
+            If True, an error is raised in case power flow analysis did not converge
+            for all time steps.
+            Default: True.
 
         """
         if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
@@ -978,7 +995,7 @@ class EDisGo:
                     combined_analysis=combined_analysis,
                     mode=reinforce_mode,
                     without_generator_import=without_generator_import,
-                    **kwargs
+                    **kwargs,
                 )
 
             if mode not in ["mv", "lv"]:
@@ -994,6 +1011,7 @@ class EDisGo:
                 combined_analysis=combined_analysis,
                 mode=mode,
                 without_generator_import=without_generator_import,
+                **kwargs,
             )
 
         # add measure to Results object
