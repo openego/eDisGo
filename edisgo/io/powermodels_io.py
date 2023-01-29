@@ -273,7 +273,7 @@ def from_powermodels(
         raise ValueError(
             "Parameter 'pm_results' must be either dictionary or path to json file."
         )
-    edisgo_object.opf_results.solution_time = pm["solution_time"]
+    edisgo_object.opf_results.solution_time = pm["solve_time"]
     flex_dicts = {
         "curt": ["gen_nd", "pgc"],
         "hp": ["heatpumps", "php"],
