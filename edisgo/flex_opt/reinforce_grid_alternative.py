@@ -24,25 +24,25 @@ def reinforce_line_overloading_alternative(
     without_generator_import=False,
 ):
     """
+    todo: docstring is to be updated
     Evaluates network reinforcement needs and performs measures.
 
     This function is the parent function for all network reinforcements.
-    todo: docstring is to be updated
-    MV Grid Reinforcement:
-    1- Circuit Breakers are relocated based on the least load/gen difference between
-    the feeders
-    2- Split method is implemented into the grids which are not reinforced by split+add
-     station method
 
-    LV Grid Reinforcement:
-    1- Split+add station method is implemented into all the lv grids if there are more
-    than 3 overloaded lines in the grid.
-    2- Split method is implemented into the grids which are not reinforced by split+add
-     station method
+    MV Grid Reinforcement:
+        After circuit breakers are relocated based on the least load/gen difference
+        between the feeders, the feeder is split at the half-length and connected
+        to the new mv/lv station
+
+    LV Grid Reinforcement
+        If the number of overloaded lines are more than 2 in the grid, the feeder is
+    split at the half-length and connected to the new mv/lv station. Otherwise,
+    the feeder is split at the half-length and connected to the HV/MV station.
 
     MV_LV Grid Reinforcement
-    1- The remaining overloaded lines are reinforced by add same type of parallel line
+        The remaining overloaded lines are reinforced by add same type of parallel line
     method
+
     Parameters
     ----------
     edisgo: class:`~.EDisGo`
@@ -106,8 +106,7 @@ def reinforce_line_overloading_alternative(
     Assumptions
     ------
     1-The removing cost of cables are not incorporated.
-    2-One type of line cost is used for mv and lv
-    3-Line Reinforcements are done with the same type of lines as lines reinforced
+    2-Line Reinforcements are done with the same type of lines as lines reinforced
 
 
     """
@@ -175,6 +174,8 @@ def reinforce_line_overloading_alternative(
         edisgo_reinforce = copy.deepcopy(edisgo)
     else:
         edisgo_reinforce = edisgo
+    # todo:activate
+    # edisgo_reinforce = remove_short_lines(remove_1m_end_lines(edisgo_reinforce))
 
     if timesteps_pfa is not None:
         if isinstance(timesteps_pfa, str) and timesteps_pfa == "snapshot_analysis":
@@ -230,7 +231,10 @@ def reinforce_line_overloading_alternative(
     # 1.1.1 Method:Split the feeder at the half-length of feeder (applied only once to
     # secure n-1).
     if (not mode or mode == "mv") and not crit_lines_mv.empty:
-        if add_method == ["add_station_at_half_length"]:
+        if (
+            add_method == ["add_station_at_half_length"]
+            or "add_station_at_half_length" in add_method
+        ):
             logger.error(
                 "==>method:add_station_at_half_length is only applicable for LV grids"
             )
@@ -242,18 +246,16 @@ def reinforce_line_overloading_alternative(
                 f"for MV grid {edisgo_reinforce.topology.mv_grid}: "
             )
             circuit_breaker_changes = reinforce_measures.relocate_circuit_breaker(
-                edisgo_reinforce, mode="loadgen"
+                edisgo_reinforce, mode="load"
             )
             _add_circuit_breaker_changes_to_equipment_changes()
             logger.debug("==> Run power flow analysis.")
             edisgo_reinforce.analyze(timesteps=timesteps_pfa)
+            crit_lines_mv = checks.mv_line_load(edisgo_reinforce)
 
         if "split_feeder_at_half_length" in add_method or add_method is None:
             # method-2: split_feeder_at_half_length
-            logger.info(
-                f"==>method:split_feeder_at_half_length is running for MV grid "
-                f"{edisgo_reinforce.topology.mv_grid}: "
-            )
+
             lines_changes = reinforce_measures.split_feeder_at_half_length(
                 edisgo_reinforce, edisgo_reinforce.topology.mv_grid, crit_lines_mv
             )
@@ -265,7 +267,10 @@ def reinforce_line_overloading_alternative(
     # 1.2- Voltage level= LV
     if (not mode or mode == "lv") and not crit_lines_lv.empty:
         while_counter = 1
-        if add_method == ["relocate_circuit_breaker"]:
+        if (
+            add_method == ["relocate_circuit_breaker"]
+            or "relocate_circuit_breaker" in add_method
+        ):
             logger.error(
                 "==>method:relocate_circuit_breaker is only applicable for MV grids"
             )
@@ -278,15 +283,14 @@ def reinforce_line_overloading_alternative(
                 # 1.2.1  Method: Split the feeder at the half-length of feeder and add
                 # new station( applied only once )
                 # if the number of overloaded lines is more than 2
-                logger.debug(
-                    f"==>method:add_station_at_half_length is running for {lv_grid}: "
-                )
+
                 (
                     transformer_changes,
                     lines_changes,
                 ) = reinforce_measures.add_station_at_half_length(
                     edisgo_reinforce, lv_grid, crit_lines_lv
                 )
+
             if transformer_changes and lines_changes:
                 _add_transformer_changes_to_equipment_changes("added")
                 _add_lines_changes_to_equipment_changes()
@@ -294,10 +298,7 @@ def reinforce_line_overloading_alternative(
                 if "split_feeder_at_half_length" in add_method or add_method is None:
                     # 1.2.2 Method:Split the feeder at the half-length of feeder
                     # (applied only once)
-                    logger.debug(
-                        f"==>method:split_feeder_at_half_length is running for "
-                        f"{lv_grid}: "
-                    )
+
                     lines_changes = reinforce_measures.split_feeder_at_half_length(
                         edisgo_reinforce, lv_grid, crit_lines_lv
                     )
@@ -378,7 +379,7 @@ def reinforce_line_overloading_alternative(
             )
 
     if not crit_lines.empty:
-        logger.warning("==> Not all of the overloading issues could be solved.")
+        logger.warning("==> Not all overloading issues could be solved.")
 
     edisgo_reinforce.results.grid_expansion_costs = grid_expansion_costs(
         edisgo_reinforce, without_generator_import=without_generator_import

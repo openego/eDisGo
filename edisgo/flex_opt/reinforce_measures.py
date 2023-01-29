@@ -948,9 +948,13 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines):
                     break
 
         # if MVGrid: check if node_1_2 is LV station and if not find
-        # next or preceding LV station
+        # next or preceding LV station. If there is no LV station, do not split the
+        # feeder
         else:
-            while node_1_2 not in edisgo_obj.topology.transformers_df.bus0.values:
+            while (
+                node_1_2 not in nodes_feeder.keys()
+                and node_1_2 not in edisgo_obj.topology.transformers_df.bus0.values
+            ):
                 try:
                     node_1_2 = path[path.index(node_1_2) + 1]
                 except IndexError:
@@ -964,11 +968,15 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines):
                                 f" {feeder_first_line} and following lines could not "
                                 f"be reinforced due to the lack of LV station . "
                             )
+                            node_1_2 = str()
                             break
 
         # if node_1_2 is a representative (meaning it is already directly connected
         # to the station), line cannot be disconnected and reinforced
-        if node_1_2 not in nodes_feeder.keys():
+        if node_1_2 not in nodes_feeder.keys() and not len(node_1_2) == 0:
+            logger.info(
+                f"==>method:split_feeder_at_half_length is running for " f"{grid}: "
+            )
             # get line between node_1_2 and predecessor node
             pred_node = path[path.index(node_1_2) - 1]
             line_removed = G.get_edge_data(node_1_2, pred_node)["branch_name"]
@@ -1006,8 +1014,8 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines):
             lines_changes[line_added] = 1
     if lines_changes:
         logger.info(
-            f"{len(lines_changes)} line/s are reinforced by split feeder at half-length"
-            f"method in {grid}"
+            f"{len(lines_changes)} line/s are reinforced by method: split feeder "
+            f"at half-length method in {grid}"
         )
 
     return lines_changes
@@ -1248,6 +1256,7 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
             # removed from exiting LV grid and converted to an MV line between new
             # and existing MV/LV station
         if len(nodes_tb_relocated) > 2 and loop_counter == 0:
+            logger.info(f"==>method:add_station_at_half_length is running for {grid}: ")
             # Create the bus-bar name of primary and secondary side of new MV/LV station
             lv_bus_new = create_bus_name(station_node, "lv")
             mv_bus_new = create_bus_name(station_node, "mv")
@@ -1273,10 +1282,11 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
             # same with the distance between pred. node of node_1_2 of one of first
             # feeders to be split in LV grid
 
-            length = (
+            length_lv = (
                 path_length_dict_tmp[node_1_2]
                 - path_length_dict_tmp[path[path.index(node_1_2) - 1]]
             )
+            length_mv = path_length_dict_tmp[node_1_2]
 
             # if the transformer already added, do not add bus and transformer once more
             if not transformers_changes:
@@ -1288,7 +1298,7 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
                 edisgo_obj.topology.add_bus(
                     lv_bus_new,
                     v_nom_lv,
-                    x=x_bus + length / 1000,
+                    x=x_bus + length_lv / 1000,
                     y=y_bus,
                     lv_grid_id=lv_grid_id_new,
                     in_building=building_bus,
@@ -1297,7 +1307,7 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
                 edisgo_obj.topology.add_bus(
                     mv_bus_new,
                     v_nom_mv,
-                    x=x_bus + length / 1000,
+                    x=x_bus + length_mv / 1000,
                     y=y_bus,
                     in_building=building_bus,
                 )
@@ -1319,7 +1329,7 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
                 line_added_mv = edisgo_obj.topology.add_line(
                     bus0=grid.transformers_df.bus0[0],
                     bus1=mv_bus_new,
-                    length=length,
+                    length=length_mv,
                     type_info=standard_line,
                     kind="cable",
                 )
@@ -1697,7 +1707,6 @@ def relocate_circuit_breaker(edisgo_obj, mode="loadgen"):
                 # split route and calc demand difference
                 route_data_part1 = sum(node_peak_data[0:ctr])
                 route_data_part2 = sum(node_peak_data[ctr : len(node_peak_data)])
-
                 # equality has to be respected, otherwise comparison stops when
                 # demand/generation=0
                 diff = abs(route_data_part1 - route_data_part2)
