@@ -31,7 +31,7 @@ if "READTHEDOCS" not in os.environ:
 logger = logging.getLogger(__name__)
 
 COLUMNS = {
-    "loads_df": ["bus", "p_set", "type", "annual_consumption", "sector"],
+    "loads_df": ["bus", "p_set", "type", "annual_consumption", "sector", "opt"],
     "generators_df": [
         "bus",
         "p_nom",
