@@ -77,7 +77,10 @@ def to_powermodels(
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from etrago component of edisgo object.
     """
-    opf_flex = ["curt"]
+    if opf_version in [1, 2, 4]:
+        opf_flex = ["curt"]
+    else:
+        opf_flex = []
     if flexible_cps is None:
         flexible_cps = []
     if flexible_hps is None:
@@ -270,7 +273,7 @@ def from_powermodels(
         raise ValueError(
             "Parameter 'pm_results' must be either dictionary or path to json file."
         )
-
+    edisgo_object.opf_results.solution_time = pm["solution_time"]
     flex_dicts = {
         "curt": ["gen_nd", "pgc"],
         "hp": ["heatpumps", "php"],
@@ -548,37 +551,43 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     inflexible_storages = psa_net.storage_units.index[
         [storage not in flexible_storages for storage in psa_net.storage_units.index]
     ]
-    for stor_i in np.arange(len(inflexible_storages)):
-        idx_bus = _mapping(
-            psa_net, psa_net.storage_units.bus.loc[inflexible_storages[stor_i]]
-        )
-        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
-        p_g = max(psa_net.storage_units_t.p_set[inflexible_storages[stor_i]], 0)
-        q_g = min(psa_net.storage_units_t.q_set[inflexible_storages[stor_i]], 0)
-        pm[text][str(stor_i + len(gen_disp.index) + 1)] = {
-            "pg": p_g / s_base,
-            "qg": q_g / s_base,
-            "pmax": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]] / s_base,
-            "pmin": -psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
-            / s_base,
-            "qmax": np.tan(np.arccos(pf))
-            * psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
-            / s_base,
-            "qmin": -np.tan(np.arccos(pf))
-            * psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
-            / s_base,
-            "P": 0,
-            "Q": 0,
-            "vg": 1,
-            "pf": pf,
-            "sign": sign,
-            "mbase": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
-            / s_base,
-            "gen_bus": idx_bus,
-            "gen_status": 1,
-            "name": inflexible_storages[stor_i],
-            "index": stor_i + len(gen_disp.index) + 1,
-        }
+    if len(inflexible_storages) > 0:
+        for stor_i in np.arange(len(inflexible_storages)):
+            idx_bus = _mapping(
+                psa_net, psa_net.storage_units.bus.loc[inflexible_storages[stor_i]]
+            )
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
+            p_g = max(
+                [psa_net.storage_units_t.p_set[inflexible_storages[stor_i]][0], 0]
+            )
+            q_g = min(
+                [psa_net.storage_units_t.q_set[inflexible_storages[stor_i]][0], 0]
+            )
+            pm["gen"][str(stor_i + len(gen_disp.index) + 1)] = {
+                "pg": p_g / s_base,
+                "qg": q_g / s_base,
+                "pmax": psa_net.storage_units.p_nom.loc[inflexible_storages[stor_i]]
+                / s_base,
+                "pmin": -psa_net.storage_units.p_nom.loc[inflexible_storages[stor_i]]
+                / s_base,
+                "qmax": np.tan(np.arccos(pf))
+                * psa_net.storage_units.p_nom.loc[inflexible_storages[stor_i]]
+                / s_base,
+                "qmin": -np.tan(np.arccos(pf))
+                * psa_net.storage_units.p_nom.loc[inflexible_storages[stor_i]]
+                / s_base,
+                "P": 0,
+                "Q": 0,
+                "vg": 1,
+                "pf": pf,
+                "sign": sign,
+                "mbase": psa_net.storage_units.p_nom.loc[inflexible_storages[stor_i]]
+                / s_base,
+                "gen_bus": idx_bus,
+                "gen_status": 1,
+                "name": inflexible_storages[stor_i],
+                "index": stor_i + len(gen_disp.index) + 1,
+            }
 
 
 def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
@@ -603,25 +612,25 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     shift = branches.phase_shift.fillna(0)
     length = branches.length.fillna(1)
     for par, val, decimal, decade, text in [
-        ("r_pu", branches.r_pu, 4, 1e5, "resistance"),
-        ("x_pu", branches.x_pu, 4, 1e5, "reactance"),
+        ("r_pu", branches.r_pu, 5, 1e5, "resistance"),
+        ("x_pu", branches.x_pu, 5, 1e5, "reactance"),
         ("length", length, 3, 1e3, "branch length"),
     ]:
         max_value = np.round(max(val.loc[val < val.quantile(0.98)]), decimal)
         min_value = np.round(min(val.loc[val > val.quantile(0.02)]), decimal)
         if val.max() / val.min() > decade:
             # only modify r, x and l values if min/max value differences are too big
-            branches[par] = val.clip(lower=min_value)  # , max_value)
-            logger.info(
+            branches[par] = val.clip(lower=min_value, upper=max_value)
+            logger.warning(
                 "Range between min and max {} values is too high. Highest and "
-                "lowest 2% of {} values will be set to {} p.u./m and"
+                "lowest 2% of {} values will be set to {} p.u./km and"
                 " {} p.u./m, respectively.".format(text, text, max_value, min_value)
             )
 
     for branch_i in np.arange(len(branches.index)):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
-        cost_factor = {"mv": 1, "lv": 100}
+        cost_factor = {"mv": 100, "lv": 0.01}
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
             "br_r": branches.r_pu[branch_i] * s_base,
@@ -679,7 +688,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "transformer": False,
             "storage": True,
             "tap": 1,
-            "length": 0,
+            "length": 1,
             "cost": 0,
             "cost_factor": 0,
             "storage_pf": np.tan(np.arccos(pf)) * sign,
@@ -737,24 +746,28 @@ def _build_load(
             "name": loads_df.index[load_i],
             "index": load_i + 1,
         }
-
-    for stor_i in np.arange(len(inflexible_storages)):
-        idx_bus = _mapping(
-            psa_net, psa_net.storage_units.bus.loc[inflexible_storages[stor_i]]
-        )
-        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
-        p_d = -min(psa_net.storage_units_t.p_set[inflexible_storages[stor_i]], 0)
-        q_d = -max(psa_net.storage_units_t.q_set[inflexible_storages[stor_i]], 0)
-        pm["load"][str(stor_i + len(loads_df.index) + 1)] = {
-            "pd": p_d[0] / s_base,
-            "qd": q_d[0] / s_base,
-            "load_bus": idx_bus,
-            "status": True,
-            "pf": pf,
-            "sign": sign,
-            "name": inflexible_storages[stor_i],
-            "index": stor_i + len(loads_df.index) + 1,
-        }
+    if len(inflexible_storages) > 0:
+        for stor_i in np.arange(len(inflexible_storages)):
+            idx_bus = _mapping(
+                psa_net, psa_net.storage_units.bus.loc[inflexible_storages[stor_i]]
+            )
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
+            p_d = -min(
+                [psa_net.storage_units_t.p_set[inflexible_storages[stor_i]][0], 0]
+            )
+            q_d = -max(
+                [psa_net.storage_units_t.q_set[inflexible_storages[stor_i]][0], 0]
+            )
+            pm["load"][str(stor_i + len(loads_df.index) + 1)] = {
+                "pd": p_d / s_base,
+                "qd": q_d / s_base,
+                "load_bus": idx_bus,
+                "status": True,
+                "pf": pf,
+                "sign": sign,
+                "name": inflexible_storages[stor_i],
+                "index": stor_i + len(loads_df.index) + 1,
+            }
 
 
 def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
@@ -1287,7 +1300,7 @@ def _build_component_timeseries(
     """
     pm_comp = dict()
     if kind == "gen":
-        p_set = (
+        p_set2 = (
             psa_net.generators_t.p_set.loc[
                 :,
                 ~(psa_net.generators_t.p_set.columns.str.contains("solar"))
@@ -1296,13 +1309,41 @@ def _build_component_timeseries(
             ]
             / s_base
         )
-        q_set = psa_net.generators_t.q_set[p_set.columns] / s_base
+        q_set2 = psa_net.generators_t.q_set[p_set2.columns] / s_base
+        inflexible_storages = psa_net.storage_units.index[
+            [
+                storage not in flexible_storages
+                for storage in psa_net.storage_units.index
+            ]
+        ]
+        p_set = (
+            pd.concat(
+                [
+                    p_set2,
+                    psa_net.storage_units_t.p_set[inflexible_storages].clip(lower=0),
+                ],
+                axis=1,
+            )
+            / s_base
+        )
+        q_set = (
+            pd.concat(
+                [
+                    q_set2,
+                    psa_net.storage_units_t.q_set[inflexible_storages].clip(upper=0),
+                ],
+                axis=1,
+            )
+            / s_base
+        )
+
         for comp in p_set.columns:
-            comp_i = _mapping(psa_net, comp, kind)
+            comp_i = _mapping(psa_net, comp, kind, flexible_storages=flexible_storages)
             pm_comp[str(comp_i)] = {
                 "pg": p_set[comp].values.tolist(),
                 "qg": q_set[comp].values.tolist(),
             }
+
     elif kind == "gen_nd":
         p_set = (
             psa_net.generators_t.p_set.loc[
@@ -1347,7 +1388,10 @@ def _build_component_timeseries(
                 pd.concat(
                     [
                         psa_net.loads_t.p_set,
-                        psa_net.storage_units_t.p_set[inflexible_storages],
+                        -1
+                        * psa_net.storage_units_t.p_set[inflexible_storages].clip(
+                            upper=0
+                        ),
                     ],
                     axis=1,
                 )
@@ -1357,7 +1401,10 @@ def _build_component_timeseries(
                 pd.concat(
                     [
                         psa_net.loads_t.q_set,
-                        psa_net.storage_units_t.q_set[inflexible_storages],
+                        -1
+                        * psa_net.storage_units_t.q_set[inflexible_storages].clip(
+                            lower=0
+                        ),
                     ],
                     axis=1,
                 )
@@ -1368,7 +1415,10 @@ def _build_component_timeseries(
                 pd.concat(
                     [
                         psa_net.loads_t.p_set.drop(columns=flex_loads),
-                        psa_net.storage_units_t.p_set[inflexible_storages],
+                        -1
+                        * psa_net.storage_units_t.p_set[inflexible_storages].clip(
+                            upper=0
+                        ),
                     ],
                     axis=1,
                 )
@@ -1378,7 +1428,10 @@ def _build_component_timeseries(
                 pd.concat(
                     [
                         psa_net.loads_t.q_set.drop(columns=flex_loads),
-                        psa_net.storage_units_t.q_set[inflexible_storages],
+                        -1
+                        * psa_net.storage_units_t.q_set[inflexible_storages].clip(
+                            lower=0
+                        ),
                     ],
                     axis=1,
                 )
@@ -1481,14 +1534,22 @@ def _mapping(
     flexible_loads=None,
     flexible_storages=None,
 ):
+
     if kind == "bus":
         df = psa_net.buses
     elif kind == "gen":
-        df = psa_net.generators.loc[
+        df2 = psa_net.generators.loc[
             ~(psa_net.generators.index.str.contains("solar"))
             & ~(psa_net.generators.index.str.contains("wind"))
             & ~(psa_net.generators.index.str.contains("slack"))
         ]
+        inflexible_storages = psa_net.storage_units.index[
+            [
+                storage not in flexible_storages
+                for storage in psa_net.storage_units.index
+            ]
+        ]
+        df = pd.concat([df2, psa_net.storage_units.loc[inflexible_storages]])
     elif kind == "gen_nd":
         df = psa_net.generators.loc[
             (psa_net.generators.index.str.contains("solar"))
