@@ -174,7 +174,7 @@ def prepare_time_invariant_parameters(
             )
         else:
             fixed_parameters["optimized_heat_pumps"] = kwargs.get(
-                "optimized_heat_pumps", edisgo_obj.heat_pump.heat_demand_df.index
+                "optimized_heat_pumps", edisgo_obj.heat_pump.heat_demand_df.columns
             )
         fixed_parameters["heat_pumps"] = fixed_parameters["grid_object"].loads_df.loc[
             fixed_parameters["grid_object"].loads_df.type == "heat_pump"
