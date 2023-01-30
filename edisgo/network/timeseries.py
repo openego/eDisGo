@@ -15,6 +15,7 @@ from edisgo.io import timeseries_import
 from edisgo.tools.tools import (
     assign_voltage_level_to_component,
     get_weather_cells_intersecting_with_grid_district,
+    resample,
 )
 
 if TYPE_CHECKING:
@@ -1578,8 +1579,9 @@ class TimeSeries:
                             [
                                 q_sign,
                                 q_control._fixed_cosphi_default_reactive_power_sign(
-                                    df[df["type"] == load_type], f"{load_type}s",
-                                    edisgo_object.config
+                                    df[df["type"] == load_type],
+                                    f"{load_type}s",
+                                    edisgo_object.config,
                                 ),
                             ]
                         )
@@ -1587,8 +1589,9 @@ class TimeSeries:
                             [
                                 power_factor,
                                 q_control._fixed_cosphi_default_power_factor(
-                                    df[df["type"] == load_type], f"{load_type}s",
-                                    edisgo_object.config
+                                    df[df["type"] == load_type],
+                                    f"{load_type}s",
+                                    edisgo_object.config,
                                 ),
                             ]
                         )
@@ -1620,14 +1623,18 @@ class TimeSeries:
                                 components_df.loc[comps, :],
                                 edisgo_object.topology.buses_df,
                             )
+                            default_func = (
+                                q_control._fixed_cosphi_default_reactive_power_sign
+                            )
                             if type == "loads":
                                 for load_type in df["type"].unique():
                                     q_sign = pd.concat(
                                         [
                                             q_sign,
-                                            q_control._fixed_cosphi_default_reactive_power_sign(
-                                                df[df["type"] == load_type], f"{load_type}s",
-                                                edisgo_object.config
+                                            default_func(
+                                                df[df["type"] == load_type],
+                                                f"{load_type}s",
+                                                edisgo_object.config,
                                             ),
                                         ]
                                     )
@@ -1635,9 +1642,7 @@ class TimeSeries:
                                 q_sign = pd.concat(
                                     [
                                         q_sign,
-                                        q_control._fixed_cosphi_default_reactive_power_sign(
-                                            df, type, edisgo_object.config
-                                        ),
+                                        default_func(df, type, edisgo_object.config),
                                     ]
                                 )
                         else:
@@ -1653,14 +1658,16 @@ class TimeSeries:
                                 components_df.loc[comps, :],
                                 edisgo_object.topology.buses_df,
                             )
+                            default_func = q_control._fixed_cosphi_default_power_factor
                             if type == "loads":
                                 for load_type in df["type"].unique():
                                     power_factor = pd.concat(
                                         [
                                             power_factor,
-                                            q_control._fixed_cosphi_default_power_factor(
-                                                df[df["type"] == load_type], f"{load_type}s",
-                                                edisgo_object.config
+                                            default_func(
+                                                df[df["type"] == load_type],
+                                                f"{load_type}s",
+                                                edisgo_object.config,
                                             ),
                                         ]
                                     )
@@ -1668,9 +1675,7 @@ class TimeSeries:
                                 power_factor = pd.concat(
                                     [
                                         power_factor,
-                                        q_control._fixed_cosphi_default_power_factor(
-                                            df, type, edisgo_object.config
-                                        ),
+                                        default_func(df, type, edisgo_object.config),
                                     ]
                                 )
                         else:
@@ -2153,22 +2158,15 @@ class TimeSeries:
 
         """
 
-        # add time step at the end of the time series in case of up-sampling so that
-        # last time interval in the original time series is still included
-        attrs = self._attributes
-        freq_orig = self.timeindex[1] - self.timeindex[0]
-        df_dict = {}
-        for attr in attrs:
-            df_dict[attr] = getattr(self, attr)
-            if pd.Timedelta(freq) < freq_orig:  # up-sampling
-                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1] + freq_orig])
-            else:  # down-sampling
-                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1]])
-            df_dict[attr] = (
-                df_dict[attr]
-                .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
-                .ffill()
+        if len(self.timeindex) < 2:
+            logger.warning(
+                "Data cannot be resampled as it only contains one time step."
             )
+            return
+
+        freq_orig = self.timeindex[1] - self.timeindex[0]
+
+        resample(self, freq_orig, method, freq)
 
         # create new index
         if pd.Timedelta(freq) < freq_orig:  # up-sampling
@@ -2187,37 +2185,6 @@ class TimeSeries:
 
         # set new timeindex
         self._timeindex = index
-
-        # resample time series
-        if pd.Timedelta(freq) < freq_orig:  # up-sampling
-            if method == "interpolate":
-                for attr in attrs:
-                    setattr(
-                        self,
-                        attr,
-                        df_dict[attr].resample(freq, closed="left").interpolate(),
-                    )
-            elif method == "ffill":
-                for attr in attrs:
-                    setattr(
-                        self, attr, df_dict[attr].resample(freq, closed="left").ffill()
-                    )
-            elif method == "bfill":
-                for attr in attrs:
-                    setattr(
-                        self, attr, df_dict[attr].resample(freq, closed="left").bfill()
-                    )
-            else:
-                raise NotImplementedError(
-                    f"Resampling method {method} is not implemented."
-                )
-        else:  # down-sampling
-            for attr in attrs:
-                setattr(
-                    self,
-                    attr,
-                    df_dict[attr].resample(freq).mean(),
-                )
 
 
 class TimeSeriesRaw:
