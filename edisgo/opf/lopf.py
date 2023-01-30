@@ -378,9 +378,12 @@ def setup_model(
         "minimize_energy_level",
         "residual_load",
         "maximize_energy_level",
+        "maximize_grid_power",
         "minimize_loading",
     ]:
         raise ValueError("The objective you inserted is not implemented yet.")
+
+    model.objective_name = objective
 
     # DEFINE SETS AND FIX PARAMETERS
     logger.info("Setup model: Defining sets and parameters.")
@@ -427,8 +430,13 @@ def setup_model(
         model.delta_max = kwargs.get("delta_max", 0.1)
         model.min_load_factor = pm.Var()
         model.max_load_factor = pm.Var()
-    elif objective == "minimize_energy_level" or objective == "maximize_energy_level":
+    elif objective == "minimize_energy_level" or \
+            objective == "maximize_energy_level" or \
+            objective == "maximize_grid_power":
         model.grid_power_flexible = pm.Var(model.time_set)
+        if objective == "minimize_energy_level" or \
+                objective == "maximize_energy_level":
+            model.grid_cumulated_energy = pm.Var(model.time_set)
 
     # DEFINE VARIABLES
     if fixed_parameters["optimize_bess"]:
@@ -478,8 +486,8 @@ def setup_model(
             charging_starts=kwargs.get("charging_starts", {"hp": None, "tes": None}),
         )
 
-    # if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
-    if True:
+    if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
+    # if True:
         logger.info("Setup model: Adding grid model.")
         model = add_grid_model_lopf(
             model=model,
@@ -507,8 +515,12 @@ def setup_model(
             model.storage_set, model.times_fixed_soc, rule=fix_soc
         )
 
-    if objective == "minimize_energy_level" or objective == "maximize_energy_level":
+    if objective == "minimize_energy_level" or \
+            objective == "maximize_energy_level" or \
+            objective == "maximize_grid_power":
         model.AggrGrid = pm.Constraint(model.time_set, rule=aggregated_power)
+        if objective == "minimize_energy_level" or objective == "maximize_energy_level":
+            model.AggrGridEnergy = pm.Constraint(model.time_set, rule=aggregated_energy)
 
     # DEFINE OBJECTIVE
     logger.info("Setup model: Setting objective.")
@@ -535,6 +547,12 @@ def setup_model(
     elif objective == "maximize_energy_level":
         model.objective = pm.Objective(
             rule=maximize_energy_level,
+            sense=pm.minimize,
+            doc="Define objective function",
+        )
+    elif objective == "maximize_grid_power":
+        model.objective = pm.Objective(
+            rule=maximize_power,
             sense=pm.minimize,
             doc="Define objective function",
         )
@@ -831,12 +849,17 @@ def add_ev_model_bands(
         model.time_set,
         bounds=lambda m, b, t: (0, m.power_bound_ev[b, t]),
     )
-
-    model.energy_level_ev = pm.Var(
-        model.flexible_charging_points_set,
-        model.time_set,
-        bounds=lambda m, b, t: (m.lower_bound_ev[b, t], m.upper_bound_ev[b, t]),
-    )
+    # if grid power is maximised, do not set bound on energy
+    if model.objective_name == "maximize_grid_power":
+        model.energy_level_ev = pm.Var(
+            model.flexible_charging_points_set,
+            model.time_set)
+    else:
+        model.energy_level_ev = pm.Var(
+            model.flexible_charging_points_set,
+            model.time_set,
+            bounds=lambda m, b, t: (m.lower_bound_ev[b, t], m.upper_bound_ev[b, t]),
+        )
     # Constraints
     model.EVCharging = pm.Constraint(
         model.flexible_charging_points_set, model.time_non_zero, rule=charging_ev
@@ -877,8 +900,9 @@ def add_rolling_horizon(
 
     """
     charging_attrs, energy_attrs, flex_set = get_attrs_rolling_horizon(comp_type, model)
-    # set initial energy level
+
     for energy_attr in energy_attrs[comp_type.lower()]:
+        # set initial energy level
         setattr(
             model,
             f"energy_level_start_{energy_attr}",
@@ -970,6 +994,11 @@ def add_rolling_horizon(
                 getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
             elif comp_type(energy_level_end) == bool:
                 getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
+
+        # If grid power is maximised, deactivate all final energy constraints
+        if model.objective_name == "maximize_grid_power":
+            getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
+            getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
 
     # set initial charging power
     for charging_attr in charging_attrs[comp_type.lower()]:
@@ -1102,11 +1131,18 @@ def add_heat_pump_model(
         within=pm.Any,
     )
     # set up variables
-    model.energy_level_tes = pm.Var(
-        model.flexible_heat_pumps_set,
-        model.time_set,
-        bounds=lambda m, hp, t: (0, m.tes.loc[hp, "capacity"]),
-    )
+    # Do not constrain energy is grid power is maximised:
+    if model.objective_name == "maximize_grid_power":
+        model.energy_level_tes = pm.Var(
+            model.flexible_heat_pumps_set,
+            model.time_set,
+        )
+    else:
+        model.energy_level_tes = pm.Var(
+            model.flexible_heat_pumps_set,
+            model.time_set,
+            bounds=lambda m, hp, t: (0, m.tes.loc[hp, "capacity"]),
+        )
     model.charging_tes = pm.Var(model.flexible_heat_pumps_set, model.time_set)
     model.charging_hp = pm.Var(
         model.flexible_heat_pumps_set,
@@ -1304,6 +1340,11 @@ def update_rolling_horizon(comp_type, model, **kwargs):
                 )
             getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").activate()
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
+
+        # If grid power is maximised, deactivate all final energy constraints
+        if model.objective_name == "maximize_grid_power":
+            getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
+            getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
 
     # set initial charging value
     for charging_attr in charging_attrs[comp_type.lower()]:
@@ -2507,6 +2548,28 @@ def aggregated_power(model, time):
     )
 
 
+def aggregated_energy(model, time):
+    """
+    Constraint aggregating the power of bess and emob and hp charging
+
+    Parameters
+    ----------
+    model :
+    time :
+
+    Returns
+    -------
+
+    """
+    if time == 0:
+        energy_level_pre = 0
+    else:
+        energy_level_pre = model.grid_cumulated_energy[time-1]
+    return model.grid_cumulated_energy[time] == energy_level_pre + \
+           model.grid_power_flexible[time] * \
+           (pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h"))
+
+
 def load_factor_min(model, time):
     """
     Constraint that describes the minimum load factor.
@@ -2638,32 +2701,9 @@ def minimize_energy_level(model):
 
     """
     slack_charging, slack_energy = extract_slack_charging(model)
-    ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
-    return (
-        (
-            sum(
-                model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time]
-                # + 0.5 * model.curtailment_ev[bus, time]
-                for bus in model.bus_set
-                for time in model.time_set
-            )
-            # + 0.5 * ev_curtailment
-            + ev_curtailment
-            + hp_curtailment
+    return (sum(model.grid_cumulated_energy[time] for time in model.time_set)
+            + 1000 * (slack_charging + slack_energy)
         )
-        * 1e6
-        + sum(model.grid_power_flexible[time] for time in model.time_set)
-        #    TODO check if hp in grid_power_flexible - Done
-        + 1000 * (slack_charging + slack_energy)
-        #     #TODO not needed as grid model not added for this objective
-        #     + 1000
-        #     * sum(
-        #     model.slack_p_cum_pos[branch, time] + model.slack_p_cum_neg[
-        #         branch, time]
-        #     for branch in model.branch_set
-        #     for time in model.time_set
-        # )
-    )
 
 
 def maximize_energy_level(model):
@@ -2680,23 +2720,41 @@ def maximize_energy_level(model):
 
     """
     slack_charging, slack_energy = extract_slack_charging(model)
+    return (- sum(model.grid_cumulated_energy[time] for time in model.time_set)
+            + 1000 * (slack_charging + slack_energy))
+
+
+def maximize_power(model):
+    """
+    Objective minimizing curtailment and squared term of component loading
+
+    Parameters
+    ----------
+    model :
+
+    Returns
+    -------
+
+    """
+    slack_charging, slack_energy = extract_slack_charging(model)
     ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
     return (
-        (
-            sum(
-                model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time]
-                # + 0.5 * model.curtailment_ev[bus, time]
-                for bus in model.bus_set
-                for time in model.time_set
-            )
-            # + 0.5 * ev_curtailment
-            + ev_curtailment
-            + hp_curtailment
+        - 1e-5 * sum(model.grid_power_flexible[time] for time in model.time_set)
+        + sum(
+            1e-2
+            * (model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time])
+            + 1000 * (model.slack_v_pos[bus, time] + model.slack_v_neg[bus, time])
+            for bus in model.bus_set
+            for time in model.time_set
         )
-        * 1e6
-        - sum(model.grid_power_flexible[time] for time in model.time_set)
+        + 1e-2 * (0.5 * ev_curtailment + hp_curtailment)
         + 1000 * (slack_charging + slack_energy)
-    )
+        + 1000
+        * sum(
+            model.slack_p_cum_pos[branch, time] + model.slack_p_cum_neg[branch, time]
+            for branch in model.branch_set
+            for time in model.time_set
+        ))
 
 
 def grid_residual_load(model, time):
