@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 
@@ -508,7 +510,9 @@ def get_directory_size(start_dir):
 
     Walks through all files and sub-directories within a given directory and
     calculate the sum of size of all files in the directory.
-    See https://stackoverflow.com/questions/1392413/calculating-a-directorys-size-using-python/1392549#1392549
+    See also
+    `stackoverflow <https://stackoverflow.com/questions/1392413/\
+    calculating-a-directorys-size-using-python/1392549#1392549>`_.
 
     Parameters
     ----------
@@ -631,3 +635,74 @@ def add_line_susceptance(
         )
 
     return edisgo_obj
+
+
+def resample(
+    object, freq_orig, method: str = "ffill", freq: str | pd.Timedelta = "15min"
+):
+    """
+    Resamples all time series data in given object to a desired resolution.
+
+    Parameters
+    ----------
+    object : :class:`~.network.timeseries.TimeSeries`
+        Object of which to resample time series data.
+    freq_orig : :pandas:`pandas.Timedelta<Timedelta>`
+        Frequency of original time series data.
+    method : str, optional
+        See `method` parameter in :attr:`~.EDisGo.resample_timeseries` for more
+        information.
+    freq : str, optional
+        See `freq` parameter in :attr:`~.EDisGo.resample_timeseries` for more
+        information.
+
+    """
+
+    # add time step at the end of the time series in case of up-sampling so that
+    # last time interval in the original time series is still included
+    df_dict = {}
+    for attr in object._attributes:
+        if not getattr(object, attr).empty:
+            df_dict[attr] = getattr(object, attr)
+            if pd.Timedelta(freq) < freq_orig:  # up-sampling
+                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1] + freq_orig])
+            else:  # down-sampling
+                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1]])
+            df_dict[attr] = (
+                df_dict[attr]
+                .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
+                .ffill()
+            )
+
+    # resample time series
+    if pd.Timedelta(freq) < freq_orig:  # up-sampling
+        if method == "interpolate":
+            for attr in df_dict.keys():
+                setattr(
+                    object,
+                    attr,
+                    df_dict[attr].resample(freq, closed="left").interpolate().iloc[:-1],
+                )
+        elif method == "ffill":
+            for attr in df_dict.keys():
+                setattr(
+                    object,
+                    attr,
+                    df_dict[attr].resample(freq, closed="left").ffill().iloc[:-1],
+                )
+        elif method == "bfill":
+            for attr in df_dict.keys():
+                setattr(
+                    object,
+                    attr,
+                    df_dict[attr].resample(freq, closed="left").bfill().iloc[:-1],
+                )
+        else:
+            raise NotImplementedError(f"Resampling method {method} is not implemented.")
+    else:  # down-sampling
+        for attr in df_dict.keys():
+            setattr(
+                object,
+                attr,
+                df_dict[attr].resample(freq).mean(),
+            )
