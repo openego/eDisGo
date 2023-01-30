@@ -1445,16 +1445,23 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
             "slack_v_pos": "slack_v_pos",
             "slack_v_neg": "slack_v_neg",
             "slack_p_cum_pos": "slack_p_cum_pos",
-            "slack_p_cum_neg": "slack_p_cum_neg"
+            "slack_p_cum_neg": "slack_p_cum_neg",
+            "grid_power_flexible": "grid_power_flexible",
+            "grid_cumulated_energy": "grid_cumulated_energy",
         }
         for attr in results_name_dict.keys():
             if hasattr(model, attr):
-                result_dict[results_name_dict[attr]] = (
-                    pd.Series(getattr(model, attr).extract_values())
-                        .unstack()
-                        .rename(columns=time_dict)
-                        .T
-                )
+                try:
+                    result_dict[results_name_dict[attr]] = (
+                        pd.Series(getattr(model, attr).extract_values())
+                            .unstack()
+                            .rename(columns=time_dict)
+                            .T
+                    )
+                except ValueError:
+                    result_dict[results_name_dict[attr]] = \
+                        (pd.Series(getattr(model, attr).extract_values()).
+                         rename(time_dict))
 
         if hasattr(model, "flexible_charging_points_set"):
             result_dict["slack_initial_charging_ev"] = pd.Series(
