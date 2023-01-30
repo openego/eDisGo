@@ -18,11 +18,11 @@ function objective_min_line_loading(pm::AbstractBFModelEdisgo)
     pgs = Dict(n => PowerModels.var(pm, n, :pgs) for n in nws)
 
     return JuMP.@objective(pm.model, Min,
-        #sum(sum(phvs[n][i]^2 * 1e5 for (i, flex) in ref(pm, n, :HV_requirements)) for n in nws) # minimize HV req. slack variables
-        #+ sum(sum(phps[n][i] * 1e2 for (i, hp) in ref(pm, n, :heatpumps)) for n in nws) # minimize heat pump slack variables
-        sum(sum(ccm[n][b]*r[n][b]*1e2 for (b,i,j) in ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
+        #sum(sum(phvs[n][i]^2 * 1e5 for (i, flex) in PowerModels.ref(pm, n, :HV_requirements)) for n in nws) # minimize HV req. slack variables
+        #+ sum(sum(phps[n][i] * 1e2 for (i, hp) in PowerModels.ref(pm, n, :heatpumps)) for n in nws) # minimize heat pump slack variables
+        sum(sum(ccm[n][b]*r[n][b]*1e2 for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
         #+ sum(sum(pgs[n]) for n in nws) *1e5
-        #+ sum(sum(p[n][(b,i,j)]/s_nom[n][b]*l[n][b]*c[n][b]*1e3 for (b,i,j) in ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading
+        #+ sum(sum(p[n][(b,i,j)]/s_nom[n][b]*l[n][b]*c[n][b]*1e3 for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading
     )
 end
 
@@ -36,7 +36,7 @@ function objective_min_losses(pm::AbstractBFModelEdisgo)
     s_nom = Dict(n => Dict(i => get(branch, "rate_a", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)# p_max?
     bus = Dict(n => Dict(i => get(branch, "f_bus", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)
     #v_min = Dict(n => Dict(i => get(bus, "vmin", 1.0) for (i,bus) in PowerModels.ref(pm, n, :branch))  for n in nws)
-    # ref(pm, n, :bus)[bus[n][b]]["vmin"]
+    # PowerModels.ref(pm, n, :bus)[bus[n][b]]["vmin"]
     parameters = [r[1][i] for i in keys(c[1])]
     parameters = parameters[parameters .>0]
     factor = 1
@@ -65,7 +65,7 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     pgens = Dict(n => PowerModels.var(pm, n, :pgens) for n in nws)
     pds = Dict(n => PowerModels.var(pm, n, :pds) for n in nws)
     pcps = Dict(n => PowerModels.var(pm, n, :pcps) for n in nws)
-    s_base = ref(pm, 1, :baseMVA)
+    s_base = PowerModels.ref(pm, 1, :baseMVA)
     l = Dict(n => Dict(i => get(branch, "length", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
     c = Dict(n => Dict(i => get(branch, "cost_factor", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
     p = Dict(n => PowerModels.var(pm, n, :p) for n in nws)

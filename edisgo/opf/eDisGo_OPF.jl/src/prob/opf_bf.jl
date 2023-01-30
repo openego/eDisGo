@@ -28,7 +28,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             variable_slack_grid_restrictions(pm, nw=n)
             variable_slack_HV_requirements(pm, nw=n)
         else
-            throw(ArgumentError("OPF version $(ref(pm, 1, :opf_version)) is not implemented! Choose between version 1 to 4."))
+            throw(ArgumentError("OPF version $(PowerModels.ref(pm, 1, :opf_version)) is not implemented! Choose between version 1 to 4."))
         end
 
         # CONSTRAINTS

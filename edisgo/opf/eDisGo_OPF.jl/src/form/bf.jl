@@ -168,7 +168,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
     end
 
     if InfrastructureModels.report_duals(pm)
-        sol(pm, n, :bus, i)[:lam_kcl_r] = cstr_p
-        sol(pm, n, :bus, i)[:lam_kcl_i] = cstr_q
+        PowerModels.sol(pm, n, :bus, i)[:lam_kcl_r] = cstr_p
+        PowerModels.sol(pm, n, :bus, i)[:lam_kcl_i] = cstr_q
     end
 end

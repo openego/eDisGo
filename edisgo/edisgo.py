@@ -41,7 +41,6 @@ from edisgo.network.results import Results
 from edisgo.network.topology import Topology
 from edisgo.opf import powermodels_opf
 from edisgo.opf.results.opf_result_class import OPFResults
-from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
@@ -1225,27 +1224,27 @@ class EDisGo:
 
         return results
 
-    def perform_mp_opf(self, timesteps, storage_series=None, **kwargs):
-        """
-        Run optimal power flow with julia.
-
-        Parameters
-        -----------
-        timesteps : list
-            List of timesteps to perform OPF for.
-        kwargs :
-            See :func:`~.opf.run_mp_opf.run_mp_opf` for further
-            information.
-
-        Returns
-        --------
-        str
-            Status of optimization.
-
-        """
-        if storage_series is None:
-            storage_series = []
-        return run_mp_opf(self, timesteps, storage_series=storage_series, **kwargs)
+    # def perform_mp_opf(self, timesteps, storage_series=None, **kwargs):
+    #     """
+    #     Run optimal power flow with julia.
+    #
+    #     Parameters
+    #     -----------
+    #     timesteps : list
+    #         List of timesteps to perform OPF for.
+    #     kwargs :
+    #         See :func:`~.opf.run_mp_opf.run_mp_opf` for further
+    #         information.
+    #
+    #     Returns
+    #     --------
+    #     str
+    #         Status of optimization.
+    #
+    #     """
+    #     if storage_series is None:
+    #         storage_series = []
+    #     return run_mp_opf(self, timesteps, storage_series=storage_series, **kwargs)
 
     def add_component(
         self,
