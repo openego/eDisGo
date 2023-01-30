@@ -1,6 +1,7 @@
 import os
 import shutil
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -18,7 +19,7 @@ class TestOverlyingGrid:
         self.overlying_grid = OverlyingGrid()
         self.timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
         self.overlying_grid.renewables_curtailment = pd.Series(
-            data=[2.4, 1.3], index=self.timeindex
+            data=[2.4], index=[self.timeindex[0]]
         )
         self.overlying_grid.geothermal_energy_feedin_district_heating = pd.DataFrame(
             {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]}, index=self.timeindex
@@ -114,3 +115,62 @@ class TestOverlyingGrid:
         ).all()
 
         shutil.rmtree(save_dir)
+
+    def test_resample(self, caplog):
+
+        mean_value_curtailment_orig = self.overlying_grid.renewables_curtailment.mean()
+        mean_value_geothermal_orig = (
+            self.overlying_grid.geothermal_energy_feedin_district_heating.mean()
+        )
+
+        # test up-sampling with ffill (default)
+        self.overlying_grid.resample()
+        # check if resampled length of time index is 4 times original length of
+        # timeindex
+        assert len(
+            self.overlying_grid.geothermal_energy_feedin_district_heating.index
+        ) == 4 * len(self.timeindex)
+        # check if mean value of resampled data is the same as mean value of original
+        # data
+        assert np.isclose(
+            self.overlying_grid.renewables_curtailment.mean(),
+            mean_value_curtailment_orig,
+            atol=1e-5,
+        )
+        assert (
+            np.isclose(
+                self.overlying_grid.geothermal_energy_feedin_district_heating.mean(),
+                mean_value_geothermal_orig,
+                atol=1e-5,
+            )
+        ).all()
+        # check if index is the same after resampled back
+        self.overlying_grid.resample(freq="1h")
+        pd.testing.assert_index_equal(
+            self.overlying_grid.geothermal_energy_feedin_district_heating.index,
+            self.timeindex,
+        )
+
+        # same tests for down-sampling
+        self.overlying_grid.resample(freq="2h")
+        assert len(
+            self.overlying_grid.geothermal_energy_feedin_district_heating.index
+        ) == 0.5 * len(self.timeindex)
+        assert np.isclose(
+            self.overlying_grid.renewables_curtailment.mean(),
+            mean_value_curtailment_orig,
+            atol=1e-5,
+        )
+        assert (
+            np.isclose(
+                self.overlying_grid.geothermal_energy_feedin_district_heating.mean(),
+                mean_value_geothermal_orig,
+                atol=1e-5,
+            )
+        ).all()
+
+        # test warning that resampling cannot be conducted
+        self.overlying_grid.resample()
+        assert (
+            "Data cannot be resampled as it only contains one time step." in caplog.text
+        )
