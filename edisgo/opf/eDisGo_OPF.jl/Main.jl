@@ -1,13 +1,24 @@
 cd(dirname(@__FILE__))
 using Pkg
 Pkg.activate("")
-Pkg.instantiate()
-using eDisGo_OPF
-using PowerModels
-using Ipopt
-using JuMP
-using JSON
-using Gurobi
+try
+    using eDisGo_OPF
+    using PowerModels
+    using Ipopt
+    using JuMP
+    using JSON
+    using Gurobi
+catch e
+    Pkg.instantiate()
+    using eDisGo_OPF
+    using PowerModels
+    using Ipopt
+    using JuMP
+    using JSON
+    using Gurobi
+end
+
+
 
 PowerModels.logger_config!("debug")
 
