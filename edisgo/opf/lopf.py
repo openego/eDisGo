@@ -1973,6 +1973,8 @@ def upper_voltage(model, bus, time):
     except KeyError as e:
         # logging.debug(f"No Series passed for v_max: {e}")
         v_max = model.v_max
+    except TypeError:
+        v_max = model.v_max
 
     return (
         model.v[bus, time]
@@ -1998,6 +2000,8 @@ def lower_voltage(model, bus, time):
         v_min = model.v_min[bus]
     except KeyError as e:
         # logging.debug(f"No Series passed for v_min: {e}")
+        v_min = model.v_min
+    except TypeError:
         v_min = model.v_min
 
     return (
