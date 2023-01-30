@@ -81,18 +81,23 @@ extlinks = {
         "geopandas.%s",
     ),
     "networkx": (
-        "https://networkx.org/documentation/stable/reference/classes/"
-        "graph.html#%s",
+        "https://networkx.org/documentation/stable/reference/classes/" "graph.html#%s",
         "networkx.%s",
     ),
     "sqlalchemy": (
         "http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s",
         "sqlalchemy.%s",
     ),
-    "shapely": ("https://shapely.readthedocs.io/en/latest/manual.html#%s", "shapely.%s"),
+    "shapely": (
+        "https://shapely.readthedocs.io/en/latest/manual.html#%s",
+        "shapely.%s",
+    ),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "ding0.%s"),
     "pypsa": ("https://pypsa.readthedocs.io/en/latest/components.html#%s", "pypsa.%s"),
-    "plotly": ("https://plotly.com/python-api-reference/generated/%s.html", "plotly.%s"),
+    "plotly": (
+        "https://plotly.com/python-api-reference/generated/%s.html",
+        "plotly.%s",
+    ),
 }
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]

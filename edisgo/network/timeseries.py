@@ -1578,8 +1578,9 @@ class TimeSeries:
                             [
                                 q_sign,
                                 q_control._fixed_cosphi_default_reactive_power_sign(
-                                    df[df["type"] == load_type], f"{load_type}s",
-                                    edisgo_object.config
+                                    df[df["type"] == load_type],
+                                    f"{load_type}s",
+                                    edisgo_object.config,
                                 ),
                             ]
                         )
@@ -1587,8 +1588,9 @@ class TimeSeries:
                             [
                                 power_factor,
                                 q_control._fixed_cosphi_default_power_factor(
-                                    df[df["type"] == load_type], f"{load_type}s",
-                                    edisgo_object.config
+                                    df[df["type"] == load_type],
+                                    f"{load_type}s",
+                                    edisgo_object.config,
                                 ),
                             ]
                         )
@@ -1620,14 +1622,18 @@ class TimeSeries:
                                 components_df.loc[comps, :],
                                 edisgo_object.topology.buses_df,
                             )
+                            default_func = (
+                                q_control._fixed_cosphi_default_reactive_power_sign
+                            )
                             if type == "loads":
                                 for load_type in df["type"].unique():
                                     q_sign = pd.concat(
                                         [
                                             q_sign,
-                                            q_control._fixed_cosphi_default_reactive_power_sign(
-                                                df[df["type"] == load_type], f"{load_type}s",
-                                                edisgo_object.config
+                                            default_func(
+                                                df[df["type"] == load_type],
+                                                f"{load_type}s",
+                                                edisgo_object.config,
                                             ),
                                         ]
                                     )
@@ -1635,9 +1641,7 @@ class TimeSeries:
                                 q_sign = pd.concat(
                                     [
                                         q_sign,
-                                        q_control._fixed_cosphi_default_reactive_power_sign(
-                                            df, type, edisgo_object.config
-                                        ),
+                                        default_func(df, type, edisgo_object.config),
                                     ]
                                 )
                         else:
@@ -1653,14 +1657,16 @@ class TimeSeries:
                                 components_df.loc[comps, :],
                                 edisgo_object.topology.buses_df,
                             )
+                            default_func = q_control._fixed_cosphi_default_power_factor
                             if type == "loads":
                                 for load_type in df["type"].unique():
                                     power_factor = pd.concat(
                                         [
                                             power_factor,
-                                            q_control._fixed_cosphi_default_power_factor(
-                                                df[df["type"] == load_type], f"{load_type}s",
-                                                edisgo_object.config
+                                            default_func(
+                                                df[df["type"] == load_type],
+                                                f"{load_type}s",
+                                                edisgo_object.config,
                                             ),
                                         ]
                                     )
@@ -1668,9 +1674,7 @@ class TimeSeries:
                                 power_factor = pd.concat(
                                     [
                                         power_factor,
-                                        q_control._fixed_cosphi_default_power_factor(
-                                            df, type, edisgo_object.config
-                                        ),
+                                        default_func(df, type, edisgo_object.config),
                                     ]
                                 )
                         else:

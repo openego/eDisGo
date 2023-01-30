@@ -510,7 +510,9 @@ def get_directory_size(start_dir):
 
     Walks through all files and sub-directories within a given directory and
     calculate the sum of size of all files in the directory.
-    See https://stackoverflow.com/questions/1392413/calculating-a-directorys-size-using-python/1392549#1392549
+    See also
+    `stackoverflow <https://stackoverflow.com/questions/1392413/\
+    calculating-a-directorys-size-using-python/1392549#1392549>`_.
 
     Parameters
     ----------
@@ -636,8 +638,7 @@ def add_line_susceptance(
 
 
 def resample(
-        object, freq_orig, method: str = "ffill",
-        freq: str | pd.Timedelta = "15min"
+    object, freq_orig, method: str = "ffill", freq: str | pd.Timedelta = "15min"
 ):
     """
     Resamples all time series data in given object to a desired resolution.
@@ -669,8 +670,8 @@ def resample(
                 new_dates = pd.DatetimeIndex([df_dict[attr].index[-1]])
             df_dict[attr] = (
                 df_dict[attr]
-                    .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
-                    .ffill()
+                .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
+                .ffill()
             )
 
     # resample time series
@@ -685,17 +686,19 @@ def resample(
         elif method == "ffill":
             for attr in df_dict.keys():
                 setattr(
-                    object, attr, df_dict[attr].resample(freq, closed="left").ffill().iloc[:-1]
+                    object,
+                    attr,
+                    df_dict[attr].resample(freq, closed="left").ffill().iloc[:-1],
                 )
         elif method == "bfill":
             for attr in df_dict.keys():
                 setattr(
-                    object, attr, df_dict[attr].resample(freq, closed="left").bfill().iloc[:-1]
+                    object,
+                    attr,
+                    df_dict[attr].resample(freq, closed="left").bfill().iloc[:-1],
                 )
         else:
-            raise NotImplementedError(
-                f"Resampling method {method} is not implemented."
-            )
+            raise NotImplementedError(f"Resampling method {method} is not implemented.")
     else:  # down-sampling
         for attr in df_dict.keys():
             setattr(
