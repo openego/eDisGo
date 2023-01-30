@@ -143,7 +143,7 @@ def reinforce_grid(
 
         edisgo_reinforce.results.equipment_changes = pd.concat(df_list)
 
-    raise_not_converged = kwargs.get("raise_not_converged", False)
+    raise_not_converged = kwargs.get("raise_not_converged", True)
     troubleshooting_mode = kwargs.get("troubleshooting_mode", None)
     # check if provided mode is valid
     if mode and mode not in ["mv", "mvlv", "lv"]:
