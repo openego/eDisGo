@@ -137,6 +137,12 @@ version = "0.10.34"
 deps = ["Random"]
 uuid = "9fa8497b-333b-5362-9e8d-4d0656e87820"
 
+[[Gurobi]]
+deps = ["LazyArtifacts", "Libdl", "MathOptInterface"]
+git-tree-sha1 = "82a44a86f4dc4fa4510c9d49b0a74d3d73914d5c"
+uuid = "2e9cd046-0924-5485-92f1-d5272153d98b"
+version = "0.11.5"
+
 [[InfrastructureModels]]
 deps = ["JuMP", "Memento"]
 git-tree-sha1 = "cca034ca1ae73e08bf4db63f158474d40d7dad9a"
@@ -187,6 +193,10 @@ deps = ["LinearAlgebra", "MathOptInterface", "MutableArithmetics", "OrderedColle
 git-tree-sha1 = "8ebcb407c28617ea075563c550ec766dddf25a2e"
 uuid = "4076af6c-e467-56ae-b986-b466b2749572"
 version = "1.7.0"
+
+[[LazyArtifacts]]
+deps = ["Artifacts", "Pkg"]
+uuid = "4af54fe1-eca0-43a8-85a7-787d91b784e3"
 
 [[LibCURL]]
 deps = ["LibCURL_jll", "MozillaCACerts_jll"]

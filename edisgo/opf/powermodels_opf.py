@@ -139,7 +139,7 @@ def pm_optimize(
     julia_process = subprocess.Popen(
         [
             "julia",
-            os.path.join(opf_dir, "PowerModels.jl/Main.jl"),
+            os.path.join(opf_dir, "eDisGo_OPF.jl/Main.jl"),
             pm["name"],
             solution_dir,
             method,

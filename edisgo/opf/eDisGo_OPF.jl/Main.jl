@@ -8,7 +8,7 @@ using JuMP
 using JSON
 using Gurobi
 
-logger_config!("debug")
+PowerModels.logger_config!("debug")
 
 json_str = readline(stdin)
 ding0_grid = ARGS[1]
@@ -17,7 +17,7 @@ method = ARGS[3]
 silence_moi = ARGS[4].=="True"
 tol = parse(Float64, ARGS[5])
 warm_start = ARGS[6].=="True"
-set_tol = true
+set_tol = false
 
 # Set solver attributes
 const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>tol)
@@ -30,7 +30,7 @@ end
 function optimize_edisgo()
   # read in data and create multinetwork
   data_edisgo = parse_json(json_str)
-  data_edisgo_mn = make_multinetwork(data_edisgo)
+  data_edisgo_mn = PowerModels.make_multinetwork(data_edisgo)
 
   if method == "soc" # Second order cone
     # Solve SOC model

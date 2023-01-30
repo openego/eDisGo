@@ -1,14 +1,19 @@
-function variable_buspair_current_magnitude_sqr(pm::AbstractBFModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
-    branch = ref(pm, nw, :branch)
+""
+function variable_branch_current(pm::AbstractBFModel; kwargs...)
+    eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm; kwargs...)
+end
 
-    ccm = var(pm, nw)[:ccm] = JuMP.@variable(pm.model,
-        [i in ids(pm, nw, :branch)], base_name="$(nw)_ccm",
+function variable_buspair_current_magnitude_sqr(pm::AbstractBFModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    branch = PowerModels.ref(pm, nw, :branch)
+
+    ccm = PowerModels.var(pm, nw)[:ccm] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :branch)], base_name="$(nw)_ccm",
         lower_bound = 0.0,
         start = comp_start_value(branch[i], "ccm_start")
     )
 
     if bounded
-        bus = ref(pm, nw, :bus)
+        bus = PowerModels.ref(pm, nw, :bus)
         for (i, b) in branch
             rate_a = Inf
             if haskey(b, "rate_a")
@@ -23,30 +28,30 @@ function variable_buspair_current_magnitude_sqr(pm::AbstractBFModel; nw::Int=nw_
         end
     end
 
-    report && sol_component_value(pm, nw, :branch, :ccm, ids(pm, nw, :branch), ccm)
+    report && PowerModels.sol_component_value(pm, nw, :branch, :ccm, PowerModels.ids(pm, nw, :branch), ccm)
 end
 
 
 function constraint_voltage_magnitude_difference(pm::AbstractBFModelEdisgo, n::Int, i, f_bus, t_bus, f_idx, t_idx, r, x, tm)
-    p_fr = var(pm, n, :p, f_idx)
-    q_fr = var(pm, n, :q, f_idx)
-    w_fr = var(pm, n, :w, f_bus)
-    w_to = var(pm, n, :w, t_bus)
-    ccm =  var(pm, n, :ccm, i)
+    p_fr = PowerModels.var(pm, n, :p, f_idx)
+    q_fr = PowerModels.var(pm, n, :q, f_idx)
+    w_fr = PowerModels.var(pm, n, :w, f_bus)
+    w_to = PowerModels.var(pm, n, :w, t_bus)
+    ccm =  PowerModels.var(pm, n, :ccm, i)
 
     JuMP.@constraint(pm.model, ((w_fr/tm^2)  - w_to ==  2*(r*p_fr + x*q_fr) - (r^2 + x^2)*ccm))
 end
 
 
 function constraint_model_current(pm::AbstractSOCBFModelEdisgo, n::Int)
-    _check_missing_keys(var(pm, n), [:p,:q,:w,:ccm], typeof(pm))
+    PowerModels._check_missing_keys(PowerModels.var(pm, n), [:p,:q,:w,:ccm], typeof(pm))
 
-    p  = var(pm, n, :p)
-    q  = var(pm, n, :q)
-    w  = var(pm, n, :w)
-    ccm = var(pm, n, :ccm)
+    p  = PowerModels.var(pm, n, :p)
+    q  = PowerModels.var(pm, n, :q)
+    w  = PowerModels.var(pm, n, :w)
+    ccm = PowerModels.var(pm, n, :ccm)
 
-    for (i,branch) in ref(pm, n, :branch)
+    for (i,branch) in PowerModels.ref(pm, n, :branch)
         f_bus = branch["f_bus"]
         t_bus = branch["t_bus"]
         f_idx = (i, f_bus, t_bus)
@@ -58,14 +63,14 @@ function constraint_model_current(pm::AbstractSOCBFModelEdisgo, n::Int)
 end
 
 function constraint_model_current(pm::AbstractNCBFModelEdisgo, n::Int)
-    _check_missing_keys(var(pm, n), [:p,:q,:w,:ccm], typeof(pm))
+    PowerModels._check_missing_keys(PowerModels.var(pm, n), [:p,:q,:w,:ccm], typeof(pm))
 
-    p  = var(pm, n, :p)
-    q  = var(pm, n, :q)
-    w  = var(pm, n, :w)
-    ccm = var(pm, n, :ccm)
+    p  = PowerModels.var(pm, n, :p)
+    q  = PowerModels.var(pm, n, :q)
+    w  = PowerModels.var(pm, n, :w)
+    ccm = PowerModels.var(pm, n, :ccm)
 
-    for (i,branch) in ref(pm, n, :branch)
+    for (i,branch) in PowerModels.ref(pm, n, :branch)
         f_bus = branch["f_bus"]
         t_bus = branch["t_bus"]
         f_idx = (i, f_bus, t_bus)
@@ -77,23 +82,23 @@ end
 
 
 function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens, bus_gens_nd, bus_gens_slack, bus_loads, bus_arcs_to, bus_arcs_from, bus_lines_to, bus_storage, bus_pg, bus_qg, bus_pg_nd, bus_qg_nd, bus_pd, bus_qd, branch_r, branch_x, bus_dsm, bus_hps, bus_cps, bus_storage_pf, bus_dsm_pf, bus_hps_pf, bus_cps_pf, bus_gen_nd_pf, bus_gen_d_pf, bus_loads_pf, branch_strg_pf)
-    pt   = get(var(pm, n),  :p, Dict()); _check_var_keys(pt, bus_arcs_to, "active power", "branch")
-    qt   = get(var(pm, n),  :q, Dict()); _check_var_keys(qt, bus_arcs_to, "reactive power", "branch")
-    pf   = get(var(pm, n),  :p, Dict()); _check_var_keys(pf, bus_arcs_from, "active power", "branch")
-    qf   = get(var(pm, n),  :q, Dict()); _check_var_keys(qf, bus_arcs_from, "reactive power", "branch")
-    ps   = get(var(pm, n),  :ps, Dict()); _check_var_keys(ps, bus_storage, "active power", "storage")
-    pgs  = get(var(pm, n),  :pgs, Dict()); _check_var_keys(pgs, bus_gens_slack, "active power", "slack")
-    qgs  = get(var(pm, n),  :qgs, Dict()); _check_var_keys(qgs, bus_gens_slack, "reactive power", "slack")
-    ccm  = get(var(pm, n),  :ccm, Dict()); _check_var_keys(ccm, bus_lines_to, "active power", "branch")
-    pdsm  = get(var(pm, n),  :pdsm, Dict()); _check_var_keys(pdsm, bus_dsm, "active power", "dsm")
-    php  = get(var(pm, n),  :php, Dict()); _check_var_keys(php, bus_hps, "active power", "heatpumps")
-    pcp  = get(var(pm, n),  :pcp, Dict()); _check_var_keys(pcp, bus_cps, "active power", "electromobility")
+    pt   = get(PowerModels.var(pm, n),  :p, Dict()); PowerModels._check_var_keys(pt, bus_arcs_to, "active power", "branch")
+    qt   = get(PowerModels.var(pm, n),  :q, Dict()); PowerModels._check_var_keys(qt, bus_arcs_to, "reactive power", "branch")
+    pf   = get(PowerModels.var(pm, n),  :p, Dict()); PowerModels._check_var_keys(pf, bus_arcs_from, "active power", "branch")
+    qf   = get(PowerModels.var(pm, n),  :q, Dict()); PowerModels._check_var_keys(qf, bus_arcs_from, "reactive power", "branch")
+    ps   = get(PowerModels.var(pm, n),  :ps, Dict()); PowerModels._check_var_keys(ps, bus_storage, "active power", "storage")
+    pgs  = get(PowerModels.var(pm, n),  :pgs, Dict()); PowerModels._check_var_keys(pgs, bus_gens_slack, "active power", "slack")
+    qgs  = get(PowerModels.var(pm, n),  :qgs, Dict()); PowerModels._check_var_keys(qgs, bus_gens_slack, "reactive power", "slack")
+    ccm  = get(PowerModels.var(pm, n),  :ccm, Dict()); PowerModels._check_var_keys(ccm, bus_lines_to, "active power", "branch")
+    pdsm  = get(PowerModels.var(pm, n),  :pdsm, Dict()); PowerModels._check_var_keys(pdsm, bus_dsm, "active power", "dsm")
+    php  = get(PowerModels.var(pm, n),  :php, Dict()); PowerModels._check_var_keys(php, bus_hps, "active power", "heatpumps")
+    pcp  = get(PowerModels.var(pm, n),  :pcp, Dict()); PowerModels._check_var_keys(pcp, bus_cps, "active power", "electromobility")
 
-    if ref(pm, 1, :opf_version) in(2, 4)
-        pgens  = get(var(pm, n),  :pgens, Dict()); _check_var_keys(pgens, bus_gens, "active power slack", "curtailment")
-        pds  = get(var(pm, n),  :pds, Dict()); _check_var_keys(pds, bus_loads, "active power slack", "load")
-        pcps  = get(var(pm, n),  :pcps, Dict()); _check_var_keys(pcps, bus_cps, "active power slack", "charging point")
-        pgc  = get(var(pm, n),  :pgc, Dict()); _check_var_keys(pgc, bus_gens_nd, "active power", "curtailment")
+    if PowerModels.ref(pm, 1, :opf_version) in(2, 4)
+        pgens  = get(PowerModels.var(pm, n),  :pgens, Dict()); PowerModels._check_var_keys(pgens, bus_gens, "active power slack", "curtailment")
+        pds  = get(PowerModels.var(pm, n),  :pds, Dict()); PowerModels._check_var_keys(pds, bus_loads, "active power slack", "load")
+        pcps  = get(PowerModels.var(pm, n),  :pcps, Dict()); PowerModels._check_var_keys(pcps, bus_cps, "active power slack", "charging point")
+        pgc  = get(PowerModels.var(pm, n),  :pgc, Dict()); PowerModels._check_var_keys(pgc, bus_gens_nd, "active power", "curtailment")
 
         cstr_p = JuMP.@constraint(pm.model,
             sum(pt[a] for a in bus_arcs_to)
@@ -162,7 +167,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
         )
     end
 
-    if _IM.report_duals(pm)
+    if InfrastructureModels.report_duals(pm)
         sol(pm, n, :bus, i)[:lam_kcl_r] = cstr_p
         sol(pm, n, :bus, i)[:lam_kcl_i] = cstr_q
     end

@@ -1,12 +1,19 @@
 module eDisGo_OPF
 
 using PowerModels
+using InfrastructureModels
+using Memento
 using JuMP
 using Ipopt
 using JSON
 using Compat
+using Gurobi
 
-# include functions extending PowerModels core functions
+const _pm_global_keys = Set(["time_series", "per_unit"])
+const pm_it_name = "pm"
+const pm_it_sym = Symbol(pm_it_name)
+
+# include functions extending PowerModels functions
 include("core/types.jl")
 include("core/base.jl")
 include("core/constraint.jl")
@@ -15,15 +22,11 @@ include("core/data.jl")
 include("core/objective.jl")
 include("core/solution.jl")
 include("core/variables.jl")
-
-# include functions extending PowerModels from functions
 include("form/bf.jl")
-
-# include functions extending PowerModels prob functions
-include("prob/opf.jl")
 include("prob/opf_bf.jl")
 #include("../test/opf_test_case.jl")
 
+# export new types of PowerModels
 export BFPowerModelEdisgo, SOCBFPowerModelEdisgo, NCBFPowerModelEdisgo
 
-end # module
+end
