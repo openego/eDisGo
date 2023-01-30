@@ -1426,69 +1426,42 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
         # Extract results
         time_dict = {t: model.timeindex[t].value for t in model.time_set}
         result_dict = {}
-        if hasattr(model, "optimized_storage_set"):
-            result_dict["charging_bess"] = (
-                pd.Series(model.charging.extract_values())
-                .unstack()
-                .rename(columns=time_dict)
-                .T
-            )
-            result_dict["soc"] = (
-                pd.Series(model.soc.extract_values())
-                .unstack()
-                .rename(columns=time_dict)
-                .T
-            )
+
+        results_name_dict = {
+            "charging": "charging_bess",
+            "soc": "soc",
+            "charging_ev": "charging_ev",
+            "energy_level_ev": "energy_level_ev",
+            "curtailment_ev": "curtailment_ev",
+            "charging_hp": "charging_hp_el",
+            "charging_tes": "charging_tes",
+            "energy_level_tes": "energy_level_tes",
+            "curtailment_hp": "curtailment_hp",
+            "curtailment_load": "curtailment_load",
+            "curtailment_feedin": "curtailment_feedin",
+            "p_cum": "p_line",
+            "q_cum": "q_line",
+            "v": "v_bus",
+            "slack_v_pos": "slack_v_pos",
+            "slack_v_neg": "slack_v_neg",
+            "slack_p_cum_pos": "slack_p_cum_pos",
+            "slack_p_cum_neg": "slack_p_cum_neg"
+        }
+        for attr in results_name_dict.keys():
+            if hasattr(model, attr):
+                result_dict[results_name_dict[attr]] = (
+                    pd.Series(getattr(model, attr).extract_values())
+                        .unstack()
+                        .rename(columns=time_dict)
+                        .T
+                )
+
         if hasattr(model, "flexible_charging_points_set"):
-            result_dict["charging_ev"] = (
-                pd.Series(model.charging_ev.extract_values())
-                .unstack()
-                .rename(columns=time_dict)
-                .T
-            )
-            result_dict["energy_level_ev"] = (
-                pd.Series(model.energy_level_ev.extract_values())
-                .unstack()
-                .rename(columns=time_dict)
-                .T
-            )
             result_dict["slack_initial_charging_ev"] = pd.Series(
                 model.slack_initial_charging_pos_ev.extract_values()
             ) + pd.Series(model.slack_initial_charging_neg_ev.extract_values())
-            result_dict["slack_initial_energy_ev"] = pd.Series(
-                model.slack_initial_energy_pos_ev.extract_values()
-            ) + pd.Series(model.slack_initial_energy_neg_ev.extract_values())
-            result_dict["curtailment_ev"] = (
-                pd.Series(model.curtailment_ev.extract_values())
-                .unstack()
-                .rename(columns=time_dict)
-                .T
-            )
+
         if hasattr(model, "flexible_heat_pumps_set"):
-            result_dict["charging_hp_el"] = (
-                pd.Series(model.charging_hp.extract_values())
-                .unstack()
-                .rename(columns=time_dict)
-                .T
-            )
-            result_dict["charging_tes"] = (
-                pd.Series(model.charging_tes.extract_values())
-                .unstack()
-                .rename(columns=time_dict)
-                .T
-            )
-            result_dict["energy_level_tes"] = (
-                pd.Series(model.energy_level_tes.extract_values())
-                .unstack()
-                .rename(columns=time_dict)
-                .T
-            )
-            result_dict["curtailment_hp"] = (
-                pd.Series(model.curtailment_hp.extract_values())
-                .unstack()
-                .rename(columns=time_dict)
-                .T
-            )
             result_dict["slack_initial_charging_hp"] = pd.Series(
                 model.slack_initial_charging_pos_hp.extract_values()
             ) + pd.Series(model.slack_initial_charging_neg_hp.extract_values())
@@ -1498,92 +1471,32 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
             result_dict["slack_initial_energy_tes"] = pd.Series(
                 model.slack_initial_energy_pos_tes.extract_values()
             ) + pd.Series(model.slack_initial_energy_neg_tes.extract_values())
-            result_dict["curtailment_hp"] = (
-                pd.Series(model.curtailment_hp.extract_values())
-                .unstack()
-                .rename(columns=time_dict)
-                .T
-            )
-        result_dict["curtailment_load"] = (
-            pd.Series(model.curtailment_load.extract_values())
-            .unstack()
-            .rename(columns=time_dict)
-            .T
-        )
-        result_dict["curtailment_feedin"] = (
-            pd.Series(model.curtailment_feedin.extract_values())
-            .unstack()
-            .rename(columns=time_dict)
-            .T
-        )
 
-        result_dict["p_line"] = (
-            pd.Series(model.p_cum.extract_values())
-            .unstack()
-            .rename(columns=time_dict)
-            .T
-        )
-        result_dict["q_line"] = (
-            pd.Series(model.q_cum.extract_values())
-            .unstack()
-            .rename(columns=time_dict)
-            .T
-        )
-        result_dict["v_bus"] = (
-            pd.Series(model.v.extract_values())
-            .unstack()
-            .rename(columns=time_dict)
-            .T.apply(np.sqrt)
-        )
-        result_dict["slack_v_pos"] = (
-            pd.Series(model.slack_v_pos.extract_values())
-            .unstack()
-            .rename(columns=time_dict)
-            .T
-        )
-        result_dict["slack_v_neg"] = (
-            pd.Series(model.slack_v_neg.extract_values())
-            .unstack()
-            .rename(columns=time_dict)
-            .T
-        )
-        result_dict["slack_p_cum_pos"] = (
-            pd.Series(model.slack_p_cum_pos.extract_values())
-            .unstack()
-            .rename(columns=time_dict)
-            .T
-        )
-        result_dict["slack_p_cum_neg"] = (
-            pd.Series(model.slack_p_cum_pos.extract_values())
-            .unstack()
-            .rename(columns=time_dict)
-            .T
-        )
         if mode == "energy_band":
             result_dict["p_aggr"] = pd.Series(
                 model.grid_power_flexible.extract_values()
             ).rename(time_dict)
-        # Todo: check if this works
-        index = result_dict["curtailment_load"].index[
-            result_dict["curtailment_load"].index.isin(model.tan_phi_load.index)
-        ]
-        result_dict["curtailment_reactive_load"] = (
-            result_dict["curtailment_load"]
-            .multiply(
-                model.tan_phi_load.loc[index, result_dict["curtailment_load"].columns]
-            )
-            .dropna(how="all")
-        )
-        result_dict["curtailment_reactive_feedin"] = (
-            result_dict["curtailment_feedin"]
-            .multiply(
-                model.tan_phi_feedin.loc[
-                    index, result_dict["curtailment_feedin"].columns
-                ]
-            )
-            .dropna(how="all")
-        )
 
+        if "curtailment_load" in result_dict.keys():
+            index = result_dict["curtailment_load"].index[
+                result_dict["curtailment_load"].index.isin(model.tan_phi_load.index)
+            ]
+            result_dict["curtailment_reactive_load"] = (
+                result_dict["curtailment_load"]
+                .multiply(
+                    model.tan_phi_load.loc[index, result_dict["curtailment_load"].columns]
+                )
+                .dropna(how="all")
+            )
+            result_dict["curtailment_reactive_feedin"] = (
+                result_dict["curtailment_feedin"]
+                .multiply(
+                    model.tan_phi_feedin.loc[
+                        index, result_dict["curtailment_feedin"].columns
+                    ]
+                )
+                .dropna(how="all")
+            )
         logger.info(f"It took {get_exec_time(t1)} to optimize model.")
         return result_dict
     elif results.solver.termination_condition == TerminationCondition.infeasible:
