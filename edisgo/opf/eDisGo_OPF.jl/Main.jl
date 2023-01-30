@@ -1,6 +1,7 @@
 cd(dirname(@__FILE__))
 using Pkg
 Pkg.activate("")
+Pkg.instantiate()
 using eDisGo_OPF
 using PowerModels
 using Ipopt
