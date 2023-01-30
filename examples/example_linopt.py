@@ -56,7 +56,8 @@ if opt_ev:
         index=[cp_id], columns=["edisgo_id"], data=cp
     )
     edisgo.electromobility.simbev_config_df = pd.DataFrame(
-        index=["eta_cp", "stepsize"], columns=[0], data=[0.9, 60]
+        index=["eta_cp", "stepsize", "start_date", "end_date"], columns=[0],
+        data=[0.9, 60, pd.to_datetime("2011-01-01"), pd.to_datetime("2011-12-31")]
     ).T
     energy_bands = edisgo.electromobility.get_flexibility_bands(
         edisgo_obj=edisgo, use_case="home"
@@ -100,14 +101,16 @@ parameters = opt.prepare_time_invariant_parameters(
     downstream_node_matrix,
     pu=False,
     optimize_storage=False,
-    optimize_ev_charging=opt_ev,
+    optimize_emob=opt_ev,
     optimize_hp=opt_hp,
     ev_flex_bands=energy_bands,
 )
 model = opt.setup_model(
     parameters,
     timesteps=timesteps,
-    objective="residual_load",
+    objective="maximize_grid_power",
+    v_min=1.0,
+    v_max=1.0
 )
 
 results = opt.optimize(model, "gurobi")
