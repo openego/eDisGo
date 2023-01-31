@@ -30,6 +30,7 @@ from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.network import timeseries
 from edisgo.network.electromobility import Electromobility
 from edisgo.network.heat import HeatPump
+from edisgo.network.overlying_grid import OverlyingGrid
 from edisgo.network.results import Results
 from edisgo.network.topology import Topology
 from edisgo.opf.results.opf_result_class import OPFResults
@@ -129,6 +130,9 @@ class EDisGo:
     heat_pump : :class:`~.network.heat.HeatPump`
         This is a container holding heat pump data such as COP, heat demand to be
         served and heat storage information.
+    overlying_grid : :class:`~.network.overlying_grid.OverlyingGrid`
+        This is a container holding data from the overlying grid such as curtailment
+        requirements or power plant dispatch.
 
     """
 
@@ -141,16 +145,15 @@ class EDisGo:
         self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
 
-        # set up results and time series container
+        # instantiate other data classes
         self.results = Results(self)
         self.opf_results = OPFResults()
         self.timeseries = timeseries.TimeSeries(
             timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
         )
-
-        # instantiate electromobility and heat pump object
         self.electromobility = Electromobility(edisgo_obj=self)
         self.heat_pump = HeatPump()
+        self.overlying_grid = OverlyingGrid()
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
@@ -2042,6 +2045,7 @@ class EDisGo:
         save_results=True,
         save_electromobility=False,
         save_heatpump=False,
+        save_overlying_grid=False,
         **kwargs,
     ):
         """
@@ -2088,13 +2092,21 @@ class EDisGo:
             :class:`~.network.heat.HeatPump` object. Per default it is not saved.
             If set to True, it is saved to subdirectory 'heat_pump'.
             See :attr:`~.network.heat.HeatPump.to_csv` for more information.
+        save_overlying_grid : bool, optional
+            Indicates whether to save
+            :class:`~.network.overlying_grid.OverlyingGrid` object. Per default it is
+            not saved. If set to True, it is saved to subdirectory 'overlying_grid'.
+            See :attr:`~.network.overlying_grid.OverlyingGrid.to_csv` for more
+            information.
 
         Other Parameters
         ------------------
         reduce_memory : bool, optional
             If True, size of dataframes containing time series in
-            :class:`~.network.results.Results`, :class:`~.network.timeseries.TimeSeries`
-            and :class:`~.network.heat.HeatPump`
+            :class:`~.network.results.Results`,
+            :class:`~.network.timeseries.TimeSeries`,
+            :class:`~.network.heat.HeatPump` and
+            :class:`~.network.overlying_grid.OverlyingGrid`
             is reduced. See respective classes `reduce_memory` functions for more
             information. Type to convert to can be specified by providing
             `to_type` as keyword argument. Further parameters of reduce_memory
@@ -2162,6 +2174,13 @@ class EDisGo:
                 to_type=kwargs.get("to_type", "float32"),
             )
 
+        if save_overlying_grid:
+            self.overlying_grid.to_csv(
+                os.path.join(directory, "overlying_grid"),
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32"),
+            )
+
         if kwargs.get("archive", False):
             archive_type = kwargs.get("archive_type", "zip")
             shutil.make_archive(directory, archive_type, directory)
@@ -2178,8 +2197,8 @@ class EDisGo:
 
             logger.info(
                 f"Archived files in a {archive_type} archive and reduced "
-                f"storage needs by {reduction:.2f} %. The unarchived files"
-                f" were dropped: {drop_unarchived}"
+                f"storage needs by {reduction:.2f} %. The unarchived files "
+                f"were dropped: {drop_unarchived}"
             )
 
     def save_edisgo_to_pickle(self, path="", filename=None):
@@ -2203,7 +2222,7 @@ class EDisGo:
 
     def reduce_memory(self, **kwargs):
         """
-        Reduces size of dataframes containing time series to save memory.
+        Reduces size of time series data to save memory.
 
         Per default, float data is stored as float64. As this precision is
         barely needed, this function can be used to convert time series data
@@ -2222,6 +2241,10 @@ class EDisGo:
             See `attr_to_reduce` parameter in
             :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
             information.
+        overlying_grid_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.overlying_grid.OverlyingGrid.reduce_memory` for more
+            information.
 
         """
         # time series
@@ -2233,6 +2256,11 @@ class EDisGo:
         self.results.reduce_memory(
             to_type=kwargs.get("to_type", "float32"),
             attr_to_reduce=kwargs.get("results_attr_to_reduce", None),
+        )
+        # overlying grid
+        self.overlying_grid.reduce_memory(
+            to_type=kwargs.get("to_type", "float32"),
+            attr_to_reduce=kwargs.get("overlying_grid_attr_to_reduce", None),
         )
 
     def check_integrity(self):
@@ -2299,23 +2327,14 @@ class EDisGo:
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
     ):
         """
-        Resamples all generator, load and storage time series to a desired resolution.
+        Resamples (up- and down-sampling) time series data to a desired resolution.
 
-        The following time series are affected by this:
+        The following data are affected by this:
 
-        * :attr:`~.network.timeseries.TimeSeries.generators_active_power`
+        * All active and reactive power time series in
+          :class:`~.network.timeseries.TimeSeries`
 
-        * :attr:`~.network.timeseries.TimeSeries.loads_active_power`
-
-        * :attr:`~.network.timeseries.TimeSeries.storage_units_active_power`
-
-        * :attr:`~.network.timeseries.TimeSeries.generators_reactive_power`
-
-        * :attr:`~.network.timeseries.TimeSeries.loads_reactive_power`
-
-        * :attr:`~.network.timeseries.TimeSeries.storage_units_reactive_power`
-
-        Both up- and down-sampling methods are possible.
+        * All data in :attr:`~.network.overlying_grid.OverlyingGrid`
 
         Parameters
         ----------
@@ -2342,6 +2361,7 @@ class EDisGo:
 
         """
         self.timeseries.resample_timeseries(method=method, freq=freq)
+        self.overlying_grid.resample(method=method, freq=freq)
 
 
 def import_edisgo_from_pickle(filename, path=""):
@@ -2368,6 +2388,7 @@ def import_edisgo_from_files(
     import_results=False,
     import_electromobility=False,
     import_heat_pump=False,
+    import_overlying_grid=False,
     from_zip_archive=False,
     **kwargs,
 ):
@@ -2423,6 +2444,15 @@ def import_edisgo_from_files(
         'heat_pump'. A different directory can be specified through keyword
         argument `heat_pump_directory`.
         Default: False.
+    import_overlying_grid : bool
+        Indicates whether to import :class:`~.network.overlying_grid.OverlyingGrid`
+        object. Per default it is set to False, in which case overlying grid data
+        containing information on renewables curtailment requirements, generator
+        dispatch, etc. is not imported.
+        The default directory overlying grid data is imported from is the sub-directory
+        'overlying_grid'. A different directory can be specified through keyword
+        argument `overlying_grid_directory`.
+        Default: False.
     from_zip_archive : bool
         Set to True if data needs to be imported from an archive, e.g. a zip
         archive. Default: False.
@@ -2449,6 +2479,10 @@ def import_edisgo_from_files(
         Indicates directory :class:`~.network.heat.HeatPump` object is
         imported from. Per default heat pump data is imported from `edisgo_path`
         sub-directory 'heat_pump'.
+    overlying_grid_directory : str
+        Indicates directory :class:`~.network.overlying_grid.OverlyingGrid` object is
+        imported from. Per default overlying grid data is imported from `edisgo_path`
+        sub-directory 'overlying_grid'.
     dtype : str
         Numerical data type for time series and results data to be imported,
         e.g. "float32". Per default this is None in which case data type is inferred.
@@ -2560,5 +2594,21 @@ def import_edisgo_from_files(
             edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
             logging.warning("No heat pump data found. Heat pump data not imported.")
+
+    if import_overlying_grid:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "overlying_grid_directory",
+                os.path.join(edisgo_path, "overlying_grid"),
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.overlying_grid.from_csv(
+                directory, from_zip_archive=from_zip_archive
+            )
+        else:
+            logging.warning(
+                "No overlying grid data found. Overlying grid data not imported."
+            )
 
     return edisgo_obj
