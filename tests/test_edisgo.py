@@ -1455,9 +1455,10 @@ class TestEDisGo:
         self.edisgo.timeseries.loads_reactive_power = ts_loads
         self.edisgo.timeseries.storage_units_active_power = ts_stor
         self.edisgo.timeseries.storage_units_reactive_power = ts_stor
-        # check that no warning is raised
+        # check that time series warnings are not raised anymore
         self.edisgo.check_integrity()
-        assert not caplog.text
+        assert len(caplog.records) == 1
+        assert "There are lines with very short line lengths" in caplog.text
         manipulated_comps = {
             "generators": ["Generator_1", "GeneratorFluctuating_4"],
             "loads": ["Load_agricultural_LVGrid_1_3"],
