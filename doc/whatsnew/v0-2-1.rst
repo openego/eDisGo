@@ -14,3 +14,4 @@ Changes
 * Changed to_pypsa function such that pypsa network can be build even though not all components have time series `#335 <https://github.com/openego/eDisGo/pull/335>`_
 * Added class holding data from overlying grid, such as curtailment requirements and
   conventional generator dispatch `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Added integrity check for very short lines `#335 <https://github.com/openego/eDisGo/pull/335>`_
