@@ -13,7 +13,6 @@ function objective_min_line_loading(pm::AbstractBFModelEdisgo)
             Dict(i => get(branch, "rate_a", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))
         for n in nws)# p_max?
     phvs = Dict(n => PowerModels.var(pm, n, :phvs) for n in nws)
-    #qhvs = Dict(n => PowerModels.var(pm, n, :qhvs) for n in nws)
     phps = Dict(n => PowerModels.var(pm, n, :phps) for n in nws)
     pgs = Dict(n => PowerModels.var(pm, n, :pgs) for n in nws)
 
@@ -26,6 +25,7 @@ function objective_min_line_loading(pm::AbstractBFModelEdisgo)
     )
 end
 
+
 function objective_min_losses(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
@@ -35,8 +35,7 @@ function objective_min_losses(pm::AbstractBFModelEdisgo)
     l = Dict(n => Dict(i => get(branch, "length", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
     c = Dict(n => Dict(i => get(branch, "cost", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
     s_nom = Dict(n => Dict(i => get(branch, "rate_a", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)# p_max?
-    bus = Dict(n => Dict(i => get(branch, "f_bus", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)
-    #v_min = Dict(n => Dict(i => get(bus, "vmin", 1.0) for (i,bus) in PowerModels.ref(pm, n, :branch))  for n in nws)
+    #bus = Dict(n => Dict(i => get(branch, "f_bus", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)
     # PowerModels.ref(pm, n, :bus)[bus[n][b]]["vmin"]
     parameters = [r[1][i] for i in keys(c[1])]
     parameters = parameters[parameters .>0]
@@ -62,20 +61,20 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
     r = Dict(n => Dict(i => get(branch, "br_r", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)
     pgc = Dict(n => PowerModels.var(pm, n, :pgc) for n in nws)
-    #phps = Dict(n => PowerModels.var(pm, n, :phps) for n in nws)
     pgens = Dict(n => PowerModels.var(pm, n, :pgens) for n in nws)
     pds = Dict(n => PowerModels.var(pm, n, :pds) for n in nws)
     pcps = Dict(n => PowerModels.var(pm, n, :pcps) for n in nws)
     s_base = PowerModels.ref(pm, 1, :baseMVA)
     l = Dict(n => Dict(i => get(branch, "length", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
-    c = Dict(n => Dict(i => get(branch, "cost_factor", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
+    c = Dict(n => Dict(i => get(branch, "cost", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
     p = Dict(n => PowerModels.var(pm, n, :p) for n in nws)
+    q = Dict(n => PowerModels.var(pm, n, :q) for n in nws)
     s_nom = Dict(n => Dict(i => get(branch, "rate_a", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)# p_max?
-    parameters = [r[1][i]*c[1][i] for i in keys(c[1])]
+    parameters = [r[1][i] for i in keys(c[1])]
     parameters = parameters[parameters .>0]
     factor = 1
     while true
-        if minimum(factor*parameters) > 1e-3
+        if minimum(factor*parameters) > 1
             break
         else
             factor = 10*factor
@@ -83,14 +82,12 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     end
     println(factor)
     factor_slacks = exp10(floor(log10(maximum(factor*parameters))) + 2)
-    #factor_ll = factor_slacks * 1e-3
     println(factor_slacks)
     return JuMP.@objective(pm.model, Min,
-        factor * s_base * sum(sum(ccm[n][b]*r[n][b]*c[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
-        #+ factor_ll * sum(sum(p[n][(b,i,j)]/s_nom[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading
+        factor * s_base * sum(sum(ccm[n][b]*r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
+        + sum(sum((p[n][(b,i,j)]^2+q[n][(b,i,j)]^2)/s_nom[n][b]^2 for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading * c[n][b]*l[n][b]
         + factor_slacks * s_base * sum(sum(pgc[n]) for n in nws) # minimize non-dispatchable curtailment
         + factor_slacks * s_base * sum(sum(pgens[n]) for n in nws) # minimize dispatchable curtailment
-        #+ s_base * sum(sum(phps[n]) for n in nws) # minimize heatpump slack variables
         + factor_slacks * s_base * sum(sum(pds[n]) for n in nws) # minimize load shedding
         + factor_slacks * s_base * sum(sum(pcps[n]) for n in nws) # minimize cp load shedding
     )
