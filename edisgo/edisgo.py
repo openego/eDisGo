@@ -912,6 +912,7 @@ class EDisGo:
         combined_analysis: bool = False,
         mode: str | None = None,
         without_generator_import: bool = False,
+        catch_convergence_problems: bool = False,
         **kwargs,
     ) -> Results:
         """
@@ -985,15 +986,114 @@ class EDisGo:
             results = edisgo_obj.results
 
         else:
-            results = reinforce_grid(
-                self,
-                max_while_iterations=max_while_iterations,
-                copy_grid=copy_grid,
-                timesteps_pfa=timesteps_pfa,
-                combined_analysis=combined_analysis,
-                mode=mode,
-                without_generator_import=without_generator_import,
-            )
+            if not catch_convergence_problems:
+                results = reinforce_grid(
+                    self,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=copy_grid,
+                    timesteps_pfa=timesteps_pfa,
+                    combined_analysis=combined_analysis,
+                    mode=mode,
+                    without_generator_import=without_generator_import,
+                )
+            else:
+                # Initial try
+                try:
+                    logger.info("Initial reinforcement try.")
+                    results = reinforce_grid(
+                        self,
+                        max_while_iterations=max_while_iterations,
+                        copy_grid=copy_grid,
+                        timesteps_pfa=timesteps_pfa,
+                        combined_analysis=combined_analysis,
+                        mode=mode,
+                        without_generator_import=without_generator_import,
+                    )
+                    converged = True
+                except ValueError:
+                    logger.info("Initial reinforcement doesn't converged.")
+                    converged = False
+
+                # traceback.print_exc()
+                set_scaling_factor = 1
+                initial_timerseries = copy.deepcopy(self.timeseries)
+                minimal_scaling_factor = 0.1
+                max_iterations = 10
+
+                # Find non converging timesteps
+                non_converging_timesteps = self.analyze(
+                    timesteps=timesteps_pfa, raise_not_converged=False
+                )
+                logger.debug(
+                    f"Following timesteps {non_converging_timesteps} "
+                    f"doesnt't converged."
+                )
+                # Reinforce only converged timesteps
+
+                def reinforce():
+                    try:
+                        results = reinforce_grid(
+                            self,
+                            max_while_iterations=max_while_iterations,
+                            copy_grid=copy_grid,
+                            timesteps_pfa=non_converging_timesteps,
+                            combined_analysis=combined_analysis,
+                            mode=mode,
+                            without_generator_import=without_generator_import,
+                        )
+                        converged = True
+                        logger.debug(
+                            f"Reinforcement succeeded for {set_scaling_factor=} "
+                            f"at {iteration=}"
+                        )
+                    except ValueError:
+                        results = self.results
+                        converged = False
+                        logger.debug(
+                            f"Reinforcement failed for {set_scaling_factor=} "
+                            f"at {iteration=}"
+                        )
+                    return converged, results
+
+                iteration = 0
+                highest_converged_scaling_factor = 0
+                while iteration < max_iterations:
+                    iteration += 1
+                    if converged:
+                        if set_scaling_factor == 1:
+                            # Initial iteration (0) worked
+                            break
+                        else:
+                            highest_converged_scaling_factor = set_scaling_factor
+                            set_scaling_factor = 1
+                    else:
+                        if set_scaling_factor == minimal_scaling_factor:
+                            raise ValueError(
+                                f"Not reinforceable with {minimal_scaling_factor=}!"
+                            )
+                        elif iteration == 1:
+                            set_scaling_factor = minimal_scaling_factor
+                        else:
+                            set_scaling_factor = (
+                                set_scaling_factor + highest_converged_scaling_factor
+                            ) / 2
+
+                    self.timeseries = copy.deepcopy(initial_timerseries)
+                    self.timeseries.scale_timeseries(
+                        p_scaling_factor=set_scaling_factor,
+                        q_scaling_factor=set_scaling_factor,
+                    )
+                    logger.info(
+                        f"Try reinforce with {set_scaling_factor=} at {iteration=}"
+                    )
+                    converged, results = reinforce()
+                    if converged is False and iteration == max_iterations:
+                        raise ValueError(
+                            f"Not reinforceable, max iterations ({max_iterations}) "
+                            f"reached!"
+                        )
+
+                self.timeseries = initial_timerseries
 
         # add measure to Results object
         if not copy_grid:
