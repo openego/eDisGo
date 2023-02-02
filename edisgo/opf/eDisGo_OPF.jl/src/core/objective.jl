@@ -3,7 +3,6 @@ function objective_min_line_loading(pm::AbstractBFModelEdisgo)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
     r = Dict(n => Dict(i => get(branch, "br_r", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)
     p = Dict(n => PowerModels.var(pm, n, :p) for n in nws)
-    l = Dict(n =>
             Dict(i => get(branch, "length", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))
         for n in nws)
     c = Dict(n =>
