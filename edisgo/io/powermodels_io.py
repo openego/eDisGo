@@ -20,19 +20,6 @@ from edisgo.tools.tools import calculate_impedance_for_parallel_components
 logger = logging.getLogger(__name__)
 
 
-class Etrago:  # ToDo: delete as soon as etrago class is implemented
-    def __init__(self):
-        self.renewables_curtailment = pd.Series(dtype="float64")
-        self.storage_units_active_power = pd.Series(dtype="float64")
-        self.dsm_active_power = pd.Series(dtype="float64")
-        self.electromobility_active_power = pd.Series(dtype="float64")
-        self.heat_pump_rural_active_power = pd.Series(dtype="float64")
-        self.heat_central_active_power = pd.Series(dtype="float64")
-        self.opf_results = pd.DataFrame(dtype="float64")
-        self.geothermal_energy_feedin_district_heating = pd.DataFrame(dtype="float64")
-        self.solarthermal_energy_feedin_district_heating = pd.DataFrame(dtype="float64")
-
-
 def to_powermodels(
     edisgo_object,
     s_base=1,
@@ -75,7 +62,7 @@ def to_powermodels(
         format.
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
-        retrieved from etrago component of edisgo object.
+        retrieved from overlying_grid component of edisgo object.
     """
     if opf_version in [1, 2, 4]:
         opf_flex = ["curt"]
@@ -164,15 +151,15 @@ def to_powermodels(
         logger.warning("No loads found in network.")
     if (opf_version == 1) | (opf_version == 2):
         hv_flex_dict = {
-            "curt": edisgo_object.etrago.renewables_curtailment / s_base,
-            "storage": edisgo_object.etrago.storage_units_active_power / s_base,
-            "cp": edisgo_object.etrago.electromobility_active_power / s_base,
+            "curt": edisgo_object.overlying_grid.renewables_curtailment / s_base,
+            "storage": edisgo_object.overlying_grid.storage_units_active_power / s_base,
+            "cp": edisgo_object.overlying_grid.electromobility_active_power / s_base,
             "hp": (
-                edisgo_object.etrago.heat_pump_rural_active_power
-                + edisgo_object.etrago.heat_central_active_power
+                edisgo_object.overlying_grid.heat_pump_rural_active_power
+                + edisgo_object.overlying_grid.heat_central_active_power
             )
             / s_base,
-            "dsm": edisgo_object.etrago.dsm_active_power / s_base,
+            "dsm": edisgo_object.overlying_grid.dsm_active_power / s_base,
         }
         try:
             _build_hv_requirements(
@@ -187,7 +174,7 @@ def to_powermodels(
             )
         except IndexError:
             logger.warning(
-                "Etrago component of eDisGo object has no entries."
+                "Overlying grid component of eDisGo object has no entries."
                 " Changing optimization version to '4' (without high voltage"
                 " requirements)."
             )
@@ -232,7 +219,7 @@ def from_powermodels(
         PowerModels network data format.
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
-        retrieved from etrago component of edisgo object.
+        retrieved from overlying grid component of edisgo object.
     s_base : int
         Base value of apparent power for per unit system.
         Default: 1 MVA
@@ -335,7 +322,7 @@ def from_powermodels(
         for flex in df.columns:
             df[flex] = abs(df[flex].values - hv_flex_dict[flex]) / hv_flex_dict[flex]
         # write results to edisgo object
-        edisgo_object.etrago.opf_results = pd.DataFrame(
+        edisgo_object.overlying_grid.opf_results = pd.DataFrame(
             columns=[
                 "Highest relative error",
                 "Mean relative error",
@@ -349,7 +336,8 @@ def from_powermodels(
 
         for flex in df.columns:
             if (
-                edisgo_object.etrago.opf_results["Highest relative error"][flex] > 0.05
+                edisgo_object.overlying_grid.opf_results["Highest relative error"][flex]
+                > 0.05
             ).any():
                 logger.warning(
                     "Highest relative error of {} variable exceeds 5%.".format(flex)
@@ -942,8 +930,10 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     """
     heat_df = psa_net.loads.loc[flexible_hps]  # electric load
     heat_df2 = edisgo_obj.heat_pump.heat_demand_df[flexible_hps]  # thermal load
-    # solarthermal_feedin = edisgo_obj.etrago.geothermal_energy_feedin_district_heating
-    # geothermal_feedin = edisgo_obj.etrago.solarthermal_energy_feedin_district_heating
+    # solarthermal_feedin = (
+    # edisgo_obj.overlying_grid.geothermal_energy_feedin_district_heating)
+    # geothermal_feedin = (
+    # edisgo_obj.overlying_grid.solarthermal_energy_feedin_district_heating)
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
@@ -1133,7 +1123,7 @@ def _build_hv_requirements(
         Default: None
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
-        retrieved from etrago component of edisgo object.
+        retrieved from overlying grid component of edisgo object.
     """
     inflexible_cps = [
         cp
@@ -1220,7 +1210,7 @@ def _build_timeseries(
         subset of ["curt", "storage", "cp", "hp", "dsm"]
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
-        retrieved from etrago component of edisgo object.
+        retrieved from overlying_grid component of edisgo object.
     """
     for kind in [
         "gen",
@@ -1296,7 +1286,7 @@ def _build_component_timeseries(
         subset of ["curt", "storage", "cp", "hp", "dsm"]
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
-        retrieved from etrago component of edisgo object.
+        retrieved from overlying grid component of edisgo object.
     """
     pm_comp = dict()
     if kind == "gen":

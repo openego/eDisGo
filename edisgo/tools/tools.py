@@ -684,6 +684,13 @@ def add_line_susceptance(
     return edisgo_obj
 
 
+def mv_grid_gdf(edisgo_obj):
+    return gpd.GeoDataFrame(
+        geometry=[edisgo_obj.topology.grid_district["geom"]],
+        crs=f"EPSG:{edisgo_obj.topology.grid_district['srid']}",
+    )
+
+
 def battery_storage_reference_operation(
     df,
     init_storage_charge,
