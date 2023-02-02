@@ -176,7 +176,9 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
             dsm_df.bus = edisgo_obj.topology.buses_df.loc[
                 edisgo_obj.topology.buses_df.v_nom > 0.4
             ].index.values[0:amount_mv_dsm_loads]
-            dsm_df.p_set = 1  # ToDo: max der Zeitreihe?
+            dsm_df.p_set = (
+                edisgo_obj.timeseries.loads_active_power[mv_dsm_loads].max().values
+            )
             dsm_df.sector = "industrial"
         elif vl == "lv":
             dsm_df = pd.DataFrame(
