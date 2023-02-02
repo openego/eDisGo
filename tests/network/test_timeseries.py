@@ -1909,13 +1909,9 @@ class TestTimeSeries:
         )
         self.edisgo.set_time_series_manual(
             loads_p=pd.DataFrame(
-                {
-                    "CP1": ts_wind,
-                    "HP1": ts_wind,
-                    "CP2": ts_wind,
-                    "HP2": ts_wind
-                 },
-                index=timeindex)
+                {"CP1": ts_wind, "HP1": ts_wind, "CP2": ts_wind, "HP2": ts_wind},
+                index=timeindex,
+            )
         )
 
         # test different options (default, Dataframe with default, Dataframe with
@@ -1935,8 +1931,10 @@ class TestTimeSeries:
             ),
             loads_parametrisation=pd.DataFrame(
                 {
-                    "components": [[load_1, "CP1", "HP1", "CP2", "HP2"],
-                                   [load_2, load_3]],
+                    "components": [
+                        [load_1, "CP1", "HP1", "CP2", "HP2"],
+                        [load_2, load_3],
+                    ],
                     "mode": ["default", "capacitive"],
                     "power_factor": ["default", 0.98],
                 },
@@ -1963,8 +1961,9 @@ class TestTimeSeries:
         assert (
             np.isclose(
                 self.edisgo.timeseries.loads_reactive_power.loc[
-                    :, ["CP1", "HP1", "CP2", "HP2"]],
-                0.0
+                    :, ["CP1", "HP1", "CP2", "HP2"]
+                ],
+                0.0,
             )
         ).all()
         assert (
