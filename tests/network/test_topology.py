@@ -1756,12 +1756,13 @@ class TestTopologyWithEdisgoObject:
         assert "The network has isolated nodes or edges." in caplog.text
         caplog.clear()
 
-        # check small impedance and large line length
+        # check small impedance and large/short line length
         line = "Line_10017"
         self.edisgo.topology.lines_df.at[line, "length"] = 12.0
         self.edisgo.topology.lines_df.at[line, "x"] = 1e-7
         self.edisgo.topology.lines_df.at[line, "r"] = 1e-7
         self.edisgo.topology.check_integrity()
         assert "There are lines with very large line lengths" in caplog.text
+        assert "There are lines with very short line lengths" in caplog.text
         assert "Very small values for impedance of lines" and line in caplog.text
         caplog.clear()

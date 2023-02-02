@@ -10,3 +10,8 @@ Changes
 * Added MV grid ID to logging output `#309 <https://github.com/openego/eDisGo/pull/309>`_
 * Added automatic link checking `#297 <https://github.com/openego/eDisGo/pull/297>`_
 * Bug fix `#346 <https://github.com/openego/eDisGo/pull/346>`_
+* Added function to sort buses in lines dataframe such that bus0 is always the upstream bus `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Changed to_pypsa function such that pypsa network can be build even though not all components have time series `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Added class holding data from overlying grid, such as curtailment requirements and
+  conventional generator dispatch `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Added integrity check for very short lines `#335 <https://github.com/openego/eDisGo/pull/335>`_
