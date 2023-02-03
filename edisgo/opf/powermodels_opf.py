@@ -126,8 +126,9 @@ def pm_optimize(
 
     def _convert(o):
         """Helper function for json dump, as int64 cannot be dumped."""
-        if isinstance(o, np.int64):
-            return int(o)
+        for format in [np.int8, np.int16, np.int32, np.int64]:
+            if isinstance(o, format):
+                return int(o)
         raise TypeError
 
     json_str = json.dumps(pm, default=_convert)
