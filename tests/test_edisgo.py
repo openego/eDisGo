@@ -440,8 +440,8 @@ class TestEDisGo:
         )
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 109
-        assert len(results.equipment_changes) == 139
-        assert results.v_res.shape == (2, 142)
+        assert len(results.equipment_changes) == 176
+        assert results.v_res.shape == (4, 142)
 
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()

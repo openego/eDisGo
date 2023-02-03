@@ -1026,7 +1026,7 @@ class EDisGo:
 
                 if not fully_converged:
                     # Find non converging timesteps
-                    logger.debug("Find converging and non converging timesteps.")
+                    logger.info("Find converging and non converging timesteps.")
                     converging_timesteps, non_converging_timesteps = self.analyze(
                         timesteps=timesteps_pfa, raise_not_converged=False
                     )
@@ -1050,25 +1050,25 @@ class EDisGo:
                             without_generator_import=without_generator_import,
                         )
                         converged = True
-                        logger.debug(
+                        logger.info(
                             f"Reinforcement succeeded for {set_scaling_factor=} "
                             f"at {iteration=}"
                         )
                     except ValueError:
                         results = self.results
                         converged = False
-                        logger.debug(
+                        logger.info(
                             f"Reinforcement failed for {set_scaling_factor=} "
                             f"at {iteration=}"
                         )
                     return converged, results
 
                 if not converged:
-                    logger.debug("Reinforce only converged timesteps")
+                    logger.info("Reinforce only converged timesteps")
                     selected_timesteps = converging_timesteps
                     _, _ = reinforce()
 
-                    logger.debug("Reinforce only non converged timesteps")
+                    logger.info("Reinforce only non converged timesteps")
                     selected_timesteps = non_converging_timesteps
                     converged, results = reinforce()
 
@@ -1097,7 +1097,7 @@ class EDisGo:
                     self.timeseries = copy.deepcopy(initial_timerseries)
                     self.timeseries.scale_timeseries(
                         p_scaling_factor=set_scaling_factor,
-                        q_scaling_factor=0,
+                        q_scaling_factor=set_scaling_factor,
                     )
                     logger.info(
                         f"Try reinforce with {set_scaling_factor=} at {iteration=}"
@@ -1110,7 +1110,8 @@ class EDisGo:
                         )
 
                 self.timeseries = initial_timerseries
-
+                selected_timesteps = timesteps_pfa
+                converged, results = reinforce()
         # add measure to Results object
         if not copy_grid:
             self.results.measures = "grid_expansion"
