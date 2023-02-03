@@ -902,7 +902,7 @@ class EDisGo:
         # handle converged time steps
         pypsa_io.process_pfa_results(self, pypsa_network, timesteps_converged)
 
-        return timesteps_not_converged
+        return timesteps_converged, timesteps_not_converged
 
     def reinforce(
         self,
@@ -1010,25 +1010,33 @@ class EDisGo:
                         without_generator_import=without_generator_import,
                     )
                     converged = True
+                    fully_converged = True
                 except ValueError:
                     logger.info("Initial reinforcement doesn't converged.")
                     converged = False
+                    fully_converged = False
 
                 # traceback.print_exc()
                 set_scaling_factor = 1
                 initial_timerseries = copy.deepcopy(self.timeseries)
-                minimal_scaling_factor = 0.1
+                minimal_scaling_factor = 0.01
                 max_iterations = 10
+                iteration = 0
+                highest_converged_scaling_factor = 0
 
-                # Find non converging timesteps
-                non_converging_timesteps = self.analyze(
-                    timesteps=timesteps_pfa, raise_not_converged=False
-                )
-                logger.debug(
-                    f"Following timesteps {non_converging_timesteps} "
-                    f"doesnt't converged."
-                )
-                # Reinforce only converged timesteps
+                if not fully_converged:
+                    # Find non converging timesteps
+                    logger.debug("Find converging and non converging timesteps.")
+                    converging_timesteps, non_converging_timesteps = self.analyze(
+                        timesteps=timesteps_pfa, raise_not_converged=False
+                    )
+                    logger.debug(
+                        f"Following timesteps {converging_timesteps} converged."
+                    )
+                    logger.debug(
+                        f"Following timesteps {non_converging_timesteps} "
+                        f"doesnt't converged."
+                    )
 
                 def reinforce():
                     try:
@@ -1036,7 +1044,7 @@ class EDisGo:
                             self,
                             max_while_iterations=max_while_iterations,
                             copy_grid=copy_grid,
-                            timesteps_pfa=non_converging_timesteps,
+                            timesteps_pfa=selected_timesteps,
                             combined_analysis=combined_analysis,
                             mode=mode,
                             without_generator_import=without_generator_import,
@@ -1055,8 +1063,15 @@ class EDisGo:
                         )
                     return converged, results
 
-                iteration = 0
-                highest_converged_scaling_factor = 0
+                if not converged:
+                    logger.debug("Reinforce only converged timesteps")
+                    selected_timesteps = converging_timesteps
+                    _, _ = reinforce()
+
+                    logger.debug("Reinforce only non converged timesteps")
+                    selected_timesteps = non_converging_timesteps
+                    converged, results = reinforce()
+
                 while iteration < max_iterations:
                     iteration += 1
                     if converged:
@@ -1075,13 +1090,14 @@ class EDisGo:
                             set_scaling_factor = minimal_scaling_factor
                         else:
                             set_scaling_factor = (
-                                set_scaling_factor + highest_converged_scaling_factor
-                            ) / 2
+                                (set_scaling_factor - highest_converged_scaling_factor)
+                                * 0.25
+                            ) + highest_converged_scaling_factor
 
                     self.timeseries = copy.deepcopy(initial_timerseries)
                     self.timeseries.scale_timeseries(
                         p_scaling_factor=set_scaling_factor,
-                        q_scaling_factor=set_scaling_factor,
+                        q_scaling_factor=0,
                     )
                     logger.info(
                         f"Try reinforce with {set_scaling_factor=} at {iteration=}"
