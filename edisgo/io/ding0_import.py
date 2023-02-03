@@ -15,7 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def import_ding0_grid(path, edisgo_obj):
+def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=False):
     """
     Import an eDisGo network topology from
     `Ding0 data <https://github.com/openego/ding0>`_.
@@ -73,6 +73,11 @@ def import_ding0_grid(path, edisgo_obj):
     # write dataframes to edisgo_obj
     edisgo_obj.topology.buses_df = grid.buses[edisgo_obj.topology.buses_df.columns]
     edisgo_obj.topology.lines_df = grid.lines[edisgo_obj.topology.lines_df.columns]
+    if legacy_ding0_grids:
+        logger.debug("Use ding0 legacy grid import.")
+        grid.loads = grid.loads.drop(columns="p_set").rename(
+            columns={"peak_load": "p_set"}
+        )
 
     edisgo_obj.topology.loads_df = grid.loads[edisgo_obj.topology.loads_df.columns]
     # set loads without type information to be conventional loads
@@ -83,6 +88,10 @@ def import_ding0_grid(path, edisgo_obj):
         (edisgo_obj.topology.loads_df.type.isnull())
         | (edisgo_obj.topology.loads_df.type == "")
     ].index
+    if legacy_ding0_grids:
+        edisgo_obj.topology.loads_df.loc[
+            loads_without_type, "type"
+        ] = "conventional_load"
 
     # drop slack generator from generators
     slack = grid.generators.loc[grid.generators.control == "Slack"].index
