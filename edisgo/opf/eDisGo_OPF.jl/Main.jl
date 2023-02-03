@@ -27,17 +27,11 @@ ding0_grid = ARGS[1]
 results_path = ARGS[2]
 method = ARGS[3]
 silence_moi = ARGS[4].=="True"
-tol = parse(Float64, ARGS[5])
-warm_start = ARGS[6].=="True"
-set_tol = false
+warm_start = ARGS[5].=="True"
 
 # Set solver attributes
 const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>tol)
-if set_tol
-  const gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "Presolve" => 1, "NumericFocus"=> 1, "BarQCPConvTol" => tol, "BarConvTol" => tol, "BarHomogeneous"=> 1, "OptimalityTol" => tol, "FeasibilityTol"=>tol)
-else
-  const gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "Presolve" => 1, "NumericFocus"=> 1, "BarHomogeneous"=> 1)
-end
+const gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "Presolve" => 1, "NumericFocus"=> 1, "BarHomogeneous"=> 1)
 
 function optimize_edisgo()
   # read in data and create multinetwork

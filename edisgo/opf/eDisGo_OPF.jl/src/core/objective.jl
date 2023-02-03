@@ -41,7 +41,7 @@ function objective_min_losses(pm::AbstractBFModelEdisgo)
     parameters = parameters[parameters .>0]
     factor = 1
     while true
-        if minimum(factor*parameters) > 1
+        if minimum(factor*parameters) > 1e1
             break
         else
             factor = 10*factor
@@ -69,7 +69,7 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     c = Dict(n => Dict(i => get(branch, "cost", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
     p = Dict(n => PowerModels.var(pm, n, :p) for n in nws)
     q = Dict(n => PowerModels.var(pm, n, :q) for n in nws)
-    s_nom = Dict(n => Dict(i => get(branch, "rate_a", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)# p_max?
+    s_nom = Dict(n => Dict(i => get(branch, "rate_a", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)
     parameters = [r[1][i] for i in keys(c[1])]
     parameters = parameters[parameters .>0]
     factor = 1

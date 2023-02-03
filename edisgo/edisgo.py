@@ -776,7 +776,6 @@ class EDisGo:
         flexible_storages=None,
         opf_version=4,
         method="soc",
-        solver_tol=1e-6,
         warm_start=False,
         silence_moi=False,
         save_heat_storage=False,
@@ -818,9 +817,6 @@ class EDisGo:
             (Non Convex). For more information see
             :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: "soc"
-        solver_tol: float
-            Feasibility tolerance for solvers.
-            Default: 1e-6
         warm_start: bool
             If set to True and if method is set to "soc", non-convex IPOPT OPF will be
             run additionally and will be warm started with Gurobi SOC solution.
@@ -862,7 +858,6 @@ class EDisGo:
             flexible_storages=flexible_storages,
             opf_version=opf_version,
             method=method,
-            solver_tol=solver_tol,
             warm_start=warm_start,
             silence_moi=silence_moi,
             save_heat_storage=save_heat_storage,

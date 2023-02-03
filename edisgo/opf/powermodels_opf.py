@@ -18,7 +18,6 @@ def pm_optimize(
     flexible_storages=None,
     opf_version=4,
     method="soc",
-    solver_tol=1e-6,
     warm_start=False,
     silence_moi=False,
     save_heat_storage=False,
@@ -78,8 +77,6 @@ def pm_optimize(
         with Ipopt solver as a non-convex problem due to quadratic equality constraint
         P²+Q² = V²*I².
         Default: "soc"
-    solver_tol: float
-        Feasibility tolerance for solvers. Default: 1e-6
     warm_start: bool
         If set to True and if method is set to "soc", non-convex IPOPT OPF will be run
         additionally and will be warm started with Gurobi SOC solution. Warm-start will
@@ -144,7 +141,6 @@ def pm_optimize(
             solution_dir,
             method,
             str(silence_moi),
-            str(solver_tol),
             str(warm_start),
         ],
         stdin=subprocess.PIPE,
