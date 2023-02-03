@@ -30,8 +30,8 @@ silence_moi = ARGS[4].=="True"
 warm_start = ARGS[5].=="True"
 
 # Set solver attributes
-const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>tol)
-const gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "Presolve" => 1, "NumericFocus"=> 1, "BarHomogeneous"=> 1)
+const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>1e-6)
+const gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "Presolve" => 1, "NumericFocus"=> 1, "BarHomogeneous"=> 1, "FeasibilityTol"=>1e-4, "OptimalityTol"=>1e-4)
 
 function optimize_edisgo()
   # read in data and create multinetwork
