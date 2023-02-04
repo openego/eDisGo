@@ -41,7 +41,7 @@ function optimize_edisgo()
   if method == "soc" # Second order cone
     # Solve SOC model
     println("Starting convex SOC AC-OPF with Gurobi.")
-    result_soc, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, SOCBFPowerModelEdisgo, gurobi
+    result_soc, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, SOCBFPowerModelEdisgo, gurobi)
     # JuMP.write_to_file(pm.model, "model.mps")
     # grbtune "model.mps"
     #GRBtunemodel(unsafe_backend(pm.model))
