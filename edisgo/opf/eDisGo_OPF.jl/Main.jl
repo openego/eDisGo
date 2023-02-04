@@ -31,7 +31,7 @@ warm_start = ARGS[5].=="True"
 
 # Set solver attributes
 const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>1e-6)
-const gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "Presolve" => 1, "FeasibilityTol"=>1e-4) #"NumericFocus"=> 1, "BarHomogeneous"=> 1,
+const gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "Presolve" => 1, "FeasibilityTol"=>1e-4, "BarConvTol"=>1e-6, "BarQCPConvTol"=>1e-5)
 
 function optimize_edisgo()
   # read in data and create multinetwork
@@ -41,7 +41,13 @@ function optimize_edisgo()
   if method == "soc" # Second order cone
     # Solve SOC model
     println("Starting convex SOC AC-OPF with Gurobi.")
-    result_soc, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, SOCBFPowerModelEdisgo, gurobi)
+    result_soc, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, SOCBFPowerModelEdisgo, gurobi
+    # JuMP.write_to_file(pm.model, "model.mps")
+    # grbtune "model.mps"
+    #GRBtunemodel(unsafe_backend(pm.model))
+    #GRBgetintattr(unsafe_backend(pm.model), "TuneResultCount", nresults)
+    #GRBgettuneresult(unsafe_backend(pm.model), 0)
+
     # Find violating constraint if model is infeasible
     if result_soc["termination_status"] == MOI.INFEASIBLE
       JuMP.compute_conflict!(pm.model)
