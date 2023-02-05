@@ -12,6 +12,7 @@ import pyomo.environ as pm
 from pyomo.opt import SolverStatus, TerminationCondition
 
 from edisgo.tools.tools import (
+    assign_voltage_level_to_component,
     calculate_impedance_for_parallel_components,
     get_nodal_residual_load,
 )
@@ -59,6 +60,43 @@ def import_flexibility_bands(dir, use_cases):
     return flexibility_bands
 
 
+def define_mvlv_voltage_limits(edisgo_obj):
+    """Define voltage limits for MV and LV buses from edisgo config.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+        EDisGo object
+
+    Returns
+    -------
+    pd.DataFrame
+        all buses with voltage limits assigned
+    """
+    # get v_min, v_max per bus
+    v_limits = pd.DataFrame(
+        data=edisgo_obj.topology.buses_df.index.rename("bus"),
+    )
+    v_limits = assign_voltage_level_to_component(v_limits, edisgo_obj.topology.buses_df)
+    edisgo_cfg = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"]
+    mv_v_min = 1 - edisgo_cfg["mv_load_case_max_v_deviation"]
+    mv_v_max = 1 + edisgo_cfg["mv_feed-in_case_max_v_deviation"]
+    lv_v_min = edisgo_cfg["feed-in_case_lower"]
+    lv_v_max = edisgo_cfg["load_case_upper"]
+
+    v_limits.loc[v_limits["voltage_level"] == "mv", "v_min"] = mv_v_min
+    # 0.985
+    v_limits.loc[v_limits["voltage_level"] == "mv", "v_max"] = mv_v_max
+    # 1.05
+    v_limits.loc[v_limits["voltage_level"] == "lv", "v_min"] = lv_v_min
+    # 0.9
+    v_limits.loc[v_limits["voltage_level"] == "lv", "v_max"] = lv_v_max
+    # 1.1
+    v_limits = v_limits.set_index("bus")
+
+    return v_limits
+
+
 def prepare_time_invariant_parameters(
     edisgo_obj,
     downstream_nodes_matrix,
@@ -77,6 +115,9 @@ def prepare_time_invariant_parameters(
     downstream_nodes_matrix : pd.DataFrame
         Matrix describing the mutual dependencies of the nodes
     kwargs : (default: False)
+        voltage_limits: bool
+            Defines seperate voltage levels for lv and mv from edisgo config.
+            Default (v_min: 0.9, v_max: 1.1)
         per_unit : bool
         optimize_bess : bool
         optimize_emob : bool
@@ -107,6 +148,11 @@ def prepare_time_invariant_parameters(
     fixed_parameters["optimize_hp"] = kwargs.get("optimize_hp", False)
     fixed_parameters["per_unit"] = kwargs.get("per_unit", False)
     fixed_parameters["flexible_loads"] = kwargs.get("flexible_loads", pd.DataFrame())
+
+    if kwargs.get("voltage_limits", False):
+        v_limits = define_mvlv_voltage_limits(edisgo_obj)
+        fixed_parameters["v_min"] = v_limits["v_min"]
+        fixed_parameters["v_max"] = v_limits["v_max"]
 
     if fixed_parameters["optimize_bess"]:
         if not fixed_parameters["flexible_loads"].empty:
@@ -350,8 +396,6 @@ def setup_model(
             Wärmespeicher, bei Bander vermutlich mean
         delta_min : (default: 0.9)
         delta_max : (default: 0.1)
-        v_min : (default: 0.9)
-        v_max : (default: 1.1)
             Spannungsgrenzwerte
         thermal_limit : (default: 1.0)
             für Lines und Transformer
@@ -496,8 +540,8 @@ def setup_model(
             edisgo_obj=fixed_parameters["edisgo_object"],
             grid_object=fixed_parameters["grid_object"],
             slack=fixed_parameters["slack"],
-            v_min=kwargs.get("v_min", 0.9),
-            v_max=kwargs.get("v_max", 1.1),
+            v_min=fixed_parameters.get("v_min", 0.9),
+            v_max=fixed_parameters.get("v_max", 1.1),
             thermal_limits=kwargs.get("thermal_limit", 1.0),
             v_slack=kwargs.get("v_slack", fixed_parameters["v_nom"]),
             load_factor_rings=kwargs.get("load_factor_rings", 1.0),
