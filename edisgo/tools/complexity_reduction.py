@@ -73,14 +73,22 @@ def remove_1m_end_line(edisgo, line):
 
 
 def extract_feeders_nx(
-    edisgo_obj, save_dir=None, only_flex_ev=True, flexible_loads: pd.DataFrame = None
+    edisgo_obj,
+    export_path=None,
+    only_flex_ev=False,
+    flexible_loads: pd.DataFrame = None,
 ):
     """
     Method to extract and optionally save MV-feeders.
     """
 
     def _extract_feeder(
-        edisgo_orig, subgraph, feeder_id, export_dir, buses_with_feeders, flexible_loads
+        edisgo_orig,
+        subgraph,
+        feeder_id,
+        buses_with_feeders,
+        flexible_loads,
+        export_path=None,
     ):
         if len(list(set(subgraph.nodes))) > 1:
             buses_with_feeders.loc[list(subgraph.nodes), "feeder_id"] = feeder_id
@@ -90,16 +98,18 @@ def extract_feeders_nx(
                 feeder_id,
                 flexible_loads=flexible_loads,
             )
+            edisgo_feeder.topology.mv_grid
             if edisgo_feeder is None:
                 # edisgo_feeder == None if loads_df is empty
                 return None
 
             else:
-                if save_dir:
-                    export_dir = save_dir / "feeder" / f"{feeder_id:02}"
-                    os.makedirs(export_dir, exist_ok=True)
+                if export_path is not None:
+                    # export_path = export_path / "feeder" / f"{feeder_id:02}"
+                    export_path = export_path / f"{feeder_id:02}"
+                    os.makedirs(export_path, exist_ok=True)
                     edisgo_feeder.save(
-                        export_dir,
+                        export_path,
                         save_topology=True,
                         save_timeseries=True,
                         save_heatpump=True,
@@ -110,7 +120,7 @@ def extract_feeders_nx(
                             "flexibility_bands",
                         ],
                     )
-                    logger.info(f"Saved feeder: {feeder_id} to {export_dir}")
+                    logger.info(f"Saved feeder: {feeder_id} to {export_path}")
                 feeder_id += 1
                 return edisgo_feeder
 
@@ -156,7 +166,7 @@ def extract_feeders_nx(
                     edisgo_orig=edisgo_orig,
                     subgraph=subgraph,
                     feeder_id=feeder_id,
-                    export_dir=save_dir,
+                    export_path=export_path,
                     buses_with_feeders=buses_with_feeders,
                     flexible_loads=flexible_loads,
                 )
@@ -165,7 +175,7 @@ def extract_feeders_nx(
                 edisgo_orig=edisgo_orig,
                 subgraph=subgraph,
                 feeder_id=feeder_id,
-                export_dir=save_dir,
+                export_path=export_path,
                 buses_with_feeders=buses_with_feeders,
                 flexible_loads=flexible_loads,
             )
