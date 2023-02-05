@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 import random
-import warnings
 
 from zipfile import ZipFile
 
@@ -948,7 +947,7 @@ class Topology:
         """
         # check if bus is part of topology
         if bus_name not in self.buses_df.index:
-            warnings.warn(
+            logger.warning(
                 "Bus of name {} not in Topology. Cannot be removed.".format(bus_name)
             )
             return False
@@ -990,7 +989,7 @@ class Topology:
         """
         # check if line is part of topology
         if line_name not in self.lines_df.index:
-            warnings.warn(
+            logger.warning(
                 "Line of name {} not in Topology. Cannot be "
                 "removed.".format(line_name)
             )
@@ -1360,7 +1359,7 @@ class Topology:
         # if type of line is specified calculate x, r and s_nom
         if type_info is not None:
             if x is not None or r is not None or b is not None or s_nom is not None:
-                warnings.warn(
+                logger.warning(
                     "When line 'type_info' is provided when creating a new "
                     "line, x, r, b and s_nom are calculated and provided "
                     "parameters are overwritten."
@@ -1393,7 +1392,7 @@ class Topology:
                 "Newly added line has no line resistance and/or reactance."
             )
         if s_nom is None:
-            warnings.warn("Newly added line has no nominal power.")
+            logger.warning("Newly added line has no nominal power.")
 
         new_line_df = pd.DataFrame(
             data={
@@ -1568,7 +1567,7 @@ class Topology:
 
         """
         if not self._check_line_for_removal(name):
-            warnings.warn(
+            logger.warning(
                 f"Removal of line {name} would create isolated node. Remove all "
                 "connected elements first to remove bus."
             )
@@ -1581,7 +1580,7 @@ class Topology:
         remove_bus1 = self._check_bus_for_removal(bus1)
 
         # drop line
-        self._lines_df.drop(name, inplace=True)
+        self._lines_df = self.lines_df.drop(name)
 
         # drop buses if no other elements are connected
         if remove_bus0:
@@ -1612,12 +1611,12 @@ class Topology:
         conn_comp = self.get_connected_components_from_bus(name)
         conn_comp_types = [k for k, v in conn_comp.items() if not v.empty]
         if len(conn_comp_types) > 0:
-            warnings.warn(
+            logger.warning(
                 f"Bus {name} is not isolated and therefore not removed. Remove all "
                 f"connected elements ({conn_comp_types}) first to remove bus."
             )
         else:
-            self._buses_df.drop(name, inplace=True)
+            self._buses_df = self.buses_df.drop(name)
 
     def update_number_of_parallel_lines(self, lines_num_parallel):
         """
@@ -1628,7 +1627,7 @@ class Topology:
 
         Parameters
         ------------
-        lines_num_parallel : :pandas:`pandas.Series<series>`
+        lines_num_parallel : :pandas:`pandas.Series<Series>`
             Index contains identifiers of lines to update as in index of
             :py:attr:`~lines_df` and values of series contain corresponding
             new number of parallel lines.
@@ -2122,7 +2121,7 @@ class Topology:
             else:
                 # ToDo
                 # lv_grid = _choose_random_substation_id()
-                # warnings.warn(
+                # logger.warning(
                 #     "Given mvlv_subst_id does not exist, wherefore a random "
                 #     "LV Grid ({}) to connect in is chosen.".format(
                 #         lv_grid.id
@@ -2134,7 +2133,7 @@ class Topology:
         # if no MV/LV substation ID is given, choose random LV grid
         else:
             lv_grid = _choose_random_substation_id()
-            warnings.warn(
+            logger.warning(
                 "Component has no mvlv_subst_id. It is therefore allocated "
                 f"to a random LV Grid ({lv_grid.id})."
             )
@@ -2471,7 +2470,7 @@ class Topology:
 
         Returns
         -------
-        :networkx:`networkx.Graph<network.Graph>`
+        :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
             where lines are represented by edges in the graph, and buses and
             transformers are represented by nodes.

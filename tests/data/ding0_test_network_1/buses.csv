@@ -75,6 +75,8 @@ Bus_BranchTee_LVGrid_5_3,0.4,,,1,5,FALSE
 Bus_BranchTee_LVGrid_5_4,0.4,,,1,5,TRUE
 Bus_BranchTee_LVGrid_5_5,0.4,,,1,5,FALSE
 Bus_BranchTee_LVGrid_5_6,0.4,,,1,5,TRUE
+Bus_GeneratorFluctuating_19,0.4,,,1,5,TRUE
+Bus_Load_residential_LVGrid_5_3,0.4,,,1,5,TRUE
 Bus_BranchTee_LVGrid_6_1,0.4,,,1,6,FALSE
 Bus_BranchTee_LVGrid_6_2,0.4,,,1,6,TRUE
 Bus_BranchTee_LVGrid_7_1,0.4,,,1,7,FALSE
