@@ -369,7 +369,7 @@ def setup_model(
     objective :
         Optimization objectives. Possible keys: "curtailment", "peak_load",
         "residual_load", "minimize_energy_level", "maximize_energy_level",
-        "minimize_loading",
+        "minimize_loading", "maximize_grid_power"
     kwargs :
         name :
             Name of the model (default: optimization objective)
@@ -419,11 +419,11 @@ def setup_model(
     if objective not in [
         "curtailment",
         "peak_load",
-        "minimize_energy_level",
         "residual_load",
+        "minimize_loading",
+        "minimize_energy_level",
         "maximize_energy_level",
         "maximize_grid_power",
-        "minimize_loading",
     ]:
         raise ValueError("The objective you inserted is not implemented yet.")
 
@@ -474,12 +474,15 @@ def setup_model(
         model.delta_max = kwargs.get("delta_max", 0.1)
         model.min_load_factor = pm.Var()
         model.max_load_factor = pm.Var()
-    elif objective == "minimize_energy_level" or \
-            objective == "maximize_energy_level" or \
-            objective == "maximize_grid_power":
+
+    elif objective in [
+        "maximize_grid_power",
+        "maximize_energy_level",
+        "minimize_energy_level",
+    ]:
+
         model.grid_power_flexible = pm.Var(model.time_set)
-        if objective == "minimize_energy_level" or \
-                objective == "maximize_energy_level":
+        if objective == "minimize_energy_level" or objective == "maximize_energy_level":
             model.grid_cumulated_energy = pm.Var(model.time_set)
 
     # DEFINE VARIABLES
@@ -531,7 +534,7 @@ def setup_model(
         )
 
     if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
-    # if True:
+        # if True:
         logger.info("Setup model: Adding grid model.")
         model = add_grid_model_lopf(
             model=model,
@@ -559,9 +562,11 @@ def setup_model(
             model.storage_set, model.times_fixed_soc, rule=fix_soc
         )
 
-    if objective == "minimize_energy_level" or \
-            objective == "maximize_energy_level" or \
-            objective == "maximize_grid_power":
+    if objective in [
+        "maximize_grid_power",
+        "maximize_energy_level",
+        "minimize_energy_level",
+    ]:
         model.AggrGrid = pm.Constraint(model.time_set, rule=aggregated_power)
         if objective == "minimize_energy_level" or objective == "maximize_energy_level":
             model.AggrGridEnergy = pm.Constraint(model.time_set, rule=aggregated_energy)
@@ -730,9 +735,7 @@ def add_grid_model_lopf(
 
     model.branches = fixed_parameters["branches"]
     model.branch_set = pm.Set(initialize=model.branches.index)
-    model.underlying_branch_elements = fixed_parameters[
-        "underlying_branch_elements"
-    ]
+    model.underlying_branch_elements = fixed_parameters["underlying_branch_elements"]
     model.power_factors = pm.Param(
         model.branch_set,
         model.time_set,
@@ -766,12 +769,8 @@ def add_grid_model_lopf(
     # Note: So far LV does not contain rings
     # Variables
     model.p_cum = pm.Var(model.branch_set, model.time_set)
-    model.slack_p_cum_pos = pm.Var(
-        model.branch_set, model.time_set, bounds=(0, None)
-    )
-    model.slack_p_cum_neg = pm.Var(
-        model.branch_set, model.time_set, bounds=(0, None)
-    )
+    model.slack_p_cum_pos = pm.Var(model.branch_set, model.time_set, bounds=(0, None))
+    model.slack_p_cum_neg = pm.Var(model.branch_set, model.time_set, bounds=(0, None))
     model.q_cum = pm.Var(model.branch_set, model.time_set)
 
     model.v = pm.Var(model.bus_set, model.time_set)
@@ -890,8 +889,8 @@ def add_ev_model_bands(
     # if grid power is maximised, do not set bound on energy
     if model.objective_name == "maximize_grid_power":
         model.energy_level_ev = pm.Var(
-            model.flexible_charging_points_set,
-            model.time_set)
+            model.flexible_charging_points_set, model.time_set
+        )
     else:
         model.energy_level_ev = pm.Var(
             model.flexible_charging_points_set,
@@ -1249,30 +1248,36 @@ def update_model(
         model.residual_load[i].set_value(
             fixed_parameters["res_load_inflexible_units"][indexer]
         )
-        for bus in model.bus_set:
-            model.nodal_active_power[bus, i].set_value(
-                fixed_parameters["nodal_active_power"].loc[bus, indexer]
-            )
-            model.nodal_reactive_power[bus, i].set_value(
-                fixed_parameters["nodal_reactive_power"].loc[bus, indexer]
-            )
-            model.nodal_active_load[bus, i].set_value(
-                fixed_parameters["nodal_active_load"].loc[bus, indexer]
-            )
-            model.nodal_reactive_load[bus, i].set_value(
-                fixed_parameters["nodal_reactive_load"].loc[bus, indexer]
-            )
-            model.nodal_active_feedin[bus, i].set_value(
-                fixed_parameters["nodal_active_feedin"].loc[bus, indexer]
-            )
-            model.nodal_reactive_feedin[bus, i].set_value(
-                fixed_parameters["nodal_reactive_feedin"].loc[bus, indexer]
-            )
+        if model.objective_name not in [
+            "maximize_grid_power",
+            "maximize_energy_level",
+            "minimize_energy_level",
+        ]:
 
-        for branch in model.branch_set:
-            model.power_factors[branch, i].set_value(
-                fixed_parameters["power_factors"].loc[branch, indexer]
-            )
+            for bus in model.bus_set:
+                model.nodal_active_power[bus, i].set_value(
+                    fixed_parameters["nodal_active_power"].loc[bus, indexer]
+                )
+                model.nodal_reactive_power[bus, i].set_value(
+                    fixed_parameters["nodal_reactive_power"].loc[bus, indexer]
+                )
+                model.nodal_active_load[bus, i].set_value(
+                    fixed_parameters["nodal_active_load"].loc[bus, indexer]
+                )
+                model.nodal_reactive_load[bus, i].set_value(
+                    fixed_parameters["nodal_reactive_load"].loc[bus, indexer]
+                )
+                model.nodal_active_feedin[bus, i].set_value(
+                    fixed_parameters["nodal_active_feedin"].loc[bus, indexer]
+                )
+                model.nodal_reactive_feedin[bus, i].set_value(
+                    fixed_parameters["nodal_reactive_feedin"].loc[bus, indexer]
+                )
+
+            for branch in model.branch_set:
+                model.power_factors[branch, i].set_value(
+                    fixed_parameters["power_factors"].loc[branch, indexer]
+                )
 
     if fixed_parameters["optimize_emob"]:
         for t in model.time_set:
@@ -1498,14 +1503,14 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
                 try:
                     result_dict[results_name_dict[attr]] = (
                         pd.Series(getattr(model, attr).extract_values())
-                            .unstack()
-                            .rename(columns=time_dict)
-                            .T
+                        .unstack()
+                        .rename(columns=time_dict)
+                        .T
                     )
                 except ValueError:
-                    result_dict[results_name_dict[attr]] = \
-                        (pd.Series(getattr(model, attr).extract_values()).
-                         rename(time_dict))
+                    result_dict[results_name_dict[attr]] = pd.Series(
+                        getattr(model, attr).extract_values()
+                    ).rename(time_dict)
 
         if hasattr(model, "flexible_charging_points_set"):
             result_dict["slack_initial_charging_ev"] = pd.Series(
@@ -1535,7 +1540,9 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
             result_dict["curtailment_reactive_load"] = (
                 result_dict["curtailment_load"]
                 .multiply(
-                    model.tan_phi_load.loc[index, result_dict["curtailment_load"].columns]
+                    model.tan_phi_load.loc[
+                        index, result_dict["curtailment_load"].columns
+                    ]
                 )
                 .dropna(how="all")
             )
@@ -1915,7 +1922,7 @@ def slack_voltage(model, bus, time):
     ----------
     model :
     bus :
-    time :
+    time    :
 
     Returns
     -------
@@ -2526,10 +2533,12 @@ def aggregated_energy(model, time):
     if time == 0:
         energy_level_pre = 0
     else:
-        energy_level_pre = model.grid_cumulated_energy[time-1]
-    return model.grid_cumulated_energy[time] == energy_level_pre + \
-           model.grid_power_flexible[time] * \
-           (pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h"))
+        energy_level_pre = model.grid_cumulated_energy[time - 1]
+    return model.grid_cumulated_energy[
+        time
+    ] == energy_level_pre + model.grid_power_flexible[time] * (
+        pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h")
+    )
 
 
 def load_factor_min(model, time):
@@ -2663,9 +2672,9 @@ def minimize_energy_level(model):
 
     """
     slack_charging, slack_energy = extract_slack_charging(model)
-    return (sum(model.grid_cumulated_energy[time] for time in model.time_set)
-            + 1000 * (slack_charging + slack_energy)
-        )
+    return sum(model.grid_cumulated_energy[time] for time in model.time_set) + 1000 * (
+        slack_charging + slack_energy
+    )
 
 
 def maximize_energy_level(model):
@@ -2682,8 +2691,9 @@ def maximize_energy_level(model):
 
     """
     slack_charging, slack_energy = extract_slack_charging(model)
-    return (- sum(model.grid_cumulated_energy[time] for time in model.time_set)
-            + 1000 * (slack_charging + slack_energy))
+    return -sum(model.grid_cumulated_energy[time] for time in model.time_set) + 1000 * (
+        slack_charging + slack_energy
+    )
 
 
 def maximize_power(model):
@@ -2701,7 +2711,7 @@ def maximize_power(model):
     slack_charging, slack_energy = extract_slack_charging(model)
     ev_curtailment, hp_curtailment = extract_curtailment_of_flexible_components(model)
     return (
-        - 1e-5 * sum(model.grid_power_flexible[time] for time in model.time_set)
+        -1e-5 * sum(model.grid_power_flexible[time] for time in model.time_set)
         + sum(
             1e-2
             * (model.curtailment_load[bus, time] + model.curtailment_feedin[bus, time])
@@ -2716,7 +2726,8 @@ def maximize_power(model):
             model.slack_p_cum_pos[branch, time] + model.slack_p_cum_neg[branch, time]
             for branch in model.branch_set
             for time in model.time_set
-        ))
+        )
+    )
 
 
 def grid_residual_load(model, time):
