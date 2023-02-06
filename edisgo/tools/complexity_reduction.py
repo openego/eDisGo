@@ -98,7 +98,7 @@ def extract_feeders_nx(
                 feeder_id,
                 flexible_loads=flexible_loads,
             )
-            edisgo_feeder.topology.mv_grid
+
             if edisgo_feeder is None:
                 # edisgo_feeder == None if loads_df is empty
                 return None
@@ -233,6 +233,11 @@ def create_feeder_edisgo_object(
             if attr_new.empty:
                 logger.info(f"{attr_name} of feeder {feeder_id} is empty.")
             setattr(edisgo_feeder.topology, attr_name, attr_new)
+
+    # Check if any flexible loads in feeder. If not skip!
+    if not edisgo_feeder.topology.loads_df.index.isin(flexible_loads.index).any():
+        logger.info("No flexible loads in feeder. Skipping.")
+        return None
 
     # get switches connected to a line of this feeder with open bus
     # TODO switches get lost?!

@@ -77,6 +77,7 @@ def import_ding0_grid(path, edisgo_obj):
     grid.loads = grid.loads.drop(columns="p_set").rename(columns={"peak_load": "p_set"})
 
     edisgo_obj.topology.loads_df = grid.loads[edisgo_obj.topology.loads_df.columns]
+
     # set loads without type information to be conventional loads
     # this is done, as ding0 currently does not provide information on the type of load
     # but ding0 grids currently also only contain conventional loads
