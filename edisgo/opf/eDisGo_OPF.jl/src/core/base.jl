@@ -10,7 +10,7 @@ function solve_model(data::Dict{String,<:Any}, model_type::Type, optimizer, buil
     start_time = time()
     result = optimize_model!(pm, relax_integrality=relax_integrality, optimizer=optimizer, solution_processors=solution_processors)
     Memento.debug(PowerModels._LOGGER, "pm model solve and solution time: $(time() - start_time)")
-    return result, pm
+    return result
 end
 
 function instantiate_model(data::Dict{String,<:Any}, model_type::Type, build_method; kwargs...)
