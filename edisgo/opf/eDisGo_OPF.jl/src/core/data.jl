@@ -47,7 +47,7 @@ active connected generator.
 assumes that the network is a single connected component
 """
 function correct_bus_types!(data::Dict{String,<:Any})
-    apply_pm!(_correct_bus_types!, data)
+    apply_pm!(eDisGo_OPF._correct_bus_types!, data)
 end
 
 ""

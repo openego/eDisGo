@@ -40,28 +40,15 @@ const mosek = optimizer_with_attributes(Mosek.Optimizer, MOI.Silent() => silence
 
 function optimize_edisgo()
   # read in data and create multinetwork
-  data_edisgo = parse_json(json_str)
+  data_edisgo = eDisGo_OPF.parse_json(json_str)
   data_edisgo_mn = PowerModels.make_multinetwork(data_edisgo)
 
   if method == "soc" # Second order cone
     # Solve SOC model
     println("Starting convex SOC AC-OPF with Gurobi.")
-    # ToDo: solve_.. umschreiben in instantiate() und optimize!()
-    #pm = eDisGo_OPF.instantiate_model(data_edisgo_mn, SOCBFPowerModelEdisgo,build_mn_opf_bf_flex)
     result_soc, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, SOCBFPowerModelEdisgo, gurobi)
-    # ToDo
-    # JuMP.write_to_file(pm.model, "model.mps")
-    # subprocess grbtune model.mps
-    # read tile tune.prm (?)
-    # set gurobi parameters
-    # delete tune.prm file
-    #GRBtunemodel(unsafe_backend(pm.model))
-    #GRBgetintattr(unsafe_backend(pm.model), "TuneResultCount", nresults)
-    #GRBgettuneresult(unsafe_backend(pm.model), 0)
-    # Find violating constraint if model is infeasible
     if result_soc["termination_status"] == MOI.INFEASIBLE
       JuMP.compute_conflict!(pm.model)
-
       if MOI.get(pm.model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
         iis_model, _ = copy_conflict(pm.model)
         print(iis_model)
