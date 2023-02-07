@@ -645,6 +645,8 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "length": branches.length.fillna(1)[branch_i],
             "cost": branches.capital_cost[branch_i],
             "cost_factor": cost_factor[pm["bus"][str(idx_f_bus)]["grid_level"]],
+            "cost_inverse": 1
+            / (branches.length.fillna(1)[branch_i] * branches.capital_cost[branch_i]),
             "storage_pf": 0,
             "index": branch_i + 1,
         }
@@ -681,6 +683,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "length": 1,
             "cost": 0,
             "cost_factor": 0,
+            "cost_inverse": 0,
             "storage_pf": np.tan(np.arccos(pf)) * sign,
             "index": stor_i + len(branches.index) + 1,
         }
