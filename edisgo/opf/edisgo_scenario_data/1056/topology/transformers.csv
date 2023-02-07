@@ -1,0 +1,210 @@
+,bus0,bus1,x,r,s_nom,type_info
+Transformer_lv_grid_97101_1,BusBar_mvgd_1056_lvgd_97101_MV,BusBar_mvgd_1056_lvgd_97101_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_440123_1,BusBar_mvgd_1056_lvgd_440123_MV,BusBar_mvgd_1056_lvgd_440123_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_97195_1,BusBar_mvgd_1056_lvgd_97195_MV,BusBar_mvgd_1056_lvgd_97195_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97221_1,BusBar_mvgd_1056_lvgd_97221_MV,BusBar_mvgd_1056_lvgd_97221_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_97239_1,BusBar_mvgd_1056_lvgd_97239_MV,BusBar_mvgd_1056_lvgd_97239_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97253_1,BusBar_mvgd_1056_lvgd_97253_MV,BusBar_mvgd_1056_lvgd_97253_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97254_1,BusBar_mvgd_1056_lvgd_97254_MV,BusBar_mvgd_1056_lvgd_97254_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97255_1,BusBar_mvgd_1056_lvgd_97255_MV,BusBar_mvgd_1056_lvgd_97255_LV,0.038646474775814,0.0103174603174603,0.63,0.63 MVA 10/0.4 kV
+Transformer_lv_grid_97333_1,BusBar_mvgd_1056_lvgd_97333_MV,BusBar_mvgd_1056_lvgd_97333_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97334_1,BusBar_mvgd_1056_lvgd_97334_MV,BusBar_mvgd_1056_lvgd_97334_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97340_1,BusBar_mvgd_1056_lvgd_97340_MV,BusBar_mvgd_1056_lvgd_97340_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97341_1,BusBar_mvgd_1056_lvgd_97341_MV,BusBar_mvgd_1056_lvgd_97341_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_440493_1,BusBar_mvgd_1056_lvgd_440493_MV,BusBar_mvgd_1056_lvgd_440493_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_97717_1,BusBar_mvgd_1056_lvgd_97717_MV,BusBar_mvgd_1056_lvgd_97717_LV,0.0590741060025456,0.0105,0.8,0.8 MVA 10/0.4 kV
+Transformer_lv_grid_97718_1,BusBar_mvgd_1056_lvgd_97718_MV,BusBar_mvgd_1056_lvgd_97718_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_97719_1,BusBar_mvgd_1056_lvgd_97719_MV,BusBar_mvgd_1056_lvgd_97719_LV,0.0590741060025456,0.0105,0.8,0.8 MVA 10/0.4 kV
+Transformer_lv_grid_97720_1,BusBar_mvgd_1056_lvgd_97720_MV,BusBar_mvgd_1056_lvgd_97720_LV,0.0590741060025456,0.0105,0.8,0.8 MVA 10/0.4 kV
+Transformer_lv_grid_97720_2,BusBar_mvgd_1056_lvgd_97720_MV,BusBar_mvgd_1056_lvgd_97720_LV,0.0590741060025456,0.0105,0.8,0.8 MVA 10/0.4 kV
+Transformer_lv_grid_97721_1,BusBar_mvgd_1056_lvgd_97721_MV,BusBar_mvgd_1056_lvgd_97721_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_506706_1,BusBar_mvgd_1056_lvgd_506706_MV,BusBar_mvgd_1056_lvgd_506706_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97722_1,BusBar_mvgd_1056_lvgd_97722_MV,BusBar_mvgd_1056_lvgd_97722_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97723_1,BusBar_mvgd_1056_lvgd_97723_MV,BusBar_mvgd_1056_lvgd_97723_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_97724_1,BusBar_mvgd_1056_lvgd_97724_MV,BusBar_mvgd_1056_lvgd_97724_LV,0.0590741060025456,0.0105,1.0,1.0 MVA 10/0.4 kV
+Transformer_lv_grid_97725_1,BusBar_mvgd_1056_lvgd_97725_MV,BusBar_mvgd_1056_lvgd_97725_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97726_1,BusBar_mvgd_1056_lvgd_97726_MV,BusBar_mvgd_1056_lvgd_97726_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_97727_1,BusBar_mvgd_1056_lvgd_97727_MV,BusBar_mvgd_1056_lvgd_97727_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_97728_1,BusBar_mvgd_1056_lvgd_97728_MV,BusBar_mvgd_1056_lvgd_97728_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97729_1,BusBar_mvgd_1056_lvgd_97729_MV,BusBar_mvgd_1056_lvgd_97729_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_97730_1,BusBar_mvgd_1056_lvgd_97730_MV,BusBar_mvgd_1056_lvgd_97730_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_97731_1,BusBar_mvgd_1056_lvgd_97731_MV,BusBar_mvgd_1056_lvgd_97731_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97732_1,BusBar_mvgd_1056_lvgd_97732_MV,BusBar_mvgd_1056_lvgd_97732_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97733_1,BusBar_mvgd_1056_lvgd_97733_MV,BusBar_mvgd_1056_lvgd_97733_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97735_1,BusBar_mvgd_1056_lvgd_97735_MV,BusBar_mvgd_1056_lvgd_97735_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_97768_1,BusBar_mvgd_1056_lvgd_97768_MV,BusBar_mvgd_1056_lvgd_97768_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_97828_1,BusBar_mvgd_1056_lvgd_97828_MV,BusBar_mvgd_1056_lvgd_97828_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_97829_1,BusBar_mvgd_1056_lvgd_97829_MV,BusBar_mvgd_1056_lvgd_97829_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97851_1,BusBar_mvgd_1056_lvgd_97851_MV,BusBar_mvgd_1056_lvgd_97851_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97876_1,BusBar_mvgd_1056_lvgd_97876_MV,BusBar_mvgd_1056_lvgd_97876_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97905_1,BusBar_mvgd_1056_lvgd_97905_MV,BusBar_mvgd_1056_lvgd_97905_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97906_1,BusBar_mvgd_1056_lvgd_97906_MV,BusBar_mvgd_1056_lvgd_97906_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_440366_1,BusBar_mvgd_1056_lvgd_440366_MV,BusBar_mvgd_1056_lvgd_440366_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_440345_1,BusBar_mvgd_1056_lvgd_440345_MV,BusBar_mvgd_1056_lvgd_440345_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97952_1,BusBar_mvgd_1056_lvgd_97952_MV,BusBar_mvgd_1056_lvgd_97952_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_97976_1,BusBar_mvgd_1056_lvgd_97976_MV,BusBar_mvgd_1056_lvgd_97976_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_98276_1,BusBar_mvgd_1056_lvgd_98276_MV,BusBar_mvgd_1056_lvgd_98276_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_98277_1,BusBar_mvgd_1056_lvgd_98277_MV,BusBar_mvgd_1056_lvgd_98277_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_98278_1,BusBar_mvgd_1056_lvgd_98278_MV,BusBar_mvgd_1056_lvgd_98278_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_98279_1,BusBar_mvgd_1056_lvgd_98279_MV,BusBar_mvgd_1056_lvgd_98279_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_98280_1,BusBar_mvgd_1056_lvgd_98280_MV,BusBar_mvgd_1056_lvgd_98280_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_440438_1,BusBar_mvgd_1056_lvgd_440438_MV,BusBar_mvgd_1056_lvgd_440438_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_440694_1,BusBar_mvgd_1056_lvgd_440694_MV,BusBar_mvgd_1056_lvgd_440694_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_98547_1,BusBar_mvgd_1056_lvgd_98547_MV,BusBar_mvgd_1056_lvgd_98547_LV,0.038646474775814,0.0103174603174603,0.63,0.63 MVA 10/0.4 kV
+Transformer_lv_grid_98548_1,BusBar_mvgd_1056_lvgd_98548_MV,BusBar_mvgd_1056_lvgd_98548_LV,0.038646474775814,0.0103174603174603,0.63,0.63 MVA 10/0.4 kV
+Transformer_lv_grid_98549_1,BusBar_mvgd_1056_lvgd_98549_MV,BusBar_mvgd_1056_lvgd_98549_LV,0.038646474775814,0.0103174603174603,0.63,0.63 MVA 10/0.4 kV
+Transformer_lv_grid_98550_1,BusBar_mvgd_1056_lvgd_98550_MV,BusBar_mvgd_1056_lvgd_98550_LV,0.0590741060025456,0.0105,0.8,0.8 MVA 10/0.4 kV
+Transformer_lv_grid_98712_1,BusBar_mvgd_1056_lvgd_98712_MV,BusBar_mvgd_1056_lvgd_98712_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_98714_1,BusBar_mvgd_1056_lvgd_98714_MV,BusBar_mvgd_1056_lvgd_98714_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_440776_1,BusBar_mvgd_1056_lvgd_440776_MV,BusBar_mvgd_1056_lvgd_440776_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_439483_1,BusBar_mvgd_1056_lvgd_439483_MV,BusBar_mvgd_1056_lvgd_439483_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_439544_1,BusBar_mvgd_1056_lvgd_439544_MV,BusBar_mvgd_1056_lvgd_439544_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_440905_1,BusBar_mvgd_1056_lvgd_440905_MV,BusBar_mvgd_1056_lvgd_440905_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_439676_1,BusBar_mvgd_1056_lvgd_439676_MV,BusBar_mvgd_1056_lvgd_439676_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_439054_1,BusBar_mvgd_1056_lvgd_439054_MV,BusBar_mvgd_1056_lvgd_439054_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_440526_1,BusBar_mvgd_1056_lvgd_440526_MV,BusBar_mvgd_1056_lvgd_440526_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_504532_1,BusBar_mvgd_1056_lvgd_504532_MV,BusBar_mvgd_1056_lvgd_504532_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_98951_1,BusBar_mvgd_1056_lvgd_98951_MV,BusBar_mvgd_1056_lvgd_98951_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_98952_1,BusBar_mvgd_1056_lvgd_98952_MV,BusBar_mvgd_1056_lvgd_98952_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_99001_1,BusBar_mvgd_1056_lvgd_99001_MV,BusBar_mvgd_1056_lvgd_99001_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_99002_1,BusBar_mvgd_1056_lvgd_99002_MV,BusBar_mvgd_1056_lvgd_99002_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_99021_1,BusBar_mvgd_1056_lvgd_99021_MV,BusBar_mvgd_1056_lvgd_99021_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_440092_1,BusBar_mvgd_1056_lvgd_440092_MV,BusBar_mvgd_1056_lvgd_440092_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_99144_1,BusBar_mvgd_1056_lvgd_99144_MV,BusBar_mvgd_1056_lvgd_99144_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_439040_1,BusBar_mvgd_1056_lvgd_439040_MV,BusBar_mvgd_1056_lvgd_439040_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_440892_1,BusBar_mvgd_1056_lvgd_440892_MV,BusBar_mvgd_1056_lvgd_440892_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_99159_1,BusBar_mvgd_1056_lvgd_99159_MV,BusBar_mvgd_1056_lvgd_99159_LV,0.038646474775814,0.0103174603174603,0.63,0.63 MVA 10/0.4 kV
+Transformer_lv_grid_440136_1,BusBar_mvgd_1056_lvgd_440136_MV,BusBar_mvgd_1056_lvgd_440136_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_440502_1,BusBar_mvgd_1056_lvgd_440502_MV,BusBar_mvgd_1056_lvgd_440502_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_99296_1,BusBar_mvgd_1056_lvgd_99296_MV,BusBar_mvgd_1056_lvgd_99296_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_487647_1,BusBar_mvgd_1056_lvgd_487647_MV,BusBar_mvgd_1056_lvgd_487647_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_99308_1,BusBar_mvgd_1056_lvgd_99308_MV,BusBar_mvgd_1056_lvgd_99308_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_99309_1,BusBar_mvgd_1056_lvgd_99309_MV,BusBar_mvgd_1056_lvgd_99309_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_99310_1,BusBar_mvgd_1056_lvgd_99310_MV,BusBar_mvgd_1056_lvgd_99310_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_102175_1,BusBar_mvgd_1056_lvgd_102175_MV,BusBar_mvgd_1056_lvgd_102175_LV,0.038646474775814,0.0103174603174603,0.63,0.63 MVA 10/0.4 kV
+Transformer_lv_grid_102176_1,BusBar_mvgd_1056_lvgd_102176_MV,BusBar_mvgd_1056_lvgd_102176_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_102178_1,BusBar_mvgd_1056_lvgd_102178_MV,BusBar_mvgd_1056_lvgd_102178_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_102243_1,BusBar_mvgd_1056_lvgd_102243_MV,BusBar_mvgd_1056_lvgd_102243_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_102248_1,BusBar_mvgd_1056_lvgd_102248_MV,BusBar_mvgd_1056_lvgd_102248_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_102249_1,BusBar_mvgd_1056_lvgd_102249_MV,BusBar_mvgd_1056_lvgd_102249_LV,0.038646474775814,0.0103174603174603,0.63,0.63 MVA 10/0.4 kV
+Transformer_lv_grid_102250_1,BusBar_mvgd_1056_lvgd_102250_MV,BusBar_mvgd_1056_lvgd_102250_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_506612_1,BusBar_mvgd_1056_lvgd_506612_MV,BusBar_mvgd_1056_lvgd_506612_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_506626_1,BusBar_mvgd_1056_lvgd_506626_MV,BusBar_mvgd_1056_lvgd_506626_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_102319_1,BusBar_mvgd_1056_lvgd_102319_MV,BusBar_mvgd_1056_lvgd_102319_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_440985_1,BusBar_mvgd_1056_lvgd_440985_MV,BusBar_mvgd_1056_lvgd_440985_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_441085_1,BusBar_mvgd_1056_lvgd_441085_MV,BusBar_mvgd_1056_lvgd_441085_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_102576_1,BusBar_mvgd_1056_lvgd_102576_MV,BusBar_mvgd_1056_lvgd_102576_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_102577_1,BusBar_mvgd_1056_lvgd_102577_MV,BusBar_mvgd_1056_lvgd_102577_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_102578_1,BusBar_mvgd_1056_lvgd_102578_MV,BusBar_mvgd_1056_lvgd_102578_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_102579_1,BusBar_mvgd_1056_lvgd_102579_MV,BusBar_mvgd_1056_lvgd_102579_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_102659_1,BusBar_mvgd_1056_lvgd_102659_MV,BusBar_mvgd_1056_lvgd_102659_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_441037_1,BusBar_mvgd_1056_lvgd_441037_MV,BusBar_mvgd_1056_lvgd_441037_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_440994_1,BusBar_mvgd_1056_lvgd_440994_MV,BusBar_mvgd_1056_lvgd_440994_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_102708_1,BusBar_mvgd_1056_lvgd_102708_MV,BusBar_mvgd_1056_lvgd_102708_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_102723_1,BusBar_mvgd_1056_lvgd_102723_MV,BusBar_mvgd_1056_lvgd_102723_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_102773_1,BusBar_mvgd_1056_lvgd_102773_MV,BusBar_mvgd_1056_lvgd_102773_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_102774_1,BusBar_mvgd_1056_lvgd_102774_MV,BusBar_mvgd_1056_lvgd_102774_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_102775_1,BusBar_mvgd_1056_lvgd_102775_MV,BusBar_mvgd_1056_lvgd_102775_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_502473_1,BusBar_mvgd_1056_lvgd_502473_MV,BusBar_mvgd_1056_lvgd_502473_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_102937_1,BusBar_mvgd_1056_lvgd_102937_MV,BusBar_mvgd_1056_lvgd_102937_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_103068_1,BusBar_mvgd_1056_lvgd_103068_MV,BusBar_mvgd_1056_lvgd_103068_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_506736_1,BusBar_mvgd_1056_lvgd_506736_MV,BusBar_mvgd_1056_lvgd_506736_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_439680_1,BusBar_mvgd_1056_lvgd_439680_MV,BusBar_mvgd_1056_lvgd_439680_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_103093_1,BusBar_mvgd_1056_lvgd_103093_MV,BusBar_mvgd_1056_lvgd_103093_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_109033_1,BusBar_mvgd_1056_lvgd_109033_MV,BusBar_mvgd_1056_lvgd_109033_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_109034_1,BusBar_mvgd_1056_lvgd_109034_MV,BusBar_mvgd_1056_lvgd_109034_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_109035_1,BusBar_mvgd_1056_lvgd_109035_MV,BusBar_mvgd_1056_lvgd_109035_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_109036_1,BusBar_mvgd_1056_lvgd_109036_MV,BusBar_mvgd_1056_lvgd_109036_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_109037_1,BusBar_mvgd_1056_lvgd_109037_MV,BusBar_mvgd_1056_lvgd_109037_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_109038_1,BusBar_mvgd_1056_lvgd_109038_MV,BusBar_mvgd_1056_lvgd_109038_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_440565_1,BusBar_mvgd_1056_lvgd_440565_MV,BusBar_mvgd_1056_lvgd_440565_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_109130_1,BusBar_mvgd_1056_lvgd_109130_MV,BusBar_mvgd_1056_lvgd_109130_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_109131_1,BusBar_mvgd_1056_lvgd_109131_MV,BusBar_mvgd_1056_lvgd_109131_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_109191_1,BusBar_mvgd_1056_lvgd_109191_MV,BusBar_mvgd_1056_lvgd_109191_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_109684_1,BusBar_mvgd_1056_lvgd_109684_MV,BusBar_mvgd_1056_lvgd_109684_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_440542_1,BusBar_mvgd_1056_lvgd_440542_MV,BusBar_mvgd_1056_lvgd_440542_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_98548_reinforced_2,BusBar_mvgd_1056_lvgd_98548_MV,BusBar_mvgd_1056_lvgd_98548_LV,0.038646474775814,0.0103174603174603,0.63,0.63 MVA 10/0.4 kV
+Transformer_lv_grid_98550_reinforced_2,BusBar_mvgd_1056_lvgd_98550_MV,BusBar_mvgd_1056_lvgd_98550_LV,0.0590741060025456,0.0105,0.8,0.8 MVA 10/0.4 kV
+Transformer_lv_grid_439544_reinforced_2,BusBar_mvgd_1056_lvgd_439544_MV,BusBar_mvgd_1056_lvgd_439544_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97717_reinforced_2,BusBar_mvgd_1056_lvgd_97717_MV,BusBar_mvgd_1056_lvgd_97717_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97719_reinforced_2,BusBar_mvgd_1056_lvgd_97719_MV,BusBar_mvgd_1056_lvgd_97719_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97720_reinforced_3,BusBar_mvgd_1056_lvgd_97720_MV,BusBar_mvgd_1056_lvgd_97720_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_506706_reinforced_2,BusBar_mvgd_1056_lvgd_506706_MV,BusBar_mvgd_1056_lvgd_506706_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97722_reinforced_2,BusBar_mvgd_1056_lvgd_97722_MV,BusBar_mvgd_1056_lvgd_97722_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97723_reinforced_2,BusBar_mvgd_1056_lvgd_97723_MV,BusBar_mvgd_1056_lvgd_97723_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97724_reinforced_2,BusBar_mvgd_1056_lvgd_97724_MV,BusBar_mvgd_1056_lvgd_97724_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97725_reinforced_2,BusBar_mvgd_1056_lvgd_97725_MV,BusBar_mvgd_1056_lvgd_97725_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97729_reinforced_2,BusBar_mvgd_1056_lvgd_97729_MV,BusBar_mvgd_1056_lvgd_97729_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97735_reinforced_2,BusBar_mvgd_1056_lvgd_97735_MV,BusBar_mvgd_1056_lvgd_97735_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97876_reinforced_2,BusBar_mvgd_1056_lvgd_97876_MV,BusBar_mvgd_1056_lvgd_97876_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_98278_reinforced_2,BusBar_mvgd_1056_lvgd_98278_MV,BusBar_mvgd_1056_lvgd_98278_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_98279_reinforced_2,BusBar_mvgd_1056_lvgd_98279_MV,BusBar_mvgd_1056_lvgd_98279_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_98549_reinforced_2,BusBar_mvgd_1056_lvgd_98549_MV,BusBar_mvgd_1056_lvgd_98549_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_439054_reinforced_2,BusBar_mvgd_1056_lvgd_439054_MV,BusBar_mvgd_1056_lvgd_439054_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_98951_reinforced_2,BusBar_mvgd_1056_lvgd_98951_MV,BusBar_mvgd_1056_lvgd_98951_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_98952_reinforced_2,BusBar_mvgd_1056_lvgd_98952_MV,BusBar_mvgd_1056_lvgd_98952_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_99001_reinforced_2,BusBar_mvgd_1056_lvgd_99001_MV,BusBar_mvgd_1056_lvgd_99001_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_440892_reinforced_2,BusBar_mvgd_1056_lvgd_440892_MV,BusBar_mvgd_1056_lvgd_440892_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_440136_reinforced_2,BusBar_mvgd_1056_lvgd_440136_MV,BusBar_mvgd_1056_lvgd_440136_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_109034_reinforced_2,BusBar_mvgd_1056_lvgd_109034_MV,BusBar_mvgd_1056_lvgd_109034_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_109036_reinforced_2,BusBar_mvgd_1056_lvgd_109036_MV,BusBar_mvgd_1056_lvgd_109036_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97101_reinforced_2,BusBar_mvgd_1056_lvgd_97101_MV,BusBar_mvgd_1056_lvgd_97101_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97195_reinforced_2,BusBar_mvgd_1056_lvgd_97195_MV,BusBar_mvgd_1056_lvgd_97195_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97239_reinforced_2,BusBar_mvgd_1056_lvgd_97239_MV,BusBar_mvgd_1056_lvgd_97239_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97253_reinforced_2,BusBar_mvgd_1056_lvgd_97253_MV,BusBar_mvgd_1056_lvgd_97253_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97290_reinforced_1,BusBar_mvgd_1056_lvgd_97290_MV,BusBar_mvgd_1056_lvgd_97290_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97334_reinforced_2,BusBar_mvgd_1056_lvgd_97334_MV,BusBar_mvgd_1056_lvgd_97334_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97340_reinforced_2,BusBar_mvgd_1056_lvgd_97340_MV,BusBar_mvgd_1056_lvgd_97340_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97341_reinforced_2,BusBar_mvgd_1056_lvgd_97341_MV,BusBar_mvgd_1056_lvgd_97341_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_440493_reinforced_2,BusBar_mvgd_1056_lvgd_440493_MV,BusBar_mvgd_1056_lvgd_440493_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_97718_reinforced_2,BusBar_mvgd_1056_lvgd_97718_MV,BusBar_mvgd_1056_lvgd_97718_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_97721_reinforced_2,BusBar_mvgd_1056_lvgd_97721_MV,BusBar_mvgd_1056_lvgd_97721_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_97726_reinforced_2,BusBar_mvgd_1056_lvgd_97726_MV,BusBar_mvgd_1056_lvgd_97726_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_97727_reinforced_2,BusBar_mvgd_1056_lvgd_97727_MV,BusBar_mvgd_1056_lvgd_97727_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_97728_reinforced_2,BusBar_mvgd_1056_lvgd_97728_MV,BusBar_mvgd_1056_lvgd_97728_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97731_reinforced_2,BusBar_mvgd_1056_lvgd_97731_MV,BusBar_mvgd_1056_lvgd_97731_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97733_reinforced_2,BusBar_mvgd_1056_lvgd_97733_MV,BusBar_mvgd_1056_lvgd_97733_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97734_reinforced_1,BusBar_mvgd_1056_lvgd_97734_MV,BusBar_mvgd_1056_lvgd_97734_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_97768_reinforced_2,BusBar_mvgd_1056_lvgd_97768_MV,BusBar_mvgd_1056_lvgd_97768_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_97828_reinforced_2,BusBar_mvgd_1056_lvgd_97828_MV,BusBar_mvgd_1056_lvgd_97828_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_97829_reinforced_2,BusBar_mvgd_1056_lvgd_97829_MV,BusBar_mvgd_1056_lvgd_97829_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97851_reinforced_2,BusBar_mvgd_1056_lvgd_97851_MV,BusBar_mvgd_1056_lvgd_97851_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_97905_reinforced_2,BusBar_mvgd_1056_lvgd_97905_MV,BusBar_mvgd_1056_lvgd_97905_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_97976_reinforced_2,BusBar_mvgd_1056_lvgd_97976_MV,BusBar_mvgd_1056_lvgd_97976_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_98276_reinforced_2,BusBar_mvgd_1056_lvgd_98276_MV,BusBar_mvgd_1056_lvgd_98276_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_98277_reinforced_2,BusBar_mvgd_1056_lvgd_98277_MV,BusBar_mvgd_1056_lvgd_98277_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_98280_reinforced_2,BusBar_mvgd_1056_lvgd_98280_MV,BusBar_mvgd_1056_lvgd_98280_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_440438_reinforced_2,BusBar_mvgd_1056_lvgd_440438_MV,BusBar_mvgd_1056_lvgd_440438_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_98712_reinforced_2,BusBar_mvgd_1056_lvgd_98712_MV,BusBar_mvgd_1056_lvgd_98712_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_98713_reinforced_1,BusBar_mvgd_1056_lvgd_98713_MV,BusBar_mvgd_1056_lvgd_98713_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_504532_reinforced_2,BusBar_mvgd_1056_lvgd_504532_MV,BusBar_mvgd_1056_lvgd_504532_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_99002_reinforced_2,BusBar_mvgd_1056_lvgd_99002_MV,BusBar_mvgd_1056_lvgd_99002_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_99143_reinforced_1,BusBar_mvgd_1056_lvgd_99143_MV,BusBar_mvgd_1056_lvgd_99143_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_99144_reinforced_2,BusBar_mvgd_1056_lvgd_99144_MV,BusBar_mvgd_1056_lvgd_99144_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_99159_reinforced_2,BusBar_mvgd_1056_lvgd_99159_MV,BusBar_mvgd_1056_lvgd_99159_LV,0.038646474775814,0.0103174603174603,0.63,0.63 MVA 10/0.4 kV
+Transformer_lv_grid_99308_reinforced_2,BusBar_mvgd_1056_lvgd_99308_MV,BusBar_mvgd_1056_lvgd_99308_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_102177_reinforced_1,BusBar_mvgd_1056_lvgd_102177_MV,BusBar_mvgd_1056_lvgd_102177_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_102178_reinforced_2,BusBar_mvgd_1056_lvgd_102178_MV,BusBar_mvgd_1056_lvgd_102178_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_102242_reinforced_1,BusBar_mvgd_1056_lvgd_102242_MV,BusBar_mvgd_1056_lvgd_102242_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_102248_reinforced_2,BusBar_mvgd_1056_lvgd_102248_MV,BusBar_mvgd_1056_lvgd_102248_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_102249_reinforced_2,BusBar_mvgd_1056_lvgd_102249_MV,BusBar_mvgd_1056_lvgd_102249_LV,0.038646474775814,0.0103174603174603,0.63,0.63 MVA 10/0.4 kV
+Transformer_lv_grid_506612_reinforced_2,BusBar_mvgd_1056_lvgd_506612_MV,BusBar_mvgd_1056_lvgd_506612_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_102319_reinforced_2,BusBar_mvgd_1056_lvgd_102319_MV,BusBar_mvgd_1056_lvgd_102319_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_102576_reinforced_2,BusBar_mvgd_1056_lvgd_102576_MV,BusBar_mvgd_1056_lvgd_102576_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_102577_reinforced_2,BusBar_mvgd_1056_lvgd_102577_MV,BusBar_mvgd_1056_lvgd_102577_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_102578_reinforced_2,BusBar_mvgd_1056_lvgd_102578_MV,BusBar_mvgd_1056_lvgd_102578_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_102579_reinforced_2,BusBar_mvgd_1056_lvgd_102579_MV,BusBar_mvgd_1056_lvgd_102579_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_102659_reinforced_2,BusBar_mvgd_1056_lvgd_102659_MV,BusBar_mvgd_1056_lvgd_102659_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_440994_reinforced_2,BusBar_mvgd_1056_lvgd_440994_MV,BusBar_mvgd_1056_lvgd_440994_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_102773_reinforced_2,BusBar_mvgd_1056_lvgd_102773_MV,BusBar_mvgd_1056_lvgd_102773_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_102774_reinforced_2,BusBar_mvgd_1056_lvgd_102774_MV,BusBar_mvgd_1056_lvgd_102774_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_102785_reinforced_1,BusBar_mvgd_1056_lvgd_102785_MV,BusBar_mvgd_1056_lvgd_102785_LV,0.038646474775814,0.0103174603174603,0.63,630 kVA
+Transformer_lv_grid_103068_reinforced_2,BusBar_mvgd_1056_lvgd_103068_MV,BusBar_mvgd_1056_lvgd_103068_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_506736_reinforced_2,BusBar_mvgd_1056_lvgd_506736_MV,BusBar_mvgd_1056_lvgd_506736_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_103093_reinforced_2,BusBar_mvgd_1056_lvgd_103093_MV,BusBar_mvgd_1056_lvgd_103093_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV
+Transformer_lv_grid_109033_reinforced_2,BusBar_mvgd_1056_lvgd_109033_MV,BusBar_mvgd_1056_lvgd_109033_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_109035_reinforced_2,BusBar_mvgd_1056_lvgd_109035_MV,BusBar_mvgd_1056_lvgd_109035_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_109037_reinforced_2,BusBar_mvgd_1056_lvgd_109037_MV,BusBar_mvgd_1056_lvgd_109037_LV,0.038311225508981,0.0115,0.4,0.4 MVA 10/0.4 kV
+Transformer_lv_grid_109130_reinforced_2,BusBar_mvgd_1056_lvgd_109130_MV,BusBar_mvgd_1056_lvgd_109130_LV,0.0359687364248453,0.0175,0.1,0.1 MVA 10/0.4 kV
+Transformer_lv_grid_109191_reinforced_2,BusBar_mvgd_1056_lvgd_109191_MV,BusBar_mvgd_1056_lvgd_109191_LV,0.0372058778118458,0.0146875,0.16,0.16 MVA 10/0.4 kV
+Transformer_lv_grid_109684_reinforced_2,BusBar_mvgd_1056_lvgd_109684_MV,BusBar_mvgd_1056_lvgd_109684_LV,0.0378285606387554,0.013,0.25,0.25 MVA 10/0.4 kV

@@ -18,3 +18,4 @@ PowerModels = "c36e90e8-916a-50a6-bd94-075b64ef4655"
 
 [compat]
 PowerModels = "0.19.6"
+julia = "1.6"
