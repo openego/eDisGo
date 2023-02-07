@@ -599,10 +599,10 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     tap = branches.tap_ratio.fillna(1)
     shift = branches.phase_shift.fillna(0)
     length = branches.length.fillna(1)
-    for par, val, decimal, decade, text in [
-        ("r_pu", branches.r_pu, 5, 1e5, "resistance"),
-        ("x_pu", branches.x_pu, 5, 1e5, "reactance"),
-        ("length", length, 3, 1e3, "branch length"),
+    for par, val, decimal, decade, text, unit in [
+        ("r_pu", branches.r_pu, 5, 1e5, "resistance", "p.u."),
+        ("x_pu", branches.x_pu, 5, 1e5, "reactance", "p.u."),
+        ("length", length, 3, 1e3, "branch length", "km"),
     ]:
         max_value = np.round(max(val.loc[val < val.quantile(0.998)]), decimal)
         min_value = np.round(min(val.loc[val > val.quantile(0.002)]), decimal)
@@ -611,8 +611,10 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             branches[par] = val.clip(lower=min_value, upper=max_value)
             logger.warning(
                 "Range between min and max {} values is too high. Highest and "
-                "lowest 0.2% of {} values will be set to {} p.u./km and"
-                " {} p.u./km, respectively.".format(text, text, max_value, min_value)
+                "lowest 0.2% of {} values will be set to {} {} and"
+                " {} {}, respectively.".format(
+                    text, text, max_value, unit, min_value, unit
+                )
             )
 
     for branch_i in np.arange(len(branches.index)):
