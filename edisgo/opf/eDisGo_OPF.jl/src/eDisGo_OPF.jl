@@ -24,6 +24,8 @@ include("core/solution.jl")
 include("core/variables.jl")
 include("form/bf.jl")
 include("prob/opf_bf.jl")
+include("io/common.jl")
+include("io/json.jl")
 #include("../test/opf_test_case.jl")
 
 # export new types of PowerModels
