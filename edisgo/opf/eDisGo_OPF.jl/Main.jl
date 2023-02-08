@@ -1,6 +1,7 @@
 cd(dirname(@__FILE__))
 using Pkg
 Pkg.activate("")
+Pkg.instantiate()
 try
     using eDisGo_OPF
     using PowerModels
@@ -8,8 +9,8 @@ try
     using JuMP
     using JSON
     using Gurobi
-    using Mosek
-    using MosekTools
+    #using Mosek
+    #using MosekTools
 catch e
     Pkg.instantiate()
     using eDisGo_OPF
@@ -18,8 +19,8 @@ catch e
     using JuMP
     using JSON
     using Gurobi
-    using Mosek
-    using MosekTools
+    #using Mosek
+    #using MosekTools
 end
 
 
@@ -36,7 +37,7 @@ warm_start = ARGS[5].=="True"
 # Set solver attributes
 const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>1e-6)
 const gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "Presolve" => 1, "FeasibilityTol"=>1e-4, "BarConvTol"=>1e-6, "BarQCPConvTol"=>1e-4) #"NumericFocus"=> 1, "BarHomogeneous"=> 1,
-const mosek = optimizer_with_attributes(Mosek.Optimizer, MOI.Silent() => silence_moi)
+#const mosek = optimizer_with_attributes(Mosek.Optimizer, MOI.Silent() => silence_moi)
 
 function optimize_edisgo()
   # read in data and create multinetwork
