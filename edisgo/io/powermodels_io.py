@@ -608,9 +608,9 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     shift = branches.phase_shift.fillna(0)
     length = branches.length.fillna(1)
     for par, val, decimal, decade, quant, text, unit in [
-        ("r_pu", branches.r_pu, 5, 1e5, 0.01, "resistance", "p.u."),
-        ("x_pu", branches.x_pu, 5, 1e5, 0.01, "reactance", "p.u."),
-        ("length", length, 3, 1e3, 0.01, "branch length", "km"),
+        ("r_pu", branches.r_pu, 5, 1e5, 0.005, "resistance", "p.u."),
+        ("x_pu", branches.x_pu, 5, 1e5, 0.005, "reactance", "p.u."),
+        ("length", length, 3, 1e3, 0.005, "branch length", "km"),
     ]:
         max_value = np.round(max(val.loc[val < val.quantile(1 - quant)]), decimal)
         min_value = np.round(min(val.loc[val > val.quantile(quant)]), decimal)
