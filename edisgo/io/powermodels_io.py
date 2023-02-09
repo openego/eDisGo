@@ -8,7 +8,6 @@ Call :func:`to_powermodels` to retrieve the PowerModels network container and
 
 import json
 import logging
-import os
 
 import numpy as np
 import pandas as pd
@@ -202,10 +201,9 @@ def from_powermodels(
     pm_results,
     hv_flex_dict,
     s_base=1,
-    save_heat_storage=False,
-    save_slack_gen=False,
-    save_slacks=False,
-    path="",
+    save_heat_storage=True,
+    save_slack_gen=True,
+    save_slacks=True,
 ):
     """
     Convert results from optimization in PowerModels network data format to eDisGo data
@@ -245,11 +243,7 @@ def from_powermodels(
         3 : -
         4 : grid related slacks cf. version 2
         Default: False
-    path : str
-        Directory the csv file is saved to. Per default it takes the current
-        working directory.
     """
-    abs_path = os.path.abspath(path)
 
     if type(pm_results) == str:
         with open(pm_results) as f:
@@ -261,6 +255,8 @@ def from_powermodels(
             "Parameter 'pm_results' must be either dictionary or path to json file."
         )
     edisgo_object.opf_results.solution_time = pm["solve_time"]
+    edisgo_object.opf_results.status = pm["status"]
+    edisgo_object.opf_results.solver = pm["solver"]
     flex_dicts = {
         "curt": ["gen_nd", "pgc"],
         "hp": ["heatpumps", "php"],
@@ -314,9 +310,9 @@ def from_powermodels(
         df = _result_df(
             pm, "HV_requirements", "phvs", edisgo_object.timeseries.timeindex, s_base
         )
-        # save HV slack results to csv
+        # save HV slack results to edisgo object
         if save_slacks:
-            df.to_csv(os.path.join(abs_path, "hv_requirements_slack.csv"))
+            edisgo_object.opf_results.hv_requirement_slacks_t = df
 
         # calculate relative error
         for flex in df.columns:
@@ -354,26 +350,38 @@ def from_powermodels(
             df["qg"] = [
                 pm["nw"][t]["gen_slack"][gen]["qgs"] * s_base for t in timesteps
             ]
-        df.to_csv(os.path.join(abs_path, "slack_gen.csv"))
+        edisgo_object.opf_results.slack_generator_t = df
 
-    if save_heat_storage:  # save heat storage variables to csv file
-        for var, filename in [("phs", "p"), ("hse", "e")]:
-            _result_df(
-                pm, "heat_storage", var, edisgo_object.timeseries.timeindex, s_base
-            ).to_csv(os.path.join(abs_path, "heat_storage_" + str(filename) + ".csv"))
+    if save_heat_storage:  # save heat storage variables to edisgo object
+        df = _result_df(
+            pm, "heat_storage", "phs", edisgo_object.timeseries.timeindex, s_base
+        )
+        edisgo_object.opf_results.heat_storage_t.p = df
+        df = _result_df(
+            pm, "heat_storage", "hse", edisgo_object.timeseries.timeindex, s_base
+        )
+        edisgo_object.opf_results.heat_storage_t.e = df
 
     if (pm["nw"]["1"]["opf_version"] in [2, 4]) & save_slacks:
         slacks = [
-            ("gen", "pgens", "disp_gen_curtailment"),
-            ("gen_nd", "pgc", "nondisp_gen_curtailment"),
-            ("load", "pds", "load_shedding"),
-            ("electromobility", "pcps", "cp_load_shedding"),
+            ("gen", "pgens"),
+            ("gen_nd", "pgc"),
+            ("load", "pds"),
+            ("electromobility", "pcps"),
         ]
-        for comp, var, filename in slacks:
-            # save slacks to csv file
-            _result_df(
-                pm, comp, var, edisgo_object.timeseries.timeindex, s_base
-            ).to_csv(os.path.join(abs_path, str(filename) + ".csv"))
+        for comp, var in slacks:
+            # save slacks to edisgo object
+            df = _result_df(pm, comp, var, edisgo_object.timeseries.timeindex, s_base)
+            if comp == "gen":
+                edisgo_object.opf_results.grid_slacks_t.gen_d_crt = df
+            elif comp == "gen_nd":
+                edisgo_object.opf_results.grid_slacks_t.gen_nd_crt = df
+            elif comp == "load":
+                edisgo_object.opf_results.grid_slacks_t.load_shedding = df
+            elif comp == "electromobility":
+                edisgo_object.opf_results.grid_slacks_t.cp_load_shedding = df
+
+    # ToDo: save results for lines, buses
 
 
 def _init_pm():
@@ -1597,7 +1605,6 @@ def aggregate_parallel_transformers(psa_net):
         :pypsa:`PyPSA.Network<network>` representation of network.
 
     """
-    # TODO: what about b, g?
     psa_trafos = psa_net.transformers
     trafo_df = (
         psa_trafos.groupby(by=[psa_trafos.bus0, psa_trafos.bus1])[["r", "x", "s_nom"]]

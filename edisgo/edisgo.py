@@ -715,10 +715,9 @@ class EDisGo:
         pm_results,
         hv_flex_dict,
         s_base=1,
-        save_heat_storage=False,
-        save_slack_gen=False,
-        save_slacks=False,
-        path="",
+        save_heat_storage=True,
+        save_slack_gen=True,
+        save_slacks=True,
     ):
         """
         Convert results from optimization in PowerModels network data format to eDisGo
@@ -752,9 +751,6 @@ class EDisGo:
              chosen opf_version, different slacks are used. For more information see
              :func:`edisgo.io.powermodels_io.from_powermodels`
             Default: False
-        path : str
-            Directory the csv file is saved to. Per default it takes the current
-            working directory.
         """
         return powermodels_io.from_powermodels(
             self,
@@ -764,7 +760,6 @@ class EDisGo:
             save_heat_storage=save_heat_storage,
             save_slack_gen=save_slack_gen,
             save_slacks=save_slacks,
-            path=path,
         )
 
     def pm_optimize(
@@ -778,10 +773,9 @@ class EDisGo:
         method="soc",
         warm_start=False,
         silence_moi=False,
-        save_heat_storage=False,
-        save_slack_gen=False,
-        save_slacks=False,
-        path="",
+        save_heat_storage=True,
+        save_slack_gen=True,
+        save_slacks=True,
     ):
         """
         Run OPF for edisgo object in julia subprocess and write results of OPF to
@@ -845,9 +839,6 @@ class EDisGo:
              chosen opf_version, different slacks are used. For more information see
              :func:`edisgo.io.powermodels_io.from_powermodels`.
             Default: False
-        path : str
-            Directory the csv file is saved to. Per default it takes the current
-            working directory.
         """
         return powermodels_opf.pm_optimize(
             self,
@@ -863,7 +854,6 @@ class EDisGo:
             save_heat_storage=save_heat_storage,
             save_slack_gen=save_slack_gen,
             save_slacks=save_slacks,
-            path=path,
         )
 
     def to_graph(self):

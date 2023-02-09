@@ -20,10 +20,9 @@ def pm_optimize(
     method="soc",
     warm_start=False,
     silence_moi=False,
-    save_heat_storage=False,
-    save_slack_gen=False,
-    save_slacks=False,
-    path="",
+    save_heat_storage=True,
+    save_slack_gen=True,
+    save_slacks=True,
 ):
     """
     Run OPF for edisgo object in julia subprocess and write results of OPF to edisgo
@@ -105,9 +104,6 @@ def pm_optimize(
          chosen opf_version, different slacks are used. For more information see
          :func:`edisgo.io.powermodels_io.from_powermodels`.
         Default: False
-    path : str
-        Directory the csv file is saved to. Per default it takes the current
-        working directory.
     """
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
@@ -168,7 +164,6 @@ def pm_optimize(
                 save_heat_storage=save_heat_storage,
                 save_slack_gen=save_slack_gen,
                 save_slacks=save_slacks,
-                path=path,
             )
         elif out.rstrip().startswith("Set parameter") or out.rstrip().startswith(
             "Academic"
