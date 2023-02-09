@@ -119,6 +119,7 @@ def extract_feeders_nx(
                             "simbev_config_df",
                             "flexibility_bands",
                         ],
+                        save_results=True,
                     )
                     logger.info(f"Saved feeder: {feeder_id} to {export_path}")
                 feeder_id += 1
