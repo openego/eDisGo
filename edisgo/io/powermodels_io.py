@@ -607,13 +607,13 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     tap = branches.tap_ratio.fillna(1)
     shift = branches.phase_shift.fillna(0)
     length = branches.length.fillna(1)
-    for par, val, decimal, decade, text, unit in [
-        ("r_pu", branches.r_pu, 5, 1e5, "resistance", "p.u."),
-        ("x_pu", branches.x_pu, 5, 1e5, "reactance", "p.u."),
-        ("length", length, 3, 1e3, "branch length", "km"),
+    for par, val, decimal, decade, quant, text, unit in [
+        ("r_pu", branches.r_pu, 5, 1e5, 0.002, "resistance", "p.u."),
+        ("x_pu", branches.x_pu, 5, 1e5, 0.002, "reactance", "p.u."),
+        ("length", length, 3, 1e3, 0.002, "branch length", "km"),
     ]:
-        max_value = np.round(max(val.loc[val < val.quantile(0.998)]), decimal)
-        min_value = np.round(min(val.loc[val > val.quantile(0.092)]), decimal)
+        max_value = np.round(max(val.loc[val < val.quantile(1 - quant)]), decimal)
+        min_value = np.round(min(val.loc[val > val.quantile(quant)]), decimal)
         if val.max() / val.min() > decade:
             # only modify r, x and l values if min/max value differences are too big
             branches[par] = val.clip(lower=min_value, upper=max_value)
