@@ -21,7 +21,6 @@ function variable_buspair_current_magnitude_sqr(pm::AbstractBFModel; nw::Int=nw_
             end
             ub = ((rate_a*b["tap"])/(bus[b["f_bus"]]["vmin"]))^2
 
-            JuMP.set_lower_bound(ccm[i], 0.0)
             if !isinf(ub)&!(b["storage"])
                 JuMP.set_upper_bound(ccm[i], ub)
             end

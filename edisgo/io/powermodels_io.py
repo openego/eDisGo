@@ -604,14 +604,14 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
         ("x_pu", branches.x_pu, 5, 1e5, "reactance", "p.u."),
         ("length", length, 3, 1e3, "branch length", "km"),
     ]:
-        max_value = np.round(max(val.loc[val < val.quantile(0.998)]), decimal)
-        min_value = np.round(min(val.loc[val > val.quantile(0.002)]), decimal)
+        max_value = np.round(max(val.loc[val < val.quantile(0.98)]), decimal)
+        min_value = np.round(min(val.loc[val > val.quantile(0.02)]), decimal)
         if val.max() / val.min() > decade:
             # only modify r, x and l values if min/max value differences are too big
             branches[par] = val.clip(lower=min_value, upper=max_value)
             logger.warning(
                 "Range between min and max {} values is too high. Highest and "
-                "lowest 0.2% of {} values will be set to {} {} and"
+                "lowest 2% of {} values will be set to {} {} and"
                 " {} {}, respectively.".format(
                     text, text, max_value, unit, min_value, unit
                 )
