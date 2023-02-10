@@ -610,7 +610,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     for par, val, decimal, decade, quant, text, unit in [
         ("r_pu", branches.r_pu, 5, 1e5, 0.005, "resistance", "p.u."),
         ("x_pu", branches.x_pu, 5, 1e5, 0.005, "reactance", "p.u."),
-        ("length", length, 3, 1e3, 0.005, "branch length", "km"),
+        ("length", length, 3, 1e3, 0.002, "branch length", "km"),
     ]:
         max_value = np.round(max(val.loc[val < val.quantile(1 - quant)]), decimal)
         min_value = np.round(min(val.loc[val > val.quantile(quant)]), decimal)
@@ -619,9 +619,9 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             branches[par] = val.clip(lower=min_value, upper=max_value)
             logger.warning(
                 "Range between min and max {} values is too high. Highest and "
-                "lowest 0.2% of {} values will be set to {} {} and"
+                "lowest {}% of {} values will be set to {} {} and"
                 " {} {}, respectively.".format(
-                    text, text, max_value, unit, min_value, unit
+                    text, 100 * quant, text, max_value, unit, min_value, unit
                 )
             )
 
