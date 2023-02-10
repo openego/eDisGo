@@ -628,7 +628,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     for branch_i in np.arange(len(branches.index)):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
-        cost_factor = {"mv": 100, "lv": 0.01}
+        cost_factor = {"mv": 1, "lv": 100}
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
             "br_r": branches.r_pu[branch_i] * s_base,

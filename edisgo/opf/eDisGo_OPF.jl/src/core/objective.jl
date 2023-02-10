@@ -11,7 +11,7 @@ function objective_min_losses(pm::AbstractBFModelEdisgo)
     parameters = parameters[parameters .>0]
     factor = 1
     while true
-        if minimum(factor*parameters) > 1e1
+        if minimum(factor*parameters) > 1e0
             break
         else
             factor = 10*factor
@@ -20,7 +20,7 @@ function objective_min_losses(pm::AbstractBFModelEdisgo)
 
     return JuMP.@objective(pm.model, Min,
         factor * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
-        + sum(sum((p[n][(b,i,j)]^2+q[n][(b,i,j)]^2)/s_nom[n][b]^2 * c[n][b]*l[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading * c[n][b]*l[n][b]
+        + 10* sum(sum((p[n][(b,i,j)]^2+q[n][(b,i,j)]^2)/s_nom[n][b]^2 * c[n][b]*l[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading * c[n][b]*l[n][b]
     )
 end
 
@@ -34,7 +34,7 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     pcps = Dict(n => PowerModels.var(pm, n, :pcps) for n in nws)
     s_base = PowerModels.ref(pm, 1, :baseMVA)
     #l = Dict(n => Dict(i => get(branch, "length", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
-    c = Dict(n => Dict(i => get(branch, "cost_inverse", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
+    c = Dict(n => Dict(i => get(branch, "cost_factor", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
     p = Dict(n => PowerModels.var(pm, n, :p) for n in nws)
     q = Dict(n => PowerModels.var(pm, n, :q) for n in nws)
     s_nom = Dict(n => Dict(i => get(branch, "rate_a", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)
@@ -42,7 +42,7 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     parameters = parameters[parameters .>0]
     factor = 1
     while true
-        if minimum(factor*parameters) > 1
+        if minimum(factor*parameters) > 1e-1
             break
         else
             factor = 10*factor
@@ -52,7 +52,7 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     factor_slacks = exp10(floor(log10(maximum(factor*parameters))) + 1)
     return JuMP.@objective(pm.model, Min,
         factor * s_base * sum(sum(ccm[n][b]*r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
-        + sum(sum((p[n][(b,i,j)]^2+q[n][(b,i,j)]^2)/s_nom[n][b]^2 for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading
+        + sum(sum((p[n][(b,i,j)]^2+q[n][(b,i,j)]^2)/s_nom[n][b]^2 * c[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading
         + factor_slacks * s_base * sum(sum(pgc[n]) for n in nws) # minimize non-dispatchable curtailment
         + factor_slacks * s_base * sum(sum(pgens[n]) for n in nws) # minimize dispatchable curtailment
         + factor_slacks * s_base * sum(sum(pds[n]) for n in nws) # minimize load shedding
