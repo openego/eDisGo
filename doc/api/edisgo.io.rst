@@ -17,6 +17,14 @@ edisgo.io.electromobility\_import module
    :undoc-members:
    :show-inheritance:
 
+edisgo.io.heat\_pump\_import module
+----------------------------------------
+
+.. automodule:: edisgo.io.heat_pump_import
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 edisgo.io.generators\_import module
 -----------------------------------
 
