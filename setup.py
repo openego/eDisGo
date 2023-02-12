@@ -35,11 +35,11 @@ requirements = [
     "networkx >= 2.5.0",
     "geopy >= 2.0.0",
     "pandas >= 1.2.0",
-    "geopandas >= 0.9.0",
+    "geopandas >= 0.12.0",
     "pyproj >= 3.0.0",
     "shapely >= 1.7.0",
     "pypsa >= 0.17.0, <= 0.20.1",
-    "pyomo >= 6.0",
+    "pyomo <= 6.4.2",  # Problem with PyPSA 20.1 fixed in newest PyPSA release
     "multiprocess",
     "workalendar",
     "sqlalchemy < 1.4.0",
@@ -64,7 +64,8 @@ requirements = [
 dev_requirements = [
     "pytest",
     "pytest-notebook",
-    "sphinx_rtd_theme",
+    "sphinx >= 4.3.0, < 5.1.0",
+    "sphinx_rtd_theme >=0.5.2",
     "sphinx-autodoc-typehints",
     "pre-commit",
     "black",

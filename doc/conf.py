@@ -5,7 +5,7 @@ distribution grids based on open data.
 It is developed in the project open_eGo: https://openegoproject.wordpress.com
 
 DINGO lives at github: https://github.com/openego/dingo/
-The documentation is available on RTD: http://edisgo.readthedocs.io"""
+The documentation is available on RTD: https://edisgo.readthedocs.io/en/dev/"""
 
 __copyright__ = "Reiner Lemoine Institut gGmbH"
 __license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
@@ -73,26 +73,31 @@ napoleon_use_keyword = False
 # Dictionary of external links
 extlinks = {
     "pandas": (
-        "http://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.%s.html",
-        "pandas.",
+        "https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.%s.html",
+        "pandas.%s",
     ),
     "geopandas": (
         "https://geopandas.org/en/stable/docs/reference/api/geopandas.%s.html",
-        "geopandas.",
+        "geopandas.%s",
     ),
     "networkx": (
-        "https://networkx.github.io/documentation/stable/reference/classes/"
-        "graph.html#%s",
-        "networkx.",
+        "https://networkx.org/documentation/stable/reference/classes/" "graph.html#%s",
+        "networkx.%s",
     ),
     "sqlalchemy": (
         "http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s",
-        "SQLAlchemy session object",
+        "sqlalchemy.%s",
     ),
-    "shapely": ("https://shapely.readthedocs.io/en/latest/manual.html#%s", "shapely."),
-    "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "Ding0"),
-    "pypsa": ("https://pypsa.readthedocs.io/en/latest/components.html#%s", "pypsa"),
-    "plotly": ("https://plotly.com/python-api-reference/generated/%s.html", "plotly"),
+    "shapely": (
+        "https://shapely.readthedocs.io/en/latest/manual.html#%s",
+        "shapely.%s",
+    ),
+    "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "ding0.%s"),
+    "pypsa": ("https://pypsa.readthedocs.io/en/latest/components.html#%s", "pypsa.%s"),
+    "plotly": (
+        "https://plotly.com/python-api-reference/generated/%s.html",
+        "plotly.%s",
+    ),
 }
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
