@@ -828,6 +828,7 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines, split_mode="back")
         the voltage level the line is in (either 'mv' or 'lv').
     split_mode: it determines the pathway to be searched for MV/LV station when the
     node_1_2 comes after the half-length of feeder is not a MV/LV station.
+        Default: back
         *None: search for MV/LV station in all the nodes in the path (first back then
         forward)
         *back: search for MV/LV station in preceding nodes of node_1_2 in the path
@@ -926,7 +927,7 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines, split_mode="back")
                 # break if node is station
                 if node_1_2 is path[0]:
                     logger.error(
-                        f" {feeder_first_line} and following lines could not "
+                        f" {grid}==>{feeder_first_line} and following lines could not "
                         f"be reinforced due to insufficient number of node . "
                     )
                     break
@@ -956,7 +957,7 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines, split_mode="back")
                 )
                 nodes_tb_selected.insert(0, node_1_2)
             else:
-                logger.error(f"{split_mode} is not a valid mode")
+                logger.error(f"{grid}==>{split_mode} is not a valid mode")
 
             while (
                 node_1_2 not in nodes_feeder.keys()
@@ -967,7 +968,7 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines, split_mode="back")
                     node_1_2 = nodes_tb_selected[nodes_tb_selected.index(node_1_2) + 1]
                 except IndexError:
                     logger.error(
-                        f" {feeder_first_line} and following lines could not "
+                        f" {grid}==>{feeder_first_line} and following lines could not "
                         f"be reinforced due to the lack of LV station . "
                     )
                     node_1_2 = str()
@@ -976,9 +977,7 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines, split_mode="back")
         # if node_1_2 is a representative (meaning it is already directly connected
         # to the station), line cannot be disconnected and reinforced
         if node_1_2 not in nodes_feeder.keys() and not len(node_1_2) == 0:
-            logger.info(
-                f"==>method:split_feeder_at_half_length is running for " f"{grid}: "
-            )
+            logger.info(f"{grid}==>method:split_feeder_at_half_length is running")
             # get line between node_1_2 and predecessor node
             pred_node = path[path.index(node_1_2) - 1]
             line_removed = G.get_edge_data(node_1_2, pred_node)["branch_name"]
@@ -995,14 +994,14 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines, split_mode="back")
 
                 edisgo_obj.topology._lines_df.at[line_removed, "bus0"] = station_node
                 logger.info(
-                    f"==> {grid}--> the line {line_removed} disconnected from  "
+                    f"{grid}==> the line {line_removed} disconnected from  "
                     f"{pred_node} and connected to the main station {station_node} "
                 )
             elif grid.lines_df.at[line_removed, "bus1"] == pred_node:
 
                 edisgo_obj.topology._lines_df.at[line_removed, "bus1"] = station_node
                 logger.info(
-                    f"==> {grid}-->the line {line_removed} disconnected from "
+                    f"{grid}==>the line {line_removed} disconnected from "
                     f"{pred_node} and connected to the main station  {station_node} "
                 )
             else:
@@ -1016,8 +1015,8 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines, split_mode="back")
             lines_changes[line_added] = 1
     if lines_changes:
         logger.info(
-            f"{len(lines_changes)} line/s are reinforced by method: split feeder "
-            f"at half-length method in {grid}"
+            f"{grid}==>{len(lines_changes)} line/s are reinforced by method: "
+            f"split feeder at half-length"
         )
 
     return lines_changes
@@ -1240,8 +1239,8 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
                 # break if node is station
                 if node_1_2 is path[0]:
                     grid.error(
-                        f" {first_line} and following lines could not be reinforced "
-                        f"due to insufficient number of node in the feeder . "
+                        f" {grid}==>{first_line} and following lines could not be "
+                        f"reinforced due to insufficient number of node in the feeder. "
                     )
                     break
         loop_counter -= 1
@@ -1258,7 +1257,7 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
             # removed from exiting LV grid and converted to an MV line between new
             # and existing MV/LV station
         if len(nodes_tb_relocated) > 2 and loop_counter == 0:
-            logger.info(f"==>method:add_station_at_half_length is running for {grid}: ")
+            logger.info(f"{grid}==>method:add_station_at_half_length is running ")
             # Create the bus-bar name of primary and secondary side of new MV/LV station
             lv_bus_new = create_bus_name(station_node, "lv")
             mv_bus_new = create_bus_name(station_node, "mv")
@@ -1320,7 +1319,10 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
                 )
                 transformers_changes.update(transformer_changes)
 
-                logger.debug(f"A new grid {lv_grid_id_new} added into topology")
+                logger.debug(
+                    f"{edisgo_obj.topology.mv_grid}==>A new grid {lv_grid_id_new} "
+                    f"added into topology"
+                )
 
                 # ADD the MV LINE between existing and new MV station
 
@@ -1686,7 +1688,7 @@ def relocate_circuit_breaker(edisgo_obj, mode="loadgen"):
         else:
             has_lv_station = False
             logging.debug(
-                f"Ring {ring} does not have a LV station."
+                f"{grid}==>Ring {ring} does not have a LV station."
                 f"Switch disconnecter is installed at arbitrary "
                 "node."
             )
@@ -1743,10 +1745,11 @@ def relocate_circuit_breaker(edisgo_obj, mode="loadgen"):
 
     if len(circuit_breaker_changes):
         logger.info(
-            f"{len(circuit_breaker_changes)} circuit breakers are relocated in {grid}"
+            f"{grid}==>{len(circuit_breaker_changes)} circuit breakers are "
+            f"relocated in "
         )
     else:
-        logger.info(f"no circuit breaker is relocated in {grid}")
+        logger.info(f"{grid}==>no circuit breaker is relocated")
     return circuit_breaker_changes
 
 
@@ -1778,6 +1781,13 @@ def split_feeder_at_2_3_length(edisgo_obj, grid, crit_nodes, split_mode="forward
         corresponding time step the voltage issue occured in as
         :pandas:`pandas.Timestamp<Timestamp>`. Index of the dataframe are the
         names of all buses with voltage issues.
+    split_mode: it determines the pathway to be searched for MV/LV station when the
+    node_1_2 comes after the half-length of feeder is not a MV/LV station.
+        Default: forward
+        *None: search for MV/LV station in all the nodes in the path (first back then
+        forward)
+        *back: search for MV/LV station in preceding nodes of node_1_2 in the path
+        *forward: search for MV/LV station in latter nodes of node_1_2 in the path
 
     Returns
     -------
@@ -1805,7 +1815,7 @@ def split_feeder_at_2_3_length(edisgo_obj, grid, crit_nodes, split_mode="forward
         # distribution substations due to overvoltage issues.
         if len(path) == 1:
             logging.error(
-                f"Voltage issues at busbar in LV network {grid} "
+                f"{grid}==>Voltage issues at busbar in LV network  "
                 f"should have been solved in previous steps."
             )
         crit_nodes_feeder.setdefault(path[1], []).append(node)
@@ -1844,7 +1854,7 @@ def split_feeder_at_2_3_length(edisgo_obj, grid, crit_nodes, split_mode="forward
                 # break if node is station
                 if node_2_3 is path[0]:
                     logger.error(
-                        f" line of {node_2_3} could not be reinforced due to "
+                        f" {grid}==>line of {node_2_3} could not be reinforced due to "
                         f"insufficient number of node . "
                     )
                     break
@@ -1891,10 +1901,9 @@ def split_feeder_at_2_3_length(edisgo_obj, grid, crit_nodes, split_mode="forward
                 try:
                     node_2_3 = nodes_tb_selected[nodes_tb_selected.index(node_2_3) + 1]
                 except IndexError:
-                    logger.error(
-                        f" A lv station could not be found in the line of {node_2_3}. "
-                        f"Therefore the node {st_node_2_3} will be separated from the "
-                        f"feeder "
+                    logger.warning(
+                        f"{grid}==> A lv station could not be found in the line of "
+                        f"{node_2_3}.Therefore the feeder is split from {st_node_2_3} "
                     )
                     # instead of connecting last nodes of the feeders and reducing n-1
                     # security, install a disconnector in its current location
@@ -1907,10 +1916,13 @@ def split_feeder_at_2_3_length(edisgo_obj, grid, crit_nodes, split_mode="forward
 
         if node_2_3 in crit_nodes_feeder.keys():
             crit_line_name = G.get_edge_data(station_node, node_2_3)["branch_name"]
-            crit_line = grid.lines_df.loc[crit_line_name:]
+            crit_line = grid.lines_df[grid.lines_df.index.isin([crit_line_name])]
             # add same type of parallel line
             lines_changes = add_same_type_of_parallel_line(edisgo_obj, crit_line)
-
+            logger.info(
+                f"{grid} ==> voltage issue of {crit_line_name} solved by "
+                f"adding same type of parallel line "
+            )
         else:
             # get line between node_2_3 and predecessor node
             pred_node = path[path.index(node_2_3) - 1]
@@ -1935,7 +1947,7 @@ def split_feeder_at_2_3_length(edisgo_obj, grid, crit_nodes, split_mode="forward
 
                 edisgo_obj.topology._lines_df.at[line_removed, "bus1"] = station_node
                 logger.info(
-                    f"==> {grid}-->the line {line_removed} disconnected from "
+                    f"==> {grid}==>the line {line_removed} disconnected from "
                     f"{pred_node} and connected to the main station  {station_node} "
                 )
             else:
@@ -1950,13 +1962,13 @@ def split_feeder_at_2_3_length(edisgo_obj, grid, crit_nodes, split_mode="forward
 
     if lines_changes:
         logger.info(
-            f"{len(lines_changes)} line/s are reinforced by split feeder at 2/3-length "
-            f"method in {grid}"
+            f"{grid}==>{len(lines_changes)} line/s are reinforced by method: "
+            f"split feeder at 2_3-length"
         )
     return lines_changes
 
 
-def add_substation_at_2_3_length(edisgo_obj, grid, crit_nodes):
+def add_station_at_2_3_length(edisgo_obj, grid, crit_nodes):
     """
     todo: docstring to be updated
     If the number of overloaded feeders in the LV grid is more than 2, the feeders are
@@ -2128,7 +2140,7 @@ def add_substation_at_2_3_length(edisgo_obj, grid, crit_nodes):
         # distribution substations due to overvoltage issues.
         if len(path) == 1:
             logging.error(
-                f"Voltage issues at busbar in LV network {grid} should have "
+                f"{grid}==>Voltage issues at busbar in LV network should have "
                 "been solved in previous steps."
             )
         crit_nodes_feeder.setdefault(path[1], []).append(node)
@@ -2173,7 +2185,7 @@ def add_substation_at_2_3_length(edisgo_obj, grid, crit_nodes):
                 # break if node is station
                 if node_2_3 is path[0]:
                     grid.error(
-                        f" line of {node_2_3} could not be reinforced "
+                        f" {grid}==>line of {node_2_3} could not be reinforced "
                         f"due to insufficient number of node in the feeder . "
                     )
                     break
@@ -2226,10 +2238,12 @@ def add_substation_at_2_3_length(edisgo_obj, grid, crit_nodes):
             # same with the distance between pred. node of node_2_3 of one of first
             # feeders to be split in LV grid
 
-            length = (
+            length_lv = (
                 path_length_dict[node_2_3]
                 - path_length_dict[path[path.index(node_2_3) - 1]]
             )
+            length_mv = path_length_dict[node_2_3]
+
             # if the transformer already added, do not add bus and transformer once more
             if not transformers_changes:
                 # the coordinates of new MV station (x2,y2)
@@ -2240,7 +2254,7 @@ def add_substation_at_2_3_length(edisgo_obj, grid, crit_nodes):
                 edisgo_obj.topology.add_bus(
                     lv_bus_new,
                     v_nom_lv,
-                    x=x_bus + length / 1000,
+                    x=x_bus + length_lv / 1000,
                     y=y_bus,
                     lv_grid_id=lv_grid_id_new,
                     in_building=building_bus,
@@ -2249,7 +2263,7 @@ def add_substation_at_2_3_length(edisgo_obj, grid, crit_nodes):
                 edisgo_obj.topology.add_bus(
                     mv_bus_new,
                     v_nom_mv,
-                    x=x_bus + length / 1000,
+                    x=x_bus + length_mv / 1000,
                     y=y_bus,
                     in_building=building_bus,
                 )
@@ -2260,7 +2274,10 @@ def add_substation_at_2_3_length(edisgo_obj, grid, crit_nodes):
                 )
                 transformers_changes.update(transformer_changes)
 
-                logger.debug(f"A new grid {lv_grid_id_new} added into topology")
+                logger.debug(
+                    f"{edisgo_obj.topology.mv_grid}==>A new grid {lv_grid_id_new} "
+                    f"added into topology"
+                )
 
                 # ADD the MV LINE between existing and new MV station
 
@@ -2271,7 +2288,7 @@ def add_substation_at_2_3_length(edisgo_obj, grid, crit_nodes):
                 line_added_mv = edisgo_obj.topology.add_line(
                     bus0=grid.transformers_df.bus0[0],
                     bus1=mv_bus_new,
-                    length=length,
+                    length=length_mv,
                     type_info=standard_line,
                     kind="cable",
                 )
@@ -2299,8 +2316,8 @@ def add_substation_at_2_3_length(edisgo_obj, grid, crit_nodes):
                     )
             logger.info(
                 f"{len(nodes_tb_relocated.keys())} feeders are removed from the grid "
-                f"{grid} and located in new grid{repr(grid) + str(1001)} by split "
-                f"feeder+add transformer method"
+                f"{grid} and located in new grid{repr(grid) + str(1001)} by method: "
+                f"add_station_at_2_3_length "
             )
     if len(lines_changes) < 3:
         lines_changes = {}
