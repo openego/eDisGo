@@ -73,19 +73,7 @@ def import_ding0_grid(path, edisgo_obj):
     # write dataframes to edisgo_obj
     edisgo_obj.topology.buses_df = grid.buses[edisgo_obj.topology.buses_df.columns]
     edisgo_obj.topology.lines_df = grid.lines[edisgo_obj.topology.lines_df.columns]
-
-    grid.loads = grid.loads.drop(columns="p_set").rename(columns={"peak_load": "p_set"})
-
     edisgo_obj.topology.loads_df = grid.loads[edisgo_obj.topology.loads_df.columns]
-    # set loads without type information to be conventional loads
-    # this is done, as ding0 currently does not provide information on the type of load
-    # but ding0 grids currently also only contain conventional loads
-    # ToDo: Change, once information is provided by ding0
-    loads_without_type = edisgo_obj.topology.loads_df[
-        (edisgo_obj.topology.loads_df.type.isnull())
-        | (edisgo_obj.topology.loads_df.type == "")
-    ].index
-    edisgo_obj.topology.loads_df.loc[loads_without_type, "type"] = "conventional_load"
     # drop slack generator from generators
     slack = grid.generators.loc[grid.generators.control == "Slack"].index
     grid.generators.drop(slack, inplace=True)
