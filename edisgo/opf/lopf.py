@@ -440,9 +440,8 @@ def setup_model(
     else:
         model.time_final = [model.time_set.at(-1)]
         model.time_end = [model.time_set.at(-1)]
-    model.time_non_zero = model.time_set - [model.time_set.at(1)]
     model.times_fixed_soc = pm.Set(
-        initialize=[model.time_set.at(1), model.time_set.at(-1)]
+        initialize=[model.time_set.at(-1)]
     )
     model.timeindex = pm.Param(
         model.time_set,
@@ -558,7 +557,7 @@ def setup_model(
 
     if fixed_parameters["optimize_bess"]:
         model.BatteryCharging = pm.Constraint(
-            model.storage_set, model.time_non_zero, rule=soc
+            model.storage_set, model.time_set, rule=soc
         )
         model.FixedSOC = pm.Constraint(
             model.storage_set, model.times_fixed_soc, rule=fix_soc
@@ -909,7 +908,7 @@ def add_ev_model_bands(
         )
     # Constraints
     model.EVCharging = pm.Constraint(
-        model.flexible_charging_points_set, model.time_non_zero, rule=charging_ev
+        model.flexible_charging_points_set, model.time_set, rule=charging_ev
     )
     model = add_rolling_horizon(
         comp_type="ev",
@@ -979,19 +978,8 @@ def add_rolling_horizon(
                 rule=globals()[f"initial_energy_level_{energy_attr}"],
             ),
         )
-        setattr(
-            model,
-            f"InitialEnergyLevelStart{energy_attr.upper()}",
-            pm.Constraint(
-                flex_set,
-                model.time_zero,
-                rule=globals()[f"fixed_energy_level_{energy_attr}"],
-            ),
-        )
         if energy_level_starts[energy_attr] is None:
             getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").deactivate()
-        else:
-            getattr(model, f"InitialEnergyLevelStart{energy_attr.upper()}").deactivate()
         # set final energy level and if necessary charging power
         setattr(
             model,
@@ -1149,9 +1137,14 @@ def add_heat_pump_model(
         -------
 
         """
+        if time == 0:
+            energy_level_pre = model.tes.loc[hp, "capacity"] * \
+                               model.tes.loc[hp, "state_of_charge_initial"]
+        else:
+            energy_level_pre = model.energy_level_tes[hp, time - 1]
         return model.energy_level_tes[hp, time] == (
             1 - 0.05 * pd.to_timedelta(model.time_increment) / pd.to_timedelta("24h")
-        ) * model.energy_level_tes[hp, time - 1] + model.charging_tes[hp, time] * (
+        ) * energy_level_pre + model.charging_tes[hp, time] * (
             pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h")
         )
 
@@ -1179,7 +1172,7 @@ def add_heat_pump_model(
         within=pm.Any,
     )
     # set up variables
-    # Do not constrain energy is grid power is maximised:
+    # Do not constrain energy if grid power is maximised:
     if (model.objective_name == "maximize_grid_power") or \
             (model.objective_name == "minimize_grid_power"):
         model.energy_level_tes = pm.Var(
@@ -1203,7 +1196,7 @@ def add_heat_pump_model(
         model.flexible_heat_pumps_set, model.time_set, rule=energy_balance_hp_tes
     )
     model.ChargingTES = pm.Constraint(
-        model.flexible_heat_pumps_set, model.time_non_zero, rule=charging_tes
+        model.flexible_heat_pumps_set, model.time_set, rule=charging_tes
     )
     model = add_rolling_horizon(
         comp_type="hp",
@@ -1362,14 +1355,12 @@ def update_rolling_horizon(comp_type, model, **kwargs):
         # otherwise activate initial energy and charging
         if energy_level_starts[energy_attr] is None:
             getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").deactivate()
-            getattr(model, f"InitialEnergyLevelStart{energy_attr.upper()}").activate()
         else:
             for comp in flex_set:
                 getattr(model, f"energy_level_start_{energy_attr}")[comp].set_value(
                     energy_level_starts[energy_attr][comp]
                 )
             getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").activate()
-            getattr(model, f"InitialEnergyLevelStart{energy_attr.upper()}").deactivate()
 
         # set energy level beginning if necessary
         # this is implemented to compensate difference to reference charging
@@ -2096,16 +2087,19 @@ def soc(model, storage, time):
     -------
 
     """
-    return model.soc[storage, time] == model.soc[
-        storage, time - 1
-    ] - model.grid.storage_units_df.loc[storage, "efficiency_store"] * model.charging[
-        storage, time - 1
-    ] * (
+    if time == 0:
+        soc_pre = model.fix_relative_soc * \
+                  model.grid.storage_units_df.loc[storage, model.pars["capacity"]]
+    else:
+        soc_pre = model.soc[storage, time - 1]
+    return model.soc[storage, time] == soc_pre - \
+        model.grid.storage_units_df.loc[storage, "efficiency_store"] * \
+        model.charging[storage, time - 1] * (
         pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h")
     )
 
 
-def fix_soc(model, bus, time):
+def fix_soc(model, storage, time):
     """
     Constraint with which state of charge at beginning and end of charging
     period is fixed at certain value
@@ -2113,7 +2107,7 @@ def fix_soc(model, bus, time):
     Parameters
     ----------
     model :
-    bus :
+    storage :
     time :
 
     Returns
@@ -2121,9 +2115,9 @@ def fix_soc(model, bus, time):
 
     """
     return (
-        model.soc[bus, time]
+        model.soc[storage, time]
         == model.fix_relative_soc
-        * model.grid.storage_units_df.loc[bus, model.pars["capacity"]]
+        * model.grid.storage_units_df.loc[storage, model.pars["capacity"]]
     )
 
 
@@ -2142,9 +2136,13 @@ def charging_ev(model, charging_point, time):
     -------
 
     """
-    return model.energy_level_ev[charging_point, time] == model.energy_level_ev[
-        charging_point, time - 1
-    ] + model.charging_efficiency * model.charging_ev[charging_point, time] * (
+    if time == 0:
+        energy_level_pre = (model.lower_bound_ev[charging_point, time] +
+                            model.upper_bound_ev[charging_point, time]) / 2
+    else:
+        energy_level_pre = model.energy_level_ev[charging_point, time - 1]
+    return model.energy_level_ev[charging_point, time] == energy_level_pre + \
+        model.charging_efficiency * model.charging_ev[charging_point, time] * (
         pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h")
     )
 
