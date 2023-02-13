@@ -31,7 +31,15 @@ if "READTHEDOCS" not in os.environ:
 logger = logging.getLogger(__name__)
 
 COLUMNS = {
-    "loads_df": ["bus", "p_set", "type", "annual_consumption", "sector"],
+    "loads_df": [
+        "bus",
+        "p_set",
+        "building_id",
+        "type",
+        "annual_consumption",
+        "sector",
+        "number_households",
+    ],
     "generators_df": [
         "bus",
         "p_nom",
@@ -211,9 +219,6 @@ class Topology:
                 worst case analysis, as different types of loads are treated
                 differently.
 
-            annual_consumption : float
-                Annual consumption in MWh.
-
             sector : str
                 Further specifies type of load.
 
@@ -242,6 +247,19 @@ class Topology:
                 existing load (see
                 function :attr:`~.network.topology.Topology.connect_to_lv`). The sector
                 needs to either be 'individual_heating' or 'district_heating'.
+
+            building_id : int
+                ID of the building the load is associated with. This is e.g. used to
+                get electricity and heat demand time series as well as information on
+                existing heat pumps and PV rooftop plants for scenarios developed in the
+                eGo^n research project.
+
+            annual_consumption : float
+                Annual consumption in MWh.
+
+            number_households : int
+                Number of households in the building. This information is currently not
+                used in eDisGo.
 
         Returns
         --------
