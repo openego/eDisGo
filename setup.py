@@ -59,6 +59,7 @@ requirements = [
     "dash==2.6.0",
     "jupyter_dash",
     "werkzeug==2.2.0",
+    "saio",
 ]
 
 dev_requirements = [
