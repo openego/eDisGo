@@ -1,16 +1,21 @@
 import datetime
+import logging
 import os
 
 import pandas as pd
+import saio
 
 from demandlib import bdew as bdew
 from demandlib import particular_profiles as profiles
 from workalendar.europe import Germany
 
+from edisgo.io.egon_data_import import session_scope_egon_data
 from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import model_draft, supply
+
+logger = logging.getLogger(__name__)
 
 
 def feedin_oedb(config_data, weather_cell_ids, timeindex):
@@ -185,63 +190,63 @@ def load_time_series_demandlib(config_data, timeindex):
     return elec_demand.loc[timeindex]
 
 
-def cop_oedb(config_data, weather_cell_ids=None, timeindex=None):
+def cop_oedb(engine, weather_cell_ids, year=None):
     """
     Get COP (coefficient of performance) time series data from the
     `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
 
     Parameters
     ----------
-    config_data : :class:`~.tools.config.Config`
-        Configuration data from config files, relevant for information of
-        which data base table to retrieve COP data from.
-    weather_cell_ids : list(int)
-        List of weather cell id's (integers) to obtain COP data for.
-    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-        COP data is only provided for the weather year 2011. If
-        timeindex contains a different year, the data is reindexed.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+    weather_cell_ids : list(int) or list(float)
+        List (or array) of weather cell IDs to obtain COP data for.
+    year : int
+        COP data is only provided for the weather year 2011. If a different year
+        is provided through this parameter, the data is reindexed. A leap year can
+        currently not be handled. In case a leap year is given, the time index is
+        set for 2011!
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        DataFrame with hourly COP time series in p.u. per weather cell.
+        DataFrame with hourly COP time series in p.u. per weather cell. Index of the
+        dataframe is a time index. Columns contain the weather cell ID as integer.
 
     """
-    raise NotImplementedError
+    # set up time index to index COP data by
+    if year is None:
+        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
+    else:
+        if pd.Timestamp(year, 1, 1).is_leap_year:
+            year = 2011
+            logger.warning(
+                "A leap year was given to 'cop_oedb' function. This is currently not "
+                "valid. The year data is indexed by is therefore set to the default "
+                "value of 2011."
+            )
+        timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
 
-    # if timeindex is None:
-    #     timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
-    #
-    # if weather_cell_ids is None:
-    #     # get weather cells in grid district
-    #     pass
-    #
-    # import saio
-    # saio.register_schema("supply", engine)
-    # from saio.supply import egon_era5_renewable_feedin
-    #
-    # # get cop from database
-    # with db.session_scope() as session:
-    #     query = session.query(
-    #         egon_era5_renewable_feedin.w_id,
-    #         egon_era5_renewable_feedin.feedin.label("cop"),
-    #     ).filter(
-    #         egon_era5_renewable_feedin.carrier == "heat_pump_cop"
-    #     ).filter(
-    #         egon_era5_renewable_feedin.w_id.in_(weather_cell_ids)
-    #     )
-    #
-    #     cop = pd.read_sql(
-    #         query.statement, query.session.bind, index_col="w_id"
-    #     )
-    #
-    # # convert dataframe to have weather cell ID as column name and time index
-    # cop = pd.DataFrame(
-    #     {w_id: ts.cop for w_id, ts in cop.iterrows()},
-    #     index=timeindex
-    # )
-    #
-    # return cop
+    saio.register_schema("supply", engine)
+    from saio.supply import egon_era5_renewable_feedin
+
+    # get cop from database
+    with session_scope_egon_data(engine) as session:
+        query = (
+            session.query(
+                egon_era5_renewable_feedin.w_id,
+                egon_era5_renewable_feedin.feedin.label("cop"),
+            )
+            .filter(egon_era5_renewable_feedin.carrier == "heat_pump_cop")
+            .filter(egon_era5_renewable_feedin.w_id.in_(weather_cell_ids))
+        )
+
+        cop = pd.read_sql(query.statement, engine, index_col="w_id")
+
+    # convert dataframe to have weather cell ID as column name and time index
+    cop = pd.DataFrame({w_id: ts.cop for w_id, ts in cop.iterrows()}, index=timeindex)
+
+    return cop
 
 
 def heat_demand_oedb(config_data, building_ids, timeindex=None):
