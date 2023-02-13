@@ -1701,7 +1701,9 @@ class EDisGo:
         self.heat_pump.set_heat_demand(
             self, "oedb", heat_pump_names=integrated_heat_pumps
         )
-        self.heat_pump.set_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
+        self.heat_pump.set_cop(
+            self, "oedb", heat_pump_names=integrated_heat_pumps, engine=engine
+        )
 
     def apply_heat_pump_operating_strategy(
         self, strategy="uncontrolled", heat_pump_names=None, **kwargs

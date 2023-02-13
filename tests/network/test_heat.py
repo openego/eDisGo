@@ -34,12 +34,6 @@ class TestHeatPump:
             },
             index=["hp1", "hp2"],
         )
-        self.building_ids = pd.DataFrame(
-            data={
-                "building_ids": [[1], [2, 3]],
-            },
-            index=["hp1", "hp2"],
-        )
 
     @pytest.fixture(autouse=True)
     def setup_heat_pump(self):
@@ -47,7 +41,6 @@ class TestHeatPump:
         self.heatpump.cop_df = self.cop
         self.heatpump.heat_demand_df = self.heat_demand
         self.heatpump.thermal_storage_units_df = self.tes
-        self.heatpump.building_ids_df = self.building_ids
 
     def test_set_cop(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
@@ -152,10 +145,6 @@ class TestHeatPump:
         pd.testing.assert_frame_equal(
             self.heatpump.thermal_storage_units_df,
             self.tes,
-        )
-        pd.testing.assert_frame_equal(
-            self.heatpump.building_ids_df,
-            self.building_ids,
         )
 
         shutil.rmtree(save_dir)
