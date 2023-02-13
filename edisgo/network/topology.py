@@ -1777,15 +1777,15 @@ class Topology:
             The identifier of the newly connected component.
 
         """
-
-        voltage_level = comp_data.pop("voltage_level")
-
         if "p" not in comp_data.keys():
             comp_data["p"] = (
                 comp_data["p_set"]
                 if "p_set" in comp_data.keys()
                 else comp_data["p_nom"]
             )
+
+        voltage_level = comp_data.pop("voltage_level")
+        power = comp_data.pop("p")
 
         # create new bus for new component
         if type(comp_data["geom"]) != Point:
@@ -1838,7 +1838,7 @@ class Topology:
             # avoid very short lines by limiting line length to at least 1m
             line_length = max(line_length, 0.001)
 
-            line_type, num_parallel = select_cable(edisgo_object, "mv", comp_data["p"])
+            line_type, num_parallel = select_cable(edisgo_object, "mv", power)
 
             line_name = self.add_line(
                 bus0=self.mv_grid.station.index[0],
@@ -1887,9 +1887,7 @@ class Topology:
             for dist_min_obj in conn_objects_min_stack:
                 # do not allow connection to virtual busses
                 if "virtual" not in dist_min_obj["repr"]:
-                    line_type, num_parallel = select_cable(
-                        edisgo_object, "mv", comp_data["p"]
-                    )
+                    line_type, num_parallel = select_cable(edisgo_object, "mv", power)
                     target_obj_result = self._connect_mv_bus_to_target_object(
                         edisgo_object=edisgo_object,
                         bus=self.buses_df.loc[bus, :],
@@ -2010,8 +2008,6 @@ class Topology:
 
         """
         global add_func
-        voltage_level = comp_data.pop("voltage_level")
-        mvlv_subst_id = comp_data.pop("mvlv_subst_id")
 
         if "p" not in comp_data.keys():
             comp_data["p"] = (
@@ -2019,6 +2015,10 @@ class Topology:
                 if "p_set" in comp_data.keys()
                 else comp_data["p_nom"]
             )
+
+        voltage_level = comp_data.pop("voltage_level")
+        mvlv_subst_id = comp_data.pop("mvlv_subst_id")
+        power = comp_data.pop("p")
 
         def _connect_to_station():
             """
@@ -2064,7 +2064,7 @@ class Topology:
             line_length = max(line_length, 0.001)
 
             # get suitable line type
-            line_type, num_parallel = select_cable(edisgo_object, "lv", comp_data["p"])
+            line_type, num_parallel = select_cable(edisgo_object, "lv", power)
             line_name = self.add_line(
                 bus0=station_bus,
                 bus1=b,
@@ -2161,7 +2161,7 @@ class Topology:
             # get valid buses to connect new component to
             lv_loads = lv_grid.loads_df
             if comp_type == "generator":
-                if comp_data["p"] <= 0.030:
+                if power <= 0.030:
                     tmp = lv_loads[lv_loads.sector == "residential"]
                     target_buses = tmp.bus.values
                 else:
@@ -2200,7 +2200,7 @@ class Topology:
                 random.seed(
                     a="{}_{}_{}".format(
                         comp_data["sector"],
-                        comp_data["p"],
+                        power,
                         len(lv_grid.loads_df),
                     )
                 )
