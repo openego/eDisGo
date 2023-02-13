@@ -1642,7 +1642,7 @@ class EDisGo:
         """
         charging_strategy(self, strategy=strategy, **kwargs)
 
-    def import_heat_pumps(self, scenario=None, **kwargs):
+    def import_heat_pumps(self, scenario, engine, **kwargs):
         """
         Gets heat pump capacities for specified scenario from oedb and integrates them
         into the grid.
@@ -1691,15 +1691,12 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve heat pump data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-
-        Other Parameters
-        ----------------
-        kwargs :
-            See :func:`edisgo.io.heat_pump_import.oedb`.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine.
 
         """
         integrated_heat_pumps = import_heat_pumps_oedb(
-            edisgo_object=self, scenario=scenario, **kwargs
+            edisgo_object=self, scenario=scenario, engine=engine
         )
         self.heat_pump.set_heat_demand(
             self, "oedb", heat_pump_names=integrated_heat_pumps
