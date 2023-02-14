@@ -74,10 +74,10 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     return JuMP.@objective(pm.model, Min,
         factor  * sum(sum(ccm[n][b]*r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
         + factor2  * sum(sum((p[n][(b,i,j)]^2+q[n][(b,i,j)]^2)/s_nom[n][b]^2 * c[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading
-        + factor_slacks  * sum(sum(pgc[n]^2) for n in nws) # minimize non-dispatchable curtailment
-        + factor_slacks  * sum(sum(pgens[n]^2) for n in nws) # minimize dispatchable curtailment
-        + factor_slacks  * sum(sum(pds[n]^2) for n in nws) # minimize load shedding
-        + factor_slacks  * sum(sum(pcps[n]^2) for n in nws) # minimize cp load shedding
+        + factor_slacks  * sum(sum(pgc[n][i]^2 for i in keys(PowerModels.ref(pm,1 , :gen_nd))) for n in nws) # minimize non-dispatchable curtailment
+        + factor_slacks  * sum(sum(pgens[n][i]^2 for i in keys(PowerModels.ref(pm,1 , :gen))) for n in nws) # minimize dispatchable curtailment
+        + factor_slacks  * sum(sum(pds[n][i]^2 for i in keys(PowerModels.ref(pm,1 , :load))) for n in nws) # minimize load shedding
+        + factor_slacks  * sum(sum(pcps[n][i]^2 for i in keys(PowerModels.ref(pm,1 , :electromobility))) for n in nws) # minimize cp load shedding
     )
 end
 
