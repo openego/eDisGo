@@ -1196,17 +1196,11 @@ class EDisGo:
             Specifies the voltage level the new component is integrated in.
             Possible options are 4 (MV busbar), 5 (MV grid), 6 (LV busbar) or
             7 (LV grid). If no voltage level is provided the voltage level
-            is determined based on the nominal power `p_nom` or `p_set` (given as kwarg)
-            as follows:
-
-            * voltage level 4 (MV busbar): nominal power between 4.5 MW and
-              17.5 MW
-            * voltage level 5 (MV grid) : nominal power between 0.3 MW and
-              4.5 MW
-            * voltage level 6 (LV busbar): nominal power between 0.1 MW and
-              0.3 MW
-            * voltage level 7 (LV grid): nominal power below 0.1 MW
-
+            is determined based on the nominal power `p_nom` or `p_set` (given as
+            kwarg). For this, upper limits up to which capacity a component is
+            integrated into a certain voltage level (set in the config section
+            `grid_connection` through the parameters 'upper_limit_voltage_level_{4:7}')
+            are used.
         add_ts : bool, optional
             Indicator if time series for component are added as well.
             Default: True.
@@ -1249,14 +1243,27 @@ class EDisGo:
                     "Neither appropriate voltage level nor nominal power "
                     "were supplied."
                 )
-            # Determine voltage level manually from nominal power
-            if 4.5 < p <= 17.5:
+            # determine voltage level manually from nominal power
+            cfg_max_p_nom = self.config["grid_connection"]
+            if (
+                cfg_max_p_nom["upper_limit_voltage_level_5"]
+                < p
+                <= cfg_max_p_nom["upper_limit_voltage_level_4"]
+            ):
                 voltage_level = 4
-            elif 0.3 < p <= 4.5:
+            elif (
+                cfg_max_p_nom["upper_limit_voltage_level_6"]
+                < p
+                <= cfg_max_p_nom["upper_limit_voltage_level_5"]
+            ):
                 voltage_level = 5
-            elif 0.1 < p <= 0.3:
+            elif (
+                cfg_max_p_nom["upper_limit_voltage_level_7"]
+                < p
+                <= cfg_max_p_nom["upper_limit_voltage_level_6"]
+            ):
                 voltage_level = 6
-            elif 0 < p <= 0.1:
+            elif 0 < p <= cfg_max_p_nom["upper_limit_voltage_level_7"]:
                 voltage_level = 7
             else:
                 raise ValueError("Unsupported voltage level")
