@@ -920,6 +920,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
     for cp_i in np.arange(len(emob_df.index)):
         idx_bus = _mapping(psa_net, emob_df.bus[cp_i])
         # retrieve power factor and sign from config
+        eta = edisgo_obj.electromobility.simbev_config_df.eta_cp.values[0]
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "cp")
         q = (
             sign
@@ -945,6 +946,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
             "e_min": e_min[0] / s_base,
             "e_max": e_max[0] / s_base,
             "energy": soc_initial,
+            "eta": eta,
             "cp_bus": idx_bus,
             "name": emob_df.index[cp_i],
             "index": cp_i + 1,

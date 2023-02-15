@@ -38,7 +38,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         for i in PowerModels.ids(pm, :branch, nw=n)
             constraint_voltage_magnitude_difference_radial(pm, i, nw=n) # Eq. (6)
         end
-        PowerModels.constraint_model_current(pm, nw=n)  # Eq. (7) as SOC
+        eDisGo_OPF.constraint_model_current(pm, nw=n)  # Eq. (7) as SOC
         for i in PowerModels.ids(pm, :heatpumps, nw=n)
             constraint_hp_operation(pm, i, n) # Eq. (14)
         end
@@ -66,13 +66,16 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
     end
 
     n_1 = network_ids[1]
+
     for i in PowerModels.ids(pm, :electromobility, nw=n_1)
-        constraint_cp_state_initial(pm, n_1, i)  # Eq. (12)
+        eta = PowerModels.ref(pm, 1, :electromobility)[i]["eta"]
+        constraint_cp_state_initial(pm, n_1, i, eta)  # Eq. (12)
     end
 
     for n_2 in network_ids[2:end]
         for i in PowerModels.ids(pm, :electromobility, nw=n_2)
-            constraint_cp_state(pm, n_1, n_2, i) # Eq. (13)
+            eta = PowerModels.ref(pm, 1, :electromobility)[i]["eta"]
+            constraint_cp_state(pm, n_1, n_2, i, eta) # Eq. (13)
         end
         n_1 = n_2
     end

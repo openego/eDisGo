@@ -74,8 +74,9 @@ function constraint_model_current(pm::AbstractNCBFModelEdisgo, n::Int)
         t_bus = branch["t_bus"]
         f_idx = (i, f_bus, t_bus)
         tm = branch["tap"]
-
-        JuMP.@NLconstraint(pm.model, p[f_idx]^2 + q[f_idx]^2 == (w[f_bus]/tm^2)*ccm[i])
+        if !(branch["storage"])
+            JuMP.@NLconstraint(pm.model, p[f_idx]^2 + q[f_idx]^2 == (w[f_bus]/tm^2)*ccm[i])
+        end
     end
 end
 

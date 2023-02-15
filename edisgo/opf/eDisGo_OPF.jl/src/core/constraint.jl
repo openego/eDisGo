@@ -47,7 +47,7 @@ end
 
 """ Creates constraints for EV charging per charging park"""
 
-function constraint_cp_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int)
+function constraint_cp_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int, eta)
     if haskey(PowerModels.ref(pm, n), :time_elapsed)
         time_elapsed = PowerModels.ref(pm, n, :time_elapsed)
     else
@@ -58,11 +58,11 @@ function constraint_cp_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int)
     cp = PowerModels.ref(pm, n, :electromobility, i)
     cpe = PowerModels.var(pm, n, :cpe, i)
     pcp_1 = PowerModels.var(pm, n, :pcp, i)
-    JuMP.@constraint(pm.model, cpe == 0.5*(cp["e_min"]+cp["e_max"]) + time_elapsed * pcp_1)
+    JuMP.@constraint(pm.model, cpe == 0.5*(cp["e_min"]+cp["e_max"]) + time_elapsed * eta * pcp_1)
 
 end
 
-function constraint_cp_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i::Int)
+function constraint_cp_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i::Int, eta)
     if haskey(PowerModels.ref(pm, n_1), :time_elapsed)
         time_elapsed = PowerModels.ref(pm, n_1, :time_elapsed)
     else
@@ -74,7 +74,7 @@ function constraint_cp_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i::I
     cpe_2 = PowerModels.var(pm, n_2, :cpe, i)
     cpe_1 = PowerModels.var(pm, n_1, :cpe, i)
 
-    JuMP.@constraint(pm.model, cpe_2 - cpe_1 == time_elapsed*pcp_2)
+    JuMP.@constraint(pm.model, cpe_2 - cpe_1 == time_elapsed * eta * pcp_2)
 
     if n_2 == length(collect(PowerModels.nw_ids(pm)))
         cp = PowerModels.ref(pm, length(collect(PowerModels.nw_ids(pm))), :electromobility, i)

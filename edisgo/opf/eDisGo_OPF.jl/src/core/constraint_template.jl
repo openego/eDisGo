@@ -97,3 +97,7 @@ function constraint_store_state(pm::AbstractBFModelEdisgo, i::Int, nw_1::Int, nw
         constraint_store_state_initial(pm, nw_2, i, storage["energy"], storage["charge_efficiency"], storage["discharge_efficiency"], time_elapsed, kind, p_loss)
     end
 end
+
+function constraint_model_current(pm::AbstractPowerModel; nw::Int=nw_id_default)
+    eDisGo_OPF.constraint_model_current(pm, nw)
+end
