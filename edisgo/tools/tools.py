@@ -451,6 +451,91 @@ def assign_voltage_level_to_component(df, buses_df):
     return df
 
 
+def determine_grid_integration_voltage_level(edisgo_object, power):
+    """
+    Gives voltage level component should be integrated into based on its nominal power.
+
+    The voltage level is specified through an integer value from 4 to 7 with
+    4 = MV busbar, 5 = MV grid, 6 = LV busbar and 7 = LV grid.
+
+    The voltage level is determined using upper limits up to which capacity a component
+    is integrated into a certain voltage level. These upper limits are set in the
+    config section `grid_connection` through the parameters
+    'upper_limit_voltage_level_{4:7}'.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    power : float
+        Nominal power of component in MW.
+
+    Returns
+    --------
+    int
+        Voltage level component should be integrated into. Possible options are
+        4 (MV busbar), 5 (MV grid), 6 (LV busbar) or 7 (LV grid).
+
+    """
+    cfg_max_p_nom = edisgo_object.config["grid_connection"]
+    if (
+        cfg_max_p_nom["upper_limit_voltage_level_5"]
+        < power
+        <= cfg_max_p_nom["upper_limit_voltage_level_4"]
+    ):
+        voltage_level = 4
+    elif (
+        cfg_max_p_nom["upper_limit_voltage_level_6"]
+        < power
+        <= cfg_max_p_nom["upper_limit_voltage_level_5"]
+    ):
+        voltage_level = 5
+    elif (
+        cfg_max_p_nom["upper_limit_voltage_level_7"]
+        < power
+        <= cfg_max_p_nom["upper_limit_voltage_level_6"]
+    ):
+        voltage_level = 6
+    elif 0 < power <= cfg_max_p_nom["upper_limit_voltage_level_7"]:
+        voltage_level = 7
+    else:
+        raise ValueError("Unsupported voltage level")
+    return voltage_level
+
+
+def determine_bus_voltage_level(edisgo_object, bus_name):
+    """
+    Gives voltage level as integer from 4 to 7 of given bus.
+
+    The voltage level is specified through an integer value from 4 to 7 with
+    4 = MV busbar, 5 = MV grid, 6 = LV busbar and 7 = LV grid.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    bus_name : str
+        Name of bus as in index of :attr:`~.network.topology.Topology.buses_df`.
+
+    Returns
+    --------
+    int
+        Voltage level of bus. Possible options are 4 (MV busbar), 5 (MV grid),
+        6 (LV busbar) or 7 (LV grid).
+
+    """
+    v_nom = edisgo_object.topology.buses_df.at[bus_name, "v_nom"]
+    if v_nom < 1:
+        if bus_name in edisgo_object.topology.transformers_df.bus1:
+            voltage_level = 6
+        else:
+            voltage_level = 7
+    else:
+        if bus_name in edisgo_object.topology.transformers_hvmv_df.bus1:
+            voltage_level = 4
+        else:
+            voltage_level = 5
+    return voltage_level
+
+
 def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
     """
     Get all weather cells that intersect with the grid district.
