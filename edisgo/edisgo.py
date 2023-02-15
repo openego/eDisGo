@@ -932,6 +932,12 @@ class EDisGo:
             :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case`. If True
             reinforcement is calculated for worst-case MV and LV cases separately.
 
+        catch_convergence_problems : bool
+            Uses reinforcement strategy to reinforce not converging grid.
+            Reinforces first with only converging timesteps. Reinforce again with at
+            start not converging timesteps. If still not converging, scale timeseries.
+            Default: False
+
         """
         if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
 
