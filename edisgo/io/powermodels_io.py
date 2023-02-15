@@ -367,7 +367,7 @@ def from_powermodels(
                     "Highest relative error of {} variable exceeds 5%.".format(flex)
                 )
 
-    if save_slack_gen:  # save slack generator variable to csv file
+    if save_slack_gen:  # save slack generator variable to edisgo object
         df = pd.DataFrame(
             index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"]
         )

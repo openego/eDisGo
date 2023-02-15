@@ -56,7 +56,7 @@ def pm_optimize(
         Implemented version are:
         1 : - Additional constraints: high voltage requirements
             - Lifted constraints: grid restrictions
-            - Objective: minimize line losses and bus voltage magnitudes
+            - Objective: minimize line losses and line loading
             # ToDo: add HV slacks to objective (see `Gurobi's multiple objectives
             <https://www.gurobi.com/documentation/9.1/refman/multiple_objectives.html>`_
             ).
@@ -64,8 +64,8 @@ def pm_optimize(
             - Objective: minimize line losses and grid related slacks
             # ToDo: add HV slacks to objective cf. version 1.
         3 : - Lifted constraints: grid restrictions
-            - Objective: minimize line losses and bus voltage magnitudes
-        4 : - Objective: minimize line losses and grid related slacks
+            - Objective: minimize line losses and line loading
+        4 : - Objective: minimize line losses, line loading and grid related slacks
         Must be one of [1, 2, 3, 4].
         Default: 4
     method: str
