@@ -36,6 +36,7 @@ from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
+from edisgo.tools.tools import determine_grid_integration_voltage_level
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
@@ -1244,29 +1245,7 @@ class EDisGo:
                     "were supplied."
                 )
             # determine voltage level manually from nominal power
-            cfg_max_p_nom = self.config["grid_connection"]
-            if (
-                cfg_max_p_nom["upper_limit_voltage_level_5"]
-                < p
-                <= cfg_max_p_nom["upper_limit_voltage_level_4"]
-            ):
-                voltage_level = 4
-            elif (
-                cfg_max_p_nom["upper_limit_voltage_level_6"]
-                < p
-                <= cfg_max_p_nom["upper_limit_voltage_level_5"]
-            ):
-                voltage_level = 5
-            elif (
-                cfg_max_p_nom["upper_limit_voltage_level_7"]
-                < p
-                <= cfg_max_p_nom["upper_limit_voltage_level_6"]
-            ):
-                voltage_level = 6
-            elif 0 < p <= cfg_max_p_nom["upper_limit_voltage_level_7"]:
-                voltage_level = 7
-            else:
-                raise ValueError("Unsupported voltage level")
+            voltage_level = determine_grid_integration_voltage_level(self, p)
 
         # check if geolocation is given as shapely Point, otherwise transform
         # to shapely Point
