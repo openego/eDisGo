@@ -79,7 +79,6 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
         grid.loads = grid.loads.drop(columns="p_set").rename(
             columns={"peak_load": "p_set"}
         )
-        # edisgo_obj.topology.buses_df["in_building"] = False
     else:
         edisgo_obj.topology.buses_df["in_building"] = False
     edisgo_obj.topology.loads_df = grid.loads[edisgo_obj.topology.loads_df.columns]
@@ -95,9 +94,9 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
         edisgo_obj.topology.loads_df.loc[
             loads_without_type, "type"
         ] = "conventional_load"
-        # edisgo_obj.topology.loads_df.replace(
-        #     to_replace=["agricultural","retail"], value="cts", inplace=True
-        # )
+        edisgo_obj.topology.loads_df.replace(
+            to_replace=["retail"], value="cts", inplace=True
+        )
     # drop slack generator from generators
     slack = grid.generators.loc[grid.generators.control == "Slack"].index
     grid.generators.drop(slack, inplace=True)
