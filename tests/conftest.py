@@ -4,10 +4,12 @@ import pytest
 
 
 def pytest_configure(config):
+    # small self constructed ding0 grid with only 9 LV grids used for general testing
     pytest.ding0_test_network_path = os.path.join(
         os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_1"
     )
-
+    # real ding0 grid without georeference in LV used to test import of open_ego data
+    # from oedb
     pytest.ding0_test_network_2_path = os.path.join(
         os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_2"
     )
@@ -31,6 +33,7 @@ def pytest_configure(config):
     )
 
     config.addinivalue_line("markers", "slow: mark test as slow to run")
+    config.addinivalue_line("markers", "local: mark test as local to run")
 
 
 def pytest_addoption(parser):
