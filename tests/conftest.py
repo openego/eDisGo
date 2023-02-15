@@ -20,6 +20,11 @@ def pytest_configure(config):
         os.path.realpath(os.path.dirname(__file__)), "data/tracbev_example_scenario"
     )
 
+    pytest.egon_data_config_yml = os.path.join(
+        os.path.realpath(os.path.dirname(os.path.dirname(__file__))),
+        "egon-data.configuration.yaml",
+    )
+
     config.addinivalue_line("markers", "slow: mark test as slow to run")
 
 
