@@ -751,8 +751,8 @@ def battery_storage_reference_operation(
 
             # If the storage would be overcharged, feed the 'rest' to the grid
             if storage_charge > storage_max:
-                storage_power = (
-                    storage_power + (storage_charge - storage_max) / time_base
+                storage_power = storage_power + (storage_charge - storage_max) / (
+                    efficiency_charge * time_base
                 )
                 storage_charge = storage_max
 
@@ -763,11 +763,9 @@ def battery_storage_reference_operation(
         elif (d.house_demand < 0) & (storage_charge > 0):
 
             # Check if energy demand exceeds charger power
-            if d.house_demand < (charger_power * -1):
-                storage_charge = storage_charge - (
-                    charger_power / efficiency_discharge * time_base
-                )
-                storage_power = charger_power
+            if d.house_demand / efficiency_discharge < (charger_power * -1):
+                storage_charge = storage_charge - (charger_power * time_base)
+                storage_power = charger_power * efficiency_discharge
 
             else:
                 storage_charge = storage_charge + (
@@ -779,7 +777,9 @@ def battery_storage_reference_operation(
             if storage_charge < 0:
                 # since storage_charge is negative in this case it can be taken as
                 # demand
-                storage_power = storage_power + storage_charge / time_base
+                storage_power = (
+                    storage_power + storage_charge * efficiency_discharge / time_base
+                )
                 storage_charge = 0
 
         # If the storage is full or empty, the demand is not affected
@@ -787,7 +787,6 @@ def battery_storage_reference_operation(
         else:
             storage_power = 0
         lst_storage_power.append(storage_power)
-
     df["storage_power"] = lst_storage_power
 
     return df

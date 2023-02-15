@@ -261,7 +261,7 @@ def from_powermodels(
         "curt": ["gen_nd", "pgc"],
         "hp": ["heatpumps", "php"],
         "cp": ["electromobility", "pcp"],
-        "storage": ["storage", "ps"],
+        "storage": ["storage", "pf"],
         "dsm": ["dsm", "pdsm"],
     }
 
@@ -274,13 +274,41 @@ def from_powermodels(
             pm["nw"]["1"][flex][flex_comp]["name"]
             for flex_comp in list(pm["nw"]["1"][flex].keys())
         ]
-        data = [
-            [
-                pm["nw"][t][flex][flex_comp][variable] * s_base
+        # replace storage power values by branch power values of virtual branch to
+        # account for losses and save efficiency values to edisgo object
+        if flex == "storage":
+            branches = [
+                pm["nw"]["1"][flex][flex_comp]["virtual_branch"]
                 for flex_comp in list(pm["nw"]["1"][flex].keys())
             ]
-            for t in timesteps
-        ]
+            data = [
+                [
+                    pm["nw"][t]["branch"][branch][variable] * s_base
+                    for branch in branches
+                ]
+                for t in timesteps
+            ]
+            data2 = [
+                [
+                    pm["nw"][t][flex][flex_comp]["ps"] * s_base
+                    for flex_comp in list(pm["nw"]["1"][flex].keys())
+                ]
+                for t in timesteps
+            ]
+            efficiency = pd.DataFrame(
+                index=edisgo_object.timeseries.timeindex,
+                columns=names,
+                data=abs(pd.DataFrame(data) / pd.DataFrame(data2)).values,
+            )
+            edisgo_object.opf_results.storage_efficiency = efficiency
+        else:
+            data = [
+                [
+                    pm["nw"][t][flex][flex_comp][variable] * s_base
+                    for flex_comp in list(pm["nw"]["1"][flex].keys())
+                ]
+                for t in timesteps
+            ]
         results = pd.DataFrame(index=timesteps, columns=names, data=data)
         if flex == "gen_nd":
             # edisgo_object.timeseries._generators_active_power.loc[:, names] = (
@@ -791,6 +819,7 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
         Base value of apparent power for per unit system.
         Default: 100 MVA
     """
+    branches = pd.concat([psa_net.lines, psa_net.transformers])
     for stor_i in np.arange(len(flexible_storages)):
         idx_bus = _mapping(
             psa_net, psa_net.storage_units.bus.loc[flexible_storages[stor_i]]
@@ -808,6 +837,7 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "q_loss": 0,
             "pf": pf,
             "sign": sign,
+            "virtual_branch": str(stor_i + len(branches.index) + 1),
             "ps": psa_net.storage_units_t.p_set[flexible_storages[stor_i]][0] / s_base,
             "qs": psa_net.storage_units_t.q_set[flexible_storages[stor_i]][0] / s_base,
             "pmax": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]] / s_base,
