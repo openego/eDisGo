@@ -174,7 +174,7 @@ def load_time_series_demandlib(config_data, timeindex):
 
     elec_demand.rename(
         columns={
-            "g0": "retail",
+            "g0": "cts",
             "h0": "residential",
             "l0": "agricultural",
             "i0": "industrial",

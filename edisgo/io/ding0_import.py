@@ -15,7 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def import_ding0_grid(path, edisgo_obj):
+def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
     """
     Import an eDisGo network topology from
     `Ding0 data <https://github.com/openego/ding0>`_.
@@ -30,7 +30,8 @@ def import_ding0_grid(path, edisgo_obj):
         Path to ding0 network csv files.
     edisgo_obj: :class:`~.EDisGo`
         The eDisGo data container object.
-
+    legacy_ding0_grids: `bool`
+        Allow import of old ding0 grids. Default: True
     """
 
     def sort_transformer_buses(transformers_df):
@@ -73,9 +74,13 @@ def import_ding0_grid(path, edisgo_obj):
     # write dataframes to edisgo_obj
     edisgo_obj.topology.buses_df = grid.buses[edisgo_obj.topology.buses_df.columns]
     edisgo_obj.topology.lines_df = grid.lines[edisgo_obj.topology.lines_df.columns]
-
-    grid.loads = grid.loads.drop(columns="p_set").rename(columns={"peak_load": "p_set"})
-
+    if legacy_ding0_grids:
+        logger.debug("Use ding0 legacy grid import.")
+        grid.loads = grid.loads.drop(columns="p_set").rename(
+            columns={"peak_load": "p_set"}
+        )
+    else:
+        edisgo_obj.topology.buses_df["in_building"] = False
     edisgo_obj.topology.loads_df = grid.loads[edisgo_obj.topology.loads_df.columns]
     # set loads without type information to be conventional loads
     # this is done, as ding0 currently does not provide information on the type of load
@@ -85,7 +90,13 @@ def import_ding0_grid(path, edisgo_obj):
         (edisgo_obj.topology.loads_df.type.isnull())
         | (edisgo_obj.topology.loads_df.type == "")
     ].index
-    edisgo_obj.topology.loads_df.loc[loads_without_type, "type"] = "conventional_load"
+    if legacy_ding0_grids:
+        edisgo_obj.topology.loads_df.loc[
+            loads_without_type, "type"
+        ] = "conventional_load"
+        edisgo_obj.topology.loads_df.replace(
+            to_replace=["retail"], value="cts", inplace=True
+        )
     # drop slack generator from generators
     slack = grid.generators.loc[grid.generators.control == "Slack"].index
     grid.generators.drop(slack, inplace=True)
