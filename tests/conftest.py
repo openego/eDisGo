@@ -11,6 +11,11 @@ def pytest_configure(config):
     pytest.ding0_test_network_2_path = os.path.join(
         os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_2"
     )
+    # real ding0 grid from newer version of ding0 with georeferenced LV used to test
+    # import of egon_data data
+    pytest.ding0_test_network_3_path = os.path.join(
+        os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_3"
+    )
 
     pytest.simbev_example_scenario_path = os.path.join(
         os.path.realpath(os.path.dirname(__file__)), "data/simbev_example_scenario"
