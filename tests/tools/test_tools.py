@@ -236,6 +236,12 @@ class TestTools:
             .any()
         )
 
+    def test_determine_grid_integration_voltage_level(self):
+        assert tools.determine_grid_integration_voltage_level(self.edisgo, 0.05) == 7
+        assert tools.determine_grid_integration_voltage_level(self.edisgo, 0.2) == 6
+        assert tools.determine_grid_integration_voltage_level(self.edisgo, 1.5) == 5
+        assert tools.determine_grid_integration_voltage_level(self.edisgo, 16) == 4
+
     def test_determine_bus_voltage_level(self):
         bus_mv_station = "Bus_MVStation_1"
         bus_mv = "Bus_GeneratorFluctuating_7"
