@@ -58,7 +58,7 @@ requirements = [
     "plotly",
     "dash==2.6.0",
     "jupyter_dash",
-    "werkzeug==2.2.0",
+    "werkzeug==2.2.3",
 ]
 
 dev_requirements = [
