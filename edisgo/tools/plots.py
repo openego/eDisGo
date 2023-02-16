@@ -2202,9 +2202,9 @@ def plot_opf_results(  # ToDo: Plots für andere Komponenten hinzufügen + schö
             .sum(axis=1),
             label="Verteilnetz-optimiertes Laden",
         )
-        plt.ylabel("Ladeleistung (MW)")
+        plt.ylabel("Ladeleistung (MW)", fontsize=18)
         plt.xticks(rotation=70)
-        plt.legend()
+        plt.legend(fontsize=18)
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%d-%m-%Y"))
         plt.gcf().autofmt_xdate()
 

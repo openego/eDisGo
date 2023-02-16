@@ -348,7 +348,7 @@ function variable_ev_slack(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bou
 end
 
 "slack generator variables"
-function eDisGo_OPF.variable_slack_gen(pm::AbstractBFModelEdisgo; kwargs...)
+function variable_slack_gen(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_slack_gen_real(pm; kwargs...)
     eDisGo_OPF.variable_slack_gen_imaginary(pm; kwargs...)
 end

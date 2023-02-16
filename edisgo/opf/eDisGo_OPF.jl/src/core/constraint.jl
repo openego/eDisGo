@@ -13,7 +13,7 @@ function constraint_store_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::In
         JuMP.@constraint(pm.model, hse - hse_end * (1 - p_loss) == - time_elapsed * phs_1)
     elseif kind == "dsm"
         dsme = PowerModels.var(pm, n, :dsme, i)
-        dsme_end = var(pm, length(PowerModels.nw_ids(pm)), :dsme, i)
+        dsme_end = PowerModels.var(pm, length(PowerModels.nw_ids(pm)), :dsme, i)
         pdsm_1 = PowerModels.var(pm, n, :pdsm, i)
         JuMP.@constraint(pm.model, dsme - energy ==  + time_elapsed * pdsm_1)
         JuMP.@constraint(pm.model, dsme_end == 0)
