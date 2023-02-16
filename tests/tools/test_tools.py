@@ -103,6 +103,14 @@ class TestTools:
         )
         assert_allclose(data, np.array([1039.23 * 2, 1558.84 * 3]), rtol=1e-5)
 
+    def test_drop_duplicated_indices(self):
+        # ToDo implement
+        pass
+
+    def test_drop_duplicated_columns(self):
+        # ToDo implement
+        pass
+
     def test_select_cable(self):
         cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "mv", 5.1)
         assert cable_data.name == "NA2XS2Y 3x1x150 RE/25"
@@ -236,6 +244,14 @@ class TestTools:
             .any()
         )
 
+    def test_get_path_length_to_station(self):
+        # ToDo implement
+        pass
+
+    def test_assign_voltage_level_to_component(self):
+        # ToDo implement
+        pass
+
     def test_determine_grid_integration_voltage_level(self):
         assert tools.determine_grid_integration_voltage_level(self.edisgo, 0.05) == 7
         assert tools.determine_grid_integration_voltage_level(self.edisgo, 0.2) == 6
@@ -265,7 +281,7 @@ class TestTools:
         # for some reason..
         assert 1122074 in weather_cells
 
-    def test_add_susceptance(self):
+    def test_add_line_susceptance(self):
         assert self.edisgo.topology.lines_df.loc["Line_10006", "b"] == 0
         assert self.edisgo.topology.lines_df.loc["Line_50000002", "b"] == 0
 
@@ -296,3 +312,7 @@ class TestTools:
         assert edisgo_root.topology.lines_df.loc[
             "Line_50000002", "b"
         ] == tools.calculate_line_susceptance(0.25, 0.03, 1)
+
+    def test_reduce_memory_usage(self):
+        # ToDo implement
+        pass
