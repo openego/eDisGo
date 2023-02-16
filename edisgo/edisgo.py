@@ -108,6 +108,8 @@ class EDisGo:
             default config files are copied into the directory.
 
         Default: "default".
+    legacy_ding0_grids : bool
+        Allow import of old ding0 grids. Default: True.
 
     Attributes
     ----------
@@ -139,7 +141,10 @@ class EDisGo:
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
-        self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
+        self.import_ding0_grid(
+            path=kwargs.get("ding0_grid", None),
+            legacy_ding0_grids=kwargs.get("legacy_ding0_grids", True),
+        )
 
         # set up results and time series container
         self.results = Results(self)
@@ -212,7 +217,7 @@ class EDisGo:
     def config(self, kwargs):
         self._config = Config(**kwargs)
 
-    def import_ding0_grid(self, path):
+    def import_ding0_grid(self, path, legacy_ding0_grids=True):
         """
         Import ding0 topology data from csv files in the format as
         `Ding0 <https://github.com/openego/ding0>`_ provides it.
@@ -221,10 +226,12 @@ class EDisGo:
         -----------
         path : str
             Path to directory containing csv files of network to be loaded.
+        legacy_ding0_grids : bool
+            Allow import of old ding0 grids. Default: True.
 
         """
         if path is not None:
-            import_ding0_grid(path, self)
+            import_ding0_grid(path, self, legacy_ding0_grids)
 
     def set_timeindex(self, timeindex):
         """
