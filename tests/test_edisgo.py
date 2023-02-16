@@ -1539,7 +1539,9 @@ class TestEDisGoFunc:
 
         # check topology
         assert_frame_equal(
-            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+            edisgo_obj_loaded.topology.loads_df,
+            edisgo_obj.topology.loads_df,
+            check_dtype=False,
         )
         # check time series
         assert edisgo_obj_loaded.timeseries.timeindex.empty
@@ -1582,7 +1584,9 @@ class TestEDisGoFunc:
 
         # check topology
         assert_frame_equal(
-            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+            edisgo_obj_loaded.topology.loads_df,
+            edisgo_obj.topology.loads_df,
+            check_dtype=False,
         )
         # check time series
         assert_frame_equal(

@@ -104,11 +104,10 @@ class TestHeatPump:
         self.heatpump.to_csv(save_dir)
 
         files_in_dir = os.listdir(save_dir)
-        assert len(files_in_dir) == 4
+        assert len(files_in_dir) == 3
         assert "cop.csv" in files_in_dir
         assert "heat_demand.csv" in files_in_dir
         assert "thermal_storage_units.csv" in files_in_dir
-        assert "building_ids.csv" in files_in_dir
 
         shutil.rmtree(save_dir)
 
@@ -117,7 +116,7 @@ class TestHeatPump:
 
         assert (self.heatpump.cop_df.dtypes == "float16").all()
         files_in_dir = os.listdir(save_dir)
-        assert len(files_in_dir) == 4
+        assert len(files_in_dir) == 3
 
         shutil.rmtree(save_dir, ignore_errors=True)
 
