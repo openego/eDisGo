@@ -524,12 +524,12 @@ def determine_bus_voltage_level(edisgo_object, bus_name):
     """
     v_nom = edisgo_object.topology.buses_df.at[bus_name, "v_nom"]
     if v_nom < 1:
-        if bus_name in edisgo_object.topology.transformers_df.bus1:
+        if bus_name in edisgo_object.topology.transformers_df.bus1.values:
             voltage_level = 6
         else:
             voltage_level = 7
     else:
-        if bus_name in edisgo_object.topology.transformers_hvmv_df.bus1:
+        if bus_name in edisgo_object.topology.transformers_hvmv_df.bus1.values:
             voltage_level = 4
         else:
             voltage_level = 5

@@ -236,6 +236,16 @@ class TestTools:
             .any()
         )
 
+    def test_determine_bus_voltage_level(self):
+        bus_mv_station = "Bus_MVStation_1"
+        bus_mv = "Bus_GeneratorFluctuating_7"
+        bus_lv_station = "BusBar_MVGrid_1_LVGrid_1_LV"
+        bus_lv = "Bus_BranchTee_LVGrid_1_10"
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_mv_station) == 4
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_mv) == 5
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_lv_station) == 6
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_lv) == 7
+
     def test_get_weather_cells_intersecting_with_grid_district(self):
         weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
             self.edisgo
