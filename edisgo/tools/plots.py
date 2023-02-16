@@ -14,6 +14,7 @@ import plotly.graph_objects as go
 from dash import dcc, html
 from dash.dependencies import Input, Output
 from jupyter_dash import JupyterDash
+from matplotlib import dates as mdates
 from matplotlib import pyplot as plt
 from networkx import Graph
 from pyproj import Transformer
@@ -2178,3 +2179,33 @@ def plot_opf_results(  # ToDo: Plots für andere Komponenten hinzufügen + schö
             label="heat demand",
         )
         plt.legend()
+    elif component == "cp":
+        ax = plt.plot(
+            edisgo_objects["before OPF"]
+            .timeseries.loads_active_power.loc[
+                :,
+                edisgo_objects[
+                    "before OPF"
+                ].timeseries.loads_active_power.columns.str.contains("Charging"),
+            ]
+            .sum(axis=1),
+            label="Ungesteuertes Laden",
+        )
+        ax = plt.plot(
+            edisgo_objects["after OPF"]
+            .timeseries.loads_active_power.loc[
+                :,
+                edisgo_objects[
+                    "after OPF"
+                ].timeseries.loads_active_power.columns.str.contains("Charging"),
+            ]
+            .sum(axis=1),
+            label="Verteilnetz-optimiertes Laden",
+        )
+        plt.ylabel("Ladeleistung (MW)")
+        plt.xticks(rotation=70)
+        plt.legend()
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d-%m-%Y"))
+        plt.gcf().autofmt_xdate()
+
+        plt.show()

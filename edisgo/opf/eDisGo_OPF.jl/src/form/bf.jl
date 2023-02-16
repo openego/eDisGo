@@ -21,7 +21,20 @@ function variable_buspair_current_magnitude_sqr(pm::AbstractBFModel; nw::Int=nw_
             end
             ub = ((rate_a*b["tap"])/(bus[b["f_bus"]]["vmin"]))^2
 
-            if !isinf(ub)&!(b["storage"])
+            if !isinf(ub)
+                JuMP.set_upper_bound(ccm[i], ub)
+            end
+        end
+    else
+        bus = PowerModels.ref(pm, nw, :bus)
+        for (i, b) in branch
+            rate_a = Inf
+            if haskey(b, "rate_a")
+                rate_a = b["rate_a"]
+            end
+            ub = ((rate_a*b["tap"])/(bus[b["f_bus"]]["vmin"]))^2
+
+            if !isinf(ub)&(b["storage"])
                 JuMP.set_upper_bound(ccm[i], ub)
             end
         end
@@ -42,7 +55,7 @@ function constraint_voltage_magnitude_difference(pm::AbstractBFModelEdisgo, n::I
 end
 
 
-function constraint_model_current(pm::AbstractSOCBFModelEdisgo, n::Int)
+function constraint_model_current(pm::AbstractSOCBFModelEdisgo, n::Int) # Eq. (3.9)
     PowerModels._check_missing_keys(PowerModels.var(pm, n), [:p,:q,:w,:ccm], typeof(pm))
 
     p  = PowerModels.var(pm, n, :p)
@@ -61,7 +74,7 @@ function constraint_model_current(pm::AbstractSOCBFModelEdisgo, n::Int)
     end
 end
 
-function constraint_model_current(pm::AbstractNCBFModelEdisgo, n::Int)
+function constraint_model_current(pm::AbstractNCBFModelEdisgo, n::Int) # Eq. (3.5)
     PowerModels._check_missing_keys(PowerModels.var(pm, n), [:p,:q,:w,:ccm], typeof(pm))
 
     p  = PowerModels.var(pm, n, :p)

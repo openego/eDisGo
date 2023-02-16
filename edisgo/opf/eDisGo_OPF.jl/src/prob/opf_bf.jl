@@ -9,42 +9,45 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
     for (n, network) in PowerModels.nws(pm)
         # VARIABLES
         if PowerModels.ref(pm, 1, :opf_version) in(1, 2, 3, 4)
-            #variable_branch_power_radial(pm, nw=n)  # Eq. ():  branch power <= rate_a (s_nom)
             if PowerModels.ref(pm, 1, :opf_version) in(1, 3)
-                eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false)
-                variable_branch_power(pm, nw=n, bounded=false)  # ToDo: nur bounded = false falls kein Storage!!!
+                eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false) # Eq. 3.14 (für Version 1 bzw. 3 keine Eq. (3.8))
+                PowerModels.variable_branch_power(pm, nw=n, bounded=false)  # Für Version 1 bzw. 3 keine Eq. (3.7)
             else
-                eDisGo_OPF.variable_branch_current(pm, nw=n)  # Eq. ()
-                variable_gen_power_curt(pm, nw=n)  #  Eq. (20)
-                variable_branch_power(pm, nw=n)
-                variable_slack_grid_restrictions(pm, nw=n)
+                eDisGo_OPF.variable_branch_current(pm, nw=n)  # Eq. (3.8) und (3.14)
+                PowerModels.variable_branch_power(pm, nw=n) # Eq. (3.7)
+                eDisGo_OPF.variable_gen_power_curt(pm, nw=n)  # Eq. (3.30) für non-dispatchable Generators
+                eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.30)-(3.32)
             end
-            variable_bus_voltage(pm, nw=n)  # Eq. (29)
-            variable_battery_storage_power(pm, nw=n)  # Eq. (21), (22)
-            variable_heat_storage(pm, nw=n)  # Eq. (22)
-            variable_cp_power(pm, nw=n)  #  Eq. (23), (24)
-            variable_heat_pump_power(pm, nw=n)  # Eq. (25)
-            variable_dsm_storage_power(pm, nw=n)  # Eq. (26), (27)
-            variable_slack_gen(pm, nw=n)  # Eq. (28)
-            variable_slack_HV_requirements(pm, nw=n)
+            PowerModels.variable_bus_voltage(pm, nw=n)  # Eq. (3.6)
+            eDisGo_OPF.variable_battery_storage_power(pm, nw=n)  # Eq. (3.12) und (3.13)
+            eDisGo_OPF.variable_heat_storage(pm, nw=n)  # Eq. (3.19)
+            eDisGo_OPF.variable_heat_pump_power(pm, nw=n)  # Eq. (3.16)
+            eDisGo_OPF.variable_cp_power(pm, nw=n)  #  Eq. (3.22), (3.23)
+            eDisGo_OPF.variable_dsm_storage_power(pm, nw=n)  # Eq. (3.26), (3.27)
+            eDisGo_OPF.variable_slack_gen(pm, nw=n)  # keine Bounds für Slack Generator
+            if PowerModels.ref(pm, 1, :opf_version) in(3, 4)
+                eDisGo_OPF.variable_slack_HV_requirements(pm, nw=n) # Nicht Teil der MA
+                if PowerModels.ref(pm, 1, :opf_version) in(3)
+                    eDisGo_OPF.variable_gen_power_curt(pm, nw=n) # Nicht Teil der MA
+                end
+                for i in PowerModels.ids(pm, :HV_requirements, nw=n)
+                    eDisGo_OPF.constraint_HV_requirements(pm, i, n) # Nicht Teil der MA
+                end
+            end
         else
             throw(ArgumentError("OPF version $(PowerModels.ref(pm, 1, :opf_version)) is not implemented! Choose between version 1 to 4."))
         end
 
         # CONSTRAINTS
         for i in PowerModels.ids(pm, :bus, nw=n)
-            constraint_power_balance_bf(pm, i, nw=n) # Eq. (2)-(5)
+            eDisGo_OPF.constraint_power_balance_bf(pm, i, nw=n) # Eq. (3.28) und (3.29) für Version 1 und 3; Eq. (3.33) und (3.34) für Version 2 und 4
         end
         for i in PowerModels.ids(pm, :branch, nw=n)
-            constraint_voltage_magnitude_difference_radial(pm, i, nw=n) # Eq. (6)
+            eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, i, nw=n) # Eq. (3.4)
         end
-        eDisGo_OPF.constraint_model_current(pm, nw=n)  # Eq. (7) as SOC
+        eDisGo_OPF.constraint_model_current(pm, nw=n)  # Eq. (3.5) bzw. (3.9) (je nachdem ob nicht-konvex oder konvex gelöst wird)
         for i in PowerModels.ids(pm, :heatpumps, nw=n)
-            constraint_hp_operation(pm, i, n) # Eq. (14)
-        end
-
-        for i in PowerModels.ids(pm, :HV_requirements, nw=n)
-            constraint_HV_requirements(pm, i, n) # Eq. (15)-(19)
+            eDisGo_OPF.constraint_hp_operation(pm, i, n) # Eq. (3.15)
         end
 
     end
@@ -54,12 +57,12 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
     for kind in ["storage", "heat_storage", "dsm"]
         n_1 = network_ids[1]
         for i in PowerModels.ids(pm, Symbol(kind), nw=n_1)
-            constraint_store_state(pm, i, nw=n_1, kind=kind)  # Eq. (8), (10)
+            eDisGo_OPF.constraint_store_state(pm, i, nw=n_1, kind=kind)  # Eq. (3.10), (3.17), (3.24)
         end
 
         for n_2 in network_ids[2:end]
             for i in PowerModels.ids(pm, Symbol(kind), nw=n_2)
-                constraint_store_state(pm, i, n_1, n_2, kind) # Eq. (9), (11)
+                eDisGo_OPF.constraint_store_state(pm, i, n_1, n_2, kind) # Eq. (3.11), (3.18), (3.25)
             end
             n_1 = n_2
         end
@@ -69,28 +72,26 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
 
     for i in PowerModels.ids(pm, :electromobility, nw=n_1)
         eta = PowerModels.ref(pm, 1, :electromobility)[i]["eta"]
-        constraint_cp_state_initial(pm, n_1, i, eta)  # Eq. (12)
+        eDisGo_OPF.constraint_cp_state_initial(pm, n_1, i, eta)  # Eq. (3.20)
     end
 
     for n_2 in network_ids[2:end]
         for i in PowerModels.ids(pm, :electromobility, nw=n_2)
             eta = PowerModels.ref(pm, 1, :electromobility)[i]["eta"]
-            constraint_cp_state(pm, n_1, n_2, i, eta) # Eq. (13)
+            eDisGo_OPF.constraint_cp_state(pm, n_1, n_2, i, eta) # Eq. (3.21) (und (3.20) für letzten Zeitschritt)
         end
         n_1 = n_2
     end
 
     # OBJECTIVE FUNCTION
     if PowerModels.ref(pm, 1, :opf_version) in(1,3)
-        objective_min_losses(pm)  # Eq. (1)
-        if (PowerModels.ref(pm, 1, :opf_version) == 1)
+        eDisGo_OPF.objective_min_losses(pm)  # Eq. (3.1)
+        if (PowerModels.ref(pm, 1, :opf_version) == 3) # Nicht Teil der MA
             #objective_min_hv_slacks(pm)
-            # Set multiple objectives
-            # https://www.gurobi.com/documentation/9.1/refman/specifying_multiple_object.html
         end
     elseif PowerModels.ref(pm, 1, :opf_version) in(2,4)
-        objective_min_losses_slacks(pm)  # Eq. (1)
-        if (PowerModels.ref(pm, 1, :opf_version) == 2)
+        eDisGo_OPF.objective_min_losses_slacks(pm)  # Eq. (3.35)
+        if (PowerModels.ref(pm, 1, :opf_version) == 4) # Nicht Teil der MA
             #objective_min_hv_slacks(pm)
         end
     end

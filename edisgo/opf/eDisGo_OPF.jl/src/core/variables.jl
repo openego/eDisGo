@@ -1,6 +1,6 @@
 "generates variables for both `active` and `reactive` non-dispatchable power generation curtailment"
 function variable_gen_power_curt(pm::AbstractPowerModel; kwargs...)
-    variable_gen_power_curt_real(pm; kwargs...)
+    variable_gen_power_curt_real(pm; kwargs...) # Eq. (3.30) für non-dispatchable Generators
     #variable_gen_power_curt_imaginary(pm; kwargs...)
 end
 
@@ -41,9 +41,8 @@ end
 
 "variables for modeling storage units, includes grid injection and internal variables"
 function variable_battery_storage_power(pm::AbstractPowerModel; kwargs...)
-    variable_battery_storage_power_real(pm; kwargs...)  # Eq. (21)
-    #variable_battery_storage_power_imaginary(pm; kwargs...) # Eq. (21)
-    variable_storage_energy(pm; kwargs...)  # Eq. (22)
+    eDisGo_OPF.variable_battery_storage_power_real(pm; kwargs...)  # Eq. (3.13)
+    PowerModels.variable_storage_energy(pm; kwargs...)  # Eq. (3.12)
 end
 
 ""
@@ -85,9 +84,9 @@ end
 
 "variables for modeling dsm storage units, includes grid injection and internal variables"
 function variable_dsm_storage_power(pm::AbstractPowerModel; kwargs...)
-    variable_dsm_storage_power_real(pm; kwargs...)  # Eq. (34)
-    #variable_dsm_storage_power_imaginary(pm; kwargs...)  # TODO: to add
-    variable_dsm_storage_energy(pm; kwargs...)  # Eq. (35)
+    eDisGo_OPF.variable_dsm_storage_power_real(pm; kwargs...)  # Eq. (34)
+    # eDisGo_OPF.variable_dsm_storage_power_imaginary(pm; kwargs...)  # TODO: to add
+    eDisGo_OPF.variable_dsm_storage_energy(pm; kwargs...)  # Eq. (35)
 end
 
 ""
@@ -145,8 +144,10 @@ end
 
 "variables for modeling heat storage units, includes grid injection and internal variables"
 function variable_heat_storage(pm::AbstractPowerModel; kwargs...)
-    variable_heat_storage_power(pm; kwargs...)  # Eq. (34)
-    variable_heat_storage_energy(pm; kwargs...)  # Eq. (35)
+    eDisGo_OPF.variable_heat_storage_power(pm; kwargs...)  # wird hier durch Kapazität des Speichers beschränkt (kein Schranke kann die
+    # Lösungsgeschwindigkeit verringern), indirekte Beschränkung durch min/max Speicherfüllstand ist jedoch restriktiver
+    # -> Bound wird nicht in MA aufgenommen
+    eDisGo_OPF.variable_heat_storage_energy(pm; kwargs...)  # Eq. (3.19)
 end
 
 ""
@@ -154,7 +155,6 @@ function variable_heat_storage_power(pm::AbstractPowerModel; nw::Int=nw_id_defau
     phs = PowerModels.var(pm, nw)[:phs] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :heat_storage)], base_name="$(nw)_phs",
         start = comp_start_value(PowerModels.ref(pm, nw, :heat_storage, i), "phs_start")
-
     )
 
     if bounded
@@ -187,8 +187,8 @@ end
 
 "variables for modeling heat pumps, includes grid injection and internal variables"
 function variable_heat_pump_power(pm::AbstractPowerModel; kwargs...)
-    variable_heat_pump_power_real(pm; kwargs...)  # Eq. (34)
-    #variable_heat_pump_power_imaginary(pm; kwargs...)  # TODO: to add
+    eDisGo_OPF.variable_heat_pump_power_real(pm; kwargs...)  # Eq. (3.16)
+    # eDisGo_OPF.variable_heat_pump_power_imaginary(pm; kwargs...)
 end
 
 function variable_heat_pump_power_real(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
@@ -225,9 +225,9 @@ end
 
 "variables for modeling charging points, includes grid injection and internal variables"
 function variable_cp_power(pm::AbstractPowerModel; kwargs...)
-    variable_cp_power_real(pm; kwargs...)  # Eq. (34)
-    #variable_cp_power_imaginary(pm; kwargs...)
-    variable_cp_energy(pm; kwargs...)  # Eq. (35)
+    eDisGo_OPF.variable_cp_power_real(pm; kwargs...)  # Eq. (3.23)
+    # eDisGo_OPF.variable_cp_power_imaginary(pm; kwargs...)
+    eDisGo_OPF.variable_cp_energy(pm; kwargs...)  # Eq. (3.22)
 end
 
 ""
@@ -284,12 +284,10 @@ end
 
 "slack variables for grid restrictions"
 function variable_slack_grid_restrictions(pm::AbstractBFModelEdisgo; kwargs...)
-    if PowerModels.ref(pm, 1, :opf_version) in(2,4)
-        #variable_hp_slack(pm; kwargs...)
-        variable_load_slack(pm; kwargs...)
-        variable_gen_slack(pm; kwargs...)
-        variable_ev_slack(pm; kwargs...)
-    end
+    #variable_hp_slack(pm; kwargs...)
+    eDisGo_OPF.variable_load_slack(pm; kwargs...) # Eq. (3.31)
+    eDisGo_OPF.variable_gen_slack(pm; kwargs...) # Eq. (3.30) für dispatchable Generators
+    eDisGo_OPF.variable_ev_slack(pm; kwargs...) # Eq. (3.32)
 end
 
 "heat pump slack variable"
@@ -350,9 +348,9 @@ function variable_ev_slack(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bou
 end
 
 "slack generator variables"
-function variable_slack_gen(pm::AbstractBFModelEdisgo; kwargs...)
-    variable_slack_gen_real(pm; kwargs...)
-    variable_slack_gen_imaginary(pm; kwargs...)
+function eDisGo_OPF.variable_slack_gen(pm::AbstractBFModelEdisgo; kwargs...)
+    eDisGo_OPF.variable_slack_gen_real(pm; kwargs...)
+    eDisGo_OPF.variable_slack_gen_imaginary(pm; kwargs...)
 end
 
 function variable_slack_gen_real(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, report::Bool=true)
@@ -372,10 +370,8 @@ end
 
 "slack variables for HV requirement constraints"
 function variable_slack_HV_requirements(pm::AbstractPowerModel; kwargs...)
-    if PowerModels.ref(pm, 1, :opf_version) in(1,2)
-        variable_slack_HV_requirements_real(pm; kwargs...)
-        #variable_slack_HV_requirements_imaginary(pm; kwargs...)
-    end
+    eDisGo_OPF.variable_slack_HV_requirements_real(pm; kwargs...)
+    # eDisGo_OPF.variable_slack_HV_requirements_imaginary(pm; kwargs...)
 end
 
 ""

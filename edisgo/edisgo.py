@@ -666,7 +666,7 @@ class EDisGo:
         flexible_hps=None,
         flexible_loads=None,
         flexible_storages=None,
-        opf_version=4,
+        opf_version=1,
     ):
         """
         Convert eDisGo representation of the network topology and timeseries to
@@ -692,7 +692,7 @@ class EDisGo:
         opf_version: Int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
-            Default: 4
+            Default: 1
 
         Returns
         -------
@@ -737,20 +737,18 @@ class EDisGo:
             Default: 1 MVA
         save_heat_storage: bool
             Indicates whether to save results of heat storage variables from the
-            optimization to csv file in the current working directory. Set parameter
-            "path" to change the directory the file is saved to.
-            directory.
-                Default: False
+            optimization to eDisGo object.
+                Default: True
         save_slack_gen: bool
             Indicates whether to save results of slack generator variables from the
-            optimization to csv file in the current working directory. Set parameter
-            "path" to change the directory the file is saved to.
-            Default: False
+            optimization to eDisGo object.
+            Default: True
         save_slacks: bool
-            Indicates whether to save results of slack variables of OPF. Depending on
-             chosen opf_version, different slacks are used. For more information see
+            Indicates whether to save results of slack variables from the OPF run to
+            eDisGo object. Depending on the chosen opf_version, different slacks are
+            created and saved For more information see
              :func:`edisgo.io.powermodels_io.from_powermodels`
-            Default: False
+            Default: True
         """
         return powermodels_io.from_powermodels(
             self,
@@ -769,7 +767,7 @@ class EDisGo:
         flexible_hps=None,
         flexible_loads=None,
         flexible_storages=None,
-        opf_version=4,
+        opf_version=1,
         method="soc",
         warm_start=False,
         silence_moi=False,
@@ -805,7 +803,7 @@ class EDisGo:
         opf_version: Int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
-            Default: 4
+            Default: 1
         method: str
             Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
             (Non Convex). For more information see
@@ -825,20 +823,18 @@ class EDisGo:
             Default: False
         save_heat_storage: bool
             Indicates whether to save results of heat storage variables from the
-            optimization to csv file in the current working directory. Set parameter
-            "path" to change the directory the file is saved to.
-            directory.
-            Default: False
+            optimization to eDisGo object.
+                Default: True
         save_slack_gen: bool
             Indicates whether to save results of slack generator variables from the
-            optimization to csv file in the current working directory. Set parameter
-            "path" to change the directory the file is saved to.
-            Default: False
+            optimization to eDisGo object.
+            Default: True
         save_slacks: bool
-            Indicates whether to save results of slack variables of OPF. Depending on
-             chosen opf_version, different slacks are used. For more information see
-             :func:`edisgo.io.powermodels_io.from_powermodels`.
-            Default: False
+            Indicates whether to save results of slack variables from the OPF run to
+            eDisGo object. Depending on the chosen opf_version, different slacks are
+            created and saved For more information see
+             :func:`edisgo.io.powermodels_io.from_powermodels`
+            Default: True
         """
         return powermodels_opf.pm_optimize(
             self,
@@ -2454,7 +2450,7 @@ class EDisGo:
         flexible_hps=None,
         flexible_loads=None,
         flexible_storages=None,
-        opf_version=4,
+        opf_version=1,
     ):
         """
         Saves EDisGo object in PowerModels network data format to json file.
@@ -2485,7 +2481,7 @@ class EDisGo:
         opf_version: Int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
-            Default: 4
+            Default: 1
         Returns
         -------
         pm: dict

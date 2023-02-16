@@ -13,9 +13,10 @@ function constraint_store_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::In
         JuMP.@constraint(pm.model, hse - hse_end * (1 - p_loss) == - time_elapsed * phs_1)
     elseif kind == "dsm"
         dsme = PowerModels.var(pm, n, :dsme, i)
-        #dsme_end = var(pm, length(nw_ids(pm)), :dsme, i)
+        dsme_end = var(pm, length(PowerModels.nw_ids(pm)), :dsme, i)
         pdsm_1 = PowerModels.var(pm, n, :pdsm, i)
         JuMP.@constraint(pm.model, dsme - energy ==  + time_elapsed * pdsm_1)
+        JuMP.@constraint(pm.model, dsme_end == 0)
     end
 end
 
@@ -39,9 +40,6 @@ function constraint_store_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i
         dsme_1 = PowerModels.var(pm, n_1, :dsme, i)
 
         JuMP.@constraint(pm.model, dsme_2 - dsme_1 == time_elapsed*pdsm_2)
-        if n_2 == length(PowerModels.nw_ids(pm))
-            JuMP.@constraint(pm.model, dsme_2 == 0)
-        end
     end
 end
 
@@ -89,32 +87,27 @@ function constraint_hp_operation(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_i
     php = PowerModels.var(pm, nw, :php, i)
     phs = PowerModels.var(pm, nw, :phs, i)
 
-    if PowerModels.ref(pm, 1, :opf_version) in(5)#in(2,4)
-        phps = PowerModels.var(pm, nw, :phps, i)
-        JuMP.@constraint(pm.model, hp["cop"] * (php+phps) == hp["pd"] - phs)
-    else
-        JuMP.@constraint(pm.model, hp["cop"] * php == hp["pd"] - phs)
-    end
+    JuMP.@constraint(pm.model, hp["cop"] * php == hp["pd"] - phs)
+
 end
 
 """ Creates constraints for high voltage grid requirements"""
 
 function constraint_HV_requirements(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
-    if PowerModels.ref(pm, 1, :opf_version) in(1,2)
-        hv_req = PowerModels.ref(pm, nw, :HV_requirements, i)
-        phvs = PowerModels.var(pm, nw, :phvs, i)
+    hv_req = PowerModels.ref(pm, nw, :HV_requirements, i)
+    phvs = PowerModels.var(pm, nw, :phvs, i)
 
-        if hv_req["name"] == "dsm"
-            pflex = PowerModels.var(pm, nw, :pdsm)
-        elseif hv_req["name"] == "curt"
-            pflex = PowerModels.var(pm, nw, :pgc)
-        elseif hv_req["name"] == "storage"
-            pflex = PowerModels.var(pm, nw, :ps)
-        elseif hv_req["name"] == "hp"
-            pflex = PowerModels.var(pm, nw, :php)
-        elseif hv_req["name"] == "cp"
-            pflex = PowerModels.var(pm, nw, :pcp)
-        end
-        JuMP.@constraint(pm.model, sum(pflex) + phvs == hv_req["P"])
+    if hv_req["name"] == "dsm"
+        pflex = PowerModels.var(pm, nw, :pdsm)
+    elseif hv_req["name"] == "curt"
+        pflex = PowerModels.var(pm, nw, :pgc)
+    elseif hv_req["name"] == "storage"
+        pflex = PowerModels.var(pm, nw, :ps)
+    elseif hv_req["name"] == "hp"
+        pflex = PowerModels.var(pm, nw, :php)
+    elseif hv_req["name"] == "cp"
+        pflex = PowerModels.var(pm, nw, :pcp)
     end
+    JuMP.@constraint(pm.model, sum(pflex) + phvs == hv_req["P"])
+
 end

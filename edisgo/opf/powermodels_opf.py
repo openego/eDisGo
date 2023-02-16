@@ -16,7 +16,7 @@ def pm_optimize(
     flexible_hps=None,
     flexible_loads=None,
     flexible_storages=None,
-    opf_version=4,
+    opf_version=1,
     method="soc",
     warm_start=False,
     silence_moi=False,
@@ -54,20 +54,20 @@ def pm_optimize(
         flow model (BFM). Optimization versions differ in lifted or additional
         constraints and the objective function.
         Implemented version are:
-        1 : - Additional constraints: high voltage requirements
-            - Lifted constraints: grid restrictions
+        1 : - Lifted constraints: grid restrictions
             - Objective: minimize line losses and line loading
+        2 : - Objective: minimize line losses, line loading and grid related slacks
+        3 : - Additional constraints: high voltage requirements
+            - Lifted constraints: grid restrictions
+            - Objective: minimize line losses, line loading and HV slacks
             # ToDo: add HV slacks to objective (see `Gurobi's multiple objectives
             <https://www.gurobi.com/documentation/9.1/refman/multiple_objectives.html>`_
             ).
-        2 : - Additional constraints: high voltage requirements
-            - Objective: minimize line losses and grid related slacks
-            # ToDo: add HV slacks to objective cf. version 1.
-        3 : - Lifted constraints: grid restrictions
-            - Objective: minimize line losses and line loading
-        4 : - Objective: minimize line losses, line loading and grid related slacks
+        4 : - Additional constraints: high voltage requirements
+            - Objective: minimize line losses, line loading, HV slacks and grid related
+             slacks
         Must be one of [1, 2, 3, 4].
-        Default: 4
+        Default: 1
     method: str
         Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
         (Non Convex).

@@ -26,7 +26,7 @@ def to_powermodels(
     flexible_hps=None,
     flexible_loads=None,
     flexible_storages=None,
-    opf_version=4,
+    opf_version=1,
 ):
     """
     Convert eDisGo representation of the network topology and timeseries to
@@ -53,7 +53,7 @@ def to_powermodels(
     opf_version: Int
         Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
         For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
-        Default: 4
+        Default: 1
     Returns
     -------
     pm: dict
@@ -63,7 +63,7 @@ def to_powermodels(
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from overlying_grid component of edisgo object.
     """
-    if opf_version in [1, 2, 4]:
+    if opf_version in [2, 3, 4]:
         opf_flex = ["curt"]
     else:
         opf_flex = []
@@ -148,7 +148,7 @@ def to_powermodels(
         )
     else:
         logger.warning("No loads found in network.")
-    if (opf_version == 1) | (opf_version == 2):
+    if (opf_version == 3) | (opf_version == 4):
         hv_flex_dict = {
             "curt": edisgo_object.overlying_grid.renewables_curtailment / s_base,
             "storage": edisgo_object.overlying_grid.storage_units_active_power / s_base,
@@ -177,7 +177,7 @@ def to_powermodels(
                 " Changing optimization version to '4' (without high voltage"
                 " requirements)."
             )
-            opf_version = 4
+            opf_version = 1
 
     pm["opf_version"] = opf_version
 
@@ -223,25 +223,22 @@ def from_powermodels(
         Default: 1 MVA
     save_heat_storage: bool
         Indicates whether to save results of heat storage variables from the
-        optimization to csv file in the current working directory. Set parameter
-        "path" to change the directory the file is saved to.
-        directory.
-            Default: False
+        optimization to eDisGo object.
+            Default: True
     save_slack_gen: bool
         Indicates whether to save results of slack generator variables from the
-        optimization to csv file in the current working directory. Set parameter
-        "path" to change the directory the file is saved to.
-        Default: False
+        optimization to eDisGo object.
+        Default: True
     save_slacks: bool
-        Indicates whether to save results of slack variables from the OPF run to csv
-        files in the current working directory. Set parameter "path" to change the
-        directory the file is saved to. Depending on the chosen opf_version, different
-        slacks are created and saved:
-        1 : high voltage requirement slacks
-        2 : high voltage requirements slacks and grid related slacks (load shedding,
-            dispatchable and non-dispatchable generator curtailment, heat pump slack)
-        3 : -
-        4 : grid related slacks cf. version 2
+        Indicates whether to save results of slack variables from the OPF run to eDisGo
+        object. Depending on the chosen opf_version, different slacks are created and
+        saved:
+        1 : -
+        2 : grid related slacks (load shedding, dispatchable and non-dispatchable
+            generator curtailment, heat pump slack)
+        3 : high voltage requirement slacks
+        4 : high voltage requirements slacks and grid related slacks cf. version 2
+
         Default: False
     """
 
@@ -334,7 +331,7 @@ def from_powermodels(
     edisgo_object.set_time_series_reactive_power_control()
 
     # Check values of slack variables for HV requirement constraint
-    if pm["nw"]["1"]["opf_version"] in [1, 2]:
+    if pm["nw"]["1"]["opf_version"] in [3, 4]:
         df = _result_df(
             pm, "HV_requirements", "phvs", edisgo_object.timeseries.timeindex, s_base
         )
@@ -1550,7 +1547,7 @@ def _build_component_timeseries(
                 }
 
     if (kind == "HV_requirements") & (
-        (pm["opf_version"] == 1) | (pm["opf_version"] == 2)
+        (pm["opf_version"] == 3) | (pm["opf_version"] == 4)
     ):
         for i in np.arange(len(opf_flex)):
             pm_comp[(str(i + 1))] = {
