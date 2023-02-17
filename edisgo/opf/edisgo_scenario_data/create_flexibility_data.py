@@ -42,7 +42,11 @@ def create_storage_data(edisgo_obj, directory=None, save_edisgo=False):
                 edisgo_obj.timeseries.loads_active_power[loads].sum(axis=1)
             )
             storage_ts = battery_storage_reference_operation(
-                pd.DataFrame(house_demand - pv_feedin), 0, row[1].p_nom, row[1].p_nom, 1
+                pd.DataFrame(columns=["house_demand"], data=pv_feedin - house_demand),
+                0,
+                row[1].p_nom,
+                row[1].p_nom,
+                1,
             )
             # Add storage instance
             edisgo_obj.add_component(

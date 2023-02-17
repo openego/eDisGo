@@ -724,9 +724,7 @@ def battery_storage_reference_operation(
     pandas.DataFrame
         Dataframe with storage operation timeseries
     """
-    # add data to processing data frame. Battery model handles generation positive,
-    # demand negative
-    df["house_demand"] = -1 * df
+    # Battery model handles generation positive, demand negative
     lst_storage_power = []
     storage_charge = init_storage_charge
 

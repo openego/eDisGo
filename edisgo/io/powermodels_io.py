@@ -262,7 +262,7 @@ def from_powermodels(
         "dsm": ["dsm", "pdsm"],
     }
 
-    timesteps = pm["nw"].keys()
+    timesteps = pd.Series([int(k) for k in pm["nw"].keys()]).sort_values().values
 
     # write active power OPF results to edisgo object
     for flexibility in pm_results["nw"]["1"]["flexibilities"]:
@@ -280,14 +280,14 @@ def from_powermodels(
             ]
             data = [
                 [
-                    pm["nw"][t]["branch"][branch][variable] * s_base
+                    pm["nw"][str(t)]["branch"][branch][variable] * s_base
                     for branch in branches
                 ]
                 for t in timesteps
             ]
             data2 = [
                 [
-                    pm["nw"][t][flex][flex_comp]["ps"] * s_base
+                    pm["nw"][str(t)][flex][flex_comp]["ps"] * s_base
                     for flex_comp in list(pm["nw"]["1"][flex].keys())
                 ]
                 for t in timesteps
@@ -301,7 +301,7 @@ def from_powermodels(
         else:
             data = [
                 [
-                    pm["nw"][t][flex][flex_comp][variable] * s_base
+                    pm["nw"][str(t)][flex][flex_comp][variable] * s_base
                     for flex_comp in list(pm["nw"]["1"][flex].keys())
                 ]
                 for t in timesteps
@@ -333,7 +333,12 @@ def from_powermodels(
     # Check values of slack variables for HV requirement constraint
     if pm["nw"]["1"]["opf_version"] in [3, 4]:
         df = _result_df(
-            pm, "HV_requirements", "phvs", edisgo_object.timeseries.timeindex, s_base
+            pm,
+            "HV_requirements",
+            "phvs",
+            timesteps,
+            edisgo_object.timeseries.timeindex,
+            s_base,
         )
         # save HV slack results to edisgo object
         if save_slacks:
@@ -370,20 +375,30 @@ def from_powermodels(
         )
         for gen in list(pm["nw"]["1"]["gen_slack"].keys()):
             df["pg"] = [
-                pm["nw"][t]["gen_slack"][gen]["pgs"] * s_base for t in timesteps
+                pm["nw"][str(t)]["gen_slack"][gen]["pgs"] * s_base for t in timesteps
             ]
             df["qg"] = [
-                pm["nw"][t]["gen_slack"][gen]["qgs"] * s_base for t in timesteps
+                pm["nw"][str(t)]["gen_slack"][gen]["qgs"] * s_base for t in timesteps
             ]
         edisgo_object.opf_results.slack_generator_t = df
 
     if save_heat_storage:  # save heat storage variables to edisgo object
         df = _result_df(
-            pm, "heat_storage", "phs", edisgo_object.timeseries.timeindex, s_base
+            pm,
+            "heat_storage",
+            "phs",
+            timesteps,
+            edisgo_object.timeseries.timeindex,
+            s_base,
         )
         edisgo_object.opf_results.heat_storage_t.p = df
         df = _result_df(
-            pm, "heat_storage", "hse", edisgo_object.timeseries.timeindex, s_base
+            pm,
+            "heat_storage",
+            "hse",
+            timesteps,
+            edisgo_object.timeseries.timeindex,
+            s_base,
         )
         edisgo_object.opf_results.heat_storage_t.e = df
 
@@ -396,7 +411,9 @@ def from_powermodels(
         ]
         for comp, var in slacks:
             # save slacks to edisgo object
-            df = _result_df(pm, comp, var, edisgo_object.timeseries.timeindex, s_base)
+            df = _result_df(
+                pm, comp, var, timesteps, edisgo_object.timeseries.timeindex, s_base
+            )
             if comp == "gen":
                 edisgo_object.opf_results.grid_slacks_t.gen_d_crt = df
             elif comp == "gen_nd":
@@ -1690,16 +1707,16 @@ def _get_pf(edisgo_obj, pm, idx_bus, kind):
     return pf, sign
 
 
-def _result_df(pm, component, variable, index, s_base):
+def _result_df(pm, component, variable, timesteps, index, s_base):
     cols = [
         pm["nw"]["1"][component][n]["name"]
         for n in list(pm["nw"]["1"][component].keys())
     ]
     data = [
         [
-            pm["nw"][t][component][n][variable] * s_base
+            pm["nw"][str(t)][component][n][variable] * s_base
             for n in list(pm["nw"]["1"][component].keys())
         ]
-        for t in pm["nw"].keys()
+        for t in timesteps
     ]
     return pd.DataFrame(index=index, columns=cols, data=data)
