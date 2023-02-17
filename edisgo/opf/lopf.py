@@ -1567,7 +1567,7 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
         return
         # Do something when model in infeasible
     else:
-        logger.warning(f"Model is {results.solver.termination_condition}}")
+        logger.warning(f"Model is {results.solver.termination_condition}")
         logger.warning(f"Solver Status: {results.solver.status}")
         return
 
