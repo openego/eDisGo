@@ -365,7 +365,7 @@ def setup_model(
     fixed_parameters : dict
         All fixed parameters which are needed to setup the model
     timesteps :
-        Number of timesteps for which the model is set up
+        Timesteps for which the model is set up
     objective :
         Optimization objectives. Possible keys: "curtailment", "peak_load",
         "residual_load", "minimize_energy_level", "maximize_energy_level",
@@ -1563,11 +1563,12 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
         logger.info(f"It took {get_exec_time(t1)} to optimize model.")
         return result_dict
     elif results.solver.termination_condition == TerminationCondition.infeasible:
-        logger.info("Model is infeasible")
+        logger.warning(f"Model is {results.solver.termination_condition}")
         return
         # Do something when model in infeasible
     else:
-        logger.info(f"Solver Status: {results.solver.status}")
+        logger.warning(f"Model is {results.solver.termination_condition}}")
+        logger.warning(f"Solver Status: {results.solver.status}")
         return
 
 
