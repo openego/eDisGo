@@ -1473,9 +1473,8 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
         logfile=kwargs.get("logfile", None),
     )
 
-    if (results.solver.status == SolverStatus.ok
-    # ) and (
-    #     results.solver.termination_condition == TerminationCondition.optimal
+    if (results.solver.status == SolverStatus.ok) and (
+        results.solver.termination_condition == TerminationCondition.optimal
     ):
         logger.info("Model Solved to Optimality")
         # Extract results
@@ -1564,13 +1563,11 @@ def optimize(model, solver, load_solutions=True, mode=None, tee=True, **kwargs):
         logger.info(f"It took {get_exec_time(t1)} to optimize model.")
         return result_dict
     elif results.solver.termination_condition == TerminationCondition.infeasible:
-        logger.warning(
-            f"Model termination: {results.solver.termination_condition}")
+        logger.warning(f"Model is {results.solver.termination_condition}")
         return
         # Do something when model in infeasible
     else:
-        logger.warning(
-            f"Model termination: {results.solver.termination_condition}")
+        logger.warning(f"Model is {results.solver.termination_condition}")
         logger.warning(f"Solver Status: {results.solver.status}")
         return
 
