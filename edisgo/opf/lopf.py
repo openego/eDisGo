@@ -895,7 +895,8 @@ def add_ev_model_bands(
     # if grid power is maximised, do not set bound on energy
     if model.objective_name in ["maximize_grid_power", "minimize_grid_power"]:
         model.energy_level_ev = pm.Var(
-            model.flexible_charging_points_set, model.time_set
+            model.flexible_charging_points_set, model.time_set,
+            bounds=lambda m, b, t: (0, None),
         )
     else:
         model.energy_level_ev = pm.Var(
