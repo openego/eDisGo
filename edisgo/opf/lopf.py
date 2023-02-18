@@ -424,7 +424,7 @@ def setup_model(
         "minimize_energy_level",
         "maximize_energy_level",
         "maximize_grid_power",
-        "minimize_grid_power"
+        "minimize_grid_power",
     ]:
         raise ValueError("The objective you inserted is not implemented yet.")
 
@@ -440,9 +440,7 @@ def setup_model(
     else:
         model.time_final = [model.time_set.at(-1)]
         model.time_end = [model.time_set.at(-1)]
-    model.times_fixed_soc = pm.Set(
-        initialize=[model.time_set.at(-1)]
-    )
+    model.times_fixed_soc = pm.Set(initialize=[model.time_set.at(-1)])
     model.timeindex = pm.Param(
         model.time_set,
         initialize={i: timesteps[i] for i in model.time_set},
@@ -534,7 +532,7 @@ def setup_model(
             charging_starts=kwargs.get("charging_starts", {"hp": None, "tes": None}),
         )
 
-    if not objective == "minimize_energy_level" or objective == "maximize_energy_level":
+    if objective not in ["minimize_energy_level", "maximize_energy_level"]:
         # if True:
         logger.info("Setup model: Adding grid model.")
         model = add_grid_model_lopf(
@@ -895,8 +893,7 @@ def add_ev_model_bands(
         bounds=lambda m, b, t: (0, m.power_bound_ev[b, t]),
     )
     # if grid power is maximised, do not set bound on energy
-    if (model.objective_name == "maximize_grid_power") or \
-       (model.objective_name == "minimize_grid_power"):
+    if model.objective_name in ["maximize_grid_power", "minimize_grid_power"]:
         model.energy_level_ev = pm.Var(
             model.flexible_charging_points_set, model.time_set
         )
@@ -1031,8 +1028,7 @@ def add_rolling_horizon(
                 getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
 
         # If grid power is maximised, deactivate all final energy constraints
-        if (model.objective_name == "maximize_grid_power") or \
-                (model.objective_name == "minimize_grid_power"):
+        if model.objective_name in ["maximize_grid_power", "minimize_grid_power"]:
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
             getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
 
@@ -1138,8 +1134,10 @@ def add_heat_pump_model(
 
         """
         if time == 0:
-            energy_level_pre = model.tes.loc[hp, "capacity"] * \
-                               model.tes.loc[hp, "state_of_charge_initial"]
+            energy_level_pre = (
+                model.tes.loc[hp, "capacity"]
+                * model.tes.loc[hp, "state_of_charge_initial"]
+            )
         else:
             energy_level_pre = model.energy_level_tes[hp, time - 1]
         return model.energy_level_tes[hp, time] == (
@@ -1172,12 +1170,12 @@ def add_heat_pump_model(
         within=pm.Any,
     )
     # set up variables
-    # Do not constrain energy if grid power is maximised:
-    if (model.objective_name == "maximize_grid_power") or \
-            (model.objective_name == "minimize_grid_power"):
+    # Only constrain lower bound if grid powr is optimized:
+    if model.objective_name in ["maximize_grid_power", "minimize_grid_power"]:
         model.energy_level_tes = pm.Var(
             model.flexible_heat_pumps_set,
             model.time_set,
+            bounds=lambda m, hp, t: (0, None),
         )
     else:
         model.energy_level_tes = pm.Var(
@@ -1389,8 +1387,7 @@ def update_rolling_horizon(comp_type, model, **kwargs):
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
 
         # If grid power is maximised, deactivate all final energy constraints
-        if (model.objective_name == "maximize_grid_power") or \
-                (model.objective_name == "minimize_grid_power"):
+        if model.objective_name in ["maximize_grid_power", "minimize_grid_power"]:
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
             getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
 
@@ -2089,13 +2086,15 @@ def soc(model, storage, time):
 
     """
     if time == 0:
-        soc_pre = model.fix_relative_soc * \
-                  model.grid.storage_units_df.loc[storage, model.pars["capacity"]]
+        soc_pre = (
+            model.fix_relative_soc
+            * model.grid.storage_units_df.loc[storage, model.pars["capacity"]]
+        )
     else:
         soc_pre = model.soc[storage, time - 1]
-    return model.soc[storage, time] == soc_pre - \
-        model.grid.storage_units_df.loc[storage, "efficiency_store"] * \
-        model.charging[storage, time - 1] * (
+    return model.soc[storage, time] == soc_pre - model.grid.storage_units_df.loc[
+        storage, "efficiency_store"
+    ] * model.charging[storage, time - 1] * (
         pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h")
     )
 
@@ -2138,12 +2137,17 @@ def charging_ev(model, charging_point, time):
 
     """
     if time == 0:
-        energy_level_pre = (model.lower_bound_ev[charging_point, time] +
-                            model.upper_bound_ev[charging_point, time]) / 2
+        energy_level_pre = (
+            model.lower_bound_ev[charging_point, time]
+            + model.upper_bound_ev[charging_point, time]
+        ) / 2
     else:
         energy_level_pre = model.energy_level_ev[charging_point, time - 1]
-    return model.energy_level_ev[charging_point, time] == energy_level_pre + \
-        model.charging_efficiency * model.charging_ev[charging_point, time] * (
+    return model.energy_level_ev[
+        charging_point, time
+    ] == energy_level_pre + model.charging_efficiency * model.charging_ev[
+        charging_point, time
+    ] * (
         pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h")
     )
 
