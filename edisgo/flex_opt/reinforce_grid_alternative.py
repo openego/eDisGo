@@ -19,7 +19,7 @@ def reinforce_line_overloading_alternative(
     add_method=None,
     timesteps_pfa=None,
     copy_grid=False,
-    grid_mode=None,
+    voltage_level=None,
     loading_mode="load",
     split_mode="back",
     max_while_iterations=20,
@@ -85,7 +85,7 @@ def reinforce_line_overloading_alternative(
           Use this option to explicitly choose which time steps to consider.
     copy_grid:If True reinforcement is conducted on a copied grid and discarded.
         Default: False.
-    grid_mode : str
+    voltage_level : str
         Determines network levels reinforcement is conducted for. Specify
         * None to reinforce MV and LV network levels. None is the default.
         * 'mv' to reinforce MV network level only, neglecting MV/LV stations,
@@ -182,8 +182,8 @@ def reinforce_line_overloading_alternative(
         )
 
     # check if provided mode is valid
-    if grid_mode and grid_mode not in ["mv", "lv"]:
-        raise ValueError(f"Provided mode {grid_mode} is not valid.")
+    if voltage_level and voltage_level not in ["mv", "lv"]:
+        raise ValueError(f"Provided mode {voltage_level} is not valid.")
     # in case reinforcement needs to be conducted on a copied graph the
     # edisgo object is deep copied
     if copy_grid is True:
@@ -242,12 +242,12 @@ def reinforce_line_overloading_alternative(
     logger.debug("==> Check line loadings.")
     crit_lines_mv = checks.mv_line_load(edisgo_reinforce)
     crit_lines_lv = checks.lv_line_load(edisgo_reinforce)
-    if not crit_lines_mv:
+    if not any(crit_lines_mv):
         logger.info(
             f"{edisgo_reinforce.topology.mv_grid}==>there is no critical line in MV "
             f"grid "
         )
-    if not crit_lines_lv:
+    if not any(crit_lines_lv):
         logger.info(
             f"{edisgo_reinforce.topology.mv_grid}==>there is no critical line in lv "
             f"grids "
@@ -255,7 +255,7 @@ def reinforce_line_overloading_alternative(
     # 1.1 Voltage level= MV
     # 1.1.1 Method:Split the feeder at the half-length of feeder (applied only once to
     # secure n-1).
-    if (not grid_mode or grid_mode == "mv") and not crit_lines_mv.empty:
+    if (not voltage_level or voltage_level == "mv") and not crit_lines_mv.empty:
         if (
             add_method == ["add_station_at_half_length"]
             or "add_station_at_half_length" in add_method
@@ -296,7 +296,7 @@ def reinforce_line_overloading_alternative(
             edisgo_reinforce.analyze(timesteps=timesteps_pfa)
 
     # 1.2- Voltage level= LV
-    if (not grid_mode or grid_mode == "lv") and not crit_lines_lv.empty:
+    if (not voltage_level or voltage_level == "lv") and not crit_lines_lv.empty:
         if (
             add_method == ["relocate_circuit_breaker"]
             or "relocate_circuit_breaker" in add_method
@@ -345,11 +345,11 @@ def reinforce_line_overloading_alternative(
     logger.debug("==> Recheck line load.")
     crit_lines = (
         pd.DataFrame(dtype=float)
-        if grid_mode == "lv"
+        if voltage_level == "lv"
         else checks.mv_line_load(edisgo_reinforce)
     )
 
-    if not grid_mode or grid_mode == "lv":
+    if not voltage_level or voltage_level == "lv":
         crit_lines = pd.concat(
             [
                 crit_lines,
@@ -361,10 +361,10 @@ def reinforce_line_overloading_alternative(
         # Method: Add same type of parallel line
         while_counter = 0
         while not crit_lines.empty and while_counter < max_while_iterations:
-            if grid_mode is None:
+            if voltage_level is None:
                 grid_level = "MV and LV "
             else:
-                grid_level = grid_mode
+                grid_level = voltage_level
 
             logger.info(
                 f"{edisgo_reinforce.topology.mv_grid}==>method:add_same_type_of_"
@@ -384,11 +384,11 @@ def reinforce_line_overloading_alternative(
             logger.debug("==> Recheck line load.")
             crit_lines = (
                 pd.DataFrame(dtype=float)
-                if grid_mode == "lv"
+                if voltage_level == "lv"
                 else checks.mv_line_load(edisgo_reinforce)
             )
 
-            if not grid_mode or grid_mode == "lv":
+            if not voltage_level or voltage_level == "lv":
                 crit_lines = pd.concat(
                     [
                         crit_lines,
@@ -419,7 +419,7 @@ def reinforce_line_overloading_alternative(
 
     if not crit_lines.empty:
         logger.warning(
-            "{edisgo_reinforce.topology.mv_grid}==>Not all overloading issues could "
+            f"{edisgo_reinforce.topology.mv_grid}==>Not all overloading issues could "
             "be solved. "
         )
 
@@ -436,7 +436,7 @@ def reinforce_lines_voltage_issues_alternative(
     timesteps_pfa=None,
     split_mode="forward",
     copy_grid=False,
-    grid_mode=None,
+    voltage_level=None,
     max_while_iterations=20,
     combined_analysis=False,
     without_generator_import=False,
@@ -490,7 +490,7 @@ def reinforce_lines_voltage_issues_alternative(
 
     copy_grid:If True reinforcement is conducted on a copied grid and discarded.
         Default: False.
-    grid_mode:
+    voltage_level:
         Determines network levels reinforcement is conducted for. Specify
         * None to reinforce MV and LV network levels. None is the default.
         * 'mv' to reinforce MV network level only, neglecting MV/LV stations,
@@ -550,8 +550,8 @@ def reinforce_lines_voltage_issues_alternative(
         edisgo_reinforce.results.equipment_changes = pd.concat(df_list)
 
     # check if provided mode is valid
-    if grid_mode and grid_mode not in ["mv", "lv"]:
-        raise ValueError(f"Provided mode {grid_mode} is not valid.")
+    if voltage_level and voltage_level not in ["mv", "lv"]:
+        raise ValueError(f"Provided mode {voltage_level} is not valid.")
     # in case reinforcement needs to be conducted on a copied graph the
     # edisgo object is deep copied
     if copy_grid is True:
@@ -616,18 +616,21 @@ def reinforce_lines_voltage_issues_alternative(
             f"grid"
         )
 
-    if (not grid_mode or grid_mode == "mv") and crit_nodes_mv:
+    if (not voltage_level or voltage_level == "mv") and crit_nodes_mv:
         # 1.1Method:Split the feeder at the 2_3-length of the feeder (applied several
         # times till all the voltage issues are remedied
         while_counter = 0
         while crit_nodes_mv and while_counter < max_while_iterations:
-            if add_method == ["add_station_at_2_3_length"] and grid_mode is not None:
+            if (
+                add_method == ["add_station_at_2_3_length"]
+                and voltage_level is not None
+            ):
                 raise exceptions.Error(
                     f"{edisgo_reinforce.topology.mv_grid}==>method"
                     f":add_station_at_2_3_length is only applicable for LV "
                     "grids"
                 )
-            elif add_method == ["add_station_at_2_3_length"] and grid_mode is None:
+            elif add_method == ["add_station_at_2_3_length"] and voltage_level is None:
                 logger.error(
                     f"{edisgo_reinforce.topology.mv_grid}==>method"
                     f":add_station_at_2_3_length is only applicable for LV grids "
@@ -708,7 +711,7 @@ def reinforce_lines_voltage_issues_alternative(
             f"{edisgo_reinforce.topology.mv_grid}==>there is no critical line in lv "
             "grids "
         )
-    if (not grid_mode or grid_mode == "lv") and crit_nodes_lv:
+    if (not voltage_level or voltage_level == "lv") and crit_nodes_lv:
 
         # 2.1 add new station ( applied only once ) if the number of overloaded lines
         # is more than 2
