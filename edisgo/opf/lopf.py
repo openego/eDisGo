@@ -22,6 +22,26 @@ logger = logging.getLogger(__name__)
 BANDS = ["upper_power", "upper_energy", "lower_energy"]
 
 
+def timeit(func):
+    """
+    Decorator for measuring function's running time.
+    """
+
+    def measure_time(*args, **kw):
+        start_time = time.perf_counter()
+        result = func(*args, **kw)
+        exec_time = time.perf_counter() - start_time
+        if exec_time > 2:
+            exec_time = time.gmtime(exec_time)
+            exec_time = time.strftime("%Hh:%Mm:%Ss", exec_time)
+        else:
+            exec_time = str(int(exec_time * 100)) + "ms"
+        logger.info(f"Processing time of {func.__qualname__}(): {exec_time}.")
+        return result
+
+    return measure_time
+
+
 def get_exec_time(start_time):
     """Computes execution time in h:m:s format or ms if <2seconds"""
     exec_time = time.perf_counter() - start_time
@@ -633,6 +653,7 @@ def setup_model(
     return model
 
 
+@timeit
 def add_grid_model_lopf(
     model,
     fixed_parameters,
@@ -835,6 +856,7 @@ def add_grid_model_lopf(
     return model
 
 
+@timeit
 def add_ev_model_bands(
     model,
     fixed_parameters,
@@ -895,7 +917,8 @@ def add_ev_model_bands(
     # if grid power is maximised, do not set bound on energy
     if model.objective_name in ["maximize_grid_power", "minimize_grid_power"]:
         model.energy_level_ev = pm.Var(
-            model.flexible_charging_points_set, model.time_set,
+            model.flexible_charging_points_set,
+            model.time_set,
             bounds=lambda m, b, t: (0, None),
         )
     else:
@@ -1090,6 +1113,7 @@ def get_attrs_rolling_horizon(comp_type, model):
     return charging_attrs, energy_attrs, flex_set
 
 
+@timeit
 def add_heat_pump_model(
     model,
     fixed_parameters,
