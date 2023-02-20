@@ -21,7 +21,7 @@ function objective_min_losses(pm::AbstractBFModelEdisgo)
     factor2 = 1
     while true
         if (maximum(factor2*parameters2) > maximum(factor*parameters)) &
-            (minimum(factor2*parameters2) > -1e-5)
+            (minimum(factor2*parameters2) > -1e-4)
             break
         else
             factor2 = 10*factor2

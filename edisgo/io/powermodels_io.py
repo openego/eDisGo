@@ -280,7 +280,7 @@ def from_powermodels(
             ]
             data = [
                 [
-                    pm["nw"][str(t)]["branch"][branch][variable] * s_base
+                    -pm["nw"][str(t)]["branch"][branch][variable] * s_base
                     for branch in branches
                 ]
                 for t in timesteps
@@ -322,6 +322,7 @@ def from_powermodels(
                 edisgo_object.timeseries._loads_active_power.loc[:, names].values
                 + results[names].values
             )
+
         elif flex == "storage":
             edisgo_object.timeseries._storage_units_active_power.loc[
                 :, names
@@ -423,7 +424,32 @@ def from_powermodels(
             elif comp == "electromobility":
                 edisgo_object.opf_results.grid_slacks_t.cp_load_shedding = df
 
-    # ToDo: save results for lines, buses
+    # save line flows and currents to edisgo object
+    for variable in ["pf", "qf", "ccm"]:
+        df = _result_df(
+            pm,
+            "branch",
+            variable,
+            timesteps,
+            edisgo_object.timeseries.timeindex,
+            s_base,
+        )
+        if variable == "pf":
+            edisgo_object.opf_results.lines_t.p = df
+        elif variable == "qf":
+            edisgo_object.opf_results.lines_t.q = df
+        elif variable == "ccm":
+            edisgo_object.opf_results.lines_t.ccm = df
+    # Save bus voltages to edisgo object
+    df = _result_df(
+        pm,
+        "bus",
+        "w",
+        timesteps,
+        edisgo_object.timeseries.timeindex,
+        1,
+    )
+    edisgo_object.opf_results.buses_t.w = df
 
 
 def _init_pm():
@@ -514,14 +540,14 @@ def _build_bus(psa_net, pm, flexible_storages):
             "index": stor_i + len(psa_net.buses.index) + 1,
             "bus_i": stor_i + len(psa_net.buses.index) + 1,
             "zone": 1,
-            "bus_type": bus_types_int[idx_bus],
-            "vmax": v_max[idx_bus],
-            "vmin": v_min[idx_bus],
+            "bus_type": bus_types_int[idx_bus - 1],
+            "vmax": v_max[idx_bus - 1],
+            "vmin": v_min[idx_bus - 1],
             "va": 0,
             "vm": 1,
-            "name": psa_net.buses.index[idx_bus] + "_bss",
-            "base_kv": psa_net.buses.v_nom[idx_bus],
-            "grid_level": grid_level[psa_net.buses.v_nom[idx_bus]],
+            "name": psa_net.buses.index[idx_bus - 1] + "_bss",
+            "base_kv": psa_net.buses.v_nom[idx_bus - 1],
+            "grid_level": grid_level[psa_net.buses.v_nom[idx_bus - 1]],
         }
 
 
@@ -710,7 +736,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
 
         pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
-            "br_r": 0.017 * s_base / (psa_net.buses.v_nom[idx_bus] ** 2),
+            "br_r": 0.017 * s_base / (psa_net.buses.v_nom[idx_bus - 1] ** 2),
             "r": 0.017,
             "br_x": 0,
             "f_bus": idx_bus,

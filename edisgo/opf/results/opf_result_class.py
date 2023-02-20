@@ -12,6 +12,11 @@ class LineVariables:
         self.ccm = pd.DataFrame()
 
 
+class BusVariables:
+    def __init__(self):
+        self.w = pd.DataFrame()
+
+
 class HeatStorage:
     def __init__(self):
         self.p = pd.DataFrame()
@@ -31,7 +36,7 @@ class OPFResults:
         self.status = None
         self.solution_time = None
         self.solver = None
-        self.buses_t = pd.DataFrame()
+        self.buses_t = BusVariables()
         self.lines_t = LineVariables()
         self.slack_generator_t = pd.DataFrame()
         self.heat_pump_t = pd.DataFrame()
