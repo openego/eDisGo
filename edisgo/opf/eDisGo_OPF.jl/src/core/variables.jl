@@ -1,3 +1,81 @@
+""
+function variable_branch_power_radial(pm::AbstractPowerModel; kwargs...)
+    variable_branch_power_real_radial(pm; kwargs...)
+    variable_branch_power_imaginary_radial(pm; kwargs...)
+end
+
+
+"variable: `p[l,i,j]` for `(l,i,j)` in `arcs_from`"
+function variable_branch_power_real_radial(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    p = PowerModels.var(pm, nw)[:p] = JuMP.@variable(pm.model,
+        [(l,i,j) in PowerModels.ref(pm, nw, :arcs_from)], base_name="$(nw)_p",
+        start = comp_start_value(PowerModels.ref(pm, nw, :branch, l), "p_start")
+    )
+
+    if bounded
+        flow_lb, flow_ub = ref_calc_branch_flow_bounds(PowerModels.ref(pm, nw, :branch), PowerModels.ref(pm, nw, :bus))
+
+        for arc in PowerModels.ref(pm, nw, :arcs_from)
+            l,i,j = arc
+            if !isinf(flow_lb[l])
+                JuMP.set_lower_bound(p[arc], flow_lb[l])
+            end
+            if !isinf(flow_ub[l])
+                JuMP.set_upper_bound(p[arc], flow_ub[l])
+            end
+        end
+    end
+
+    for (l,branch) in PowerModels.ref(pm, nw, :branch)
+        if haskey(branch, "pf_start")
+            f_idx = (l, branch["f_bus"], branch["t_bus"])
+            JuMP.set_start_value(p[f_idx], branch["pf_start"])
+        end
+        if haskey(branch, "pt_start")
+            t_idx = (l, branch["t_bus"], branch["f_bus"])
+            JuMP.set_start_value(p[t_idx], branch["pt_start"])
+        end
+    end
+
+    report && eDisGo_OPF.sol_component_value_radial(pm, nw, :branch, :pf, PowerModels.ref(pm, nw, :arcs_from), p)
+end
+
+"variable: `q[l,i,j]` for `(l,i,j)` in `arcs`"
+function variable_branch_power_imaginary_radial(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    q = PowerModels.var(pm, nw)[:q] = JuMP.@variable(pm.model,
+        [(l,i,j) in PowerModels.ref(pm, nw, :arcs_from)], base_name="$(nw)_q",
+        start = comp_start_value(PowerModels.ref(pm, nw, :branch, l), "q_start")
+    )
+
+    if bounded
+        flow_lb, flow_ub = ref_calc_branch_flow_bounds(PowerModels.ref(pm, nw, :branch), PowerModels.ref(pm, nw, :bus))
+
+        for arc in PowerModels.ref(pm, nw, :arcs_from)
+            l,i,j = arc
+            if !isinf(flow_lb[l])
+                JuMP.set_lower_bound(q[arc], flow_lb[l])
+            end
+            if !isinf(flow_ub[l])
+                JuMP.set_upper_bound(q[arc], flow_ub[l])
+            end
+        end
+    end
+
+    for (l,branch) in PowerModels.ref(pm, nw, :branch)
+        if haskey(branch, "qf_start")
+            f_idx = (l, branch["f_bus"], branch["t_bus"])
+            JuMP.set_start_value(q[f_idx], branch["qf_start"])
+        end
+        if haskey(branch, "qt_start")
+            t_idx = (l, branch["t_bus"], branch["f_bus"])
+            JuMP.set_start_value(q[t_idx], branch["qt_start"])
+        end
+    end
+
+    report && eDisGo_OPF.sol_component_value_radial(pm, nw, :branch, :qf, PowerModels.ref(pm, nw, :arcs_from), q)
+end
+
+
 "generates variables for both `active` and `reactive` non-dispatchable power generation curtailment"
 function variable_gen_power_curt(pm::AbstractPowerModel; kwargs...)
     variable_gen_power_curt_real(pm; kwargs...) # Eq. (3.30) für non-dispatchable Generators

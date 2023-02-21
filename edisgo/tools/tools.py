@@ -807,6 +807,7 @@ def get_sample_using_time(edisgo_obj, start_date, end_date):
     edisgo_obj.timeseries._loads_reactive_power = (
         edisgo_obj.timeseries.loads_reactive_power[start_date:end_date]
     )
+
     edisgo_obj.timeseries._storage_units_active_power = (
         edisgo_obj.timeseries.storage_units_active_power[start_date:end_date]
     )
@@ -815,50 +816,54 @@ def get_sample_using_time(edisgo_obj, start_date, end_date):
     )
 
     ts_before = pd.to_datetime(start_date) - pd.Timedelta(hours=1)
-    try:
-        initial_soc_cp = (
-            1
-            / 2
-            * (
-                edisgo_obj.electromobility.flexibility_bands["upper_energy"].loc[
-                    ts_before
-                ]
-                + edisgo_obj.electromobility.flexibility_bands["lower_energy"].loc[
-                    ts_before
-                ]
+    if len(edisgo_obj.electromobility.flexibility_bands["upper_energy"]) > 0:
+        try:
+            initial_soc_cp = (
+                1
+                / 2
+                * (
+                    edisgo_obj.electromobility.flexibility_bands["upper_energy"].loc[
+                        ts_before
+                    ]
+                    + edisgo_obj.electromobility.flexibility_bands["lower_energy"].loc[
+                        ts_before
+                    ]
+                )
             )
-        )
-    except KeyError:
-        initial_soc_cp = (
-            1
-            / 2
-            * (
-                edisgo_obj.electromobility.flexibility_bands["upper_energy"].loc[
-                    start_date
-                ]
-                + edisgo_obj.electromobility.flexibility_bands["lower_energy"].loc[
-                    start_date
-                ]
+        except KeyError:
+            initial_soc_cp = (
+                1
+                / 2
+                * (
+                    edisgo_obj.electromobility.flexibility_bands["upper_energy"].loc[
+                        start_date
+                    ]
+                    + edisgo_obj.electromobility.flexibility_bands["lower_energy"].loc[
+                        start_date
+                    ]
+                )
             )
-        )
-    edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
-    edisgo_obj.electromobility.flexibility_bands[
-        "upper_power"
-    ] = edisgo_obj.electromobility.flexibility_bands["upper_power"][start_date:end_date]
-    edisgo_obj.electromobility.flexibility_bands[
-        "upper_energy"
-    ] = edisgo_obj.electromobility.flexibility_bands["upper_energy"][
-        start_date:end_date
-    ]
-    edisgo_obj.electromobility.flexibility_bands[
-        "lower_energy"
-    ] = edisgo_obj.electromobility.flexibility_bands["lower_energy"][
-        start_date:end_date
-    ]
-    edisgo_obj.heat_pump.cop_df = edisgo_obj.heat_pump.cop_df[start_date:end_date]
-    edisgo_obj.heat_pump.heat_demand_df = edisgo_obj.heat_pump.heat_demand_df[
-        start_date:end_date
-    ]
+        edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
+        edisgo_obj.electromobility.flexibility_bands[
+            "upper_power"
+        ] = edisgo_obj.electromobility.flexibility_bands["upper_power"][
+            start_date:end_date
+        ]
+        edisgo_obj.electromobility.flexibility_bands[
+            "upper_energy"
+        ] = edisgo_obj.electromobility.flexibility_bands["upper_energy"][
+            start_date:end_date
+        ]
+        edisgo_obj.electromobility.flexibility_bands[
+            "lower_energy"
+        ] = edisgo_obj.electromobility.flexibility_bands["lower_energy"][
+            start_date:end_date
+        ]
+    if len(edisgo_obj.heat_pump.cop_df) > 0:
+        edisgo_obj.heat_pump.cop_df = edisgo_obj.heat_pump.cop_df[start_date:end_date]
+        edisgo_obj.heat_pump.heat_demand_df = edisgo_obj.heat_pump.heat_demand_df[
+            start_date:end_date
+        ]
 
 
 def resample(

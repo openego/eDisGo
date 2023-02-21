@@ -1,7 +1,7 @@
 function sol_component_value_radial(aim::AbstractPowerModel, n::Int, comp_name::Symbol, field_name_to::Symbol, comp_ids_to, variables)
     for (l, i, j) in comp_ids_to
         @assert !haskey(InfrastructureModels.sol(aim, pm_it_sym, n, comp_name, l), field_name_to)
-        InfrastructurModels.sol(aim, pm_it_sym, n, comp_name, l)[field_name_to] = variables[(l, i, j)]
+        InfrastructureModels.sol(aim, pm_it_sym, n, comp_name, l)[field_name_to] = variables[(l, i, j)]
     end
 end
 

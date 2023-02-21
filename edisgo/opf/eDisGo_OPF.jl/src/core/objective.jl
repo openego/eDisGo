@@ -17,20 +17,20 @@ function objective_min_losses(pm::AbstractBFModelEdisgo)
             factor = 10*factor
         end
     end
-    parameters2 = [c[1][b]*l[1][b]/s_nom[1][b]^2 for b in keys(c[1])]
+    parameters2 = [(c[1][b]*l[1][b])/s_nom[1][b]^2 for b in keys(c[1])]
     factor2 = 1
     while true
-        if (maximum(factor2*parameters2) > maximum(factor*parameters)) &
-            (minimum(factor2*parameters2) > -1e-4)
+        if (maximum(factor2*parameters2) > maximum(factor*parameters))
             break
         else
             factor2 = 10*factor2
         end
     end
+    println(factor)
     println(factor2)
     return JuMP.@objective(pm.model, Min,
         factor * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
-        + factor2 * sum(sum((p[n][(b,i,j)]^2+q[n][(b,i,j)]^2)/s_nom[n][b]^2 * c[n][b]*l[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading * c[n][b]*l[n][b]
+        + factor2 * sum(sum((p[n][(b,i,j)]^2+q[n][(b,i,j)]^2)/s_nom[n][b] * c[1][b]*l[1][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading * c[n][b]*l[n][b]
     )
 end
 

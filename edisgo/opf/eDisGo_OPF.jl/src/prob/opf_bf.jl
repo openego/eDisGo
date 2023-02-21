@@ -11,10 +11,10 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         if PowerModels.ref(pm, 1, :opf_version) in(1, 2, 3, 4)
             if PowerModels.ref(pm, 1, :opf_version) in(1, 3)
                 eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false) # Eq. 3.14 (für Version 1 bzw. 3 keine Eq. (3.8))
-                PowerModels.variable_branch_power(pm, nw=n, bounded=false)  # Für Version 1 bzw. 3 keine Eq. (3.7)
+                eDisGo_OPF.variable_branch_power_radial(pm, nw=n, bounded=false)  # Für Version 1 bzw. 3 keine Eq. (3.7)
             else
                 eDisGo_OPF.variable_branch_current(pm, nw=n)  # Eq. (3.8) und (3.14)
-                PowerModels.variable_branch_power(pm, nw=n) # Eq. (3.7)
+                eDisGo_OPF.variable_branch_power_radial(pm, nw=n) # Eq. (3.7)
                 eDisGo_OPF.variable_gen_power_curt(pm, nw=n)  # Eq. (3.30) für non-dispatchable Generators
                 eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.30)-(3.32)
             end

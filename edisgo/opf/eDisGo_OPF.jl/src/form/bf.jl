@@ -164,13 +164,13 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
         )
         cstr_q = JuMP.@constraint(pm.model,
             sum(qt[a] for a in bus_arcs_to)
+            - sum(pt[a] * branch_strg_pf[a[1]] for a in bus_arcs_to)
             ==
             sum(qf[a] for a in bus_arcs_from)
             + sum(ccm[a] * branch_x[a] for a in bus_lines_to)
             - sum(qgs[g] for g in bus_gens_slack)
             - sum(qg for qg in values(bus_qg))
             - sum(qg for qg in values(bus_qg_nd))
-            - sum(ps[s] * bus_storage_pf[s] for s in bus_storage)
             + sum(qd for qd in values(bus_qd))
             + sum(pdsm[dsm] * bus_dsm_pf[dsm] for dsm in bus_dsm)
             + sum(php[hp] * bus_hps_pf[hp] for hp in bus_hps)
