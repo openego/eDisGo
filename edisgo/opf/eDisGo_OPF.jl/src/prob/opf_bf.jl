@@ -6,6 +6,7 @@ end
 
 "Build multinetwork branch flow OPF with multiple flexibilities"
 function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
+    eDisGo_OPF.variable_max_line_loading(pm, nw=1)
     for (n, network) in PowerModels.nws(pm)
         # VARIABLES
         if PowerModels.ref(pm, 1, :opf_version) in(1, 2, 3, 4)
@@ -25,6 +26,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             eDisGo_OPF.variable_cp_power(pm, nw=n)  #  Eq. (3.22), (3.23)
             eDisGo_OPF.variable_dsm_storage_power(pm, nw=n)  # Eq. (3.26), (3.27)
             eDisGo_OPF.variable_slack_gen(pm, nw=n)  # keine Bounds für Slack Generator
+
             if PowerModels.ref(pm, 1, :opf_version) in(3, 4)
                 eDisGo_OPF.variable_slack_HV_requirements(pm, nw=n) # Nicht Teil der MA
                 if PowerModels.ref(pm, 1, :opf_version) in(3)
@@ -46,6 +48,8 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, i, nw=n) # Eq. (3.4)
         end
         eDisGo_OPF.constraint_model_current(pm, nw=n)  # Eq. (3.5) bzw. (3.9) (je nachdem ob nicht-konvex oder konvex gelöst wird)
+        eDisGo_OPF.constraint_max_line_loading(pm, n)
+
         for i in PowerModels.ids(pm, :heatpumps, nw=n)
             eDisGo_OPF.constraint_hp_operation(pm, i, n) # Eq. (3.15)
         end
@@ -85,7 +89,8 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
 
     # OBJECTIVE FUNCTION
     if PowerModels.ref(pm, 1, :opf_version) in(1,3)
-        eDisGo_OPF.objective_min_losses(pm)  # Eq. (3.1)
+        #eDisGo_OPF.objective_min_losses(pm)  # Eq. (3.1)
+        eDisGo_OPF.objective_min_line_loading_max(pm)
         if (PowerModels.ref(pm, 1, :opf_version) == 3) # Nicht Teil der MA
             #objective_min_hv_slacks(pm)
         end
