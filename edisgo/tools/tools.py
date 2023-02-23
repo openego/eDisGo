@@ -790,7 +790,43 @@ def battery_storage_reference_operation(
     return df
 
 
-def get_sample_using_time(edisgo_obj, start_date, end_date):
+def get_sample_using_time(edisgo_obj, start_date=None, end_date=None, res_load=None):
+    if res_load is None:
+        if start_date is None:
+            raise TypeError(
+                "get_sample_using_time() missing required argument:" "'start_date'"
+            )
+        if end_date is None:
+            raise TypeError(
+                "get_sample_using_time() missing required argument: " "'end_date'"
+            )
+    else:
+        df = pd.DataFrame(edisgo_obj.timeseries.residual_load)
+        df["week"] = df.index.week
+        if res_load == "min":
+            week = df.groupby(by="week")[[0]].min().sort_values(by=0).index[0]
+        elif res_load == "max":
+            week = (
+                df.groupby(by="week")[[0]]
+                .min()
+                .sort_values(by=0, ascending=False)
+                .index[0]
+            )
+        elif res_load == "balanced":
+            df["residuals"] = df[0] ** 2
+            week = (
+                df.groupby(by="week")[["residuals"]]
+                .max()
+                .sort_values(by="residuals")
+                .index[0]
+            )
+        else:
+            raise ValueError(
+                "argument 'res_load' must be one of: 'min', 'max', " "'balanced'"
+            )
+        start_date = df.loc[df["week"] == week].index[0]
+        end_date = df.loc[df["week"] == week].index[-1]
+
     edisgo_obj.timeseries._timeindex = edisgo_obj.timeseries.timeindex[
         (edisgo_obj.timeseries.timeindex >= start_date)
         & (edisgo_obj.timeseries.timeindex <= end_date)

@@ -18,20 +18,20 @@ function objective_min_losses(pm::AbstractBFModelEdisgo)
             factor = 10*factor
         end
     end
-    parameters2 = [(c[1][b]*l[1][b])/s_nom[1][b]^2 for b in keys(c[1])]
-    factor2 = 1
-    while true
-        if (maximum(factor2*parameters2) > maximum(factor*parameters))
-            break
-        else
-            factor2 = 10*factor2
-        end
-    end
-    println(factor)
-    println(factor2)
+#     parameters2 = [(c[1][b]*l[1][b])/s_nom[1][b]^2 for b in keys(c[1])]
+#     factor2 = 1
+#     while true
+#         if (maximum(factor2*parameters2) > maximum(factor*parameters))
+#             break
+#         else
+#             factor2 = 10*factor2
+#         end
+#     end
+#     println(factor)
+#     println(factor2)
     return JuMP.@objective(pm.model, Min,
         factor * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from) if storage[b] == 0) for n in nws) # minimize line losses
-        + factor2 * sum(sum((p[n][(b,i,j)]^2+q[n][(b,i,j)]^2)/s_nom[n][b]^2 * c[1][b]*l[1][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading * c[n][b]*l[n][b]
+        #+ factor2 * sum(sum((p[n][(b,i,j)]^2+q[n][(b,i,j)]^2)/s_nom[n][b]^2 * c[1][b]*l[1][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading * c[n][b]*l[n][b]
     )
 end
 
@@ -105,7 +105,7 @@ function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
     parameters = parameters[parameters .>0]
     factor = 1
     while true
-        if minimum(factor*parameters) > 1e-2
+        if minimum(factor*parameters) > 1e-3
             break
         else
             factor = 10*factor
@@ -113,7 +113,7 @@ function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
     end
 
     return JuMP.@objective(pm.model, Min,
-        #factor * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from) if storage[b] == 0) for n in nws) # minimize line losses
-        sum(ll[(b,i,j)] * c[1][b]*l[1][b]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading
+        factor * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from) if storage[b] == 0) for n in nws) # minimize line losses
+        + sum(ll[(b,i,j)] * c[1][b]*l[1][b]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading
     )
 end
