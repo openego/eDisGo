@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import shutil
@@ -2424,6 +2425,17 @@ class TestTimeSeries:
             )
             / 2,
             atol=1e-5,
+        )
+
+    def test_scale_timeseries(self):
+        self.edisgo.set_time_series_worst_case_analysis()
+        edisgo_scaled = copy.deepcopy(self.edisgo)
+        edisgo_scaled.timeseries.scale_timeseries(
+            p_scaling_factor=0.5, q_scaling_factor=0.5
+        )
+        assert_frame_equal(
+            edisgo_scaled.timeseries.generators_active_power,
+            self.edisgo.timeseries.generators_active_power * 0.5,
         )
 
 
