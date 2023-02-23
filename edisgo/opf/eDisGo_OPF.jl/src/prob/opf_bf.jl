@@ -17,7 +17,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
                 eDisGo_OPF.variable_branch_current(pm, nw=n)  # Eq. (3.8) und (3.14)
                 eDisGo_OPF.variable_branch_power_radial(pm, nw=n) # Eq. (3.7)
                 eDisGo_OPF.variable_gen_power_curt(pm, nw=n)  # Eq. (3.30) für non-dispatchable Generators
-                eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.30)-(3.32)
+                eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.30)-(3.33)
             end
             PowerModels.variable_bus_voltage(pm, nw=n)  # Eq. (3.6)
             eDisGo_OPF.variable_battery_storage_power(pm, nw=n)  # Eq. (3.12) und (3.13)
@@ -42,7 +42,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
 
         # CONSTRAINTS
         for i in PowerModels.ids(pm, :bus, nw=n)
-            eDisGo_OPF.constraint_power_balance_bf(pm, i, nw=n) # Eq. (3.28) und (3.29) für Version 1 und 3; Eq. (3.33) und (3.34) für Version 2 und 4
+            eDisGo_OPF.constraint_power_balance_bf(pm, i, nw=n) # Eq. (3.28) und (3.29) für Version 1 und 3; Eq. (3.34) und (3.35) für Version 2 und 4
         end
         for i in PowerModels.ids(pm, :branch, nw=n)
             eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, i, nw=n) # Eq. (3.4)
@@ -95,7 +95,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             #objective_min_hv_slacks(pm)
         end
     elseif PowerModels.ref(pm, 1, :opf_version) in(2,4)
-        eDisGo_OPF.objective_min_losses_slacks(pm)  # Eq. (3.35)
+        eDisGo_OPF.objective_min_losses_slacks(pm)  # Eq. (3.36)
         if (PowerModels.ref(pm, 1, :opf_version) == 4) # Nicht Teil der MA
             #objective_min_hv_slacks(pm)
         end

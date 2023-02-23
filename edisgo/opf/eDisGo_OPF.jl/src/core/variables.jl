@@ -379,7 +379,7 @@ end
 
 "slack variables for grid restrictions"
 function variable_slack_grid_restrictions(pm::AbstractBFModelEdisgo; kwargs...)
-    #variable_hp_slack(pm; kwargs...)
+    eDisGo_OPF.variable_hp_slack(pm; kwargs...) # Eq. (3.33)
     eDisGo_OPF.variable_load_slack(pm; kwargs...) # Eq. (3.31)
     eDisGo_OPF.variable_gen_slack(pm; kwargs...) # Eq. (3.30) für dispatchable Generators
     eDisGo_OPF.variable_ev_slack(pm; kwargs...) # Eq. (3.32)

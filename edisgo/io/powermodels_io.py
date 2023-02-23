@@ -1077,7 +1077,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         idx_bus = _mapping(psa_net, psa_net.loads.bus[stor_i])
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
-            "p_loss": 0.04 / 24,
+            "p_loss": 0.04,  # 4% of SOC per day
             "energy": (
                 heat_storage_df.state_of_charge_initial[stor_i]
                 * heat_storage_df.capacity[stor_i]

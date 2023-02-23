@@ -129,6 +129,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
         pds  = get(PowerModels.var(pm, n),  :pds, Dict()); PowerModels._check_var_keys(pds, bus_loads, "active power slack", "load")
         pcps  = get(PowerModels.var(pm, n),  :pcps, Dict()); PowerModels._check_var_keys(pcps, bus_cps, "active power slack", "charging point")
         pgc  = get(PowerModels.var(pm, n),  :pgc, Dict()); PowerModels._check_var_keys(pgc, bus_gens_nd, "active power", "curtailment")
+        phps  = get(PowerModels.var(pm, n),  :phps, Dict()); PowerModels._check_var_keys(phps, bus_hps, "active power slack", "heatpump")
 
         cstr_p = JuMP.@constraint(pm.model,
             sum(pt[a] for a in bus_arcs_to)
@@ -144,7 +145,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum(pgens[g] for g in bus_gens)
             + sum(pgc[g] for g in bus_gens_nd)
             + sum(pdsm[dsm] for dsm in bus_dsm)
-            + sum(php[hp] for hp in bus_hps)
+            + sum(php[hp] - phps[hp] for hp in bus_hps)
             + sum(pcp[cp] - pcps[cp] for cp in bus_cps)
         )
         cstr_q = JuMP.@constraint(pm.model,
@@ -161,7 +162,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum(pgc[g] * bus_gen_nd_pf[g] for g in bus_gens_nd)
             + sum(pgens[g] * bus_gen_d_pf[g] for g in bus_gens)
             + sum(pdsm[dsm] * bus_dsm_pf[dsm] for dsm in bus_dsm)
-            + sum(php[hp] * bus_hps_pf[hp] for hp in bus_hps)
+            + sum((php[hp] - phps[hp]) * bus_hps_pf[hp] for hp in bus_hps)
             + sum((pcp[cp] - pcps[cp]) * bus_cps_pf[cp] for cp in bus_cps)
         )
     else
