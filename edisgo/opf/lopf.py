@@ -919,7 +919,7 @@ def add_ev_model_bands(
         model.energy_level_ev = pm.Var(
             model.flexible_charging_points_set,
             model.time_set,
-            bounds=lambda m, b, t: (0, None),
+            # bounds=lambda m, b, t: (0, None),
         )
     else:
         model.energy_level_ev = pm.Var(
@@ -1200,7 +1200,7 @@ def add_heat_pump_model(
         model.energy_level_tes = pm.Var(
             model.flexible_heat_pumps_set,
             model.time_set,
-            bounds=lambda m, hp, t: (0, None),
+            # bounds=lambda m, hp, t: (0, None),
         )
     else:
         model.energy_level_tes = pm.Var(
