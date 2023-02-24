@@ -584,6 +584,7 @@ def reinforce_lines_voltage_issues_alternative(
     methods = [
         "split_feeder_at_2_3_length",
         "add_station_at_2_3_length",
+        "add_same_type_parallel_line_voltage_issue",
     ]
 
     if add_method is None:
@@ -604,7 +605,8 @@ def reinforce_lines_voltage_issues_alternative(
 
     # 1.Voltage level= MV
     logger.debug(f"{edisgo_reinforce.topology.mv_grid}==>Check voltage in MV topology.")
-    voltage_level_mv = "mv"
+
+    voltage_level_mv = "mv_lv" if combined_analysis else "mv"
 
     # The nodes that have voltage issue
     crit_nodes_mv = checks.mv_voltage_deviation(
@@ -619,88 +621,113 @@ def reinforce_lines_voltage_issues_alternative(
     if (not voltage_level or voltage_level == "mv") and crit_nodes_mv:
         # 1.1Method:Split the feeder at the 2_3-length of the feeder (applied several
         # times till all the voltage issues are remedied
-        while_counter = 0
-        while crit_nodes_mv and while_counter < max_while_iterations:
-            if (
-                add_method == ["add_station_at_2_3_length"]
-                and voltage_level is not None
-            ):
-                raise exceptions.Error(
-                    f"{edisgo_reinforce.topology.mv_grid}==>method"
-                    f":add_station_at_2_3_length is only applicable for LV "
-                    "grids"
-                )
-            elif add_method == ["add_station_at_2_3_length"] and voltage_level is None:
-                logger.error(
-                    f"{edisgo_reinforce.topology.mv_grid}==>method"
-                    f":add_station_at_2_3_length is only applicable for LV grids "
-                )
-                while_counter = max_while_iterations
-            else:
-                logger.error(
-                    f"{edisgo_reinforce.topology.mv_grid}==>method"
-                    f":add_station_at_2_3_length is only applicable for LV grids "
-                )
-            if "split_feeder_at_2_3_length" in add_method:
-                logger.info(
-                    f"{edisgo_reinforce.topology.mv_grid}==>method"
-                    f":split_feeder_at_2_3_length is running "
-                )
 
-                lines_changes = reinforce_measures.split_feeder_at_2_3_length(
-                    edisgo_reinforce,
-                    edisgo_reinforce.topology.mv_grid,
-                    crit_nodes_mv[repr(edisgo_reinforce.topology.mv_grid)],
-                    split_mode=split_mode,
+        if add_method == ["add_station_at_2_3_length"] and voltage_level is not None:
+            raise exceptions.Error(
+                f"{edisgo_reinforce.topology.mv_grid}==>method"
+                f":add_station_at_2_3_length is only applicable for LV "
+                "grids"
+            )
+        elif add_method == ["add_station_at_2_3_length"] and voltage_level is None:
+            logger.error(
+                f"{edisgo_reinforce.topology.mv_grid}==>method"
+                f":add_station_at_2_3_length is only applicable for LV grids "
+            )
+            while_counter = max_while_iterations
+        elif "add_station_at_2_3_length" in add_method:
+            logger.error(
+                f"{edisgo_reinforce.topology.mv_grid}==>method"
+                f":add_station_at_2_3_length is only applicable for LV grids "
+            )
+        if "split_feeder_at_2_3_length" in add_method:
+            logger.info(
+                f"{edisgo_reinforce.topology.mv_grid}==>method"
+                f":split_feeder_at_2_3_length is running "
+            )
+
+            lines_changes = reinforce_measures.split_feeder_at_2_3_length(
+                edisgo_reinforce,
+                edisgo_reinforce.topology.mv_grid,
+                crit_nodes_mv[repr(edisgo_reinforce.topology.mv_grid)],
+                split_mode=split_mode,
+            )
+            # write changed lines to results.equipment_changes
+            _add_lines_changes_to_equipment_changes()
+        # run power flow analysis again (after updating pypsa object) and check
+        # if all over-voltage problems were solved
+        logger.debug(f"{edisgo_reinforce.topology.mv_grid}==>Run power flow analysis.")
+        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
+
+        logger.debug(
+            f"{edisgo_reinforce.topology.mv_grid}==> Recheck voltage in MV grid."
+        )
+        crit_nodes_mv = checks.mv_voltage_deviation(
+            edisgo_reinforce, voltage_levels=voltage_level_mv
+        )
+
+        if "add_same_type_parallel_line_voltage_issue" in add_method:
+            logger.info(
+                f"{edisgo_reinforce.topology.mv_grid}==>method"
+                f":add_same_type_parallel_line_voltage_issue is running "
+            )
+            while_counter = 0
+            while crit_nodes_mv and while_counter < max_while_iterations:
+                lines_changes = (
+                    reinforce_measures.add_same_type_parallel_line_voltage_issue(
+                        edisgo_reinforce,
+                        edisgo_reinforce.topology.mv_grid,
+                        crit_nodes_mv[repr(edisgo_reinforce.topology.mv_grid)],
+                    )
                 )
                 # write changed lines to results.equipment_changes
                 _add_lines_changes_to_equipment_changes()
 
-            # run power flow analysis again (after updating pypsa object) and check
-            # if all over-voltage problems were solved
-            logger.debug(
-                f"{edisgo_reinforce.topology.mv_grid}==>Run power flow analysis."
-            )
-            edisgo_reinforce.analyze(timesteps=timesteps_pfa)
+                # run power flow analysis again (after updating pypsa object)
+                # and check if all over-voltage problems were solved
+                logger.debug("==>Run power flow analysis.")
+                edisgo_reinforce.analyze(timesteps=timesteps_pfa)
 
-            logger.debug(
-                f"{edisgo_reinforce.topology.mv_grid}==> Recheck voltage in MV grid."
-            )
-            crit_nodes_mv = checks.mv_voltage_deviation(
-                edisgo_reinforce, voltage_levels=voltage_level_mv
-            )
+                logger.debug("==>Recheck voltage in LV grids.")
+                crit_nodes_mv = checks.mv_voltage_deviation(
+                    edisgo_reinforce, voltage_levels=voltage_level_mv
+                )
 
-            iteration_step += 1
-            while_counter += 1
+                iteration_step += 1
+                while_counter += 1
 
-        # check if all voltage problems were solved after maximum number of
-        # iterations allowed
-        if while_counter == max_while_iterations and crit_nodes_mv:
-            edisgo_reinforce.results.unresolved_issues = pd.concat(
-                [
-                    edisgo_reinforce.results.unresolved_issues,
-                    pd.concat([_ for _ in crit_nodes_mv.values()]),
-                ]
-            )
+            # check if all voltage problems were solved after maximum number of
+            # iterations allowed
+            if while_counter == max_while_iterations and crit_nodes_mv:
+                edisgo_reinforce.results.unresolved_issues = pd.concat(
+                    [
+                        edisgo_reinforce.results.unresolved_issues,
+                        pd.concat([_ for _ in crit_nodes_mv.values()]),
+                    ]
+                )
 
-            logger.info(
-                f"{edisgo_reinforce.topology.mv_grid}==>Voltage issues for the "
-                f"following nodes could not be solved in Mv grid since the the number "
-                f"of max. iteration is reached {crit_nodes_mv.keys()} "
+                logger.info(
+                    f"{edisgo_reinforce.topology.mv_grid}==>Voltage issues for the "
+                    f"following nodes could not be solved in Mv grid since the the "
+                    f"number of max. iteration is reached {crit_nodes_mv.keys()} "
+                )
+            elif not crit_nodes_mv:
+                logger.info(
+                    f"{edisgo_reinforce.topology.mv_grid}==>Voltage issues were solved "
+                    f"in Mv grid in {iteration_step} iteration step(s). "
+                )
+        if any(crit_nodes_mv):
+            logger.warning(
+                f"{edisgo_reinforce.topology.mv_grid}==>Not all overloading issues in"
+                f" MV grid could be solved. "
             )
-        elif not crit_nodes_mv:
-            logger.info(
-                f"{edisgo_reinforce.topology.mv_grid}==>Voltage issues were solved in "
-                f"Mv grid in {while_counter} iteration step(s). "
-            )
-
     # 2 Voltage level= LV
 
     # todo: If new grid created by the method add
     #  station requires a voltage issue reinforcement, it will
     #  raise an error since the buses and lines name of the moved nodes to
     #  the new grid is not changed.
-    voltage_level_lv = "lv"
+
+    voltage_level_lv = "mv_lv" if combined_analysis else "lv"
     logger.debug("==> Check voltage in LV grids.")
 
     crit_nodes_lv = checks.lv_voltage_deviation(
@@ -713,42 +740,33 @@ def reinforce_lines_voltage_issues_alternative(
         )
     if (not voltage_level or voltage_level == "lv") and crit_nodes_lv:
 
-        # 2.1 add new station ( applied only once ) if the number of overloaded lines
-        # is more than 2
+        for lv_grid in crit_nodes_lv:
+            transformer_changes = {}
+            lines_changes = {}
+            # 2.1 add new station ( applied only once ) if the number of overloaded
+            # lines is more than 2
+            if "add_station_at_2_3_length" in add_method:
 
-        while_counter = 0
-        while crit_nodes_lv and while_counter < max_while_iterations:
-            for lv_grid in crit_nodes_lv:
-
-                transformer_changes = {}
-                lines_changes = {}
-                if (
-                    "add_station_at_2_3_length" in add_method and while_counter < 1
-                ) or (add_method is None and while_counter < 1):
-
-                    logger.info(
-                        f"{lv_grid}:==>method:add_station_at_2_3_length method is "
-                        f"running "
-                    )
-                    (
-                        transformer_changes,
-                        lines_changes,
-                    ) = reinforce_measures.add_station_at_2_3_length(
-                        edisgo_reinforce,
-                        edisgo_reinforce.topology.get_lv_grid(lv_grid),
-                        crit_nodes_lv[lv_grid],
-                    )
-                    if transformer_changes and lines_changes:
-                        # write changed lines and transformers to
-                        # results.equipment_changes
-                        _add_transformer_changes_to_equipment_changes("added")
-                        _add_lines_changes_to_equipment_changes()
-
+                logger.info(
+                    f"{lv_grid}:==>method:add_station_at_2_3_length method is "
+                    f"running "
+                )
+                (
+                    transformer_changes,
+                    lines_changes,
+                ) = reinforce_measures.add_station_at_2_3_length(
+                    edisgo_reinforce,
+                    edisgo_reinforce.topology.get_lv_grid(lv_grid),
+                    crit_nodes_lv[lv_grid],
+                )
+            if transformer_changes and lines_changes:
+                # write changed lines and transformers to
+                # results.equipment_changes
+                _add_transformer_changes_to_equipment_changes("added")
+                _add_lines_changes_to_equipment_changes()
+            else:
                 # 2.2 Method:split_feeder_at_2/3-length of feeder
-                if (
-                    "split_feeder_at_2_3_length" in add_method
-                    and not any(transformer_changes)
-                ) or (add_method is None and not any(transformer_changes)):
+                if "split_feeder_at_2_3_length" in add_method or add_method is None:
                     logger.info(
                         f"{lv_grid}:==>method:split_feeder_at_2_3_length is running"
                     )
@@ -761,47 +779,69 @@ def reinforce_lines_voltage_issues_alternative(
                     # write changed lines to results.equipment_changes
                     _add_lines_changes_to_equipment_changes()
 
-            # run power flow analysis again (after updating pypsa object)
-            # and check if all over-voltage problems were solved
-            logger.debug("==>Run power flow analysis.")
-            edisgo_reinforce.analyze(timesteps=timesteps_pfa)
+        # run power flow analysis again (after updating pypsa object)
+        # and check if all over-voltage problems were solved
+        logger.debug("==>Run power flow analysis.")
+        edisgo_reinforce.analyze(timesteps=timesteps_pfa)
 
-            logger.debug("==>Recheck voltage in LV grids.")
-            crit_nodes_lv = checks.lv_voltage_deviation(
-                edisgo_reinforce, voltage_levels=voltage_level_lv
-            )
+        logger.debug("==>Recheck voltage in LV grids.")
+        crit_nodes_lv = checks.lv_voltage_deviation(
+            edisgo_reinforce, voltage_levels=voltage_level_lv
+        )
+        if "add_same_type_parallel_line_voltage_issue" in add_method:
+            while_counter = 0
+            while crit_nodes_lv and while_counter < max_while_iterations:
+                for lv_grid in crit_nodes_lv:
+                    logger.info(
+                        f"{edisgo_reinforce.topology.mv_grid}==>method:add_same_type_of"
+                        f"_parallel_line is running for LV grid/s_Step{iteration_step}"
+                    )
+                    lines_changes = (
+                        reinforce_measures.add_same_type_parallel_line_voltage_issue(
+                            edisgo_reinforce,
+                            edisgo_reinforce.topology.get_lv_grid(lv_grid),
+                            crit_nodes_lv[lv_grid],
+                        )
+                    )
+                    # write changed lines to results.equipment_changes
+                    _add_lines_changes_to_equipment_changes()
 
-            if add_method == ["add_station_at_2_3_length"]:
-                while_counter = max_while_iterations - 1
+                # run power flow analysis again (after updating pypsa object)
+                # and check if all over-voltage problems were solved
+                logger.debug("==>Run power flow analysis.")
+                edisgo_reinforce.analyze(timesteps=timesteps_pfa)
 
-            iteration_step += 1
-            while_counter += 1
-
-        # check if all load problems were solved after maximum number of
-        # iterations allowed
-        if while_counter == max_while_iterations and crit_nodes_lv:
-            edisgo_reinforce.results.unresolved_issues = pd.concat(
-                [
-                    edisgo_reinforce.results.unresolved_issues,
-                    pd.concat([_ for _ in crit_nodes_lv.values()]),
-                ]
-            )
-            if add_method == ["add_station_at_2_3_length"]:
-                logger.error(
-                    f"{edisgo_reinforce.topology.mv_grid}==> Voltage issues in LV "
-                    f"grids could not solve in {while_counter} iteration step(s) "
-                    f"since only method :add_station_at_2_3_length is applied "
+                logger.debug("==>Recheck voltage in LV grids.")
+                crit_nodes_lv = checks.lv_voltage_deviation(
+                    edisgo_reinforce, voltage_levels=voltage_level_lv
                 )
-            else:
-                logger.info(
-                    f"{edisgo_reinforce.topology.mv_grid}==>Voltage issues for the"
-                    f"following nodes in LV grids could not be solved: "
-                    f"{crit_nodes_lv.keys()} "
-                )
-        else:
-            logger.info(
-                f"{edisgo_reinforce.topology.mv_grid}==>Voltage issues in LV grids "
-                f"were solved in {while_counter} iteration step(s)."
+
+                iteration_step += 1
+                while_counter += 1
+
+                # check if all load problems were solved after maximum number of
+                # iterations allowed
+                if while_counter == max_while_iterations and crit_nodes_lv:
+                    edisgo_reinforce.results.unresolved_issues = pd.concat(
+                        [
+                            edisgo_reinforce.results.unresolved_issues,
+                            pd.concat([_ for _ in crit_nodes_lv.values()]),
+                        ]
+                    )
+                    raise exceptions.MaximumIterationError(
+                        f"{edisgo_reinforce.topology.mv_grid}==>Overloading issues "
+                        f"could not be solved after maximum allowed iterations."
+                    )
+                else:
+                    logger.info(
+                        f"{edisgo_reinforce.topology.mv_grid}==>Voltage issues in LV "
+                        f"grids were solved in {while_counter} iteration step(s)."
+                    )
+
+        if any(crit_nodes_lv):
+            logger.warning(
+                f"{edisgo_reinforce.topology.mv_grid}==>Not all overloading issues in "
+                f"LV could be solved. "
             )
 
     edisgo_reinforce.results.grid_expansion_costs = grid_expansion_costs(
