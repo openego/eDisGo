@@ -16,15 +16,15 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             else
                 eDisGo_OPF.variable_branch_current(pm, nw=n)  # Eq. (3.8) und (3.14)
                 eDisGo_OPF.variable_branch_power_radial(pm, nw=n) # Eq. (3.7)
-                eDisGo_OPF.variable_gen_power_curt(pm, nw=n)  # Eq. (3.30) für non-dispatchable Generators
-                eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.30)-(3.33)
+                eDisGo_OPF.variable_gen_power_curt(pm, nw=n)  # Eq. (3.32) für non-dispatchable Generators
+                eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.32)-(3.35)
             end
             PowerModels.variable_bus_voltage(pm, nw=n)  # Eq. (3.6)
             eDisGo_OPF.variable_battery_storage_power(pm, nw=n)  # Eq. (3.12) und (3.13)
-            eDisGo_OPF.variable_heat_storage(pm, nw=n)  # Eq. (3.19)
-            eDisGo_OPF.variable_heat_pump_power(pm, nw=n)  # Eq. (3.16)
-            eDisGo_OPF.variable_cp_power(pm, nw=n)  #  Eq. (3.22), (3.23)
-            eDisGo_OPF.variable_dsm_storage_power(pm, nw=n)  # Eq. (3.26), (3.27)
+            eDisGo_OPF.variable_heat_storage(pm, nw=n)  # Eq. (3.21)
+            eDisGo_OPF.variable_heat_pump_power(pm, nw=n)  # Eq. (3.18)
+            eDisGo_OPF.variable_cp_power(pm, nw=n)  #  Eq. (3.24), (3.25)
+            eDisGo_OPF.variable_dsm_storage_power(pm, nw=n)  # Eq. (3.28), (3.29)
             eDisGo_OPF.variable_slack_gen(pm, nw=n)  # keine Bounds für Slack Generator
 
             if PowerModels.ref(pm, 1, :opf_version) in(3, 4)
@@ -42,7 +42,8 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
 
         # CONSTRAINTS
         for i in PowerModels.ids(pm, :bus, nw=n)
-            eDisGo_OPF.constraint_power_balance_bf(pm, i, nw=n) # Eq. (3.28) und (3.29) für Version 1 und 3; Eq. (3.34) und (3.35) für Version 2 und 4
+            eDisGo_OPF.constraint_power_balance_bf(pm, i, nw=n) # Eq. (3.30) und (3.31) für Version 1 und 3; Eq. (3.36) und (3.37) für Version 2 und 4
+            # zudem Eq. (3.15) und (3.16) für die Storages (virtuelle Leitungen)
         end
         for i in PowerModels.ids(pm, :branch, nw=n)
             eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, i, nw=n) # Eq. (3.4)
@@ -51,7 +52,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         eDisGo_OPF.constraint_max_line_loading(pm, n)
 
         for i in PowerModels.ids(pm, :heatpumps, nw=n)
-            eDisGo_OPF.constraint_hp_operation(pm, i, n) # Eq. (3.15)
+            eDisGo_OPF.constraint_hp_operation(pm, i, n) # Eq. (3.17)
         end
 
     end
@@ -61,12 +62,12 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
     for kind in ["storage", "heat_storage", "dsm"]
         n_1 = network_ids[1]
         for i in PowerModels.ids(pm, Symbol(kind), nw=n_1)
-            eDisGo_OPF.constraint_store_state(pm, i, nw=n_1, kind=kind)  # Eq. (3.10), (3.17), (3.24)
+            eDisGo_OPF.constraint_store_state(pm, i, nw=n_1, kind=kind)  # Eq. (3.10), (3.19), (3.26)
         end
 
         for n_2 in network_ids[2:end]
             for i in PowerModels.ids(pm, Symbol(kind), nw=n_2)
-                eDisGo_OPF.constraint_store_state(pm, i, n_1, n_2, kind) # Eq. (3.11), (3.18), (3.25)
+                eDisGo_OPF.constraint_store_state(pm, i, n_1, n_2, kind) # Eq. (3.11), (3.20), (3.27)
             end
             n_1 = n_2
         end
@@ -76,13 +77,13 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
 
     for i in PowerModels.ids(pm, :electromobility, nw=n_1)
         eta = PowerModels.ref(pm, 1, :electromobility)[i]["eta"]
-        eDisGo_OPF.constraint_cp_state_initial(pm, n_1, i, eta)  # Eq. (3.20)
+        eDisGo_OPF.constraint_cp_state_initial(pm, n_1, i, eta)  # Eq. (3.22)
     end
 
     for n_2 in network_ids[2:end]
         for i in PowerModels.ids(pm, :electromobility, nw=n_2)
             eta = PowerModels.ref(pm, 1, :electromobility)[i]["eta"]
-            eDisGo_OPF.constraint_cp_state(pm, n_1, n_2, i, eta) # Eq. (3.21) (und (3.20) für letzten Zeitschritt)
+            eDisGo_OPF.constraint_cp_state(pm, n_1, n_2, i, eta) # Eq. (3.23) (und (3.22) für letzten Zeitschritt)
         end
         n_1 = n_2
     end
@@ -95,7 +96,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             #objective_min_hv_slacks(pm)
         end
     elseif PowerModels.ref(pm, 1, :opf_version) in(2,4)
-        eDisGo_OPF.objective_min_losses_slacks(pm)  # Eq. (3.36)
+        eDisGo_OPF.objective_min_losses_slacks(pm)  # Eq. (3.38)
         if (PowerModels.ref(pm, 1, :opf_version) == 4) # Nicht Teil der MA
             #objective_min_hv_slacks(pm)
         end
