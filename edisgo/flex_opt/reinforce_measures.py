@@ -1604,18 +1604,12 @@ def relocate_circuit_breaker(edisgo_obj, mode="loadgen"):
     # add all the loads and gens to the dicts
     for node in G.nodes:
         # for Bus-bars
-        if "BusBar" in node:
+        if node in edisgo_obj.topology.transformers_df.bus0.values:
             # the lv_side of node
-            if "virtual" in node:
-                bus_node_lv = edisgo_obj.topology.transformers_df[
-                    edisgo_obj.topology.transformers_df.bus0
-                    == node.replace("virtual_", "")
-                ].bus1[0]
-            else:
-                bus_node_lv = edisgo_obj.topology.transformers_df[
-                    edisgo_obj.topology.transformers_df.bus0 == node
-                ].bus1[0]
-            # grid_id
+            bus_node_lv = edisgo_obj.topology.transformers_df[
+                edisgo_obj.topology.transformers_df.bus0 == node
+            ].bus1[0]
+
             grid_id = edisgo_obj.topology.buses_df[
                 edisgo_obj.topology.buses_df.index.values == bus_node_lv
             ].lv_grid_id[0]
@@ -1627,15 +1621,40 @@ def relocate_circuit_breaker(edisgo_obj, mode="loadgen"):
             )
             node_peak_load_dict[node] = lv_grid.loads_df.p_set.sum() / cos_phi_load
 
+        elif node in edisgo_obj.topology.switches_df.bus_open.values:
+
+            bus_open = edisgo_obj.topology.switches_df[
+                edisgo_obj.topology.switches_df.bus_open == node
+            ].bus_closed[0]
+            bus_node_lv = edisgo_obj.topology.transformers_df[
+                edisgo_obj.topology.transformers_df.bus0 == bus_open
+            ].bus1[0]
+            # grid_id
+            grid_id = edisgo_obj.topology.buses_df[
+                edisgo_obj.topology.buses_df.index.values == bus_node_lv
+            ].lv_grid_id[0]
+            # get lv_grid
+            lv_grid = edisgo_obj.topology.get_lv_grid(int(grid_id))
+
+            node_peak_gen_dict[node] = 0
+            node_peak_load_dict[node] = 0
             # Generators
-        elif "gen" in node:
+        elif node in edisgo_obj.topology.generators_df.bus.values:
             node_peak_gen_dict[node] = (
-                edisgo_obj.topology.mv_grid.generators_df[
-                    edisgo_obj.topology.mv_grid.generators_df.bus == node
+                edisgo_obj.topology.generators_df[
+                    edisgo_obj.topology.generators_df.bus == node
                 ].p_nom.sum()
                 / cos_phi_feedin
             )
             node_peak_load_dict[node] = 0
+        elif node in edisgo_obj.topology.loads_df.bus.values:
+            node_peak_load_dict[node] = (
+                edisgo_obj.topology.loads_df[
+                    edisgo_obj.topology.loads_df.bus == node
+                ].p_set.sum()
+                / cos_phi_feedin
+            )
+            node_peak_gen_dict[node] = 0
 
         # branchTees do not have any load and generation
         else:
@@ -1683,7 +1702,13 @@ def relocate_circuit_breaker(edisgo_obj, mode="loadgen"):
 
         # if none of the nodes is of the type LVStation, a switch
         # disconnecter will be installed anyways.
-        if any([node for node in ring if "BusBar" in node]):
+        if any(
+            [
+                node
+                for node in ring
+                if node in edisgo_obj.topology.transformers_df.bus0.values
+            ]
+        ):
             has_lv_station = True
         else:
             has_lv_station = False
@@ -1701,7 +1726,10 @@ def relocate_circuit_breaker(edisgo_obj, mode="loadgen"):
             # check if node that owns the switch disconnector is of type
             # LVStation
 
-            if "BusBar" in ring[ctr] or not has_lv_station:
+            if (
+                ring[ctr] in edisgo_obj.topology.transformers_df.bus0.values
+                or not has_lv_station
+            ):
                 # split route and calc demand difference
                 route_data_part1 = sum(node_peak_data[0:ctr])
                 route_data_part2 = sum(node_peak_data[ctr : len(node_peak_data)])
@@ -1746,7 +1774,7 @@ def relocate_circuit_breaker(edisgo_obj, mode="loadgen"):
     if len(circuit_breaker_changes):
         logger.info(
             f"{grid}==>{len(circuit_breaker_changes)} circuit breakers are "
-            f"relocated in "
+            f"relocated "
         )
     else:
         logger.info(f"{grid}==>no circuit breaker is relocated")
@@ -1940,14 +1968,14 @@ def split_feeder_at_2_3_length(edisgo_obj, grid, crit_nodes, split_mode="forward
 
                 edisgo_obj.topology._lines_df.at[line_removed, "bus0"] = station_node
                 logger.info(
-                    f"==> {grid}--> the line {line_removed} disconnected from  "
+                    f"{grid}--> the line {line_removed} disconnected from  "
                     f"{pred_node} and connected to the main station {station_node} "
                 )
             elif grid.lines_df.at[line_removed, "bus1"] == pred_node:
 
                 edisgo_obj.topology._lines_df.at[line_removed, "bus1"] = station_node
                 logger.info(
-                    f"==> {grid}==>the line {line_removed} disconnected from "
+                    f"{grid}==>the line {line_removed} disconnected from "
                     f"{pred_node} and connected to the main station  {station_node} "
                 )
             else:
@@ -2323,3 +2351,25 @@ def add_station_at_2_3_length(edisgo_obj, grid, crit_nodes):
         lines_changes = {}
 
     return transformers_changes, lines_changes
+
+
+def add_same_type_parallel_line_voltage_issue(edisgo_obj, grid, crit_nodes):
+    logger.info(
+        f"{grid}:==>method:add_same_type_parallel_line_voltage_issue is running"
+    )
+    G = grid.graph
+    station_node = list(G.nodes)[0]
+    most_crit_node = crit_nodes[
+        crit_nodes.v_diff_max == crit_nodes.v_diff_max.max()
+    ].index[0]
+    path = nx.shortest_path(G, station_node, most_crit_node)
+
+    crit_lines = {}
+    for ctr in range(len(path) - 1):
+        lines = G.get_edge_data(path[ctr], path[ctr + 1])["branch_name"]
+        crit_lines[lines] = 1
+        crit_lines = pd.Series(crit_lines)
+
+    lines_changes = add_same_type_of_parallel_line(edisgo_obj, crit_lines)
+
+    return lines_changes
