@@ -6,14 +6,14 @@ end
 
 "Build multinetwork branch flow OPF with multiple flexibilities"
 function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
-    #eDisGo_OPF.variable_max_line_loading(pm, nw=1)
+    eDisGo_OPF.variable_max_line_loading(pm, nw=1)
     for (n, network) in PowerModels.nws(pm)
         # VARIABLES
         if PowerModels.ref(pm, 1, :opf_version) in(1, 2, 3, 4)
             if PowerModels.ref(pm, 1, :opf_version) in(1, 3)
-                eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false) # Eq. 3.13 (für Version 1 bzw. 3 keine Eq. (3.6))
+                eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false) # Eq. 3.6* (für Version 1 bzw. 3 keine Eq. (3.6))
             else
-                eDisGo_OPF.variable_branch_current(pm, nw=n)  # Eq. (3.6) und (3.13)
+                eDisGo_OPF.variable_branch_current(pm, nw=n)  # Eq. (3.6) und (3.6*)
                 eDisGo_OPF.variable_gen_power_curt(pm, nw=n)  # Eq. (3.31) für non-dispatchable Generators
                 eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.31)-(3.34)
             end
@@ -42,13 +42,13 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         # CONSTRAINTS
         for i in PowerModels.ids(pm, :bus, nw=n)
             eDisGo_OPF.constraint_power_balance_bf(pm, i, nw=n) # Eq. (3.29) und (3.30) für Version 1 und 3; Eq. (3.35) und (3.36) für Version 2 und 4
-            # zudem Eq. (3.15) und (3.16) für die Storages (virtuelle Leitungen)
+            # zudem Eq. (3.2*) und (3.3*) für die Storages (virtuelle Leitungen)
         end
         for i in PowerModels.ids(pm, :branch, nw=n)
             eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, i, nw=n) # Eq. (3.4)
         end
         eDisGo_OPF.constraint_model_current(pm, nw=n)  # Eq. (3.5) bzw. (3.8) (je nachdem ob nicht-konvex oder konvex gelöst wird)
-        #eDisGo_OPF.constraint_max_line_loading(pm, n)
+        eDisGo_OPF.constraint_max_line_loading(pm, n)
 
         for i in PowerModels.ids(pm, :heatpumps, nw=n)
             eDisGo_OPF.constraint_hp_operation(pm, i, n) # Eq. (3.16)
