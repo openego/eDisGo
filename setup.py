@@ -53,12 +53,10 @@ requirements = [
     "beautifulsoup4",
     "contextily",
     "descartes",
-    "jupyter",
     "jupyterlab",
     "plotly",
-    "dash==2.6.0",
+    "dash",
     "jupyter_dash",
-    "werkzeug==2.2.0",
 ]
 
 dev_requirements = [
