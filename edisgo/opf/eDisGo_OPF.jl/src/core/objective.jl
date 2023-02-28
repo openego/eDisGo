@@ -62,21 +62,21 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     #println(factor)
 
     # parameters2 = [c[1][b]/s_nom[1][b]^2 for b in keys(c[1])]
-    factor2 = 1
-    while true
-        if factor2 > maximum(factor*parameters)
-            break
-        else
-            factor2 = 10*factor2
-        end
-    end
-    println(factor2)
-    factor_slacks = exp10(floor(log10(maximum(factor2)))+1)
+#     factor2 = 1
+#     while true
+#         if factor2 > maximum(factor*parameters)
+#             break
+#         else
+#             factor2 = 10*factor2
+#         end
+#     end
+#     println(factor2)
+    factor_slacks = exp10(floor(log10(maximum(factor*parameters)))+2)
 
     return JuMP.@objective(pm.model, Min,
         factor  * sum(sum(ccm[n][b]*r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from) if storage[b] == 0) for n in nws) # minimize line losses
         #+ factor2  * sum(sum((p[n][(b,i,j)]^2+q[n][(b,i,j)]^2)/s_nom[n][b]^2  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)  # minimize line loading * c[n][b]
-        + factor2 * sum(ll[(b,i,j)]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading
+        + sum(ll[(b,i,j)]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading
         + factor_slacks  * sum(sum(pgc[n][i] for i in keys(PowerModels.ref(pm,1 , :gen_nd))) for n in nws) # minimize non-dispatchable curtailment
         + factor_slacks  * sum(sum(pgens[n][i] for i in keys(PowerModels.ref(pm,1 , :gen))) for n in nws) # minimize dispatchable curtailment
         + factor_slacks  * sum(sum(pds[n][i] for i in keys(PowerModels.ref(pm,1 , :load))) for n in nws) # minimize load shedding
