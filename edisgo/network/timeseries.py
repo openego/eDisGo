@@ -2007,7 +2007,7 @@ class TimeSeries:
         if timeindex is None:
             timeindex = pd.DatetimeIndex([])
 
-        self._timeindex = timeindex
+        self._timeindex = timeindex.sort_values()
 
         if time_series_raw:
             self.time_series_raw.from_csv(
