@@ -10,3 +10,5 @@ Changes
 * Added MV grid ID to logging output `#309 <https://github.com/openego/eDisGo/pull/309>`_
 * Added automatic link checking `#297 <https://github.com/openego/eDisGo/pull/297>`_
 * Bug fix `#346 <https://github.com/openego/eDisGo/pull/346>`_
+* Added method to scale timeseries `#353 <https://github.com/openego/eDisGo/pull/353>`_
+* Added method to aggregate lv grid buses to station bus secondary side `#353 <https://github.com/openego/eDisGo/pull/353>`_
