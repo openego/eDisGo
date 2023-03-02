@@ -726,6 +726,7 @@ def battery_storage_reference_operation(
     """
     # Battery model handles generation positive, demand negative
     lst_storage_power = []
+    lst_storage_charge = []
     storage_charge = init_storage_charge
 
     for i, d in df.iterrows():
@@ -785,7 +786,9 @@ def battery_storage_reference_operation(
         else:
             storage_power = 0
         lst_storage_power.append(storage_power)
+        lst_storage_charge.append(storage_charge)
     df["storage_power"] = lst_storage_power
+    df["storage_charge"] = lst_storage_charge
 
     return df
 

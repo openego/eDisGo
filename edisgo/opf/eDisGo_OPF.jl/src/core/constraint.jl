@@ -5,7 +5,10 @@ function constraint_store_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::In
         ps_1 = PowerModels.var(pm, n, :ps, i)
         se = PowerModels.var(pm, n, :se, i)
         se_end = PowerModels.var(pm, length(PowerModels.nw_ids(pm)), :se, i)
-        JuMP.@constraint(pm.model, se - se_end == - time_elapsed * ps_1)
+        soc_initial = PowerModels.ref(pm, n, :storage)[i]["soc_initial"]
+        soc_end = PowerModels.ref(pm, n, :storage)[i]["soc_end"]
+        JuMP.@constraint(pm.model, se - soc_initial == - time_elapsed * ps_1)  # 0 durch se_end ersetzen
+        JuMP.@constraint(pm.model, se_end == soc_end)
     elseif kind == "heat_storage"
         phs_1 = PowerModels.var(pm, n, :phs, i)
         hse = PowerModels.var(pm, n, :hse, i)

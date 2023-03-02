@@ -303,6 +303,32 @@ class TimeSeries:
     def storage_units_reactive_power(self, df):
         self._storage_units_reactive_power = df
 
+    @property
+    def storage_units_state_of_charge(self):
+        """
+        State of charge time series of storage units in MWh.
+
+        Parameters
+        ----------
+        df : :pandas:`pandas.DataFrame<DataFrame>`
+            State of charge time series of all storage units in topology in MWh. Index
+            of the dataframe is a time index and column names are names of storage
+            units.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Reactive power time series of all storage units in topology in MVA for time
+            steps given in :py:attr:`~timeindex`. For more information on the dataframe
+            see input parameter `df`.
+
+        """
+        return self._internal_getter("storage_units_state_of_charge")
+
+    @storage_units_state_of_charge.setter
+    def storage_units_state_of_charge(self, df):
+        self._storage_units_state_of_charge = df
+
     def reset(self):
         """
         Resets all time series.
@@ -1828,6 +1854,7 @@ class TimeSeries:
             "generators_reactive_power",
             "storage_units_active_power",
             "storage_units_reactive_power",
+            "storage_units_state_of_charge",
         ]
 
     def reduce_memory(

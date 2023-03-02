@@ -544,6 +544,19 @@ class Storage(Component):
         """
         return self.edisgo_obj.timeseries.storage_units_reactive_power.loc[:, self.id]
 
+    @property
+    def state_of_charge_timeseries(self):
+        """
+        State of charge time series of storage unit in MWh.
+
+        Returns
+        --------
+        :pandas:`pandas.Series<Series>`
+            State of charge time series of storage unit in MWh.
+
+        """
+        return self.edisgo_obj.timeseries.storage_units_state_of_charge.loc[:, self.id]
+
     def _set_bus(self, bus):
         # check if bus is valid
         if bus in self.topology.buses_df.index:

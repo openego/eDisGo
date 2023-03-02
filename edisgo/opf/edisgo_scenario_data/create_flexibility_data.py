@@ -29,6 +29,8 @@ def create_storage_data(edisgo_obj, directory=None, save_edisgo=False):
     storages = edisgo_obj.topology.generators_df.loc[
         edisgo_obj.topology.generators_df.index.str.contains("solar_roof")
     ]
+    SOC_df = pd.DataFrame(index=edisgo_obj.timeseries.timeindex)
+    i = 1
     # one storage per roof mounted solar generator
     for row in storages.iterrows():
         pv_feedin = edisgo_obj.timeseries.generators_active_power[row[0]]
@@ -56,7 +58,10 @@ def create_storage_data(edisgo_obj, directory=None, save_edisgo=False):
                 max_hours=1,
                 ts_active_power=storage_ts.storage_power,
             )
-
+            SOC_df[i] = storage_ts.storage_charge
+            i += 1
+    SOC_df.columns = edisgo_obj.topology.storage_units_df.index
+    edisgo_obj.timeseries.storage_units_state_of_charge = SOC_df
     edisgo_obj.set_time_series_reactive_power_control()
     if save_edisgo:
         edisgo_obj.save(

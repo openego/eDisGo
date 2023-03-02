@@ -894,6 +894,18 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             ]
             * e_max
             / s_base,
+            "soc_initial": (
+                edisgo_obj.timeseries.storage_units_state_of_charge[
+                    flexible_storages[stor_i]
+                ].iloc[0]
+                + edisgo_obj.timeseries.storage_units_active_power[
+                    flexible_storages[stor_i]
+                ].iloc[0]
+                * 0.9
+            ),
+            "soc_end": edisgo_obj.timeseries.storage_units_state_of_charge[
+                flexible_storages[stor_i]
+            ].iloc[-1],
             "energy_rating": e_max / s_base,
             "thermal_rating": 100,
             "charge_rating": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]

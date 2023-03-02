@@ -14,7 +14,6 @@ import plotly.graph_objects as go
 from dash import dcc, html
 from dash.dependencies import Input, Output
 from jupyter_dash import JupyterDash
-from matplotlib import dates as mdates
 from matplotlib import pyplot as plt
 from networkx import Graph
 from pyproj import Transformer
@@ -2152,6 +2151,7 @@ def plot_opf_results(  # ToDo: Plots für andere Komponenten hinzufügen + schö
     component,
 ):
     if component == "hp":
+        plt.figure(figsize=(15, 9))
         plt.plot(
             edisgo_objects["before OPF"]
             .timeseries.loads_active_power.loc[
@@ -2161,7 +2161,7 @@ def plot_opf_results(  # ToDo: Plots für andere Komponenten hinzufügen + schö
                 ].timeseries.loads_active_power.columns.str.contains("HP"),
             ]
             .sum(axis=1),
-            label="hp before OPF",
+            label="Ungesteuerter WP-Einsatz",
         )
         plt.plot(
             edisgo_objects["after OPF"]
@@ -2172,15 +2172,22 @@ def plot_opf_results(  # ToDo: Plots für andere Komponenten hinzufügen + schö
                 ].timeseries.loads_active_power.columns.str.contains("HP"),
             ]
             .sum(axis=1),
-            label="hp after OPF",
+            label="Verteilnetz-optimierter WP-Einsatz",
         )
         plt.plot(
             edisgo_objects["after OPF"].heat_pump.heat_demand_df.sum(axis=1),
-            label="heat demand",
+            label="Thermischer Wärmelast",
         )
-        plt.legend()
+        plt.ylabel("Leistung (MW)", fontsize=18)
+        plt.xticks(rotation=70)
+        plt.legend(fontsize=16)
+        # ax.xaxis.set_major_formatter(mdates.DateFormatter("%d-%m-%Y"))
+        plt.gcf().autofmt_xdate()
+
+        plt.show()
     elif component == "cp":
-        ax = plt.plot(
+        plt.figure(figsize=(15, 9))
+        plt.plot(
             edisgo_objects["before OPF"]
             .timeseries.loads_active_power.loc[
                 :,
@@ -2191,7 +2198,7 @@ def plot_opf_results(  # ToDo: Plots für andere Komponenten hinzufügen + schö
             .sum(axis=1),
             label="Ungesteuertes Laden",
         )
-        ax = plt.plot(
+        plt.plot(
             edisgo_objects["after OPF"]
             .timeseries.loads_active_power.loc[
                 :,
@@ -2204,8 +2211,29 @@ def plot_opf_results(  # ToDo: Plots für andere Komponenten hinzufügen + schö
         )
         plt.ylabel("Ladeleistung (MW)", fontsize=18)
         plt.xticks(rotation=70)
-        plt.legend(fontsize=18)
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%d-%m-%Y"))
+        plt.legend(fontsize=16)
+        # ax.xaxis.set_major_formatter(mdates.DateFormatter("%d-%m-%Y"))
+        plt.gcf().autofmt_xdate()
+
+        plt.show()
+    elif component == "storage":
+        plt.figure(figsize=(15, 9))
+        plt.plot(
+            edisgo_objects["before OPF"].timeseries.storage_units_active_power.sum(
+                axis=1
+            ),
+            label="Eigenverbrauchsoptimierter Einsatz",
+        )
+        plt.plot(
+            edisgo_objects["after OPF"].timeseries.storage_units_active_power.sum(
+                axis=1
+            ),
+            label="Verteilnetz-optimierter Einsatz",
+        )
+        plt.ylabel("Leistung (MW)", fontsize=18)
+        plt.xticks(rotation=70)
+        plt.legend(fontsize=16)
+        # ax.xaxis.set_major_formatter(mdates.DateFormatter("%d-%m-%Y"))
         plt.gcf().autofmt_xdate()
 
         plt.show()
