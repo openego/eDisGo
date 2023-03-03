@@ -16,17 +16,10 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     Attributes
     ----------
     edisgo_obj : :class:`~.self.edisgo.EDisGo`
-    without_generator_import : Boolean
+    without_generator_import : bool
         If True excludes lines that were added in the generator import to
         connect new generators to the topology from calculation of topology expansion
         costs. Default: False.
-    mode : :obj:`str`
-        Specifies topology levels reinforcement was conducted for to only return
-        costs in the considered topology level. Specify
-
-        * None to return costs in MV and LV topology levels. None is the default.
-        * 'mv' to return costs of MV topology level only, including MV/LV stations.
-          Costs to connect LV generators are excluded as well.
 
     Returns
     -------
@@ -36,21 +29,21 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         transformer and line. Index of the DataFrame is the name of either line
         or transformer. Columns are the following:
 
-        type: String
+        type : str
             Transformer size or cable name
 
-        total_costs: float
+        total_costs : float
             Costs of equipment in kEUR. For lines the line length and number of
             parallel lines is already included in the total costs.
 
-        quantity: int
+        quantity : int
             For transformers quantity is always one, for lines it specifies the
             number of parallel lines.
 
-        line_length: float
+        line_length : float
             Length of line or in case of parallel lines all lines in km.
 
-        voltage_level : :obj:`str` {'lv' | 'mv' | 'mv/lv'}
+        voltage_level : str {'lv' | 'mv' | 'mv/lv'}
             Specifies voltage level the equipment is in.
 
         mv_feeder : :class:`~.network.components.Line`

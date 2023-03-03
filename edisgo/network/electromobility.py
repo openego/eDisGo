@@ -96,7 +96,7 @@ class Electromobility:
                     Identification Number). Leading zeros are missing.
 
                 car_id : int
-                    Car ID to differntiate charging processes from different cars.
+                    Car ID to differentiate charging processes from different cars.
 
                 destination : str
                     SimBEV driving destination.
@@ -311,7 +311,7 @@ class Electromobility:
         Returns
         -------
         float
-            Charging point efficiency
+            Charging point efficiency in p.u..
 
         """
         try:
@@ -319,11 +319,179 @@ class Electromobility:
         except Exception:
             return None
 
-    def to_csv(self, directory):
+    @property
+    def flexibility_bands(self):
         """
-        Exports electromobility to csv files.
+        Dictionary with flexibility bands (lower and upper energy band as well as
+        upper power band).
 
-        The following attributes are exported:
+        Parameters
+        -----------
+        flex_dict : dict(str, :pandas:`pandas.DataFrame<DataFrame>`)
+            Keys are 'upper_power', 'lower_energy' and 'upper_energy'.
+            Values are dataframes containing the corresponding band per each charging
+            point. Columns of the dataframe are the charging point names as in
+            :attr:`~.network.topology.Topology.loads_df`. Index is a time index.
+
+        Returns
+        -------
+        dict(str, :pandas:`pandas.DataFrame<DataFrame>`)
+            See input parameter `flex_dict` for more information on the dictionary.
+
+        """
+        try:
+            return self._flexibility_bands
+        except Exception:
+            return {
+                "upper_power": pd.DataFrame(),
+                "lower_energy": pd.DataFrame(),
+                "upper_energy": pd.DataFrame(),
+            }
+
+    @flexibility_bands.setter
+    def flexibility_bands(self, flex_dict):
+        self._flexibility_bands = flex_dict
+
+    def get_flexibility_bands(self, edisgo_obj, use_case):
+        """
+        Method to determine flexibility bands (lower and upper energy band as well as
+        upper power band).
+
+        Besides being returned by this function, flexibility bands are written to
+        :attr:`flexibility_bands`.
+
+        Parameters
+        -----------
+        edisgo_obj : :class:`~.EDisGo`
+        use_case : str or list(str)
+            Charging point use case(s) to determine flexibility bands for.
+
+        Returns
+        --------
+        dict(str, :pandas:`pandas.DataFrame<DataFrame>`)
+            Keys are 'upper_power', 'lower_energy' and 'upper_energy'.
+            Values are dataframes containing the corresponding band for each charging
+            point of the specified use case. Columns of the dataframe are the
+            charging point names as in :attr:`~.network.topology.Topology.loads_df`.
+            Index is a time index.
+
+        """
+
+        def _shorten_and_set_index(band):
+            """
+            Method to adjust bands to time index of EDisGo object.
+            #Todo: change such that first day is replaced by (365+1)th day
+            """
+            band = band.iloc[: len(edisgo_obj.timeseries.timeindex)]
+            band.index = edisgo_obj.timeseries.timeindex
+            return band
+
+        if isinstance(use_case, str):
+            use_case = [use_case]
+
+        # get all relevant charging points
+        cp_df = edisgo_obj.topology.loads_df[
+            edisgo_obj.topology.loads_df.type == "charging_point"
+        ]
+        cps = cp_df[cp_df.sector.isin(use_case)]
+
+        # set up bands
+        t_max = 372 * 4 * 24
+        tmp_idx = range(t_max)
+        upper_power = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+        upper_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+        lower_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+        hourly_steps = 60 / self.stepsize
+        for cp in cps.index:
+            # get index of charging park used in charging processes
+            charging_park_id = self.integrated_charging_parks_df.loc[
+                self.integrated_charging_parks_df.edisgo_id == cp
+            ].index
+            # get relevant charging processes
+            charging_processes = self.charging_processes_df.loc[
+                self.charging_processes_df.charging_park_id.isin(charging_park_id)
+            ]
+            # iterate through charging processes and fill matrices
+            for idx, charging_process in charging_processes.iterrows():
+                # Last time steps can lead to problems --> skip
+                if charging_process.park_end_timesteps == t_max:
+                    continue
+
+                start = charging_process.park_start_timesteps
+                end = charging_process.park_end_timesteps
+                power = charging_process.nominal_charging_capacity_kW
+
+                # charging power
+                upper_power.loc[start:end, cp] += (
+                    power / edisgo_obj.electromobility.eta_charging_points
+                )
+                # energy bands
+                charging_time = (
+                    charging_process.chargingdemand_kWh / power * hourly_steps
+                )
+                if charging_time - (end - start + 1) > 1e-6:
+                    raise ValueError(
+                        "Charging demand cannot be fulfilled for charging process {}. "
+                        "Please check.".format(idx)
+                    )
+                full_charging_steps = int(charging_time)
+                part_time_step = charging_time - full_charging_steps
+                # lower band
+                lower_energy.loc[end - full_charging_steps + 1 : end, cp] += power
+                if part_time_step != 0.0:
+                    lower_energy.loc[end - full_charging_steps, cp] += (
+                        part_time_step * power
+                    )
+                # upper band
+                upper_energy.loc[start : start + full_charging_steps - 1, cp] += power
+                upper_energy.loc[start + full_charging_steps, cp] += (
+                    part_time_step * power
+                )
+        # sanity check
+        if (
+            (
+                (
+                    lower_energy
+                    - upper_power * edisgo_obj.electromobility.eta_charging_points
+                )
+                > 1e-6
+            )
+            .any()
+            .any()
+        ):
+            raise ValueError(
+                "Lower energy has power values higher than nominal power. Please check."
+            )
+        if ((upper_energy - upper_power * self.eta_charging_points) > 1e-6).any().any():
+            raise ValueError(
+                "Upper energy has power values higher than nominal power. Please check."
+            )
+        if ((upper_energy.cumsum() - lower_energy.cumsum()) < -1e-6).any().any():
+            raise ValueError(
+                "Lower energy is higher than upper energy bound. Please check."
+            )
+        # Convert to MW and cumulate energy
+        upper_power = upper_power / 1e3
+        lower_energy = lower_energy.cumsum() / hourly_steps / 1e3
+        upper_energy = upper_energy.cumsum() / hourly_steps / 1e3
+        # Set time_index
+        upper_power = _shorten_and_set_index(upper_power)
+        lower_energy = _shorten_and_set_index(lower_energy)
+        upper_energy = _shorten_and_set_index(upper_energy)
+
+        flex_band_dict = {
+            "upper_power": upper_power,
+            "lower_energy": lower_energy,
+            "upper_energy": upper_energy,
+        }
+        self.flexibility_bands = flex_band_dict
+        return flex_band_dict
+
+    def to_csv(self, directory, attributes=None):
+        """
+        Exports electromobility data to csv files.
+
+        The following attributes can be exported:
 
         * 'charging_processes_df' : Attribute :py:attr:`~charging_processes_df`
           is saved to `charging_processes.csv`.
@@ -335,23 +503,39 @@ class Electromobility:
           `integrated_charging_parks.csv`.
         * 'simbev_config_df' : Attribute :py:attr:`~simbev_config_df` is
           saved to `simbev_config.csv`.
+        * 'flexibility_bands' : The three flexibility bands in attribute
+          :py:attr:`~flexibility_bands` are saved to
+          `flexibility_band_upper_power.csv`, `flexibility_band_lower_energy.csv`, and
+          `flexibility_band_upper_energy.csv`.
 
         Parameters
         ----------
         directory : str
-            Path to save electromobility to.
+            Path to save electromobility data to.
+        attributes : list(str) or None
+            List of attributes to export. See above for attributes that can be exported.
+            If None, all specified attributes are exported. Default: None.
 
         """
         os.makedirs(directory, exist_ok=True)
 
-        attrs = _get_matching_dict_of_attributes_and_file_names()
+        attrs_file_names = _get_matching_dict_of_attributes_and_file_names()
 
-        for attr, file in attrs.items():
+        if attributes is None:
+            attributes = list(attrs_file_names.keys())
+
+        for attr in attributes:
+            file = attrs_file_names[attr]
             df = getattr(self, attr)
-
-            if not df.empty:
-                path = os.path.join(directory, file)
-                df.to_csv(path)
+            if attr == "flexibility_bands":
+                for band in file.keys():
+                    if band in df.keys() and not df[band].empty:
+                        path = os.path.join(directory, file[band])
+                        df[band].to_csv(path)
+            else:
+                if not df.empty:
+                    path = os.path.join(directory, file)
+                    df.to_csv(path)
 
     def from_csv(self, data_path, edisgo_obj, from_zip_archive=False):
         """
@@ -377,23 +561,47 @@ class Electromobility:
             files = zip.namelist()
 
             # add directory and .csv to files to match zip archive
-            attrs = {k: f"electromobility/{v}" for k, v in attrs.items()}
+            attrs = {
+                k: (
+                    f"electromobility/{v}"
+                    if isinstance(v, str)
+                    else {k2: f"electromobility/{v2}" for k2, v2 in v.items()}
+                )
+                for k, v in attrs.items()
+            }
 
         else:
             # read from directory
             # check files within the directory
             files = os.listdir(data_path)
 
-        attrs_to_read = {k: v for k, v in attrs.items() if v in files}
+        attrs_to_read = {
+            k: v
+            for k, v in attrs.items()
+            if (isinstance(v, str) and v in files)
+            or (isinstance(v, dict) and any([_ in files for _ in v.values()]))
+        }
 
         for attr, file in attrs_to_read.items():
-            if from_zip_archive:
-                # open zip file to make it readable for pandas
-                with zip.open(file) as f:
-                    df = pd.read_csv(f, index_col=0)
+            if attr == "flexibility_bands":
+                df = {}
+                for band, file_name in file.items():
+                    if file_name in files:
+                        if from_zip_archive:
+                            # open zip file to make it readable for pandas
+                            with zip.open(file_name) as f:
+                                df[band] = pd.read_csv(f, index_col=0, parse_dates=True)
+                        else:
+                            path = os.path.join(data_path, file_name)
+                            df[band] = pd.read_csv(path, index_col=0, parse_dates=True)
             else:
-                path = os.path.join(data_path, file)
-                df = pd.read_csv(path, index_col=0)
+                if from_zip_archive:
+                    # open zip file to make it readable for pandas
+                    with zip.open(file) as f:
+                        df = pd.read_csv(f, index_col=0)
+                else:
+                    path = os.path.join(data_path, file)
+                    df = pd.read_csv(path, index_col=0)
 
             if attr == "potential_charging_parks_gdf":
                 epsg = edisgo_obj.topology.grid_district["srid"]
@@ -506,7 +714,8 @@ def _get_matching_dict_of_attributes_and_file_names():
     restore and maps them to the file name.
 
     Is used in functions
-    :attr:`~.network.electromobility.Electromobility.from_csv`.
+    :attr:`~.network.electromobility.Electromobility.from_csv` and
+    attr:`~.network.electromobility.Electromobility.to_csv`.
 
     Returns
     -------
@@ -520,6 +729,11 @@ def _get_matching_dict_of_attributes_and_file_names():
         "potential_charging_parks_gdf": "potential_charging_parks.csv",
         "integrated_charging_parks_df": "integrated_charging_parks.csv",
         "simbev_config_df": "metadata_simbev_run.csv",
+        "flexibility_bands": {
+            "upper_power": "flexibility_band_upper_power.csv",
+            "lower_energy": "flexibility_band_lower_energy.csv",
+            "upper_energy": "flexibility_band_upper_energy.csv",
+        },
     }
 
     return emob_dict

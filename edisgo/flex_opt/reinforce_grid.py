@@ -27,6 +27,7 @@ def reinforce_grid(
     max_while_iterations: int = 20,
     split_voltage_band: bool = True,
     mode: str | None = None,
+    without_generator_import: bool = False,
 ) -> Results:
     """
     Evaluates network reinforcement needs and performs measures.
@@ -37,7 +38,7 @@ def reinforce_grid(
     ----------
     edisgo : :class:`~.EDisGo`
         The eDisGo API object
-    timesteps_pfa : :obj:`str` or \
+    timesteps_pfa : str or \
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
         timesteps_pfa specifies for which time steps power flow analysis is
@@ -76,7 +77,7 @@ def reinforce_grid(
         are used for all voltage levels. Be aware that this does currently not work
         correctly.
         Default: True.
-    mode : :obj:`str`
+    mode : str
         Determines network levels reinforcement is conducted for. Specify
 
         * None to reinforce MV and LV network levels. None is the default.
@@ -88,7 +89,11 @@ def reinforce_grid(
           and neglecting LV network topology. LV load and generation is
           aggregated per LV network and directly connected to the secondary
           side of the respective MV/LV station.
-        * 'lv' to reinforce LV networks including MV/LV stations only.
+        * 'lv' to reinforce LV networks including MV/LV stations.
+    without_generator_import : bool
+        If True excludes lines that were added in the generator import to
+        connect new generators to the topology from calculation of topology expansion
+        costs. Default: False.
 
     Returns
     -------
@@ -612,7 +617,7 @@ def reinforce_grid(
 
     # calculate topology expansion costs
     edisgo_reinforce.results.grid_expansion_costs = grid_expansion_costs(
-        edisgo_reinforce
+        edisgo_reinforce, without_generator_import=without_generator_import
     )
 
     return edisgo_reinforce.results

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import logging
 import os
 import pickle
@@ -13,6 +14,9 @@ import pandas as pd
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.check_tech_constraints import lines_relative_load
+from edisgo.flex_opt.heat_pump_operation import (
+    operating_strategy as hp_operating_strategy,
+)
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
 from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
@@ -22,8 +26,11 @@ from edisgo.io.electromobility_import import (
     integrate_charging_parks,
 )
 from edisgo.io.generators_import import oedb as import_generators_oedb
+
+# from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.network import timeseries
 from edisgo.network.electromobility import Electromobility
+from edisgo.network.heat import HeatPump
 from edisgo.network.results import Results
 from edisgo.network.topology import Topology
 from edisgo.opf.results.opf_result_class import OPFResults
@@ -68,63 +75,72 @@ class EDisGo:
         Providing a time index is only optional in case a worst case analysis is set
         up using :func:`~set_time_series_worst_case_analysis`.
         In all other cases a time index needs to be set manually.
-    config_path : None or :obj:`str` or :obj:`dict`
+    config_path : None or str or dict
         Path to the config directory. Options are:
 
+        * 'default' (default)
+            If `config_path` is set to 'default', the provided default config files
+            are used directly.
+        * str
+            If `config_path` is a string, configs will be loaded from the
+            directory specified by `config_path`. If the directory
+            does not exist, it is created. If config files don't exist, the
+            default config files are copied into the directory.
+        * dict
+            A dictionary can be used to specify different paths to the
+            different config files. The dictionary must have the following
+            keys:
+
+            * 'config_db_tables'
+
+            * 'config_grid'
+
+            * 'config_grid_expansion'
+
+            * 'config_timeseries'
+
+            Values of the dictionary are paths to the corresponding
+            config file. In contrast to the other options, the directories
+            and config files must exist and are not automatically created.
         * None
+            If `config_path` is None, configs are loaded from the edisgo
+            default config directory ($HOME$/.edisgo). If the directory
+            does not exist, it is created. If config files don't exist, the
+            default config files are copied into the directory.
 
-          If `config_path` is None, configs are loaded from the edisgo
-          default config directory ($HOME$/.edisgo). If the directory
-          does not exist it is created. If config files don't exist the
-          default config files are copied into the directory.
-
-        * :obj:`str`
-
-          If `config_path` is a string, configs will be loaded from the
-          directory specified by `config_path`. If the directory
-          does not exist it is created. If config files don't exist the
-          default config files are copied into the directory.
-
-        * :obj:`dict`
-
-          A dictionary can be used to specify different paths to the
-          different config files. The dictionary must have the following
-          keys:
-
-          * 'config_db_tables'
-          * 'config_grid'
-          * 'config_grid_expansion'
-          * 'config_timeseries'
-
-          Values of the dictionary are paths to the corresponding
-          config file. In contrast to the other two options, the directories
-          and config files must exist and are not automatically created.
-
-        Default: None.
+        Default: "default".
 
     Attributes
     ----------
     topology : :class:`~.network.topology.Topology`
-        The topology is a container object holding the topology of the grids.
+        The topology is a container object holding the topology of the grids including
+        buses, lines, transformers, switches and components connected to the grid
+        including generators, loads and storage units.
     timeseries : :class:`~.network.timeseries.TimeSeries`
-        Container for component time series.
+        Container for active and reactive power time series of generators, loads and
+        storage units.
     results : :class:`~.network.results.Results`
         This is a container holding all calculation results from power flow
-        analyses, curtailment, storage integration, etc.
+        analyses and grid reinforcement.
+    electromobility : :class:`~.network.electromobility.Electromobility`
+        This class holds data on charging processes (how long cars are parking at a
+        charging station, how much they need to charge, etc.) necessary to apply
+        different charging strategies, as well as information on potential charging
+        sites and integrated charging parks.
+    heat_pump : :class:`~.network.heat.HeatPump`
+        This is a container holding heat pump data such as COP, heat demand to be
+        served and heat storage information.
 
     """
 
     def __init__(self, **kwargs):
 
         # load configuration
-        self._config = Config(config_path=kwargs.get("config_path", "default"))
+        self._config = Config(**kwargs)
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
         self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
-
-        # instantiate electromobility object and load charging processes and sites
-        self.electromobility = Electromobility(edisgo_obj=self)
 
         # set up results and time series container
         self.results = Results(self)
@@ -133,16 +149,57 @@ class EDisGo:
             timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
         )
 
+        # instantiate electromobility and heat pump object
+        self.electromobility = Electromobility(edisgo_obj=self)
+        self.heat_pump = HeatPump()
+
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
             self.import_generators(
                 generator_scenario=kwargs.pop("generator_scenario"), **kwargs
             )
 
+        # add MVGrid id to logging messages of logger "edisgo"
+        log_grid_id = kwargs.get("log_grid_id", True)
+        if log_grid_id:
+
+            def add_grid_id_filter(record):
+                record.grid_id = self.topology.id
+                return True
+
+            file_formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - "
+                "MVGrid(%(grid_id)s): %(message)s"
+            )
+            stream_formatter = logging.Formatter(
+                "%(name)s - %(levelname)s - MVGrid(%(grid_id)s): %(message)s"
+            )
+
+            logger_edisgo = logging.getLogger("edisgo")
+            for handler in logger_edisgo.handlers:
+                if isinstance(logger_edisgo.handlers[0], logging.StreamHandler):
+                    handler.setFormatter(stream_formatter)
+                elif isinstance(logger_edisgo.handlers[0], logging.FileHandler):
+                    handler.setFormatter(file_formatter)
+                else:
+                    raise ValueError(
+                        "Disable the log_grid_id function when using other"
+                        " handlers than StreamHandler or FileHandler"
+                    )
+                handler.filters.clear()
+                handler.addFilter(add_grid_id_filter)
+
     @property
     def config(self):
         """
         eDisGo configuration data.
+
+        Parameters
+        ----------
+        kwargs : dict
+            Dictionary with keyword arguments to set up Config object. See parameters
+            of :class:`~.tools.config.Config` class for more information on possible
+            input parameters.
 
         Returns
         -------
@@ -153,8 +210,8 @@ class EDisGo:
         return self._config
 
     @config.setter
-    def config(self, config_path):
-        self._config = Config(config_path=config_path)
+    def config(self, kwargs):
+        self._config = Config(**kwargs)
 
     def import_ding0_grid(self, path):
         """
@@ -424,15 +481,15 @@ class EDisGo:
             Type of reactive power control to apply. Currently the only option is
             'fixed_coshpi'. See :func:`~.network.timeseries.TimeSeries.fixed_cosphi`
             for further information.
-        generators_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        generators_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `generators_parametrisation` in
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
-        loads_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        loads_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `loads_parametrisation` in
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
-        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<dataframe>`
+        storage_units_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `storage_units_parametrisation` in
             :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
@@ -599,7 +656,7 @@ class EDisGo:
 
         Returns
         -------
-        :networkx:`networkx.Graph<network.Graph>`
+        :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
             where lines are represented by edges in the graph, and buses and
             transformers are represented by nodes.
@@ -855,6 +912,7 @@ class EDisGo:
         max_while_iterations: int = 20,
         split_voltage_band: bool = True,
         mode: str | None = None,
+        without_generator_import: bool = False,
         **kwargs,
     ) -> Results:
         """
@@ -877,43 +935,66 @@ class EDisGo:
         """
         if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
 
-            logger.info(
-                "Running reinforcement in worst-case mode by differentiating between mv"
-                " and lv load and feed-in cases."
+            logger.debug(
+                "Running reinforcement in worst-case mode by differentiating between "
+                "MV and LV load and feed-in cases."
             )
+
+            if copy_grid:
+                edisgo_obj = copy.deepcopy(self)
+            else:
+                edisgo_obj = self
 
             timeindex_worst_cases = self.timeseries.timeindex_worst_cases
-            timesteps_pfa = pd.DatetimeIndex(
-                timeindex_worst_cases.loc[
-                    timeindex_worst_cases.index.str.contains("mv")
-                ]
-            )
-            mode = "mv"
 
-            reinforce_grid(
+            if mode != "lv":
+
+                timesteps_pfa = pd.DatetimeIndex(
+                    timeindex_worst_cases.loc[
+                        timeindex_worst_cases.index.str.contains("mv")
+                    ]
+                )
+                reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=timesteps_pfa,
+                    split_voltage_band=split_voltage_band,
+                    mode="mv",
+                    without_generator_import=without_generator_import,
+                )
+
+            if mode != "mv":
+                timesteps_pfa = pd.DatetimeIndex(
+                    timeindex_worst_cases.loc[
+                        timeindex_worst_cases.index.str.contains("lv")
+                    ]
+                )
+                reinforce_mode = mode if mode == "mvlv" else "lv"
+                reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=timesteps_pfa,
+                    split_voltage_band=split_voltage_band,
+                    mode=reinforce_mode,
+                    without_generator_import=without_generator_import,
+                )
+
+            if mode not in ["mv", "lv"]:
+                edisgo_obj.analyze(mode=mode)
+            results = edisgo_obj.results
+
+        else:
+            results = reinforce_grid(
                 self,
                 max_while_iterations=max_while_iterations,
                 copy_grid=copy_grid,
                 timesteps_pfa=timesteps_pfa,
                 split_voltage_band=split_voltage_band,
                 mode=mode,
+                without_generator_import=without_generator_import,
             )
-
-            timesteps_pfa = pd.DatetimeIndex(
-                timeindex_worst_cases.loc[
-                    timeindex_worst_cases.index.str.contains("lv")
-                ]
-            )
-            mode = "lv"
-
-        results = reinforce_grid(
-            self,
-            max_while_iterations=max_while_iterations,
-            copy_grid=copy_grid,
-            timesteps_pfa=timesteps_pfa,
-            split_voltage_band=split_voltage_band,
-            mode=mode,
-        )
 
         # add measure to Results object
         if not copy_grid:
@@ -962,16 +1043,16 @@ class EDisGo:
         comp_type : str
             Type of added component. Can be 'bus', 'line', 'load', 'generator', or
             'storage_unit'.
-        ts_active_power : :pandas:`pandas.Series<series>` or None
+        ts_active_power : :pandas:`pandas.Series<Series>` or None
             Active power time series of added component.
             Index of the series must contain all time steps in
             :attr:`~.network.timeseries.TimeSeries.timeindex`.
             Values are active power per time step in MW.
             Defaults to None in which case no time series is set.
-        ts_reactive_power : :pandas:`pandas.Series<series>` or str or None
+        ts_reactive_power : :pandas:`pandas.Series<Series>` or str or None
             Possible options are:
 
-            * :pandas:`pandas.Series<series>`
+            * :pandas:`pandas.Series<Series>`
 
                 Reactive power time series of added component. Index of the series must
                 contain all time steps in
@@ -1100,12 +1181,16 @@ class EDisGo:
         """
         Adds single component to topology based on geolocation.
 
-        Currently components can be generators or charging points.
+        Currently components can be generators, charging points and heat pumps.
+
+        See :attr:`~.network.topology.Topology.connect_to_mv` and
+        :attr:`~.network.topology.Topology.connect_to_lv` for more information.
 
         Parameters
         ----------
         comp_type : str
-            Type of added component. Can be 'generator' or 'charging_point'.
+            Type of added component. Can be 'generator', 'charging_point' or
+            'heat_pump'.
         geolocation : :shapely:`shapely.Point<Point>` or tuple
             Geolocation of the new component. In case of tuple, the geolocation
             must be given in the form (longitude, latitude).
@@ -1113,7 +1198,7 @@ class EDisGo:
             Specifies the voltage level the new component is integrated in.
             Possible options are 4 (MV busbar), 5 (MV grid), 6 (LV busbar) or
             7 (LV grid). If no voltage level is provided the voltage level
-            is determined based on the nominal power `p_nom` (given as kwarg)
+            is determined based on the nominal power `p_nom` or `p_set` (given as kwarg)
             as follows:
 
             * voltage level 4 (MV busbar): nominal power between 4.5 MW and
@@ -1147,9 +1232,9 @@ class EDisGo:
         kwargs :
             Attributes of added component.
             See :attr:`~.network.topology.Topology.add_generator` respectively
-            :attr:`~.network.topology.Topology.add_charging_point` methods
+            :attr:`~.network.topology.Topology.add_load` methods
             for more information on required and optional parameters of
-            generators and charging points.
+            generators respectively charging points and heat pumps.
 
         """
         supported_voltage_levels = {4, 5, 6, 7}
@@ -1191,11 +1276,12 @@ class EDisGo:
 
         # Connect in LV
         else:
-            substations = self.topology.buses_df.loc[
-                self.topology.transformers_df.bus1.unique()
-            ]
-            nearest_substation, _ = find_nearest_bus(geolocation, substations)
-            kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
+            if kwargs.get("mvlv_subst_id", None) is None:
+                substations = self.topology.buses_df.loc[
+                    self.topology.transformers_df.bus1.unique()
+                ]
+                nearest_substation, _ = find_nearest_bus(geolocation, substations)
+                kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
             kwargs["geom"] = geolocation
             kwargs["voltage_level"] = voltage_level
             comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
@@ -1443,7 +1529,7 @@ class EDisGo:
                 with any charging demand are imported. Any other input will lead
                 to all parking and driving events being imported. Default "frugal".
             charging_processes_dir : str
-                Charging processes sub-directory. Default "simbev_run".
+                Charging processes sub-directory. Default None.
             simbev_config_file : str
                 Name of the simbev config file. Default "metadata_simbev_run.json".
 
@@ -1546,8 +1632,126 @@ class EDisGo:
             capacity of 22 kW and a minimum_charging_capacity_factor of 0.1 this would
             result in a minimum charging power of 2.2 kW. Default: 0.1.
 
+        Notes
+        ------
+        If the frequency of time series data in :class:`~.network.timeseries.TimeSeries`
+        (checked using :attr:`~.network.timeseries.TimeSeries.timeindex`) differs from
+        the frequency of SimBEV data, then the time series in
+        :class:`~.network.timeseries.TimeSeries` is first automatically resampled to
+        match the SimBEV data frequency and after determining the charging demand time
+        series resampled back to the original frequency.
+
         """
         charging_strategy(self, strategy=strategy, **kwargs)
+
+    def import_heat_pumps(self, scenario=None, **kwargs):
+        """
+        Gets heat pump capacities for specified scenario from oedb and integrates them
+        into the grid.
+
+        Besides heat pump capacity the heat pump's COP and heat demand to be served
+        are as well retrieved.
+
+        Currently, the only supported data source is scenario data generated
+        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        between two scenarios: 'eGon2035' and 'eGon100RE'.
+
+        The data is retrieved from the
+        `open energy platform <https://openenergy-platform.org/>`_.
+
+        # ToDo Add information on scenarios and from which tables data is retrieved.
+
+        The following steps are conducted in this function:
+
+            * Spatially disaggregated data on heat pump capacities in individual and
+              district heating are obtained from the database for the specified
+              scenario.
+            * Heat pumps are integrated into the grid (added to
+              :attr:`~.network.topology.Topology.loads_df`).
+
+              * Grid connection points of heat pumps for individual heating are
+                determined based on the corresponding building ID.
+              * Grid connection points of heat pumps for district heating are determined
+                based on their geolocation and installed capacity.
+                See :attr:`~.network.topology.Topology.connect_to_mv` and
+                :attr:`~.network.topology.Topology.connect_to_lv` for more information.
+            * COP and heat demand for each heat pump are retrieved from the database
+              and stored in the :class:`~.network.heat.HeatPump` class that can be
+              accessed through :attr:`~.edisgo.EDisGo.heat_pump`.
+
+        Be aware that this function does not yield electricity load time series for the
+        heat pumps. The actual time series are determined through applying an
+        operation strategy or optimising heat pump dispatch.
+
+        After the heat pumps are integrated there may be grid issues due to the
+        additional load. These are not solved automatically. If you want to
+        have a stable grid without grid issues you can invoke the automatic
+        grid expansion through the function :attr:`~.EDisGo.reinforce`.
+
+        Parameters
+        ----------
+        scenario : str
+            Scenario for which to retrieve heat pump data. Possible options
+            are 'eGon2035' and 'eGon100RE'.
+
+        Other Parameters
+        ----------------
+        kwargs :
+            See :func:`edisgo.io.heat_pump_import.oedb`.
+
+        """
+        raise NotImplementedError
+        # integrated_heat_pumps = import_heat_pumps_oedb(
+        #     edisgo_object=self, scenario=scenario, **kwargs
+        # )
+        # self.heat_pump.set_heat_demand(
+        #     self, "oedb", heat_pump_names=integrated_heat_pumps
+        # )
+        # self.heat_pump.set_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
+
+    def apply_heat_pump_operating_strategy(
+        self, strategy="uncontrolled", heat_pump_names=None, **kwargs
+    ):
+        """
+        Applies operating strategy to set electrical load time series of heat pumps.
+
+        This function requires that COP and heat demand time series, and depending on
+        the operating strategy also information on thermal storage units,
+        were previously set in :attr:`~.edisgo.EDisGo.heat_pump`. COP and heat demand
+        information is automatically set when using
+        :attr:`~.edisgo.EDisGo.import_heat_pumps`. When not using this function it can
+        be manually set using :attr:`~.network.heat.HeatPump.set_cop` and
+        :attr:`~.network.heat.HeatPump.set_heat_demand`.
+
+        The electrical load time series of each heat pump are written to
+        :attr:`~.network.timeseries.TimeSeries.loads_active_power`. Reactive power
+        in :attr:`~.network.timeseries.TimeSeries.loads_reactive_power` is
+        set to 0 Mvar.
+
+        Parameters
+        ----------
+        strategy : str
+            Defines the operating strategy to apply. The following strategies are valid:
+
+            * 'uncontrolled'
+
+                The heat demand is directly served by the heat pump without buffering
+                heat using a thermal storage. The electrical load of the heat pump is
+                determined as follows:
+
+                .. math::
+
+                    P_{el} = P_{th} / COP
+
+            Default: 'uncontrolled'.
+
+        heat_pump_names : list(str) or None
+            Defines for which heat pumps to apply operating strategy. If None, all heat
+            pumps for which COP information in :attr:`~.edisgo.EDisGo.heat_pump` is
+            given are used. Default: None.
+
+        """
+        hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
@@ -1836,59 +2040,87 @@ class EDisGo:
         save_topology=True,
         save_timeseries=True,
         save_results=True,
-        save_electromobility=True,
+        save_electromobility=False,
+        save_heatpump=False,
         **kwargs,
     ):
         """
-        Saves EDisGo object to csv.
+        Saves EDisGo object to csv files.
 
-        It can be chosen if results, topology and timeseries should be saved.
-        For each one, a separate directory is created.
+        It can be chosen what is included in the csv export (e.g. power flow results,
+        electromobility flexibility, etc.). Further, in order to save disk storage space
+        the data type of time series data can be reduced, e.g. to float32 and data
+        can be archived, e.g. in a zip archive.
 
         Parameters
         ----------
         directory : str
             Main directory to save EDisGo object to.
         save_topology : bool, optional
-            Indicates whether to save :class:`~.network.topology.Topology`.
-            Per default it is saved. See
+            Indicates whether to save :class:`~.network.topology.Topology` object.
+            Per default it is saved to sub-directory 'topology'. See
             :attr:`~.network.topology.Topology.to_csv` for more information.
+            Default: True.
         save_timeseries : bool, optional
-            Indicates whether to save :class:`~.network.timeseries.Timeseries`.
-            Per default it is saved. See
+            Indicates whether to save :class:`~.network.timeseries.Timeseries` object.
+            Per default it is saved to subdirectory 'timeseries'.
+            Through the keyword arguments `reduce_memory`
+            and `to_type` it can be chosen if memory should be reduced. See
             :attr:`~.network.timeseries.Timeseries.to_csv` for more
             information.
+            Default: True.
         save_results : bool, optional
             Indicates whether to save :class:`~.network.results.Results`
-            object. Per default it is saved. See
-            :attr:`~.network.results.Results.to_csv` for more information.
+            object. Per default it is saved to subdirectory 'results'.
+            Through the keyword argument `parameters` the results that should
+            be stored can be specified. Further, through the keyword parameters
+            `reduce_memory` and `to_type` it can be chosen if memory should be reduced.
+            See :attr:`~.network.results.Results.to_csv` for more information.
+            Default: True.
         save_electromobility : bool, optional
             Indicates whether to save
-            :class:`~.network.electromobility.Electromobility`. Per default it is saved.
+            :class:`~.network.electromobility.Electromobility` object. Per default it is
+            not saved. If set to True, it is saved to subdirectory 'electromobility'.
             See :attr:`~.network.electromobility.Electromobility.to_csv` for more
             information.
+        save_heatpump : bool, optional
+            Indicates whether to save
+            :class:`~.network.heat.HeatPump` object. Per default it is not saved.
+            If set to True, it is saved to subdirectory 'heat_pump'.
+            See :attr:`~.network.heat.HeatPump.to_csv` for more information.
 
         Other Parameters
         ------------------
         reduce_memory : bool, optional
             If True, size of dataframes containing time series in
-            :class:`~.network.results.Results` and
-            :class:`~.network.timeseries.TimeSeries`
-            is reduced. See :attr:`~.network.results.Results.reduce_memory`
-            and :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
+            :class:`~.network.results.Results`, :class:`~.network.timeseries.TimeSeries`
+            and :class:`~.network.heat.HeatPump`
+            is reduced. See respective classes `reduce_memory` functions for more
             information. Type to convert to can be specified by providing
             `to_type` as keyword argument. Further parameters of reduce_memory
             functions cannot be passed here. Call these functions directly to
             make use of further options. Default: False.
         to_type : str, optional
-            Data type to convert time series data to. This is a tradeoff
+            Data type to convert time series data to. This is a trade-off
             between precision and memory. Default: "float32".
+        parameters : None or dict
+            Specifies which results to store. By default this is set to None,
+            in which case all available results are stored.
+            To only store certain results provide a dictionary. See function docstring
+            `parameters` parameter in :func:`~.network.results.Results.to_csv`
+            for more information.
+        electromobility_attributes : None or list(str)
+            Specifies which electromobility attributes to store. By default this is set
+            to None, in which case all attributes are stored.
+            See function docstring `attributes` parameter in
+            :attr:`~.network.electromobility.Electromobility.to_csv` for more
+            information.
         archive : bool, optional
-            Save storage capacity by archiving the results in an archive. The
+            Save disk storage capacity by archiving the csv files. The
             archiving takes place after the generation of the CSVs and
             therefore temporarily the storage needs are higher. Default: False.
         archive_type : str, optional
-            Set archive type. Default "zip"
+            Set archive type. Default: "zip".
         drop_unarchived : bool, optional
             Drop the unarchived data if parameter archive is set to True.
             Default: True.
@@ -1915,7 +2147,20 @@ class EDisGo:
             )
 
         if save_electromobility:
-            self.electromobility.to_csv(os.path.join(directory, "electromobility"))
+            self.electromobility.to_csv(
+                os.path.join(directory, "electromobility"),
+                attributes=kwargs.get("electromobility_attributes", None),
+            )
+
+        # save configs
+        self.config.to_json(directory)
+
+        if save_heatpump:
+            self.heat_pump.to_csv(
+                os.path.join(directory, "heat_pump"),
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32"),
+            )
 
         if kwargs.get("archive", False):
             archive_type = kwargs.get("archive_type", "zip")
@@ -1938,6 +2183,19 @@ class EDisGo:
             )
 
     def save_edisgo_to_pickle(self, path="", filename=None):
+        """
+        Saves EDisGo object to pickle file.
+
+        Parameters
+        -----------
+        path : str
+            Directory the pickle file is saved to. Per default it takes the current
+            working directory.
+        filename : str or None
+            Filename the pickle file is saved under. If None, filename is
+            'edisgo_object_{grid_id}.pkl'.
+
+        """
         abs_path = os.path.abspath(path)
         if filename is None:
             filename = f"edisgo_object_{self.topology.mv_grid.id}.pkl"
@@ -2037,7 +2295,9 @@ class EDisGo:
 
             logging.info("Integrity check finished. Please pay attention to warnings.")
 
-    def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
+    def resample_timeseries(
+        self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
+    ):
         """
         Resamples all generator, load and storage time series to a desired resolution.
 
@@ -2085,26 +2345,148 @@ class EDisGo:
 
 
 def import_edisgo_from_pickle(filename, path=""):
+    """
+    Restores EDisGo object from pickle file.
+
+    Parameters
+    -----------
+    filename : str
+        Filename the pickle file is saved under.
+    path : str
+        Directory the pickle file is restored from. Per default it takes the current
+        working directory.
+
+    """
     abs_path = os.path.abspath(path)
     return pickle.load(open(os.path.join(abs_path, filename), "rb"))
 
 
 def import_edisgo_from_files(
-    edisgo_path="",
+    edisgo_path,
     import_topology=True,
     import_timeseries=False,
     import_results=False,
     import_electromobility=False,
+    import_heat_pump=False,
     from_zip_archive=False,
     **kwargs,
 ):
+    """
+    Sets up EDisGo object from csv files.
 
-    edisgo_obj = EDisGo(import_timeseries=False)
+    This is the reverse function of :func:`~.edisgo.EDisGo.save` and if not specified
+    differently assumes all data in the default sub-directories created in the
+    :func:`~.edisgo.EDisGo.save` function.
+
+    Parameters
+    -----------
+    edisgo_path : str
+        Main directory to restore EDisGo object from. This directory must contain the
+        config files. Further, if not specified differently,
+        it is assumed to be the main directory containing sub-directories with
+        e.g. topology data. In case `from_zip_archive` is set to True, `edisgo_path`
+        is the name of the archive.
+    import_topology : bool
+        Indicates whether to import :class:`~.network.topology.Topology` object.
+        Per default it is set to True, in which case topology data is imported.
+        The default directory topology data is imported from is the sub-directory
+        'topology'. A different directory can be specified through keyword argument
+        `topology_directory`.
+        Default: True.
+    import_timeseries : bool
+        Indicates whether to import :class:`~.network.timeseries.Timeseries` object.
+        Per default it is set to False, in which case timeseries data is not imported.
+        The default directory time series data is imported from is the sub-directory
+        'timeseries'. A different directory can be specified through keyword argument
+        `timeseries_directory`.
+        Default: False.
+    import_results : bool
+        Indicates whether to import :class:`~.network.results.Results` object.
+        Per default it is set to False, in which case results data is not imported.
+        The default directory results data is imported from is the sub-directory
+        'results'. A different directory can be specified through keyword argument
+        `results_directory`.
+        Default: False.
+    import_electromobility : bool
+        Indicates whether to import :class:`~.network.electromobility.Electromobility`
+        object. Per default it is set to False, in which case electromobility data is
+        not imported.
+        The default directory electromobility data is imported from is the sub-directory
+        'electromobility'. A different directory can be specified through keyword
+        argument `electromobility_directory`.
+        Default: False.
+    import_heat_pump : bool
+        Indicates whether to import :class:`~.network.heat.HeatPump` object.
+        Per default it is set to False, in which case heat pump data containing
+        information on COP, heat demand time series, etc. is not imported.
+        The default directory heat pump data is imported from is the sub-directory
+        'heat_pump'. A different directory can be specified through keyword
+        argument `heat_pump_directory`.
+        Default: False.
+    from_zip_archive : bool
+        Set to True if data needs to be imported from an archive, e.g. a zip
+        archive. Default: False.
+
+    Other Parameters
+    -----------------
+    topology_directory : str
+        Indicates directory :class:`~.network.topology.Topology` object is imported
+        from. Per default topology data is imported from `edisgo_path` sub-directory
+        'topology'.
+    timeseries_directory : str
+        Indicates directory :class:`~.network.timeseries.Timeseries` object is imported
+        from. Per default time series data is imported from `edisgo_path` sub-directory
+        'timeseries'.
+    results_directory : str
+        Indicates directory :class:`~.network.results.Results` object is imported
+        from. Per default results data is imported from `edisgo_path` sub-directory
+        'results'.
+    electromobility_directory : str
+        Indicates directory :class:`~.network.electromobility.Electromobility` object is
+        imported from. Per default electromobility data is imported from `edisgo_path`
+        sub-directory 'electromobility'.
+    heat_pump_directory : str
+        Indicates directory :class:`~.network.heat.HeatPump` object is
+        imported from. Per default heat pump data is imported from `edisgo_path`
+        sub-directory 'heat_pump'.
+    dtype : str
+        Numerical data type for time series and results data to be imported,
+        e.g. "float32". Per default this is None in which case data type is inferred.
+    parameters : None or dict
+        Specifies which results to restore. By default this is set to None,
+        in which case all available results are restored.
+        To only restore certain results provide a dictionary. See function docstring
+        `parameters` parameter in :func:`~.network.results.Results.to_csv`
+        for more information.
+
+    Results
+    ---------
+    :class:`~.EDisGo`
+        Restored EDisGo object.
+
+    """
+
+    if not os.path.exists(edisgo_path):
+        raise ValueError("Given edisgo_path does not exist.")
 
     if not from_zip_archive and str(edisgo_path).endswith(".zip"):
         from_zip_archive = True
-
         logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
+
+    edisgo_obj = EDisGo()
+    try:
+        edisgo_obj.config = {
+            "from_json": True,
+            "config_path": edisgo_path,
+            "from_zip_archive": from_zip_archive,
+        }
+    except FileNotFoundError:
+        logging.info(
+            "Configuration data could not be loaded from json wherefore "
+            "the default configuration data is loaded."
+        )
+    except Exception:
+        raise Exception
 
     if from_zip_archive:
         directory = edisgo_path
@@ -2133,7 +2515,7 @@ def import_edisgo_from_files(
                 directory, dtype=dtype, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning("No timeseries data found. Timeseries not imported.")
+            logging.warning("No time series data found. Timeseries not imported.")
 
     if import_results:
         parameters = kwargs.get("parameters", None)
@@ -2167,19 +2549,16 @@ def import_edisgo_from_files(
                 "No electromobility data found. Electromobility not imported."
             )
 
-    if kwargs.get("import_residual_load", False):
+    if import_heat_pump:
         if not from_zip_archive:
             directory = kwargs.get(
-                "residual_load_path", os.path.join(edisgo_path, "time_series_sums.csv")
+                "heat_pump_directory",
+                os.path.join(edisgo_path, "heat_pump"),
             )
 
         if os.path.exists(directory):
-            residual_load = pd.read_csv(directory, index_col=0, parse_dates=True)
-
-            residual_load.index.name = "timeindex"
-
-            edisgo_obj.timeseries._residual_load = residual_load["residual_load"]
+            edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
-            logging.warning("No residual load data found. Timeseries not imported.")
+            logging.warning("No heat pump data found. Heat pump data not imported.")
 
     return edisgo_obj

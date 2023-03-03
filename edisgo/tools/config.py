@@ -4,7 +4,7 @@ analysis and optimization.
 It is developed in the project open_eGo: https://openegoproject.wordpress.com
 
 eDisGo lives on github: https://github.com/openego/edisgo/
-The documentation is available on RTD: http://edisgo.readthedocs.io
+The documentation is available on RTD: https://edisgo.readthedocs.io/en/dev/
 
 Based on code by oemof developing group
 
@@ -18,12 +18,15 @@ __url__ = "https://github.com/openego/edisgo/blob/master/LICENSE"
 __author__ = "nesnoj, gplssm"
 
 
+import copy
 import datetime
+import json
 import logging
 import os
 import shutil
 
 from glob import glob
+from zipfile import ZipFile
 
 import edisgo
 
@@ -51,8 +54,8 @@ class Config:
     """
     Container for all configurations.
 
-    Parameters
-    -----------
+    Other Parameters
+    -----------------
     config_path : None or str or :dict
         Path to the config directory. Options are:
 
@@ -86,12 +89,23 @@ class Config:
             does not exist, it is created. If config files don't exist, the
             default config files are copied into the directory.
 
-        Default: None.
+        Default: "default".
+
+    from_json : bool
+        Set to True to load config data from json file. In that case the json
+        file is assumed to be located in path specified through `config_path`.
+        Per default this is set to False in which case config data is loaded from cfg
+        files.
+        Default: False.
+    json_filename : str
+        Filename of the json file. If None, it is loaded from file with name
+        "configs.json". Default: None.
+    from_zip_archive : bool
+        Set to True to load json config file from zip archive. Default: False.
 
     Notes
     -----
-    The Config object can be used like a dictionary. See example on how to use
-    it.
+    The Config object can be used like a dictionary. See example on how to use it.
 
     Examples
     --------
@@ -107,10 +121,16 @@ class Config:
     """
 
     def __init__(self, **kwargs):
-        self._data = self._load_config(kwargs.get("config_path", None))
+        if not kwargs.get("from_json", False):
+            self._data = self.from_cfg(kwargs.get("config_path", "default"))
+        else:
+            self._data = self.from_json(
+                directory=kwargs.get("config_path", None),
+                filename=kwargs.get("json_filename", None),
+                from_zip_archive=kwargs.get("from_zip_archive", False),
+            )
 
-    @staticmethod
-    def _load_config(config_path=None):
+    def from_cfg(self, config_path=None):
         """
         Load config files.
 
@@ -174,6 +194,81 @@ class Config:
         )
         config_dict["demandlib"]["day_end"] = datetime.datetime.strptime(
             config_dict["demandlib"]["day_end"], "%H:%M"
+        )
+        config_dict["demandlib"]["day_end"] = datetime.time(
+            config_dict["demandlib"]["day_end"].hour,
+            config_dict["demandlib"]["day_end"].minute,
+        )
+
+        return config_dict
+
+    def to_json(self, directory, filename=None):
+        """
+        Saves config data to json file.
+
+        Parameters
+        -----------
+        directory : str
+            Directory, the json file is saved to.
+        filename : str or None
+            Filename the json file is saved under. If None, it is saved under the
+            filename "configs.json". Default: None.
+
+        """
+        # data type time needs to be changed to str
+        data_dict = copy.deepcopy(self._data)
+        data_dict["demandlib"]["day_start"] = str(data_dict["demandlib"]["day_start"])
+        data_dict["demandlib"]["day_end"] = str(data_dict["demandlib"]["day_end"])
+        if filename is None:
+            filename = "configs.json"
+        with open(os.path.join(directory, filename), "w") as f:
+            json.dump(data_dict, f)
+
+    def from_json(self, directory, filename=None, from_zip_archive=False):
+        """
+        Imports config data from json file as dictionary.
+
+        Parameters
+        -----------
+        directory : str
+            Directory, the json file is loaded from.
+        filename : str or None
+            Filename of the json file. If None, it is loaded from file with name
+            "configs.json". Default: None.
+        from_zip_archive : bool
+            Set to True if data is archived in a zip archive. Default: False.
+
+        Returns
+        --------
+        dict
+            Dictionary with config data loaded from json file.
+
+        """
+        if filename is None:
+            filename = "configs.json"
+
+        if from_zip_archive:
+            # read from zip archive
+            # setup ZipFile Class
+            zip = ZipFile(directory)
+
+            with zip.open(filename) as json_file:
+                data = json_file.read()
+        else:
+            with open(os.path.join(directory, filename)) as json_file:
+                data = json_file.read()
+
+        config_dict = json.loads(data)
+
+        config_dict["demandlib"]["day_start"] = datetime.datetime.strptime(
+            config_dict["demandlib"]["day_start"], "%H:%M:%S"
+        )
+        config_dict["demandlib"]["day_start"] = datetime.time(
+            config_dict["demandlib"]["day_start"].hour,
+            config_dict["demandlib"]["day_start"].minute,
+        )
+        config_dict["demandlib"]["day_end"] = datetime.datetime.strptime(
+            config_dict["demandlib"]["day_end"], "%H:%M:%S"
         )
         config_dict["demandlib"]["day_end"] = datetime.time(
             config_dict["demandlib"]["day_end"].hour,
