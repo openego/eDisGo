@@ -863,7 +863,7 @@ def allowed_voltage_limits(edisgo_obj, buses=None, split_voltage_band=True):
 
     """
     if buses is None:
-        buses = edisgo_obj.topology.buses_df.index
+        buses = edisgo_obj.results.v_res.columns
 
     if split_voltage_band:
 
@@ -888,6 +888,20 @@ def allowed_voltage_limits(edisgo_obj, buses=None, split_voltage_band=True):
         # concat results and select relevant buses
         upper = pd.concat([mv_upper, stations_upper, lv_upper], axis=1)
         lower = pd.concat([mv_lower, stations_lower, lv_lower], axis=1)
+
+        # check if allowed voltage limits could be determined for all specified buses
+        allowed_buses = upper.columns
+        buses_not_incl = list(set(buses) - set(allowed_buses))
+        if buses_not_incl:
+            logger.debug(
+                f"Allowed voltage limits cannot be determined for all given buses as "
+                f"voltage information from power flow analysis is needed to calculate "
+                f"allowed voltage for the MV/LV and LV level but the buses were not "
+                f"included in the power flow analysis. "
+                f"This concerns the following buses: {buses_not_incl}."
+            )
+            buses = list(set(buses) - set(buses_not_incl))
+
         return upper.loc[:, buses], lower.loc[:, buses]
     else:
         upper = pd.DataFrame(1.1, columns=buses, index=edisgo_obj.results.v_res.index)
@@ -977,6 +991,7 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
 
     upper_limits_df = pd.DataFrame()
     lower_limits_df = pd.DataFrame()
+    buses_in_pfa = edisgo_obj.results.v_res.columns
 
     if mode == "stations":
 
@@ -986,8 +1001,10 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         primary_sides = pd.Series()
         secondary_sides = pd.Series()
         for grid in lv_grids:
-            primary_sides[grid] = grid.transformers_df.iloc[0].bus0
-            secondary_sides[grid] = grid.station.index[0]
+            primary_side = grid.transformers_df.iloc[0].bus0
+            if primary_side in buses_in_pfa:
+                primary_sides[grid] = primary_side
+                secondary_sides[grid] = grid.station.index[0]
 
         voltage_base = edisgo_obj.results.v_res.loc[:, primary_sides.values]
 
@@ -1005,7 +1022,9 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         )
 
         # rename columns to secondary side
-        rename_dict = {primary_sides[g]: secondary_sides[g] for g in lv_grids}
+        rename_dict = {
+            primary_sides[g]: secondary_sides[g] for g in primary_sides.keys()
+        }
         upper_limits_df.rename(columns=rename_dict, inplace=True)
         lower_limits_df.rename(columns=rename_dict, inplace=True)
 
@@ -1016,10 +1035,12 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         buses_dict = {}
         secondary_sides = pd.Series()
         for grid in lv_grids:
-            secondary_sides[grid] = grid.station.index[0]
-            buses_dict[grid.station.index[0]] = grid.buses_df.index.drop(
-                grid.station.index[0]
-            )
+            secondary_side = grid.station.index[0]
+            if secondary_side in buses_in_pfa:
+                secondary_sides[grid] = secondary_side
+                buses_dict[grid.station.index[0]] = grid.buses_df.index.drop(
+                    grid.station.index[0]
+                )
 
         voltage_base = edisgo_obj.results.v_res.loc[:, secondary_sides.values]
 

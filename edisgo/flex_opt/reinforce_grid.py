@@ -317,7 +317,7 @@ def reinforce_grid(
     logger.debug("==> Check voltage in MV topology.")
 
     crit_nodes = (
-        False
+        pd.DataFrame()
         if mode == "lv"
         else checks.voltage_issues(
             edisgo_reinforce, voltage_level="mv", split_voltage_band=split_voltage_band
@@ -325,7 +325,7 @@ def reinforce_grid(
     )
 
     while_counter = 0
-    while crit_nodes and while_counter < max_while_iterations:
+    while not crit_nodes.empty and while_counter < max_while_iterations:
 
         # reinforce lines
         lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
@@ -379,7 +379,7 @@ def reinforce_grid(
         )
 
         while_counter = 0
-        while crit_stations and while_counter < max_while_iterations:
+        while not crit_stations.empty and while_counter < max_while_iterations:
             # reinforce distribution substations
             transformer_changes = (
                 reinforce_measures.reinforce_mv_lv_station_voltage_issues(
@@ -431,7 +431,7 @@ def reinforce_grid(
         )
 
         while_counter = 0
-        while crit_nodes and while_counter < max_while_iterations:
+        while not crit_nodes.empty and while_counter < max_while_iterations:
             # for every topology in crit_nodes do reinforcement
             for grid_id in crit_nodes.lv_grid_id.unique():
                 # reinforce lines

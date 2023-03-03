@@ -631,6 +631,28 @@ class TestCheckTechConstraints:
         assert v_limits_lower.shape == (4, 2)
         assert v_limits_upper.shape == (4, 2)
 
+        # ############### test with missing power flow results
+        self.edisgo.analyze(mode="lv", lv_grid_id=1)
+        upper, lower = check_tech_constraints.allowed_voltage_limits(
+            self.edisgo, buses=self.edisgo.topology.buses_df.index
+        )
+        assert upper.shape == (4, 45)
+
+        self.edisgo.analyze(mode="lv", lv_grid_id=1)
+        upper, lower = check_tech_constraints.allowed_voltage_limits(
+            self.edisgo,
+            buses=self.edisgo.topology.buses_df.index.drop(
+                self.edisgo.topology.mv_grid.buses_df.index
+            ),
+        )
+        assert upper.shape == (4, 14)
+
+        self.edisgo.analyze(mode="mv")
+        upper, lower = check_tech_constraints.allowed_voltage_limits(
+            self.edisgo, buses=self.edisgo.topology.buses_df.index
+        )
+        assert upper.shape == (4, 41)
+
     def test__mv_allowed_voltage_limits(self):
 
         (
