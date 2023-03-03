@@ -56,7 +56,7 @@ class TestCheckTechConstraints:
         # check with default value (all lines)
         df = check_tech_constraints.lines_allowed_load(self.edisgo)
         # check shape of dataframe
-        assert (4, 129) == df.shape
+        assert (4, 131) == df.shape
         # check values (feed-in case)
         assert np.isclose(
             df.at[self.timesteps[2], "Line_10005"],
@@ -124,7 +124,7 @@ class TestCheckTechConstraints:
         # check with default value (all lines)
         df = check_tech_constraints.lines_relative_load(self.edisgo)
         # check shape of dataframe
-        assert (4, 129) == df.shape
+        assert (4, 131) == df.shape
         # check values (feed-in case)
         assert np.isclose(
             df.at[self.timesteps[2], "Line_10005"], 7.74132 / 7.27461, atol=1e-5
@@ -320,7 +320,7 @@ class TestCheckTechConstraints:
         # check with power flow results available for all components
         df = check_tech_constraints.components_relative_load(self.edisgo)
         # check shape of dataframe
-        assert (4, 140) == df.shape
+        assert (4, 142) == df.shape
         # check values
         load_cases = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
@@ -687,8 +687,8 @@ class TestCheckTechConstraints:
         ) = check_tech_constraints._lv_allowed_voltage_limits(self.edisgo, mode=None)
 
         # check shape
-        assert v_limits_lower.shape == (4, 99)
-        assert v_limits_upper.shape == (4, 99)
+        assert v_limits_lower.shape == (4, 101)
+        assert v_limits_upper.shape == (4, 101)
 
         # check values
 
@@ -779,7 +779,7 @@ class TestCheckTechConstraints:
             )
         )
 
-        assert voltage_dev.shape == (4, 140)
+        assert voltage_dev.shape == (4, 142)
         # check that there are voltage issues created through mv_voltage_issues() and
         # at "BusBar_MVGrid_1_LVGrid_6_LV" detected
         comps_with_v_issues = (
@@ -816,7 +816,7 @@ class TestCheckTechConstraints:
             )
         )
 
-        assert voltage_dev.shape == (4, 140)
+        assert voltage_dev.shape == (4, 142)
         # check that "BusBar_MVGrid_1_LVGrid_6_LV" does now not have any voltage issues
         comps_with_v_issues = (
             voltage_dev[voltage_dev != 0].dropna(how="all", axis=1).columns
