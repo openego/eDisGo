@@ -160,11 +160,14 @@ class TestReinforceMeasures:
     def test_reinforce_mv_lv_station_voltage_issues(self):
         self.edisgo = copy.deepcopy(self.edisgo_root)
 
-        station_9 = pd.DataFrame(
-            {"v_diff_max": [0.03], "time_index": [self.timesteps[0]]},
+        crit_stations = pd.DataFrame(
+            {
+                "abs_max_voltage_dev": [0.03],
+                "time_index": [self.timesteps[0]],
+                "lv_grid_id": 9.0,
+            },
             index=["Bus_secondary_LVStation_9"],
         )
-        crit_stations = {"LVGrid_9": station_9}
 
         trafos_pre = self.edisgo.topology.transformers_df
 
@@ -212,7 +215,7 @@ class TestReinforceMeasures:
 
         crit_nodes = pd.DataFrame(
             {
-                "v_diff_max": [0.08, 0.06, 0.05, 0.04],
+                "abs_max_voltage_dev": [0.08, 0.06, 0.05, 0.04],
                 "time_index": [
                     self.timesteps[0],
                     self.timesteps[0],
@@ -306,7 +309,7 @@ class TestReinforceMeasures:
 
         crit_nodes = pd.DataFrame(
             {
-                "v_diff_max": [0.08, 0.05],
+                "abs_max_voltage_dev": [0.08, 0.05],
                 "time_index": [self.timesteps[0], self.timesteps[0]],
             },
             index=["Bus_BranchTee_LVGrid_5_2", "Bus_BranchTee_LVGrid_5_5"],
