@@ -118,7 +118,7 @@ def one_storage_per_feeder(
         critical_lines_feeder : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe containing over-loaded lines in MV feeder, their maximum
             relative over-loading and the corresponding time step. See
-            :func:`edisgo.flex_opt.check_tech_constraints.mv_line_load` for
+            :func:`edisgo.flex_opt.check_tech_constraints.mv_line_overload` for
             more information.
         critical_nodes_feeder : :obj:`list`
             List with all nodes in MV feeder with voltage issues.
@@ -305,7 +305,7 @@ def one_storage_per_feeder(
         :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe containing over-loaded lines in MV feeder, their maximum
             relative over-loading and the corresponding time step. See
-            :func:`edisgo.flex_opt.check_tech_constraints.mv_line_load` for
+            :func:`edisgo.flex_opt.check_tech_constraints.mv_line_overload` for
             more information.
 
         """

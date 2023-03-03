@@ -579,11 +579,11 @@ class Results:
             Dataframe containing remaining grid issues. Names of remaining
             critical lines, stations and buses are in the index of the
             dataframe. Columns depend on the equipment type. See
-            :func:`~.flex_opt.check_tech_constraints.mv_line_load` for format
+            :func:`~.flex_opt.check_tech_constraints.mv_line_overload` for format
             of remaining overloading issues of lines,
-            :func:`~.flex_opt.check_tech_constraints.hv_mv_station_load`
+            :func:`~.flex_opt.check_tech_constraints.hv_mv_station_overload`
             for format of remaining overloading issues of transformers, and
-            :func:`~.flex_opt.check_tech_constraints.mv_voltage_deviation`
+            :func:`~.flex_opt.check_tech_constraints.voltage_issues`
             for format of remaining voltage issues.
 
             Provide this if you want to set unresolved_issues. For retrieval
