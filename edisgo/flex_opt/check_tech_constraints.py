@@ -713,7 +713,8 @@ def voltage_issues(edisgo_obj, voltage_level, split_voltage_band=True):
         corresponding time step the maximum voltage issue occured in as
         :pandas:`pandas.Timestamp<Timestamp>`, and 'lv_grid_id' giving the LV grid ID
         the bus is in as integer. Index of the dataframe are the
-        names of all buses with voltage issues.
+        names of all buses with voltage issues as in index of
+        :attr:`~.network.topology.Topology.buses_df`.
 
     Notes
     -----
@@ -816,7 +817,8 @@ def _voltage_issues_helper(edisgo_obj, buses, split_voltage_band):
         absolute voltage deviation as float and 'time_index' containing the
         corresponding time step the maximum voltage issue occured in as
         :pandas:`pandas.Timestamp<Timestamp>`. Index of the dataframe are the
-        names of all buses with voltage issues.
+        names of all buses with voltage issues as in index of
+        :attr:`~.network.topology.Topology.buses_df`.
 
     """
     crit_buses = pd.DataFrame(dtype=float)
@@ -981,9 +983,9 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         Dataframe containing the allowed lower and upper voltage limits in p.u..
         Index of the dataframe are all time steps power flow was last conducted
         for of type :pandas:`pandas.Timestamp<Timestamp>`. Columns are bus names as in
-        index of :attr:`~.network.topology.Topology.buses_df`.
-
-        If stations columns are stations secondary sides
+        index of :attr:`~.network.topology.Topology.buses_df` for all buses power flow
+        results are available. If mode is 'stations' columns contain bus names
+        of the stations secondary sides.
 
     """
     if lv_grids is None:
