@@ -453,7 +453,7 @@ def _station_overload(edisgo_obj, grid):
             ]
         )
 
-        # calculate greatest apparent power missing (residual apparent power is
+        # calculate the greatest apparent power missing (residual apparent power is
         # divided by the load factor to account for load factors smaller than
         # one, which lead to a higher needed additional capacity)
         s_missing = (s_res.iloc[:, 0] / load_factor).dropna()
