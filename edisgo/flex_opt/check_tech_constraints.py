@@ -290,12 +290,17 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
 
 def lines_relative_load(edisgo_obj, lines=None):
     """
-    Returns relative line load based on specified allowed line load.
+    Returns relative line load.
+
+    The relative line load is here defined as the apparent power over a line, obtained
+    from power flow analysis, divided by the allowed load of a line, which is the
+    nominal apparent power times a security factor (see :py:attr:`~lines_allowed_load`
+    for more information).
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    lines : list(str)
+    lines : list(str) or None
         List of line names to get relative loading for. Per default relative loading
         is returned for all lines included in the power flow analysis. Default: None.
 
