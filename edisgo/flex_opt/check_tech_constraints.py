@@ -684,39 +684,36 @@ def components_relative_load(edisgo_obj):
     return pd.concat([lines_rel_load, stations_rel_load], axis=1)
 
 
-def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
+def voltage_issues(edisgo_obj, voltage_level, split_voltage_band=True):
     """
-    Checks for voltage stability issues in MV network.
-
-    Returns buses with voltage issues and their maximum voltage deviation.
+    Gives buses with voltage issues and their maximum voltage deviation in p.u..
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    voltage_levels : :obj:`str`
-        Specifies which allowed voltage deviations to use. Possible options
-        are:
-
-        * 'mv_lv'
-          This is the default. The allowed voltage deviations for buses in the
-          MV is the same as for buses in the LV. Further, load and feed-in case
-          are not distinguished.
-        * 'mv'
-          Use this to handle allowed voltage limits in the MV and LV
-          topology differently. In that case, load and feed-in case are
-          differentiated.
+    voltage_level : None or str
+        Specifies voltage level for which to determine voltage issues. Possible options
+        are 'mv' to check voltage deviations at MV buses, 'mv_lv' to check voltage
+        deviations at MV-LV stations, and 'lv' to check voltage deviations at LV buses.
+        If None voltage deviations in all voltage levels are checked.
+    split_voltage_band : bool
+        If True the allowed voltage band of +/-10 percent is allocated to the different
+        voltage levels MV, MV/LV and LV according to config values set in section
+        `grid_expansion_allowed_voltage_deviations`. If False, the same voltage limits
+        are used for all voltage levels. Default: True.
 
     Returns
     -------
-    :obj:`dict`
-        Dictionary with representative of :class:`~.network.grids.MVGrid` as
-        key and a :pandas:`pandas.DataFrame<DataFrame>` with voltage
-        deviations from allowed lower or upper voltage limits, sorted
-        descending from highest to lowest voltage deviation, as value.
-        Index of the dataframe are all buses with voltage issues.
-        Columns are 'v_diff_max' containing the maximum voltage deviation as
-        float and 'time_index' containing the corresponding time step the
-        voltage issue occured in as :pandas:`pandas.Timestamp<Timestamp>`.
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with maximum deviations from allowed lower or upper voltage limits
+        in p.u. sorted descending from highest to lowest voltage deviation
+        (it is not distinguished between over- or undervoltage).
+        Columns of the dataframe are 'abs_max_voltage_dev' containing the maximum
+        absolute voltage deviation as float, 'time_index' containing the
+        corresponding time step the maximum voltage issue occured in as
+        :pandas:`pandas.Timestamp<Timestamp>`, and 'lv_grid_id' giving the LV grid ID
+        the bus is in as integer. Index of the dataframe are the
+        names of all buses with voltage issues.
 
     Notes
     -----
@@ -725,402 +722,73 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
     'grid_expansion_allowed_voltage_deviations'.
 
     """
-
-    crit_buses = {}
-
-    # get allowed lower and upper voltage limits
-    v_limits_upper, v_limits_lower = _mv_allowed_voltage_limits(
-        edisgo_obj, voltage_levels
-    )
-
-    # find buses with voltage issues and their maximum voltage deviation
-    crit_buses_grid = _voltage_deviation(
-        edisgo_obj,
-        edisgo_obj.topology.mv_grid.buses_df.index,
-        v_limits_upper,
-        v_limits_lower,
-    )
-
-    if not crit_buses_grid.empty:
-        crit_buses[repr(edisgo_obj.topology.mv_grid)] = crit_buses_grid
-        logger.debug(
-            "==> {} bus(es) in MV topology has/have voltage issues.".format(
-                crit_buses_grid.shape[0]
-            )
-        )
-    else:
-        logger.debug("==> No voltage issues in MV topology.")
-
-    return crit_buses
-
-
-def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
-    """
-    Checks for voltage stability issues in LV networks.
-
-    Returns buses with voltage issues and their maximum voltage deviation.
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    mode : None or str
-        If None voltage at all buses in LV networks is checked. If mode is set
-        to 'stations' only voltage at bus bar is checked. Default: None.
-    voltage_levels : str
-        Specifies which allowed voltage deviations to use. Possible options
-        are:
-
-        * 'mv_lv'
-          This is the default. The allowed voltage deviations for buses in the
-          LV is the same as for buses in the MV. Further, load and feed-in case
-          are not distinguished.
-        * 'lv'
-          Use this to handle allowed voltage limits in the MV and LV
-          topology differently. In that case, load and feed-in case are
-          differentiated.
-
-    Returns
-    -------
-    dict
-        Dictionary with representative of :class:`~.network.grids.LVGrid` as
-        key and a :pandas:`pandas.DataFrame<DataFrame>` with voltage
-        deviations from allowed lower or upper voltage limits, sorted
-        descending from highest to lowest voltage deviation, as value.
-        Index of the dataframe are all buses with voltage issues.
-        Columns are 'v_diff_max' containing the maximum voltage deviation as
-        float and 'time_index' containing the corresponding time step the
-        voltage issue occured in as :pandas:`pandas.Timestamp<Timestamp>`.
-
-    Notes
-    -----
-    Voltage issues are determined based on allowed voltage deviations defined
-    in the config file 'config_grid_expansion' in section
-    'grid_expansion_allowed_voltage_deviations'.
-
-    """
-
-    crit_buses = {}
-
-    if voltage_levels == "mv_lv":
-        v_limits_upper, v_limits_lower = _mv_allowed_voltage_limits(edisgo_obj, "mv_lv")
-    elif not "lv" == voltage_levels:
-        raise ValueError(
-            "{} is not a valid option for input variable 'voltage_levels' in "
-            "function lv_voltage_deviation. Try 'mv_lv' or "
-            "'lv'.".format(voltage_levels)
-        )
-
-    for lv_grid in edisgo_obj.topology.lv_grids:
-
-        if mode:
-            if mode == "stations":
-                buses = lv_grid.station.index
-            else:
-                raise ValueError(
-                    "{} is not a valid option for input variable 'mode' in "
-                    "function lv_voltage_deviation. Try 'stations' or "
-                    "None.".format(mode)
+    station_buses = edisgo_obj.topology.transformers_df.bus1.unique()
+    if voltage_level:
+        if voltage_level == "mv_lv":
+            buses = station_buses
+        elif voltage_level == "lv":
+            buses = edisgo_obj.topology.buses_df.index
+            # drop MV buses and buses of stations secondary sides
+            buses = buses.drop(
+                edisgo_obj.topology.mv_grid.buses_df.index.append(
+                    pd.Index(station_buses)
                 )
-        else:
-            buses = lv_grid.buses_df.index
-
-        if voltage_levels == "lv":
-            v_limits_upper, v_limits_lower = _lv_allowed_voltage_limits(
-                edisgo_obj, lv_grid, mode
             )
-
-        crit_buses_grid = _voltage_deviation(
-            edisgo_obj, buses, v_limits_upper, v_limits_lower
-        )
-
-        if not crit_buses_grid.empty:
-            crit_buses[str(lv_grid)] = crit_buses_grid
-
-    if crit_buses:
-        if mode == "stations":
-            logger.debug(
-                "==> {} LV station(s) has/have voltage issues.".format(len(crit_buses))
-            )
+        elif voltage_level == "mv":
+            buses = edisgo_obj.topology.mv_grid.buses_df.index
         else:
-            logger.debug(
-                "==> {} LV topology(s) has/have voltage issues.".format(len(crit_buses))
+            raise ValueError(
+                "{} is not a valid option for input variable 'voltage_level' in "
+                "function voltage_issue. Possible options are 'mv', 'mv_lv', 'lv', "
+                "or None.".format(voltage_level)
             )
     else:
-        if mode == "stations":
-            logger.debug("==> No voltage issues in LV stations.")
-        else:
-            logger.debug("==> No voltage issues in LV grids.")
+        mv_issues = voltage_issues(
+            edisgo_obj, voltage_level="mv", split_voltage_band=split_voltage_band
+        )
+        mv_lv_issues = voltage_issues(
+            edisgo_obj, voltage_level="mv_lv", split_voltage_band=split_voltage_band
+        )
+        lv_issues = voltage_issues(
+            edisgo_obj, voltage_level="lv", split_voltage_band=split_voltage_band
+        )
+        crit_buses = pd.concat([mv_issues, mv_lv_issues, lv_issues])
+        if not crit_buses.empty:
+            crit_buses.sort_values(
+                by=["abs_max_voltage_dev"], ascending=False, inplace=True
+            )
+        return crit_buses
 
+    crit_buses = _voltage_issues_helper(edisgo_obj, buses, split_voltage_band)
+
+    # join LV grid information
+    if voltage_level == "mv_lv" or voltage_level == "lv":
+        crit_buses["lv_grid_id"] = edisgo_obj.topology.buses_df.loc[
+            crit_buses.index, "lv_grid_id"
+        ]
+    else:
+        crit_buses["lv_grid_id"] = None
+
+    if not crit_buses.empty:
+        if voltage_level == "mv_lv":
+            message = "==> {} MV-LV station(s) has/have voltage issues."
+        elif voltage_level == "lv":
+            message = "==> {} LV bus(es) has/have voltage issues."
+        else:
+            message = "==> {} bus(es) in MV topology has/have voltage issues."
+        logger.debug(message.format(len(crit_buses)))
+    else:
+        if voltage_level == "mv_lv":
+            message = "==> No voltage issues in MV-LV stations."
+        elif voltage_level == "lv":
+            message = "==> No voltage issues in LV grids."
+        else:
+            message = "==> No voltage issues in MV topology."
+        logger.debug(message)
     return crit_buses
 
 
-def _mv_allowed_voltage_limits(edisgo_obj, voltage_levels):
-    """
-    Calculates allowed upper and lower MV voltage limits in p.u..
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    voltage_levels : :obj:`str`
-        Specifies which allowed voltage limits to use. Possible options
-        are:
-
-        * 'mv_lv'
-          The allowed voltage deviations for buses in the MV are the same as
-          for buses in the LV, namely $pm$ 10 %.
-        * 'mv'
-          Use this to handle allowed voltage limits in the MV and LV
-          differently. In that case load and feed-in case are differentiated.
-
-    Returns
-    -------
-    :pandas:`pandas.Series<Series>`
-        Series containing the allowed upper voltage limits in p.u..
-        Index of the series are all time steps power flow was last conducted
-        for of type :pandas:`pandas.Timestamp<Timestamp>`.
-
-    :pandas:`pandas.Series<Series>`
-        Series containing the allowed lower voltage limits in p.u..
-        Index of the series are all time steps power flow was last conducted
-        for of type :pandas:`pandas.Timestamp<Timestamp>`.
-
-    """
-    v_allowed_per_case = {}
-
-    # get config values for lower voltage limit in feed-in case and upper
-    # voltage limit in load case
-    v_allowed_per_case["feed-in_case_lower"] = edisgo_obj.config[
-        "grid_expansion_allowed_voltage_deviations"
-    ]["feed-in_case_lower"]
-    v_allowed_per_case["load_case_upper"] = edisgo_obj.config[
-        "grid_expansion_allowed_voltage_deviations"
-    ]["load_case_upper"]
-
-    # calculate upper voltage limit in feed-in case and lower voltage limit in
-    # load case
-    offset = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-        "hv_mv_trafo_offset"
-    ]
-    control_deviation = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-        "hv_mv_trafo_control_deviation"
-    ]
-
-    if voltage_levels == "mv_lv" or voltage_levels == "mv":
-        v_allowed_per_case["feed-in_case_upper"] = (
-            1
-            + offset
-            + control_deviation
-            + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_feed-in_case_max_v_deviation".format(voltage_levels)
-            ]
-        )
-        v_allowed_per_case["load_case_lower"] = (
-            1
-            + offset
-            - control_deviation
-            - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_load_case_max_v_deviation".format(voltage_levels)
-            ]
-        )
-    else:
-        raise ValueError(
-            "Specified mode {} is not a valid option.".format(voltage_levels)
-        )
-
-    # create series with upper and lower voltage limits for each time step
-    v_limits_upper = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
-        lambda _: v_allowed_per_case["{}_upper".format(_)]
-    )
-    v_limits_lower = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
-        lambda _: v_allowed_per_case["{}_lower".format(_)]
-    )
-
-    return v_limits_upper, v_limits_lower
-
-
-def _lv_allowed_voltage_limits(edisgo_obj, lv_grid, mode):
-    """
-    Calculates allowed upper and lower voltage limits for given LV grid.
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    lv_grid : :class:`~.network.grids.LVGrid`
-        LV grid to get voltage limits for.
-    mode : None or :obj:`str`
-        If None, voltage limits for buses in the LV network are returned. In
-        that case the reference bus is the LV stations' secondary side.
-        If mode is set to 'stations', voltage limits for stations' secondary
-        side (LV bus bar) are returned; the reference bus is the stations'
-        primary side.
-
-    Returns
-    -------
-    :pandas:`pandas.Series<Series>`
-        Series containing the allowed upper voltage limits in p.u..
-        Index of the series are all time steps power flow was last conducted
-        for of type :pandas:`pandas.Timestamp<Timestamp>`.
-
-    :pandas:`pandas.Series<Series>`
-        Series containing the allowed lower voltage limits in p.u..
-        Index of the series are all time steps power flow was last conducted
-        for of type :pandas:`pandas.Timestamp<Timestamp>`.
-
-    """
-    v_allowed_per_case = {}
-
-    # get reference voltages for different modes
-    if mode == "stations":
-        # reference voltage is voltage at stations' primary side
-        bus_station_primary = lv_grid.transformers_df.iloc[0].bus0
-        voltage_base = edisgo_obj.results.v_res.loc[:, bus_station_primary]
-        config_string = "mv_lv_station"
-    else:
-        # reference voltage is voltage at stations' secondary side
-        voltage_base = edisgo_obj.results.v_res.loc[:, lv_grid.station.index.values[0]]
-        config_string = "lv"
-
-    # calculate upper voltage limit in feed-in case and lower voltage limit in
-    # load case
-    v_allowed_per_case["feed-in_case_upper"] = (
-        voltage_base
-        + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-            "{}_feed-in_case_max_v_deviation".format(config_string)
-        ]
-    )
-    v_allowed_per_case["load_case_lower"] = (
-        voltage_base
-        - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-            "{}_load_case_max_v_deviation".format(config_string)
-        ]
-    )
-
-    timeindex = voltage_base.index
-    v_allowed_per_case["feed-in_case_lower"] = pd.Series(
-        edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-            "feed-in_case_lower"
-        ],
-        index=timeindex,
-    )
-    v_allowed_per_case["load_case_upper"] = pd.Series(
-        edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-            "load_case_upper"
-        ],
-        index=timeindex,
-    )
-
-    # create series with upper and lower voltage limits for each time step
-    v_limits_upper = []
-    v_limits_lower = []
-    load_feedin_case = edisgo_obj.timeseries.timesteps_load_feedin_case
-    for t in timeindex:
-        case = load_feedin_case.loc[t]
-        v_limits_upper.append(v_allowed_per_case["{}_upper".format(case)].loc[t])
-        v_limits_lower.append(v_allowed_per_case["{}_lower".format(case)].loc[t])
-    v_limits_upper = pd.Series(v_limits_upper, index=timeindex)
-    v_limits_lower = pd.Series(v_limits_lower, index=timeindex)
-
-    return v_limits_upper, v_limits_lower
-
-
-def voltage_diff(edisgo_obj, buses, v_dev_allowed_upper, v_dev_allowed_lower):
-    """
-    Function to detect under- and overvoltage at buses.
-
-    The function returns both under- and overvoltage deviations in p.u. from
-    the allowed lower and upper voltage limit, respectively, in separate
-    dataframes. In case of both under- and overvoltage issues at one bus,
-    only the highest voltage deviation is returned.
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    buses : list(str)
-        List of buses to check voltage deviation for.
-    v_dev_allowed_upper : :pandas:`pandas.Series<Series>`
-        Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
-        power flow analysis was conducted for and the allowed upper limit of
-        voltage deviation for each time step as float in p.u..
-    v_dev_allowed_lower : :pandas:`pandas.Series<Series>`
-        Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
-        power flow analysis was conducted for and the allowed lower limit of
-        voltage deviation for each time step as float in p.u..
-
-    Returns
-    -------
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with deviations from allowed lower voltage level.
-        Columns of the dataframe are all time steps power flow analysis was
-        conducted for of type :pandas:`pandas.Timestamp<Timestamp>`; in the
-        index are all buses for which undervoltage was detected. In case of
-        a higher over- than undervoltage deviation for a bus, the bus does
-        not appear in this dataframe, but in the dataframe with overvoltage
-        deviations.
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with deviations from allowed upper voltage level.
-        Columns of the dataframe are all time steps power flow analysis was
-        conducted for of type :pandas:`pandas.Timestamp<Timestamp>`; in the
-        index are all buses for which overvoltage was detected. In case of
-        a higher under- than overvoltage deviation for a bus, the bus does
-        not appear in this dataframe, but in the dataframe with undervoltage
-        deviations.
-
-    """
-    v_mag_pu_pfa = edisgo_obj.results.v_res.loc[:, buses]
-
-    v_dev_allowed_upper_format = np.tile(
-        (v_dev_allowed_upper.loc[v_mag_pu_pfa.index]).values,
-        (v_mag_pu_pfa.shape[1], 1),
-    )
-    v_dev_allowed_lower_format = np.tile(
-        (v_dev_allowed_lower.loc[v_mag_pu_pfa.index]).values,
-        (v_mag_pu_pfa.shape[1], 1),
-    )
-    overvoltage = v_mag_pu_pfa.T[v_mag_pu_pfa.T > v_dev_allowed_upper_format].dropna(
-        how="all"
-    )
-    undervoltage = v_mag_pu_pfa.T[v_mag_pu_pfa.T < v_dev_allowed_lower_format].dropna(
-        how="all"
-    )
-    # sort buses with under- and overvoltage issues in a way that
-    # worst case is saved
-    buses_both = v_mag_pu_pfa[
-        overvoltage[overvoltage.index.isin(undervoltage.index)].index
-    ]
-    voltage_diff_ov = buses_both.T - v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values
-    voltage_diff_uv = -buses_both.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values
-    voltage_diff_ov = voltage_diff_ov.loc[
-        voltage_diff_ov.max(axis=1) > voltage_diff_uv.max(axis=1)
-    ]
-    voltage_diff_uv = voltage_diff_uv.loc[
-        ~voltage_diff_uv.index.isin(voltage_diff_ov.index)
-    ]
-    # handle buses with overvoltage issues and append to voltage_diff_ov
-    buses_ov = v_mag_pu_pfa[
-        overvoltage[~overvoltage.index.isin(buses_both.columns)].index
-    ]
-    voltage_diff_ov = pd.concat(
-        [
-            voltage_diff_ov,
-            buses_ov.T - v_dev_allowed_upper.loc[v_mag_pu_pfa.index].values,
-        ]
-    )
-
-    # handle buses with undervoltage issues and append to voltage_diff_uv
-    buses_uv = v_mag_pu_pfa[
-        undervoltage[~undervoltage.index.isin(buses_both.columns)].index
-    ]
-    voltage_diff_uv = pd.concat(
-        [
-            voltage_diff_uv,
-            -buses_uv.T + v_dev_allowed_lower.loc[v_mag_pu_pfa.index].values,
-        ]
-    )
-
-    return voltage_diff_uv, voltage_diff_ov
-
-
-def _voltage_deviation(edisgo_obj, buses, v_limits_upper, v_limits_lower):
+def _voltage_issues_helper(edisgo_obj, buses, split_voltage_band):
     """
     Function to detect voltage issues at buses.
 
@@ -1132,80 +800,316 @@ def _voltage_deviation(edisgo_obj, buses, v_limits_upper, v_limits_lower):
     edisgo_obj : :class:`~.EDisGo`
     buses : list(str)
         List of buses to check voltage deviation for.
-    v_limits_upper : :pandas:`pandas.Series<Series>`
-        Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
-        power flow analysis was conducted for and the allowed upper limit of
-        voltage deviation for each time step as float in p.u..
-    v_limits_lower : :pandas:`pandas.Series<Series>`
-        Series with time steps (of type :pandas:`pandas.Timestamp<Timestamp>`)
-        power flow analysis was conducted for and the allowed lower limit of
-        voltage deviation for each time step as float in p.u..
+    split_voltage_band : bool
+        If True the allowed voltage band of +/-10 percent is allocated to the different
+        voltage levels MV, MV/LV and LV according to config values set in section
+        `grid_expansion_allowed_voltage_deviations`. If False, the same voltage limits
+        are used for all voltage levels.
 
     Returns
     -------
     pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with deviations from allowed lower or upper voltage limits
-        sorted descending from highest to lowest voltage deviation
+        Dataframe with maximum deviations from allowed lower or upper voltage limits
+        in p.u. sorted descending from highest to lowest voltage deviation
         (it is not distinguished between over- or undervoltage).
-        Columns of the dataframe are 'v_diff_max' containing the maximum
+        Columns of the dataframe are 'abs_max_voltage_dev' containing the maximum
         absolute voltage deviation as float and 'time_index' containing the
-        corresponding time step the voltage issue occured in as
+        corresponding time step the maximum voltage issue occured in as
         :pandas:`pandas.Timestamp<Timestamp>`. Index of the dataframe are the
         names of all buses with voltage issues.
 
     """
-
-    def _append_crit_buses(df):
-        return pd.DataFrame(
-            {
-                "v_diff_max": df.max(axis=1).values,
-                "time_index": df.idxmax(axis=1).values,
-            },
-            index=df.index,
-        )
-
-    crit_buses_grid = pd.DataFrame(dtype=float)
-
-    voltage_diff_uv, voltage_diff_ov = voltage_diff(
-        edisgo_obj, buses, v_limits_upper, v_limits_lower
+    crit_buses = pd.DataFrame(dtype=float)
+    # get voltage deviations
+    voltage_dev = voltage_deviation_from_allowed_voltage_limits(
+        edisgo_obj, buses=buses, split_voltage_band=split_voltage_band
     )
-
-    # append to crit buses dataframe
-    if not voltage_diff_ov.empty:
-        crit_buses_grid = pd.concat(
-            [
-                crit_buses_grid,
-                _append_crit_buses(voltage_diff_ov),
-            ]
+    # drop buses without voltage issues
+    voltage_dev = voltage_dev[voltage_dev != 0].dropna(how="all", axis=1).abs()
+    # determine absolute maximum voltage deviation and time step it occurs
+    crit_buses["abs_max_voltage_dev"] = voltage_dev.max()
+    crit_buses["time_index"] = voltage_dev.idxmax()
+    # sort descending by maximum voltage deviation
+    if not crit_buses.empty:
+        crit_buses.sort_values(
+            by=["abs_max_voltage_dev"], ascending=False, inplace=True
         )
-    if not voltage_diff_uv.empty:
-        crit_buses_grid = pd.concat(
-            [
-                crit_buses_grid,
-                _append_crit_buses(voltage_diff_uv),
-            ]
-        )
-
-    if not crit_buses_grid.empty:
-        crit_buses_grid.sort_values(by=["v_diff_max"], ascending=False, inplace=True)
-
-    return crit_buses_grid
+    return crit_buses
 
 
-def check_ten_percent_voltage_deviation(edisgo_obj):
+def allowed_voltage_limits(edisgo_obj, buses=None, split_voltage_band=True):
     """
-    Checks if 10% criteria is exceeded.
 
-    Through the 10% criteria it is ensured that voltage is kept between 0.9
-    and 1.1 p.u.. In case of higher or lower voltages a ValueError is raised.
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    buses : list(str)
+        List of bus names to get allowed voltage limits for. Per default
+        allowed voltage limits are returned for all buses in the network. Default: None.
+    split_voltage_band : bool
+        If True the allowed voltage band of +/-10 percent is allocated to the different
+        voltage levels MV, MV/LV and LV according to config values set in section
+        `grid_expansion_allowed_voltage_deviations`. If False, the same voltage limits
+        are used for all voltage levels. Default: True.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing the maximum allowed apparent power per line and time step
+        in MVA. Index of the dataframe are all time steps power flow analysis
+        was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
+        Columns are bus names as in index of
+        :attr:`~.network.topology.Topology.buses_df`.
+
+    """
+    if buses is None:
+        buses = edisgo_obj.topology.buses_df.index
+
+    if split_voltage_band:
+
+        # MV limits
+        mv_buses = edisgo_obj.topology.mv_grid.buses_df.index
+        mv_upper, mv_lower = _mv_allowed_voltage_limits(edisgo_obj)
+        mv_upper = pd.DataFrame(
+            mv_upper, columns=mv_buses, index=edisgo_obj.results.v_res.index
+        )
+        mv_lower = pd.DataFrame(
+            mv_lower, columns=mv_buses, index=edisgo_obj.results.v_res.index
+        )
+
+        # station limits
+        stations_upper, stations_lower = _lv_allowed_voltage_limits(
+            edisgo_obj, mode="stations"
+        )
+
+        # LV limits
+        lv_upper, lv_lower = _lv_allowed_voltage_limits(edisgo_obj, mode=None)
+
+        # concat results and select relevant buses
+        upper = pd.concat([mv_upper, stations_upper, lv_upper], axis=1)
+        lower = pd.concat([mv_lower, stations_lower, lv_lower], axis=1)
+        return upper.loc[:, buses], lower.loc[:, buses]
+    else:
+        upper = pd.DataFrame(1.1, columns=buses, index=edisgo_obj.results.v_res.index)
+        lower = pd.DataFrame(0.9, columns=buses, index=edisgo_obj.results.v_res.index)
+        return upper, lower
+
+
+def _mv_allowed_voltage_limits(edisgo_obj):
+    """
+    Calculates allowed lower and upper voltage limits for MV nodes in p.u..
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
 
-    """
+    Returns
+    -------
+    (float, float)
+        Lower and upper voltage limit for MV nodes.
 
-    v_mag_pu_pfa = edisgo_obj.results.v_res
-    if (v_mag_pu_pfa > 1.1).any().any() or (v_mag_pu_pfa < 0.9).any().any():
-        message = "Maximum allowed voltage deviation of 10% exceeded."
-        raise ValueError(message)
+    """
+    # get values from config
+    offset = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+        "hv_mv_trafo_offset"
+    ]
+    control_deviation = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+        "hv_mv_trafo_control_deviation"
+    ]
+
+    upper_limit = (
+        1
+        + offset
+        + control_deviation
+        + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+            "mv_max_v_rise"
+        ]
+    )
+    lower_limit = (
+        1
+        + offset
+        - control_deviation
+        - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+            "mv_max_v_drop"
+        ]
+    )
+
+    return upper_limit, lower_limit
+
+
+def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
+    """
+    Calculates allowed lower and upper voltage limits for either buses or transformers
+    in given LV grids.
+
+    Voltage limits are determined relative to the station's secondary side, in case
+    limits are determined for buses in the LV grid (default), or relative to the
+    station's primary side, in case limits are determined for transformers.
+
+    Limits can only be determined for grids included in power flow analysis.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    lv_grids : list(:class:`~.network.grids.LVGrid`) or None
+        LV grids to get voltage limits for. If None, limits for all LV grids
+        included in last power flow analysis are returned.
+    mode : None or str
+        If None, voltage limits for buses in the LV network are returned. In
+        that case the reference bus is the LV stations' secondary side.
+        If mode is set to 'stations', voltage limits for stations' secondary
+        side (LV bus bar) are returned; the reference bus is the stations'
+        primary side.
+
+    Returns
+    -------
+    (:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+        Dataframe containing the allowed lower and upper voltage limits in p.u..
+        Index of the dataframe are all time steps power flow was last conducted
+        for of type :pandas:`pandas.Timestamp<Timestamp>`. Columns are bus names as in
+        index of :attr:`~.network.topology.Topology.buses_df`.
+
+        If stations columns are stations secondary sides
+
+    """
+    if lv_grids is None:
+        lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
+
+    upper_limits_df = pd.DataFrame()
+    lower_limits_df = pd.DataFrame()
+
+    if mode == "stations":
+
+        config_string = "mv_lv_station"
+
+        # get all primary and secondary sides
+        primary_sides = pd.Series()
+        secondary_sides = pd.Series()
+        for grid in lv_grids:
+            primary_sides[grid] = grid.transformers_df.iloc[0].bus0
+            secondary_sides[grid] = grid.station.index[0]
+
+        voltage_base = edisgo_obj.results.v_res.loc[:, primary_sides.values]
+
+        upper_limits_df = (
+            voltage_base
+            + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+                "{}_max_v_rise".format(config_string)
+            ]
+        )
+        lower_limits_df = (
+            voltage_base
+            - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+                "{}_max_v_drop".format(config_string)
+            ]
+        )
+
+        # rename columns to secondary side
+        rename_dict = {primary_sides[g]: secondary_sides[g] for g in lv_grids}
+        upper_limits_df.rename(columns=rename_dict, inplace=True)
+        lower_limits_df.rename(columns=rename_dict, inplace=True)
+
+    else:
+        config_string = "lv"
+
+        # get all secondary sides and buses in grids
+        buses_dict = {}
+        secondary_sides = pd.Series()
+        for grid in lv_grids:
+            secondary_sides[grid] = grid.station.index[0]
+            buses_dict[grid.station.index[0]] = grid.buses_df.index.drop(
+                grid.station.index[0]
+            )
+
+        voltage_base = edisgo_obj.results.v_res.loc[:, secondary_sides.values]
+
+        upper_limits_df_tmp = (
+            voltage_base
+            + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+                "{}_max_v_rise".format(config_string)
+            ]
+        )
+        lower_limits_df_tmp = (
+            voltage_base
+            - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+                "{}_max_v_drop".format(config_string)
+            ]
+        )
+
+        # rename columns to secondary side
+        for colname, values in upper_limits_df_tmp.iteritems():
+            tmp = pd.DataFrame(
+                data=np.tile(values, (len(buses_dict[colname]), 1)).T,
+                columns=buses_dict[colname],
+                index=values.index,
+            )
+            upper_limits_df = pd.concat([upper_limits_df, tmp], axis=1)
+        for colname, values in lower_limits_df_tmp.iteritems():
+            tmp = pd.DataFrame(
+                data=np.tile(values, (len(buses_dict[colname]), 1)).T,
+                columns=buses_dict[colname],
+                index=values.index,
+            )
+            lower_limits_df = pd.concat([lower_limits_df, tmp], axis=1)
+
+    return upper_limits_df, lower_limits_df
+
+
+def voltage_deviation_from_allowed_voltage_limits(
+    edisgo_obj, buses=None, split_voltage_band=True
+):
+    """
+    Function to detect under- and overvoltage at buses.
+
+    The function returns both under- and overvoltage deviations in p.u. from
+    the allowed lower and upper voltage limit, respectively, in separate
+    dataframes. In case of both under- and overvoltage issues at one bus,
+    only the highest voltage deviation is returned.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    buses : list(str) or None
+        List of buses to check voltage deviation for. Per default voltage deviation
+        is returned for all buses included in the power flow analysis. Default: None.
+    split_voltage_band : bool
+        If True the allowed voltage band of +/-10 percent is allocated to the different
+        voltage levels MV, MV/LV and LV according to config values set in section
+        `grid_expansion_allowed_voltage_deviations`. If False, the same voltage limits
+        are used for all voltage levels. Default: True.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with deviations from allowed lower voltage level in p.u.. Positive
+        values signify an overvoltage whereas negative values signify an undervoltage.
+        Zero values signify that the voltage is within the allowed limits.
+        Index of the dataframe are all time steps power flow analysis was conducted for
+        of type :pandas:`pandas.Timestamp<Timestamp>`. Columns are bus names as in index
+        of :attr:`~.network.topology.Topology.buses_df`.
+
+    """
+    if buses is None:
+        buses = edisgo_obj.results.v_res.columns
+
+    # get allowed voltage deviations
+    v_dev_allowed_upper, v_dev_allowed_lower = allowed_voltage_limits(
+        edisgo_obj, buses=buses, split_voltage_band=split_voltage_band
+    )
+
+    # get voltages from power flow analysis
+    v_mag_pu_pfa = edisgo_obj.results.v_res.loc[:, buses]
+
+    # make all entries without voltage issues NaN values
+    overvoltage = v_mag_pu_pfa[v_mag_pu_pfa > v_dev_allowed_upper]
+    undervoltage = v_mag_pu_pfa[v_mag_pu_pfa < v_dev_allowed_lower]
+
+    # determine deviation from allowed voltage limits for times with voltage issues
+    # overvoltage deviations are positive, undervoltage deviations negative
+    overvoltage_dev = overvoltage - v_dev_allowed_upper
+    undervoltage_dev = undervoltage - v_dev_allowed_lower
+
+    # combine overvoltage and undervoltage issues and set NaN values to zero
+    voltage_dev = overvoltage_dev.fillna(0) + undervoltage_dev.fillna(0)
+
+    return voltage_dev

@@ -278,7 +278,7 @@ def one_storage_per_feeder(
 
         """
         # get all nodes with voltage issues in MV network
-        critical_nodes = check_tech_constraints.mv_voltage_deviation(
+        critical_nodes = check_tech_constraints.voltage_issues(
             edisgo.network, voltage_levels="mv"
         )
         if critical_nodes:

@@ -364,7 +364,7 @@ class TestEDisGo:
 
     def test_reinforce(self):
         self.setup_worst_case_time_series()
-        results = self.edisgo.reinforce(combined_analysis=True)
+        results = self.edisgo.reinforce(split_voltage_band=False)
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 10
         assert len(results.equipment_changes) == 10

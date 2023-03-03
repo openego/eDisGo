@@ -853,7 +853,7 @@ class EDisGo:
         timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
         copy_grid: bool = False,
         max_while_iterations: int = 20,
-        combined_analysis: bool = False,
+        split_voltage_band: bool = True,
         mode: str | None = None,
         **kwargs,
     ) -> Results:
@@ -895,7 +895,7 @@ class EDisGo:
                 max_while_iterations=max_while_iterations,
                 copy_grid=copy_grid,
                 timesteps_pfa=timesteps_pfa,
-                combined_analysis=combined_analysis,
+                split_voltage_band=split_voltage_band,
                 mode=mode,
             )
 
@@ -911,7 +911,7 @@ class EDisGo:
             max_while_iterations=max_while_iterations,
             copy_grid=copy_grid,
             timesteps_pfa=timesteps_pfa,
-            combined_analysis=combined_analysis,
+            split_voltage_band=split_voltage_band,
             mode=mode,
         )
 
