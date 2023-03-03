@@ -30,7 +30,6 @@ def create_storage_data(edisgo_obj, directory=None, save_edisgo=False):
         edisgo_obj.topology.generators_df.index.str.contains("solar_roof")
     ]
     SOC_df = pd.DataFrame(index=edisgo_obj.timeseries.timeindex)
-    i = 1
     # one storage per roof mounted solar generator
     for row in storages.iterrows():
         pv_feedin = edisgo_obj.timeseries.generators_active_power[row[0]]
@@ -58,8 +57,8 @@ def create_storage_data(edisgo_obj, directory=None, save_edisgo=False):
                 max_hours=1,
                 ts_active_power=storage_ts.storage_power,
             )
-            SOC_df[i] = storage_ts.storage_charge
-            i += 1
+            SOC_df = pd.concat([SOC_df, storage_ts.storage_charge], axis=1)
+
     SOC_df.columns = edisgo_obj.topology.storage_units_df.index
     edisgo_obj.timeseries.storage_units_state_of_charge = SOC_df
     edisgo_obj.set_time_series_reactive_power_control()
@@ -74,7 +73,14 @@ def create_storage_data(edisgo_obj, directory=None, save_edisgo=False):
         )
 
 
-def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo=False):
+def create_dsm_data(
+    edisgo_obj,
+    dsm_data,
+    timeindex,
+    reinforce_grid=False,
+    directory=None,
+    save_edisgo=False,
+):
     lv_loads = edisgo_obj.topology.loads_df.loc[
         edisgo_obj.topology.loads_df.voltage_level == "lv"
     ]
@@ -214,43 +220,43 @@ def create_dsm_data(edisgo_obj, dsm_data, timeindex, directory=None, save_edisgo
 
     # set reactive power timeseries
     edisgo_obj.set_time_series_reactive_power_control()
+    if reinforce_grid:
+        # Reinforce grid to accommodate for additional mv dsm loads
+        edisgo_obj_copy = deepcopy(edisgo_obj)
+        simultaneties = [
+            "mv_feed-in_case_cp_home",
+            "mv_feed-in_case_cp_work",
+            "mv_feed-in_case_cp_public",
+            "mv_feed-in_case_cp_hpc",
+            "lv_feed-in_case_cp_home",
+            "lv_feed-in_case_cp_work",
+            "lv_feed-in_case_cp_public",
+            "lv_feed-in_case_cp_hpc",
+            "mv_load_case_cp_home",
+            "mv_load_case_cp_work",
+            "mv_load_case_cp_public",
+            "mv_load_case_cp_hpc",
+            "lv_load_case_cp_home",
+            "lv_load_case_cp_work",
+            "lv_load_case_cp_public",
+            "lv_load_case_cp_hpc",
+            "mv_feed-in_case_hp",
+            "lv_feed-in_case_hp",
+            "mv_load_case_hp",
+            "lv_load_case_hp",
+        ]
 
-    # Reinforce grid to accommodate for additional mv dsm loads
-    edisgo_obj_copy = deepcopy(edisgo_obj)
-    simultaneties = [
-        "mv_feed-in_case_cp_home",
-        "mv_feed-in_case_cp_work",
-        "mv_feed-in_case_cp_public",
-        "mv_feed-in_case_cp_hpc",
-        "lv_feed-in_case_cp_home",
-        "lv_feed-in_case_cp_work",
-        "lv_feed-in_case_cp_public",
-        "lv_feed-in_case_cp_hpc",
-        "mv_load_case_cp_home",
-        "mv_load_case_cp_work",
-        "mv_load_case_cp_public",
-        "mv_load_case_cp_hpc",
-        "lv_load_case_cp_home",
-        "lv_load_case_cp_work",
-        "lv_load_case_cp_public",
-        "lv_load_case_cp_hpc",
-        "mv_feed-in_case_hp",
-        "lv_feed-in_case_hp",
-        "mv_load_case_hp",
-        "lv_load_case_hp",
-    ]
+        for factor in simultaneties:
+            edisgo_obj_copy.config._data["worst_case_scale_factor"][factor] = 0
 
-    for factor in simultaneties:
-        edisgo_obj_copy.config._data["worst_case_scale_factor"][factor] = 0
+        edisgo_obj_copy.set_time_series_worst_case_analysis()
+        edisgo_obj_copy.reinforce()
 
-    edisgo_obj_copy.set_time_series_worst_case_analysis()
-    edisgo_obj_copy.reinforce()
-
-    edisgo_obj.topology.lines_df = edisgo_obj_copy.topology.lines_df
-    edisgo_obj.topology.transformers_df = edisgo_obj_copy.topology.transformers_df
-    edisgo_obj.topology.transformers_hvmv_df = (
-        edisgo_obj_copy.topology.transformers_hvmv_df
-    )
+        edisgo_obj.topology.lines_df = edisgo_obj_copy.topology.lines_df
+        edisgo_obj.topology.transformers_df = edisgo_obj_copy.topology.transformers_df
+        edisgo_obj.topology.transformers_hvmv_df = (
+            edisgo_obj_copy.topology.transformers_hvmv_df
+        )
 
     if save_edisgo:
         edisgo_obj.save(

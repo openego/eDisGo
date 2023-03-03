@@ -86,7 +86,6 @@ function variable_line_loading_max(pm::AbstractPowerModel; nw::Int=nw_id_default
     ll = PowerModels.var(pm, nw)[:ll] = JuMP.@variable(pm.model,
         [(l,i,j) in branches], base_name="$(nw)_ll",
         start = comp_start_value(PowerModels.ref(pm, nw, :branch, l), "ll_start"),
-        lower_bound = 0.0
     )
 
     report && eDisGo_OPF.sol_component_value_radial(pm, nw, :branch, :ll, branches, ll)
