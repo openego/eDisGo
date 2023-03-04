@@ -284,7 +284,7 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
             )
 
     return edisgo_obj.timeseries.timesteps_load_feedin_case.loc[
-        edisgo_obj.results.i_res.index
+        edisgo_obj.results.s_res.index
     ].apply(lambda _: allowed_load_per_case[_])
 
 
@@ -315,7 +315,7 @@ def lines_relative_load(edisgo_obj, lines=None):
 
     """
     if lines is None:
-        lines = edisgo_obj.results.i_res.columns
+        lines = edisgo_obj.results.s_res.columns
 
     # get allowed loading
     allowed_loading = lines_allowed_load(edisgo_obj, lines)
