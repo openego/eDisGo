@@ -2,6 +2,8 @@ import os
 
 import pytest
 
+from edisgo.io.egon_data_import import engine
+
 
 def pytest_configure(config):
     # small self constructed ding0 grid with only 9 LV grids used for general testing
@@ -34,6 +36,9 @@ def pytest_configure(config):
 
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "local: mark test as local to run")
+
+    if config.getoption("--runlocal"):
+        pytest.engine = engine(path=pytest.egon_data_config_yml, ssh=True)
 
 
 def pytest_addoption(parser):
