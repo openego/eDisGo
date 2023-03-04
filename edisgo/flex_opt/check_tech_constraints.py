@@ -315,7 +315,9 @@ def lines_relative_load(edisgo_obj, lines=None):
 
     """
     if lines is None:
-        lines = edisgo_obj.results.s_res.columns
+        lines = edisgo_obj.results.s_res.columns.drop(
+            edisgo_obj.topology.transformers_df.index, errors="ignore"
+        )
 
     # get allowed loading
     allowed_loading = lines_allowed_load(edisgo_obj, lines)
