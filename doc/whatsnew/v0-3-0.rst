@@ -1,0 +1,8 @@
+Release v0.3.0
+================
+
+Release date: <month> <day>, <year>
+
+Changes
+-------
+* Refactoring of check_tech_constraints functions `#290 <https://github.com/openego/eDisGo/pull/290>`_
