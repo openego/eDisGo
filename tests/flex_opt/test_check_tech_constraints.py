@@ -355,6 +355,12 @@ class TestCheckTechConstraints:
             0.06753, df.loc[load_cases.values, "MVGrid_1_station"].values, atol=1e-5
         ).all()
 
+        # check single LV grid
+        self.edisgo.analyze(mode="lv", lv_grid_id=1)
+        df = check_tech_constraints.components_relative_load(self.edisgo)
+        # check shape of dataframe
+        assert (4, 14) == df.shape
+
     def mv_voltage_issues(self):
         """
         Fixture to create voltage issues in MV grid.
