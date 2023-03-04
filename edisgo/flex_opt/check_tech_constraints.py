@@ -268,7 +268,7 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
                 ]
             )
 
-            # lines in radial feeders are not n-1 secure anyways
+            # lines in radial feeders are not n-1 secure anyway
             allowed_load_per_case[case] = pd.concat(
                 [
                     allowed_load_per_case[case],
