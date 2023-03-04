@@ -38,7 +38,6 @@ class TestHeatPump:
             },
             index=["hp1", "hp2"],
         )
-        cls.hp_data_egon = cls.setup_egon_heat_pump_data(cls)
 
     def setup_egon_heat_pump_data(self):
         names = [
@@ -113,10 +112,11 @@ class TestHeatPump:
 
         # test with missing weather cell information (some values None) - raises
         # warning
+        hp_data_egon = self.setup_egon_heat_pump_data()
         edisgo_object.topology.loads_df = pd.concat(
-            [edisgo_object.topology.loads_df, self.hp_data_egon]
+            [edisgo_object.topology.loads_df, hp_data_egon]
         )
-        heat_pump_names = self.hp_data_egon.index.append(
+        heat_pump_names = hp_data_egon.index.append(
             edisgo_object.topology.loads_df.index[0:1]
         )
         with caplog.at_level(logging.WARNING):
