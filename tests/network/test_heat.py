@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 
@@ -64,8 +65,9 @@ class TestHeatPump:
         return hp_df
 
     def test_set_cop(self):
+
+        # ################### test with dataframe ###################
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        # test with dataframe
         cop = pd.DataFrame(
             data={
                 "hp3": [5.0, 6.0],
@@ -78,7 +80,54 @@ class TestHeatPump:
             cop,
             check_freq=False,
         )
-        # ToDo: test with oedb
+
+    @pytest.mark.local
+    def test_set_cop_oedb(self, caplog):
+
+        # ################### test with oedb ###################
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+
+        # test with missing weather cell information (column does not exist) - raises
+        # ValueError
+        msg = "In order to obtain COP time series data from database"
+        with pytest.raises(ValueError, match=msg):
+            edisgo_object.heat_pump.set_cop(
+                edisgo_object,
+                "oedb",
+                engine=pytest.engine,
+                heat_pump_names=edisgo_object.topology.loads_df.index[0:4],
+            )
+
+        # test with missing weather cell information (column exists but all values
+        # None) - raises ValueError
+        with pytest.raises(ValueError, match=msg):
+            edisgo_object.topology.loads_df["weather_cell_id"] = None
+            edisgo_object.heat_pump.set_cop(
+                edisgo_object,
+                "oedb",
+                engine=pytest.engine,
+                heat_pump_names=edisgo_object.topology.loads_df.index[0:4],
+            )
+
+        # test with missing weather cell information (some values None) - raises
+        # warning
+        edisgo_object.topology.loads_df = pd.concat(
+            [edisgo_object.topology.loads_df, self.hp_data_egon]
+        )
+        heat_pump_names = self.hp_data_egon.index.append(
+            edisgo_object.topology.loads_df.index[0:1]
+        )
+        with caplog.at_level(logging.WARNING):
+            self.heatpump.set_cop(
+                edisgo_object,
+                "oedb",
+                engine=pytest.engine,
+                heat_pump_names=heat_pump_names,
+            )
+        assert "There are heat pumps with no weather cell ID." in caplog.text
+        assert self.heatpump.cop_df.shape == (8760, 4)
 
     def test_set_heat_demand(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
