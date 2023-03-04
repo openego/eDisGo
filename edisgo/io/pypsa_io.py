@@ -828,13 +828,20 @@ def process_pfa_results(edisgo, pypsa, timesteps, dtype="float"):
     """
     # get the absolute losses in the system (in MW and Mvar)
     # subtracting total generation (including slack) from total load
-    # ToDo include storage units
     grid_losses = {
         "p": (
-            abs(pypsa.generators_t["p"].sum(axis=1) - pypsa.loads_t["p"].sum(axis=1))
+            abs(
+                pypsa.generators_t["p"].sum(axis=1)
+                + pypsa.storage_units_t["p"].sum(axis=1)
+                - pypsa.loads_t["p"].sum(axis=1)
+            )
         ),
         "q": (
-            abs(pypsa.generators_t["q"].sum(axis=1) - pypsa.loads_t["q"].sum(axis=1))
+            abs(
+                pypsa.generators_t["q"].sum(axis=1)
+                + pypsa.storage_units_t["q"].sum(axis=1)
+                - pypsa.loads_t["q"].sum(axis=1)
+            )
         ),
     }
     edisgo.results.grid_losses = pd.DataFrame(grid_losses, dtype=dtype)
