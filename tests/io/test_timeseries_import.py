@@ -46,3 +46,21 @@ class TestTimeseriesImport:
         assert np.isclose(load.loc[timeindex[13], "residential"], 1.73151e-04)
         assert np.isclose(load.loc[timeindex[6328], "agricultural"], 1.01346e-04)
         assert np.isclose(load.loc[timeindex[4325], "industrial"], 9.91768e-05)
+
+    @pytest.mark.local
+    def test_cop_oedb(self):
+        cop_df = timeseries_import.cop_oedb(
+            pytest.engine, weather_cell_ids=[11051, 11052]
+        )
+        assert cop_df.shape == (8760, 2)
+        assert (cop_df > 1.0).all().all()
+        assert (cop_df < 10.0).all().all()
+
+        # ToDo
+        # # test with overwriting time index
+        # cop_df = timeseries_import.cop_oedb(
+        #     pytest.engine, weather_cell_ids=[11051, 11052], year=2010)
+        #
+        # # test with leap year
+        # cop_df = timeseries_import.cop_oedb(
+        #     pytest.engine, weather_cell_ids=[11051, 11052], year=2020)
