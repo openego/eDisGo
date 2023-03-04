@@ -837,40 +837,36 @@ def process_pfa_results(edisgo, pypsa, timesteps, dtype="float"):
             abs(pypsa.generators_t["q"].sum(axis=1) - pypsa.loads_t["q"].sum(axis=1))
         ),
     }
-    edisgo.results.grid_losses = pd.DataFrame(grid_losses, dtype=dtype).reindex(
-        index=timesteps
-    )
+    edisgo.results.grid_losses = pd.DataFrame(grid_losses, dtype=dtype)
 
     # get slack results in MW and Mvar
     pfa_slack = {
         "p": (pypsa.generators_t["p"]["Generator_slack"]),
         "q": (pypsa.generators_t["q"]["Generator_slack"]),
     }
-    edisgo.results.pfa_slack = pd.DataFrame(pfa_slack, dtype=dtype).reindex(
-        index=timesteps
-    )
+    edisgo.results.pfa_slack = pd.DataFrame(pfa_slack, dtype=dtype)
 
     # get P and Q of lines and transformers in MW and Mvar
     q0 = pd.concat(
         [np.abs(pypsa.lines_t["q0"]), np.abs(pypsa.transformers_t["q0"])],
         axis=1,
         sort=False,
-    ).reindex(index=timesteps)
+    )
     q1 = pd.concat(
         [np.abs(pypsa.lines_t["q1"]), np.abs(pypsa.transformers_t["q1"])],
         axis=1,
         sort=False,
-    ).reindex(index=timesteps)
+    )
     p0 = pd.concat(
         [np.abs(pypsa.lines_t["p0"]), np.abs(pypsa.transformers_t["p0"])],
         axis=1,
         sort=False,
-    ).reindex(index=timesteps)
+    )
     p1 = pd.concat(
         [np.abs(pypsa.lines_t["p1"]), np.abs(pypsa.transformers_t["p1"])],
         axis=1,
         sort=False,
-    ).reindex(index=timesteps)
+    )
     # determine apparent power at line endings/transformer sides
     s0 = np.hypot(p0, q0)
     s1 = np.hypot(p1, q1)
@@ -888,9 +884,7 @@ def process_pfa_results(edisgo, pypsa, timesteps, dtype="float"):
     edisgo.results._i_res = current.reindex(index=timesteps)
 
     # get voltage results in kV
-    edisgo.results._v_res = (
-        pypsa.buses_t["v_mag_pu"].reindex(index=timesteps).astype(dtype)
-    )
+    edisgo.results._v_res = pypsa.buses_t["v_mag_pu"].astype(dtype)
 
     # save seeds
     edisgo.results.pfa_v_mag_pu_seed = pd.concat(
