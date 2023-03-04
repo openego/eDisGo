@@ -881,14 +881,21 @@ def process_pfa_results(edisgo, pypsa, timesteps, dtype="float"):
     edisgo.results.pfa_p = p0.where(s0 > s1, p1).astype(dtype)
     edisgo.results.pfa_q = q0.where(s0 > s1, q1).astype(dtype)
 
-    # calculate line currents in kA
-    lines_bus0 = pypsa.lines["bus0"].to_dict()
-    bus0_v_mag_pu = pypsa.buses_t["v_mag_pu"].T.loc[list(lines_bus0.values()), :].copy()
-    bus0_v_mag_pu.index = list(lines_bus0.keys())
-    current = np.hypot(pypsa.lines_t["p0"], pypsa.lines_t["q0"]).truediv(
-        pypsa.lines["v_nom"] * bus0_v_mag_pu.T, axis="columns"
+    # calculate line and transformer currents in kA
+    lines_bus0 = pypsa.lines["bus0"]
+    bus0_v_mag_pu = pypsa.buses_t["v_mag_pu"].loc[:, lines_bus0.values].copy()
+    bus0_v_mag_pu.columns = lines_bus0.index
+    current_lines = np.hypot(pypsa.lines_t["p0"], pypsa.lines_t["q0"]).truediv(
+        pypsa.lines["v_nom"] * bus0_v_mag_pu, axis="columns"
     ) / sqrt(3)
-    edisgo.results._i_res = current.reindex(index=timesteps)
+    transformers_bus0 = pypsa.transformers["bus0"]
+    bus0_v_mag_pu = pypsa.buses_t["v_mag_pu"].loc[:, transformers_bus0.values].copy()
+    bus0_v_mag_abs = pypsa.buses["v_nom"].loc[transformers_bus0.values] * bus0_v_mag_pu
+    bus0_v_mag_abs.columns = transformers_bus0.index
+    current_transformers = np.hypot(
+        pypsa.transformers_t["p0"], pypsa.transformers_t["q0"]
+    ).truediv(bus0_v_mag_abs, axis="columns") / sqrt(3)
+    edisgo.results._i_res = pd.concat([current_lines, current_transformers], axis=1)
 
     # get voltage results in kV
     edisgo.results._v_res = pypsa.buses_t["v_mag_pu"].astype(dtype)
