@@ -62,9 +62,7 @@ class TestHeatPumpImport:
 
     @pytest.mark.local
     def test__grid_integration(self, caplog):
-        # test individual heat pump too large for voltage level building is in
 
-        # test debugging messages
         hp_individual = self.setup_heat_pump_data_individual_heating()
         hp_central = self.setup_heat_pump_data_dh()
 
