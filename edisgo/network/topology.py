@@ -2082,7 +2082,7 @@ class Topology:
                 #         lv_grid.id
                 #     )
                 # )
-                comp_data.pop("geom")
+                comp_data.pop("geom", None)
                 comp_data.pop("p")
                 comp_name = add_func(bus=self.mv_grid.station.index[0], **comp_data)
                 return comp_name
@@ -2180,7 +2180,7 @@ class Topology:
                 bus = random.choice(
                     lv_grid.buses_df[~lv_grid.buses_df.in_building.astype(bool)].index
                 )
-                comp_data.pop("geom")
+                comp_data.pop("geom", None)
                 comp_data.pop("p")
                 comp_name = add_func(bus=bus, **comp_data)
                 return comp_name
@@ -2219,11 +2219,11 @@ class Topology:
                 comp_bus = self._connect_to_lv_bus(
                     edisgo_object, lv_grid.station.index[0], comp_type, comp_data
                 )
-                comp_data.pop("geom")
+                comp_data.pop("geom", None)
                 comp_data.pop("p")
                 comp_name = add_func(bus=comp_bus, **comp_data)
             else:
-                comp_data.pop("geom")
+                comp_data.pop("geom", None)
                 comp_data.pop("p")
                 comp_name = add_func(bus=lv_conn_target, **comp_data)
             return comp_name
