@@ -122,7 +122,7 @@ class HeatPump:
     def thermal_storage_units_df(self, df):
         self._thermal_storage_units_df = df
 
-    def set_cop(self, edisgo_object, ts_cop, heat_pump_names=None, engine=None):
+    def set_cop(self, edisgo_object, ts_cop, **kwargs):
         """
         Write COP time series for heat pumps to py:attr:`~cop_df`.
 
@@ -143,40 +143,49 @@ class HeatPump:
 
                 Weather cell specific hourly COP time series for one year are obtained
                 from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_.
-
-                Weather cell information of heat pumps is obtained from column
-                'weather_cell_id' in
-                :attr:`~.network.topology.Topology.loads_df`. In case no heat pump has
-                weather cell information, this function will throw an error. In case
-                only some heat pumps are missing weather cell information, a random
-                existing weather cell is used to fill missing information.
-
-                If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is already set
-                COP data is indexed by the same year, otherwise time index will be set
-                for the year 2011 which is the weather year the data was generated with.
-                In case :py:attr:`~.network.timeseries.TimeSeries.timeindex` contains a
-                leap year, the COP data will as well be indexed using the year 2011, as
-                leap years can currently not be handled. See
-                :func:`edisgo.io.timeseries_import.cop_oedb` for more information.
+                <https://openenergy-platform.org/dataedit/schemas>`_ (see
+                :func:`edisgo.io.timeseries_import.cop_oedb` for more information).
                 Using information on which weather cell each heat pump is in, the
                 weather cell specific time series are mapped to each heat pump.
+
+                Weather cell information of heat pumps is obtained from column
+                'weather_cell_id' in :attr:`~.network.topology.Topology.loads_df`. In
+                case no heat pump has weather cell information, this function will throw
+                an error. In case only some heat pumps are missing weather cell
+                information, a random existing weather cell is used to fill missing
+                information.
+
+                This option requires that the parameter `engine` is provided as keyword
+                argument. For further settings, the parameters `year` and
+                `heat_pump_names` can also be provided as keyword arguments.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
 
                 DataFrame with self-provided COP time series per heat pump.
                 See :py:attr:`~cop_df` on information on the required dataframe format.
 
+        Other Parameters
+        ------------------
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine. This parameter is required in case `ts_cop` is 'oedb'.
         heat_pump_names : list(str) or None
             Defines for which heat pumps to get COP time series for in case `ts_cop` is
             'oedb'. If None, all heat pumps in
             :attr:`~.network.topology.Topology.loads_df` (type is 'heat_pump') are
             used. Default: None.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        year : int or None
+            Year to index COP data by in case `ts_heat_demand` is 'oedb'.
+            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is already set
+            COP data is indexed by the same year, otherwise time index will be set
+            for the year 2011 which is the weather year the data was generated with.
+            In case :py:attr:`~.network.timeseries.TimeSeries.timeindex` contains a
+            leap year, the COP data will as well be indexed using the year 2011, as
+            leap years can currently not be handled. See
+            :func:`edisgo.io.timeseries_import.cop_oedb` for more information.
 
         """
         if isinstance(ts_cop, str) and ts_cop == "oedb":
+            heat_pump_names = kwargs.get("heat_pump_names", None)
             # get heat_pump_names in case they are not specified
             if heat_pump_names is None:
                 heat_pump_names = edisgo_object.topology.loads_df[
@@ -211,15 +220,19 @@ class HeatPump:
             weather_cells = hp_df.weather_cell_id.dropna().unique()
 
             # set up year to index COP data by
-            year = edisgo_object.timeseries.timeindex.year
-            if len(year) == 0:
-                year = None
-            else:
-                year = year[0]
+            year = kwargs.get("year", None)
+            if year is None:
+                year = edisgo_object.timeseries.timeindex.year
+                if len(year) == 0:
+                    year = None
+                else:
+                    year = year[0]
 
             # get COP per weather cell
             ts_cop_per_weather_cell = timeseries_import.cop_oedb(
-                engine, weather_cells, year
+                engine=kwargs.get("engine", None),
+                weather_cell_ids=weather_cells,
+                year=year,
             )
             # assign COP time series to each heat pump
             self.cop_df = pd.DataFrame(
