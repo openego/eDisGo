@@ -1887,8 +1887,7 @@ class Topology:
                 ),
             )
 
-            # calc distance between component and grid's lines -> find nearest
-            # line
+            # calc distance between component and grid's lines -> find nearest line
             conn_objects_min_stack = geo.find_nearest_conn_objects(
                 grid_topology=self,
                 bus=self.buses_df.loc[bus, :],
@@ -2036,69 +2035,7 @@ class Topology:
 
         voltage_level = comp_data.pop("voltage_level")
         mvlv_subst_id = comp_data.pop("mvlv_subst_id")
-        power = comp_data.pop("p")
-
-        def _connect_to_station():
-            """
-            Connects new component to substation via an own bus.
-
-            """
-
-            # add bus for new component
-            if comp_type == "generator":
-                if comp_data["generator_id"] is not None:
-                    b = f'Bus_Generator_{comp_data["generator_id"]}'
-                else:
-                    b = f"Bus_Generator_{len(self.generators_df)}"
-            elif comp_type == "charging_point":
-                b = f"Bus_ChargingPoint_{len(self.charging_points_df)}"
-            else:
-                b = f"Bus_HeatPump_{len(self.loads_df)}"
-
-            if not isinstance(comp_data["geom"], Point):
-                geom = wkt_loads(comp_data["geom"])
-            else:
-                geom = comp_data["geom"]
-
-            self.add_bus(
-                bus_name=b,
-                v_nom=lv_grid.nominal_voltage,
-                x=geom.x,
-                y=geom.y,
-                lv_grid_id=lv_grid.id,
-            )
-
-            # add line to connect new component
-            station_bus = lv_grid.station.index[0]
-            line_length = geo.calc_geo_dist_vincenty(
-                grid_topology=self,
-                bus_source=b,
-                bus_target=station_bus,
-                branch_detour_factor=edisgo_object.config["grid_connection"][
-                    "branch_detour_factor"
-                ],
-            )
-            # avoid very short lines by limiting line length to at least 1m
-            line_length = max(line_length, 0.001)
-
-            # get suitable line type
-            line_type, num_parallel = select_cable(edisgo_object, "lv", power)
-            line_name = self.add_line(
-                bus0=station_bus,
-                bus1=b,
-                length=line_length,
-                kind="cable",
-                type_info=line_type.name,
-                num_parallel=num_parallel,
-            )
-
-            # add line to equipment changes to track costs
-            edisgo_object.results._add_line_to_equipment_changes(
-                line=self.lines_df.loc[line_name],
-            )
-
-            # add new component
-            return add_func(bus=b, **comp_data)
+        power = comp_data.get("p")
 
         def _choose_random_substation_id():
             """
@@ -2145,6 +2082,8 @@ class Topology:
                 #         lv_grid.id
                 #     )
                 # )
+                comp_data.pop("geom")
+                comp_data.pop("p")
                 comp_name = add_func(bus=self.mv_grid.station.index[0], **comp_data)
                 return comp_name
 
@@ -2160,17 +2099,23 @@ class Topology:
         if voltage_level == 6:
             # if no geom is given, connect directly to LV grid's station, as
             # connecting via separate bus will otherwise throw an error (see
-            # _connect_to_station function)
+            # _connect_to_lv_bus function)
             if ("geom" not in comp_data.keys()) or (
                 "geom" in comp_data.keys() and not comp_data["geom"]
             ):
+                comp_data.pop("p")
                 comp_name = add_func(bus=lv_grid.station.index[0], **comp_data)
                 logger.debug(
                     f"Component {comp_name} has no geom entry and will be connected "
                     "to grid's LV station."
                 )
             else:
-                comp_name = _connect_to_station()
+                comp_bus = self._connect_to_lv_bus(
+                    edisgo_object, lv_grid.station.index[0], comp_type, comp_data
+                )
+                comp_data.pop("geom")
+                comp_data.pop("p")
+                comp_name = add_func(bus=comp_bus, **comp_data)
             return comp_name
 
         # v_level 7 -> connect in LV grid
@@ -2235,6 +2180,8 @@ class Topology:
                 bus = random.choice(
                     lv_grid.buses_df[~lv_grid.buses_df.in_building.astype(bool)].index
                 )
+                comp_data.pop("geom")
+                comp_data.pop("p")
                 comp_name = add_func(bus=bus, **comp_data)
                 return comp_name
 
@@ -2269,8 +2216,15 @@ class Topology:
                     "No valid connection target found for new component. "
                     "Connected to LV station."
                 )
-                comp_name = _connect_to_station()
+                comp_bus = self._connect_to_lv_bus(
+                    edisgo_object, lv_grid.station.index[0], comp_type, comp_data
+                )
+                comp_data.pop("geom")
+                comp_data.pop("p")
+                comp_name = add_func(bus=comp_bus, **comp_data)
             else:
+                comp_data.pop("geom")
+                comp_data.pop("p")
                 comp_name = add_func(bus=lv_conn_target, **comp_data)
             return comp_name
 
