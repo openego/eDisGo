@@ -60,6 +60,7 @@ requirements = [
     "jupyter_dash",
     "werkzeug==2.2.0",
     "saio",
+    "sshtunnel",
 ]
 
 dev_requirements = [
