@@ -1,5 +1,6 @@
 import logging
 import os
+import random
 
 from copy import deepcopy
 
@@ -86,21 +87,23 @@ def create_dsm_data(
     ]
     # amount of dsm loads
     amount_retail_dsm_loads = int(
-        np.ceil(0.25 * len(lv_loads.loc[lv_loads.sector == "retail"]))
+        np.ceil(0.35 * len(lv_loads.loc[lv_loads.sector == "retail"]))
     )
     amount_industrial_dsm_loads = int(
-        np.ceil(0.25 * len(lv_loads.loc[lv_loads.sector == "industrial"]))
+        np.ceil(0.35 * len(lv_loads.loc[lv_loads.sector == "industrial"]))
     )
     amount_mv_dsm_loads = int(
-        np.ceil(0.1 * (amount_retail_dsm_loads + amount_industrial_dsm_loads))
+        np.ceil(0.25 * (amount_retail_dsm_loads + amount_industrial_dsm_loads))
     )
     # name of lv loads to be replaced by dsm loads
-    retail_dsm_loads = lv_loads.loc[lv_loads.sector == "retail"][
-        0:amount_retail_dsm_loads
-    ].index.values
-    industrial_dsm_loads = lv_loads.loc[lv_loads.sector == "industrial"][
-        0:amount_industrial_dsm_loads
-    ].index.values
+    retail_dsm_loads = random.choices(
+        lv_loads.loc[lv_loads.sector == "retail"].index.values,
+        k=amount_retail_dsm_loads,
+    )
+    industrial_dsm_loads = random.choices(
+        lv_loads.loc[lv_loads.sector == "industrial"].index.values,
+        k=amount_industrial_dsm_loads,
+    )
 
     dsm_data["name"] = [str("dsm_load_" + str(i)) for i in range(len(dsm_data))]
     # calculate peak load
@@ -188,9 +191,12 @@ def create_dsm_data(
             dsm_df = pd.DataFrame(
                 index=mv_dsm_loads, columns=edisgo_obj.topology.loads_df.columns
             )
-            dsm_df.bus = edisgo_obj.topology.buses_df.loc[
-                edisgo_obj.topology.buses_df.v_nom > 0.4
-            ].index.values[0:amount_mv_dsm_loads]
+            dsm_df.bus = random.choices(
+                edisgo_obj.topology.buses_df.loc[
+                    edisgo_obj.topology.buses_df.v_nom > 0.4
+                ].index.values,
+                k=amount_mv_dsm_loads,
+            )
             dsm_df.p_set = (
                 edisgo_obj.timeseries.loads_active_power[mv_dsm_loads].max().values
             )
