@@ -278,8 +278,10 @@ def _grid_integration(
             <= edisgo_object.config["grid_connection"]["upper_limit_voltage_level_7"]
         ]
 
-        # integrate small individual heat pumps to building
-        edisgo_object.topology.loads_df = pd.concat([loads_df, hp_individual])
+        # integrate small individual heat pumps at buildings
+        edisgo_object.topology.loads_df = pd.concat(
+            [edisgo_object.topology.loads_df, hp_individual_small]
+        )
 
         integrated_hps = hp_individual_small.index
         integrated_hps_building = hp_individual_small.index
@@ -302,7 +304,7 @@ def _grid_integration(
             if voltage_level_hp >= voltage_level_building:
                 # integrate at same bus as building
                 edisgo_object.topology.loads_df = pd.concat(
-                    [loads_df, hp_individual_large.loc[[hp], :]]
+                    [edisgo_object.topology.loads_df, hp_individual_large.loc[[hp], :]]
                 )
                 integrated_hps = integrated_hps.append(pd.Index([hp]))
                 integrated_hps_building = integrated_hps_building.append(pd.Index([hp]))
@@ -319,6 +321,7 @@ def _grid_integration(
                     p_set=hp_individual_large.at[hp, "p_set"],
                     weather_cell_id=hp_individual_large.at[hp, "weather_cell_id"],
                     sector="individual_heating",
+                    building_id=hp_individual_large.at[hp, "building_id"],
                 )
                 integrated_hps = integrated_hps.append(pd.Index([hp_name]))
                 integrated_hps_own_grid_conn = integrated_hps_own_grid_conn.append(
