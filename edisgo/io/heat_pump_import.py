@@ -189,8 +189,8 @@ def oedb(edisgo_object, scenario, engine):
     # integrate into grid
     return _grid_integration(
         edisgo_object=edisgo_object,
-        hp_individual=hp_individual,
-        hp_central=hp_central,
+        hp_individual=hp_individual.sort_values(by="p_set"),
+        hp_central=hp_central.sort_values(by="p_set"),
     )
 
 
