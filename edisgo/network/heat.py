@@ -246,11 +246,9 @@ class HeatPump:
         else:
             raise ValueError("'ts_cop' must either be a pandas DataFrame or 'oedb'.")
 
-    def set_heat_demand(self, edisgo_object, ts_heat_demand, heat_pump_names=None):
+    def set_heat_demand(self, edisgo_object, ts_heat_demand, **kwargs):
         """
-        Get heat demand time series for buildings with heat pumps.
-
-        Heat pumps need to already be integrated into the grid.
+        Set heat demand time series to be served by the heat pumps.
 
         Parameters
         ----------
@@ -261,50 +259,75 @@ class HeatPump:
 
             * 'oedb'
 
-                Not yet implemented!
                 Heat demand time series are obtained from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_
-                for the weather year 2011. See
+                <https://openenergy-platform.org/dataedit/schemas>`_ (see
                 :func:`edisgo.io.timeseries_import.heat_demand_oedb` for more
-                information.
+                information).
+                Time series are only obtained for heat pumps that are already integrated
+                into the grid.
+                This option requires that the parameters `engine` and `scenario` are
+                provided as keyword arguments. For further settings, the parameters
+                `year` and `heat_pump_names` can also be provided as keyword arguments.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
 
                 DataFrame with self-provided heat demand time series per heat pump.
-                See :py:attr:`~heat_demand_df` on information on the required
+                See :py:attr:`~heat_demand_df` for information on the required
                 dataframe format.
 
+        Other Parameters
+        ------------------
+        scenario : str
+            Scenario for which to retrieve heat demand data. This parameter is required
+            in case `ts_heat_demand` is 'oedb'.  Possible options are 'eGon2035' and
+            'eGon100RE'.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine. This parameter is required in case `ts_heat_demand` is
+            'oedb'.
         heat_pump_names : list(str) or None
             Defines for which heat pumps to get heat demand time series for in
             case `ts_heat_demand` is 'oedb'. If None, all heat pumps in
             :attr:`~.network.topology.Topology.loads_df` (type is 'heat_pump') are
             used. Default: None.
+        year : int or None
+            Year to index heat demand data by in case `ts_heat_demand` is 'oedb'.
+            If none is provided and :py:attr:`~.network.timeseries.TimeSeries.timeindex`
+            is already set, data is indexed by the same year. Otherwise, time index will
+            be set according to the scenario (2035 in case of the 'eGon2035' scenario
+            and 2045 in case of the 'eGon100RE' scenario).
+            A leap year can currently not be handled. In case a leap year is given, the
+            time index is set according to the chosen scenario.
 
         """
-
         # in case time series from oedb are used, retrieve oedb time series
         if isinstance(ts_heat_demand, str) and ts_heat_demand == "oedb":
-            raise NotImplementedError
-            # ToDo Also include large heat pumps for district heating that don't have
-            #  a building ID
-            #
-            # if heat_pump_names is None:
-            #     heat_pump_names = edisgo_object.topology.loads_df[
-            #         edisgo_object.topology.loads_df.type == "heat_pump"
-            #         ]
-            # # get building ID each heat pump is in
-            #
-            # # get heat demand per building
-            # heat_demand_buildings_df = timeseries_import.heat_demand_oedb(
-            #     edisgo_object.config,
-            #     building_ids,
-            #     edisgo_object.timeseries.timeindex,
-            # )
-            #
-            # # map building ID back to heat pump
-            # self.heat_demand_df = heat_demand_buildings_df.rename(
-            #     columns={}
-            # )
+            heat_pump_names = kwargs.get("heat_pump_names", None)
+            # get heat_pump_names in case they are not specified
+            if heat_pump_names is None:
+                heat_pump_names = edisgo_object.topology.loads_df[
+                    edisgo_object.topology.loads_df.type == "heat_pump"
+                ].index
+
+            # set up year to index data by
+            year = kwargs.get("year", None)
+            if year is None:
+                year = edisgo_object.timeseries.timeindex.year
+                if len(year) == 0:
+                    year = None
+                else:
+                    year = year[0]
+
+            # get heat demand per heat pump
+            heat_demand_df = timeseries_import.heat_demand_oedb(
+                edisgo_object,
+                scenario=kwargs.get("scenario", ""),
+                engine=kwargs.get("engine", None),
+                year=year,
+            )
+            heat_pump_names_select = [
+                _ for _ in heat_demand_df.columns if _ in heat_pump_names
+            ]
+            self.heat_demand_df = heat_demand_df.loc[:, heat_pump_names_select]
 
         elif isinstance(ts_heat_demand, pd.DataFrame):
             self.heat_demand_df = ts_heat_demand
