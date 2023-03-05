@@ -130,8 +130,8 @@ class TestHeatPump:
         assert self.heatpump.cop_df.shape == (8760, 4)
 
     def test_set_heat_demand(self):
-        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         # test with dataframe
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         heat_demand = pd.DataFrame(
             data={
                 "hp3": [1.0, 2.0],
@@ -144,7 +144,41 @@ class TestHeatPump:
             heat_demand,
             check_freq=False,
         )
-        # ToDo: test with oedb
+
+    @pytest.mark.local
+    def test_set_heat_demand_oedb(self):
+        # test with oedb
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        hp_data_egon = self.setup_egon_heat_pump_data()
+        edisgo_object.topology.loads_df = pd.concat(
+            [edisgo_object.topology.loads_df, hp_data_egon]
+        )
+
+        # ################# test with no timeindex to get year from #############
+        self.heatpump.set_heat_demand(
+            edisgo_object,
+            "oedb",
+            engine=pytest.engine,
+            scenario="eGon2035",
+        )
+        assert self.heatpump.heat_demand_df.shape == (8760, 3)
+        assert self.heatpump.heat_demand_df.index[0].year == 2035
+
+        # ###### test with timeindex to get year from and invalid heat pump name #####
+        edisgo_object.set_timeindex(
+            pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        )
+        self.heatpump.set_heat_demand(
+            edisgo_object,
+            "oedb",
+            engine=pytest.engine,
+            scenario="eGon2035",
+            heat_pump_names=["HP_442081", "HP_dummy"],
+        )
+        assert self.heatpump.heat_demand_df.shape == (8760, 1)
+        assert self.heatpump.heat_demand_df.index[0].year == 2011
 
     def test_reduce_memory(self):
 
