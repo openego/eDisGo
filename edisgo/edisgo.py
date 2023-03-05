@@ -1187,7 +1187,7 @@ class EDisGo:
         """
         Adds single component to topology based on geolocation.
 
-        Currently components can be generators, charging points and heat pumps.
+        Currently, components can be generators, charging points and heat pumps.
 
         See :attr:`~.network.topology.Topology.connect_to_mv` and
         :attr:`~.network.topology.Topology.connect_to_lv` for more information.
@@ -1259,23 +1259,38 @@ class EDisGo:
         if type(geolocation) is not Point:
             geolocation = Point(geolocation)
 
+        # write voltage level and geolocation to kwargs
+        kwargs["geom"] = geolocation
+        kwargs["voltage_level"] = voltage_level
+
         # Connect in MV
         if voltage_level in [4, 5]:
-            kwargs["voltage_level"] = voltage_level
-            kwargs["geom"] = geolocation
             comp_name = self.topology.connect_to_mv(self, kwargs, comp_type)
 
         # Connect in LV
         else:
-            if kwargs.get("mvlv_subst_id", None) is None:
-                substations = self.topology.buses_df.loc[
-                    self.topology.transformers_df.bus1.unique()
-                ]
-                nearest_substation, _ = find_nearest_bus(geolocation, substations)
-                kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
-            kwargs["geom"] = geolocation
-            kwargs["voltage_level"] = voltage_level
-            comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
+            # check if LV is geo-referenced or not
+            lv_buses = self.topology.buses_df.drop(self.topology.mv_grid.buses_df.index)
+            lv_buses_dropna = lv_buses.dropna(axis=0, subset=["x", "y"])
+
+            # if there are some LV buses without geo-reference, use function where
+            # components are not integrated based on geolocation
+            if len(lv_buses_dropna) < len(lv_buses):
+                if kwargs.get("mvlv_subst_id", None) is None:
+                    substations = self.topology.buses_df.loc[
+                        self.topology.transformers_df.bus1.unique()
+                    ]
+                    nearest_substation, _ = find_nearest_bus(geolocation, substations)
+                    kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
+                comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
+
+            else:
+                max_distance_from_target_bus = kwargs.pop(
+                    "max_distance_from_target_bus", 0.1
+                )
+                comp_name = self.topology.connect_to_lv_based_on_geolocation(
+                    self, kwargs, comp_type, max_distance_from_target_bus
+                )
 
         if add_ts:
             if comp_type == "generator":
