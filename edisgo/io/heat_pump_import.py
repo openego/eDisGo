@@ -7,7 +7,7 @@ import saio
 
 from sqlalchemy import func
 
-from edisgo.io.egon_data_import import session_scope_egon_data
+from edisgo.io.db import session_scope_egon_data
 from edisgo.tools.tools import (
     determine_bus_voltage_level,
     determine_grid_integration_voltage_level,

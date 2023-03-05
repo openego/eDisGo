@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from edisgo.io.egon_data_import import engine
+from edisgo.io.db import engine
 
 
 def pytest_configure(config):

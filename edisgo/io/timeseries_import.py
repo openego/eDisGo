@@ -10,7 +10,7 @@ from demandlib import bdew as bdew
 from demandlib import particular_profiles as profiles
 from workalendar.europe import Germany
 
-from edisgo.io.egon_data_import import session_scope_egon_data
+from edisgo.io.db import session_scope_egon_data
 from edisgo.tools import session_scope
 from edisgo.tools.tools import reduce_memory_usage
 
