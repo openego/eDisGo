@@ -2274,6 +2274,113 @@ class Topology:
                 comp_name = add_func(bus=lv_conn_target, **comp_data)
             return comp_name
 
+    def connect_to_lv_based_on_geolocation(
+        self,
+        edisgo_object,
+        comp_data,
+        comp_type,
+        max_distance_from_target_bus=0.1,
+    ):
+        """
+        Add and connect new component to LV grid topology based on its geolocation.
+
+        In case the component is integrated in voltage level 6 it is connected to the
+        closest MV/LV substation; in case it is integrated in voltage level 7 it is
+        connected to the closest LV bus. In contrast to the connection of components
+        to the MV level splitting of a line to connect a new component is not conducted.
+
+        A new bus for the new component is only created in case the closest existing
+        bus is farther away than what is specified through parameter
+        `max_distance_from_target_bus`. Otherwise, the new component is directly
+        connected to the nearest bus.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        comp_data : dict
+            Dictionary with all information on component.
+            The dictionary must contain all required arguments of method
+            :attr:`~.network.topology.Topology.add_generator` respectively
+            :attr:`~.network.topology.Topology.add_load`, except the
+            `bus` that is assigned in this function, and may contain all other
+            parameters of those methods.
+            Additionally, the dictionary must contain the voltage level to
+            connect to in key 'voltage_level' and the geolocation
+            in key 'geom'. The voltage level must be provided as integer,
+            with possible options being 6 (component is connected directly to
+            the MV/LV substation) or 7 (component is connected somewhere in the
+            LV grid). The geolocation must be provided as
+            :shapely:`Shapely Point object<points>`.
+        comp_type : str
+            Type of new component. Can be 'generator', 'charging_point' or 'heat_pump'.
+        max_distance_from_target_bus : int
+            Specifies the maximum distance of the component to the target bus in km
+            before a new bus is created. If the new component is closer to the target
+            bus than the maximum specified distance, it is directly connected to that
+            target bus. Default: 0.1.
+
+        Returns
+        -------
+        str
+            The identifier of the newly connected component as in index of
+            :attr:`~.network.topology.Topology.generators_df` or
+            :attr:`~.network.topology.Topology.loads_df`, depending on component
+            type.
+
+        """
+
+        if "p" not in comp_data.keys():
+            comp_data["p"] = (
+                comp_data["p_set"]
+                if "p_set" in comp_data.keys()
+                else comp_data["p_nom"]
+            )
+
+        voltage_level = comp_data.pop("voltage_level")
+        if voltage_level not in [6, 7]:
+            raise ValueError(
+                f"Voltage level must either be 6 or 7 but given voltage level "
+                f"is {voltage_level}."
+            )
+        geolocation = comp_data.get("geom")
+
+        if comp_type == "generator":
+            add_func = self.add_generator
+        elif comp_type == "charging_point" or comp_type == "heat_pump":
+            add_func = self.add_load
+            comp_data["type"] = comp_type
+        else:
+            logger.error(f"Component type {comp_type} is not a valid option.")
+            return
+
+        # find the nearest substation or LV bus
+        if voltage_level == 6:
+            substations = self.buses_df.loc[self.transformers_df.bus1.unique()]
+            target_bus, target_bus_distance = geo.find_nearest_bus(
+                geolocation, substations
+            )
+        else:
+            lv_buses = self.buses_df.drop(self.mv_grid.buses_df.index)
+            target_bus, target_bus_distance = geo.find_nearest_bus(
+                geolocation, lv_buses
+            )
+
+        # check distance from target bus
+        if target_bus_distance > max_distance_from_target_bus:
+            # if target bus is too far away from the component, connect the component
+            # via a new bus
+            bus = self._connect_to_lv_bus(
+                edisgo_object, target_bus, comp_type, comp_data
+            )
+        else:
+            # if target bus is very close to the component, the component is directly
+            # connected at the target bus
+            bus = target_bus
+        comp_data.pop("geom")
+        comp_data.pop("p")
+        comp_name = add_func(bus=bus, **comp_data)
+        return comp_name
+
     def _connect_mv_bus_to_target_object(
         self, edisgo_object, bus, target_obj, line_type, number_parallel_lines
     ):
@@ -2481,6 +2588,88 @@ class Topology:
             )
 
             return target_obj["repr"]
+
+    def _connect_to_lv_bus(self, edisgo_object, target_bus, comp_type, comp_data):
+        """
+        Sets up new bus and line to connect new component to specified target bus.
+
+        In this function first a new bus is created at the location of the new
+        component. Then a line is added connecting the newly crated bus and the
+        target bus.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        target_bus : str
+            Name of bus as in index of :attr:`~.network.topology.Topology.buses_df`
+            to connect new component to.
+        comp_type : str
+            Type of new component. Can be 'generator', 'charging_point' or 'heat_pump'.
+        comp_data : dict
+            Dictionary with all information on new component. See parameter `comp_data`
+            in :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
+            for more information.
+
+        Returns
+        --------
+        str
+            Name of newly created bus as in index of
+            :attr:`~.network.topology.Topology.buses_df` to connect new component to.
+
+        """
+        # add bus for new component
+        if comp_type == "generator":
+            if comp_data["generator_id"] is not None:
+                b = f"Bus_Generator_{comp_data['generator_id']}"
+            else:
+                b = f"Bus_Generator_{len(self.generators_df)}"
+        elif comp_type == "charging_point":
+            b = f"Bus_ChargingPoint_{len(self.charging_points_df)}"
+        else:
+            b = f"Bus_HeatPump_{len(self.loads_df)}"
+
+        if not isinstance(comp_data["geom"], Point):
+            geom = wkt_loads(comp_data["geom"])
+        else:
+            geom = comp_data["geom"]
+
+        b = self.add_bus(
+            bus_name=b,
+            v_nom=self.buses_df.at[target_bus, "v_nom"],
+            x=geom.x,
+            y=geom.y,
+            lv_grid_id=self.buses_df.at[target_bus, "lv_grid_id"],
+        )
+
+        # add line to connect new component
+        line_length = geo.calc_geo_dist_vincenty(
+            grid_topology=self,
+            bus_source=b,
+            bus_target=target_bus,
+            branch_detour_factor=edisgo_object.config["grid_connection"][
+                "branch_detour_factor"
+            ],
+        )
+        # avoid very short lines by limiting line length to at least 1m
+        line_length = max(line_length, 0.001)
+
+        # get suitable line type
+        line_type, num_parallel = select_cable(edisgo_object, "lv", comp_data["p"])
+        line_name = self.add_line(
+            bus0=target_bus,
+            bus1=b,
+            length=line_length,
+            kind="cable",
+            type_info=line_type.name,
+            num_parallel=num_parallel,
+        )
+
+        # add line to equipment changes to track costs
+        edisgo_object.results._add_line_to_equipment_changes(
+            line=self.lines_df.loc[line_name],
+        )
+
+        return b
 
     def to_graph(self):
         """
