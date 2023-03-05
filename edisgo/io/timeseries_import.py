@@ -251,92 +251,115 @@ def cop_oedb(engine, weather_cell_ids, year=None):
     return cop
 
 
-def heat_demand_oedb(config_data, building_ids, timeindex=None):
+def heat_demand_oedb(edisgo_obj, scenario, engine, year=None):
     """
-    Get heat demand time series data from the
+    Get heat demand profiles for heat pumps from the
     `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+
+    Heat demand data is returned for all heat pumps in the grid.
+    For more information on how individual heat demand profiles are obtained see
+    functions :attr:`~.io.timeseries_import.get_residential_heat_profiles_per_building`
+    and :attr:`~.io.timeseries_import.get_cts_profiles_per_building`.
+    For more information on how district heating heat demand profiles are obtained see
+    function :attr:`~.io.timeseries_import.get_district_heating_heat_demand_profiles`.
 
     Parameters
     ----------
-    config_data : :class:`~.tools.config.Config`
-        Configuration data from config files, relevant for information of
-        which data base table to retrieve data from.
-    building_ids : list(int)
-        List of building IDs to obtain heat demand for.
-    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-        Heat demand data is only provided for the weather year 2011. If
-        timeindex contains a different year, the data is reindexed.
+    edisgo_obj : :class:`~.EDisGo`
+    scenario : str
+        Scenario for which to retrieve demand data. Possible options
+        are 'eGon2035' and 'eGon100RE'.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine.
+    year : int or None
+        Year to index heat demand data by. Per default this is set to 2035 in case
+        of the 'eGon2035' and to 2045 in case of the 'eGon100RE' scenario.
+        A leap year can currently not be handled. In case a leap year is given, the
+        time index is set according to the chosen scenario.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        DataFrame with hourly heat demand time series in MW per building ID.
+        DataFrame with hourly heat demand for one year in MW per heat pump. Index of the
+        dataframe is a time index. Columns contain the heat pump name as in index of
+        :attr:`~.network.topology.Topology.loads_df`.
 
     """
+    # set up time index to index data by
+    if year is None:
+        if scenario == "eGon2035":
+            year = 2035
+        elif scenario == "eGon100RE":
+            year = 2045
+        else:
+            raise ValueError(
+                "Invalid input for parameter 'scenario'. Possible options are "
+                "'eGon2035' and 'eGon100RE'."
+            )
+    else:
+        if pd.Timestamp(year, 1, 1).is_leap_year:
+            logger.warning(
+                "A leap year was given to 'heat_demand_oedb' function. This is "
+                "currently not valid. The year the data is indexed by is therefore set "
+                "to the default value of 2011."
+            )
+            return heat_demand_oedb(edisgo_obj, scenario, engine, year=None)
+    timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
 
-    def _get_CTS_demand():
-        """
-        Gets CTS heat demand time series for each building in building_ids.
+    hp_df = edisgo_obj.topology.loads_df[
+        edisgo_obj.topology.loads_df.type == "heat_pump"
+    ]
 
-        First, the share of the total CTS demand in the NUTS 3 region for
-        each building and the total CTS heat demand time series in the NUTS 3 region
-        are retrieved. To obtain the heat demand time series per building the building's
-        share is multiplied with the total time series.
+    # get individual heating profiles from oedb
+    building_ids = hp_df.building_id.dropna().unique()
+    if len(building_ids) > 0:
+        residential_profiles_df = get_residential_heat_profiles_per_building(
+            building_ids, scenario, engine
+        )
+        cts_profiles_df = get_cts_profiles_per_building(
+            edisgo_obj.topology.id, scenario, "heat", engine
+        )
+        # drop CTS profiles for buildings without a heat pump
+        buildings_no_hp = [_ for _ in cts_profiles_df.columns if _ not in building_ids]
+        cts_profiles_df = cts_profiles_df.drop(columns=buildings_no_hp)
+        # add residential and CTS profiles
+        individual_heating_df = pd.concat(
+            [residential_profiles_df, cts_profiles_df], axis=1
+        )
+        individual_heating_df = individual_heating_df.groupby(axis=1, level=0).sum()
+        # set column names to be heat pump names instead of building IDs
+        rename_series = (
+            hp_df.loc[:, ["building_id"]]
+            .dropna()
+            .reset_index()
+            .set_index("building_id")["index"]
+        )
+        individual_heating_df.rename(columns=rename_series, inplace=True)
+        # set index
+        individual_heating_df.index = timeindex
+    else:
+        individual_heating_df = pd.DataFrame(index=timeindex)
 
-        Returns
-        --------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            CTS heat demand time series per building with building IDs in columns
-            and time steps as index.
+    # get district heating profiles from oedb
+    dh_ids = hp_df.district_heating_id.dropna().unique()
+    if len(dh_ids) > 0:
+        dh_profile_df = get_district_heating_heat_demand_profiles(
+            dh_ids, scenario, engine
+        )
+        # set column names to be heat pump names instead of district heating IDs
+        rename_series = (
+            hp_df.loc[:, ["district_heating_id"]]
+            .dropna()
+            .reset_index()
+            .set_index("district_heating_id")["index"]
+        )
+        dh_profile_df.rename(columns=rename_series, inplace=True)
+        # set index
+        dh_profile_df.index = timeindex
+    else:
+        dh_profile_df = pd.DataFrame(index=timeindex)
 
-        """
-        raise NotImplementedError
-        # # get share per building
-        # # get total demand time series
-        # # multiply
-        # pd.read_sql(
-        #     query.statement, session.bind, index_col="id"
-        # )
-        #
-        # return
-
-    def _get_household_demand():
-        """
-        Gets household heat demand time series for each building in building_ids.
-
-        Returns
-        --------
-        :pandas:`pandas.DataFrame<DataFrame>`
-            Household heat demand time series per building with building IDs in columns
-            and time steps as index.
-
-        """
-        raise NotImplementedError
-        # # get representative days per building
-        # # get time series for representative days
-        # # set up time series per building
-        # pd.read_sql(
-        #     query.statement, session.bind, index_col="id"
-        # )
-        #
-        # return
-
-    raise NotImplementedError
-    # ToDo Also include large heat pumps for district heating that don't have
-    #  a building ID
-
-    # if timeindex is None:
-    #     timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
-    #
-    # with session_scope() as session:
-    #     # get heat demand from database
-    #     heat_demand_CTS = _get_CTS_demand()
-    #     heat_demand_households = _get_household_demand()
-    #
-    # heat_demand = heat_demand_CTS + heat_demand_households
-    # heat_demand.sort_index(axis=0, inplace=True)
-    #
-    # return heat_demand
+    return pd.concat([individual_heating_df, dh_profile_df], axis=1)
 
 
 def _get_zensus_cells_of_buildings(building_ids, engine):
