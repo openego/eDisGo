@@ -335,21 +335,22 @@ def _grid_integration(
     else:
         integrated_hps = pd.Index([])
 
-    # integrate central heat pumps
-    for hp in hp_central.index:
-        # ToDo LV integration based on geolocation
-        hp_name = edisgo_object.integrate_component_based_on_geolocation(
-            comp_type="heat_pump",
-            geolocation=hp_central.at[hp, "geom"],
-            add_ts=False,
-            p_set=hp_central.at[hp, "p_set"],
-            weather_cell_id=hp_central.at[hp, "weather_cell_id"],
-            sector="district_heating",
-            district_heating_id=hp_central.at[hp, "district_heating_id"],
-        )
-        integrated_hps = integrated_hps.append(pd.Index([hp_name]))
+    if not hp_central.empty:
+        # integrate central heat pumps
+        for hp in hp_central.index:
+            hp_name = edisgo_object.integrate_component_based_on_geolocation(
+                comp_type="heat_pump",
+                geolocation=hp_central.at[hp, "geom"],
+                add_ts=False,
+                p_set=hp_central.at[hp, "p_set"],
+                weather_cell_id=hp_central.at[hp, "weather_cell_id"],
+                sector="district_heating",
+                district_heating_id=hp_central.at[hp, "district_heating_id"],
+            )
+            integrated_hps = integrated_hps.append(pd.Index([hp_name]))
 
-    logger.debug(
-        f"{sum(hp_central.p_set):.2f} MW of heat pumps for district heating integrated."
-    )
+        logger.debug(
+            f"{sum(hp_central.p_set):.2f} MW of heat pumps for district heating "
+            f"integrated."
+        )
     return integrated_hps
