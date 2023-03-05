@@ -246,89 +246,94 @@ def _grid_integration(
 
     """
     # integrate individual heat pumps
-    # join busses corresponding to building ID
-    loads_df = edisgo_object.topology.loads_df
-    building_id_busses = (
-        loads_df[loads_df.type == "conventional_load"]
-        .drop_duplicates(subset=["building_id"])
-        .set_index("building_id")
-        .loc[:, ["bus"]]
-    )
-    hp_individual = hp_individual.join(building_id_busses, how="left", on="building_id")
-
-    # add further information needed in loads_df
-    hp_individual["sector"] = "individual_heating"
-    hp_individual["type"] = "heat_pump"
-    # add heat pump name as index
-    hp_individual["index"] = hp_individual.apply(
-        lambda _: f"HP_{_.building_id}", axis=1
-    )
-    hp_individual.set_index("index", drop=True, inplace=True)
-
-    # filter heat pumps that are too large to be integrated into LV level
-    hp_individual_large = hp_individual[
-        hp_individual.p_set
-        > edisgo_object.config["grid_connection"]["upper_limit_voltage_level_7"]
-    ]
-    hp_individual_small = hp_individual[
-        hp_individual.p_set
-        <= edisgo_object.config["grid_connection"]["upper_limit_voltage_level_7"]
-    ]
-
-    # integrate small individual heat pumps to building
-    edisgo_object.topology.loads_df = pd.concat([loads_df, hp_individual])
-
-    integrated_hps = hp_individual_small.index
-    integrated_hps_building = hp_individual_small.index
-
-    # integrate large individual heat pumps - if building is already connected to
-    # higher voltage level it can be integrated at same bus, otherwise it is integrated
-    # based on geolocation
-    integrated_hps_own_grid_connection = pd.Index([])
-    for hp in hp_individual_large.index:
-        # check if building is already connected to a voltage level equal to or higher
-        # than the voltage level the heat pump should be connected to
-        bus_building = hp_individual_large.at[hp, "bus"]
-        voltage_level_building = determine_bus_voltage_level(
-            edisgo_object, bus_building
+    if not hp_individual.empty:
+        # join busses corresponding to building ID
+        loads_df = edisgo_object.topology.loads_df
+        building_id_busses = (
+            loads_df[loads_df.type == "conventional_load"]
+            .drop_duplicates(subset=["building_id"])
+            .set_index("building_id")
+            .loc[:, ["bus"]]
         )
-        voltage_level_hp = determine_grid_integration_voltage_level(
-            edisgo_object, hp_individual_large.at[hp, "p_set"]
+        hp_individual = hp_individual.join(
+            building_id_busses, how="left", on="building_id"
         )
 
-        if voltage_level_hp >= voltage_level_building:
-            # integrate at same bus as building
-            edisgo_object.topology.loads_df = pd.concat(
-                [loads_df, hp_individual_large.loc[[hp], :]]
+        # add further information needed in loads_df
+        hp_individual["sector"] = "individual_heating"
+        hp_individual["type"] = "heat_pump"
+        # add heat pump name as index
+        hp_individual["index"] = hp_individual.apply(
+            lambda _: f"HP_{_.building_id}", axis=1
+        )
+        hp_individual.set_index("index", drop=True, inplace=True)
+
+        # filter heat pumps that are too large to be integrated into LV level
+        hp_individual_large = hp_individual[
+            hp_individual.p_set
+            > edisgo_object.config["grid_connection"]["upper_limit_voltage_level_7"]
+        ]
+        hp_individual_small = hp_individual[
+            hp_individual.p_set
+            <= edisgo_object.config["grid_connection"]["upper_limit_voltage_level_7"]
+        ]
+
+        # integrate small individual heat pumps to building
+        edisgo_object.topology.loads_df = pd.concat([loads_df, hp_individual])
+
+        integrated_hps = hp_individual_small.index
+        integrated_hps_building = hp_individual_small.index
+
+        # integrate large individual heat pumps - if building is already connected to
+        # higher voltage level it can be integrated at same bus, otherwise it is
+        # integrated based on geolocation
+        integrated_hps_own_grid_conn = pd.Index([])
+        for hp in hp_individual_large.index:
+            # check if building is already connected to a voltage level equal to or
+            # higher than the voltage level the heat pump should be connected to
+            bus_building = hp_individual_large.at[hp, "bus"]
+            voltage_level_building = determine_bus_voltage_level(
+                edisgo_object, bus_building
             )
-            integrated_hps = integrated_hps.append(pd.Index([hp]))
-            integrated_hps_building = integrated_hps_building.append(pd.Index([hp]))
-        else:
-            # integrate based on geolocation
-            hp_name = edisgo_object.integrate_component_based_on_geolocation(
-                comp_type="heat_pump",
-                voltage_level=voltage_level_hp,
-                geolocation=(
-                    edisgo_object.topology.buses_df.at[bus_building, "x"],
-                    edisgo_object.topology.buses_df.at[bus_building, "y"],
-                ),
-                add_ts=False,
-                p_set=hp_individual_large.at[hp, "p_set"],
-                weather_cell_id=hp_individual_large.at[hp, "weather_cell_id"],
-                sector="individual_heating",
+            voltage_level_hp = determine_grid_integration_voltage_level(
+                edisgo_object, hp_individual_large.at[hp, "p_set"]
             )
-            integrated_hps = integrated_hps.append(pd.Index([hp_name]))
-            integrated_hps_own_grid_connection = (
-                integrated_hps_own_grid_connection.append(pd.Index([hp]))
-            )
-    logger.debug(
-        f"{sum(hp_individual.p_set):.2f} MW of heat pumps for individual heating "
-        f"integrated. Of this "
-        f"{sum(hp_individual.loc[integrated_hps_building, 'p_set']):.2f} MW are "
-        f"integrated at same grid connection point as building and "
-        f"{sum(hp_individual.loc[integrated_hps_own_grid_connection, 'p_set']):.2f} "
-        f"MW have separate grid connection point."
-    )
+
+            if voltage_level_hp >= voltage_level_building:
+                # integrate at same bus as building
+                edisgo_object.topology.loads_df = pd.concat(
+                    [loads_df, hp_individual_large.loc[[hp], :]]
+                )
+                integrated_hps = integrated_hps.append(pd.Index([hp]))
+                integrated_hps_building = integrated_hps_building.append(pd.Index([hp]))
+            else:
+                # integrate based on geolocation
+                hp_name = edisgo_object.integrate_component_based_on_geolocation(
+                    comp_type="heat_pump",
+                    voltage_level=voltage_level_hp,
+                    geolocation=(
+                        edisgo_object.topology.buses_df.at[bus_building, "x"],
+                        edisgo_object.topology.buses_df.at[bus_building, "y"],
+                    ),
+                    add_ts=False,
+                    p_set=hp_individual_large.at[hp, "p_set"],
+                    weather_cell_id=hp_individual_large.at[hp, "weather_cell_id"],
+                    sector="individual_heating",
+                )
+                integrated_hps = integrated_hps.append(pd.Index([hp_name]))
+                integrated_hps_own_grid_conn = integrated_hps_own_grid_conn.append(
+                    pd.Index([hp])
+                )
+        logger.debug(
+            f"{sum(hp_individual.p_set):.2f} MW of heat pumps for individual heating "
+            f"integrated. Of this "
+            f"{sum(hp_individual.loc[integrated_hps_building, 'p_set']):.2f} MW are "
+            f"integrated at same grid connection point as building and "
+            f"{sum(hp_individual.loc[integrated_hps_own_grid_conn, 'p_set']):.2f} "
+            f"MW have separate grid connection point."
+        )
+    else:
+        integrated_hps = pd.Index([])
 
     # integrate central heat pumps
     for hp in hp_central.index:
