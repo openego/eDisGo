@@ -629,8 +629,8 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
     )
     df_profile_merge = df_profile_merge.sort_index().reset_index(drop=True)
 
-    # ToDo add sanity check using aggregated demand profile for etrago
-    return df_profile_merge.loc[:, building_ids]
+    building_ids_res_select = [_ for _ in df_profile_merge.columns if _ in building_ids]
+    return df_profile_merge.loc[:, building_ids_res_select]
 
 
 def get_district_heating_heat_demand_profiles(district_heating_ids, scenario, engine):
