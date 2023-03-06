@@ -3,6 +3,7 @@ import copy
 from math import sqrt
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from numpy.testing import assert_allclose, assert_array_equal
@@ -104,12 +105,30 @@ class TestTools:
         assert_allclose(data, np.array([1039.23 * 2, 1558.84 * 3]), rtol=1e-5)
 
     def test_drop_duplicated_indices(self):
-        # ToDo implement
-        pass
+        test_df = pd.DataFrame(
+            data={
+                "a": [1, 2, 3],
+                "b": [3, 4, 5],
+                "c": [4, 5, 6],
+            },
+            index=[0, 1, 0],
+        )
+        check_df = tools.drop_duplicated_indices(test_df)
+        assert len(check_df.index) == 2
+        assert (check_df.loc[0, :] == [3, 5, 6]).all()
 
     def test_drop_duplicated_columns(self):
-        # ToDo implement
-        pass
+        test_df = pd.DataFrame(
+            data={
+                "a": [1, 2, 3],  # noqa: F601
+                "b": [3, 4, 5],
+                "a": [4, 5, 6],  # noqa: F601
+            },
+            index=[0, 1, 2],
+        )
+        check_df = tools.drop_duplicated_columns(test_df)
+        assert len(check_df.columns) == 2
+        assert (check_df.loc[:, "a"] == [4, 5, 6]).all()
 
     def test_select_cable(self):
         cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "mv", 5.1)

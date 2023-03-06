@@ -199,34 +199,43 @@ def calculate_apparent_power(nominal_voltage, current, num_parallel):
     return sqrt(3) * nominal_voltage * current * num_parallel
 
 
-def drop_duplicated_indices(dataframe, keep="first"):
+def drop_duplicated_indices(dataframe, keep="last"):
     """
     Drop rows of duplicate indices in dataframe.
 
+    Be aware that this function changes the dataframe inplace. To avoid this behavior
+    provide a copy of the dataframe to this function.
+
     Parameters
     ----------
-    dataframe::pandas:`pandas.DataFrame<DataFrame>`
-        handled dataframe
-    keep: str
-        indicator of row to be kept, 'first', 'last' or False,
-        see pandas.DataFrame.drop_duplicates() method
+    dataframe : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe to drop indices from.
+    keep : str
+        Indicator of whether to keep first ("first"), last ("last") or
+        none (False) of the duplicated indices.
+        See :pandas:`pandas.DataFrame.duplicated<DataFrame.duplicated>` for more
+        information. Default: "last".
+
     """
     return dataframe[~dataframe.index.duplicated(keep=keep)]
 
 
-def drop_duplicated_columns(df, keep="first"):
+def drop_duplicated_columns(df, keep="last"):
     """
     Drop columns of dataframe that appear more than once.
+
+    Be aware that this function changes the dataframe inplace. To avoid this behavior
+    provide a copy of the dataframe to this function.
 
     Parameters
     ----------
     df : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe of which columns are dropped.
+        Dataframe to drop columns from.
     keep : str
-        Indicator of whether to keep first ('first'), last ('last') or
+        Indicator of whether to keep first ("first"), last ("last") or
         none (False) of the duplicated columns.
-        See `drop_duplicates()` method of
-        :pandas:`pandas.DataFrame<DataFrame>`.
+        See :pandas:`pandas.DataFrame.duplicated<DataFrame.duplicated>` for more
+        information. Default: "last".
 
     """
     return df.loc[:, ~df.columns.duplicated(keep=keep)]
