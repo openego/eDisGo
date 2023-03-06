@@ -15,3 +15,5 @@ Changes
 * Added class holding data from overlying grid, such as curtailment requirements and
   conventional generator dispatch `#335 <https://github.com/openego/eDisGo/pull/335>`_
 * Added integrity check for very short lines `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Added method to scale timeseries `#353 <https://github.com/openego/eDisGo/pull/353>`_
+* Added method to aggregate lv grid buses to station bus secondary side `#353 <https://github.com/openego/eDisGo/pull/353>`_

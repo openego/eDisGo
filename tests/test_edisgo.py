@@ -440,8 +440,21 @@ class TestEDisGo:
         )
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 109
-        assert len(results.equipment_changes) == 176
+        assert len(results.equipment_changes) == 186
         assert results.v_res.shape == (4, 142)
+
+    def test_reinforce_one_lv_grid(self):
+        # ###################### test with only one lv grid ##########################
+        self.setup_worst_case_time_series()
+        lv_grid_id = list(self.edisgo.topology.mv_grid.lv_grids)[0].id
+        results = self.edisgo.reinforce(
+            mode="lv", copy_grid=True, lv_grid_id=lv_grid_id
+        )
+
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 6
+        assert len(results.equipment_changes) == 6
+        assert results.v_res.shape == (2, 142)
 
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()

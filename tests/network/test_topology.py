@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import shutil
@@ -868,6 +869,16 @@ class TestTopology:
         assert "generators.csv" in saved_files
 
         shutil.rmtree(dir)
+
+    def test_aggregate_lv_grid_buses_on_station(self):
+        """Test method aggregate_lv_grid_buses_on_station"""
+
+        lv_grid_id = str(list(self.topology.mv_grid.lv_grids)[1])
+        topology_obj = copy.deepcopy(self.topology)
+        topology_obj.aggregate_lv_grid_buses_on_station(lv_grid_id=lv_grid_id)
+
+        assert list(self.topology.mv_grid.lv_grids)[1].buses_df.shape[0] == 15
+        assert list(topology_obj.mv_grid.lv_grids)[1].buses_df.shape[0] == 1
 
 
 class TestTopologyWithEdisgoObject:

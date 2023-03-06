@@ -858,7 +858,7 @@ class EDisGo:
 
         Returns
         -------
-        :networkx:`networkx.Graph<>`
+        :networkx:`networkx.Graph<network.Graph>`
             Graph representation of the grid as networkx Ordered Graph,
             where lines are represented by edges in the graph, and buses and
             transformers are represented by nodes.
@@ -1139,7 +1139,11 @@ class EDisGo:
             Uses reinforcement strategy to reinforce not converging grid.
             Reinforces first with only converging timesteps. Reinforce again with at
             start not converging timesteps. If still not converging, scale timeseries.
+            To use method "is_worst_case" must be "False".
             Default: False
+
+        lv_grid_id : str or int
+            LV grid id to specify the grid to check, if mode is "lv".
 
         """
         if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
@@ -1171,6 +1175,7 @@ class EDisGo:
                     combined_analysis=combined_analysis,
                     mode="mv",
                     without_generator_import=without_generator_import,
+                    **kwargs,
                 )
 
             if mode != "mv":
@@ -1188,6 +1193,7 @@ class EDisGo:
                     combined_analysis=combined_analysis,
                     mode=reinforce_mode,
                     without_generator_import=without_generator_import,
+                    **kwargs,
                 )
 
             if mode not in ["mv", "lv"]:
@@ -1204,6 +1210,7 @@ class EDisGo:
                     combined_analysis=combined_analysis,
                     mode=mode,
                     without_generator_import=without_generator_import,
+                    **kwargs,
                 )
             else:
                 # Initial try
@@ -1217,6 +1224,7 @@ class EDisGo:
                         combined_analysis=combined_analysis,
                         mode=mode,
                         without_generator_import=without_generator_import,
+                        **kwargs,
                     )
                     converged = True
                     fully_converged = True
@@ -1228,7 +1236,7 @@ class EDisGo:
                 # traceback.print_exc()
                 set_scaling_factor = 1
                 initial_timerseries = copy.deepcopy(self.timeseries)
-                minimal_scaling_factor = 0.01
+                minimal_scaling_factor = 0.05
                 max_iterations = 10
                 iteration = 0
                 highest_converged_scaling_factor = 0
@@ -1257,6 +1265,7 @@ class EDisGo:
                             combined_analysis=combined_analysis,
                             mode=mode,
                             without_generator_import=without_generator_import,
+                            **kwargs,
                         )
                         converged = True
                         logger.info(
