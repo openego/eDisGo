@@ -6,6 +6,7 @@ from zipfile import ZipFile
 import pandas as pd
 
 from edisgo.io import timeseries_import
+from edisgo.tools import tools
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +133,10 @@ class HeatPump:
         already be integrated into the grid, i.e. given in
         :attr:`~.network.topology.Topology.loads_df`.
 
+        In case COP time series are set for heat pumps that were already
+        assigned a COP time series, their existing COP time series is
+        overwritten by this function.
+
         Parameters
         ----------
         edisgo_object : :class:`~.EDisGo`
@@ -235,20 +240,34 @@ class HeatPump:
                 year=year,
             )
             # assign COP time series to each heat pump
-            self.cop_df = pd.DataFrame(
+            cop_df = pd.DataFrame(
                 data={
                     _: ts_cop_per_weather_cell.loc[:, hp_df.at[_, "weather_cell_id"]]
                     for _ in hp_df.index
                 }
             )
         elif isinstance(ts_cop, pd.DataFrame):
-            self.cop_df = ts_cop
+            cop_df = ts_cop
         else:
             raise ValueError("'ts_cop' must either be a pandas DataFrame or 'oedb'.")
+        # concat new COP time series with existing ones and drop any duplicate entries
+        self.cop_df = tools.drop_duplicated_columns(
+            pd.concat([self.cop_df, cop_df], axis=1)
+        )
 
     def set_heat_demand(self, edisgo_object, ts_heat_demand, **kwargs):
         """
-        Set heat demand time series to be served by the heat pumps.
+        Write heat demand time series of heat pumps to py:attr:`~heat_demand_df`.
+
+        Heat demand time series can either be given to this function or be obtained from
+        the `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+        In case they are obtained from the OpenEnergy DataBase the heat pumps need to
+        already be integrated into the grid, i.e. given in
+        :attr:`~.network.topology.Topology.loads_df`.
+
+        In case heat demand time series are set for heat pumps that were already
+        assigned a heat demand time series, their existing heat demand time series is
+        overwritten by this function.
 
         Parameters
         ----------
@@ -327,14 +346,18 @@ class HeatPump:
             heat_pump_names_select = [
                 _ for _ in heat_demand_df.columns if _ in heat_pump_names
             ]
-            self.heat_demand_df = heat_demand_df.loc[:, heat_pump_names_select]
+            heat_demand_df = heat_demand_df.loc[:, heat_pump_names_select]
 
         elif isinstance(ts_heat_demand, pd.DataFrame):
-            self.heat_demand_df = ts_heat_demand
+            heat_demand_df = ts_heat_demand
         else:
             raise ValueError(
                 "'ts_heat_demand' must either be a pandas DataFrame or 'oedb'."
             )
+        # concat new COP time series with existing ones and drop any duplicate entries
+        self.heat_demand_df = tools.drop_duplicated_columns(
+            pd.concat([self.heat_demand_df, heat_demand_df], axis=1)
+        )
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
         """
