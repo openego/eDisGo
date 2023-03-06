@@ -13,8 +13,7 @@ pypower
 scikit-learn
 beautifulsoup4
 plotly
-dash == 2.6.0
-werkzeug==2.2.0
+dash
 jupyter_dash
 docutils == 0.16.0
 sphinx >= 4.3.0, < 5.1.0
