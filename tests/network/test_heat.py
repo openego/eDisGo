@@ -80,6 +80,21 @@ class TestHeatPump:
             check_freq=False,
         )
 
+        # test if concatenating works correctly
+        cop = pd.DataFrame(
+            data={
+                "hp3": [1.0, 2.0],
+                "hp2": [3.0, 4.0],
+            },
+            index=self.timeindex,
+        )
+        self.heatpump.set_cop(self.edisgo, cop)
+        pd.testing.assert_frame_equal(
+            self.heatpump.cop_df,
+            cop,
+            check_freq=False,
+        )
+
     @pytest.mark.local
     def test_set_cop_oedb(self, caplog):
 
@@ -135,6 +150,7 @@ class TestHeatPump:
         heat_demand = pd.DataFrame(
             data={
                 "hp3": [1.0, 2.0],
+                "hp4": [1.0, 2.0],
             },
             index=self.timeindex,
         )
@@ -142,6 +158,22 @@ class TestHeatPump:
         pd.testing.assert_frame_equal(
             self.heatpump.heat_demand_df,
             heat_demand,
+            check_freq=False,
+        )
+
+        # test if concatenating works correctly
+        heat_demand = pd.DataFrame(
+            data={
+                "hp3": [1.0, 2.0],
+                "hp2": [3.0, 4.0],
+            },
+            index=self.timeindex,
+        )
+        self.heatpump.set_heat_demand(self.edisgo, heat_demand)
+        heat_demand["hp4"] = pd.Series([1.0, 2.0], index=self.timeindex)
+        pd.testing.assert_frame_equal(
+            self.heatpump.heat_demand_df[sorted(self.heatpump.heat_demand_df)],
+            heat_demand[sorted(heat_demand.columns)],
             check_freq=False,
         )
 
