@@ -827,6 +827,7 @@ def get_sample_using_time(
     res_load=None,
     ts=True,
     bev=True,
+    save_ev_soc_initial=True,
     hp=True,
     dsm=True,
 ):
@@ -840,35 +841,21 @@ def get_sample_using_time(
             "'start_date' or "
             "'res_load'"
         )
+    elif start_date is not None:
+        timeframe = pd.date_range(start=start_date, periods=periods, freq=freq)
     elif res_load is not None:
-        df = pd.DataFrame(edisgo_obj.timeseries.residual_load)
-        df["week"] = df.index.week
-        if res_load == "min":
-            week = df.groupby(by="week")[[0]].min().sort_values(by=0).index[0]
-        elif res_load == "max":
-            week = (
-                df.groupby(by="week")[[0]]
-                .min()
-                .sort_values(by=0, ascending=False)
-                .index[0]
+        if res_load == "balanced":
+            timeframe = determine_observation_periods(
+                edisgo_obj, 7, idx="min", absolute=True
             )
-        elif res_load == "balanced":
-            df["residuals"] = df[0] ** 2
-            week = (
-                df.groupby(by="week")[["residuals"]]
-                .max()
-                .sort_values(by="residuals")
-                .index[0]
-            )
+        elif res_load in ["min", "max", "load_max", "gen_max"]:
+            timeframe = determine_observation_periods(edisgo_obj, 7, idx=res_load)
         else:
             raise ValueError(
-                "argument 'res_load' must be one of: 'min', 'max', " "'balanced'"
+                "argument 'res_load' must be one of: 'min', 'max', 'load_max', "
+                "'gen_max' or 'balanced'"
             )
-        start_date = df.loc[df["week"] == week].index[0]
-        # end_date = df.loc[df["week"] == week].index[-1]
 
-    timeframe = pd.date_range(start=start_date, periods=periods, freq=freq)
-    ts_before = pd.to_datetime(start_date) - pd.Timedelta(hours=1)
     # generators, loads and storage units timeseries
     if ts:
         attributes = edisgo_obj.timeseries._attributes
@@ -882,33 +869,36 @@ def get_sample_using_time(
                 )
     # Battery electric vehicle timeseries
     if bev:
-        try:
-            initial_soc_cp = (
-                1
-                / 2
-                * (
-                    edisgo_obj.electromobility.flexibility_bands["upper_energy"].loc[
-                        ts_before
-                    ]
-                    + edisgo_obj.electromobility.flexibility_bands["lower_energy"].loc[
-                        ts_before
-                    ]
+        if save_ev_soc_initial:
+            # timestep EV SOC from timestep before if possible
+            ts_before = pd.to_datetime(timeframe[0]) - pd.Timedelta(hours=1)
+            try:
+                initial_soc_cp = (
+                    1
+                    / 2
+                    * (
+                        edisgo_obj.electromobility.flexibility_bands[
+                            "upper_energy"
+                        ].loc[ts_before]
+                        + edisgo_obj.electromobility.flexibility_bands[
+                            "lower_energy"
+                        ].loc[ts_before]
+                    )
                 )
-            )
-        except KeyError:
-            initial_soc_cp = (
-                1
-                / 2
-                * (
-                    edisgo_obj.electromobility.flexibility_bands["upper_energy"].loc[
-                        start_date
-                    ]
-                    + edisgo_obj.electromobility.flexibility_bands["lower_energy"].loc[
-                        start_date
-                    ]
+            except KeyError:
+                initial_soc_cp = (
+                    1
+                    / 2
+                    * (
+                        edisgo_obj.electromobility.flexibility_bands[
+                            "upper_energy"
+                        ].loc[start_date]
+                        + edisgo_obj.electromobility.flexibility_bands[
+                            "lower_energy"
+                        ].loc[start_date]
+                    )
                 )
-            )
-        edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
+            edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
         for key, df in edisgo_obj.electromobility.flexibility_bands.items():
             if not df.empty:
                 df = df.loc[timeframe]
