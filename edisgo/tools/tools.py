@@ -793,6 +793,108 @@ def battery_storage_reference_operation(
     return df
 
 
+def determine_observation_periods(edisgo_obj, window_days, idx="min", absolute=False):
+    if absolute:
+        residual_load = edisgo_obj.timeseries.residual_load.abs()
+    else:
+        residual_load = edisgo_obj.timeseries.residual_load
+    residual_load = residual_load.rolling(window=window_days * 24, closed="both").mean()
+    residual_load = residual_load.loc[::24]
+
+    if idx == "min":
+        timestep = residual_load.idxmin()
+    elif idx == "max":
+        timestep = residual_load.idxmax()
+    else:
+        raise NotImplementedError
+
+    timestep = timestep - pd.DateOffset(days=window_days)
+
+    timeframe = pd.date_range(start=timestep, periods=window_days * 24, freq="h")
+
+    return timeframe
+
+
+def extract_timeframe(
+    edisgo_obj,
+    timeframe=None,
+    start_datetime=None,
+    periods=None,
+    freq="1h",
+    ts=True,
+    bev=True,
+    hp=True,
+):
+    """Extracts a given time frame from the edisgo object for all time series
+    which are defined in the edisgo object and flagged.
+    Parameters
+    ----------
+    edisgo_obj : :class:`edisgo.EDisGo`
+        Edisgo object
+    timeframe : TimeIndex or None
+        Timeframe to extract
+    start_datetime : str or timeindex or None
+        Start datetime of time series
+    periods : int or none
+        Number of periods of time series
+    freq : str
+        Frequency of time series, default "1h"
+    ts : bool
+        Extract time series, default True
+    bev :
+        Extract battery electric vehicle time series, default True
+    hp :
+        Extract heat pump time series, default True
+    Returns
+    -------
+    :class:`edisgo.EDisGo`
+        Edisgo object with extracted time series
+    """
+    # edisgo_obj = deepcopy(edisgo_obj)
+
+    if timeframe is None:
+        timeframe = pd.date_range(start=start_datetime, periods=periods, freq=freq)
+
+    if not (timeframe.isin(edisgo_obj.timeseries.timeindex)).all():
+        # logger.exception()
+        raise ValueError("Edisgo object does not contain all the given timeindex")
+    # adapt timeseries
+    if ts:
+        attributes = (
+            edisgo_obj.network.timeseries.TimeSeries()._attributes
+        )  # edisgo statt edisgo_obj
+        edisgo_obj.timeseries.timeindex = timeframe
+        for attr in attributes:
+            if not getattr(edisgo_obj.timeseries, attr).empty:
+                setattr(
+                    edisgo_obj.timeseries,
+                    attr,
+                    getattr(edisgo_obj.timeseries, attr).loc[timeframe],
+                )
+        # logger.info("")
+    # Battery electric vehicle timeseries
+    if bev:
+        for key, df in edisgo_obj.electromobility.flexibility_bands.items():
+            if not df.empty:
+                df = df.loc[timeframe]
+                edisgo_obj.electromobility.flexibility_bands.update({key: df})
+    # Heat pumps timeseries
+    if hp:
+        for attr in ["cop_df", "heat_demand_df"]:
+            if not getattr(edisgo_obj.heat_pump, attr).empty:
+                setattr(
+                    edisgo_obj.heat_pump,
+                    attr,
+                    getattr(edisgo_obj.heat_pump, attr).loc[timeframe],
+                )
+
+    # logger.info(
+    #     f"Timeseries taken: {timeframe[0]} -> "
+    #     f"{timeframe[-1]} including {periods} timesteps."
+    # )
+    return edisgo_obj
+
+
 def get_sample_using_time(edisgo_obj, start_date=None, end_date=None, res_load=None):
     if res_load is None:
         if start_date is None:

@@ -116,6 +116,6 @@ function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
     println(factor)
     return JuMP.@objective(pm.model, Min,
         factor * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from) if storage[b] == 0) for n in nws) # minimize line losses
-        + sum(ll[(b,i,j)] * c[1][b] * l[1][b]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading
+        + 100 * sum(ll[(b,i,j)] * c[1][b] * l[1][b]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading
     )
 end
