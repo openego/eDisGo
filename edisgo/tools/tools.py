@@ -895,16 +895,27 @@ def extract_timeframe(
     return edisgo_obj
 
 
-def get_sample_using_time(edisgo_obj, start_date=None, end_date=None, res_load=None):
-    if res_load is None:
-        if start_date is None:
-            raise TypeError(
-                "get_sample_using_time() missing required argument:" "'start_date'"
-            )
-        if end_date is None:
-            raise TypeError(
-                "get_sample_using_time() missing required argument: " "'end_date'"
-            )
+def get_sample_using_time(
+    edisgo_obj,
+    start_date=None,
+    periods=None,
+    freq="1h",
+    res_load=None,
+    ts=True,
+    bev=True,
+    hp=True,
+    dsm=True,
+):
+    if periods is None:
+        raise TypeError(
+            "get_sample_using_time() missing required argument: " "'periods'"
+        )
+    if (res_load is None) & (start_date is None):
+        raise TypeError(
+            "get_sample_using_time() missing required argument:"
+            "'start_date' or "
+            "'res_load'"
+        )
     else:
         df = pd.DataFrame(edisgo_obj.timeseries.residual_load)
         df["week"] = df.index.week
@@ -930,34 +941,23 @@ def get_sample_using_time(edisgo_obj, start_date=None, end_date=None, res_load=N
                 "argument 'res_load' must be one of: 'min', 'max', " "'balanced'"
             )
         start_date = df.loc[df["week"] == week].index[0]
-        end_date = df.loc[df["week"] == week].index[-1]
+        # end_date = df.loc[df["week"] == week].index[-1]
 
-    edisgo_obj.timeseries._timeindex = edisgo_obj.timeseries.timeindex[
-        (edisgo_obj.timeseries.timeindex >= start_date)
-        & (edisgo_obj.timeseries.timeindex <= end_date)
-    ]
-    edisgo_obj.timeseries._generators_active_power = (
-        edisgo_obj.timeseries.generators_active_power[start_date:end_date]
-    )
-    edisgo_obj.timeseries._generators_reactive_power = (
-        edisgo_obj.timeseries.generators_reactive_power[start_date:end_date]
-    )
-    edisgo_obj.timeseries._loads_active_power = (
-        edisgo_obj.timeseries.loads_active_power[start_date:end_date]
-    )
-    edisgo_obj.timeseries._loads_reactive_power = (
-        edisgo_obj.timeseries.loads_reactive_power[start_date:end_date]
-    )
-
-    edisgo_obj.timeseries._storage_units_active_power = (
-        edisgo_obj.timeseries.storage_units_active_power[start_date:end_date]
-    )
-    edisgo_obj.timeseries._storage_units_reactive_power = (
-        edisgo_obj.timeseries.storage_units_reactive_power[start_date:end_date]
-    )
-
+    timeframe = pd.date_range(start=start_date, periods=periods, freq=freq)
     ts_before = pd.to_datetime(start_date) - pd.Timedelta(hours=1)
-    if len(edisgo_obj.electromobility.flexibility_bands["upper_energy"]) > 0:
+
+    if ts:
+        attributes = edisgo_obj.timeseries._attributes
+        edisgo_obj.timeseries.timeindex = timeframe
+        for attr in attributes:
+            if not getattr(edisgo_obj.timeseries, attr).empty:
+                setattr(
+                    edisgo_obj.timeseries,
+                    attr,
+                    getattr(edisgo_obj.timeseries, attr).loc[timeframe],
+                )
+    # Battery electric vehicle timeseries
+    if bev:
         try:
             initial_soc_cp = (
                 1
@@ -985,26 +985,28 @@ def get_sample_using_time(edisgo_obj, start_date=None, end_date=None, res_load=N
                 )
             )
         edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
-        edisgo_obj.electromobility.flexibility_bands[
-            "upper_power"
-        ] = edisgo_obj.electromobility.flexibility_bands["upper_power"][
-            start_date:end_date
-        ]
-        edisgo_obj.electromobility.flexibility_bands[
-            "upper_energy"
-        ] = edisgo_obj.electromobility.flexibility_bands["upper_energy"][
-            start_date:end_date
-        ]
-        edisgo_obj.electromobility.flexibility_bands[
-            "lower_energy"
-        ] = edisgo_obj.electromobility.flexibility_bands["lower_energy"][
-            start_date:end_date
-        ]
-    if len(edisgo_obj.heat_pump.cop_df) > 0:
-        edisgo_obj.heat_pump.cop_df = edisgo_obj.heat_pump.cop_df[start_date:end_date]
-        edisgo_obj.heat_pump.heat_demand_df = edisgo_obj.heat_pump.heat_demand_df[
-            start_date:end_date
-        ]
+        for key, df in edisgo_obj.electromobility.flexibility_bands.items():
+            if not df.empty:
+                df = df.loc[timeframe]
+                edisgo_obj.electromobility.flexibility_bands.update({key: df})
+    # Heat pumps timeseries
+    if hp:
+        for attr in ["cop_df", "heat_demand_df"]:
+            if not getattr(edisgo_obj.heat_pump, attr).empty:
+                setattr(
+                    edisgo_obj.heat_pump,
+                    attr,
+                    getattr(edisgo_obj.heat_pump, attr).loc[timeframe],
+                )
+    # Demand Side Management timeseries
+    if dsm:
+        for attr in ["e_min", "e_max", "p_min", "p_max"]:
+            if not getattr(edisgo_obj.dsm, attr).empty:
+                setattr(
+                    edisgo_obj.dsm,
+                    attr,
+                    getattr(edisgo_obj.dsm, attr).loc[timeframe],
+                )
 
 
 def resample(
