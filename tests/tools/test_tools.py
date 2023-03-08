@@ -3,6 +3,7 @@ import copy
 from math import sqrt
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from numpy.testing import assert_allclose, assert_array_equal
@@ -102,6 +103,32 @@ class TestTools:
             np.array([30, 30]), np.array([20, 30]), np.array([2, 3])
         )
         assert_allclose(data, np.array([1039.23 * 2, 1558.84 * 3]), rtol=1e-5)
+
+    def test_drop_duplicated_indices(self):
+        test_df = pd.DataFrame(
+            data={
+                "a": [1, 2, 3],
+                "b": [3, 4, 5],
+                "c": [4, 5, 6],
+            },
+            index=[0, 1, 0],
+        )
+        check_df = tools.drop_duplicated_indices(test_df)
+        assert len(check_df.index) == 2
+        assert (check_df.loc[0, :] == [3, 5, 6]).all()
+
+    def test_drop_duplicated_columns(self):
+        test_df = pd.DataFrame(
+            data={
+                "a": [1, 2, 3],  # noqa: F601
+                "b": [3, 4, 5],
+                "a": [4, 5, 6],  # noqa: F601
+            },
+            index=[0, 1, 2],
+        )
+        check_df = tools.drop_duplicated_columns(test_df)
+        assert len(check_df.columns) == 2
+        assert (check_df.loc[:, "a"] == [4, 5, 6]).all()
 
     def test_select_cable(self):
         cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "mv", 5.1)
@@ -256,6 +283,46 @@ class TestTools:
         assert len(buses_downstream) == len(lv_grid.buses_df) + 4
         assert all([_ in buses_downstream for _ in lv_grid.buses_df.index])
 
+    def test_get_path_length_to_station(self):
+        # ToDo implement
+        pass
+
+    def test_assign_voltage_level_to_component(self):
+        # ToDo implement
+        pass
+
+    def test_determine_grid_integration_voltage_level(self):
+        assert tools.determine_grid_integration_voltage_level(self.edisgo, 0.05) == 7
+        assert tools.determine_grid_integration_voltage_level(self.edisgo, 0.2) == 6
+        assert tools.determine_grid_integration_voltage_level(self.edisgo, 1.5) == 5
+        assert tools.determine_grid_integration_voltage_level(self.edisgo, 16) == 4
+
+    def test_determine_bus_voltage_level(self):
+        bus_mv_station = "Bus_MVStation_1"
+        bus_mv = "Bus_GeneratorFluctuating_7"
+        bus_lv_station = "BusBar_MVGrid_1_LVGrid_1_LV"
+        bus_lv = "Bus_BranchTee_LVGrid_1_10"
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_mv_station) == 4
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_mv) == 5
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_lv_station) == 6
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_lv) == 7
+
+        # test if buses directly connected to station are identified as voltage level
+        # 4 or 6, if they are not part of a larger feeder
+        # set up bus that is directly connected to HV/MV station
+        bus_voltage_level_4 = self.edisgo.topology.add_bus("dummy_bus", 20.0)
+        self.edisgo.topology.add_line(
+            bus_mv_station, bus_voltage_level_4, 10.0, type_info="NA2XS2Y 3x1x185 RM/25"
+        )
+        bus_voltage_level_5 = "Bus_BranchTee_MVGrid_1_1"
+        bus_voltage_level_6 = "Bus_GeneratorFluctuating_16"
+        bus_voltage_level_7 = "Bus_BranchTee_LVGrid_4_1"
+
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_4) == 4
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_5) == 5
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_6) == 6
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_7) == 7
+
     def test_get_weather_cells_intersecting_with_grid_district(self):
         weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
             self.edisgo
@@ -269,7 +336,7 @@ class TestTools:
         # for some reason..
         assert 1122074 in weather_cells
 
-    def test_add_susceptance(self):
+    def test_add_line_susceptance(self):
         assert self.edisgo.topology.lines_df.loc["Line_10006", "b"] == 0
         assert self.edisgo.topology.lines_df.loc["Line_50000002", "b"] == 0
 
@@ -300,3 +367,7 @@ class TestTools:
         assert edisgo_root.topology.lines_df.loc[
             "Line_50000002", "b"
         ] == tools.calculate_line_susceptance(0.25, 0.03, 1)
+
+    def test_reduce_memory_usage(self):
+        # ToDo implement
+        pass
