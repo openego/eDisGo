@@ -2270,12 +2270,13 @@ class EDisGo:
             between precision and memory. Default: "float32".
         results_attr_to_reduce : list(str), optional
             See `attr_to_reduce` parameter in
-            :attr:`~.network.results.Results.reduce_memory` for more
-            information.
+            :attr:`~.network.results.Results.reduce_memory` for more information.
         timeseries_attr_to_reduce : list(str), optional
             See `attr_to_reduce` parameter in
-            :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
-            information.
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more information.
+        heat_pump_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.heat.HeatPump.reduce_memory` for more information.
 
         """
         # time series
@@ -2287,6 +2288,11 @@ class EDisGo:
         self.results.reduce_memory(
             to_type=kwargs.get("to_type", "float32"),
             attr_to_reduce=kwargs.get("results_attr_to_reduce", None),
+        )
+        # heat pump data
+        self.heat_pump.reduce_memory(
+            to_type=kwargs.get("to_type", "float32"),
+            attr_to_reduce=kwargs.get("heat_pump_attr_to_reduce", None),
         )
 
     def check_integrity(self):

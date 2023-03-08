@@ -1341,14 +1341,26 @@ class TestEDisGo:
         os.remove(zip_file)
 
     def test_reduce_memory(self):
+        # set up test data
         self.setup_worst_case_time_series()
         self.edisgo.analyze()
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+            data={
+                "hp1": [1.0, 2.0],
+                "hp2": [3.0, 4.0],
+            },
+            index=timeindex,
+        )
 
         # check one time series attribute and one results attribute
         mem_ts_before = self.edisgo.timeseries.generators_active_power.memory_usage(
             deep=True
         ).sum()
         mem_res_before = self.edisgo.results.pfa_p.memory_usage(deep=True).sum()
+        mem_hp_before = self.edisgo.heat_pump.heat_demand_df.memory_usage(
+            deep=True
+        ).sum()
 
         # check with default value
         self.edisgo.reduce_memory()
@@ -1357,9 +1369,13 @@ class TestEDisGo:
             self.edisgo.timeseries.generators_active_power.memory_usage(deep=True).sum()
         )
         mem_res_with_default = self.edisgo.results.pfa_p.memory_usage(deep=True).sum()
+        mem_hp_with_default = self.edisgo.heat_pump.heat_demand_df.memory_usage(
+            deep=True
+        ).sum()
 
         assert mem_ts_before > mem_ts_with_default
         assert mem_res_before > mem_res_with_default
+        assert mem_hp_before > mem_hp_with_default
 
         mem_ts_with_default_2 = self.edisgo.timeseries.loads_active_power.memory_usage(
             deep=True
