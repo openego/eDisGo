@@ -2204,7 +2204,7 @@ class EDisGo:
         :func:`edisgo.network.topology.Topology.check_integrity`), timeseries (see
         :func:`edisgo.network.timeseries.TimeSeries.check_integrity`) and the interplay
         of both.
-        Further checks integrity of electromobility object (see
+        Further, checks integrity of electromobility object (see
         :func:`edisgo.network.electromobility.Electromobility.check_integrity`) if
         there is electromobility data.
 
@@ -2259,7 +2259,25 @@ class EDisGo:
                     f" the following {comp_type}: {exceeding.values}"
                 )
 
-            logging.info("Integrity check finished. Please pay attention to warnings.")
+        # check if time index of other time series data contains all time steps
+        # in TimeSeries.timeindex
+        if len(self.timeseries.timeindex) > 0:
+            # check time index of electromobility flexibility bands
+            flex_band = list(self.electromobility.flexibility_bands.values())[0]
+            # if there are no flex bands, skip integrity check
+            if not flex_band.empty:
+                missing_indices = [
+                    _ for _ in self.timeseries.timeindex if _ not in flex_band.index
+                ]
+                if len(missing_indices) > 0:
+                    logger.warning(
+                        "There are time steps in timeindex of TimeSeries object that "
+                        "are not in the index of the flexibility bands. This may lead "
+                        "to problems."
+                    )
+            # ToDo check time index of HeatPump data
+
+        logging.info("Integrity check finished. Please pay attention to warnings.")
 
     def resample_timeseries(self, method: str = "ffill", freq: str = "15min"):
         """
