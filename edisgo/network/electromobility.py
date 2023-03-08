@@ -660,12 +660,12 @@ class Electromobility:
         for band in self.flexibility_bands.keys():
             df_dict[band] = getattr(self, "flexibility_bands")[band]
             if freq < freq_orig:  # up-sampling
-                new_dates = pd.DatetimeIndex([df_dict[band].index[-1] + freq_orig])
+                end_date = pd.DatetimeIndex([df_dict[band].index[-1] + freq_orig])
             else:  # down-sampling (nothing happens)
-                new_dates = pd.DatetimeIndex([df_dict[band].index[-1]])
+                end_date = pd.DatetimeIndex([df_dict[band].index[-1]])
             df_dict[band] = (
                 df_dict[band]
-                .reindex(df_dict[band].index.union(new_dates).unique().sort_values())
+                .reindex(df_dict[band].index.union(end_date).unique().sort_values())
                 .ffill()
             )
 
@@ -704,7 +704,7 @@ class Electromobility:
 
                     # drop time steps - time step that was added in the beginning
                     # and time steps that were added due to the shift
-                    df_dict[band] = df_dict[band].loc[: new_dates[0], :]
+                    df_dict[band] = df_dict[band].loc[: end_date[0], :]
                     df_dict[band] = df_dict[band].iloc[1:-1, :]
         else:  # down-sampling
             for band in self.flexibility_bands.keys():
