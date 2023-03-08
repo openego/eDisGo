@@ -899,3 +899,51 @@ def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.Da
         )
 
     return df
+
+
+def get_year_based_on_timeindex(edisgo_obj):
+    """
+    Checks if :py:attr:`~.network.timeseries.TimeSeries.timeindex` is already set and
+    if so, returns the year of the time index.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+
+    Returns
+    --------
+    int or None
+        If a time index is available returns the year of the time index,
+        otherwise it returns None.
+
+    """
+    year = edisgo_obj.timeseries.timeindex.year
+    if len(year) == 0:
+        return None
+    else:
+        return year[0]
+
+
+def get_year_based_on_scenario(scenario):
+    """
+    Returns the year the given scenario was set up for.
+
+    Parameters
+    ----------
+    scenario : str
+        Scenario for which to set year. Possible options are 'eGon2035' and 'eGon100RE'.
+
+    Returns
+    --------
+    int or None
+        Returns the year of the scenario (2035 in case of the 'eGon2035' scenario
+        and 2045 in case of the 'eGon100RE' scenario). If another scenario name is
+        provided it returns None.
+
+    """
+    if scenario == "eGon2035":
+        return 2035
+    elif scenario == "eGon100RE":
+        return 2045
+    else:
+        return None

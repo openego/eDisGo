@@ -230,11 +230,7 @@ class HeatPump:
                 # set up year to index COP data by
                 year = kwargs.get("year", None)
                 if year is None:
-                    year = edisgo_object.timeseries.timeindex.year
-                    if len(year) == 0:
-                        year = None
-                    else:
-                        year = year[0]
+                    year = tools.get_year_based_on_timeindex(edisgo_object)
 
                 # get COP per weather cell
                 ts_cop_per_weather_cell = timeseries_import.cop_oedb(
@@ -338,11 +334,7 @@ class HeatPump:
                 # set up year to index data by
                 year = kwargs.get("year", None)
                 if year is None:
-                    year = edisgo_object.timeseries.timeindex.year
-                    if len(year) == 0:
-                        year = None
-                    else:
-                        year = year[0]
+                    year = tools.get_year_based_on_timeindex(edisgo_object)
 
                 # get heat demand per heat pump
                 heat_demand_df = timeseries_import.heat_demand_oedb(

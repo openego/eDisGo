@@ -11,8 +11,7 @@ from demandlib import particular_profiles as profiles
 from workalendar.europe import Germany
 
 from edisgo.io.db import session_scope_egon_data
-from edisgo.tools import session_scope
-from edisgo.tools.tools import reduce_memory_usage
+from edisgo.tools import session_scope, tools
 
 if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import model_draft, supply
@@ -287,11 +286,8 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, year=None):
     """
     # set up time index to index data by
     if year is None:
-        if scenario == "eGon2035":
-            year = 2035
-        elif scenario == "eGon100RE":
-            year = 2045
-        else:
+        year = tools.get_year_based_on_scenario(scenario)
+        if year is None:
             raise ValueError(
                 "Invalid input for parameter 'scenario'. Possible options are "
                 "'eGon2035' and 'eGon100RE'."
@@ -605,7 +601,7 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
         df_profile_merge.daily_demand_share
     )
     df_profile_merge.drop("daily_demand_share", axis="columns", inplace=True)
-    df_profile_merge = reduce_memory_usage(df_profile_merge)
+    df_profile_merge = tools.reduce_memory_usage(df_profile_merge)
 
     # merge daily profiles by profile ID
     df_profile_merge = pd.merge(
@@ -619,7 +615,7 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
         df_profile_merge.idp.astype(float)
     )
     df_profile_merge.drop("idp", axis="columns", inplace=True)
-    df_profile_merge = reduce_memory_usage(df_profile_merge)
+    df_profile_merge = tools.reduce_memory_usage(df_profile_merge)
 
     # pivot to allow aggregation with CTS profiles
     df_profile_merge = df_profile_merge.pivot(
