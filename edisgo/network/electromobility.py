@@ -769,7 +769,7 @@ class Electromobility:
                 self.flexibility_bands["lower_energy"].diff()
                 - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
             )
-            > 1e-6
+            > 0.0
         ).any()
         if tmp.any():
             raise ValueError(
