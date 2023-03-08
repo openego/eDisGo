@@ -2233,7 +2233,7 @@ class Topology:
         edisgo_object,
         comp_data,
         comp_type,
-        max_distance_from_target_bus=0.1,
+        max_distance_from_target_bus=0.02,
     ):
         """
         Add and connect new component to LV grid topology based on its geolocation.
