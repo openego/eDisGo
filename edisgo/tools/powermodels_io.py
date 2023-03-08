@@ -159,7 +159,7 @@ def ppc2pm(ppc, psa_net):  # pragma: no cover
     converter from pypower datastructure to powermodels dictionary,
 
     adapted from pandapower to powermodels converter:
-    https://github.com/e2nIEE/pandapower/blob/develop/pandapower/converter/powermodels/to_pm.py
+    https://github.com/e2nIEE/pandapower/blob/develop/pandapower/converter/pandamodels/to_pm.py
 
     :param ppc:
     :return:

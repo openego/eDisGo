@@ -1158,6 +1158,35 @@ class TestEDisGo:
         )
         # fmt: on
 
+    @pytest.mark.local
+    def test_import_heat_pumps(self):
+
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+
+        # ################# test with wrong scenario name #############
+        with pytest.raises(ValueError):
+            edisgo_object.import_heat_pumps(
+                scenario="eGon",
+                engine=pytest.engine,
+            )
+
+        # ################# test with leap year #############
+        edisgo_object.import_heat_pumps(
+            scenario="eGon2035",
+            engine=pytest.engine,
+            year=2020,
+        )
+
+        loads_df = edisgo_object.topology.loads_df
+        hp_df = loads_df[loads_df.type == "heat_pump"]
+        assert len(hp_df) == 177
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 177)
+        assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2035
+        assert edisgo_object.heat_pump.cop_df.shape == (8760, 177)
+        assert edisgo_object.heat_pump.cop_df.index[0].year == 2035
+
     def test_apply_charging_strategy(self):
         self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
@@ -1312,14 +1341,26 @@ class TestEDisGo:
         os.remove(zip_file)
 
     def test_reduce_memory(self):
+        # set up test data
         self.setup_worst_case_time_series()
         self.edisgo.analyze()
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+            data={
+                "hp1": [1.0, 2.0],
+                "hp2": [3.0, 4.0],
+            },
+            index=timeindex,
+        )
 
         # check one time series attribute and one results attribute
         mem_ts_before = self.edisgo.timeseries.generators_active_power.memory_usage(
             deep=True
         ).sum()
         mem_res_before = self.edisgo.results.pfa_p.memory_usage(deep=True).sum()
+        mem_hp_before = self.edisgo.heat_pump.heat_demand_df.memory_usage(
+            deep=True
+        ).sum()
 
         # check with default value
         self.edisgo.reduce_memory()
@@ -1328,9 +1369,13 @@ class TestEDisGo:
             self.edisgo.timeseries.generators_active_power.memory_usage(deep=True).sum()
         )
         mem_res_with_default = self.edisgo.results.pfa_p.memory_usage(deep=True).sum()
+        mem_hp_with_default = self.edisgo.heat_pump.heat_demand_df.memory_usage(
+            deep=True
+        ).sum()
 
         assert mem_ts_before > mem_ts_with_default
         assert mem_res_before > mem_res_with_default
+        assert mem_hp_before > mem_hp_with_default
 
         mem_ts_with_default_2 = self.edisgo.timeseries.loads_active_power.memory_usage(
             deep=True
@@ -1535,6 +1580,22 @@ class TestEDisGo:
         with pytest.raises(ValueError, match=msg):
             self.edisgo.check_integrity()
 
+    def test_resample_timeseries(self):
+        self.setup_worst_case_time_series()
+        self.edisgo.resample_timeseries()
+        assert len(self.edisgo.timeseries.loads_active_power) == 16
+
+        self.edisgo.heat_pump.cop_df = pd.DataFrame(
+            data={
+                "hp1": [5.0, 6.0],
+                "hp2": [7.0, 8.0],
+            },
+            index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
+        )
+        self.edisgo.resample_timeseries(freq="30min")
+        assert len(self.edisgo.timeseries.loads_active_power) == 8
+        assert len(self.edisgo.heat_pump.cop_df) == 4
+
 
 class TestEDisGoFunc:
     def test_import_edisgo_from_files(self):
@@ -1583,7 +1644,9 @@ class TestEDisGoFunc:
 
         # check topology
         assert_frame_equal(
-            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+            edisgo_obj_loaded.topology.loads_df,
+            edisgo_obj.topology.loads_df,
+            check_dtype=False,
         )
         # check time series
         assert edisgo_obj_loaded.timeseries.timeindex.empty
@@ -1626,7 +1689,9 @@ class TestEDisGoFunc:
 
         # check topology
         assert_frame_equal(
-            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+            edisgo_obj_loaded.topology.loads_df,
+            edisgo_obj.topology.loads_df,
+            check_dtype=False,
         )
         # check time series
         assert_frame_equal(
@@ -1638,7 +1703,10 @@ class TestEDisGoFunc:
         assert edisgo_obj_loaded.config._data == edisgo_obj.config._data
         # check results
         assert_frame_equal(
-            edisgo_obj_loaded.results.i_res, edisgo_obj.results.i_res, check_freq=False
+            edisgo_obj_loaded.results.i_res,
+            edisgo_obj.results.i_res,
+            check_freq=False,
+            check_names=False,
         )
         # check electromobility
         assert_frame_equal(

@@ -200,7 +200,7 @@ class Load(Component):
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See :attr:`~.network.topology.Topology.loads_df` for more information.
 
         """
@@ -330,7 +330,7 @@ class Generator(Component):
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See :attr:`~.network.topology.Topology.generators_df` for more
             information.
 
@@ -486,7 +486,7 @@ class Storage(Component):
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See :attr:`~.network.topology.Topology.storage_units_df` for more
             information.
 
@@ -583,7 +583,7 @@ class Switch(BasicComponent):
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See :attr:`~.network.topology.Topology.switches_df` for more
             information.
 

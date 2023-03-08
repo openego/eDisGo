@@ -6,4 +6,8 @@ Release date: <month> <day>, <year>
 Changes
 -------
 
-* added functionality to resample and check integrity of flexibility bands `#341 <https://github.com/openego/eDisGo/pull/341>`_
+* Added automatic resampling when applying a charging strategy `#332 <https://github.com/openego/eDisGo/pull/332>`_
+* Added MV grid ID to logging output `#309 <https://github.com/openego/eDisGo/pull/309>`_
+* Added automatic link checking `#297 <https://github.com/openego/eDisGo/pull/297>`_
+* Bug fix `#346 <https://github.com/openego/eDisGo/pull/346>`_
+* Added functionality to resample and check integrity of flexibility bands `#341 <https://github.com/openego/eDisGo/pull/341>`_

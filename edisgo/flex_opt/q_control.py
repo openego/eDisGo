@@ -101,7 +101,7 @@ def _get_component_dict():
     comp_dict = {
         "generators": "gen",
         "storage_units": "storage",
-        "loads": "load",
+        "conventional_loads": "load",
         "charging_points": "cp",
         "heat_pumps": "hp",
     }
@@ -123,8 +123,8 @@ def _fixed_cosphi_default_power_factor(comp_df, component_type, configs):
         All components must have the same `component_type`.
     component_type : str
         The component type determines the reactive power factor and mode used.
-        Possible options are 'generators', 'storage_units', 'loads', 'charging_points',
-        and 'heat_pumps'.
+        Possible options are 'generators', 'storage_units', 'conventional_loads',
+        'charging_points', and 'heat_pumps'.
     configs : :class:`~.tools.config.Config`
         eDisGo configuration data.
 
@@ -150,8 +150,8 @@ def _fixed_cosphi_default_power_factor(comp_df, component_type, configs):
     else:
         raise ValueError(
             "Given 'component_type' is not valid. Valid options are "
-            "'generators','storage_units', 'loads', 'charging_points', and "
-            "'heat_pumps'."
+            "'generators','storage_units', 'conventional_loads', 'charging_points', "
+            "and 'heat_pumps'."
         )
 
 
@@ -170,8 +170,8 @@ def _fixed_cosphi_default_reactive_power_sign(comp_df, component_type, configs):
         All components must have the same `component_type`.
     component_type : str
         The component type determines the reactive power factor and mode used.
-        Possible options are 'generators', 'storage_units', 'loads', 'charging_points',
-        and 'heat_pumps'.
+        Possible options are 'generators', 'storage_units', 'conventional_loads',
+        'charging_points', and 'heat_pumps'.
     configs : :class:`~.tools.config.Config`
         eDisGo configuration data.
 
@@ -187,7 +187,7 @@ def _fixed_cosphi_default_reactive_power_sign(comp_df, component_type, configs):
     q_sign_dict = {
         "generators": get_q_sign_generator,
         "storage_units": get_q_sign_generator,
-        "loads": get_q_sign_load,
+        "conventional_loads": get_q_sign_load,
         "charging_points": get_q_sign_load,
         "heat_pumps": get_q_sign_load,
     }
@@ -207,6 +207,6 @@ def _fixed_cosphi_default_reactive_power_sign(comp_df, component_type, configs):
     else:
         raise ValueError(
             "Given 'component_type' is not valid. Valid options are "
-            "'generators','storage_units', 'loads', 'charging_points', and "
-            "'heat_pumps'."
+            "'generators','storage_units', 'conventional_loads', 'charging_points', "
+            "and 'heat_pumps'."
         )

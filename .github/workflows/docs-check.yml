@@ -1,0 +1,17 @@
+name: "Docs link check"
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install dependencies
+      run: |
+        sudo apt install pandoc
+        python -m pip install --upgrade pip
+        pip install -r rtd_requirements.txt
+    - name: Check doc links
+      run: |
+        sphinx-build . -b linkcheck -d _build/doctrees _build/html
+      working-directory: ./doc
