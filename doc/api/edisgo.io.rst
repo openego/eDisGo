@@ -1,6 +1,14 @@
 edisgo.io package
 =================
 
+edisgo.io.db
+------------------------------
+
+.. automodule:: edisgo.io.db
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 edisgo.io.ding0\_import module
 ------------------------------
 
