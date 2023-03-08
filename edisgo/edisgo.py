@@ -2359,7 +2359,10 @@ class EDisGo:
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
     ):
         """
-        Resamples all generator, load and storage time series to a desired resolution.
+        Resamples time series data in
+        :class:`~.network.timeseries.TimeSeries` and :class:`~.network.heat.HeatPump`.
+
+        Both up- and down-sampling methods are possible.
 
         The following time series are affected by this:
 
@@ -2375,7 +2378,9 @@ class EDisGo:
 
         * :attr:`~.network.timeseries.TimeSeries.storage_units_reactive_power`
 
-        Both up- and down-sampling methods are possible.
+        * :attr:`~.network.heat.HeatPump.cop_df`
+
+        * :attr:`~.network.heat.HeatPump.heat_demand_df`
 
         Parameters
         ----------
@@ -2402,6 +2407,7 @@ class EDisGo:
 
         """
         self.timeseries.resample_timeseries(method=method, freq=freq)
+        self.heat_pump.resample_timeseries(method=method, freq=freq)
 
 
 def import_edisgo_from_pickle(filename, path=""):

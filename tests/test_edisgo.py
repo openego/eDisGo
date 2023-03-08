@@ -1536,6 +1536,22 @@ class TestEDisGo:
             )
             caplog.clear()
 
+    def test_resample_timeseries(self):
+        self.setup_worst_case_time_series()
+        self.edisgo.resample_timeseries()
+        assert len(self.edisgo.timeseries.loads_active_power) == 16
+
+        self.edisgo.heat_pump.cop_df = pd.DataFrame(
+            data={
+                "hp1": [5.0, 6.0],
+                "hp2": [7.0, 8.0],
+            },
+            index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
+        )
+        self.edisgo.resample_timeseries(freq="30min")
+        assert len(self.edisgo.timeseries.loads_active_power) == 8
+        assert len(self.edisgo.heat_pump.cop_df) == 4
+
 
 class TestEDisGoFunc:
     def test_import_edisgo_from_files(self):
