@@ -1,0 +1,9 @@
+Release v0.3.0
+================
+
+Release date: <month> <day>, <year>
+
+Changes
+-------
+
+* Added functionalities to obtain heat pump data from oedb `#324 <https://github.com/openego/eDisGo/pull/324>`_
