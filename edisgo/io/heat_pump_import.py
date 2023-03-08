@@ -1,4 +1,5 @@
 import logging
+import random
 
 import geopandas as gpd
 import numpy as np
@@ -267,6 +268,18 @@ def _grid_integration(
             lambda _: f"HP_{_.building_id}", axis=1
         )
         hp_individual.set_index("index", drop=True, inplace=True)
+
+        # check for duplicated load names and choose random name for duplicates
+        tmp = hp_individual.index.append(edisgo_object.topology.loads_df.index)
+        duplicated_indices = tmp[tmp.duplicated()]
+        for duplicate in duplicated_indices:
+            # find unique name
+            random.seed(a=duplicate)
+            new_name = duplicate
+            while new_name in tmp:
+                new_name = f"{duplicate}_{random.randint(10 ** 1, 10 ** 2)}"
+            # change name in hp_individual
+            hp_individual.rename(index={duplicate: new_name}, inplace=True)
 
         # filter heat pumps that are too large to be integrated into LV level
         hp_individual_large = hp_individual[
