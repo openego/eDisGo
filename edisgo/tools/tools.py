@@ -426,6 +426,61 @@ def get_path_length_to_station(edisgo_obj):
     return edisgo_obj.topology.buses_df.path_length_to_station
 
 
+def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
+    """
+    Returns all buses downstream (farther away from station) of the given bus or line.
+
+    In case a bus is given, returns all buses downstream of the given bus plus the
+    given bus itself.
+    In case a line is given, returns all buses downstream of the bus that is closer to
+    the station (thus only one bus of the line is included in the returned buses).
+
+    Parameters
+    ------------
+    edisgo_obj : EDisGo object
+    comp_name : str
+        Name of bus or line (as in index of :attr:`~.network.topology.Topology.buses_df`
+        or :attr:`~.network.topology.Topology.lines_df`) to get downstream buses for.
+    comp_type : str
+        Can be either 'bus' or 'line'. Default: 'bus'.
+
+    Returns
+    -------
+    list(str)
+        List of buses (as in index of :attr:`~.network.topology.Topology.buses_df`)
+        downstream of the given component.
+
+    """
+    graph = edisgo_obj.topology.to_graph()
+    station_node = edisgo_obj.topology.transformers_hvmv_df.bus1.values[0]
+
+    if comp_type == "bus":
+        # get upstream bus to determine which edge to remove to create subgraph
+        bus = comp_name
+        path_to_station = nx.shortest_path(graph, station_node, comp_name)
+        bus_upstream = path_to_station[-2]
+    elif comp_type == "line":
+        # get bus further downstream to determine which buses downstream are affected
+        bus0 = edisgo_obj.topology.lines_df.at[comp_name, "bus0"]
+        bus1 = edisgo_obj.topology.lines_df.at[comp_name, "bus1"]
+        path_to_station_bus0 = nx.shortest_path(graph, station_node, bus0)
+        path_to_station_bus1 = nx.shortest_path(graph, station_node, bus1)
+        bus = bus0 if len(path_to_station_bus0) > len(path_to_station_bus1) else bus1
+        bus_upstream = bus0 if bus == bus1 else bus1
+    else:
+        return None
+
+    # remove edge between bus and next bus upstream
+    graph.remove_edge(bus, bus_upstream)
+
+    # get subgraph containing relevant bus
+    subgraphs = list(graph.subgraph(c) for c in nx.connected_components(graph))
+    for subgraph in subgraphs:
+        if bus in subgraph.nodes():
+            return list(subgraph.nodes())
+    return None
+
+
 def assign_voltage_level_to_component(df, buses_df):
     """
     Adds column with specification of voltage level component is in.
