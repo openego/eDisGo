@@ -1650,10 +1650,10 @@ class EDisGo:
         """
         charging_strategy(self, strategy=strategy, **kwargs)
 
-    def import_heat_pumps(self, scenario, engine, **kwargs):
+    def import_heat_pumps(self, scenario, engine, year=None):
         """
-        Gets heat pump capacities for specified scenario from oedb and integrates them
-        into the grid.
+        Gets heat pump data for specified scenario from oedb and integrates the heat
+        pumps into the grid.
 
         Besides heat pump capacity the heat pump's COP and heat demand to be served
         are as well retrieved.
@@ -1669,25 +1669,34 @@ class EDisGo:
 
         The following steps are conducted in this function:
 
-            * Spatially disaggregated data on heat pump capacities in individual and
-              district heating are obtained from the database for the specified
-              scenario.
+            * Heat pump capacities for individual and district heating per building
+              respectively district heating area are obtained from the database for the
+              specified scenario and integrated into the grid using the function
+              :func:`~.io.heat_pump_import.oedb`.
             * Heat pumps are integrated into the grid (added to
-              :attr:`~.network.topology.Topology.loads_df`).
+              :attr:`~.network.topology.Topology.loads_df`) as follows.
 
               * Grid connection points of heat pumps for individual heating are
-                determined based on the corresponding building ID.
+                determined based on the corresponding building ID. In case the heat
+                pump is too large to use the same grid connection point, they are
+                connected via their own grid connection point.
               * Grid connection points of heat pumps for district heating are determined
                 based on their geolocation and installed capacity.
                 See :attr:`~.network.topology.Topology.connect_to_mv` and
-                :attr:`~.network.topology.Topology.connect_to_lv` for more information.
-            * COP and heat demand for each heat pump are retrieved from the database
-              and stored in the :class:`~.network.heat.HeatPump` class that can be
-              accessed through :attr:`~.edisgo.EDisGo.heat_pump`.
+                :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
+                for more information.
+            * COP and heat demand for each heat pump are retrieved from the database,
+              using the functions :func:`~.io.timeseries_import.cop_oedb` respectively
+              :func:`~.io.timeseries_import.heat_demand_oedb`, and stored in the
+              :class:`~.network.heat.HeatPump` class that can be accessed through
+              :attr:`~.edisgo.EDisGo.heat_pump`.
 
         Be aware that this function does not yield electricity load time series for the
         heat pumps. The actual time series are determined through applying an
-        operation strategy or optimising heat pump dispatch.
+        operation strategy or optimising heat pump dispatch. Further, the heat pumps
+        do not yet have a thermal storage and can therefore not yet be used as a
+        flexibility. Thermal storage units need to be added manually to
+        :attr:`~.edisgo.EDisGo.thermal_storage_units_df`.
 
         After the heat pumps are integrated there may be grid issues due to the
         additional load. These are not solved automatically. If you want to
@@ -1701,17 +1710,57 @@ class EDisGo:
             are 'eGon2035' and 'eGon100RE'.
         engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
             Database engine.
+        year : int or None
+            Year to index COP and heat demand data by.
+            If none is provided and :py:attr:`~.network.timeseries.TimeSeries.timeindex`
+            is already set, data is indexed by the same year. Otherwise, time index will
+            be set according to the scenario (2035 in case of the 'eGon2035' scenario
+            and 2045 in case of the 'eGon100RE' scenario).
+            A leap year can currently not be handled. In case a leap year is given, the
+            time index is set according to the chosen scenario.
 
         """
+        # set up year to index data by
+        # first try to get index from time index
+        if year is None:
+            year = tools.get_year_based_on_timeindex(self)
+        # if time index is not set get year from scenario
+        if year is None:
+            year = tools.get_year_based_on_scenario(scenario)
+            # if year is still None, scenario is not valid
+            if year is None:
+                raise ValueError(
+                    "Invalid input for parameter 'scenario'. Possible options are "
+                    "'eGon2035' and 'eGon100RE'."
+                )
+        # if year is leap year set year according to scenario
+        if pd.Timestamp(year, 1, 1).is_leap_year:
+            logger.warning(
+                "A leap year was given to 'heat_demand_oedb' function. This is "
+                "currently not valid. The year the data is indexed by is therefore set "
+                "according to the given scenario."
+            )
+            return self.import_heat_pumps(scenario, engine, year=None)
+
         integrated_heat_pumps = import_heat_pumps_oedb(
             edisgo_object=self, scenario=scenario, engine=engine
         )
-        self.heat_pump.set_heat_demand(
-            self, "oedb", heat_pump_names=integrated_heat_pumps
-        )
-        self.heat_pump.set_cop(
-            self, "oedb", heat_pump_names=integrated_heat_pumps, engine=engine
-        )
+        if len(integrated_heat_pumps) > 0:
+            self.heat_pump.set_heat_demand(
+                self,
+                "oedb",
+                heat_pump_names=integrated_heat_pumps,
+                engine=engine,
+                scenario=scenario,
+                year=year,
+            )
+            self.heat_pump.set_cop(
+                self,
+                "oedb",
+                heat_pump_names=integrated_heat_pumps,
+                engine=engine,
+                year=year,
+            )
 
     def apply_heat_pump_operating_strategy(
         self, strategy="uncontrolled", heat_pump_names=None, **kwargs

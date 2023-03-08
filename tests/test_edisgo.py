@@ -1158,6 +1158,35 @@ class TestEDisGo:
         )
         # fmt: on
 
+    @pytest.mark.local
+    def test_import_heat_pumps(self):
+
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+
+        # ################# test with wrong scenario name #############
+        with pytest.raises(ValueError):
+            edisgo_object.import_heat_pumps(
+                scenario="eGon",
+                engine=pytest.engine,
+            )
+
+        # ################# test with leap year #############
+        edisgo_object.import_heat_pumps(
+            scenario="eGon2035",
+            engine=pytest.engine,
+            year=2020,
+        )
+
+        loads_df = edisgo_object.topology.loads_df
+        hp_df = loads_df[loads_df.type == "heat_pump"]
+        assert len(hp_df) == 177
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 177)
+        assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2035
+        assert edisgo_object.heat_pump.cop_df.shape == (8760, 177)
+        assert edisgo_object.heat_pump.cop_df.index[0].year == 2035
+
     def test_apply_charging_strategy(self):
         self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
