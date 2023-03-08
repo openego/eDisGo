@@ -197,55 +197,62 @@ class HeatPump:
                     edisgo_object.topology.loads_df.type == "heat_pump"
                 ].index
 
-            # check weather cell information of heat pumps
-            hp_df = edisgo_object.topology.loads_df.loc[heat_pump_names, :]
-            # if no heat pump has weather cell information, throw an error
-            if (
-                "weather_cell_id" not in hp_df.columns
-                or hp_df.weather_cell_id.isna().all()
-            ):
-                raise ValueError(
-                    "In order to obtain COP time series data from database information "
-                    "on weather cells (expected in column 'weather_cell_id' in "
-                    "Topology.loads_df) is needed, but none is given."
-                )
-            # in case only some heat pumps have missing weather cell information, give
-            # a warning and use random weather cell ID to fill missing information
-            if hp_df.weather_cell_id.isna().any():
-                logger.warning(
-                    "There are heat pumps with no weather cell ID. They are assigned "
-                    "a weather cell ID from another heat pump."
-                )
-                random_weather_cell_id = hp_df.weather_cell_id.dropna().unique()[0]
-                hp_without_weather_cell = hp_df[hp_df.weather_cell_id.isna()].index
-                # random weather cell ID is not written to loads_df!
-                hp_df.loc[
-                    hp_without_weather_cell, "weather_cell_id"
-                ] = random_weather_cell_id
-            weather_cells = hp_df.weather_cell_id.dropna().unique()
+            if len(heat_pump_names) > 0:
+                # check weather cell information of heat pumps
+                hp_df = edisgo_object.topology.loads_df.loc[heat_pump_names, :]
+                # if no heat pump has weather cell information, throw an error
+                if (
+                    "weather_cell_id" not in hp_df.columns
+                    or hp_df.weather_cell_id.isna().all()
+                ):
+                    raise ValueError(
+                        "In order to obtain COP time series data from database  "
+                        "information on weather cells (expected in column "
+                        "'weather_cell_id' in Topology.loads_df) is needed, but none "
+                        "is given."
+                    )
+                # in case only some heat pumps have missing weather cell information,
+                # give a warning and use random weather cell ID to fill missing
+                # information
+                if hp_df.weather_cell_id.isna().any():
+                    logger.warning(
+                        "There are heat pumps with no weather cell ID. They are "
+                        "assigned a weather cell ID from another heat pump."
+                    )
+                    random_weather_cell_id = hp_df.weather_cell_id.dropna().unique()[0]
+                    hp_without_weather_cell = hp_df[hp_df.weather_cell_id.isna()].index
+                    # random weather cell ID is not written to loads_df!
+                    hp_df.loc[
+                        hp_without_weather_cell, "weather_cell_id"
+                    ] = random_weather_cell_id
+                weather_cells = hp_df.weather_cell_id.dropna().unique()
 
-            # set up year to index COP data by
-            year = kwargs.get("year", None)
-            if year is None:
-                year = edisgo_object.timeseries.timeindex.year
-                if len(year) == 0:
-                    year = None
-                else:
-                    year = year[0]
+                # set up year to index COP data by
+                year = kwargs.get("year", None)
+                if year is None:
+                    year = edisgo_object.timeseries.timeindex.year
+                    if len(year) == 0:
+                        year = None
+                    else:
+                        year = year[0]
 
-            # get COP per weather cell
-            ts_cop_per_weather_cell = timeseries_import.cop_oedb(
-                engine=kwargs.get("engine", None),
-                weather_cell_ids=weather_cells,
-                year=year,
-            )
-            # assign COP time series to each heat pump
-            cop_df = pd.DataFrame(
-                data={
-                    _: ts_cop_per_weather_cell.loc[:, hp_df.at[_, "weather_cell_id"]]
-                    for _ in hp_df.index
-                }
-            )
+                # get COP per weather cell
+                ts_cop_per_weather_cell = timeseries_import.cop_oedb(
+                    engine=kwargs.get("engine", None),
+                    weather_cell_ids=weather_cells,
+                    year=year,
+                )
+                # assign COP time series to each heat pump
+                cop_df = pd.DataFrame(
+                    data={
+                        _: ts_cop_per_weather_cell.loc[
+                            :, hp_df.at[_, "weather_cell_id"]
+                        ]
+                        for _ in hp_df.index
+                    }
+                )
+            else:
+                cop_df = pd.DataFrame()
         elif isinstance(ts_cop, pd.DataFrame):
             cop_df = ts_cop
         else:
@@ -327,26 +334,29 @@ class HeatPump:
                     edisgo_object.topology.loads_df.type == "heat_pump"
                 ].index
 
-            # set up year to index data by
-            year = kwargs.get("year", None)
-            if year is None:
-                year = edisgo_object.timeseries.timeindex.year
-                if len(year) == 0:
-                    year = None
-                else:
-                    year = year[0]
+            if len(heat_pump_names) > 0:
+                # set up year to index data by
+                year = kwargs.get("year", None)
+                if year is None:
+                    year = edisgo_object.timeseries.timeindex.year
+                    if len(year) == 0:
+                        year = None
+                    else:
+                        year = year[0]
 
-            # get heat demand per heat pump
-            heat_demand_df = timeseries_import.heat_demand_oedb(
-                edisgo_object,
-                scenario=kwargs.get("scenario", ""),
-                engine=kwargs.get("engine", None),
-                year=year,
-            )
-            heat_pump_names_select = [
-                _ for _ in heat_demand_df.columns if _ in heat_pump_names
-            ]
-            heat_demand_df = heat_demand_df.loc[:, heat_pump_names_select]
+                # get heat demand per heat pump
+                heat_demand_df = timeseries_import.heat_demand_oedb(
+                    edisgo_object,
+                    scenario=kwargs.get("scenario", ""),
+                    engine=kwargs.get("engine", None),
+                    year=year,
+                )
+                heat_pump_names_select = [
+                    _ for _ in heat_demand_df.columns if _ in heat_pump_names
+                ]
+                heat_demand_df = heat_demand_df.loc[:, heat_pump_names_select]
+            else:
+                heat_demand_df = pd.DataFrame()
 
         elif isinstance(ts_heat_demand, pd.DataFrame):
             heat_demand_df = ts_heat_demand

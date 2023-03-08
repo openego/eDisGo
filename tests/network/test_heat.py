@@ -144,6 +144,15 @@ class TestHeatPump:
         assert "There are heat pumps with no weather cell ID." in caplog.text
         assert self.heatpump.cop_df.shape == (8760, 4)
 
+        # test with empty list for heat_pump_names
+        self.heatpump.set_cop(
+            edisgo_object,
+            "oedb",
+            engine=pytest.engine,
+            heat_pump_names=[],
+        )
+        assert self.heatpump.cop_df.shape == (8760, 4)
+
     def test_set_heat_demand(self):
         # test with dataframe
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
@@ -199,6 +208,8 @@ class TestHeatPump:
         assert self.heatpump.heat_demand_df.index[0].year == 2035
 
         # ###### test with timeindex to get year from and invalid heat pump name #####
+        # reset heat_demand_df
+        self.heatpump.heat_demand_df = pd.DataFrame()
         edisgo_object.set_timeindex(
             pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         )
@@ -208,6 +219,17 @@ class TestHeatPump:
             engine=pytest.engine,
             scenario="eGon2035",
             heat_pump_names=["HP_442081", "HP_dummy"],
+        )
+        assert self.heatpump.heat_demand_df.shape == (8760, 1)
+        assert self.heatpump.heat_demand_df.index[0].year == 2011
+
+        # ###### test with empty list for heat pump names #####
+        self.heatpump.set_heat_demand(
+            edisgo_object,
+            "oedb",
+            engine=pytest.engine,
+            scenario="eGon2035",
+            heat_pump_names=[],
         )
         assert self.heatpump.heat_demand_df.shape == (8760, 1)
         assert self.heatpump.heat_demand_df.index[0].year == 2011
