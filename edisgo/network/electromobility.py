@@ -749,47 +749,43 @@ class Electromobility:
         freq_orig = flex_band.index[1] - flex_band.index[0]
         hourly_steps = int(60 / (freq_orig.total_seconds() / 60))
 
-        tmp = (
-            (
-                self.flexibility_bands["upper_energy"]
-                - self.flexibility_bands["lower_energy"]
-            )
-            < 0.0
-        ).any()
+        diff = (
+            self.flexibility_bands["upper_energy"]
+            - self.flexibility_bands["lower_energy"]
+        )
+        tmp = (diff < 0.0).any()
         if tmp.any():
-            print(
-                (
-                    self.flexibility_bands["upper_energy"]
-                    - self.flexibility_bands["lower_energy"]
-                ).max()
-            )
+            max_exceedance = abs(diff.min().min())
             raise ValueError(
-                f"Lower energy bound is higher than upper energy bound for the "
-                f"following charging points: {list(tmp[tmp].index)}. Please check."
+                f"Lower energy band is higher than upper energy band for the "
+                f"following charging points: {list(tmp[tmp].index)}. The maximum "
+                f"exceedance is {max_exceedance}. Please check."
             )
-        tmp = (
-            (
-                self.flexibility_bands["upper_energy"].diff()
-                - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
-            )
-            > 0.0
-        ).any()
+
+        diff = (
+            self.flexibility_bands["upper_energy"].diff()
+            - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
+        )
+        tmp = (diff > 0.0).any()
         if tmp.any():
+            max_exceedance = diff.max().max()
             raise ValueError(
                 f"Upper energy band has power values higher than nominal power for the "
-                f"following charging points: {list(tmp[tmp].index)}. Please check."
+                f"following charging points: {list(tmp[tmp].index)}. The maximum "
+                f"exceedance is {max_exceedance}. Please check."
             )
-        tmp = (
-            (
-                self.flexibility_bands["lower_energy"].diff()
-                - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
-            )
-            > 0.0
-        ).any()
+
+        diff = (
+            self.flexibility_bands["lower_energy"].diff()
+            - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
+        )
+        tmp = (diff > 0.0).any()
         if tmp.any():
+            max_exceedance = diff.max().max()
             raise ValueError(
                 f"Lower energy band has power values higher than nominal power for the "
-                f"following charging points: {list(tmp[tmp].index)}. Please check."
+                f"following charging points: {list(tmp[tmp].index)}. The maximum "
+                f"exceedance is {max_exceedance}. Please check."
             )
 
     def to_csv(self, directory, attributes=None):

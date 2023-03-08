@@ -404,13 +404,13 @@ class TestElectromobility:
             index=timeindex,
         )
 
-        # ######### check upper energy and lower than lower energy band ############
+        # ######### check upper energy band lower than lower energy band ############
         # modify flex band such that error is raised
         flex_bands["upper_energy"].at[timeindex[1], "CP2"] = 1.0
         self.edisgo_obj.electromobility.flexibility_bands = flex_bands
         msg = re.escape(
-            "Lower energy bound is higher than upper energy bound for the "
-            "following charging points: ['CP2']. Please check."
+            "Lower energy band is higher than upper energy band for the following "
+            "charging points: ['CP2']. The maximum exceedance is 1.0. Please check."
         )
         with pytest.raises(ValueError, match=msg):
             self.edisgo_obj.electromobility.check_integrity()
@@ -423,7 +423,8 @@ class TestElectromobility:
         self.edisgo_obj.electromobility.flexibility_bands = flex_bands
         msg = re.escape(
             "Upper energy band has power values higher than nominal power for the "
-            "following charging points: ['CP1']. Please check."
+            "following charging points: ['CP1']. The maximum exceedance is 1.0. "
+            "Please check."
         )
         with pytest.raises(ValueError, match=msg):
             self.edisgo_obj.electromobility.check_integrity()
@@ -436,7 +437,8 @@ class TestElectromobility:
         self.edisgo_obj.electromobility.flexibility_bands = flex_bands
         msg = re.escape(
             "Lower energy band has power values higher than nominal power for the "
-            "following charging points: ['CP1']. Please check."
+            "following charging points: ['CP1']. The maximum exceedance is 1.0. "
+            "Please check."
         )
         with pytest.raises(ValueError, match=msg):
             self.edisgo_obj.electromobility.check_integrity()
