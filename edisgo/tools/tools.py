@@ -771,14 +771,21 @@ def add_line_susceptance(
 
 
 def resample(
-    object, freq_orig, method: str = "ffill", freq: str | pd.Timedelta = "15min"
+    object,
+    freq_orig,
+    method: str = "ffill",
+    freq: str | pd.Timedelta = "15min",
+    attr_to_resample=None,
 ):
     """
-    Resamples all time series data in given object to a desired resolution.
+    Resamples time series data to a desired resolution.
+
+    Both up- and down-sampling methods are possible.
 
     Parameters
     ----------
-    object : :class:`~.network.timeseries.TimeSeries`
+    object : :class:`~.network.timeseries.TimeSeries` or \
+        :class:`~.network.heat.HeatPump`
         Object of which to resample time series data.
     freq_orig : :pandas:`pandas.Timedelta<Timedelta>`
         Frequency of original time series data.
@@ -788,13 +795,18 @@ def resample(
     freq : str, optional
         See `freq` parameter in :attr:`~.EDisGo.resample_timeseries` for more
         information.
+    attr_to_resample : list(str), optional
+        List of attributes to resample. Per default, all attributes specified in
+        respective object's `_attributes` are resampled.
 
     """
+    if attr_to_resample is None:
+        attr_to_resample = object._attributes
 
     # add time step at the end of the time series in case of up-sampling so that
     # last time interval in the original time series is still included
     df_dict = {}
-    for attr in object._attributes:
+    for attr in attr_to_resample:
         if not getattr(object, attr).empty:
             df_dict[attr] = getattr(object, attr)
             if pd.Timedelta(freq) < freq_orig:  # up-sampling
