@@ -506,7 +506,7 @@ class Electromobility:
         # sanity check
         self.check_integrity()
         # check time index
-        if len(edisgo_timeindex) > 1:
+        if len(edisgo_timeindex) > 0:
             missing_indices = [_ for _ in edisgo_timeindex if _ not in flex_band_index]
             if len(missing_indices) > 0:
                 logger.warning(
