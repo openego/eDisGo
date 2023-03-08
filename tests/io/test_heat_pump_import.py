@@ -60,7 +60,6 @@ class TestHeatPumpImport:
             hp_df[hp_df.sector == "district_heating"].p_set.sum(), 0.095348
         )
 
-    @pytest.mark.local
     def test__grid_integration(self, caplog):
 
         hp_individual = self.setup_heat_pump_data_individual_heating()
@@ -126,3 +125,11 @@ class TestHeatPumpImport:
         # is already connected to the MV
         bus_hp_voltage_level_5 = hp_df[hp_df.p_set == 2.0].bus[0]
         assert bus_hp_voltage_level_5 == bus_hp_voltage_level_5_building
+
+        # ######## test check of duplicated names ###########
+        heat_pump_import._grid_integration(
+            self.edisgo, hp_individual=hp_individual, hp_central=pd.DataFrame()
+        )
+        loads_df = self.edisgo.topology.loads_df
+        hp_df = loads_df[loads_df.type == "heat_pump"]
+        assert len(hp_df) == 9
