@@ -1576,7 +1576,7 @@ class TestEDisGo:
         self.edisgo.electromobility.flexibility_bands["upper_energy"].at[
             timeindex[1], "CP2"
         ] = 1.0
-        msg = "Lower energy bound is higher than upper energy bound for the "
+        msg = "Lower energy band is higher than upper energy band for the "
         with pytest.raises(ValueError, match=msg):
             self.edisgo.check_integrity()
 
