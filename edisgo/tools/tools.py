@@ -518,6 +518,11 @@ def determine_bus_voltage_level(edisgo_object, bus_name):
     The voltage level is specified through an integer value from 4 to 7 with
     4 = MV busbar, 5 = MV grid, 6 = LV busbar and 7 = LV grid.
 
+    Buses that are directly connected to a station and not part of a longer feeder
+    or half-ring, i.e. they are only part of one line, are as well considered as voltage
+    level 4 or 6, depending on if they are connected to an HV/MV station or MV/LV
+    station.
+
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
@@ -533,15 +538,49 @@ def determine_bus_voltage_level(edisgo_object, bus_name):
     """
     v_nom = edisgo_object.topology.buses_df.at[bus_name, "v_nom"]
     if v_nom < 1:
-        if bus_name in edisgo_object.topology.transformers_df.bus1.values:
+        station_buses = edisgo_object.topology.transformers_df.bus1.values
+        if bus_name in station_buses:
             voltage_level = 6
         else:
-            voltage_level = 7
+            # check if bus is directly connected to a station via a line that is not
+            # connected to any other line - if that is the case it is considered as
+            # voltage level 6
+            connected_lines_df = edisgo_object.topology.get_connected_lines_from_bus(
+                bus_name
+            )
+            if len(connected_lines_df) > 1:
+                voltage_level = 7
+            else:
+                connected_line = connected_lines_df.iloc[0, :]
+                if (
+                    connected_line.at["bus0"] in station_buses
+                    or connected_line.at["bus1"] in station_buses
+                ):
+                    voltage_level = 6
+                else:
+                    voltage_level = 7
     else:
-        if bus_name in edisgo_object.topology.transformers_hvmv_df.bus1.values:
+        station_buses = edisgo_object.topology.transformers_hvmv_df.bus1.values
+        if bus_name in station_buses:
             voltage_level = 4
         else:
-            voltage_level = 5
+            # check if bus is directly connected to a station via a line that is not
+            # connected to any other line - if that is the case it is considered as
+            # voltage level 4
+            connected_lines_df = edisgo_object.topology.get_connected_lines_from_bus(
+                bus_name
+            )
+            if len(connected_lines_df) > 1:
+                voltage_level = 5
+            else:
+                connected_line = connected_lines_df.iloc[0, :]
+                if (
+                    connected_line.at["bus0"] in station_buses
+                    or connected_line.at["bus1"] in station_buses
+                ):
+                    voltage_level = 4
+                else:
+                    voltage_level = 5
     return voltage_level
 
 

@@ -287,6 +287,22 @@ class TestTools:
         assert tools.determine_bus_voltage_level(self.edisgo, bus_lv_station) == 6
         assert tools.determine_bus_voltage_level(self.edisgo, bus_lv) == 7
 
+        # test if buses directly connected to station are identified as voltage level
+        # 4 or 6, if they are not part of a larger feeder
+        # set up bus that is directly connected to HV/MV station
+        bus_voltage_level_4 = self.edisgo.topology.add_bus("dummy_bus", 20.0)
+        self.edisgo.topology.add_line(
+            bus_mv_station, bus_voltage_level_4, 10.0, type_info="NA2XS2Y 3x1x185 RM/25"
+        )
+        bus_voltage_level_5 = "Bus_BranchTee_MVGrid_1_1"
+        bus_voltage_level_6 = "Bus_GeneratorFluctuating_16"
+        bus_voltage_level_7 = "Bus_BranchTee_LVGrid_4_1"
+
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_4) == 4
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_5) == 5
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_6) == 6
+        assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_7) == 7
+
     def test_get_weather_cells_intersecting_with_grid_district(self):
         weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
             self.edisgo
