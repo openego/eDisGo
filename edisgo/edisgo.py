@@ -2383,7 +2383,8 @@ class EDisGo:
     ):
         """
         Resamples time series data in
-        :class:`~.network.timeseries.TimeSeries` and :class:`~.network.heat.HeatPump`.
+        :class:`~.network.timeseries.TimeSeries`, :class:`~.network.heat.HeatPump` and
+        :class:`~.network.electromobility.Electromobility`.
 
         Both up- and down-sampling methods are possible.
 
@@ -2411,7 +2412,8 @@ class EDisGo:
         ----------
         method : str, optional
             Method to choose from to fill missing values when resampling time series
-            data in :class:`~.network.timeseries.TimeSeries` object (method for
+            data in :class:`~.network.timeseries.TimeSeries` and
+            :class:`~.network.heat.HeatPump` objects (method for
             flexibility bands in :class:`~.network.electromobility.Electromobility`
             object cannot be chosen to assure consistency of flexibility band data).
             Possible options are:
