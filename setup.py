@@ -59,7 +59,7 @@ requirements = [
     "sqlalchemy < 1.4.0",
     "sshtunnel",
     "workalendar",
-    "yaml",
+    "pyyaml",
 ]
 
 dev_requirements = [
