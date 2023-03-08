@@ -29,6 +29,32 @@ class TestElectromobility:
         distribute_charging_demand(self.edisgo_obj)
         integrate_charging_parks(self.edisgo_obj)
 
+    def setup_simple_flex_band_data(self):
+        timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
+        flex_bands = {}
+        flex_bands["upper_power"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 12.0, 12.0, 12.0, 12.0, 0.0],
+                "CP2": [3.0, 3.0, 0.0, 0.0, 3.0, 3.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["upper_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 6.0, 12.0, 12.0, 12.0, 12.0],
+                "CP2": [1.5, 2.0, 2.0, 2.0, 3.5, 4.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["lower_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 0.0, 0.0, 6.0, 12.0, 12.0],
+                "CP2": [0.5, 2.0, 2.0, 2.0, 2.5, 4.0],
+            },
+            index=timeindex,
+        )
+        return flex_bands
+
     def test_charging_processes_df(self):
         charging_processes_df = self.edisgo_obj.electromobility.charging_processes_df
         assert len(charging_processes_df) == 48
@@ -143,6 +169,43 @@ class TestElectromobility:
         ].index
         assert (flex_bands_index[1] - flex_bands_index[0]) == pd.Timedelta("1H")
 
+    def test__fix_flexibility_bands_rounding_errors(self):
+        # set up test data
+        # set charging efficiency to 1 to make things easier
+        self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 1.0
+
+        # set up flexibility bands
+        timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
+        flex_bands = {}
+        flex_bands["upper_power"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 12.0, 12.0, 12.0, 12.0, 0.0],
+                "CP2": [3.0, 3.0, 0.0, 0.0, 3.0, 3.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["upper_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 6.0, 12.0, 12.0, 12.0, 12.0],
+                "CP2": [1.5, 2.0, 2.0, 2.0, 3.5, 4.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["lower_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 0.0, 0.0, 6.0, 12.0, 12.0],
+                "CP2": [0.5, 2.0, 2.0, 2.0, 2.5, 4.0],
+            },
+            index=timeindex,
+        )
+
+        self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+
+        # test upper power too low to reach upper energy
+        # test reduce lower energy band when it is above upper energy band
+        # test increasing upper power when it is too low to meet lower energy
+        pass
+
     def test_resample(self):
         """
         Checks resampling function with flexibility bands determined using standing
@@ -248,32 +311,8 @@ class TestElectromobility:
         self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 1.0
 
         # set up flexibility bands
-        timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
-        flex_bands = {}
-        flex_bands["upper_power"] = pd.DataFrame(
-            data={
-                "CP1": [0.0, 12.0, 12.0, 12.0, 12.0, 0.0],
-                "CP2": [3.0, 3.0, 0.0, 0.0, 3.0, 3.0],
-            },
-            index=timeindex,
-        )
-        flex_bands["upper_energy"] = pd.DataFrame(
-            data={
-                "CP1": [0.0, 6.0, 12.0, 12.0, 12.0, 12.0],
-                "CP2": [1.5, 2.0, 2.0, 2.0, 3.5, 4.0],
-            },
-            index=timeindex,
-        )
-        flex_bands["lower_energy"] = pd.DataFrame(
-            data={
-                "CP1": [0.0, 0.0, 0.0, 6.0, 12.0, 12.0],
-                "CP2": [0.5, 2.0, 2.0, 2.0, 2.5, 4.0],
-            },
-            index=timeindex,
-        )
-
+        flex_bands = self.setup_simple_flex_band_data()
         self.edisgo_obj.electromobility.flexibility_bands = flex_bands
-        self.edisgo_obj.electromobility.check_integrity()
 
         # ##################### check up-sampling ####################
 
@@ -380,29 +419,8 @@ class TestElectromobility:
         self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 1.0
 
         # set up valid flexibility bands
+        flex_bands = self.setup_simple_flex_band_data()
         timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
-        flex_bands = {}
-        flex_bands["upper_power"] = pd.DataFrame(
-            data={
-                "CP1": [0.0, 12.0, 12.0, 12.0, 12.0, 0.0],
-                "CP2": [3.0, 3.0, 0.0, 0.0, 3.0, 3.0],
-            },
-            index=timeindex,
-        )
-        flex_bands["upper_energy"] = pd.DataFrame(
-            data={
-                "CP1": [0.0, 6.0, 12.0, 12.0, 12.0, 12.0],
-                "CP2": [1.5, 2.0, 2.0, 2.0, 3.5, 4.0],
-            },
-            index=timeindex,
-        )
-        flex_bands["lower_energy"] = pd.DataFrame(
-            data={
-                "CP1": [0.0, 0.0, 0.0, 6.0, 12.0, 12.0],
-                "CP2": [0.5, 2.0, 2.0, 2.0, 2.5, 4.0],
-            },
-            index=timeindex,
-        )
 
         # ######### check upper energy band lower than lower energy band ############
         # modify flex band such that error is raised
