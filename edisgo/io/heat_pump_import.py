@@ -1,7 +1,7 @@
 import logging
+import os
 import random
 
-import geopandas as gpd
 import numpy as np
 import pandas as pd
 import saio
@@ -13,6 +13,9 @@ from edisgo.tools.tools import (
     determine_bus_voltage_level,
     determine_grid_integration_voltage_level,
 )
+
+if "READTHEDOCS" not in os.environ:
+    import geopandas as gpd
 
 logger = logging.getLogger(__name__)
 
