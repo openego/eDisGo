@@ -317,3 +317,28 @@ class TestHeatPump:
         )
 
         shutil.rmtree(save_dir)
+
+    def test_resample_timeseries(self):
+        heatpump = HeatPump()
+        heatpump.cop_df = self.cop
+        heatpump.thermal_storage_units_df = self.tes
+
+        # test up-sampling of COP with default parameters
+        heatpump.resample_timeseries()
+        assert len(heatpump.cop_df) == 8
+        assert (heatpump.cop_df.iloc[0:4, 0] == 5).all()
+        assert (heatpump.cop_df.iloc[4:8, 1] == 8).all()
+
+        # test up-sampling of heat demand with default parameters
+        heatpump.heat_demand_df = self.heat_demand
+        heatpump.resample_timeseries(method="bfill")
+        assert len(heatpump.heat_demand_df) == 8
+        assert heatpump.heat_demand_df.iloc[0, 0] == 1
+        assert (heatpump.heat_demand_df.iloc[1:8, 1] == 4).all()
+        assert (heatpump.cop_df.iloc[0:4, 0] == 5).all()
+        assert (heatpump.cop_df.iloc[4:8, 1] == 8).all()
+
+        # test down-sampling
+        heatpump.resample_timeseries(freq="1H")
+        assert len(heatpump.heat_demand_df) == 2
+        assert len(heatpump.cop_df) == 2

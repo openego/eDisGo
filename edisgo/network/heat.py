@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 
@@ -504,3 +506,31 @@ class HeatPump:
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
             zip.close()
+
+    def resample_timeseries(
+        self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
+    ):
+        """
+        Resamples COP and heat demand time series to a desired resolution.
+
+        Both up- and down-sampling methods are possible.
+
+        Parameters
+        ----------
+        method : str, optional
+            See :attr:`~.EDisGo.resample_timeseries` for more information.
+
+        freq : str, optional
+            See :attr:`~.EDisGo.resample_timeseries` for more information.
+
+        """
+        for attr in ["cop_df", "heat_demand_df"]:
+            attr_index = getattr(self, attr).index
+            if len(attr_index) < 2:
+                logger.debug(
+                    f"{attr} cannot be resampled as it contains less than two "
+                    f"time steps."
+                )
+            else:
+                freq_orig = attr_index[1] - attr_index[0]
+                tools.resample(self, freq_orig, method, freq, attr_to_resample=[attr])
