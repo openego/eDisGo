@@ -915,7 +915,8 @@ class Electromobility:
 
             if attr == "simbev_config_df":
                 for col in ["start_date", "end_date"]:
-                    df[col] = pd.to_datetime(df[col])
+                    if col in df.columns:
+                        df[col] = pd.to_datetime(df[col])
 
             setattr(self, attr, df)
 
