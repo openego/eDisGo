@@ -629,10 +629,25 @@ class Electromobility:
         """
 
         flex_band = list(self.flexibility_bands.values())[0]
-        if flex_band.empty:
+        if flex_band.empty or len(flex_band.index) < 2:
             return
 
+        # check if frequency is always the same (can only be checked for more than two
+        # time steps as pd.infer_freq needs more than two time steps)
+        if len(flex_band.index) > 2:
+            freq_inferred = pd.infer_freq(flex_band.index)
+            if freq_inferred is None:
+                logger.warning(
+                    "Index of flexibility bands does not have a discernible frequency. "
+                    "The flexibility bands can therefore not be resampled."
+                )
+                return
+
+        # determine frequency of flexibility bands
+        # pd.infer_freq is not used to determine frequency as it is not always
+        # compatible with pd.Timedelta() needed to check whether to sample down or up
         freq_orig = flex_band.index[1] - flex_band.index[0]
+
         if not isinstance(freq, pd.Timedelta):
             freq = pd.Timedelta(freq)
         # in case of up-sampling, check if index is continuous and if new index fits
