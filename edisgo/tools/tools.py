@@ -846,10 +846,12 @@ def get_sample_using_time(
     elif res_load is not None:
         if res_load == "balanced":
             timeframe = determine_observation_periods(
-                edisgo_obj, 7, idx="min", absolute=True
+                edisgo_obj, int(periods / 24), idx="min", absolute=True
             )
         elif res_load in ["min", "max", "load_max", "gen_max"]:
-            timeframe = determine_observation_periods(edisgo_obj, 7, idx=res_load)
+            timeframe = determine_observation_periods(
+                edisgo_obj, int(np.ceil(periods / 24)), idx=res_load
+            )
         else:
             raise ValueError(
                 "argument 'res_load' must be one of: 'min', 'max', 'load_max', "
