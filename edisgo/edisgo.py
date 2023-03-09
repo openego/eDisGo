@@ -2434,6 +2434,7 @@ def import_edisgo_from_files(
     import_results=False,
     import_electromobility=False,
     import_heat_pump=False,
+    import_config=True,
     from_zip_archive=False,
     **kwargs,
 ):
@@ -2489,6 +2490,9 @@ def import_edisgo_from_files(
         'heat_pump'. A different directory can be specified through keyword
         argument `heat_pump_directory`.
         Default: False.
+    import_heat_pump : bool
+        If true load config of the grid directory, else load default config.
+        Default: True.
     from_zip_archive : bool
         Set to True if data needs to be imported from an archive, e.g. a zip
         archive. Default: False.
@@ -2542,7 +2546,7 @@ def import_edisgo_from_files(
     edisgo_obj = EDisGo()
     try:
         edisgo_obj.config = {
-            "from_json": True,
+            "from_json": import_config,
             "config_path": edisgo_path,
             "from_zip_archive": from_zip_archive,
         }
