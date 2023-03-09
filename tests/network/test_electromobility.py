@@ -1,3 +1,4 @@
+import logging
 import os
 import re
 import shutil
@@ -169,25 +170,63 @@ class TestElectromobility:
         ].index
         assert (flex_bands_index[1] - flex_bands_index[0]) == pd.Timedelta("1H")
 
-    # def test_fix_flexibility_bands_rounding_errors(self, caplog):
-    #     # set up test data
-    #     # set charging efficiency to 1 to make things easier
-    #     self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 1.0
-    #
-    #     # set up flexibility bands
-    #     timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
-    #     flex_bands = self.setup_simple_flex_band_data()
-    #     self.edisgo_obj.electromobility.flexibility_bands = flex_bands
-    #
-    #     # test upper power too low to reach upper energy
-    #     flex_bands["upper_power"].at[timeindex[0], "CP2"] = 3.0 - 1e-5
-    #     self.edisgo_obj.electromobility.fix_flexibility_bands_rounding_errors()
-    #     assert ("There are cases when upper power is not sufficient to meet charged "
-    #             "upper energy." in caplog.text)
-    #
-    #     # test reduce lower energy band when it is above upper energy band
-    #     # test increasing upper power when it is too low to meet lower energy
-    #     pass
+    def test_fix_flexibility_bands_rounding_errors(self, caplog):
+        # set up test data
+        # set charging efficiency to 1 to make things easier
+        self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 1.0
+
+        # set up flexibility bands
+        timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
+        flex_bands = self.setup_simple_flex_band_data()
+        self.edisgo_obj.electromobility.flexibility_bands = flex_bands
+
+        # test upper power too low to reach upper energy
+        flex_bands["upper_power"].at[timeindex[4], "CP2"] = 3.0 - 1e-6
+        with caplog.at_level(logging.DEBUG):
+            self.edisgo_obj.electromobility.fix_flexibility_bands_rounding_errors()
+        assert len(caplog.messages) == 1
+        assert (
+            "There are cases when upper power is not sufficient to meet charged "
+            "upper energy." in caplog.text
+        )
+        assert np.isclose(
+            flex_bands["upper_power"].at[timeindex[4], "CP2"], 3.0, atol=1e-7
+        )
+
+        # test that debug message is not raised again
+        caplog.clear()
+        with caplog.at_level(logging.DEBUG):
+            self.edisgo_obj.electromobility.fix_flexibility_bands_rounding_errors()
+        assert len(caplog.messages) == 0
+
+        # test reduce lower energy band when it is above upper energy band -> this
+        # also results in upper power being too low to meet charged lower energy
+        flex_bands["lower_energy"].at[timeindex[4], "CP1"] = 12.0 + 5e-7
+        with caplog.at_level(logging.DEBUG):
+            self.edisgo_obj.electromobility.fix_flexibility_bands_rounding_errors()
+        assert len(caplog.messages) == 2
+        assert (
+            "There are cases when lower energy band is larger than upper energy "
+            "band." in caplog.text
+        )
+        assert (
+            "There are cases when upper power is not sufficient to meet charged "
+            "lower energy." in caplog.text
+        )
+        assert np.isclose(
+            flex_bands["lower_energy"].at[timeindex[4], "CP1"],
+            12.0 + 5e-7 - 1e-6,
+            atol=1e-7,
+        )
+        assert np.isclose(
+            flex_bands["upper_power"].at[timeindex[4], "CP1"], 12.0 + 2e-6, atol=1e-7
+        )
+
+        # test that debug message is not raised again
+        caplog.clear()
+        with caplog.at_level(logging.DEBUG):
+            self.edisgo_obj.electromobility.fix_flexibility_bands_rounding_errors()
+        assert len(caplog.messages) == 0
 
     def test_resample(self):
         """
