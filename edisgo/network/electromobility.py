@@ -703,10 +703,19 @@ class Electromobility:
                     df_dict[band].index = df_dict[band].index.shift(
                         int(freq.total_seconds()) * (num_times - 1), "s"
                     )
+                    # values of first time step are energy values minus possible change
+                    # in energy negative values are set to zero
+                    index_pre_values = (
+                        df_dict[band].iloc[0]
+                        - df_dict["upper_power"].iloc[0] / num_times
+                    )
+                    index_pre_values[index_pre_values < 0.0] = 0.0
                     df_dict[band] = pd.concat(
                         [
                             pd.DataFrame(
-                                index=[index_pre], columns=df_dict[band].columns, data=0
+                                index=[index_pre],
+                                columns=df_dict[band].columns,
+                                data=index_pre_values.to_dict(),
                             ),
                             df_dict[band],
                         ]

@@ -31,12 +31,26 @@ class TestElectromobility:
         integrate_charging_parks(self.edisgo_obj)
 
     def setup_simple_flex_band_data(self):
-        timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
+        """
+        Sets up flex bands for testing.
+
+        """
+        # CP1 - charge 12 kWh between time steps [1, 4]
+        # CP2 - charge 2 kWh between time steps [0, 1] and 2 kWh between
+        #       time steps [4, 5]
+        # CP3 - charge 12 kWh between time steps [1, 4] with offsets (energy bands
+        #       starting at 12 kWh)
+        # CP4 - charge 2 kWh between time steps [0, 1] and 2 kWh between
+        #       time steps [4, 5] with different offsets for lower and upper energy
+        #       band
+        timeindex = pd.date_range("1/1/1970", periods=6, freq="60min")
         flex_bands = {}
         flex_bands["upper_power"] = pd.DataFrame(
             data={
                 "CP1": [0.0, 12.0, 12.0, 12.0, 12.0, 0.0],
                 "CP2": [3.0, 3.0, 0.0, 0.0, 3.0, 3.0],
+                "CP3": [0.0, 12.0, 12.0, 12.0, 12.0, 0.0],
+                "CP4": [3.0, 3.0, 0.0, 0.0, 3.0, 3.0],
             },
             index=timeindex,
         )
@@ -44,6 +58,8 @@ class TestElectromobility:
             data={
                 "CP1": [0.0, 6.0, 12.0, 12.0, 12.0, 12.0],
                 "CP2": [1.5, 2.0, 2.0, 2.0, 3.5, 4.0],
+                "CP3": [12.0, 18.0, 24.0, 24.0, 24.0, 24.0],
+                "CP4": [4.0, 4.0, 4.0, 4.0, 5.5, 6.0],
             },
             index=timeindex,
         )
@@ -51,6 +67,8 @@ class TestElectromobility:
             data={
                 "CP1": [0.0, 0.0, 0.0, 6.0, 12.0, 12.0],
                 "CP2": [0.5, 2.0, 2.0, 2.0, 2.5, 4.0],
+                "CP3": [12.0, 12.0, 12.0, 18.0, 24.0, 24.0],
+                "CP4": [2.5, 4.0, 4.0, 4.0, 4.5, 6.0],
             },
             index=timeindex,
         )
@@ -228,6 +246,9 @@ class TestElectromobility:
             self.edisgo_obj.electromobility.fix_flexibility_bands_rounding_errors()
         assert len(caplog.messages) == 0
 
+        # reset charging efficiency
+        self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 0.9
+
     def test_resample(self):
         """
         Checks resampling function with flexibility bands determined using standing
@@ -325,10 +346,6 @@ class TestElectromobility:
         Checks resampling function with set up flexibility bands.
 
         """
-        # CP1 - charge 12 kWh between time steps [1, 4]
-        # CP2 - charge 2 kWh between time steps [0, 1] and 2 kWh between
-        #       time steps [4, 5]
-
         # set charging efficiency to 1 to make things easier
         self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 1.0
 
@@ -363,6 +380,21 @@ class TestElectromobility:
                     0.0,
                 ],
                 "CP2": [3.0, 3.0, 3.0, 3.0, 0.0, 0.0, 0.0, 0.0, 3.0, 3.0, 3.0, 3.0],
+                "CP3": [
+                    0.0,
+                    0.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    0.0,
+                    0.0,
+                ],
+                "CP4": [3.0, 3.0, 3.0, 3.0, 0.0, 0.0, 0.0, 0.0, 3.0, 3.0, 3.0, 3.0],
             },
             index=timeindex,
         )
@@ -383,6 +415,21 @@ class TestElectromobility:
                     12.0,
                 ],
                 "CP2": [0.75, 1.5, 1.75, 2.0, 2.0, 2.0, 2.0, 2.0, 2.75, 3.5, 3.75, 4.0],
+                "CP3": [
+                    12.0,
+                    12.0,
+                    15.0,
+                    18.0,
+                    21.0,
+                    24.0,
+                    24.0,
+                    24.0,
+                    24.0,
+                    24.0,
+                    24.0,
+                    24.0,
+                ],
+                "CP4": [3.25, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.0, 4.75, 5.5, 5.75, 6.0],
             },
             index=timeindex,
         )
@@ -390,6 +437,21 @@ class TestElectromobility:
             data={
                 "CP1": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.0, 6.0, 9.0, 12.0, 12.0, 12.0],
                 "CP2": [0.25, 0.5, 1.25, 2.0, 2.0, 2.0, 2.0, 2.0, 2.25, 2.5, 3.25, 4.0],
+                "CP3": [
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    12.0,
+                    15.0,
+                    18.0,
+                    21.0,
+                    24.0,
+                    24.0,
+                    24.0,
+                ],
+                "CP4": [1.75, 2.5, 3.25, 4.0, 4.0, 4.0, 4.0, 4.0, 4.25, 4.5, 5.25, 6.0],
             },
             index=timeindex,
         )
@@ -433,10 +495,6 @@ class TestElectromobility:
         Checks resampling function with set up flexibility bands.
 
         """
-        # CP1 - charge 12 kWh between time steps [1, 4]
-        # CP2 - charge 2 kWh between time steps [0, 1] and 2 kWh between
-        #       time steps [4, 5]
-
         # set charging efficiency to 1 to make things easier
         self.edisgo_obj.electromobility.simbev_config_df.at[0, "eta_cp"] = 1.0
 
