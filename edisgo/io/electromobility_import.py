@@ -17,8 +17,7 @@ from sklearn import preprocessing
 from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
-from edisgo.io.egon_data_import import (
-    get_matching_egon_data_bus_id,
+from edisgo.io.db import (
     get_srid_of_db_table,
     session_scope_egon_data,
     sql_grid_geom,
@@ -1257,12 +1256,10 @@ def charging_processes_from_database(
 ):
     from saio.demand import egon_ev_mv_grid_district, egon_ev_trip
 
-    egon_bus_id = get_matching_egon_data_bus_id(edisgo_obj=edisgo_obj, db_engine=engine)
-
     with session_scope_egon_data(engine) as session:
         query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
             egon_ev_mv_grid_district.scenario == scenario,
-            egon_ev_mv_grid_district.bus_id == egon_bus_id,
+            egon_ev_mv_grid_district.bus_id == edisgo_obj.topology.id,
         )
 
         pool = Counter(

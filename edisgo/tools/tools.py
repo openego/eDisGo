@@ -15,7 +15,7 @@ from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
 from edisgo.flex_opt import check_tech_constraints, exceptions
-from edisgo.io.egon_data_import import (
+from edisgo.io.db import (
     get_srid_of_db_table,
     session_scope_egon_data,
     sql_grid_geom,

@@ -9,10 +9,7 @@ import saio
 
 from sqlalchemy.engine.base import Engine
 
-from edisgo.io.egon_data_import import (
-    get_matching_egon_data_bus_id,
-    session_scope_egon_data,
-)
+from edisgo.io.db import session_scope_egon_data
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -34,13 +31,11 @@ def dsm_from_database(
         egon_etrago_store_timeseries,
     )
 
-    egon_bus_id = get_matching_egon_data_bus_id(edisgo_obj=edisgo_obj, db_engine=engine)
-
     with session_scope_egon_data(engine) as session:
         query = session.query(egon_etrago_link).filter(
             egon_etrago_link.scn_name == "eGon2035",
             egon_etrago_link.carrier == "dsm",
-            egon_etrago_link.bus0 == egon_bus_id,
+            egon_etrago_link.bus0 == edisgo_obj.topology.id,
         )
 
         edisgo_obj.dsm.egon_etrago_link = pd.read_sql(
