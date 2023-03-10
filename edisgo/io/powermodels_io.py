@@ -439,7 +439,8 @@ def from_powermodels(
         elif variable == "qf":
             edisgo_object.opf_results.lines_t.q = df
         elif variable == "ccm":
-            edisgo_object.opf_results.lines_t.ccm = df
+            pass
+            # edisgo_object.opf_results.lines_t.ccm = df
     # Save bus voltages to edisgo object
     df = _result_df(
         pm,
