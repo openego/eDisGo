@@ -15,7 +15,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def import_ding0_grid(path, edisgo_obj):
+def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
     """
     Import an eDisGo network topology from
     `Ding0 data <https://github.com/openego/ding0>`_.
@@ -28,8 +28,10 @@ def import_ding0_grid(path, edisgo_obj):
     ----------
     path : str
         Path to ding0 network csv files.
-    edisgo_obj: :class:`~.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
         The eDisGo data container object.
+    legacy_ding0_grids : bool
+        Allow import of old ding0 grids. Default: True.
 
     """
 
@@ -73,19 +75,27 @@ def import_ding0_grid(path, edisgo_obj):
     # write dataframes to edisgo_obj
     edisgo_obj.topology.buses_df = grid.buses[edisgo_obj.topology.buses_df.columns]
     edisgo_obj.topology.lines_df = grid.lines[edisgo_obj.topology.lines_df.columns]
-
-    grid.loads = grid.loads.drop(columns="p_set").rename(columns={"peak_load": "p_set"})
-
+    if legacy_ding0_grids:
+        logger.debug("Use ding0 legacy grid import.")
+        # rename column peak_load to p_set
+        grid.loads = grid.loads.drop(columns="p_set").rename(
+            columns={"peak_load": "p_set"}
+        )
+        # set loads without type information to be conventional loads
+        # this is done, as older ding0 versions do not provide information on the type
+        # of load and can be done as these ding0 grids only contain conventional loads
+        loads_without_type = grid.loads[
+            (grid.loads.type.isnull()) | (grid.loads.type == "")
+        ].index
+        grid.loads.loc[loads_without_type, "type"] = "conventional_load"
+        # rename retail to cts, as it is in newer ding0 versions called cts
+        grid.loads.replace(to_replace=["retail"], value="cts", inplace=True)
+        # set up columns that are added in new ding0 version
+        grid.loads["building_id"] = None
+        grid.loads["number_households"] = None
+    else:
+        edisgo_obj.topology.buses_df["in_building"] = False
     edisgo_obj.topology.loads_df = grid.loads[edisgo_obj.topology.loads_df.columns]
-    # set loads without type information to be conventional loads
-    # this is done, as ding0 currently does not provide information on the type of load
-    # but ding0 grids currently also only contain conventional loads
-    # ToDo: Change, once information is provided by ding0
-    loads_without_type = edisgo_obj.topology.loads_df[
-        (edisgo_obj.topology.loads_df.type.isnull())
-        | (edisgo_obj.topology.loads_df.type == "")
-    ].index
-    edisgo_obj.topology.loads_df.loc[loads_without_type, "type"] = "conventional_load"
     # drop slack generator from generators
     slack = grid.generators.loc[grid.generators.control == "Slack"].index
     grid.generators.drop(slack, inplace=True)

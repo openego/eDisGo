@@ -33,14 +33,13 @@ def read(fname):
 requirements = [
     "beautifulsoup4",
     "contextily",
-    "dash == 2.6.0",
+    "dash",
     "demandlib",
     "descartes",
     "egoio >= 0.4.7",
     "geoalchemy2 < 0.7.0",
-    "geopandas >= 0.9.0",
+    "geopandas >= 0.12.0",
     "geopy >= 2.0.0",
-    "jupyter",
     "jupyterlab",
     "jupyter_dash",
     "matplotlib >= 3.3.0",
@@ -48,34 +47,33 @@ requirements = [
     "networkx >= 2.5.0",
     "pandas >= 1.2.0",
     "plotly",
-    "pyaml",
     "pydot",
     "pygeos",
     "pyomo <= 6.4.2",  # Problem with PyPSA 20.1 fixed in newest PyPSA release
     "pypower",
     "pyproj >= 3.0.0",
     "pypsa >= 0.17.0, <= 0.20.1",
+    "pyyaml",
     "saio",
     "scikit-learn",
     "shapely >= 1.7.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel",
-    "werkzeug == 2.2.0",
     "workalendar",
 ]
 
 dev_requirements = [
+    "black",
+    "flake8",
+    "isort",
+    "pre-commit",
+    "pylint",
     "pytest",
     "pytest-notebook",
+    "pyupgrade",
     "sphinx >= 4.3.0, < 5.1.0",
     "sphinx_rtd_theme >=0.5.2",
     "sphinx-autodoc-typehints",
-    "pre-commit",
-    "black",
-    "isort",
-    "pyupgrade",
-    "flake8",
-    "pylint",
 ]
 
 extras = {"dev": dev_requirements}
@@ -87,8 +85,8 @@ setup(
     url="https://github.com/openego/eDisGo",
     license="GNU Affero General Public License v3.0",
     author=(
-        "birgits, AnyaHe, khelfen, gplssm, nesnoj, jaappedersen, Elias, boltbeard, "
-        "mltja"
+        "birgits, AnyaHe, khelfen, mltja, gplssm, nesnoj, jaappedersen, Elias, "
+        "boltbeard"
     ),
     author_email="anya.heider@rl-institut.de",
     description="A python package for distribution network analysis and optimization",

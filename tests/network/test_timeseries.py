@@ -1526,7 +1526,7 @@ class TestTimeSeries:
         # define expected profiles
         profiles = pd.DataFrame(
             index=index,
-            columns=["retail", "residential", "agricultural", "industrial"],
+            columns=["cts", "residential", "agricultural", "industrial"],
             data=[
                 [0.0000597, 0.0000782, 0.0000654, 0.0000992],
                 [0.0000526, 0.0000563, 0.0000611, 0.0000992],
@@ -1589,7 +1589,7 @@ class TestTimeSeries:
                 self.edisgo.topology.loads_df.loc[
                     "Load_retail_LVGrid_9_14", "annual_consumption"
                 ]
-                * profiles["retail"]
+                * profiles["cts"]
             ).values,
             atol=1e-4,
         ).all()
@@ -1645,7 +1645,7 @@ class TestTimeSeries:
         # test manual - all
         profiles = pd.DataFrame(
             index=index,
-            columns=["retail", "residential", "agricultural", "industrial"],
+            columns=["cts", "residential", "agricultural", "industrial"],
             data=[
                 [0.003, 0.02, 0.00, 0.1],
                 [0.004, 0.01, 0.10, 0.2],
@@ -1683,7 +1683,7 @@ class TestTimeSeries:
                 self.edisgo.topology.loads_df.loc[
                     "Load_retail_LVGrid_9_14", "annual_consumption"
                 ]
-                * profiles["retail"]
+                * profiles["cts"]
             ).values,
         ).all()
         assert np.isclose(
@@ -1701,7 +1701,7 @@ class TestTimeSeries:
         profiles_new = (
             pd.DataFrame(
                 index=index,
-                columns=["retail", "residential", "agricultural", "industrial"],
+                columns=["cts", "residential", "agricultural", "industrial"],
                 data=[
                     [0.003, 0.02, 0.00, 0.1],
                     [0.004, 0.01, 0.10, 0.2],
@@ -1742,7 +1742,7 @@ class TestTimeSeries:
                 self.edisgo.topology.loads_df.loc[
                     "Load_retail_LVGrid_9_14", "annual_consumption"
                 ]
-                * profiles["retail"]
+                * profiles["cts"]
             ).values,
         ).all()
         assert np.isclose(

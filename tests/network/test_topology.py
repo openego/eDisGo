@@ -838,6 +838,26 @@ class TestTopology:
             == np.sqrt(3) * 0.4 * 0.419
         ).all()
 
+    def test_sort_buses(self):
+
+        lines_df_before = self.topology.lines_df.copy()
+
+        self.topology.sort_buses()
+
+        # check that buses were exchanged
+        line = "Line_10008"
+        assert (
+            lines_df_before.at[line, "bus0"] == self.topology.lines_df.at[line, "bus1"]
+        )
+        assert (
+            lines_df_before.at[line, "bus1"] == self.topology.lines_df.at[line, "bus0"]
+        )
+
+        # check number of lines where buses were exchanged
+        assert (lines_df_before.bus0 == self.topology.lines_df.bus0).value_counts().loc[
+            False
+        ] == 11
+
     def test_to_csv(self):
         """Test for method to_csv."""
         dir = os.path.join(os.getcwd(), "topology")
@@ -1736,12 +1756,13 @@ class TestTopologyWithEdisgoObject:
         assert "The network has isolated nodes or edges." in caplog.text
         caplog.clear()
 
-        # check small impedance and large line length
+        # check small impedance and large/short line length
         line = "Line_10017"
         self.edisgo.topology.lines_df.at[line, "length"] = 12.0
         self.edisgo.topology.lines_df.at[line, "x"] = 1e-7
         self.edisgo.topology.lines_df.at[line, "r"] = 1e-7
         self.edisgo.topology.check_integrity()
         assert "There are lines with very large line lengths" in caplog.text
+        assert "There are lines with very short line lengths" in caplog.text
         assert "Very small values for impedance of lines" and line in caplog.text
         caplog.clear()

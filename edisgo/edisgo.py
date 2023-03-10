@@ -30,13 +30,13 @@ from edisgo.io.electromobility_import import (
 )
 from edisgo.io.generators_import import generators_from_database
 from edisgo.io.generators_import import oedb as import_generators_oedb
+from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.io.home_batteries_import import home_batteries_from_database
-
-# from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.network import timeseries
 from edisgo.network.dsm import DSM
 from edisgo.network.electromobility import Electromobility
 from edisgo.network.heat import HeatPump
+from edisgo.network.overlying_grid import OverlyingGrid
 from edisgo.network.results import Results
 from edisgo.network.topology import Topology
 from edisgo.opf.results.opf_result_class import OPFResults
@@ -44,6 +44,7 @@ from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
+from edisgo.tools.tools import determine_grid_integration_voltage_level
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
@@ -115,6 +116,8 @@ class EDisGo:
             default config files are copied into the directory.
 
         Default: "default".
+    legacy_ding0_grids : bool
+        Allow import of old ding0 grids. Default: True.
 
     Attributes
     ----------
@@ -136,6 +139,9 @@ class EDisGo:
     heat_pump : :class:`~.network.heat.HeatPump`
         This is a container holding heat pump data such as COP, heat demand to be
         served and heat storage information.
+    overlying_grid : :class:`~.network.overlying_grid.OverlyingGrid`
+        This is a container holding data from the overlying grid such as curtailment
+        requirements or power plant dispatch.
 
     """
 
@@ -146,19 +152,21 @@ class EDisGo:
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
-        self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
+        self.import_ding0_grid(
+            path=kwargs.get("ding0_grid", None),
+            legacy_ding0_grids=kwargs.get("legacy_ding0_grids", True),
+        )
 
-        # set up results and time series container
+        # instantiate other data classes
         self.results = Results(self)
         self.opf_results = OPFResults()
         self.timeseries = timeseries.TimeSeries(
             timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
         )
-
-        # instantiate electromobility, heat pump and dsm object
         self.electromobility = Electromobility(edisgo_obj=self)
         self.heat_pump = HeatPump()
         self.dsm = DSM(edisgo_obj=self)
+        self.overlying_grid = OverlyingGrid()
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
@@ -220,7 +228,7 @@ class EDisGo:
     def config(self, kwargs):
         self._config = Config(**kwargs)
 
-    def import_ding0_grid(self, path):
+    def import_ding0_grid(self, path, legacy_ding0_grids=True):
         """
         Import ding0 topology data from csv files in the format as
         `Ding0 <https://github.com/openego/ding0>`_ provides it.
@@ -229,10 +237,12 @@ class EDisGo:
         -----------
         path : str
             Path to directory containing csv files of network to be loaded.
+        legacy_ding0_grids : bool
+            Allow import of old ding0 grids. Default: True.
 
         """
         if path is not None:
-            import_ding0_grid(path, self)
+            import_ding0_grid(path, self, legacy_ding0_grids)
 
     def set_timeindex(self, timeindex):
         """
@@ -1211,7 +1221,7 @@ class EDisGo:
         """
         Adds single component to topology based on geolocation.
 
-        Currently components can be generators, charging points and heat pumps.
+        Currently, components can be generators, charging points and heat pumps.
 
         See :attr:`~.network.topology.Topology.connect_to_mv` and
         :attr:`~.network.topology.Topology.connect_to_lv` for more information.
@@ -1228,17 +1238,11 @@ class EDisGo:
             Specifies the voltage level the new component is integrated in.
             Possible options are 4 (MV busbar), 5 (MV grid), 6 (LV busbar) or
             7 (LV grid). If no voltage level is provided the voltage level
-            is determined based on the nominal power `p_nom` or `p_set` (given as kwarg)
-            as follows:
-
-            * voltage level 4 (MV busbar): nominal power between 4.5 MW and
-              17.5 MW
-            * voltage level 5 (MV grid) : nominal power between 0.3 MW and
-              4.5 MW
-            * voltage level 6 (LV busbar): nominal power between 0.1 MW and
-              0.3 MW
-            * voltage level 7 (LV grid): nominal power below 0.1 MW
-
+            is determined based on the nominal power `p_nom` or `p_set` (given as
+            kwarg). For this, upper limits up to which capacity a component is
+            integrated into a certain voltage level (set in the config section
+            `grid_connection` through the parameters 'upper_limit_voltage_level_{4:7}')
+            are used.
         add_ts : bool, optional
             Indicator if time series for component are added as well.
             Default: True.
@@ -1281,42 +1285,46 @@ class EDisGo:
                     "Neither appropriate voltage level nor nominal power "
                     "were supplied."
                 )
-            # Determine voltage level manually from nominal power
-            if 4.5 < p <= 17.5:
-                voltage_level = 4
-            elif 0.3 < p <= 4.5:
-                voltage_level = 5
-            elif 0.1 < p <= 0.3:
-                voltage_level = 6
-            elif 0 < p <= 0.1:
-                voltage_level = 7
-            else:
-                raise ValueError("Unsupported voltage level")
+            # determine voltage level manually from nominal power
+            voltage_level = determine_grid_integration_voltage_level(self, p)
 
         # check if geolocation is given as shapely Point, otherwise transform
         # to shapely Point
         if type(geolocation) is not Point:
             geolocation = Point(geolocation)
 
+        # write voltage level and geolocation to kwargs
+        kwargs["geom"] = geolocation
+        kwargs["voltage_level"] = voltage_level
+
         # Connect in MV
         if voltage_level in [4, 5]:
-            kwargs["voltage_level"] = voltage_level
-            kwargs["geom"] = geolocation
             comp_name = self.topology.connect_to_mv(self, kwargs, comp_type)
 
         # Connect in LV
         else:
-            if kwargs.get("mvlv_subst_id", None) is None:
-                substations = self.topology.buses_df.loc[
-                    self.topology.transformers_df.bus1.unique()
-                ]
-                nearest_substation, _ = find_nearest_bus(geolocation, substations)
-                kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
+            # check if LV is geo-referenced or not
+            lv_buses = self.topology.buses_df.drop(self.topology.mv_grid.buses_df.index)
+            lv_buses_dropna = lv_buses.dropna(axis=0, subset=["x", "y"])
 
-            kwargs["geom"] = geolocation
-            kwargs["voltage_level"] = voltage_level
+            # if there are some LV buses without geo-reference, use function where
+            # components are not integrated based on geolocation
+            if len(lv_buses_dropna) < len(lv_buses):
+                if kwargs.get("mvlv_subst_id", None) is None:
+                    substations = self.topology.buses_df.loc[
+                        self.topology.transformers_df.bus1.unique()
+                    ]
+                    nearest_substation, _ = find_nearest_bus(geolocation, substations)
+                    kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
+                comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
 
-            comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
+            else:
+                max_distance_from_target_bus = kwargs.pop(
+                    "max_distance_from_target_bus", 0.1
+                )
+                comp_name = self.topology.connect_to_lv_based_on_geolocation(
+                    self, kwargs, comp_type, max_distance_from_target_bus
+                )
 
         if add_ts:
             if comp_type == "generator":
@@ -1690,10 +1698,10 @@ class EDisGo:
         """
         charging_strategy(self, strategy=strategy, **kwargs)
 
-    def import_heat_pumps(self, scenario=None, **kwargs):
+    def import_heat_pumps(self, scenario, engine, year=None):
         """
-        Gets heat pump capacities for specified scenario from oedb and integrates them
-        into the grid.
+        Gets heat pump data for specified scenario from oedb and integrates the heat
+        pumps into the grid.
 
         Besides heat pump capacity the heat pump's COP and heat demand to be served
         are as well retrieved.
@@ -1709,25 +1717,34 @@ class EDisGo:
 
         The following steps are conducted in this function:
 
-            * Spatially disaggregated data on heat pump capacities in individual and
-              district heating are obtained from the database for the specified
-              scenario.
+            * Heat pump capacities for individual and district heating per building
+              respectively district heating area are obtained from the database for the
+              specified scenario and integrated into the grid using the function
+              :func:`~.io.heat_pump_import.oedb`.
             * Heat pumps are integrated into the grid (added to
-              :attr:`~.network.topology.Topology.loads_df`).
+              :attr:`~.network.topology.Topology.loads_df`) as follows.
 
               * Grid connection points of heat pumps for individual heating are
-                determined based on the corresponding building ID.
+                determined based on the corresponding building ID. In case the heat
+                pump is too large to use the same grid connection point, they are
+                connected via their own grid connection point.
               * Grid connection points of heat pumps for district heating are determined
                 based on their geolocation and installed capacity.
                 See :attr:`~.network.topology.Topology.connect_to_mv` and
-                :attr:`~.network.topology.Topology.connect_to_lv` for more information.
-            * COP and heat demand for each heat pump are retrieved from the database
-              and stored in the :class:`~.network.heat.HeatPump` class that can be
-              accessed through :attr:`~.edisgo.EDisGo.heat_pump`.
+                :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
+                for more information.
+            * COP and heat demand for each heat pump are retrieved from the database,
+              using the functions :func:`~.io.timeseries_import.cop_oedb` respectively
+              :func:`~.io.timeseries_import.heat_demand_oedb`, and stored in the
+              :class:`~.network.heat.HeatPump` class that can be accessed through
+              :attr:`~.edisgo.EDisGo.heat_pump`.
 
         Be aware that this function does not yield electricity load time series for the
         heat pumps. The actual time series are determined through applying an
-        operation strategy or optimising heat pump dispatch.
+        operation strategy or optimising heat pump dispatch. Further, the heat pumps
+        do not yet have a thermal storage and can therefore not yet be used as a
+        flexibility. Thermal storage units need to be added manually to
+        :attr:`~.edisgo.EDisGo.thermal_storage_units_df`.
 
         After the heat pumps are integrated there may be grid issues due to the
         additional load. These are not solved automatically. If you want to
@@ -1739,37 +1756,59 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve heat pump data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-
-        Other Parameters
-        ----------------
-        kwargs :
-            See :func:`edisgo.io.heat_pump_import.oedb`.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine.
+        year : int or None
+            Year to index COP and heat demand data by.
+            If none is provided and :py:attr:`~.network.timeseries.TimeSeries.timeindex`
+            is already set, data is indexed by the same year. Otherwise, time index will
+            be set according to the scenario (2035 in case of the 'eGon2035' scenario
+            and 2045 in case of the 'eGon100RE' scenario).
+            A leap year can currently not be handled. In case a leap year is given, the
+            time index is set according to the chosen scenario.
 
         """
-        raise NotImplementedError
-        # integrated_heat_pumps = import_heat_pumps_oedb(
-        #     edisgo_object=self, scenario=scenario, **kwargs
-        # )
-        # self.heat_pump.set_heat_demand(
-        #     self, "oedb", heat_pump_names=integrated_heat_pumps
-        # )
-        # self.heat_pump.set_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
+        # set up year to index data by
+        # first try to get index from time index
+        if year is None:
+            year = tools.get_year_based_on_timeindex(self)
+        # if time index is not set get year from scenario
+        if year is None:
+            year = tools.get_year_based_on_scenario(scenario)
+            # if year is still None, scenario is not valid
+            if year is None:
+                raise ValueError(
+                    "Invalid input for parameter 'scenario'. Possible options are "
+                    "'eGon2035' and 'eGon100RE'."
+                )
+        # if year is leap year set year according to scenario
+        if pd.Timestamp(year, 1, 1).is_leap_year:
+            logger.warning(
+                "A leap year was given to 'heat_demand_oedb' function. This is "
+                "currently not valid. The year the data is indexed by is therefore set "
+                "according to the given scenario."
+            )
+            return self.import_heat_pumps(scenario, engine, year=None)
 
-    def import_dsm(self, engine: Engine, scenario: str = "eGon2035"):
-        dsm_from_database(edisgo_obj=self, engine=engine, scenario=scenario)
-
-    def import_home_batteries(
-        self,
-        engine: Engine,
-        scenario: str = "eGon2035",
-        remove_existing: bool = True,
-    ):
-        home_batteries_from_database(
-            edisgo_obj=self,
-            engine=engine,
-            scenario=scenario,
-            remove_existing=remove_existing,
+        integrated_heat_pumps = import_heat_pumps_oedb(
+            edisgo_object=self, scenario=scenario, engine=engine
         )
+        if len(integrated_heat_pumps) > 0:
+            self.heat_pump.set_heat_demand(
+                self,
+                "oedb",
+                heat_pump_names=integrated_heat_pumps,
+                engine=engine,
+                scenario=scenario,
+                year=year,
+            )
+            self.heat_pump.set_cop(
+                self,
+                "oedb",
+                heat_pump_names=integrated_heat_pumps,
+                engine=engine,
+                year=year,
+            )
 
     def apply_heat_pump_operating_strategy(
         self, strategy="uncontrolled", heat_pump_names=None, **kwargs
@@ -1814,6 +1853,23 @@ class EDisGo:
 
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
+
+    def import_dsm(self, engine: Engine, scenario: str = "eGon2035"):
+        dsm_from_database(edisgo_obj=self, engine=engine, scenario=scenario)
+
+    def import_home_batteries(
+        self,
+        engine: Engine,
+        scenario: str = "eGon2035",
+        remove_existing: bool = True,
+    ):
+        home_batteries_from_database(
+            edisgo_obj=self,
+            engine=engine,
+            scenario=scenario,
+            remove_existing=remove_existing,
+        )
+
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
@@ -2105,6 +2161,7 @@ class EDisGo:
         save_results=True,
         save_electromobility=False,
         save_heatpump=False,
+        save_overlying_grid=False,
         save_dsm=False,
         **kwargs,
     ):
@@ -2152,13 +2209,21 @@ class EDisGo:
             :class:`~.network.heat.HeatPump` object. Per default it is not saved.
             If set to True, it is saved to subdirectory 'heat_pump'.
             See :attr:`~.network.heat.HeatPump.to_csv` for more information.
+        save_overlying_grid : bool, optional
+            Indicates whether to save
+            :class:`~.network.overlying_grid.OverlyingGrid` object. Per default it is
+            not saved. If set to True, it is saved to subdirectory 'overlying_grid'.
+            See :attr:`~.network.overlying_grid.OverlyingGrid.to_csv` for more
+            information.
 
         Other Parameters
         ------------------
         reduce_memory : bool, optional
             If True, size of dataframes containing time series in
-            :class:`~.network.results.Results`, :class:`~.network.timeseries.TimeSeries`
-            and :class:`~.network.heat.HeatPump`
+            :class:`~.network.results.Results`,
+            :class:`~.network.timeseries.TimeSeries`,
+            :class:`~.network.heat.HeatPump` and
+            :class:`~.network.overlying_grid.OverlyingGrid`
             is reduced. See respective classes `reduce_memory` functions for more
             information. Type to convert to can be specified by providing
             `to_type` as keyword argument. Further parameters of reduce_memory
@@ -2231,6 +2296,13 @@ class EDisGo:
                 os.path.join(directory, "dsm"),
             )
 
+        if save_overlying_grid:
+            self.overlying_grid.to_csv(
+                os.path.join(directory, "overlying_grid"),
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32"),
+            )
+
         if kwargs.get("archive", False):
             archive_type = kwargs.get("archive_type", "zip")
             shutil.make_archive(directory, archive_type, directory)
@@ -2247,8 +2319,8 @@ class EDisGo:
 
             logger.info(
                 f"Archived files in a {archive_type} archive and reduced "
-                f"storage needs by {reduction:.2f} %. The unarchived files"
-                f" were dropped: {drop_unarchived}"
+                f"storage needs by {reduction:.2f} %. The unarchived files "
+                f"were dropped: {drop_unarchived}"
             )
 
     def save_edisgo_to_pickle(self, path="", filename=None):
@@ -2272,7 +2344,7 @@ class EDisGo:
 
     def reduce_memory(self, **kwargs):
         """
-        Reduces size of dataframes containing time series to save memory.
+        Reduces size of time series data to save memory.
 
         Per default, float data is stored as float64. As this precision is
         barely needed, this function can be used to convert time series data
@@ -2285,11 +2357,16 @@ class EDisGo:
             between precision and memory. Default: "float32".
         results_attr_to_reduce : list(str), optional
             See `attr_to_reduce` parameter in
-            :attr:`~.network.results.Results.reduce_memory` for more
-            information.
+            :attr:`~.network.results.Results.reduce_memory` for more information.
         timeseries_attr_to_reduce : list(str), optional
             See `attr_to_reduce` parameter in
-            :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more information.
+        heat_pump_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.heat.HeatPump.reduce_memory` for more information.
+        overlying_grid_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.overlying_grid.OverlyingGrid.reduce_memory` for more
             information.
 
         """
@@ -2303,18 +2380,33 @@ class EDisGo:
             to_type=kwargs.get("to_type", "float32"),
             attr_to_reduce=kwargs.get("results_attr_to_reduce", None),
         )
+        # heat pump data
+        self.heat_pump.reduce_memory(
+            to_type=kwargs.get("to_type", "float32"),
+            attr_to_reduce=kwargs.get("heat_pump_attr_to_reduce", None),
+        )
+        # overlying grid
+        self.overlying_grid.reduce_memory(
+            to_type=kwargs.get("to_type", "float32"),
+            attr_to_reduce=kwargs.get("overlying_grid_attr_to_reduce", None),
+        )
 
     def check_integrity(self):
         """
         Method to check the integrity of the EDisGo object.
 
         Checks for consistency of topology (see
-        :func:`edisgo.topology.check_integrity`), timeseries (see
-        :func:`edisgo.timeseries.check_integrity`) and the interplay of both.
+        :func:`edisgo.network.topology.Topology.check_integrity`), timeseries (see
+        :func:`edisgo.network.timeseries.TimeSeries.check_integrity`) and the interplay
+        of both.
+        Further, checks integrity of electromobility object (see
+        :func:`edisgo.network.electromobility.Electromobility.check_integrity`) if
+        there is electromobility data.
 
         """
         self.topology.check_integrity()
         self.timeseries.check_integrity()
+        self.electromobility.check_integrity()
 
         # check consistency of topology and timeseries
         comp_types = ["generators", "loads", "storage_units"]
@@ -2362,13 +2454,48 @@ class EDisGo:
                     f" the following {comp_type}: {exceeding.values}"
                 )
 
-            logging.info("Integrity check finished. Please pay attention to warnings.")
+        def _check_timeindex(check_df, param_name):
+            if not check_df.empty:
+                missing_indices = [
+                    _ for _ in self.timeseries.timeindex if _ not in check_df.index
+                ]
+                if len(missing_indices) > 0:
+                    logger.warning(
+                        f"There are time steps in timeindex of TimeSeries object that "
+                        f"are not in the index of {param_name}. This may lead "
+                        f"to problems."
+                    )
+
+        # check if time index of other time series data contains all time steps
+        # in TimeSeries.timeindex
+        if len(self.timeseries.timeindex) > 0:
+            # check time index of electromobility flexibility bands
+            flex_band = list(self.electromobility.flexibility_bands.values())[0]
+            _check_timeindex(flex_band, "Electromobility.flexibility_bands")
+            # check time index of HeatPump data
+            for param_name in self.heat_pump._timeseries_attributes:
+                _check_timeindex(
+                    getattr(self.heat_pump, param_name), f"HeatPump.{param_name}"
+                )
+            # check time index of OverlyingGrid data
+            for param_name in self.overlying_grid._attributes:
+                _check_timeindex(
+                    getattr(self.overlying_grid, param_name),
+                    f"OverlyingGrid.{param_name}",
+                )
+
+        logging.info("Integrity check finished. Please pay attention to warnings.")
 
     def resample_timeseries(
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
     ):
         """
-        Resamples all generator, load and storage time series to a desired resolution.
+        Resamples time series data in
+        :class:`~.network.timeseries.TimeSeries`, :class:`~.network.heat.HeatPump`,
+        :class:`~.network.electromobility.Electromobility` and
+        :class:`~.network.overlying_grid.OverlyingGrid`.
+
+        Both up- and down-sampling methods are possible.
 
         The following time series are affected by this:
 
@@ -2384,15 +2511,24 @@ class EDisGo:
 
         * :attr:`~.network.timeseries.TimeSeries.storage_units_reactive_power`
 
-        Both up- and down-sampling methods are possible.
+        * :attr:`~.network.electromobility.Electromobility.flexibility_bands`
+
+        * :attr:`~.network.heat.HeatPump.cop_df`
+
+        * :attr:`~.network.heat.HeatPump.heat_demand_df`
+
+        * All data in :class:`~.network.overlying_grid.OverlyingGrid`
 
         Parameters
         ----------
         method : str, optional
-            Method to choose from to fill missing values when resampling.
+            Method to choose from to fill missing values when resampling time series
+            data (only exception from this is for flexibility bands in
+            :class:`~.network.electromobility.Electromobility` object where method
+            cannot be chosen to assure consistency of flexibility band data).
             Possible options are:
 
-            * 'ffill'
+            * 'ffill' (default)
                 Propagate last valid observation forward to next valid
                 observation. See :pandas:`pandas.DataFrame.ffill<DataFrame.ffill>`.
             * 'bfill'
@@ -2411,6 +2547,9 @@ class EDisGo:
 
         """
         self.timeseries.resample_timeseries(method=method, freq=freq)
+        self.electromobility.resample(freq=freq)
+        self.heat_pump.resample_timeseries(method=method, freq=freq)
+        self.overlying_grid.resample(method=method, freq=freq)
 
 
 def import_edisgo_from_pickle(filename, path=""):
@@ -2438,6 +2577,7 @@ def import_edisgo_from_files(
     import_electromobility: bool = False,
     import_heat_pump: bool = False,
     import_dsm: bool = False,
+    import_overlying_grid: bool = False,
     from_zip_archive: bool = False,
     **kwargs,
 ):
@@ -2493,6 +2633,15 @@ def import_edisgo_from_files(
         'heat_pump'. A different directory can be specified through keyword
         argument `heat_pump_directory`.
         Default: False.
+    import_overlying_grid : bool
+        Indicates whether to import :class:`~.network.overlying_grid.OverlyingGrid`
+        object. Per default it is set to False, in which case overlying grid data
+        containing information on renewables curtailment requirements, generator
+        dispatch, etc. is not imported.
+        The default directory overlying grid data is imported from is the sub-directory
+        'overlying_grid'. A different directory can be specified through keyword
+        argument `overlying_grid_directory`.
+        Default: False.
     from_zip_archive : bool
         Set to True if data needs to be imported from an archive, e.g. a zip
         archive. Default: False.
@@ -2519,6 +2668,10 @@ def import_edisgo_from_files(
         Indicates directory :class:`~.network.heat.HeatPump` object is
         imported from. Per default heat pump data is imported from `edisgo_path`
         sub-directory 'heat_pump'.
+    overlying_grid_directory : str
+        Indicates directory :class:`~.network.overlying_grid.OverlyingGrid` object is
+        imported from. Per default overlying grid data is imported from `edisgo_path`
+        sub-directory 'overlying_grid'.
     dtype : str
         Numerical data type for time series and results data to be imported,
         e.g. "float32". Per default this is None in which case data type is inferred.
@@ -2642,5 +2795,21 @@ def import_edisgo_from_files(
             edisgo_obj.dsm.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
             logging.warning("No dsm data found. DSM data not imported.")
+
+    if import_overlying_grid:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "overlying_grid_directory",
+                os.path.join(edisgo_path, "overlying_grid"),
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.overlying_grid.from_csv(
+                directory, from_zip_archive=from_zip_archive
+            )
+        else:
+            logging.warning(
+                "No overlying grid data found. Overlying grid data not imported."
+            )
 
     return edisgo_obj

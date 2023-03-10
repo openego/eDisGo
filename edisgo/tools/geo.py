@@ -200,7 +200,7 @@ def find_nearest_bus(point, bus_target):
     Parameters
     ----------
     point : :shapely:`shapely.Point<Point>`
-        Point to find nearest bus for.
+        Point to find the nearest bus for.
     bus_target : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with candidate buses and their positions given in 'x' and 'y'
         columns. The dataframe has the same format as
@@ -209,7 +209,7 @@ def find_nearest_bus(point, bus_target):
     Returns
     -------
     tuple(str, float)
-        Tuple that contains the name of the nearest bus and its distance.
+        Tuple that contains the name of the nearest bus and its distance in km.
 
     """
     bus_target["dist"] = [
