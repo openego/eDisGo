@@ -2423,8 +2423,9 @@ class EDisGo:
     ):
         """
         Resamples time series data in
-        :class:`~.network.timeseries.TimeSeries`, :class:`~.network.heat.HeatPump` and
-        :class:`~.network.electromobility.Electromobility`.
+        :class:`~.network.timeseries.TimeSeries`, :class:`~.network.heat.HeatPump`,
+        :class:`~.network.electromobility.Electromobility` and
+        :class:`~.network.overlying_grid.OverlyingGrid`.
 
         Both up- and down-sampling methods are possible.
 
@@ -2448,16 +2449,15 @@ class EDisGo:
 
         * :attr:`~.network.heat.HeatPump.heat_demand_df`
 
-        * All data in :attr:`~.network.overlying_grid.OverlyingGrid`
+        * All data in :class:`~.network.overlying_grid.OverlyingGrid`
 
         Parameters
         ----------
         method : str, optional
             Method to choose from to fill missing values when resampling time series
-            data in :class:`~.network.timeseries.TimeSeries` and
-            :class:`~.network.heat.HeatPump` objects (method for
-            flexibility bands in :class:`~.network.electromobility.Electromobility`
-            object cannot be chosen to assure consistency of flexibility band data).
+            data (only exception from this is for flexibility bands in
+            :class:`~.network.electromobility.Electromobility` object where method
+            cannot be chosen to assure consistency of flexibility band data).
             Possible options are:
 
             * 'ffill' (default)
