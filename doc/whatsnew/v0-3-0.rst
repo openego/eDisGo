@@ -8,3 +8,8 @@ Changes
 
 * Added functionalities to obtain heat pump data from oedb `#324 <https://github.com/openego/eDisGo/pull/324>`_
 * Added functionality to resample and check integrity of flexibility bands `#341 <https://github.com/openego/eDisGo/pull/341>`_
+* Added function to sort buses in lines dataframe such that bus0 is always the upstream bus `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Changed to_pypsa function such that pypsa network can be build even though not all components have time series `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Added class holding data from overlying grid, such as curtailment requirements and
+  conventional generator dispatch `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Added integrity check for very short lines `#335 <https://github.com/openego/eDisGo/pull/335>`_
