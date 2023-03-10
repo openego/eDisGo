@@ -380,7 +380,7 @@ class HeatPump:
 
         """
         if attr_to_reduce is None:
-            attr_to_reduce = self._timeseries_attributes()
+            attr_to_reduce = self._timeseries_attributes
         for attr in attr_to_reduce:
             setattr(
                 self,
@@ -409,6 +409,7 @@ class HeatPump:
             "thermal_storage_units_df": "thermal_storage_units.csv",
         }
 
+    @property
     def _timeseries_attributes(self):
         return ["heat_demand_df", "cop_df"]
 
@@ -524,7 +525,7 @@ class HeatPump:
             See :attr:`~.EDisGo.resample_timeseries` for more information.
 
         """
-        for attr in self._timeseries_attributes():
+        for attr in self._timeseries_attributes:
             attr_index = getattr(self, attr).index
             if len(attr_index) < 2:
                 logger.debug(
