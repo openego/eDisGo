@@ -1579,6 +1579,66 @@ class TestEDisGo:
             )
             caplog.clear()
 
+        # test electromobility time index not matching
+        # set up valid flexibility bands
+        timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
+        flex_bands = {}
+        flex_bands["upper_power"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 12.0, 12.0, 12.0, 12.0, 0.0],
+                "CP2": [3.0, 3.0, 0.0, 0.0, 3.0, 3.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["upper_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 6.0, 12.0, 12.0, 12.0, 12.0],
+                "CP2": [1.5, 2.0, 2.0, 2.0, 3.5, 4.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["lower_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 0.0, 0.0, 6.0, 12.0, 12.0],
+                "CP2": [0.5, 2.0, 2.0, 2.0, 2.5, 4.0],
+            },
+            index=timeindex,
+        )
+        self.edisgo.electromobility.flexibility_bands = flex_bands
+        self.edisgo.electromobility.simbev_config_df = pd.DataFrame(
+            data={"eta_cp": [1.0]}, index=[0]
+        )
+        self.edisgo.check_integrity()
+        assert (
+            "There are time steps in timeindex of TimeSeries object that "
+            in caplog.text
+        )
+
+        # check electromobility upper energy band lower than lower energy band
+        # modify flex band such that error is raised
+        self.edisgo.electromobility.flexibility_bands["upper_energy"].at[
+            timeindex[1], "CP2"
+        ] = 1.0
+        msg = "Lower energy band is higher than upper energy band for the "
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo.check_integrity()
+
+    def test_resample_timeseries(self):
+        self.setup_worst_case_time_series()
+        self.edisgo.resample_timeseries()
+        assert len(self.edisgo.timeseries.loads_active_power) == 16
+
+        self.edisgo.heat_pump.cop_df = pd.DataFrame(
+            data={
+                "hp1": [5.0, 6.0],
+                "hp2": [7.0, 8.0],
+            },
+            index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
+        )
+        self.edisgo.resample_timeseries(freq="30min")
+        assert len(self.edisgo.timeseries.loads_active_power) == 8
+        assert len(self.edisgo.heat_pump.cop_df) == 4
+
 
 class TestEDisGoFunc:
     def test_import_edisgo_from_files(self):
