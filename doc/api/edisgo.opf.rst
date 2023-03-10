@@ -37,7 +37,3 @@ edisgo.opf.util package
    :members:
    :undoc-members:
    :show-inheritance:
-
-   :members:
-   :undoc-members:
-   :show-inheritance:

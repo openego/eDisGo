@@ -25,14 +25,6 @@ edisgo.flex\_opt.costs module
    :undoc-members:
    :show-inheritance:
 
-edisgo.flex\_opt.curtailment module
------------------------------------
-
-.. automodule:: edisgo.flex_opt.curtailment
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 edisgo.flex\_opt.exceptions module
 ----------------------------------
 
