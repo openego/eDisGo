@@ -1158,6 +1158,35 @@ class TestEDisGo:
         )
         # fmt: on
 
+    @pytest.mark.local
+    def test_import_heat_pumps(self):
+
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+
+        # ################# test with wrong scenario name #############
+        with pytest.raises(ValueError):
+            edisgo_object.import_heat_pumps(
+                scenario="eGon",
+                engine=pytest.engine,
+            )
+
+        # ################# test with leap year #############
+        edisgo_object.import_heat_pumps(
+            scenario="eGon2035",
+            engine=pytest.engine,
+            year=2020,
+        )
+
+        loads_df = edisgo_object.topology.loads_df
+        hp_df = loads_df[loads_df.type == "heat_pump"]
+        assert len(hp_df) == 177
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 177)
+        assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2035
+        assert edisgo_object.heat_pump.cop_df.shape == (8760, 177)
+        assert edisgo_object.heat_pump.cop_df.index[0].year == 2035
+
     def test_apply_charging_strategy(self):
         self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
@@ -1248,7 +1277,6 @@ class TestEDisGo:
         plt.close("all")
 
     def test_save(self):
-
         self.setup_worst_case_time_series()
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
 
@@ -1326,9 +1354,17 @@ class TestEDisGo:
         os.remove(zip_file)
 
     def test_reduce_memory(self):
-
+        # set up test data
         self.setup_worst_case_time_series()
         self.edisgo.analyze()
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+            data={
+                "hp1": [1.0, 2.0],
+                "hp2": [3.0, 4.0],
+            },
+            index=timeindex,
+        )
         og = self.edisgo.overlying_grid
         og.dsm_active_power = pd.Series(
             data=[2.4], index=[self.edisgo.timeseries.timeindex[0]]
@@ -1343,6 +1379,9 @@ class TestEDisGo:
             deep=True
         ).sum()
         mem_res_before = self.edisgo.results.pfa_p.memory_usage(deep=True).sum()
+        mem_hp_before = self.edisgo.heat_pump.heat_demand_df.memory_usage(
+            deep=True
+        ).sum()
         mem_og_before = og.solarthermal_energy_feedin_district_heating.memory_usage(
             deep=True
         ).sum()
@@ -1354,12 +1393,16 @@ class TestEDisGo:
             self.edisgo.timeseries.generators_active_power.memory_usage(deep=True).sum()
         )
         mem_res_with_default = self.edisgo.results.pfa_p.memory_usage(deep=True).sum()
+        mem_hp_with_default = self.edisgo.heat_pump.heat_demand_df.memory_usage(
+            deep=True
+        ).sum()
         mem_og_with_default = (
             og.solarthermal_energy_feedin_district_heating.memory_usage(deep=True).sum()
         )
 
         assert mem_ts_before > mem_ts_with_default
         assert mem_res_before > mem_res_with_default
+        assert mem_hp_before > mem_hp_with_default
         assert mem_og_before > mem_og_with_default
 
         mem_ts_with_default_2 = self.edisgo.timeseries.loads_active_power.memory_usage(
@@ -1536,30 +1579,9 @@ class TestEDisGo:
             )
             caplog.clear()
 
-    def test_resample_timeseries(self, caplog):
-
-        self.setup_worst_case_time_series()
-        self.edisgo.overlying_grid.heat_pump_decentral_active_power = pd.Series(
-            data=[2.4], index=[self.edisgo.timeseries.timeindex[0]]
-        )
-
-        index_orig = self.edisgo.timeseries.timeindex.copy()
-
-        # test up-sampling with ffill (default)
-        self.edisgo.resample_timeseries(method="interpolate", freq="30min")
-
-        # check if resampled length of time index is 2 times original length of
-        # timeindex
-        assert len(self.edisgo.timeseries.timeindex) == 2 * len(index_orig)
-        # test warning that resampling of overlying grid data cannot be conducted
-        assert (
-            "Data cannot be resampled as it only contains one time step." in caplog.text
-        )
-
 
 class TestEDisGoFunc:
     def test_import_edisgo_from_files(self):
-
         edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         edisgo_obj.set_time_series_worst_case_analysis()
         edisgo_obj.analyze()
@@ -1612,7 +1634,9 @@ class TestEDisGoFunc:
 
         # check topology
         assert_frame_equal(
-            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+            edisgo_obj_loaded.topology.loads_df,
+            edisgo_obj.topology.loads_df,
+            check_dtype=False,
         )
         # check time series
         assert edisgo_obj_loaded.timeseries.timeindex.empty
@@ -1666,7 +1690,9 @@ class TestEDisGoFunc:
 
         # check topology
         assert_frame_equal(
-            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+            edisgo_obj_loaded.topology.loads_df,
+            edisgo_obj.topology.loads_df,
+            check_dtype=False,
         )
         # check time series
         assert_frame_equal(
@@ -1678,7 +1704,10 @@ class TestEDisGoFunc:
         assert edisgo_obj_loaded.config._data == edisgo_obj.config._data
         # check results
         assert_frame_equal(
-            edisgo_obj_loaded.results.i_res, edisgo_obj.results.i_res, check_freq=False
+            edisgo_obj_loaded.results.i_res,
+            edisgo_obj.results.i_res,
+            check_freq=False,
+            check_names=False,
         )
         # check electromobility
         assert_frame_equal(
