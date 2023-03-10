@@ -76,9 +76,9 @@ function optimize_edisgo()
       #   data_edisgo_mn["status"] = result_nc_ws["termination_status"]
       #   data_edisgo_mn["solver"] = "Ipopt"
       # end
-    # else
-    #   println("Termination status: "*result_soc["termination_status"])
-    # end
+    else
+      println("Termination status: "*result_soc["termination_status"])
+    end
   elseif method == "nc" # Non-Convex
     # Solve NC model
     println("Starting cold-start non-convex AC-OPF with IPOPT.")
