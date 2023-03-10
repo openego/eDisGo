@@ -1480,6 +1480,8 @@ class TestEDisGo:
             in caplog.text
         )
         caplog.clear()
+
+        # ########################### check time series ##############################
         # set timeseries
         index = pd.date_range("1/1/2018", periods=3, freq="H")
         ts_gens = pd.DataFrame(
@@ -1579,6 +1581,7 @@ class TestEDisGo:
             )
             caplog.clear()
 
+        # ########################### check electromobility ##########################
         # test electromobility time index not matching
         # set up valid flexibility bands
         timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
@@ -1610,8 +1613,8 @@ class TestEDisGo:
         )
         self.edisgo.check_integrity()
         assert (
-            "There are time steps in timeindex of TimeSeries object that "
-            in caplog.text
+            "There are time steps in timeindex of TimeSeries object that are not in "
+            "the index of Electromobility.flexibility_bands" in caplog.text
         )
 
         # check electromobility upper energy band lower than lower energy band
@@ -1622,6 +1625,33 @@ class TestEDisGo:
         msg = "Lower energy band is higher than upper energy band for the "
         with pytest.raises(ValueError, match=msg):
             self.edisgo.check_integrity()
+
+        # reset values
+        caplog.clear()
+        self.edisgo.electromobility.flexibility_bands["upper_energy"].at[
+            timeindex[1], "CP2"
+        ] = 2.0
+
+        # ########################### check time index ##########################
+        # test heat pump and overlying grid time index not matching (electromobility is
+        # checked above)
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.heat_pump.cop_df = pd.DataFrame(
+            data={"hp1": [5.0, 6.0], "hp2": [7.0, 8.0]},
+            index=timeindex,
+        )
+        self.edisgo.overlying_grid.dsm_active_power = pd.DataFrame(
+            {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]}, index=timeindex
+        )
+        self.edisgo.check_integrity()
+        assert (
+            "There are time steps in timeindex of TimeSeries object that are not in "
+            "the index of OverlyingGrid.dsm_active_power" in caplog.text
+        )
+        assert (
+            "There are time steps in timeindex of TimeSeries object that are not in "
+            "the index of HeatPump.cop_df" in caplog.text
+        )
 
     def test_resample_timeseries(self):
         self.setup_worst_case_time_series()

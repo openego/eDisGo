@@ -2386,23 +2386,35 @@ class EDisGo:
                     f" the following {comp_type}: {exceeding.values}"
                 )
 
+        def _check_timeindex(check_df, param_name):
+            if not check_df.empty:
+                missing_indices = [
+                    _ for _ in self.timeseries.timeindex if _ not in check_df.index
+                ]
+                if len(missing_indices) > 0:
+                    logger.warning(
+                        f"There are time steps in timeindex of TimeSeries object that "
+                        f"are not in the index of {param_name}. This may lead "
+                        f"to problems."
+                    )
+
         # check if time index of other time series data contains all time steps
         # in TimeSeries.timeindex
         if len(self.timeseries.timeindex) > 0:
             # check time index of electromobility flexibility bands
             flex_band = list(self.electromobility.flexibility_bands.values())[0]
-            # if there are no flex bands, skip integrity check
-            if not flex_band.empty:
-                missing_indices = [
-                    _ for _ in self.timeseries.timeindex if _ not in flex_band.index
-                ]
-                if len(missing_indices) > 0:
-                    logger.warning(
-                        "There are time steps in timeindex of TimeSeries object that "
-                        "are not in the index of the flexibility bands. This may lead "
-                        "to problems."
-                    )
-            # ToDo check time index of HeatPump data
+            _check_timeindex(flex_band, "Electromobility.flexibility_bands")
+            # check time index of HeatPump data
+            for param_name in self.heat_pump._timeseries_attributes:
+                _check_timeindex(
+                    getattr(self.heat_pump, param_name), f"HeatPump.{param_name}"
+                )
+            # check time index of OverlyingGrid data
+            for param_name in self.overlying_grid._attributes:
+                _check_timeindex(
+                    getattr(self.overlying_grid, param_name),
+                    f"OverlyingGrid.{param_name}",
+                )
 
         logging.info("Integrity check finished. Please pay attention to warnings.")
 
