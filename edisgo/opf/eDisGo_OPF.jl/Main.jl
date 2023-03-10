@@ -56,13 +56,13 @@ function optimize_edisgo()
       end
     elseif result_soc["termination_status"] == MOI.OPTIMAL
       # Check if SOC constraint is tight
-      soc_tight, soc_dict = eDisGo_OPF.check_SOC_equality(result_soc, data_edisgo)
-      # Save SOC violations if SOC is not tight
-      if !soc_tight
-        open(joinpath(results_path, ding0_grid*"_"*join(data_edisgo["flexibilities"])*".json"), "w") do f
-            write(f, JSON.json(soc_dict))
-        end
-      end
+      # soc_tight, soc_dict = eDisGo_OPF.check_SOC_equality(result_soc, data_edisgo)
+      # # Save SOC violations if SOC is not tight
+      # if !soc_tight
+      #   open(joinpath(results_path, ding0_grid*"_"*join(data_edisgo["flexibilities"])*".json"), "w") do f
+      #       write(f, JSON.json(soc_dict))
+      #   end
+      # end
       PowerModels.update_data!(data_edisgo_mn, result_soc["solution"])
       data_edisgo_mn["solve_time"] = result_soc["solve_time"]
       data_edisgo_mn["status"] = result_soc["termination_status"]
