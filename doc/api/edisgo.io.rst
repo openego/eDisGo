@@ -17,10 +17,26 @@ edisgo.io.ding0\_import module
    :undoc-members:
    :show-inheritance:
 
+edisgo.io.dsm\_import module
+------------------------------
+
+.. automodule:: edisgo.io.dsm_import
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 edisgo.io.electromobility\_import module
 ----------------------------------------
 
 .. automodule:: edisgo.io.electromobility_import
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+edisgo.io.generators\_import module
+-----------------------------------
+
+.. automodule:: edisgo.io.generators_import
    :members:
    :undoc-members:
    :show-inheritance:
@@ -33,10 +49,10 @@ edisgo.io.heat\_pump\_import module
    :undoc-members:
    :show-inheritance:
 
-edisgo.io.generators\_import module
------------------------------------
+edisgo.io.home\_batteries\_import module
+----------------------------------------
 
-.. automodule:: edisgo.io.generators_import
+.. automodule:: edisgo.io.home_batteries_import
    :members:
    :undoc-members:
    :show-inheritance:

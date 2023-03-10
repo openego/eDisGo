@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from typing import TYPE_CHECKING
 
-import geopandas as gpd
 import pandas as pd
 import saio
 
@@ -18,6 +18,9 @@ from edisgo.io.db import (
     sql_within,
 )
 from edisgo.tools.geo import mv_grid_gdf
+
+if "READTHEDOCS" not in os.environ:
+    import geopandas as gpd
 
 if TYPE_CHECKING:
     from edisgo import EDisGo

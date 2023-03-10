@@ -9,6 +9,14 @@ edisgo.network.components module
    :undoc-members:
    :show-inheritance:
 
+edisgo.network.dsm module
+--------------------------------
+
+.. automodule:: edisgo.network.dsm
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 edisgo.network.electromobility module
 -------------------------------------
 
