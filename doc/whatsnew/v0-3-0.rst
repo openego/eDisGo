@@ -7,3 +7,4 @@ Changes
 -------
 
 * Added functionalities to obtain heat pump data from oedb `#324 <https://github.com/openego/eDisGo/pull/324>`_
+* Added functionality to resample and check integrity of flexibility bands `#341 <https://github.com/openego/eDisGo/pull/341>`_

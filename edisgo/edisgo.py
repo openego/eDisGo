@@ -2300,12 +2300,17 @@ class EDisGo:
         Method to check the integrity of the EDisGo object.
 
         Checks for consistency of topology (see
-        :func:`edisgo.topology.check_integrity`), timeseries (see
-        :func:`edisgo.timeseries.check_integrity`) and the interplay of both.
+        :func:`edisgo.network.topology.Topology.check_integrity`), timeseries (see
+        :func:`edisgo.network.timeseries.TimeSeries.check_integrity`) and the interplay
+        of both.
+        Further, checks integrity of electromobility object (see
+        :func:`edisgo.network.electromobility.Electromobility.check_integrity`) if
+        there is electromobility data.
 
         """
         self.topology.check_integrity()
         self.timeseries.check_integrity()
+        self.electromobility.check_integrity()
 
         # check consistency of topology and timeseries
         comp_types = ["generators", "loads", "storage_units"]
@@ -2353,14 +2358,33 @@ class EDisGo:
                     f" the following {comp_type}: {exceeding.values}"
                 )
 
-            logging.info("Integrity check finished. Please pay attention to warnings.")
+        # check if time index of other time series data contains all time steps
+        # in TimeSeries.timeindex
+        if len(self.timeseries.timeindex) > 0:
+            # check time index of electromobility flexibility bands
+            flex_band = list(self.electromobility.flexibility_bands.values())[0]
+            # if there are no flex bands, skip integrity check
+            if not flex_band.empty:
+                missing_indices = [
+                    _ for _ in self.timeseries.timeindex if _ not in flex_band.index
+                ]
+                if len(missing_indices) > 0:
+                    logger.warning(
+                        "There are time steps in timeindex of TimeSeries object that "
+                        "are not in the index of the flexibility bands. This may lead "
+                        "to problems."
+                    )
+            # ToDo check time index of HeatPump data
+
+        logging.info("Integrity check finished. Please pay attention to warnings.")
 
     def resample_timeseries(
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
     ):
         """
         Resamples time series data in
-        :class:`~.network.timeseries.TimeSeries` and :class:`~.network.heat.HeatPump`.
+        :class:`~.network.timeseries.TimeSeries`, :class:`~.network.heat.HeatPump` and
+        :class:`~.network.electromobility.Electromobility`.
 
         Both up- and down-sampling methods are possible.
 
@@ -2378,6 +2402,8 @@ class EDisGo:
 
         * :attr:`~.network.timeseries.TimeSeries.storage_units_reactive_power`
 
+        * :attr:`~.network.electromobility.Electromobility.flexibility_bands`
+
         * :attr:`~.network.heat.HeatPump.cop_df`
 
         * :attr:`~.network.heat.HeatPump.heat_demand_df`
@@ -2385,10 +2411,14 @@ class EDisGo:
         Parameters
         ----------
         method : str, optional
-            Method to choose from to fill missing values when resampling.
+            Method to choose from to fill missing values when resampling time series
+            data in :class:`~.network.timeseries.TimeSeries` and
+            :class:`~.network.heat.HeatPump` objects (method for
+            flexibility bands in :class:`~.network.electromobility.Electromobility`
+            object cannot be chosen to assure consistency of flexibility band data).
             Possible options are:
 
-            * 'ffill'
+            * 'ffill' (default)
                 Propagate last valid observation forward to next valid
                 observation. See :pandas:`pandas.DataFrame.ffill<DataFrame.ffill>`.
             * 'bfill'
@@ -2407,6 +2437,7 @@ class EDisGo:
 
         """
         self.timeseries.resample_timeseries(method=method, freq=freq)
+        self.electromobility.resample(freq=freq)
         self.heat_pump.resample_timeseries(method=method, freq=freq)
 
 
