@@ -43,7 +43,7 @@ class TestElectromobility:
         # CP4 - charge 2 kWh between time steps [0, 1] and 2 kWh between
         #       time steps [4, 5] with different offsets for lower and upper energy
         #       band
-        timeindex = pd.date_range("1/1/1970", periods=6, freq="60min")
+        timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
         flex_bands = {}
         flex_bands["upper_power"] = pd.DataFrame(
             data={
