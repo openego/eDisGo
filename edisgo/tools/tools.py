@@ -790,7 +790,7 @@ def battery_storage_reference_operation(
     df["storage_power"] = lst_storage_power
     df["storage_charge"] = lst_storage_charge
 
-    return df
+    return df.round(8)
 
 
 def determine_observation_periods(edisgo_obj, window_days, idx="min", absolute=False):

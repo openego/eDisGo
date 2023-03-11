@@ -11,14 +11,14 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         # VARIABLES
         if PowerModels.ref(pm, 1, :opf_version) in(1, 2, 3, 4)
             if PowerModels.ref(pm, 1, :opf_version) in(1, 3)
-                #eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false) # Eq. 3.9i (für Version 1 bzw. 3 keine Eq. (3.9))
+                eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false) # Eq. 3.9i (für Version 1 bzw. 3 keine Eq. (3.9))
             else
-                #eDisGo_OPF.variable_branch_current(pm, nw=n)  # Eq. (3.9) und (3.9i)
+                eDisGo_OPF.variable_branch_current(pm, nw=n)  # Eq. (3.9) und (3.9i)
                 eDisGo_OPF.variable_gen_power_curt(pm, nw=n)  # Eq. (3.29) für non-dispatchable Generators
                 eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.29)-(3.32)
             end
             eDisGo_OPF.variable_branch_power_radial(pm, nw=n, bounded=false)
-            PowerModels.variable_bus_voltage(pm, nw=n)  # Eq. (3.10)
+            PowerModels.variable_bus_voltage(pm, nw=n, bounded=false)  # Eq. (3.10)
             eDisGo_OPF.variable_battery_storage_power(pm, nw=n)  # Eq. (3.13) und (3.14)
             eDisGo_OPF.variable_heat_storage(pm, nw=n)  # Eq. (3.19)
             eDisGo_OPF.variable_heat_pump_power(pm, nw=n)  # Eq. (3.16)
@@ -47,7 +47,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         for i in PowerModels.ids(pm, :branch, nw=n)
             eDisGo_OPF.constraint_voltage_magnitude_difference_radial(pm, i, nw=n) # Eq. (3.6)
         end
-        #eDisGo_OPF.constraint_model_current(pm, nw=n)  # Eq. (3.7) bzw. (3.7i) (je nachdem ob nicht-konvex oder konvex gelöst wird)
+        eDisGo_OPF.constraint_model_current(pm, nw=n)  # Eq. (3.7) bzw. (3.7i) (je nachdem ob nicht-konvex oder konvex gelöst wird)
         eDisGo_OPF.constraint_max_line_loading(pm, n)  # Eq. (3.8)
 
         for i in PowerModels.ids(pm, :heatpumps, nw=n)

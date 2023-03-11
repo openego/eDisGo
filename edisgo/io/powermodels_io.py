@@ -425,7 +425,7 @@ def from_powermodels(
                 edisgo_object.opf_results.grid_slacks_t.cp_load_shedding = df
 
     # save line flows and currents to edisgo object
-    for variable in ["pf", "qf"]:  # , "ccm"]:
+    for variable in ["pf", "qf", "ccm"]:
         df = _result_df(
             pm,
             "branch",

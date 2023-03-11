@@ -49,9 +49,14 @@ function constraint_voltage_magnitude_difference(pm::AbstractBFModelEdisgo, n::I
     q_fr = PowerModels.var(pm, n, :q, f_idx)
     w_fr = PowerModels.var(pm, n, :w, f_bus)
     w_to = PowerModels.var(pm, n, :w, t_bus)
-    #ccm =  PowerModels.var(pm, n, :ccm, i)
+    ccm =  PowerModels.var(pm, n, :ccm, i)
 
-    JuMP.@constraint(pm.model, ((w_fr/tm^2)  - w_to ==  2*(r*p_fr + x*q_fr) ))#- (r^2 + x^2)*ccm))
+    JuMP.@constraint(pm.model, ((w_fr/tm^2)  - w_to ==  2*(r*p_fr + x*q_fr) - (r^2 + x^2)*ccm))
+
+    if PowerModels.ref(pm, n, :bus)[f_bus]["bus_type"]==3
+        JuMP.@constraint(pm.model, (w_fr ==  1))
+    end
+
 end
 
 
@@ -119,7 +124,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
     ps   = get(PowerModels.var(pm, n),  :ps, Dict()); PowerModels._check_var_keys(ps, bus_storage, "active power", "storage")
     pgs  = get(PowerModels.var(pm, n),  :pgs, Dict()); PowerModels._check_var_keys(pgs, bus_gens_slack, "active power", "slack")
     qgs  = get(PowerModels.var(pm, n),  :qgs, Dict()); PowerModels._check_var_keys(qgs, bus_gens_slack, "reactive power", "slack")
-    #ccm  = get(PowerModels.var(pm, n),  :ccm, Dict()); PowerModels._check_var_keys(ccm, bus_lines_to, "active power", "branch")
+    ccm  = get(PowerModels.var(pm, n),  :ccm, Dict()); PowerModels._check_var_keys(ccm, bus_lines_to, "active power", "branch")
     pdsm  = get(PowerModels.var(pm, n),  :pdsm, Dict()); PowerModels._check_var_keys(pdsm, bus_dsm, "active power", "dsm")
     php  = get(PowerModels.var(pm, n),  :php, Dict()); PowerModels._check_var_keys(php, bus_hps, "active power", "heatpumps")
     pcp  = get(PowerModels.var(pm, n),  :pcp, Dict()); PowerModels._check_var_keys(pcp, bus_cps, "active power", "electromobility")
@@ -135,7 +140,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             sum(pt[a] for a in bus_arcs_to)
             ==
             sum(pf[a] for a in bus_arcs_from)
-            #+ sum(ccm[a] * branch_r[a] for a in bus_lines_to)
+            + sum(ccm[a] * branch_r[a] for a in bus_lines_to)
             - sum(pgs[g] for g in bus_gens_slack)
             - sum(pg for pg in values(bus_pg))
             - sum(pg for pg in values(bus_pg_nd))
@@ -153,7 +158,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             - sum(pt[a] * branch_strg_pf[a[1]] for a in bus_arcs_to)
             ==
             sum(qf[a] for a in bus_arcs_from)
-            #+ sum(ccm[a] * branch_x[a] for a in bus_lines_to)
+            + sum(ccm[a] * branch_x[a] for a in bus_lines_to)
             - sum(qgs[g] for g in bus_gens_slack)
             - sum(qg for qg in values(bus_qg))
             - sum(qg for qg in values(bus_qg_nd))
@@ -170,7 +175,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             sum(pt[a] for a in bus_arcs_to)
             ==
             sum(pf[a] for a in bus_arcs_from)
-            #+ sum(ccm[a] * branch_r[a] for a in bus_lines_to)
+            + sum(ccm[a] * branch_r[a] for a in bus_lines_to)
             - sum(pgs[g] for g in bus_gens_slack)
             - sum(pg for pg in values(bus_pg))
             - sum(pg for pg in values(bus_pg_nd))
@@ -185,7 +190,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             - sum(pt[a] * branch_strg_pf[a[1]] for a in bus_arcs_to)
             ==
             sum(qf[a] for a in bus_arcs_from)
-            #+ sum(ccm[a] * branch_x[a] for a in bus_lines_to)
+            + sum(ccm[a] * branch_x[a] for a in bus_lines_to)
             - sum(qgs[g] for g in bus_gens_slack)
             - sum(qg for qg in values(bus_qg))
             - sum(qg for qg in values(bus_qg_nd))

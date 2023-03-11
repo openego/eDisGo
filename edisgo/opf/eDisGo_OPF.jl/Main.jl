@@ -56,26 +56,26 @@ function optimize_edisgo()
       end
     elseif result_soc["termination_status"] == MOI.OPTIMAL
       # Check if SOC constraint is tight
-      # soc_tight, soc_dict = eDisGo_OPF.check_SOC_equality(result_soc, data_edisgo)
-      # # Save SOC violations if SOC is not tight
-      # if !soc_tight
-      #   open(joinpath(results_path, ding0_grid*"_"*join(data_edisgo["flexibilities"])*".json"), "w") do f
-      #       write(f, JSON.json(soc_dict))
-      #   end
-      # end
+      soc_tight, soc_dict = eDisGo_OPF.check_SOC_equality(result_soc, data_edisgo)
+      # Save SOC violations if SOC is not tight
+      if !soc_tight
+        open(joinpath(results_path, ding0_grid*"_"*join(data_edisgo["flexibilities"])*".json"), "w") do f
+            write(f, JSON.json(soc_dict))
+        end
+      end
       PowerModels.update_data!(data_edisgo_mn, result_soc["solution"])
       data_edisgo_mn["solve_time"] = result_soc["solve_time"]
       data_edisgo_mn["status"] = result_soc["termination_status"]
       data_edisgo_mn["solver"] = "Gurobi"
-      # if soc_tight & warm_start
-      #   println("Starting warm-start non-convex AC-OPF with IPOPT.")
-      #   set_ac_bf_start_values!(data_edisgo_mn["nw"]["1"])
-      #   result_nc_ws, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, NCBFPowerModelEdisgo, ipopt)
-      #   PowerModels.update_data!(data_edisgo_mn, result_nc_ws["solution"])
-      #   data_edisgo_mn["solve_time"] = result_nc_ws["solve_time"]
-      #   data_edisgo_mn["status"] = result_nc_ws["termination_status"]
-      #   data_edisgo_mn["solver"] = "Ipopt"
-      # end
+      if soc_tight & warm_start
+        println("Starting warm-start non-convex AC-OPF with IPOPT.")
+        set_ac_bf_start_values!(data_edisgo_mn["nw"]["1"])
+        result_nc_ws, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, NCBFPowerModelEdisgo, ipopt)
+        PowerModels.update_data!(data_edisgo_mn, result_nc_ws["solution"])
+        data_edisgo_mn["solve_time"] = result_nc_ws["solve_time"]
+        data_edisgo_mn["status"] = result_nc_ws["termination_status"]
+        data_edisgo_mn["solver"] = "Ipopt"
+      end
     else
       println("Termination status: "*result_soc["termination_status"])
     end
