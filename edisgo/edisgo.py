@@ -1115,7 +1115,7 @@ class EDisGo:
                 No reactive power time series is set.
 
             Default: None
-        **kwargs: dict
+        **kwargs : dict
             Attributes of added component. See respective functions for required
             entries.
 
@@ -1595,7 +1595,7 @@ class EDisGo:
                 the generators and load factors of the LV grids.
                 Default 1 / 3.
             user_friendly_weight : float
-                Weighting factor of the user friendly weight in comparison to the
+                Weighting factor of the user-friendly weight in comparison to the
                 grid friendly weight. Default 0.5.
 
         """
@@ -1869,7 +1869,6 @@ class EDisGo:
             scenario=scenario,
             remove_existing=remove_existing,
         )
-
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """

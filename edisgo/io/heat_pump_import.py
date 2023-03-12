@@ -33,7 +33,7 @@ def oedb(edisgo_object, scenario, engine):
         Scenario for which to retrieve heat pump data. Possible options
         are 'eGon2035' and 'eGon100RE'.
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        Database engine.
 
     Returns
     --------
