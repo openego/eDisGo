@@ -24,8 +24,8 @@ from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.dsm_import import dsm_from_database
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
-    import_electromobility,
-    import_electromobility_from_database,
+    import_electromobility_from_dir,
+    import_electromobility_from_oedb,
     integrate_charging_parks,
 )
 from edisgo.io.generators_import import generators_from_database
@@ -1508,29 +1508,33 @@ class EDisGo:
 
     def import_electromobility(
         self,
-        simbev_directory: PurePath | str,
-        tracbev_directory: PurePath | str,
+        data_source: str,
+        scenario: str = None,
+        engine: Engine = None,
+        charging_processes_dir: PurePath | str = None,
+        potential_charging_points_dir: PurePath | str = None,
         import_electromobility_data_kwds=None,
         allocate_charging_demand_kwds=None,
     ):
         """
         Imports electromobility data and integrates charging points into grid.
 
-        So far, this function requires electromobility data from
+        Electromobility data can be obtained from the `OpenEnergy DataBase
+        <https://openenergy-platform.org/dataedit/schemas>`_ or from self-provided
+        data. In case you want to use self-provided data, it needs to be generated
+        using the tools
         `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
         `3083c5a <https://github.com/rl-institut/simbev/commit/
         86076c936940365587c9fba98a5b774e13083c5a>`_) and
         `TracBEV <https://github.com/rl-institut/tracbev>`_ (required version:
         `14d864c <https://github.com/rl-institut/tracbev/commit/
-        03e335655770a377166c05293a966052314d864c>`_) to be stored in the
-        directories specified through the parameters `simbev_directory` and
-        `tracbev_directory`. SimBEV provides data on standing times, charging demand,
-        etc. per vehicle, whereas TracBEV provides potential charging point locations.
+        03e335655770a377166c05293a966052314d864c>`_). SimBEV provides data on standing
+        times, charging demand, etc. per vehicle, whereas TracBEV provides potential
+        charging point locations.
 
-        After electromobility data is loaded, the charging demand from SimBEV is
-        allocated to potential charging points from TracBEV. Afterwards,
-        all potential charging points with charging demand allocated to them are
-        integrated into the grid.
+        After electromobility data is loaded, the charging demand from is allocated to
+        potential charging points. Afterwards, all potential charging points with
+        charging demand allocated to them are integrated into the grid.
 
         Be aware that this function does not yield charging time series per charging
         point but only charging processes (see
@@ -1541,85 +1545,105 @@ class EDisGo:
 
         Parameters
         ----------
-        simbev_directory : str
-            SimBEV directory holding SimBEV data.
-        tracbev_directory : str
-            TracBEV directory holding TracBEV data.
+        data_source : str
+            Specifies source from where to obtain electromobility data.
+            Possible options are:
+
+            * "oedb"
+
+                Electromobility data is obtained from the `OpenEnergy DataBase
+                <https://openenergy-platform.org/dataedit/schemas>`_.
+
+                This option requires that the parameters `scenario` and `engine` are
+                provided.
+
+            * "directory"
+
+                Electromobility data is obtained from directories specified through
+                parameters `charging_processes_dir` and `potential_charging_points_dir`.
+
+        scenario : str
+            Scenario for which to retrieve electromobility data in case `data_source` is
+            set to "oedb". Possible options are "eGon2035" and "eGon100RE".
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine. Needs to be provided in case `data_source` is set to
+            "oedb".
+        charging_processes_dir : str or pathlib.PurePath
+            Directory holding data on charging processes (standing times, charging
+            demand, etc. per vehicle), including metadata, from SimBEV.
+        potential_charging_points_dir : str or pathlib.PurePath
+            Directory holding data on potential charging point locations from TracBEV.
         import_electromobility_data_kwds : dict
-            These may contain any further attributes you want to specify when calling
-            the function to import electromobility data from SimBEV and TracBEV using
-            :func:`~.io.electromobility_import.import_electromobility`.
+            These may contain any further attributes you want to specify when importing
+            electromobility data.
 
             gc_to_car_rate_home : float
-                Specifies the minimum rate between potential charging parks
-                points for the use case "home" and the total number of cars.
-                Default 0.5.
+                Specifies the minimum rate between potential charging points for the
+                use case "home" and the total number of cars. Default: 0.5.
             gc_to_car_rate_work : float
-                Specifies the minimum rate between potential charging parks
-                points for the use case "work" and the total number of cars.
-                Default 0.25.
+                Specifies the minimum rate between potential charging points for the
+                use case "work" and the total number of cars. Default: 0.25.
             gc_to_car_rate_public : float
-                Specifies the minimum rate between potential charging parks
-                points for the use case "public" and the total number of cars.
-                Default 0.1.
+                Specifies the minimum rate between potential charging points for the
+                use case "public" and the total number of cars. Default: 0.1.
             gc_to_car_rate_hpc : float
-                Specifies the minimum rate between potential charging parks
-                points for the use case "hpc" and the total number of cars.
-                Default 0.005.
+                Specifies the minimum rate between potential charging points for the
+                use case "hpc" and the total number of cars. Default: 0.005.
             mode_parking_times : str
                 If the mode_parking_times is set to "frugal" only parking times
                 with any charging demand are imported. Any other input will lead
-                to all parking and driving events being imported. Default "frugal".
+                to all parking and driving events being imported. Default: "frugal".
             charging_processes_dir : str
-                Charging processes sub-directory. Default None.
+                Charging processes sub-directory. Only used when `data_source` is
+                set to "directory". Default: None.
             simbev_config_file : str
-                Name of the simbev config file. Default "metadata_simbev_run.json".
+                Name of the simbev config file. Only used when `data_source` is
+                set to "directory". Default: "metadata_simbev_run.json".
 
         allocate_charging_demand_kwds :
             These may contain any further attributes you want to specify when calling
-            the function that allocates charging processes from SimBEV to potential
-            charging points from TracBEV using
-            :func:`~.io.electromobility_import.distribute_charging_demand`.
+            the function :func:`~.io.electromobility_import.distribute_charging_demand`
+            that allocates charging processes to potential charging points.
 
             mode : str
                 Distribution mode. If the mode is set to "user_friendly" only the
                 simbev weights are used for the distribution. If the mode is
                 "grid_friendly" also grid conditions are respected.
-                Default "user_friendly".
+                Default: "user_friendly".
             generators_weight_factor : float
                 Weighting factor of the generators weight within an LV grid in
-                comparison to the loads weight. Default 0.5.
+                comparison to the loads weight. Default: 0.5.
             distance_weight : float
                 Weighting factor for the distance between a potential charging park
                 and its nearest substation in comparison to the combination of
-                the generators and load factors of the LV grids.
-                Default 1 / 3.
+                the generators and load factors of the LV grids. Default: 1 / 3.
             user_friendly_weight : float
                 Weighting factor of the user-friendly weight in comparison to the
-                grid friendly weight. Default 0.5.
+                grid friendly weight. Default: 0.5.
 
         """
         if import_electromobility_data_kwds is None:
             import_electromobility_data_kwds = {}
 
-        import_electromobility(
-            self,
-            simbev_directory,
-            tracbev_directory,
-            **import_electromobility_data_kwds,
-        )
-
-        if allocate_charging_demand_kwds is None:
-            allocate_charging_demand_kwds = {}
-
-        distribute_charging_demand(self, **allocate_charging_demand_kwds)
-
-        integrate_charging_parks(self)
-
-    def import_electromobility_from_database(
-        self, engine: Engine, allocate_charging_demand_kwds: dict = None, **kwargs
-    ):
-        import_electromobility_from_database(self, engine=engine, **kwargs)
+        if data_source == "oedb":
+            import_electromobility_from_oedb(
+                self,
+                scenario=scenario,
+                engine=engine,
+                **import_electromobility_data_kwds,
+            )
+        elif data_source == "directory":
+            import_electromobility_from_dir(
+                self,
+                charging_processes_dir,
+                potential_charging_points_dir,
+                **import_electromobility_data_kwds,
+            )
+        else:
+            raise ValueError(
+                "Invalid input for parameter 'data_source'. Possible options are "
+                "'oedb' and 'directory'."
+            )
 
         if allocate_charging_demand_kwds is None:
             allocate_charging_demand_kwds = {}

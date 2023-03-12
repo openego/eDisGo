@@ -1052,12 +1052,19 @@ class TestEDisGo:
         self.edisgo.analyze()
 
     def test_import_electromobility(self):
+        """
+        Test import from directories.
+        """
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
 
         # test with default parameters
         simbev_path = pytest.simbev_example_scenario_path
         tracbev_path = pytest.tracbev_example_scenario_path
-        self.edisgo.import_electromobility(simbev_path, tracbev_path)
+        self.edisgo.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=simbev_path,
+            potential_charging_points_dir=tracbev_path,
+        )
 
         assert len(self.edisgo.electromobility.charging_processes_df) == 48
         assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 1621
@@ -1109,10 +1116,11 @@ class TestEDisGo:
         # test with kwargs
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         self.edisgo.import_electromobility(
-            simbev_path,
-            tracbev_path,
-            {"mode_parking_times": "not_frugal"},
-            {"mode": "grid_friendly"},
+            data_source="directory",
+            charging_processes_dir=simbev_path,
+            potential_charging_points_dir=tracbev_path,
+            import_electromobility_data_kwds={"mode_parking_times": "not_frugal"},
+            allocate_charging_demand_kwds={"mode": "grid_friendly"},
         )
 
         # Length of charging_processes_df, potential_charging_parks_gdf and
@@ -1144,6 +1152,64 @@ class TestEDisGo:
         assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
 
         assert len(self.edisgo.electromobility.integrated_charging_parks_df) == 3
+
+        # fmt: off
+        assert set(
+            self.edisgo.electromobility.integrated_charging_parks_df.edisgo_id.
+            sort_values().values
+        ) == set(
+            self.edisgo.topology.loads_df[
+                self.edisgo.topology.loads_df.type == "charging_point"
+            ]
+            .index.sort_values()
+            .values
+        )
+        # fmt: on
+
+    @pytest.mark.local
+    def test_import_electromobility_oedb(self):
+        """
+        Test import from oedb.
+        """
+        self.edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+
+        # test with default parameters
+        self.edisgo.import_electromobility(
+            data_source="oedb", scenario="eGon2035", engine=pytest.engine
+        )
+
+        assert len(self.edisgo.electromobility.charging_processes_df) == 323507
+        assert self.edisgo.electromobility.eta_charging_points == 0.9
+
+        total_charging_demand_at_charging_parks = sum(
+            cp.charging_processes_df.chargingdemand_kWh.sum()
+            for cp in list(self.edisgo.electromobility.potential_charging_parks)
+            if cp.designated_charging_point_capacity > 0
+        )
+        total_charging_demand = (
+            self.edisgo.electromobility.charging_processes_df.chargingdemand_kWh.sum()
+        )
+        assert np.isclose(
+            total_charging_demand_at_charging_parks, total_charging_demand
+        )
+
+        # fmt: off
+        charging_park_ids = (
+            self.edisgo.electromobility.charging_processes_df.charging_park_id.
+            sort_values().unique()
+        )
+        potential_charging_parks_with_capacity = np.sort(
+            [
+                cp.id
+                for cp in list(self.edisgo.electromobility.potential_charging_parks)
+                if cp.designated_charging_point_capacity > 0.0
+            ]
+        )
+        # fmt: on
+
+        assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
 
         # fmt: off
         assert set(

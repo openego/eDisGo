@@ -203,6 +203,10 @@ class TestElectromobilityImport:
             edisgo_obj=edisgo_obj, engine=pytest.engine, scenario="eGon2035"
         )
         assert len(charging_processes_df.car_id.unique()) == 1604
+        assert len(charging_processes_df) == 323507
+        assert charging_processes_df[
+            charging_processes_df.chargingdemand_kWh == 0
+        ].empty
         assert np.isclose(
             charging_processes_df.chargingdemand_kWh.sum() / 1604, 2414.31, atol=1e-3
         )

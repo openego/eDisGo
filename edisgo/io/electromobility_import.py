@@ -104,7 +104,7 @@ PRIVATE_DESTINATIONS = {
 }
 
 
-def import_electromobility(
+def import_electromobility_from_dir(
     edisgo_obj: EDisGo,
     simbev_directory: PurePath | str,
     tracbev_directory: PurePath | str,
@@ -113,7 +113,7 @@ def import_electromobility(
     """
     Import electromobility data from
     `SimBEV <https://github.com/rl-institut/simbev>`_ and
-    `TracBEV <https://github.com/rl-institut/tracbev>`_.
+    `TracBEV <https://github.com/rl-institut/tracbev>`_ from directory.
 
     Parameters
     ----------
@@ -304,14 +304,14 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
     Parameters
     ----------
     path : str
-        Main path holding SimBEV output data
+        Main path holding TracBEV data.
     edisgo_obj : :class:`~.EDisGo`
 
     Returns
     -------
     :geopandas:`GeoDataFrame`
         GeoDataFrame with AGS, charging use case (home, work, public or
-        hpc), user centric weight and geometry.
+        hpc), user-centric weight and geometry.
 
     """
     files = [f for f in os.listdir(path) if f.endswith(".gpkg")]
@@ -391,7 +391,7 @@ def assure_minimum_potential_charging_parks(
 
         num_gcs = len(use_case_gdf)
 
-        # if simbev doesn't provide possible grid connections choose a
+        # if tracbev doesn't provide possible grid connections choose a
         # random public potential charging park and duplicate
         if num_gcs == 0:
             logger.warning(
