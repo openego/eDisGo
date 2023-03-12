@@ -113,13 +113,13 @@ class TestGeneratorsImport:
         )
         assert (
             self.edisgo.topology.generators_df.at[
-                "Generator_LVGrid_6_solar_456", "p_nom"
+                "Generator_LVGrid_9_solar_456", "p_nom"
             ]
             == 0.3
         )
         assert (
             self.edisgo.topology.generators_df.at[
-                "Generator_LVGrid_6_solar_456", "type"
+                "Generator_LVGrid_9_solar_456", "type"
             ]
             == "solar"
         )
