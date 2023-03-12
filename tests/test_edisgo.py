@@ -1262,7 +1262,11 @@ class TestEDisGo:
         # test with default parameters
         simbev_path = pytest.simbev_example_scenario_path
         tracbev_path = pytest.tracbev_example_scenario_path
-        self.edisgo_obj.import_electromobility(simbev_path, tracbev_path)
+        self.edisgo_obj.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=simbev_path,
+            potential_charging_points_dir=tracbev_path,
+        )
         self.edisgo_obj.apply_charging_strategy()
 
         # Check if all charging points have a valid chargingdemand_kWh > 0

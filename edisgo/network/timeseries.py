@@ -1242,7 +1242,7 @@ class TimeSeries:
         # in case time series from oedb are used, retrieve oedb time series
         if isinstance(ts_generators, str) and ts_generators == "oedb":
             weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
-                edisgo_object, source=ts_generators, engine=None
+                edisgo_object
             )
             ts_generators = timeseries_import.feedin_oedb(
                 edisgo_object.config, weather_cell_ids, self.timeindex
@@ -1255,7 +1255,7 @@ class TimeSeries:
                 )
 
             weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
-                edisgo_object, source=ts_generators, engine=engine
+                edisgo_object, engine=engine
             )
             ts_generators = timeseries_import.feedin_egon_data(
                 weather_cell_ids, self.timeindex, engine=engine

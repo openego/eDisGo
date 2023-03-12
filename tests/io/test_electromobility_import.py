@@ -106,7 +106,7 @@ class TestElectromobilityImport:
         self.edisgo_obj.set_timeindex(timeindex)
         self.edisgo_obj.resample_timeseries()
 
-        electromobility_import.import_electromobility(
+        electromobility_import.import_electromobility_from_dir(
             self.edisgo_obj, self.simbev_path, self.tracbev_path
         )
         electromobility_import.distribute_charging_demand(
@@ -135,7 +135,7 @@ class TestElectromobilityImport:
         self.edisgo_obj.set_timeindex(timeindex)
         self.edisgo_obj.resample_timeseries()
 
-        electromobility_import.import_electromobility(
+        electromobility_import.import_electromobility_from_dir(
             self.edisgo_obj, self.simbev_path, self.tracbev_path
         )
         electromobility_import.distribute_charging_demand(
@@ -215,8 +215,8 @@ class TestElectromobilityImport:
         assert len(potential_parks_df) == 1083
         # check for random charging points if they are within MV grid district
         grid_gdf = mv_grid_gdf(edisgo_obj)
-        assert all(potential_parks_df.geom[10].within(grid_gdf.geometry))
-        assert all(potential_parks_df.geom[100].within(grid_gdf.geometry))
+        assert all(potential_parks_df.geom.iloc[10].within(grid_gdf.geometry))
+        assert all(potential_parks_df.geom.iloc[100].within(grid_gdf.geometry))
 
     @pytest.mark.local
     def test_charging_processes_from_oedb(self):
