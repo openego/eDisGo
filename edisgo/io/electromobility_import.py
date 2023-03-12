@@ -1179,13 +1179,13 @@ def import_electromobility_from_oedb(
     ----------------
     kwargs :
         Possible options are `gc_to_car_rate_home`, `gc_to_car_rate_work`,
-        `gc_to_car_rate_public` and `gc_to_car_rate_hpc`. See parameter documentation of
-        `import_electromobility_data_kwds` parameter in
+        `gc_to_car_rate_public`, `gc_to_car_rate_hpc`, and `mode_parking_times`. See
+        parameter documentation of `import_electromobility_data_kwds` parameter in
         :attr:`~.EDisGo.import_electromobility` for more information.
 
     """
     edisgo_obj.electromobility.charging_processes_df = charging_processes_from_oedb(
-        edisgo_obj=edisgo_obj, engine=engine, scenario=scenario
+        edisgo_obj=edisgo_obj, engine=engine, scenario=scenario, **kwargs
     )
     edisgo_obj.electromobility.simbev_config_df = simbev_config_from_oedb(
         scenario=scenario, engine=engine
@@ -1295,9 +1295,7 @@ def potential_charging_parks_from_oedb(
 
 
 def charging_processes_from_oedb(
-    edisgo_obj: EDisGo,
-    engine: Engine,
-    scenario: str,
+    edisgo_obj: EDisGo, engine: Engine, scenario: str, **kwargs
 ):
     """
     Gets :attr:`~.network.electromobility.Electromobility.charging_processes_df` data
@@ -1311,6 +1309,13 @@ def charging_processes_from_oedb(
     scenario : str
         Scenario for which to retrieve data. Possible options are 'eGon2035' and
         'eGon100RE'.
+
+    Other Parameters
+    ----------------
+    kwargs :
+        Possible option is `mode_parking_times`. See parameter documentation of
+        `import_electromobility_data_kwds` parameter in
+        :attr:`~.EDisGo.import_electromobility` for more information.
 
     Returns
     --------
@@ -1349,9 +1354,10 @@ def charging_processes_from_oedb(
             egon_ev_trip.park_end.label("park_end_timesteps"),
         ).filter(
             egon_ev_trip.scenario == scenario,
-            egon_ev_trip.charging_demand > 0,
             egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
         )
+        if kwargs.get("mode_parking_times", "frugal") == "frugal":
+            query = query.filter(egon_ev_trip.charging_demand > 0)
         ev_trips_df = pd.read_sql(sql=query.statement, con=engine)
 
     # duplicate EVs that were chosen more than once from EV pool
