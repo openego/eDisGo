@@ -31,7 +31,7 @@ class TestElectromobilityImport:
 
     def test_import_electromobility(self):
 
-        electromobility_import.import_electromobility(
+        electromobility_import.import_electromobility_from_dir(
             self.edisgo_obj, self.simbev_path, self.tracbev_path
         )
 
