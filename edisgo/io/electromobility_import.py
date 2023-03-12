@@ -164,10 +164,14 @@ def import_electromobility_from_dir(
         simbev_config_file=kwargs.pop("simbev_config_file", "metadata_simbev_run.json"),
     )
 
+    potential_charging_parks_gdf = read_gpkg_potential_charging_parks(
+        tracbev_directory,
+        edisgo_obj,
+    )
     edisgo_obj.electromobility.potential_charging_parks_gdf = (
-        read_gpkg_potential_charging_parks(
-            tracbev_directory,
-            edisgo_obj,
+        assure_minimum_potential_charging_parks(
+            edisgo_obj=edisgo_obj,
+            potential_charging_parks_gdf=potential_charging_parks_gdf,
             **kwargs,
         )
     )
@@ -296,7 +300,7 @@ def read_simbev_config_df(
         return pd.DataFrame(data=data, index=[0])
 
 
-def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
+def read_gpkg_potential_charging_parks(path, edisgo_obj):
     """
     Get GeoDataFrame with all
     `TracBEV <https://github.com/rl-institut/tracbev>`_ potential charging parks.
@@ -360,11 +364,7 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
         crs=potential_charging_parks_gdf_list[0].crs,
     )
 
-    return assure_minimum_potential_charging_parks(
-        edisgo_obj=edisgo_obj,
-        potential_charging_parks_gdf=potential_charging_parks_gdf,
-        **kwargs,
-    )
+    return potential_charging_parks_gdf
 
 
 def assure_minimum_potential_charging_parks(
@@ -1190,9 +1190,14 @@ def import_electromobility_from_oedb(
     edisgo_obj.electromobility.simbev_config_df = simbev_config_from_oedb(
         scenario=scenario, engine=engine
     )
+    potential_charging_parks_gdf = potential_charging_parks_from_oedb(
+        edisgo_obj=edisgo_obj, engine=engine, **kwargs
+    )
     edisgo_obj.electromobility.potential_charging_parks_gdf = (
-        potential_charging_parks_from_oedb(
-            edisgo_obj=edisgo_obj, engine=engine, **kwargs
+        assure_minimum_potential_charging_parks(
+            edisgo_obj=edisgo_obj,
+            potential_charging_parks_gdf=potential_charging_parks_gdf,
+            **kwargs,
         )
     )
 
@@ -1236,7 +1241,6 @@ def simbev_config_from_oedb(
 def potential_charging_parks_from_oedb(
     edisgo_obj: EDisGo,
     engine: Engine,
-    **kwargs,
 ):
     """
     Gets :attr:`~.network.electromobility.Electromobility.potential_charging_parks_gdf`
@@ -1247,14 +1251,6 @@ def potential_charging_parks_from_oedb(
     edisgo_obj : :class:`~.EDisGo`
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
-
-    Other Parameters
-    ----------------
-    kwargs :
-        Possible options are `gc_to_car_rate_home`, `gc_to_car_rate_work`,
-        `gc_to_car_rate_public` and `gc_to_car_rate_hpc`. See parameter documentation of
-        `import_electromobility_data_kwds` parameter in
-        :attr:`~.EDisGo.import_electromobility` for more information.
 
     Returns
     --------
@@ -1287,11 +1283,7 @@ def potential_charging_parks_from_oedb(
             index_col="cp_id",
         ).to_crs(crs)
 
-    gdf = gdf.assign(ags=0)
-
-    return assure_minimum_potential_charging_parks(
-        edisgo_obj=edisgo_obj, potential_charging_parks_gdf=gdf, **kwargs
-    )
+    return gdf.assign(ags=0)
 
 
 def charging_processes_from_oedb(
