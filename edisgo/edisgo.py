@@ -156,6 +156,7 @@ class EDisGo:
             path=kwargs.get("ding0_grid", None),
             legacy_ding0_grids=kwargs.get("legacy_ding0_grids", True),
         )
+        self.legacy_grids = kwargs.get("legacy_ding0_grids", True)
 
         # instantiate other data classes
         self.results = Results(self)
