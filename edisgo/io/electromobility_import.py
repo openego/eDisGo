@@ -409,16 +409,17 @@ def assure_minimum_potential_charging_parks(
                 random_state=edisgo_obj.topology.mv_grid.id,
             ).assign(use_case=use_case)
 
-            potential_charging_parks_gdf = gpd.GeoDataFrame(
-                pd.concat(
-                    [
-                        potential_charging_parks_gdf,
-                        random_gcs,
-                    ],
-                    ignore_index=True,
-                ),
-                crs=potential_charging_parks_gdf.crs,
+            potential_charging_parks_gdf = pd.concat(
+                [
+                    potential_charging_parks_gdf,
+                    random_gcs,
+                ],
+                ignore_index=True,
             )
+            use_case_gdf = potential_charging_parks_gdf.loc[
+                potential_charging_parks_gdf.use_case == use_case
+            ]
+            num_gcs = len(use_case_gdf)
 
         # escape zero division
         actual_gc_to_car_rate = np.Infinity if num_cars == 0 else num_gcs / num_cars
@@ -435,15 +436,12 @@ def assure_minimum_potential_charging_parks(
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
-                potential_charging_parks_gdf = gpd.GeoDataFrame(
-                    pd.concat(
-                        [
-                            potential_charging_parks_gdf,
-                            use_case_gdf,
-                        ],
-                        ignore_index=True,
-                    ),
-                    crs=potential_charging_parks_gdf.crs,
+                potential_charging_parks_gdf = pd.concat(
+                    [
+                        potential_charging_parks_gdf,
+                        use_case_gdf,
+                    ],
+                    ignore_index=True,
                 )
 
             else:
@@ -456,15 +454,12 @@ def assure_minimum_potential_charging_parks(
                     n=extra_gcs, random_state=edisgo_obj.topology.mv_grid.id
                 )
 
-                potential_charging_parks_gdf = gpd.GeoDataFrame(
-                    pd.concat(
-                        [
-                            potential_charging_parks_gdf,
-                            extra_gdf,
-                        ],
-                        ignore_index=True,
-                    ),
-                    crs=potential_charging_parks_gdf.crs,
+                potential_charging_parks_gdf = pd.concat(
+                    [
+                        potential_charging_parks_gdf,
+                        extra_gdf,
+                    ],
+                    ignore_index=True,
                 )
 
             use_case_gdf = potential_charging_parks_gdf.loc[

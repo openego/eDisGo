@@ -55,6 +55,30 @@ class TestElectromobilityImport:
             list(electromobility.potential_charging_parks)
         )
 
+    def test_assure_minimum_potential_charging_parks(self):
+        self.edisgo_obj.electromobility.charging_processes_df = (
+            electromobility_import.read_csvs_charging_processes(self.simbev_path)
+        )
+        pot_cp_gdf_raw = electromobility_import.read_gpkg_potential_charging_parks(
+            self.tracbev_path, self.edisgo_obj
+        )
+
+        # manipulate data in order to catch every case handled in assure_minimum...
+        # drop hpc charging point to have no hpc points available
+        hpc_points = pot_cp_gdf_raw[pot_cp_gdf_raw.use_case == "hpc"].index
+        pot_cp_gdf_raw = pot_cp_gdf_raw.drop(hpc_points)
+        # drop all but one work charging point
+        work_points = pot_cp_gdf_raw[pot_cp_gdf_raw.use_case == "work"].index
+        pot_cp_gdf_raw = pot_cp_gdf_raw.drop(work_points[1:])
+
+        pot_cp_gdf = electromobility_import.assure_minimum_potential_charging_parks(
+            self.edisgo_obj, pot_cp_gdf_raw, gc_to_car_rate_work=0.3
+        )
+
+        assert len(pot_cp_gdf_raw) < len(pot_cp_gdf)
+        assert len(pot_cp_gdf[pot_cp_gdf.use_case == "hpc"]) == 32
+        assert len(pot_cp_gdf[pot_cp_gdf.use_case == "work"]) == 4
+
     def test_distribute_charging_demand(self):
 
         # test user friendly
