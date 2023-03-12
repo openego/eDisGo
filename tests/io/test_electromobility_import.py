@@ -1,14 +1,12 @@
 import os
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from edisgo.edisgo import EDisGo
-from edisgo.io.electromobility_import import (
-    distribute_charging_demand,
-    import_electromobility,
-    integrate_charging_parks,
-)
+from edisgo.io import electromobility_import
+from edisgo.tools.geo import mv_grid_gdf
 
 
 class TestElectromobilityImport:
@@ -33,7 +31,9 @@ class TestElectromobilityImport:
 
     def test_import_electromobility(self):
 
-        import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
+        electromobility_import.import_electromobility(
+            self.edisgo_obj, self.simbev_path, self.tracbev_path
+        )
 
         electromobility = self.edisgo_obj.electromobility
 
@@ -58,7 +58,7 @@ class TestElectromobilityImport:
     def test_distribute_charging_demand(self):
 
         # test user friendly
-        distribute_charging_demand(self.edisgo_obj)
+        electromobility_import.distribute_charging_demand(self.edisgo_obj)
 
         electromobility = self.edisgo_obj.electromobility
 
@@ -82,8 +82,12 @@ class TestElectromobilityImport:
         self.edisgo_obj.set_timeindex(timeindex)
         self.edisgo_obj.resample_timeseries()
 
-        import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
-        distribute_charging_demand(self.edisgo_obj, mode="grid_friendly")
+        electromobility_import.import_electromobility(
+            self.edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(
+            self.edisgo_obj, mode="grid_friendly"
+        )
 
         electromobility = self.edisgo_obj.electromobility
 
@@ -107,8 +111,10 @@ class TestElectromobilityImport:
         self.edisgo_obj.set_timeindex(timeindex)
         self.edisgo_obj.resample_timeseries()
 
-        import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
-        distribute_charging_demand(
+        electromobility_import.import_electromobility(
+            self.edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(
             self.edisgo_obj,
             generators_weight_factor=1 / 3,
             distance_weight=0.5,
@@ -133,7 +139,7 @@ class TestElectromobilityImport:
 
     def test_integrate_charging_parks(self):
 
-        integrate_charging_parks(self.edisgo_obj)
+        electromobility_import.integrate_charging_parks(self.edisgo_obj)
 
         electromobility = self.edisgo_obj.electromobility
 
@@ -163,3 +169,40 @@ class TestElectromobilityImport:
         edisgo_ids_topology = sorted(topology.charging_points_df.index.tolist())
 
         assert edisgo_ids_cp == edisgo_ids_topology
+
+    @pytest.mark.local
+    def test_simbev_config_from_oedb(self):
+        config_df = electromobility_import.simbev_config_from_oedb(
+            engine=pytest.engine, scenario="eGon2035"
+        )
+        assert len(config_df) == 1
+        assert config_df["eta_cp"][0] == 0.9
+        assert config_df["stepsize"][0] == 15
+        assert config_df["days"][0] == 365
+
+    @pytest.mark.local
+    def test_potential_charging_parks_from_oedb(self):
+        edisgo_obj = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        potential_parks_df = electromobility_import.potential_charging_parks_from_oedb(
+            edisgo_obj=edisgo_obj, engine=pytest.engine
+        )
+        assert len(potential_parks_df) == 1083
+        # check for random charging points if they are within MV grid district
+        grid_gdf = mv_grid_gdf(edisgo_obj)
+        assert all(potential_parks_df.geom[10].within(grid_gdf.geometry))
+        assert all(potential_parks_df.geom[100].within(grid_gdf.geometry))
+
+    @pytest.mark.local
+    def test_charging_processes_from_oedb(self):
+        edisgo_obj = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        charging_processes_df = electromobility_import.charging_processes_from_oedb(
+            edisgo_obj=edisgo_obj, engine=pytest.engine, scenario="eGon2035"
+        )
+        assert len(charging_processes_df.car_id.unique()) == 1604
+        assert np.isclose(
+            charging_processes_df.chargingdemand_kWh.sum() / 1604, 2414.31, atol=1e-3
+        )
