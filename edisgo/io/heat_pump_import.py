@@ -6,9 +6,7 @@ import numpy as np
 import pandas as pd
 import saio
 
-from sqlalchemy import func
-
-from edisgo.io.db import session_scope_egon_data
+from edisgo.io import db
 from edisgo.tools.tools import (
     determine_bus_voltage_level,
     determine_grid_integration_voltage_level,
@@ -31,7 +29,7 @@ def oedb(edisgo_object, scenario, engine):
     edisgo_object : :class:`~.EDisGo`
     scenario : str
         Scenario for which to retrieve heat pump data. Possible options
-        are 'eGon2035' and 'eGon100RE'.
+        are "eGon2035" and "eGon100RE".
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
 
@@ -112,24 +110,19 @@ def oedb(edisgo_object, scenario, engine):
             .filter(
                 egon_district_heating.scenario == scenario,
                 egon_district_heating.carrier == "heat_pump",
-                func.ST_Contains(  # filter heat pumps inside MV grid district geometry
-                    func.ST_GeomFromText(mv_grid_geom.wkt, mv_grid_geom_srid),
-                    # transform to same SRID as MV grid district geometry
-                    func.ST_Transform(
-                        egon_district_heating.geometry,
-                        mv_grid_geom_srid,
-                    ),
+                # filter heat pumps inside MV grid district geometry
+                db.sql_within(
+                    egon_district_heating.geometry,
+                    db.sql_grid_geom(edisgo_object),
+                    mv_grid_geom_srid,
                 ),
             )
             .outerjoin(  # join to obtain weather cell ID
                 egon_era5_weather_cells,
-                func.ST_Contains(
+                db.sql_within(
+                    egon_district_heating.geometry,
                     egon_era5_weather_cells.geom,
-                    # transform to same SRID as weather cell geometry
-                    func.ST_Transform(
-                        egon_district_heating.geometry,
-                        egon_era5_weather_cells.geom.expression.type.srid,
-                    ),
+                    mv_grid_geom_srid,
                 ),
             )
         )
@@ -173,16 +166,15 @@ def oedb(edisgo_object, scenario, engine):
     )
 
     building_ids = edisgo_object.topology.loads_df.building_id.unique()
-    mv_grid_geom = edisgo_object.topology.grid_district["geom"]
     mv_grid_geom_srid = edisgo_object.topology.grid_district["srid"]
 
     # get individual and district heating heat pumps
-    with session_scope_egon_data(engine) as session:
+    with db.session_scope_egon_data(engine) as session:
         hp_individual = _get_individual_heat_pumps()
         hp_central = _get_central_heat_pumps()
 
     # sanity check
-    with session_scope_egon_data(engine) as session:
+    with db.session_scope_egon_data(engine) as session:
         hp_individual_cap = _get_individual_heat_pump_capacity()
     if not np.isclose(hp_individual_cap, hp_individual.p_set.sum(), atol=1e-3):
         logger.warning(
