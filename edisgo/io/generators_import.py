@@ -704,11 +704,11 @@ def _update_grids(
     # iterate over new generators and create them
     for id in new_gens_lv.index.sort_values(ascending=True):
         comp_data = dict(new_gens_lv.loc[id, :])
-
-        nearest_substation, _ = find_nearest_bus(comp_data["geom"], substations)
-
-        comp_data["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
-
+        try:
+            nearest_substation, _ = find_nearest_bus(comp_data["geom"], substations)
+            comp_data["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
+        except AttributeError:
+            pass
         edisgo_object.topology.connect_to_lv(
             edisgo_object,
             comp_data,
