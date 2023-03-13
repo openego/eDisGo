@@ -1222,16 +1222,19 @@ class EDisGo:
         """
         Adds single component to topology based on geolocation.
 
-        Currently, components can be generators, charging points and heat pumps.
+        Currently, components can be generators, charging points, heat pumps and
+        storage units.
 
-        See :attr:`~.network.topology.Topology.connect_to_mv` and
-        :attr:`~.network.topology.Topology.connect_to_lv` for more information.
+        See :attr:`~.network.topology.Topology.connect_to_mv`,
+        :attr:`~.network.topology.Topology.connect_to_lv` and
+        :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation` for more
+        information.
 
         Parameters
         ----------
         comp_type : str
-            Type of added component. Can be 'generator', 'charging_point' or
-            'heat_pump'.
+            Type of added component. Can be 'generator', 'charging_point', 'heat_pump'
+            or 'storage_unit'.
         geolocation : :shapely:`shapely.Point<Point>` or tuple
             Geolocation of the new component. In case of tuple, the geolocation
             must be given in the form (longitude, latitude).
@@ -1266,10 +1269,10 @@ class EDisGo:
         ------------------
         kwargs :
             Attributes of added component.
-            See :attr:`~.network.topology.Topology.add_generator` respectively
+            See :attr:`~.network.topology.Topology.add_generator`,
+            :attr:`~.network.topology.Topology.add_storage_unit` respectively
             :attr:`~.network.topology.Topology.add_load` methods
-            for more information on required and optional parameters of
-            generators respectively charging points and heat pumps.
+            for more information on required and optional parameters.
 
         """
         supported_voltage_levels = {4, 5, 6, 7}
