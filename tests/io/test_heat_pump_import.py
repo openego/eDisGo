@@ -62,12 +62,11 @@ class TestHeatPumpImport:
 
     def test__grid_integration(self, caplog):
 
-        hp_individual = self.setup_heat_pump_data_individual_heating()
-        hp_central = self.setup_heat_pump_data_dh()
-
         # ############# test integration of central heat pumps ####################
         heat_pump_import._grid_integration(
-            self.edisgo, hp_individual=pd.DataFrame(), hp_central=hp_central
+            self.edisgo,
+            hp_individual=pd.DataFrame(),
+            hp_central=self.setup_heat_pump_data_dh(),
         )
         loads_df = self.edisgo.topology.loads_df
         hp_df = loads_df[loads_df.type == "heat_pump"]
@@ -99,7 +98,9 @@ class TestHeatPumpImport:
             bus_hp_voltage_level_5_building, "v_nom"
         ] = 20.0
         heat_pump_import._grid_integration(
-            self.edisgo, hp_individual=hp_individual, hp_central=pd.DataFrame()
+            self.edisgo,
+            hp_individual=self.setup_heat_pump_data_individual_heating(),
+            hp_central=pd.DataFrame(),
         )
 
         loads_df = self.edisgo.topology.loads_df
@@ -128,7 +129,9 @@ class TestHeatPumpImport:
 
         # ######## test check of duplicated names ###########
         heat_pump_import._grid_integration(
-            self.edisgo, hp_individual=hp_individual, hp_central=pd.DataFrame()
+            self.edisgo,
+            hp_individual=self.setup_heat_pump_data_individual_heating(),
+            hp_central=pd.DataFrame(),
         )
         loads_df = self.edisgo.topology.loads_df
         hp_df = loads_df[loads_df.type == "heat_pump"]
