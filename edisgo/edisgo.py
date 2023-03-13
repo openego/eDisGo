@@ -31,7 +31,7 @@ from edisgo.io.electromobility_import import (
 from edisgo.io.generators_import import generators_from_database
 from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
-from edisgo.io.home_batteries_import import home_batteries_from_database
+from edisgo.io.storage_import import home_batteries_oedb
 from edisgo.network import timeseries
 from edisgo.network.dsm import DSM
 from edisgo.network.electromobility import Electromobility
@@ -1887,15 +1887,43 @@ class EDisGo:
 
     def import_home_batteries(
         self,
+        scenario: str,
         engine: Engine,
-        scenario: str = "eGon2035",
-        remove_existing: bool = True,
     ):
-        home_batteries_from_database(
+        """
+        Gets home battery data for specified scenario and integrates the batteries into
+        the grid.
+
+        Currently, the only supported data source is scenario data generated
+        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        between two scenarios: 'eGon2035' and 'eGon100RE'.
+
+        The data is retrieved from the
+        `open energy platform <https://openenergy-platform.org/>`_.
+
+        The batteries are integrated into the grid (added to
+        :attr:`~.network.topology.Topology.storage_units_df`) based on their building
+        ID. In case the battery is too large to use the same grid connection point as
+        the generator or, if no generator is allocated at the same building ID, the
+        load, they are connected via their own grid connection point, based on their
+        geolocation and installed capacity.
+
+        Be aware that this function does not yield time series for the batteries. The
+        actual time series can be determined through a dispatch optimisation.
+
+        Parameters
+        ----------
+        scenario : str
+            Scenario for which to retrieve home battery data. Possible options
+            are 'eGon2035' and 'eGon100RE'.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine.
+
+        """
+        home_batteries_oedb(
             edisgo_obj=self,
-            engine=engine,
             scenario=scenario,
-            remove_existing=remove_existing,
+            engine=engine,
         )
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
