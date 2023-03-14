@@ -115,6 +115,38 @@ function constraint_max_line_loading(pm::AbstractSOCBFModelEdisgo, n::Int)
     end
 end
 
+function constraint_max_line_loading_lin(pm::AbstractSOCBFModelEdisgo, n::Int)
+    p  = PowerModels.var(pm, n, :p)
+    # q  = PowerModels.var(pm, n, :q)
+    ll = PowerModels.var(pm, 1, :ll)
+    s_nom = Dict(i => get(branch, "rate_a", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))
+
+    for (i,branch) in PowerModels.ref(pm, n, :branch)
+        f_bus = branch["f_bus"]
+        t_bus = branch["t_bus"]
+        f_idx = (i, f_bus, t_bus)
+        if !(branch["storage"])
+            JuMP.@constraint(pm.model, p[f_idx]/s_nom[i] <= ll[f_idx])
+            JuMP.@constraint(pm.model, -p[f_idx]/s_nom[i] <= ll[f_idx])
+        end
+    end
+end
+
+function constraint_max_line_loading_abs(pm::AbstractSOCBFModelEdisgo, n::Int)
+    p  = PowerModels.var(pm, n, :p)
+    # q  = PowerModels.var(pm, n, :q)
+    ll = PowerModels.var(pm, 1, :ll)
+    s_nom = Dict(i => get(branch, "rate_a", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))
+
+    for (i,branch) in PowerModels.ref(pm, n, :branch)
+        f_bus = branch["f_bus"]
+        t_bus = branch["t_bus"]
+        f_idx = (i, f_bus, t_bus)
+        if !(branch["storage"])
+            JuMP.@constraint(pm.model, abs(p[f_idx]/s_nom[i]) <= ll[f_idx])
+        end
+    end
+end
 
 function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens, bus_gens_nd, bus_gens_slack, bus_loads, bus_arcs_to, bus_arcs_from, bus_lines_to, bus_storage, bus_pg, bus_qg, bus_pg_nd, bus_qg_nd, bus_pd, bus_qd, branch_r, branch_x, bus_dsm, bus_hps, bus_cps, bus_storage_pf, bus_dsm_pf, bus_hps_pf, bus_cps_pf, bus_gen_nd_pf, bus_gen_d_pf, bus_loads_pf, branch_strg_pf)
     pt   = get(PowerModels.var(pm, n),  :p, Dict()); PowerModels._check_var_keys(pt, bus_arcs_to, "active power", "branch")
