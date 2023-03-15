@@ -119,6 +119,53 @@ class TestTimeseriesImport:
         # ToDo add further tests
 
     @pytest.mark.local
+    def test_electricity_demand_oedb(self, caplog):
+        # test with one load each and without year
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        df = timeseries_import.electricity_demand_oedb(
+            edisgo_object,
+            "eGon2035",
+            pytest.engine,
+            load_names=[
+                "Load_mvgd_33532_1_industrial",
+                "Load_mvgd_33532_lvgd_1140900000_1_residential",
+                "Load_mvgd_33532_lvgd_1163850001_47_cts",
+            ],
+        )
+        assert df.shape == (8760, 3)
+        assert df.index[0].year == 2035
+
+        # test without CTS and residential and given year
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        df = timeseries_import.electricity_demand_oedb(
+            edisgo_object,
+            "eGon2035",
+            pytest.engine,
+            load_names=["Load_mvgd_33532_1_industrial"],
+            year=2011,
+        )
+        assert df.shape == (8760, 1)
+        assert df.index[0].year == 2011
+
+        # test for leap year and all loads in the grid
+        with caplog.at_level(logging.WARNING):
+            df = timeseries_import.electricity_demand_oedb(
+                edisgo_object, "eGon100RE", pytest.engine, year=2020
+            )
+        assert (
+            "A leap year was given to 'electricity_demand_oedb' function."
+            in caplog.text
+        )
+        assert df.shape == (8760, 2463)
+        assert df.index[0].year == 2045
+
+        # ToDo add further tests to check values
+
+    @pytest.mark.local
     def test_get_residential_heat_profiles_per_building(self):
         df = timeseries_import.get_residential_heat_profiles_per_building(
             [442081, 448156], "eGon2035", pytest.engine

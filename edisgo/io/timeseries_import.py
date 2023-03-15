@@ -393,6 +393,141 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, year=None):
     return pd.concat([individual_heating_df, dh_profile_df], axis=1)
 
 
+def electricity_demand_oedb(edisgo_obj, scenario, engine, year=None, load_names=None):
+    """
+    Get electricity demand profiles for all conventional loads from the
+    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+
+    Conventional loads comprise conventional electricity applications in the
+    residential, CTS and industrial sector.
+    For more information on how the demand profiles are obtained see functions
+    :attr:`~.io.timeseries_import.get_residential_electricity_profiles_per_building`,
+    :attr:`~.io.timeseries_import.get_cts_profiles_per_building` and
+    :attr:`~.io.timeseries_import.get_industrial_electricity_profiles_per_site`.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    scenario : str
+        Scenario for which to retrieve demand data. Possible options
+        are 'eGon2035' and 'eGon100RE'.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+    year : int or None
+        Year to index electricity demand data by. Per default this is set to 2035 in
+        case of the 'eGon2035' and to 2045 in case of the 'eGon100RE' scenario.
+        A leap year can currently not be handled. In case a leap year is given, the
+        time index is set according to the chosen scenario.
+    load_names : list(str) or None
+        Conventional loads (as in index of :attr:`~.network.topology.Topology.loads_df`)
+        for which to retrieve electricity demand time series. If none are provided,
+        profiles for all conventional loads are returned.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with hourly electricity demand for one year in MW per conventional
+        load. Index of the dataframe is a time index. Columns contain the load name as
+        in index of :attr:`~.network.topology.Topology.loads_df`.
+
+    """
+    # set up time index to index data by
+    if year is None:
+        year = tools.get_year_based_on_scenario(scenario)
+        if year is None:
+            raise ValueError(
+                "Invalid input for parameter 'scenario'. Possible options are "
+                "'eGon2035' and 'eGon100RE'."
+            )
+    else:
+        if pd.Timestamp(year, 1, 1).is_leap_year:
+            logger.warning(
+                "A leap year was given to 'electricity_demand_oedb' function. This is "
+                "currently not valid. The year the data is indexed by is therefore set "
+                "to the default value of 2011."
+            )
+            return electricity_demand_oedb(
+                edisgo_obj, scenario, engine, year=None, load_names=load_names
+            )
+    timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+
+    # set loads for which to retrieve electricity profiles
+    if load_names is None:
+        conventional_loads = edisgo_obj.topology.loads_df[
+            edisgo_obj.topology.loads_df.type == "conventional_load"
+        ]
+    else:
+        loads_df = edisgo_obj.topology.loads_df.loc[load_names, :]
+        conventional_loads = loads_df[loads_df.type == "conventional_load"]
+
+    # get residential electricity profiles from oedb
+    residential_loads = conventional_loads[conventional_loads.sector == "residential"]
+    res_building_ids = residential_loads.building_id.dropna().unique()
+    if len(res_building_ids) > 0:
+        residential_profiles_df = get_residential_electricity_profiles_per_building(
+            res_building_ids, scenario, engine
+        )
+        rename_series = (
+            residential_loads.loc[:, ["building_id"]]
+            .dropna()
+            .reset_index()
+            .set_index("building_id")
+            .iloc[:, 0]
+        )
+        residential_profiles_df.rename(columns=rename_series, inplace=True)
+        residential_profiles_df.index = timeindex
+    else:
+        residential_profiles_df = pd.DataFrame()
+
+    # get CTS electricity profiles from oedb
+    cts_loads = conventional_loads[conventional_loads.sector == "cts"]
+    cts_building_ids = cts_loads.building_id.dropna().unique()
+    if len(cts_building_ids) > 0:
+        cts_profiles_df = get_cts_profiles_per_building(
+            edisgo_obj.topology.id, scenario, "electricity", engine
+        )
+        drop_buildings = [
+            _ for _ in cts_profiles_df.columns if _ not in cts_building_ids
+        ]
+        cts_profiles_df = cts_profiles_df.drop(columns=drop_buildings)
+        # set column names to be load names instead of building IDs
+        rename_series = (
+            cts_loads.loc[:, ["building_id"]]
+            .dropna()
+            .reset_index()
+            .set_index("building_id")
+            .iloc[:, 0]
+        )
+        cts_profiles_df.rename(columns=rename_series, inplace=True)
+        cts_profiles_df.index = timeindex
+    else:
+        cts_profiles_df = pd.DataFrame()
+
+    # get industrial electricity profiles from oedb
+    ind_loads = conventional_loads[conventional_loads.sector == "industrial"]
+    ind_building_ids = ind_loads.building_id.dropna().unique()
+    if len(ind_building_ids) > 0:
+        ind_profiles_df = get_industrial_electricity_profiles_per_site(
+            ind_building_ids, scenario, engine
+        )
+        # set column names to be load names instead of building IDs
+        rename_series = (
+            ind_loads.loc[:, ["building_id"]]
+            .dropna()
+            .reset_index()
+            .set_index("building_id")
+            .iloc[:, 0]
+        )
+        ind_profiles_df.rename(columns=rename_series, inplace=True)
+        ind_profiles_df.index = timeindex
+    else:
+        ind_profiles_df = pd.DataFrame()
+
+    return pd.concat(
+        [residential_profiles_df, cts_profiles_df, ind_profiles_df], axis=1
+    )
+
+
 def _get_zensus_cells_of_buildings(building_ids, engine):
     """
     Gets zensus cell ID each building is in from oedb.
