@@ -876,3 +876,258 @@ def get_cts_profiles_per_building(
         if not np.isclose(check_sum_profile, check_sum_db, atol=1e-1):
             logger.warning("Total CTS heat demand does not match.")
     return building_profiles
+
+
+def get_residential_electricity_profiles_per_building(building_ids, scenario, engine):
+    """
+    Gets residential electricity demand profiles per building.
+
+    Parameters
+    ----------
+    building_ids : list(int)
+        List of building IDs to retrieve electricity demand profiles for.
+    scenario : str
+        Scenario for which to retrieve demand data. Possible options
+        are 'eGon2035' and 'eGon100RE'.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with residential electricity demand profiles per building for one year
+        in an hourly resolution in MW. Index contains hour of the year (from 0 to 8759)
+        and column names are building ID as integer.
+
+    """
+
+    def _get_scaling_factors_of_zensus_cells(zensus_ids):
+        """
+        Get profile scaling factors per zensus cell for specified scenario.
+
+        Parameters
+        ----------
+        zensus_ids : list(int)
+            List of zensus cell IDs to get scaling factors for.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with zensus cell ID in index and respective scaling factor in
+            column factor.
+
+        """
+        with session_scope_egon_data(engine) as session:
+            if scenario == "eGon2035":
+                query = session.query(
+                    egon_household_electricity_profile_in_census_cell.cell_id,
+                    egon_household_electricity_profile_in_census_cell.factor_2035.label(
+                        "factor"
+                    ),
+                ).filter(
+                    egon_household_electricity_profile_in_census_cell.cell_id.in_(
+                        zensus_ids
+                    )
+                )
+            else:
+                query = session.query(
+                    egon_household_electricity_profile_in_census_cell.cell_id,
+                    egon_household_electricity_profile_in_census_cell.factor_2050.label(
+                        "factor"
+                    ),
+                ).filter(
+                    egon_household_electricity_profile_in_census_cell.cell_id.in_(
+                        zensus_ids
+                    )
+                )
+        return pd.read_sql(query.statement, engine, index_col="cell_id")
+
+    def _get_profile_ids_of_buildings(building_ids):
+        """
+        Get profile IDs per building.
+
+        Parameters
+        ----------
+        building_ids : list(int)
+            List of building IDs to retrieve profile IDs for.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with building ID in column building_id, zensus cell ID in column
+            cell_id and corresponding profile IDs in column profile_id.
+
+        """
+        with session_scope_egon_data(engine) as session:
+            query = session.query(
+                egon_household_electricity_profile_of_buildings.building_id,
+                egon_household_electricity_profile_of_buildings.cell_id,
+                egon_household_electricity_profile_of_buildings.profile_id,
+            ).filter(
+                egon_household_electricity_profile_of_buildings.building_id.in_(
+                    building_ids
+                )
+            )
+        return pd.read_sql(query.statement, engine, index_col=None)
+
+    def _get_profiles(profile_ids):
+        """
+        Get hourly household electricity demand profiles for specified profile IDs.
+
+        Parameters
+        ----------
+        profile_ids: list(str)
+            (type)a00..(profile number) with number having exactly 4 digits
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+             Hourly household demand profiles with profile ID as column name and index
+             containing hour of the year (from 0 to 8759).
+
+        """
+        with session_scope_egon_data(engine) as session:
+            query = session.query(
+                iee_household_load_profiles.load_in_wh, iee_household_load_profiles.type
+            ).filter(iee_household_load_profiles.type.in_(profile_ids))
+        df = pd.read_sql(query.statement, engine, index_col="type")
+
+        # convert array to dataframe
+        df_converted = pd.DataFrame.from_records(df["load_in_wh"], index=df.index).T
+
+        return df_converted
+
+    saio.register_schema("demand", engine)
+    from saio.demand import (
+        egon_household_electricity_profile_in_census_cell,
+        egon_household_electricity_profile_of_buildings,
+        iee_household_load_profiles,
+    )
+
+    # get zensus cells of buildings
+    zensus_ids_buildings = _get_zensus_cells_of_buildings(building_ids, engine)
+    zensus_ids = zensus_ids_buildings.zensus_id.unique()
+
+    # get profile scaling factors per zensus cell
+    scaling_factors_zensus_cells = _get_scaling_factors_of_zensus_cells(zensus_ids)
+
+    # get profile IDs per building and merge scaling factors
+    profile_ids_buildings = _get_profile_ids_of_buildings(building_ids)
+    profile_ids = profile_ids_buildings.profile_id.unique()
+    profile_ids_buildings = profile_ids_buildings.join(
+        scaling_factors_zensus_cells, on="cell_id"
+    )
+    if profile_ids_buildings.empty:
+        logger.info("No residential electricity demand.")
+        return pd.DataFrame()
+
+    # get hourly profiles per profile ID
+    profiles_df = _get_profiles(profile_ids)
+
+    # calculate demand profile per building
+    ts_df = pd.DataFrame()
+    for building_id, df in profile_ids_buildings.groupby(by=["building_id"]):
+        load_ts_building = (
+            profiles_df.loc[:, df["profile_id"]].sum(axis=1)
+            * df["factor"].iloc[0]
+            / 1e6  # from Wh to MWh
+        ).to_frame(name=building_id)
+        ts_df = pd.concat([ts_df, load_ts_building], axis=1).dropna(axis=1)
+
+    return ts_df
+
+
+def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
+    """
+    Gets industrial electricity demand profiles per site and OSM area.
+
+    Parameters
+    ----------
+    site_ids : list(int)
+        List of industrial site and OSM IDs to retrieve electricity demand profiles for.
+    scenario : str
+        Scenario for which to retrieve demand data. Possible options
+        are 'eGon2035' and 'eGon100RE'.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with industrial electricity demand profiles per site and OSM area for
+        one year in an hourly resolution in MW. Index contains hour of the year (from 0
+        to 8759) and column names are site ID as integer.
+
+    """
+
+    def _get_load_curves_sites(site_ids):
+        """
+        Get industrial load profiles for sites for specified scenario.
+
+        Parameters
+        ----------
+        site_ids : list(int)
+            List of industrial site IDs to retrieve electricity demand profiles for.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with site ID in column site_id and electricity profile as list
+            in column p_set.
+
+        """
+        with session_scope_egon_data(engine) as session:
+            query = session.query(
+                egon_sites_ind_load_curves_individual.site_id,
+                egon_sites_ind_load_curves_individual.p_set,
+            ).filter(
+                egon_sites_ind_load_curves_individual.scn_name == scenario,
+                egon_sites_ind_load_curves_individual.site_id.in_(site_ids),
+            )
+        return pd.read_sql(query.statement, engine, index_col=None)
+
+    def _get_load_curves_areas(site_ids):
+        """
+        Get industrial load profiles for OSM areas for specified scenario.
+
+        Parameters
+        ----------
+        site_ids : list(int)
+            List of industrial OSM IDs to retrieve electricity demand profiles for.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with OSM ID in column site_id and electricity profile as list
+            in column p_set.
+
+        """
+        with session_scope_egon_data(engine) as session:
+            query = session.query(
+                egon_osm_ind_load_curves_individual.osm_id.label("site_id"),
+                egon_osm_ind_load_curves_individual.p_set,
+            ).filter(
+                egon_osm_ind_load_curves_individual.scn_name == scenario,
+                egon_osm_ind_load_curves_individual.osm_id.in_(site_ids),
+            )
+        return pd.read_sql(query.statement, engine, index_col=None)
+
+    saio.register_schema("demand", engine)
+    from saio.demand import (
+        egon_osm_ind_load_curves_individual,
+        egon_sites_ind_load_curves_individual,
+    )
+
+    # get profiles of sites and OSM areas
+    profiles_sites = _get_load_curves_sites(site_ids)
+    profiles_areas = _get_load_curves_areas(site_ids)
+
+    # concat profiles
+    profiles_df = pd.concat([profiles_sites, profiles_areas])
+    # add time step column
+    profiles_df["time_step"] = len(profiles_df) * [np.arange(0, 8760)]
+    # un-nest p_set and pivot so that time_step becomes index and site_id the
+    # name of the columns
+    return profiles_df.explode(["p_set", "time_step"]).pivot(
+        index="time_step", columns="site_id", values="p_set"
+    )

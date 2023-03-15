@@ -145,3 +145,27 @@ class TestTimeseriesImport:
         )
         assert df.shape == (8760, 85)
         # ToDo add further tests
+
+    @pytest.mark.local
+    def test_get_residential_electricity_profiles_per_building(self):
+        df = timeseries_import.get_residential_electricity_profiles_per_building(
+            [-1, 442081], "eGon2035", pytest.engine
+        )
+        assert df.shape == (8760, 1)
+        assert np.isclose(df.loc[:, 442081].sum(), 7.799, atol=1e-3)
+
+    @pytest.mark.local
+    def test_get_industrial_electricity_profiles_per_site(self):
+        # test with one site and one OSM area
+        df = timeseries_import.get_industrial_electricity_profiles_per_site(
+            [1, 541658], "eGon2035", pytest.engine
+        )
+        assert df.shape == (8760, 2)
+        assert np.isclose(df.loc[:, 1].sum(), 32417.233, atol=1e-3)
+        assert np.isclose(df.loc[:, 541658].sum(), 2554.944, atol=1e-3)
+
+        # test without site and only OSM area
+        df = timeseries_import.get_industrial_electricity_profiles_per_site(
+            [541658], "eGon2035", pytest.engine
+        )
+        assert df.shape == (8760, 1)
