@@ -441,15 +441,15 @@ def from_powermodels(
         elif variable == "ccm":
             edisgo_object.opf_results.lines_t.ccm = df
     # Save bus voltages to edisgo object
-    df = _result_df(
-        pm,
-        "bus",
-        "w",
-        timesteps,
-        edisgo_object.timeseries.timeindex,
-        1,
-    )
-    edisgo_object.opf_results.buses_t.w = df
+    # df = _result_df(
+    #     pm,
+    #     "bus",
+    #     "w",
+    #     timesteps,
+    #     edisgo_object.timeseries.timeindex,
+    #     1,
+    # )
+    # edisgo_object.opf_results.buses_t.w = df
 
 
 def _init_pm():
@@ -527,6 +527,7 @@ def _build_bus(psa_net, pm, flexible_storages):
             "vmin": v_min[bus_i],
             "va": 0,
             "vm": 1,
+            "storage": False,
             "name": psa_net.buses.index[bus_i],
             "base_kv": psa_net.buses.v_nom[bus_i],
             "grid_level": grid_level[psa_net.buses.v_nom[bus_i]],
@@ -545,6 +546,7 @@ def _build_bus(psa_net, pm, flexible_storages):
             "vmin": v_min[idx_bus - 1],
             "va": 0,
             "vm": 1,
+            "storage": True,
             "name": psa_net.buses.index[idx_bus - 1] + "_bss",
             "base_kv": psa_net.buses.v_nom[idx_bus - 1],
             "grid_level": grid_level[psa_net.buses.v_nom[idx_bus - 1]],

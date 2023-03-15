@@ -3,6 +3,10 @@ function variable_branch_current(pm::AbstractBFModel; kwargs...)
     eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm; kwargs...)
 end
 
+function variable_bus_voltage(pm::AbstractBFModel; kwargs...)
+    eDisGo_OPF.variable_bus_voltage_magnitude_sqr(pm; kwargs...)
+end
+
 function variable_buspair_current_magnitude_sqr(pm::AbstractBFModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     branch = PowerModels.ref(pm, nw, :branch)
 
@@ -73,9 +77,7 @@ function constraint_model_current(pm::AbstractSOCBFModelEdisgo, n::Int) # Eq. (3
         t_bus = branch["t_bus"]
         f_idx = (i, f_bus, t_bus)
         tm = branch["tap"]
-        if !(branch["storage"])
-            JuMP.@constraint(pm.model, p[f_idx]^2 + q[f_idx]^2 <= (w[f_bus]/tm^2)*ccm[i])
-        end
+        JuMP.@constraint(pm.model, p[f_idx]^2 + q[f_idx]^2 <= (w[f_bus]/tm^2)*ccm[i])
     end
 end
 

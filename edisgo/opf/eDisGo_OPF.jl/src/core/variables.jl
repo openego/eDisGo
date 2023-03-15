@@ -75,6 +75,24 @@ function variable_branch_power_imaginary_radial(pm::AbstractPowerModel; nw::Int=
     report && eDisGo_OPF.sol_component_value_radial(pm, nw, :branch, :qf, PowerModels.ref(pm, nw, :arcs_from), q)
 end
 
+function variable_bus_voltage_magnitude_sqr(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    busses = [i for i in PowerModels.ids(pm, nw, :bus) if !(PowerModels.ref(pm, nw, :bus)[i]["storage"])]
+    w = PowerModels.var(pm, nw)[:w] = JuMP.@variable(pm.model,
+        [i in busses], base_name="$(nw)_w",
+        lower_bound = 0,
+        start = comp_start_value(PowerModels.ref(pm, nw, :bus, i), "w_start", 1.001)
+    )
+
+    if bounded
+        for (i, bus) in PowerModels.ref(pm, nw, :bus)
+            JuMP.set_lower_bound(w[i], bus["vmin"]^2)
+            JuMP.set_upper_bound(w[i], bus["vmax"]^2)
+        end
+    end
+
+    report && PowerModels.sol_component_value(pm, nw, :bus, :w, busses, w)
+end
+
 function variable_max_line_loading(pm::AbstractPowerModel; kwargs...)
     variable_line_loading_max(pm; kwargs...)
 end
