@@ -198,13 +198,8 @@ def _grid_integration(
     """
     Integrates heat pumps for individual and district heating into the grid.
 
-    Grid connection points of heat pumps for individual heating are determined based
-    on the corresponding building ID.
-
-    Grid connection points of heat pumps for district
-    heating are determined based on their geolocation and installed capacity. See
-    :attr:`~.network.topology.Topology.connect_to_mv` and
-    :attr:`~.network.topology.Topology.connect_to_lv` for more information.
+    See :attr:`~.edisgo.EDisGo.import_heat_pumps` for more information on grid
+    integration.
 
     Parameters
     ----------

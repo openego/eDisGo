@@ -304,7 +304,7 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, year=None):
         Scenario for which to retrieve demand data. Possible options
         are 'eGon2035' and 'eGon100RE'.
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        Database engine.
     year : int or None
         Year to index heat demand data by. Per default this is set to 2035 in case
         of the 'eGon2035' and to 2045 in case of the 'eGon100RE' scenario.
@@ -574,7 +574,7 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
         Scenario for which to retrieve demand data. Possible options
         are 'eGon2035' and 'eGon100RE'.
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        Database engine.
 
     Returns
     --------
@@ -625,7 +625,7 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
         Parameters
         ----------
         zensus_ids : list(int)
-            List of zensus cell IDs to profiles for.
+            List of zensus cell IDs to get profiles for.
 
         Returns
         -------
