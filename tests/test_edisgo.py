@@ -205,11 +205,9 @@ class TestEDisGo:
         # options where database connection is needed are tested in separate function
 
         # check warning
-        self.edisgo.set_time_series_active_power_predefined(
-            fluctuating_generators_ts="oedb"
-        )
+        self.edisgo.set_time_series_active_power_predefined()
         assert (
-            "When setting time series using predefined profiles a time index is"
+            "When setting time series using predefined profiles it is better"
             in caplog.text
         )
 
@@ -266,18 +264,27 @@ class TestEDisGo:
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
-        edisgo_object.set_timeindex(pd.date_range("1/1/2035", periods=8760, freq="H"))
+        edisgo_object.set_timeindex(pd.date_range("1/1/2011", periods=8760, freq="H"))
 
         edisgo_object.set_time_series_active_power_predefined(
             conventional_loads_ts="oedb",
+            fluctuating_generators_ts="oedb",
             scenario="eGon2035",
             engine=pytest.engine,
-            year=2020,
+            timeindex=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
+            conventional_loads_names=["Load_mvgd_33532_lvgd_1163850002_9_residential"],
         )
 
         assert edisgo_object.timeseries.loads_active_power.dropna().shape == (
-            8760,
-            2463,
+            2,
+            1,
+        )
+        fluctuating_gens = edisgo_object.topology.generators_df[
+            edisgo_object.topology.generators_df.type.isin(["wind", "solar"])
+        ]
+        assert edisgo_object.timeseries.generators_active_power.dropna().shape == (
+            2,
+            len(fluctuating_gens),
         )
 
     def test_set_time_series_reactive_power_control(self):

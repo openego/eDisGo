@@ -1413,6 +1413,54 @@ class TestTimeSeries:
         )
         # fmt: on
 
+    @pytest.mark.local
+    def test_predefined_fluctuating_generators_by_technology_oedb(self):
+
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        edisgo_object.timeseries.timeindex = timeindex
+
+        # ############# oedb, all generators (default)
+        edisgo_object.timeseries.predefined_fluctuating_generators_by_technology(
+            edisgo_object, "oedb", engine=pytest.engine
+        )
+
+        # check shape
+        fluctuating_gens = edisgo_object.topology.generators_df[
+            edisgo_object.topology.generators_df.type.isin(["wind", "solar"])
+        ]
+        p_ts = edisgo_object.timeseries.generators_active_power
+        assert p_ts.shape == (2, len(fluctuating_gens))
+        # fmt: off
+        assert (
+                edisgo_object.timeseries.time_series_raw.
+                fluctuating_generators_active_power_by_technology.shape
+                == (2, 4)
+        )
+        # fmt: on
+
+        # check values
+        comp = (
+            "Generator_mvgd_33532_lvgd_1203710000_pv_rooftop_142"  # solar, w_id = 11052
+        )
+        p_nom = 0.0033
+        exp = pd.Series(
+            data=[0.548044 * p_nom, 0.568356 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+        comp = "Generator_mvgd_33532_pv_rooftop_160"  # solar, w_id = 11051
+        p_nom = 0.08
+        exp = pd.Series(
+            data=[0.505049 * p_nom, 0.555396 * p_nom],
+            name=comp,
+            index=timeindex,
+        )
+        assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
+
     def test_predefined_dispatchable_generators_by_technology(self):
 
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
