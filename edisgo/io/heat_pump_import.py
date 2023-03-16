@@ -287,7 +287,6 @@ def _grid_integration(
         )
 
         integrated_hps = hp_individual_small.index
-        integrated_hps_building = hp_individual_small.index
 
         # integrate large individual heat pumps - if building is already connected to
         # higher voltage level it can be integrated at same bus, otherwise it is
@@ -310,7 +309,6 @@ def _grid_integration(
                     [edisgo_object.topology.loads_df, hp_individual_large.loc[[hp], :]]
                 )
                 integrated_hps = integrated_hps.append(pd.Index([hp]))
-                integrated_hps_building = integrated_hps_building.append(pd.Index([hp]))
             else:
                 # integrate based on geolocation
                 hp_name = edisgo_object.integrate_component_based_on_geolocation(
@@ -330,14 +328,17 @@ def _grid_integration(
                 integrated_hps_own_grid_conn = integrated_hps_own_grid_conn.append(
                     pd.Index([hp])
                 )
+        # logging messages
         logger.debug(
             f"{sum(hp_individual.p_set):.2f} MW of heat pumps for individual heating "
-            f"integrated. Of this "
-            f"{sum(hp_individual.loc[integrated_hps_building, 'p_set']):.2f} MW are "
-            f"integrated at same grid connection point as building and "
-            f"{sum(hp_individual.loc[integrated_hps_own_grid_conn, 'p_set']):.2f} "
-            f"MW have separate grid connection point."
+            f"integrated."
         )
+        if len(integrated_hps_own_grid_conn) > 0:
+            logger.debug(
+                f"Of this, "
+                f"{sum(hp_individual.loc[integrated_hps_own_grid_conn, 'p_set']):.2f} "
+                f"MW have separate grid connection point."
+            )
     else:
         integrated_hps = pd.Index([])
 
