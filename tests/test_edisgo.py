@@ -1264,7 +1264,7 @@ class TestEDisGo:
         edisgo_object.import_heat_pumps(
             scenario="eGon2035",
             engine=pytest.engine,
-            year=2020,
+            timeindex=pd.date_range("1/1/2020", periods=2, freq="H"),
         )
 
         loads_df = edisgo_object.topology.loads_df

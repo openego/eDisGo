@@ -218,7 +218,7 @@ class TestHeatPump:
             scenario="eGon2035",
             heat_pump_names=["HP_442081", "HP_dummy"],
         )
-        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 1)
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (2, 1)
         assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2011
 
         # ###### test with empty list for heat pump names #####
@@ -229,7 +229,7 @@ class TestHeatPump:
             scenario="eGon2035",
             heat_pump_names=[],
         )
-        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 1)
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (2, 1)
         assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2011
 
     def test_reduce_memory(self):

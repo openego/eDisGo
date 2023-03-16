@@ -25,6 +25,30 @@ logger = logging.getLogger(__name__)
 def _timeindex_helper_func(
     edisgo_object, timeindex, default_year=2011, allow_leap_year=False
 ):
+    """
+    Helper function to set up a timeindex for an entire year to initially set an index
+    on the imported data and timeindex to select certain time steps.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+        Timeindex that was provided by the user.
+    default_year : int
+        Default year to use in case no timeindex was provided by the user and no
+        timeindex is set in :py:attr:`~.network.timeseries.TimeSeries.timeindex`.
+    allow_leap_year : bool
+        If False and a leap year is given, either in `timeindex` given by the user or
+        set in :py:attr:`~.network.timeseries.TimeSeries.timeindex`, the default
+        year is used instead.
+
+    Returns
+    -------
+    (:pandas:`pandas.DatetimeIndex<DatetimeIndex>`,\
+        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`)
+        Returns timeindex to select certain time steps and timeindex for entire year.
+
+    """
     if timeindex is None:
         year = tools.get_year_based_on_timeindex(edisgo_object)
         if year is None:
@@ -47,7 +71,7 @@ def _timeindex_helper_func(
     return timeindex, timeindex_full
 
 
-def feedin_oedb_legacy(edisgo_object, timeindex):
+def feedin_oedb_legacy(edisgo_object, timeindex=None):
     """
     Import feed-in time series data for wind and solar power plants from the
     `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
@@ -204,7 +228,7 @@ def feedin_oedb(
     return feedin_df.loc[timeindex, :]
 
 
-def load_time_series_demandlib(edisgo_obj, timeindex):
+def load_time_series_demandlib(edisgo_obj, timeindex=None):
     """
     Get normalized sectoral electricity load time series using the
     `demandlib <https://github.com/oemof/demandlib/>`_.
@@ -216,10 +240,9 @@ def load_time_series_demandlib(edisgo_obj, timeindex):
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-        Specifies time steps for which to return feed-in data.
-        If no timeindex is provided, the timeindex set in
-        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+        Specifies time steps for which to return data. If no timeindex is provided, the
+        timeindex set in :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
         If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
         is indexed using the default year 2011 and returned for the whole year.
 
@@ -293,22 +316,27 @@ def load_time_series_demandlib(edisgo_obj, timeindex):
     return elec_demand.loc[timeindex]
 
 
-def cop_oedb(engine, weather_cell_ids, year=None):
+def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
     """
     Get COP (coefficient of performance) time series data from the
     `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
 
     Parameters
     ----------
+    edisgo_object : :class:`~.EDisGo`
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
     weather_cell_ids : list(int) or list(float)
         List (or array) of weather cell IDs to obtain COP data for.
-    year : int
-        COP data is only provided for the weather year 2011. If a different year
-        is provided through this parameter, the data is reindexed. A leap year can
-        currently not be handled. In case a leap year is given, the time index is
-        set for 2011!
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+        Specifies time steps for which to return data. Leap years can currently
+        not be handled. In case the given timeindex contains a leap year, the data will
+        be indexed using the default year 2011 and returned for the whole year.
+        If no timeindex is provided, the timeindex set in
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+        If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+        is indexed using the default year 2011 and returned for the whole year.
+
 
     Returns
     -------
@@ -318,17 +346,9 @@ def cop_oedb(engine, weather_cell_ids, year=None):
 
     """
     # set up time index to index COP data by
-    if year is None:
-        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
-    else:
-        if pd.Timestamp(year, 1, 1).is_leap_year:
-            year = 2011
-            logger.warning(
-                "A leap year was given to 'cop_oedb' function. This is currently not "
-                "valid. The year data is indexed by is therefore set to the default "
-                "value of 2011."
-            )
-        timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+    timeindex, timeindex_full = _timeindex_helper_func(
+        edisgo_object, timeindex, default_year=2011, allow_leap_year=False
+    )
 
     saio.register_schema("supply", engine)
     from saio.supply import egon_era5_renewable_feedin
@@ -347,12 +367,14 @@ def cop_oedb(engine, weather_cell_ids, year=None):
         cop = pd.read_sql(query.statement, engine, index_col="w_id")
 
     # convert dataframe to have weather cell ID as column name and time index
-    cop = pd.DataFrame({w_id: ts.cop for w_id, ts in cop.iterrows()}, index=timeindex)
+    cop = pd.DataFrame(
+        {w_id: ts.cop for w_id, ts in cop.iterrows()}, index=timeindex_full
+    )
 
-    return cop
+    return cop.loc[timeindex, :]
 
 
-def heat_demand_oedb(edisgo_obj, scenario, engine, year=None):
+def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
     """
     Get heat demand profiles for heat pumps from the
     `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
@@ -372,11 +394,15 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, year=None):
         are 'eGon2035' and 'eGon100RE'.
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
-    year : int or None
-        Year to index heat demand data by. Per default this is set to 2035 in case
-        of the 'eGon2035' and to 2045 in case of the 'eGon100RE' scenario.
-        A leap year can currently not be handled. In case a leap year is given, the
-        time index is set according to the chosen scenario.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+        Specifies time steps for which to return data. Leap years can currently
+        not be handled. In case the given timeindex contains a leap year, the data will
+        be indexed using the default year (2035 in case of the 'eGon2035' and to 2045
+        in case of the 'eGon100RE' scenario) and returned for the whole year.
+        If no timeindex is provided, the timeindex set in
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+        If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+        is indexed using the default year and returned for the whole year.
 
     Returns
     -------
@@ -386,23 +412,19 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, year=None):
         :attr:`~.network.topology.Topology.loads_df`.
 
     """
+    if scenario not in ["eGon2035", "eGon100RE"]:
+        raise ValueError(
+            "Invalid input for parameter 'scenario'. Possible options are "
+            "'eGon2035' and 'eGon100RE'."
+        )
+
     # set up time index to index data by
-    if year is None:
-        year = tools.get_year_based_on_scenario(scenario)
-        if year is None:
-            raise ValueError(
-                "Invalid input for parameter 'scenario'. Possible options are "
-                "'eGon2035' and 'eGon100RE'."
-            )
-    else:
-        if pd.Timestamp(year, 1, 1).is_leap_year:
-            logger.warning(
-                "A leap year was given to 'heat_demand_oedb' function. This is "
-                "currently not valid. The year the data is indexed by is therefore set "
-                "to the default value of 2011."
-            )
-            return heat_demand_oedb(edisgo_obj, scenario, engine, year=None)
-    timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+    timeindex, timeindex_full = _timeindex_helper_func(
+        edisgo_obj,
+        timeindex,
+        default_year=tools.get_year_based_on_scenario(scenario),
+        allow_leap_year=False,
+    )
 
     hp_df = edisgo_obj.topology.loads_df[
         edisgo_obj.topology.loads_df.type == "heat_pump"
@@ -435,9 +457,9 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, year=None):
         )
         individual_heating_df.rename(columns=rename_series, inplace=True)
         # set index
-        individual_heating_df.index = timeindex
+        individual_heating_df.index = timeindex_full
     else:
-        individual_heating_df = pd.DataFrame(index=timeindex)
+        individual_heating_df = pd.DataFrame(index=timeindex_full)
 
     # get district heating profiles from oedb
     dh_ids = hp_df.district_heating_id.dropna().unique()
@@ -455,14 +477,16 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, year=None):
         )
         dh_profile_df.rename(columns=rename_series, inplace=True)
         # set index
-        dh_profile_df.index = timeindex
+        dh_profile_df.index = timeindex_full
     else:
-        dh_profile_df = pd.DataFrame(index=timeindex)
+        dh_profile_df = pd.DataFrame(index=timeindex_full)
 
-    return pd.concat([individual_heating_df, dh_profile_df], axis=1)
+    return pd.concat([individual_heating_df, dh_profile_df], axis=1).loc[timeindex, :]
 
 
-def electricity_demand_oedb(edisgo_obj, scenario, engine, year=None, load_names=None):
+def electricity_demand_oedb(
+    edisgo_obj, scenario, engine, timeindex=None, load_names=None
+):
     """
     Get electricity demand profiles for all conventional loads from the
     `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
@@ -482,11 +506,15 @@ def electricity_demand_oedb(edisgo_obj, scenario, engine, year=None, load_names=
         are 'eGon2035' and 'eGon100RE'.
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
-    year : int or None
-        Year to index electricity demand data by. Per default this is set to 2035 in
-        case of the 'eGon2035' and to 2045 in case of the 'eGon100RE' scenario.
-        A leap year can currently not be handled. In case a leap year is given, the
-        time index is set according to the chosen scenario.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+        Specifies time steps for which to return data. Leap years can currently
+        not be handled. In case the given timeindex contains a leap year, the data will
+        be indexed using the default year (2035 in case of the 'eGon2035' and to 2045
+        in case of the 'eGon100RE' scenario) and returned for the whole year.
+        If no timeindex is provided, the timeindex set in
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+        If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+        is indexed using the default year and returned for the whole year.
     load_names : list(str) or None
         Conventional loads (as in index of :attr:`~.network.topology.Topology.loads_df`)
         for which to retrieve electricity demand time series. If none are provided,
@@ -500,25 +528,19 @@ def electricity_demand_oedb(edisgo_obj, scenario, engine, year=None, load_names=
         in index of :attr:`~.network.topology.Topology.loads_df`.
 
     """
+    if scenario not in ["eGon2035", "eGon100RE"]:
+        raise ValueError(
+            "Invalid input for parameter 'scenario'. Possible options are "
+            "'eGon2035' and 'eGon100RE'."
+        )
+
     # set up time index to index data by
-    if year is None:
-        year = tools.get_year_based_on_scenario(scenario)
-        if year is None:
-            raise ValueError(
-                "Invalid input for parameter 'scenario'. Possible options are "
-                "'eGon2035' and 'eGon100RE'."
-            )
-    else:
-        if pd.Timestamp(year, 1, 1).is_leap_year:
-            logger.warning(
-                "A leap year was given to 'electricity_demand_oedb' function. This is "
-                "currently not valid. The year the data is indexed by is therefore set "
-                "to the default value of 2011."
-            )
-            return electricity_demand_oedb(
-                edisgo_obj, scenario, engine, year=None, load_names=load_names
-            )
-    timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+    timeindex, timeindex_full = _timeindex_helper_func(
+        edisgo_obj,
+        timeindex,
+        default_year=tools.get_year_based_on_scenario(scenario),
+        allow_leap_year=False,
+    )
 
     # set loads for which to retrieve electricity profiles
     if load_names is None:
@@ -544,7 +566,7 @@ def electricity_demand_oedb(edisgo_obj, scenario, engine, year=None, load_names=
             .iloc[:, 0]
         )
         residential_profiles_df.rename(columns=rename_series, inplace=True)
-        residential_profiles_df.index = timeindex
+        residential_profiles_df.index = timeindex_full
     else:
         residential_profiles_df = pd.DataFrame()
 
@@ -568,7 +590,7 @@ def electricity_demand_oedb(edisgo_obj, scenario, engine, year=None, load_names=
             .iloc[:, 0]
         )
         cts_profiles_df.rename(columns=rename_series, inplace=True)
-        cts_profiles_df.index = timeindex
+        cts_profiles_df.index = timeindex_full
     else:
         cts_profiles_df = pd.DataFrame()
 
@@ -588,13 +610,13 @@ def electricity_demand_oedb(edisgo_obj, scenario, engine, year=None, load_names=
             .iloc[:, 0]
         )
         ind_profiles_df.rename(columns=rename_series, inplace=True)
-        ind_profiles_df.index = timeindex
+        ind_profiles_df.index = timeindex_full
     else:
         ind_profiles_df = pd.DataFrame()
 
     return pd.concat(
         [residential_profiles_df, cts_profiles_df, ind_profiles_df], axis=1
-    )
+    ).loc[timeindex, :]
 
 
 def _get_zensus_cells_of_buildings(building_ids, engine):

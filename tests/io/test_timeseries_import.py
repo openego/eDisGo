@@ -101,21 +101,13 @@ class TestTimeseriesImport:
 
     @pytest.mark.local
     def test_cop_oedb(self):
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         cop_df = timeseries_import.cop_oedb(
-            pytest.engine, weather_cell_ids=[11051, 11052]
+            edisgo_object=edisgo, engine=pytest.engine, weather_cell_ids=[11051, 11052]
         )
         assert cop_df.shape == (8760, 2)
         assert (cop_df > 1.0).all().all()
         assert (cop_df < 10.0).all().all()
-
-        # ToDo
-        # # test with overwriting time index
-        # cop_df = timeseries_import.cop_oedb(
-        #     pytest.engine, weather_cell_ids=[11051, 11052], year=2010)
-        #
-        # # test with leap year
-        # cop_df = timeseries_import.cop_oedb(
-        #     pytest.engine, weather_cell_ids=[11051, 11052], year=2020)
 
     def setup_egon_heat_pump_data(self):
         names = [
@@ -159,9 +151,12 @@ class TestTimeseriesImport:
         # test for leap year
         with caplog.at_level(logging.WARNING):
             df = timeseries_import.heat_demand_oedb(
-                edisgo_object, "eGon100RE", pytest.engine, year=2020
+                edisgo_object,
+                "eGon100RE",
+                pytest.engine,
+                timeindex=pd.date_range("1/1/2020", periods=8760, freq="H"),
             )
-        assert "A leap year was given to 'heat_demand_oedb' function." in caplog.text
+        assert "A leap year was given." in caplog.text
         assert df.shape == (8760, 3)
         assert df.index[0].year == 2045
 
@@ -195,20 +190,20 @@ class TestTimeseriesImport:
             "eGon2035",
             pytest.engine,
             load_names=["Load_mvgd_33532_1_industrial"],
-            year=2011,
+            timeindex=pd.date_range("1/1/2011", periods=4, freq="H"),
         )
-        assert df.shape == (8760, 1)
+        assert df.shape == (4, 1)
         assert df.index[0].year == 2011
 
         # test for leap year and all loads in the grid
         with caplog.at_level(logging.WARNING):
             df = timeseries_import.electricity_demand_oedb(
-                edisgo_object, "eGon100RE", pytest.engine, year=2020
+                edisgo_object,
+                "eGon100RE",
+                pytest.engine,
+                timeindex=pd.date_range("1/1/2020", periods=4, freq="H"),
             )
-        assert (
-            "A leap year was given to 'electricity_demand_oedb' function."
-            in caplog.text
-        )
+        assert "A leap year was given." in caplog.text
         assert df.shape == (8760, 2463)
         assert df.index[0].year == 2045
 

@@ -148,7 +148,7 @@ class HeatPump:
 
             * 'oedb'
 
-                Weather cell specific hourly COP time series for one year are obtained
+                Weather cell specific hourly COP time series are obtained
                 from the `OpenEnergy DataBase
                 <https://openenergy-platform.org/dataedit/schemas>`_ (see
                 :func:`edisgo.io.timeseries_import.cop_oedb` for more information).
@@ -163,7 +163,7 @@ class HeatPump:
                 information.
 
                 This option requires that the parameter `engine` is provided as keyword
-                argument. For further settings, the parameters `year` and
+                argument. For further settings, the parameters `timeindex` and
                 `heat_pump_names` can also be provided as keyword arguments.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
@@ -180,15 +180,15 @@ class HeatPump:
             'oedb'. If None, all heat pumps in
             :attr:`~.network.topology.Topology.loads_df` (type is 'heat_pump') are
             used. Default: None.
-        year : int or None
-            Year to index COP data by in case `ts_heat_demand` is 'oedb'.
-            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is already set
-            COP data is indexed by the same year, otherwise time index will be set
-            for the year 2011 which is the weather year the data was generated with.
-            In case :py:attr:`~.network.timeseries.TimeSeries.timeindex` contains a
-            leap year, the COP data will as well be indexed using the year 2011, as
-            leap years can currently not be handled. See
-            :func:`edisgo.io.timeseries_import.cop_oedb` for more information.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            Specifies time steps for which to set data in case `ts_cop` is
+            'oedb'. Leap years can currently not be handled. In case the given
+            timeindex contains a leap year, the data will be indexed using the default
+            year 2011 and returned for the whole year.
+            If no timeindex is provided, the timeindex set in
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+            is indexed using the default year 2011 and returned for the whole year.
 
         """
         if isinstance(ts_cop, str) and ts_cop == "oedb":
@@ -229,16 +229,12 @@ class HeatPump:
                     ] = random_weather_cell_id
                 weather_cells = hp_df.weather_cell_id.dropna().unique()
 
-                # set up year to index COP data by
-                year = kwargs.get("year", None)
-                if year is None:
-                    year = tools.get_year_based_on_timeindex(edisgo_object)
-
                 # get COP per weather cell
                 ts_cop_per_weather_cell = timeseries_import.cop_oedb(
+                    edisgo_object=edisgo_object,
                     engine=kwargs.get("engine", None),
                     weather_cell_ids=weather_cells,
-                    year=year,
+                    timeindex=kwargs.get("timeindex", None),
                 )
                 # assign COP time series to each heat pump
                 cop_df = pd.DataFrame(
@@ -291,7 +287,8 @@ class HeatPump:
                 into the grid.
                 This option requires that the parameters `engine` and `scenario` are
                 provided as keyword arguments. For further settings, the parameters
-                `year` and `heat_pump_names` can also be provided as keyword arguments.
+                `timeindex` and `heat_pump_names` can also be provided as keyword
+                arguments.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
 
@@ -313,14 +310,16 @@ class HeatPump:
             case `ts_heat_demand` is 'oedb'. If None, all heat pumps in
             :attr:`~.network.topology.Topology.loads_df` (type is 'heat_pump') are
             used. Default: None.
-        year : int or None
-            Year to index heat demand data by in case `ts_heat_demand` is 'oedb'.
-            If none is provided and :py:attr:`~.network.timeseries.TimeSeries.timeindex`
-            is already set, data is indexed by the same year. Otherwise, time index will
-            be set according to the scenario (2035 in case of the 'eGon2035' scenario
-            and 2045 in case of the 'eGon100RE' scenario).
-            A leap year can currently not be handled. In case a leap year is given, the
-            time index is set according to the chosen scenario.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            Specifies time steps for which to set data in case `ts_heat_demand` is
+            'oedb'. Leap years can currently not be handled. In case the given
+            timeindex contains a leap year, the data will be indexed using the default
+            year (2035 in case of the 'eGon2035' and to 2045 in case of the
+            'eGon100RE' scenario) and returned for the whole year.
+            If no timeindex is provided, the timeindex set in
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+            is indexed using the default year and returned for the whole year.
 
         """
         # in case time series from oedb are used, retrieve oedb time series
@@ -333,17 +332,12 @@ class HeatPump:
                 ].index
 
             if len(heat_pump_names) > 0:
-                # set up year to index data by
-                year = kwargs.get("year", None)
-                if year is None:
-                    year = tools.get_year_based_on_timeindex(edisgo_object)
-
                 # get heat demand per heat pump
                 heat_demand_df = timeseries_import.heat_demand_oedb(
                     edisgo_object,
                     scenario=kwargs.get("scenario", ""),
                     engine=kwargs.get("engine", None),
-                    year=year,
+                    timeindex=kwargs.get("timeindex", None),
                 )
                 heat_pump_names_select = [
                     _ for _ in heat_demand_df.columns if _ in heat_pump_names

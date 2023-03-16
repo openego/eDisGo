@@ -390,8 +390,7 @@ class EDisGo:
         Predefined profiles comprise i.e. standard electric conventional load profiles
         for different sectors generated using the oemof
         `demandlib <https://github.com/oemof/demandlib/>`_ or feed-in time series of
-        fluctuating solar and wind generators provided on the OpenEnergy DataBase for
-        the weather year 2011.
+        fluctuating solar and wind generators provided on the OpenEnergy DataBase.
 
         This function can also be used to provide your own profiles per technology or
         load sector.
@@ -399,12 +398,51 @@ class EDisGo:
         Parameters
         -----------
         fluctuating_generators_ts : str or :pandas:`pandas.DataFrame<DataFrame>` or None
-            Defines which technology-specific (or technology and weather cell specific)
-            time series to use to set active power time series of fluctuating
-            generators. See parameter `ts_generators` in
-            :func:`~.network.timeseries.TimeSeries.predefined_fluctuating_generators_by_technology`
-            for more information. If None, no time series of fluctuating generators
-            are set. Default: None.
+            Defines option to set technology-specific or technology- and weather cell
+            specific active power time series of wind and solar generators.
+            Possible options are:
+
+            * 'oedb'
+
+                Technology- and weather cell-specific hourly feed-in time series are
+                obtained from the
+                `OpenEnergy DataBase
+                <https://openenergy-platform.org/dataedit/schemas>`_. See
+                :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
+
+                This option requires that the parameter `engine` is provided in case
+                new ding0 grids with geo-referenced LV grids are used. For further
+                settings, the parameter `timeindex` can also be provided.
+
+            * :pandas:`pandas.DataFrame<DataFrame>`
+
+                DataFrame with self-provided feed-in time series per technology or
+                per technology and weather cell ID normalized to a nominal capacity
+                of 1.
+                In case time series are provided only by technology, columns of the
+                DataFrame contain the technology type as string.
+                In case time series are provided by technology and weather cell ID
+                columns need to be a :pandas:`pandas.MultiIndex<MultiIndex>` with the
+                first level containing the technology as string and the second level
+                the weather cell ID as integer.
+                Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+
+                When importing a ding0 grid and/or using predefined scenarios
+                of the future generator park,
+                each generator has an assigned weather cell ID that identifies the
+                weather data cell from the weather data set used in the research
+                project `open_eGo <https://openegoproject.wordpress.com/>`_ to
+                determine feed-in profiles. The weather cell ID can be retrieved
+                from column `weather_cell_id` in
+                :attr:`~.network.topology.Topology.generators_df` and could be
+                overwritten to use own weather cells.
+
+            * None
+
+                If None, time series are not set.
+
+            Default: None.
+
         fluctuating_generators_names : list(str) or None
             Defines for which fluctuating generators to apply technology-specific time
             series. See parameter `generator_names` in
@@ -433,23 +471,18 @@ class EDisGo:
                 <https://openenergy-platform.org/dataedit/schemas>`_.
 
                 This option requires that the parameters `engine` and `scenario` are
-                provided as keyword arguments. For further settings, the parameter
-                `year` can also be provided as keyword argument.
-
-                See parameter `year` in function
-                :func:`edisgo.io.timeseries_import.electricity_demand_oedb` for more
-                information on how time series data is indexed.
+                provided. For further settings, the parameter `timeindex` can also be
+                provided.
 
             * 'demandlib'
 
                 Sets active power demand time series using hourly electricity load time
-                series for one year obtained using standard electric load profiles from
+                series obtained using standard electric load profiles from
                 the oemof `demandlib <https://github.com/oemof/demandlib/>`_.
                 The demandlib provides sector-specific time series for the sectors
                 'residential', 'cts', 'industrial', and 'agricultural'.
 
-                The time series data is indexed by the year set in
-                :attr:`edisgo.network.timeseries.TimeSeries.timeindex`.
+                For further settings, the parameter `timeindex` can also be provided.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
 
@@ -494,17 +527,22 @@ class EDisGo:
         ------------------
         engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
             Database engine. This parameter is only required in case
-            `conventional_loads_ts` is 'oedb'.
+            `conventional_loads_ts` or `fluctuating_generators_ts` is 'oedb'.
         scenario : str
             Scenario for which to retrieve demand data. Possible options are 'eGon2035'
             and 'eGon100RE'. This parameter is only required in case
             `conventional_loads_ts` is 'oedb'.
-        year : int or None
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             This parameter can optionally be provided in case `conventional_loads_ts`
-            is 'oedb' and is used to determine the year, the data is indexed by.
-            See parameter `year` in function
-            :func:`edisgo.io.timeseries_import.electricity_demand_oedb` for more
-            information.
+            is 'oedb' or 'demandlib' and in case `fluctuating_generators_ts` is
+            'oedb'. It is used to specify time steps for which to set active power data.
+            Leap years can currently not be handled when data is retrieved from the
+            oedb. In case the given timeindex contains a leap year, the data will
+            be indexed using a default year and set for the whole year.
+            If no timeindex is provided, the timeindex set in
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+            is indexed using a default year and set for the whole year.
 
         Notes
         ------
@@ -518,20 +556,18 @@ class EDisGo:
         """
         if self.timeseries.timeindex.empty:
             logger.warning(
-                "When setting time series using predefined profiles a time index is "
-                "not automatically set but needs to be set by the user. In some cases "
-                "not setting a time index prior to calling this function may lead "
-                "to errors. You can set the time index upon initialisation of the "
-                "EDisGo object by providing the input parameter 'timeindex' or using "
-                "the function EDisGo.set_timeindex()."
+                "When setting time series using predefined profiles it is safer to "
+                "set a time index. You can set the time index upon initialisation of "
+                "the EDisGo object by providing the input parameter 'timeindex' or by "
+                "using the function EDisGo.set_timeindex()."
             )
-            return
         if fluctuating_generators_ts is not None:
             self.timeseries.predefined_fluctuating_generators_by_technology(
                 self,
                 fluctuating_generators_ts,
                 fluctuating_generators_names,
                 engine=kwargs.get("engine"),
+                timeindex=kwargs.get("timeindex", None),
             )
         if dispatchable_generators_ts is not None:
             self.timeseries.predefined_dispatchable_generators_by_technology(
@@ -546,7 +582,7 @@ class EDisGo:
                     edisgo_obj=self,
                     scenario=kwargs.get("scenario"),
                     engine=kwargs.get("engine"),
-                    year=kwargs.get("year", None),
+                    timeindex=kwargs.get("timeindex", None),
                     load_names=conventional_loads_names,
                 )
                 # concat new time series with existing ones and drop any duplicate
@@ -1802,7 +1838,7 @@ class EDisGo:
         """
         charging_strategy(self, strategy=strategy, **kwargs)
 
-    def import_heat_pumps(self, scenario, engine, year=None):
+    def import_heat_pumps(self, scenario, engine, timeindex=None):
         """
         Gets heat pump data for specified scenario from oedb and integrates the heat
         pumps into the grid.
@@ -1870,29 +1906,45 @@ class EDisGo:
             and 2045 in case of the 'eGon100RE' scenario).
             A leap year can currently not be handled. In case a leap year is given, the
             time index is set according to the chosen scenario.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            Specifies time steps for which to set COP and heat demand data. Leap years
+            can currently not be handled. In case the given
+            timeindex contains a leap year, the data will be indexed using the default
+            year (2035 in case of the 'eGon2035' and to 2045 in case of the
+            'eGon100RE' scenario) and returned for the whole year.
+            If no timeindex is provided, the timeindex set in
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+            is indexed using the default year and returned for the whole year.
 
         """
         # set up year to index data by
         # first try to get index from time index
-        if year is None:
-            year = tools.get_year_based_on_timeindex(self)
-        # if time index is not set get year from scenario
-        if year is None:
-            year = tools.get_year_based_on_scenario(scenario)
-            # if year is still None, scenario is not valid
-            if year is None:
-                raise ValueError(
-                    "Invalid input for parameter 'scenario'. Possible options are "
-                    "'eGon2035' and 'eGon100RE'."
-                )
+        if timeindex is None:
+            timeindex = self.timeseries.timeindex
+            # if time index is not set get year from scenario
+            if timeindex.empty:
+                year = tools.get_year_based_on_scenario(scenario)
+                # if year is still None, scenario is not valid
+                if year is None:
+                    raise ValueError(
+                        "Invalid input for parameter 'scenario'. Possible options are "
+                        "'eGon2035' and 'eGon100RE'."
+                    )
+                timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
         # if year is leap year set year according to scenario
-        if pd.Timestamp(year, 1, 1).is_leap_year:
+        if pd.Timestamp(timeindex.year[0], 1, 1).is_leap_year:
             logger.warning(
                 "A leap year was given to 'heat_demand_oedb' function. This is "
                 "currently not valid. The year the data is indexed by is therefore set "
                 "according to the given scenario."
             )
-            return self.import_heat_pumps(scenario, engine, year=None)
+            year = tools.get_year_based_on_scenario(scenario)
+            return self.import_heat_pumps(
+                scenario,
+                engine,
+                timeindex=pd.date_range(f"1/1/{year}", periods=8760, freq="H"),
+            )
 
         integrated_heat_pumps = import_heat_pumps_oedb(
             edisgo_object=self, scenario=scenario, engine=engine
@@ -1904,14 +1956,14 @@ class EDisGo:
                 heat_pump_names=integrated_heat_pumps,
                 engine=engine,
                 scenario=scenario,
-                year=year,
+                timeindex=timeindex,
             )
             self.heat_pump.set_cop(
                 self,
                 "oedb",
                 heat_pump_names=integrated_heat_pumps,
                 engine=engine,
-                year=year,
+                timeindex=timeindex,
             )
 
     def apply_heat_pump_operating_strategy(
