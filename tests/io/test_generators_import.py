@@ -5,7 +5,7 @@ import pytest
 from shapely.geometry import Point
 
 from edisgo import EDisGo
-from edisgo.io import generators_import as generators_import
+from edisgo.io import generators_import
 
 
 class TestGeneratorsImport:
