@@ -49,18 +49,18 @@ edisgo.io.heat\_pump\_import module
    :undoc-members:
    :show-inheritance:
 
-edisgo.io.home\_batteries\_import module
-----------------------------------------
-
-.. automodule:: edisgo.io.home_batteries_import
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 edisgo.io.pypsa\_io module
 --------------------------
 
 .. automodule:: edisgo.io.pypsa_io
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+edisgo.io.storage\_import module
+----------------------------------------
+
+.. automodule:: edisgo.io.storage_import
    :members:
    :undoc-members:
    :show-inheritance:
