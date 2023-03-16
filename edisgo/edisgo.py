@@ -385,15 +385,26 @@ class EDisGo:
         **kwargs,
     ):
         """
-        Uses predefined feed-in or demand profiles.
+        Uses predefined feed-in or demand profiles to set active power time series.
 
         Predefined profiles comprise i.e. standard electric conventional load profiles
         for different sectors generated using the oemof
         `demandlib <https://github.com/oemof/demandlib/>`_ or feed-in time series of
         fluctuating solar and wind generators provided on the OpenEnergy DataBase.
-
         This function can also be used to provide your own profiles per technology or
         load sector.
+
+        The active power time series are written to
+        :attr:`~.network.timeseries.TimeSeries.generators_active_power` or
+        :attr:`~.network.timeseries.TimeSeries.loads_active_power`.
+        As data in :class:`~.network.timeseries.TimeSeries` is indexed by
+        :attr:`~.network.timeseries.TimeSeries.timeindex` it is better to set
+        :attr:`~.network.timeseries.TimeSeries.timeindex` before calling this function.
+        You can set the time index upon initialisation of the EDisGo object by
+        providing the input parameter 'timeindex' or using the function
+        :attr:`~.edisgo.EDisGo.set_timeindex`.
+        Also make sure that the time steps of self-provided time series include
+        the set time index.
 
         Parameters
         -----------
@@ -544,20 +555,12 @@ class EDisGo:
             If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
             is indexed using a default year and set for the whole year.
 
-        Notes
-        ------
-        This function raises a warning in case a time index was not previously set.
-        You can set the time index upon initialisation of the EDisGo object by
-        providing the input parameter 'timeindex' or using the function
-        :attr:`~.edisgo.EDisGo.set_timeindex`.
-        Also make sure that the time steps for which time series are provided include
-        the set time index.
-
         """
         if self.timeseries.timeindex.empty:
             logger.warning(
-                "When setting time series using predefined profiles it is safer to "
-                "set a time index. You can set the time index upon initialisation of "
+                "When setting time series using predefined profiles it is better to "
+                "set a time index as all data in TimeSeries class is indexed by the"
+                "time index. You can set the time index upon initialisation of "
                 "the EDisGo object by providing the input parameter 'timeindex' or by "
                 "using the function EDisGo.set_timeindex()."
             )
