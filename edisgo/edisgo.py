@@ -19,7 +19,7 @@ from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
 )
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
-from edisgo.io import pypsa_io
+from edisgo.io import pypsa_io, timeseries_import
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.dsm_import import dsm_from_database
 from edisgo.io.electromobility_import import (
@@ -382,7 +382,7 @@ class EDisGo:
         conventional_loads_names=None,
         charging_points_ts=None,
         charging_points_names=None,
-        engine: Engine | None = None,
+        **kwargs,
     ):
         """
         Uses predefined feed-in or demand profiles.
@@ -398,54 +398,113 @@ class EDisGo:
 
         Parameters
         -----------
-        fluctuating_generators_ts : str or :pandas:`pandas.DataFrame<DataFrame>`
+        fluctuating_generators_ts : str or :pandas:`pandas.DataFrame<DataFrame>` or None
             Defines which technology-specific (or technology and weather cell specific)
             time series to use to set active power time series of fluctuating
             generators. See parameter `ts_generators` in
             :func:`~.network.timeseries.TimeSeries.predefined_fluctuating_generators_by_technology`
             for more information. If None, no time series of fluctuating generators
             are set. Default: None.
-        fluctuating_generators_names : list(str)
+        fluctuating_generators_names : list(str) or None
             Defines for which fluctuating generators to apply technology-specific time
             series. See parameter `generator_names` in
             :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
             for more information. Default: None.
-        dispatchable_generators_ts : :pandas:`pandas.DataFrame<DataFrame>`
+        dispatchable_generators_ts : :pandas:`pandas.DataFrame<DataFrame>` or None
             Defines which technology-specific time series to use to set active power
             time series of dispatchable generators.
             See parameter `ts_generators` in
             :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
             for more information. If None, no time series of dispatchable generators
             are set. Default: None.
-        dispatchable_generators_names : list(str)
+        dispatchable_generators_names : list(str) or None
             Defines for which dispatchable generators to apply technology-specific time
             series. See parameter `generator_names` in
             :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
             for more information. Default: None.
-        conventional_loads_ts : :pandas:`pandas.DataFrame<DataFrame>`
-            Defines which sector-specific time series to use to set active power
-            time series of conventional loads.
-            See parameter `ts_loads` in
-            :func:`~.network.timeseries.TimeSeries.predefined_conventional_loads_by_sector`
-            for more information. If None, no time series of conventional loads
-            are set. Default: None.
-        conventional_loads_names : list(str)
-            Defines for which conventional loads to apply technology-specific time
-            series. See parameter `load_names` in
+        conventional_loads_ts : str or :pandas:`pandas.DataFrame<DataFrame>` or None
+            Defines option to set active power time series of conventional loads.
+            Possible options are:
+
+            * 'oedb'
+
+                Sets active power demand time series using individual hourly electricity
+                load time series for one year obtained from the `OpenEnergy DataBase
+                <https://openenergy-platform.org/dataedit/schemas>`_.
+
+                This option requires that the parameters `engine` and `scenario` are
+                provided as keyword arguments. For further settings, the parameter
+                `year` can also be provided as keyword argument.
+
+                See parameter `year` in function
+                :func:`edisgo.io.timeseries_import.electricity_demand_oedb` for more
+                information on how time series data is indexed.
+
+            * 'demandlib'
+
+                Sets active power demand time series using hourly electricity load time
+                series for one year obtained using standard electric load profiles from
+                the oemof `demandlib <https://github.com/oemof/demandlib/>`_.
+                The demandlib provides sector-specific time series for the sectors
+                'residential', 'cts', 'industrial', and 'agricultural'.
+
+                The time series data is indexed by the year set in
+                :attr:`edisgo.network.timeseries.TimeSeries.timeindex`.
+
+            * :pandas:`pandas.DataFrame<DataFrame>`
+
+                Sets active power demand time series using sector-specific demand
+                time series provided in this DataFrame.
+                The load time series per sector need to be normalized to an annual
+                consumption of 1. Index needs to
+                be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+                Columns need to contain the sector as string.
+                In the current grid existing load types can be retrieved from column
+                `sector` in :attr:`~.network.topology.Topology.loads_df` (make sure to
+                select `type` 'conventional_load').
+                In ding0 grids the differentiated sectors are 'residential', 'cts',
+                and 'industrial'.
+
+            * None
+
+                If None, conventional load time series are not set.
+
+            Default: None.
+        conventional_loads_names : list(str) or None
+            Defines for which conventional loads to set time series. In case
+            `conventional_loads_ts` is 'oedb' see parameter `load_names` in
+            :func:`edisgo.io.timeseries_import.electricity_demand_oedb` for more
+            information. For other cases see parameter `load_names` in
             :func:`~.network.timeseries.TimeSeries.predefined_conventional_loads_by_sector`
             for more information. Default: None.
-        charging_points_ts : :pandas:`pandas.DataFrame<DataFrame>`
+        charging_points_ts : :pandas:`pandas.DataFrame<DataFrame>` or None
             Defines which use-case-specific time series to use to set active power
             time series of charging points.
             See parameter `ts_loads` in
             :func:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
             for more information. If None, no time series of charging points
             are set. Default: None.
-        charging_points_names : list(str)
+        charging_points_names : list(str) or None
             Defines for which charging points to apply use-case-specific time
             series. See parameter `load_names` in
             :func:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
             for more information. Default: None.
+
+        Other Parameters
+        ------------------
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine. This parameter is only required in case
+            `conventional_loads_ts` is 'oedb'.
+        scenario : str
+            Scenario for which to retrieve demand data. Possible options are 'eGon2035'
+            and 'eGon100RE'. This parameter is only required in case
+            `conventional_loads_ts` is 'oedb'.
+        year : int or None
+            This parameter can optionally be provided in case `conventional_loads_ts`
+            is 'oedb' and is used to determine the year, the data is indexed by.
+            See parameter `year` in function
+            :func:`edisgo.io.timeseries_import.electricity_demand_oedb` for more
+            information.
 
         Notes
         ------
@@ -472,16 +531,33 @@ class EDisGo:
                 self,
                 fluctuating_generators_ts,
                 fluctuating_generators_names,
-                engine=engine,
+                engine=kwargs.get("engine"),
             )
         if dispatchable_generators_ts is not None:
             self.timeseries.predefined_dispatchable_generators_by_technology(
                 self, dispatchable_generators_ts, dispatchable_generators_names
             )
         if conventional_loads_ts is not None:
-            self.timeseries.predefined_conventional_loads_by_sector(
-                self, conventional_loads_ts, conventional_loads_names
-            )
+            if (
+                isinstance(conventional_loads_ts, str)
+                and conventional_loads_ts == "oedb"
+            ):
+                loads_ts_df = timeseries_import.electricity_demand_oedb(
+                    edisgo_obj=self,
+                    scenario=kwargs.get("scenario"),
+                    engine=kwargs.get("engine"),
+                    year=kwargs.get("year", None),
+                    load_names=conventional_loads_names,
+                )
+                # concat new time series with existing ones and drop any duplicate
+                # entries
+                self.timeseries.loads_active_power = tools.drop_duplicated_columns(
+                    pd.concat([self.timeseries.loads_active_power, loads_ts_df], axis=1)
+                )
+            else:
+                self.timeseries.predefined_conventional_loads_by_sector(
+                    self, conventional_loads_ts, conventional_loads_names
+                )
         if charging_points_ts is not None:
             self.timeseries.predefined_charging_points_by_use_case(
                 self, charging_points_ts, charging_points_names

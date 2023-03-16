@@ -1399,28 +1399,21 @@ class TimeSeries:
 
             * 'demandlib'
 
-                Time series for the year specified :py:attr:`~timeindex` are
-                generated using standard electric load profiles from the oemof
-                `demandlib <https://github.com/oemof/demandlib/>`_.
-                The demandlib provides sector-specific time series for the sectors
-                'residential', 'retail', 'industrial', and 'agricultural'.
+                See parameter `conventional_loads_ts` in
+                :func:`~.edisgo.EDisGo.set_time_series_active_power_predefined` for
+                more information.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
 
-                DataFrame with load time series per sector normalized to an annual
-                consumption of 1. Index needs to
-                be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-                Columns contain the sector as string.
-                In the current grid existing load types can be retrieved from column
-                `sector` in :attr:`~.network.topology.Topology.loads_df` (make sure to
-                select `type` 'conventional_load').
-                In ding0 grid the differentiated sectors are 'residential', 'retail',
-                'industrial', and 'agricultural'.
+                See parameter `conventional_loads_ts` in
+                :func:`~.edisgo.EDisGo.set_time_series_active_power_predefined` for
+                more information.
+
         load_names : list(str)
             Defines for which conventional loads to use sector-specific time series.
             If None, all loads of sectors for which sector-specific time series are
             provided are used. In case the demandlib is used, all loads of sectors
-            'residential', 'retail', 'industrial', and 'agricultural' are used.
+            'residential', 'cts', 'industrial', and 'agricultural' are used.
 
         """
         # in case time series from demandlib are used, retrieve demandlib time series

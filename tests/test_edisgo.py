@@ -202,6 +202,7 @@ class TestEDisGo:
         )
 
     def test_set_time_series_active_power_predefined(self, caplog):
+        # options where database connection is needed are tested in separate function
 
         # check warning
         self.edisgo.set_time_series_active_power_predefined(
@@ -257,6 +258,27 @@ class TestEDisGo:
         assert self.edisgo.timeseries.loads_reactive_power.shape == (2, 0)
         assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 0)
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
+
+    @pytest.mark.local
+    def test_set_time_series_active_power_predefined_oedb(self):
+
+        # test conventional_loads_ts="oedb" for all loads in grid
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        edisgo_object.set_timeindex(pd.date_range("1/1/2035", periods=8760, freq="H"))
+
+        edisgo_object.set_time_series_active_power_predefined(
+            conventional_loads_ts="oedb",
+            scenario="eGon2035",
+            engine=pytest.engine,
+            year=2020,
+        )
+
+        assert edisgo_object.timeseries.loads_active_power.dropna().shape == (
+            8760,
+            2463,
+        )
 
     def test_set_time_series_reactive_power_control(self):
         # set active power time series for fixed cosphi
