@@ -150,34 +150,43 @@ def calculate_apparent_power(nominal_voltage, current, num_parallel):
     return sqrt(3) * nominal_voltage * current * num_parallel
 
 
-def drop_duplicated_indices(dataframe, keep="first"):
+def drop_duplicated_indices(dataframe, keep="last"):
     """
     Drop rows of duplicate indices in dataframe.
 
+    Be aware that this function changes the dataframe inplace. To avoid this behavior
+    provide a copy of the dataframe to this function.
+
     Parameters
     ----------
-    dataframe::pandas:`pandas.DataFrame<DataFrame>`
-        handled dataframe
-    keep: str
-        indicator of row to be kept, 'first', 'last' or False,
-        see pandas.DataFrame.drop_duplicates() method
+    dataframe : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe to drop indices from.
+    keep : str
+        Indicator of whether to keep first ("first"), last ("last") or
+        none (False) of the duplicated indices.
+        See :pandas:`pandas.DataFrame.duplicated<DataFrame.duplicated>` for more
+        information. Default: "last".
+
     """
     return dataframe[~dataframe.index.duplicated(keep=keep)]
 
 
-def drop_duplicated_columns(df, keep="first"):
+def drop_duplicated_columns(df, keep="last"):
     """
     Drop columns of dataframe that appear more than once.
+
+    Be aware that this function changes the dataframe inplace. To avoid this behavior
+    provide a copy of the dataframe to this function.
 
     Parameters
     ----------
     df : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe of which columns are dropped.
+        Dataframe to drop columns from.
     keep : str
-        Indicator of whether to keep first ('first'), last ('last') or
+        Indicator of whether to keep first ("first"), last ("last") or
         none (False) of the duplicated columns.
-        See `drop_duplicates()` method of
-        :pandas:`pandas.DataFrame<DataFrame>`.
+        See :pandas:`pandas.DataFrame.duplicated<DataFrame.duplicated>` for more
+        information. Default: "last".
 
     """
     return df.loc[:, ~df.columns.duplicated(keep=keep)]
@@ -368,6 +377,61 @@ def get_path_length_to_station(edisgo_obj):
     return edisgo_obj.topology.buses_df.path_length_to_station
 
 
+def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
+    """
+    Returns all buses downstream (farther away from station) of the given bus or line.
+
+    In case a bus is given, returns all buses downstream of the given bus plus the
+    given bus itself.
+    In case a line is given, returns all buses downstream of the bus that is closer to
+    the station (thus only one bus of the line is included in the returned buses).
+
+    Parameters
+    ------------
+    edisgo_obj : EDisGo object
+    comp_name : str
+        Name of bus or line (as in index of :attr:`~.network.topology.Topology.buses_df`
+        or :attr:`~.network.topology.Topology.lines_df`) to get downstream buses for.
+    comp_type : str
+        Can be either 'bus' or 'line'. Default: 'bus'.
+
+    Returns
+    -------
+    list(str)
+        List of buses (as in index of :attr:`~.network.topology.Topology.buses_df`)
+        downstream of the given component.
+
+    """
+    graph = edisgo_obj.topology.to_graph()
+    station_node = edisgo_obj.topology.transformers_hvmv_df.bus1.values[0]
+
+    if comp_type == "bus":
+        # get upstream bus to determine which edge to remove to create subgraph
+        bus = comp_name
+        path_to_station = nx.shortest_path(graph, station_node, comp_name)
+        bus_upstream = path_to_station[-2]
+    elif comp_type == "line":
+        # get bus further downstream to determine which buses downstream are affected
+        bus0 = edisgo_obj.topology.lines_df.at[comp_name, "bus0"]
+        bus1 = edisgo_obj.topology.lines_df.at[comp_name, "bus1"]
+        path_to_station_bus0 = nx.shortest_path(graph, station_node, bus0)
+        path_to_station_bus1 = nx.shortest_path(graph, station_node, bus1)
+        bus = bus0 if len(path_to_station_bus0) > len(path_to_station_bus1) else bus1
+        bus_upstream = bus0 if bus == bus1 else bus1
+    else:
+        return None
+
+    # remove edge between bus and next bus upstream
+    graph.remove_edge(bus, bus_upstream)
+
+    # get subgraph containing relevant bus
+    subgraphs = list(graph.subgraph(c) for c in nx.connected_components(graph))
+    for subgraph in subgraphs:
+        if bus in subgraph.nodes():
+            return list(subgraph.nodes())
+    return None
+
+
 def assign_voltage_level_to_component(df, buses_df):
     """
     Adds column with specification of voltage level component is in.
@@ -400,6 +464,130 @@ def assign_voltage_level_to_component(df, buses_df):
         axis=1,
     )
     return df
+
+
+def determine_grid_integration_voltage_level(edisgo_object, power):
+    """
+    Gives voltage level component should be integrated into based on its nominal power.
+
+    The voltage level is specified through an integer value from 4 to 7 with
+    4 = MV busbar, 5 = MV grid, 6 = LV busbar and 7 = LV grid.
+
+    The voltage level is determined using upper limits up to which capacity a component
+    is integrated into a certain voltage level. These upper limits are set in the
+    config section `grid_connection` through the parameters
+    'upper_limit_voltage_level_{4:7}'.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    power : float
+        Nominal power of component in MW.
+
+    Returns
+    --------
+    int
+        Voltage level component should be integrated into. Possible options are
+        4 (MV busbar), 5 (MV grid), 6 (LV busbar) or 7 (LV grid).
+
+    """
+    cfg_max_p_nom = edisgo_object.config["grid_connection"]
+    if (
+        cfg_max_p_nom["upper_limit_voltage_level_5"]
+        < power
+        <= cfg_max_p_nom["upper_limit_voltage_level_4"]
+    ):
+        voltage_level = 4
+    elif (
+        cfg_max_p_nom["upper_limit_voltage_level_6"]
+        < power
+        <= cfg_max_p_nom["upper_limit_voltage_level_5"]
+    ):
+        voltage_level = 5
+    elif (
+        cfg_max_p_nom["upper_limit_voltage_level_7"]
+        < power
+        <= cfg_max_p_nom["upper_limit_voltage_level_6"]
+    ):
+        voltage_level = 6
+    elif 0 < power <= cfg_max_p_nom["upper_limit_voltage_level_7"]:
+        voltage_level = 7
+    else:
+        raise ValueError("Unsupported voltage level")
+    return voltage_level
+
+
+def determine_bus_voltage_level(edisgo_object, bus_name):
+    """
+    Gives voltage level as integer from 4 to 7 of given bus.
+
+    The voltage level is specified through an integer value from 4 to 7 with
+    4 = MV busbar, 5 = MV grid, 6 = LV busbar and 7 = LV grid.
+
+    Buses that are directly connected to a station and not part of a longer feeder
+    or half-ring, i.e. they are only part of one line, are as well considered as voltage
+    level 4 or 6, depending on if they are connected to an HV/MV station or MV/LV
+    station.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    bus_name : str
+        Name of bus as in index of :attr:`~.network.topology.Topology.buses_df`.
+
+    Returns
+    --------
+    int
+        Voltage level of bus. Possible options are 4 (MV busbar), 5 (MV grid),
+        6 (LV busbar) or 7 (LV grid).
+
+    """
+    v_nom = edisgo_object.topology.buses_df.at[bus_name, "v_nom"]
+    if v_nom < 1:
+        station_buses = edisgo_object.topology.transformers_df.bus1.values
+        if bus_name in station_buses:
+            voltage_level = 6
+        else:
+            # check if bus is directly connected to a station via a line that is not
+            # connected to any other line - if that is the case it is considered as
+            # voltage level 6
+            connected_lines_df = edisgo_object.topology.get_connected_lines_from_bus(
+                bus_name
+            )
+            if len(connected_lines_df) > 1:
+                voltage_level = 7
+            else:
+                connected_line = connected_lines_df.iloc[0, :]
+                if (
+                    connected_line.at["bus0"] in station_buses
+                    or connected_line.at["bus1"] in station_buses
+                ):
+                    voltage_level = 6
+                else:
+                    voltage_level = 7
+    else:
+        station_buses = edisgo_object.topology.transformers_hvmv_df.bus1.values
+        if bus_name in station_buses:
+            voltage_level = 4
+        else:
+            # check if bus is directly connected to a station via a line that is not
+            # connected to any other line - if that is the case it is considered as
+            # voltage level 4
+            connected_lines_df = edisgo_object.topology.get_connected_lines_from_bus(
+                bus_name
+            )
+            if len(connected_lines_df) > 1:
+                voltage_level = 5
+            else:
+                connected_line = connected_lines_df.iloc[0, :]
+                if (
+                    connected_line.at["bus0"] in station_buses
+                    or connected_line.at["bus1"] in station_buses
+                ):
+                    voltage_level = 4
+                else:
+                    voltage_level = 5
+    return voltage_level
 
 
 def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
@@ -589,14 +777,21 @@ def add_line_susceptance(
 
 
 def resample(
-    object, freq_orig, method: str = "ffill", freq: str | pd.Timedelta = "15min"
+    object,
+    freq_orig,
+    method: str = "ffill",
+    freq: str | pd.Timedelta = "15min",
+    attr_to_resample=None,
 ):
     """
-    Resamples all time series data in given object to a desired resolution.
+    Resamples time series data to a desired resolution.
+
+    Both up- and down-sampling methods are possible.
 
     Parameters
     ----------
-    object : :class:`~.network.timeseries.TimeSeries`
+    object : :class:`~.network.timeseries.TimeSeries` or \
+        :class:`~.network.heat.HeatPump`
         Object of which to resample time series data.
     freq_orig : :pandas:`pandas.Timedelta<Timedelta>`
         Frequency of original time series data.
@@ -606,13 +801,18 @@ def resample(
     freq : str, optional
         See `freq` parameter in :attr:`~.EDisGo.resample_timeseries` for more
         information.
+    attr_to_resample : list(str), optional
+        List of attributes to resample. Per default, all attributes specified in
+        respective object's `_attributes` are resampled.
 
     """
+    if attr_to_resample is None:
+        attr_to_resample = object._attributes
 
     # add time step at the end of the time series in case of up-sampling so that
     # last time interval in the original time series is still included
     df_dict = {}
-    for attr in object._attributes:
+    for attr in attr_to_resample:
         if not getattr(object, attr).empty:
             df_dict[attr] = getattr(object, attr)
             if pd.Timedelta(freq) < freq_orig:  # up-sampling
@@ -657,3 +857,111 @@ def resample(
                 attr,
                 df_dict[attr].resample(freq).mean(),
             )
+
+
+def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.DataFrame:
+    """
+    Function to automatically check if columns of a pandas DataFrame can
+    be reduced to a smaller data type.
+
+    Source:
+    https://www.mikulskibartosz.name/how-to-reduce-memory-usage-in-pandas/
+
+    Parameters
+    ----------
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame to reduce memory usage for.
+    show_reduction : bool
+        If True, print amount of memory reduced.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with decreased memory usage.
+
+    """
+    start_mem = df.memory_usage().sum() / 1024**2
+
+    for col in df.columns:
+        col_type = df[col].dtype
+
+        if col_type != object and str(col_type) != "category":
+            c_min = df[col].min()
+            c_max = df[col].max()
+
+            if str(col_type)[:3] == "int":
+                if c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
+                    df[col] = df[col].astype("int16")
+                elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
+                    df[col] = df[col].astype("int32")
+                else:
+                    df[col] = df[col].astype("int64")
+            else:
+                if (
+                    c_min > np.finfo(np.float32).min
+                    and c_max < np.finfo(np.float32).max
+                ):
+                    df[col] = df[col].astype("float32")
+                else:
+                    df[col] = df[col].astype("float64")
+
+        else:
+            df[col] = df[col].astype("category")
+
+    end_mem = df.memory_usage().sum() / 1024**2
+
+    if show_reduction is True:
+        print(
+            "Reduced memory usage of DataFrame by "
+            f"{(1 - end_mem/start_mem) * 100:.2f} %."
+        )
+
+    return df
+
+
+def get_year_based_on_timeindex(edisgo_obj):
+    """
+    Checks if :py:attr:`~.network.timeseries.TimeSeries.timeindex` is already set and
+    if so, returns the year of the time index.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+
+    Returns
+    --------
+    int or None
+        If a time index is available returns the year of the time index,
+        otherwise it returns None.
+
+    """
+    year = edisgo_obj.timeseries.timeindex.year
+    if len(year) == 0:
+        return None
+    else:
+        return year[0]
+
+
+def get_year_based_on_scenario(scenario):
+    """
+    Returns the year the given scenario was set up for.
+
+    Parameters
+    ----------
+    scenario : str
+        Scenario for which to set year. Possible options are 'eGon2035' and 'eGon100RE'.
+
+    Returns
+    --------
+    int or None
+        Returns the year of the scenario (2035 in case of the 'eGon2035' scenario
+        and 2045 in case of the 'eGon100RE' scenario). If another scenario name is
+        provided it returns None.
+
+    """
+    if scenario == "eGon2035":
+        return 2035
+    elif scenario == "eGon100RE":
+        return 2045
+    else:
+        return None

@@ -33,6 +33,14 @@ edisgo.network.heat module
    :undoc-members:
    :show-inheritance:
 
+edisgo.network.overlying_grid module
+-------------------------------------
+
+.. automodule:: edisgo.network.overlying_grid
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 edisgo.network.results module
 -----------------------------
 
