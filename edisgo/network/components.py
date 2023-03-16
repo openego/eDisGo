@@ -257,7 +257,7 @@ class Load(Component):
 
         The sector is e.g. used to assign load time series to a load using the
         demandlib. The following four sectors are considered:
-        'agricultural', 'retail', 'residential', 'industrial'.
+        'agricultural', 'cts', 'residential', 'industrial'.
 
         Parameters
         -----------

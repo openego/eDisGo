@@ -2247,7 +2247,7 @@ class TimeSeriesRaw:
         normalized to an annual consumption of 1. Index needs to
         be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
         Columns represent load type. In ding0 grids the
-        differentiated sectors are 'residential', 'retail', 'industrial', and
+        differentiated sectors are 'residential', 'cts', 'industrial', and
         'agricultural'.
     charging_points_active_power_by_use_case : :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with charging demand time series per use case normalized to a nominal

@@ -228,11 +228,11 @@ class Topology:
                 used to generate sector-specific time series (see function
                 :attr:`~.network.timeseries.TimeSeries.
                 predefined_conventional_loads_by_sector`). It is further used when new
-                generators are integrated into the grid, as e.g. smaller PV rooftop
-                generators are most likely to be located in a household (see function
+                generators are integrated into the grid in case the LV is not
+                geo-referenced, as e.g. smaller PV rooftop generators are most likely
+                to be located in a household (see function
                 :attr:`~.network.topology.Topology.connect_to_lv`). The sector
-                needs to either be 'agricultural', 'industrial', 'residential' or
-                'retail'.
+                needs to either be 'industrial', 'residential' or 'cts'.
 
                 In case of charging points this attribute is used to define the charging
                 point use case ('home', 'work', 'public' or 'hpc') to determine whether
@@ -2000,14 +2000,14 @@ class Topology:
                 * with a nominal capacity of <=30 kW to LV loads of sector
                   residential, if available
                 * with a nominal capacity of >30 kW to LV loads of sector
-                  retail, industrial or agricultural, if available
+                  cts, industrial or agricultural, if available
                 * to random bus in the LV grid as fallback if no
                   appropriate load is available
 
             * Charging points with specified voltage level 7
                 * with sector 'home' to LV loads of sector residential, if available
                 * with sector 'work' to LV loads of sector
-                  retail, industrial or agricultural, if available, otherwise
+                  cts, industrial or agricultural, if available, otherwise
                 * with sector 'public' or 'hpc' to some bus in the grid that
                   is not a house connection
                 * to random bus in the LV grid that
@@ -2182,7 +2182,7 @@ class Topology:
                     target_buses = tmp.bus.values
                 else:
                     tmp = lv_loads[
-                        lv_loads.sector.isin(["industrial", "agricultural", "retail"])
+                        lv_loads.sector.isin(["industrial", "agricultural", "cts"])
                     ]
                     target_buses = tmp.bus.values
             elif comp_type == "charging_point":
@@ -2191,7 +2191,7 @@ class Topology:
                     target_buses = tmp.bus.values
                 elif comp_data["sector"] == "work":
                     tmp = lv_loads[
-                        lv_loads.sector.isin(["industrial", "agricultural", "retail"])
+                        lv_loads.sector.isin(["industrial", "agricultural", "cts"])
                     ]
                     target_buses = tmp.bus.values
                 else:

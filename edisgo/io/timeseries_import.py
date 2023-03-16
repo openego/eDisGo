@@ -114,7 +114,7 @@ def load_time_series_demandlib(config_data, timeindex):
     `demandlib <https://github.com/oemof/demandlib/>`_.
 
     Resulting electricity load profiles hold time series of hourly conventional
-    electricity demand for the sectors residential, retail, agricultural
+    electricity demand for the sectors residential, cts, agricultural
     and industrial. Time series are normalized to a consumption of 1 MWh per
     year.
 
@@ -130,7 +130,7 @@ def load_time_series_demandlib(config_data, timeindex):
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with conventional electricity load time series for sectors
-        residential, retail, agricultural and industrial.
+        residential, cts, agricultural and industrial.
         Index is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`. Columns
         hold the sector type.
 
