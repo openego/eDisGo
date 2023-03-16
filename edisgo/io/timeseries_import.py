@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import logging
 import os
@@ -20,7 +22,32 @@ if "READTHEDOCS" not in os.environ:
 logger = logging.getLogger(__name__)
 
 
-def feedin_oedb(config_data, weather_cell_ids, timeindex):
+def _timeindex_helper_func(
+    edisgo_object, timeindex, default_year=2011, allow_leap_year=False
+):
+    if timeindex is None:
+        year = tools.get_year_based_on_timeindex(edisgo_object)
+        if year is None:
+            year = default_year
+            timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+        else:
+            timeindex = edisgo_object.timeseries.timeindex
+        timeindex_full = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+    else:
+        year = timeindex.year[0]
+        if allow_leap_year is False and pd.Timestamp(year, 1, 1).is_leap_year:
+            year = default_year
+            logger.warning(
+                f"A leap year was given. This is currently not valid. The year the "
+                f"data is indexed by is therefore set to the default value of "
+                f"{default_year}."
+            )
+            timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+        timeindex_full = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+    return timeindex, timeindex_full
+
+
+def feedin_oedb_legacy(config_data, weather_cell_ids, timeindex):
     """
     Import feed-in time series data for wind and solar power plants from the
     `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
@@ -108,6 +135,83 @@ def feedin_oedb(config_data, weather_cell_ids, timeindex):
     return feedin.loc[timeindex]
 
 
+def feedin_oedb(
+    edisgo_object,
+    engine: Engine,
+    timeindex=None,
+):
+    """
+    Import feed-in time series data for wind and solar power plants from the
+    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+        Specifies time steps for which to return feed-in data. Leap years can currently
+        not be handled. In case the given timeindex contains a leap year, the data will
+        be indexed using the default year 2011 and returned for the whole year.
+        If no timeindex is provided, the timeindex set in
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+        If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+        is indexed using the default year 2011 and returned for the whole year.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with hourly feed-in time series per generator type (wind or solar,
+        in column level 0) and weather cell (in column level 1), normalized to a
+        capacity of 1 MW. Index of the dataframe depends on parameter `timeindex`.
+
+    """
+    # get weather cell IDs in grid
+    weather_cell_ids = tools.get_weather_cells_intersecting_with_grid_district(
+        edisgo_object, engine=engine
+    )
+
+    saio.register_schema("supply", engine)
+    from saio.supply import egon_era5_renewable_feedin
+
+    with session_scope_egon_data(engine) as session:
+        query = (
+            session.query(
+                egon_era5_renewable_feedin.w_id.label("weather_cell_id"),
+                egon_era5_renewable_feedin.carrier,
+                egon_era5_renewable_feedin.feedin,
+            )
+            .filter(
+                egon_era5_renewable_feedin.w_id.in_(weather_cell_ids),
+                egon_era5_renewable_feedin.carrier.in_(["pv", "wind_onshore"]),
+            )
+            .order_by(
+                egon_era5_renewable_feedin.w_id, egon_era5_renewable_feedin.carrier
+            )
+        )
+        feedin_df = pd.read_sql(sql=query.statement, con=engine)
+
+    # rename pv to solar and wind_onshore to wind
+    feedin_df.carrier = feedin_df.carrier.str.replace("pv", "solar").str.replace(
+        "_onshore", ""
+    )
+    # add time step column
+    feedin_df["time_step"] = len(feedin_df) * [np.arange(0, 8760)]
+    # un-nest feedin and pivot so that time_step becomes index and carrier and
+    # weather_cell_id column names
+    feedin_df = feedin_df.explode(["feedin", "time_step"]).pivot(
+        index="time_step", columns=["carrier", "weather_cell_id"], values="feedin"
+    )
+
+    # set time index
+    timeindex, timeindex_full = _timeindex_helper_func(
+        edisgo_object, timeindex, default_year=2011, allow_leap_year=False
+    )
+    feedin_df.index = timeindex_full
+
+    return feedin_df.loc[timeindex, :]
+
+
 def load_time_series_demandlib(config_data, timeindex):
     """
     Get normalized sectoral electricity load time series using the
@@ -190,40 +294,6 @@ def load_time_series_demandlib(config_data, timeindex):
     )
 
     return elec_demand.loc[timeindex]
-
-
-def feedin_egon_data(
-    weather_cell_ids: set, timeindex: pd.DatetimeIndex, engine: Engine
-):
-    saio.register_schema("supply", engine)
-
-    from saio.supply import egon_era5_renewable_feedin
-
-    with session_scope_egon_data(engine) as session:
-        query = (
-            session.query(
-                egon_era5_renewable_feedin.w_id.label("weather_cell_id"),
-                egon_era5_renewable_feedin.carrier,
-                egon_era5_renewable_feedin.feedin,
-            )
-            .filter(egon_era5_renewable_feedin.w_id.in_(weather_cell_ids))
-            .order_by(
-                egon_era5_renewable_feedin.w_id, egon_era5_renewable_feedin.carrier
-            )
-        )
-
-        feedin_df = pd.read_sql(sql=query.statement, con=query.session.bind)
-
-    # TODO: gibt es auch MS Netze mit offshore wind? vermutlich nicht
-    feedin_df.carrier = feedin_df.carrier.str.replace("pv", "solar").str.replace(
-        "_onshore", ""
-    )
-
-    feedin_df = feedin_df.set_index(["carrier", "weather_cell_id"])
-
-    data = [list(val)[: len(timeindex)] for val in feedin_df.feedin.tolist()]
-
-    return pd.DataFrame(data=data, index=feedin_df.index, columns=timeindex).T
 
 
 def cop_oedb(engine, weather_cell_ids, year=None):

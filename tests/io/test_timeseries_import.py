@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from pandas.testing import assert_index_equal
+
 from edisgo import EDisGo
 from edisgo.io import timeseries_import
 from edisgo.tools.config import Config
@@ -14,10 +16,55 @@ class TestTimeseriesImport:
     def setup_class(self):
         self.config = Config(config_path=None)
 
-    def test_feedin_oedb(self):
+    def test__timeindex_helper_func(self):
+        # test with timeindex=None and TimeSeries.timeindex not set
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        ind, ind_full = timeseries_import._timeindex_helper_func(edisgo, timeindex=None)
+        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
+        assert_index_equal(ind, timeindex)
+        assert_index_equal(ind_full, timeindex)
+
+        # test with timeindex=None and TimeSeries.timeindex set
+        edisgo_index = pd.date_range("1/1/2010", periods=5, freq="H")
+        edisgo.set_timeindex(edisgo_index)
+        ind, ind_full = timeseries_import._timeindex_helper_func(edisgo, timeindex=None)
+        timeindex = pd.date_range("1/1/2010", periods=8760, freq="H")
+        assert_index_equal(ind, edisgo_index)
+        assert_index_equal(ind_full, timeindex)
+
+        # test with given timeindex and leap year
+        given_index = pd.date_range("1/1/2012", periods=5, freq="H")
+        ind, ind_full = timeseries_import._timeindex_helper_func(
+            edisgo, timeindex=given_index
+        )
+        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
+        assert_index_equal(ind, timeindex)
+        assert_index_equal(ind_full, timeindex)
+
+        # test with given timeindex and leap year and allowing leap year
+        ind, ind_full = timeseries_import._timeindex_helper_func(
+            edisgo, timeindex=given_index, allow_leap_year=True
+        )
+        timeindex = pd.date_range("1/1/2012", periods=8760, freq="H")
+        assert_index_equal(ind, given_index)
+        assert_index_equal(ind_full, timeindex)
+
+        # test with given timeindex and no leap year
+        given_index = pd.date_range("1/1/2013", periods=5, freq="H")
+        ind, ind_full = timeseries_import._timeindex_helper_func(
+            edisgo,
+            timeindex=given_index,
+        )
+        timeindex = pd.date_range("1/1/2013", periods=8760, freq="H")
+        assert_index_equal(ind, given_index)
+        assert_index_equal(ind_full, timeindex)
+
+    def test_feedin_oedb_legacy(self):
         weather_cells = [1122074.0, 1122075.0]
         timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
-        feedin = timeseries_import.feedin_oedb(self.config, weather_cells, timeindex)
+        feedin = timeseries_import.feedin_oedb_legacy(
+            self.config, weather_cells, timeindex
+        )
         assert len(feedin["solar"][1122074]) == 8760
         assert len(feedin["solar"][1122075]) == 8760
         assert len(feedin["wind"][1122074]) == 8760
@@ -35,9 +82,21 @@ class TestTimeseriesImport:
         )
         timeindex = pd.date_range("1/1/2018", periods=8760, freq="H")
         with pytest.raises(ValueError, match=msg):
-            feedin = timeseries_import.feedin_oedb(
-                self.config, weather_cells, timeindex
-            )
+            timeseries_import.feedin_oedb_legacy(self.config, weather_cells, timeindex)
+
+    @pytest.mark.local
+    def test_feedin_oedb(self):
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        timeindex = pd.date_range("1/2/2018", periods=6, freq="H")
+        edisgo_object.set_timeindex(timeindex)
+        feedin_df = timeseries_import.feedin_oedb(
+            edisgo_object,
+            engine=pytest.engine,
+        )
+        assert feedin_df.shape == (6, 4)
+        assert_index_equal(feedin_df.index, timeindex)
 
     def test_import_load_timeseries(self):
         timeindex = pd.date_range("1/1/2018", periods=8760, freq="H")
