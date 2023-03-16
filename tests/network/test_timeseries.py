@@ -1262,9 +1262,9 @@ class TestTimeSeries:
         assert p_ts.shape == (2, len(fluctuating_gens))
         # fmt: off
         assert (
-            self.edisgo.timeseries.time_series_raw.
-            fluctuating_generators_active_power_by_technology.shape
-            == (2, 8)
+                self.edisgo.timeseries.time_series_raw.
+                fluctuating_generators_active_power_by_technology.shape
+                == (2, 8)
         )
         # fmt: on
 
@@ -1314,9 +1314,9 @@ class TestTimeSeries:
         assert p_ts.shape == (2, len(fluctuating_gens))
         # fmt: off
         assert (
-            self.edisgo.timeseries.time_series_raw.
-            fluctuating_generators_active_power_by_technology.shape
-            == (2, 10)
+                self.edisgo.timeseries.time_series_raw.
+                fluctuating_generators_active_power_by_technology.shape
+                == (2, 10)
         )
         # fmt: on
 
@@ -1359,9 +1359,9 @@ class TestTimeSeries:
         assert p_ts.shape == (2, len(fluctuating_gens))
         # fmt: off
         assert (
-            self.edisgo.timeseries.time_series_raw.
-            fluctuating_generators_active_power_by_technology.shape
-            == (2, 10)
+                self.edisgo.timeseries.time_series_raw.
+                fluctuating_generators_active_power_by_technology.shape
+                == (2, 10)
         )
         # fmt: on
 
@@ -1407,9 +1407,9 @@ class TestTimeSeries:
         assert p_ts.shape == (2, 22)
         # fmt: off
         assert (
-            self.edisgo.timeseries.time_series_raw.
-            fluctuating_generators_active_power_by_technology.shape
-            == (2, 2)
+                self.edisgo.timeseries.time_series_raw.
+                fluctuating_generators_active_power_by_technology.shape
+                == (2, 2)
         )
         # fmt: on
 
