@@ -47,21 +47,22 @@ def _timeindex_helper_func(
     return timeindex, timeindex_full
 
 
-def feedin_oedb_legacy(config_data, weather_cell_ids, timeindex):
+def feedin_oedb_legacy(edisgo_object, timeindex):
     """
     Import feed-in time series data for wind and solar power plants from the
     `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
 
     Parameters
     ----------
-    config_data : :class:`~.tools.config.Config`
-        Configuration data from config files, relevant for information of
-        which data base table to retrieve feed-in data from.
-    weather_cell_ids : list(int)
-        List of weather cell id's (integers) to obtain feed-in data for.
-    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-        Feed-in data is currently only provided for weather year 2011. If
-        timeindex contains a different year, the data is reindexed.
+    edisgo_obj : :class:`~.EDisGo`
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+        Specifies time steps for which to return feed-in data. Leap years can currently
+        not be handled. In case the given timeindex contains a leap year, the data will
+        be indexed using the default year 2011 and returned for the whole year.
+        If no timeindex is provided, the timeindex set in
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+        If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+        is indexed using the default year 2011 and returned for the whole year.
 
     Returns
     -------
@@ -72,67 +73,58 @@ def feedin_oedb_legacy(config_data, weather_cell_ids, timeindex):
 
     """
 
-    def _retrieve_timeseries_from_oedb(session, timeindex):
+    def _retrieve_timeseries_from_oedb(session):
         """Retrieve time series from oedb"""
-        # ToDo: add option to retrieve subset of time series instead of whole
-        #  year
-        # ToDo: find the reference power class for mvgrid/w_id and insert
-        #  instead of 4
-        feedin_sqla = (
-            session.query(orm_feedin.w_id, orm_feedin.source, orm_feedin.feedin)
-            .filter(orm_feedin.w_id.in_(weather_cell_ids))
-            .filter(orm_feedin.power_class.in_([0, 4]))
-            .filter(orm_feedin_version)
-            .filter(orm_feedin.weather_year.in_(timeindex.year.unique().values))
+        feedin_sqla = session.query(
+            orm_feedin.w_id.label("weather_cell_id"),
+            orm_feedin.source.label("carrier"),
+            orm_feedin.feedin,
+        ).filter(
+            orm_feedin.w_id.in_(weather_cell_ids),
+            orm_feedin.power_class.in_([0, 4]),
+            orm_feedin_version,
+            orm_feedin.weather_year == 2011,
+        )
+        return pd.read_sql_query(
+            feedin_sqla.statement,
+            session.bind,
         )
 
-        feedin = pd.read_sql_query(
-            feedin_sqla.statement, session.bind, index_col=["source", "w_id"]
-        )
-        return feedin
-
-    if config_data["data_source"]["oedb_data_source"] == "model_draft":
-        orm_feedin_name = config_data["model_draft"]["res_feedin_data"]
+    if edisgo_object.config["data_source"]["oedb_data_source"] == "model_draft":
+        orm_feedin_name = edisgo_object.config["model_draft"]["res_feedin_data"]
         orm_feedin = model_draft.__getattribute__(orm_feedin_name)
         orm_feedin_version = 1 == 1
     else:
-        orm_feedin_name = config_data["versioned"]["res_feedin_data"]
+        orm_feedin_name = edisgo_object.config["versioned"]["res_feedin_data"]
         orm_feedin = supply.__getattribute__(orm_feedin_name)
-        orm_feedin_version = orm_feedin.version == config_data["versioned"]["version"]
-
-    if timeindex is None:
-        timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
-
-    with session_scope() as session:
-        feedin = _retrieve_timeseries_from_oedb(session, timeindex)
-
-    if feedin.empty:
-        raise ValueError(
-            "The year you inserted could not be imported from "
-            "the oedb. So far only 2011 is provided. Please "
-            "check website for updates."
+        orm_feedin_version = (
+            orm_feedin.version == edisgo_object.config["versioned"]["version"]
         )
 
-    feedin.sort_index(axis=0, inplace=True)
+    weather_cell_ids = tools.get_weather_cells_intersecting_with_grid_district(
+        edisgo_object
+    )
 
-    recasted_feedin_dict = {}
-    for type_w_id in feedin.index:
-        recasted_feedin_dict[type_w_id] = feedin.loc[type_w_id, :].values[0]
+    with session_scope() as session:
+        feedin_df = _retrieve_timeseries_from_oedb(session)
 
-    # Todo: change when possibility for other years is given
-    conversion_timeindex = pd.date_range("1/1/2011", periods=8760, freq="H")
-    feedin = pd.DataFrame(recasted_feedin_dict, index=conversion_timeindex)
+    # rename wind_onshore to wind
+    feedin_df.carrier = feedin_df.carrier.str.replace("_onshore", "")
+    # add time step column
+    feedin_df["time_step"] = len(feedin_df) * [np.arange(0, 8760)]
+    # un-nest feedin and pivot so that time_step becomes index and carrier and
+    # weather_cell_id column names
+    feedin_df = feedin_df.explode(["feedin", "time_step"]).pivot(
+        index="time_step", columns=["carrier", "weather_cell_id"], values="feedin"
+    )
 
-    # rename 'wind_onshore' and 'wind_offshore' to 'wind'
-    new_level = [
-        _ if _ not in ["wind_onshore"] else "wind" for _ in feedin.columns.levels[0]
-    ]
-    feedin.columns = feedin.columns.set_levels(new_level, level=0)
+    # set time index
+    timeindex, timeindex_full = _timeindex_helper_func(
+        edisgo_object, timeindex, default_year=2011, allow_leap_year=False
+    )
+    feedin_df.index = timeindex_full
 
-    feedin.columns.rename("type", level=0, inplace=True)
-    feedin.columns.rename("weather_cell_id", level=1, inplace=True)
-
-    return feedin.loc[timeindex]
+    return feedin_df.loc[timeindex, :]
 
 
 def feedin_oedb(
@@ -212,23 +204,24 @@ def feedin_oedb(
     return feedin_df.loc[timeindex, :]
 
 
-def load_time_series_demandlib(config_data, timeindex):
+def load_time_series_demandlib(edisgo_obj, timeindex):
     """
     Get normalized sectoral electricity load time series using the
     `demandlib <https://github.com/oemof/demandlib/>`_.
 
     Resulting electricity load profiles hold time series of hourly conventional
     electricity demand for the sectors residential, cts, agricultural
-    and industrial. Time series are normalized to a consumption of 1 MWh per
-    year.
+    and industrial. Time series are normalized to a consumption of 1 MWh per year.
 
     Parameters
     ----------
-    config_data : :class:`~.tools.config.Config`
-        Configuration data from config files, relevant for industrial load
-        profiles.
+    edisgo_obj : :class:`~.EDisGo`
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-        Timesteps for which to generate load time series.
+        Specifies time steps for which to return feed-in data.
+        If no timeindex is provided, the timeindex set in
+        :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+        If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+        is indexed using the default year 2011 and returned for the whole year.
 
     Returns
     -------
@@ -239,6 +232,10 @@ def load_time_series_demandlib(config_data, timeindex):
         hold the sector type.
 
     """
+    timeindex, _ = _timeindex_helper_func(
+        edisgo_obj, timeindex, default_year=2011, allow_leap_year=True
+    )
+
     year = timeindex[0].year
 
     sectoral_consumption = {"h0": 1, "g0": 1, "i0": 1, "l0": 1}
@@ -259,23 +256,23 @@ def load_time_series_demandlib(config_data, timeindex):
     elec_demand["i0"] = ilp.simple_profile(
         sectoral_consumption["i0"],
         am=datetime.time(
-            config_data["demandlib"]["day_start"].hour,
-            config_data["demandlib"]["day_start"].minute,
+            edisgo_obj.config["demandlib"]["day_start"].hour,
+            edisgo_obj.config["demandlib"]["day_start"].minute,
             0,
         ),
         pm=datetime.time(
-            config_data["demandlib"]["day_end"].hour,
-            config_data["demandlib"]["day_end"].minute,
+            edisgo_obj.config["demandlib"]["day_end"].hour,
+            edisgo_obj.config["demandlib"]["day_end"].minute,
             0,
         ),
         profile_factors={
             "week": {
-                "day": config_data["demandlib"]["week_day"],
-                "night": config_data["demandlib"]["week_night"],
+                "day": edisgo_obj.config["demandlib"]["week_day"],
+                "night": edisgo_obj.config["demandlib"]["week_night"],
             },
             "weekend": {
-                "day": config_data["demandlib"]["weekend_day"],
-                "night": config_data["demandlib"]["weekend_night"],
+                "day": edisgo_obj.config["demandlib"]["weekend_day"],
+                "night": edisgo_obj.config["demandlib"]["weekend_night"],
             },
         },
     )
