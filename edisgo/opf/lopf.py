@@ -552,8 +552,9 @@ def setup_model(
             charging_starts=kwargs.get("charging_starts", {"hp": None, "tes": None}),
         )
 
-    if objective not in ["minimize_energy_level", "maximize_energy_level"]:
-        # if True:
+    # if objective not in ["minimize_energy_level", "maximize_energy_level"]:
+    # TODO Adhoc fix to try grid constraint in energy objectives
+    if True:
         logger.info("Setup model: Adding grid model.")
         model = add_grid_model_lopf(
             model=model,
