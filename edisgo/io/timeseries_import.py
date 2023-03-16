@@ -363,7 +363,8 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, year=None):
             hp_df.loc[:, ["building_id"]]
             .dropna()
             .reset_index()
-            .set_index("building_id")["index"]
+            .set_index("building_id")
+            .iloc[:, 0]
         )
         individual_heating_df.rename(columns=rename_series, inplace=True)
         # set index
@@ -382,7 +383,8 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, year=None):
             hp_df.loc[:, ["district_heating_id"]]
             .dropna()
             .reset_index()
-            .set_index("district_heating_id")["index"]
+            .set_index("district_heating_id")
+            .iloc[:, 0]
         )
         dh_profile_df.rename(columns=rename_series, inplace=True)
         # set index
