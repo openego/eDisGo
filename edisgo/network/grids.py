@@ -340,6 +340,67 @@ class Grid(ABC):
         """
         return self.loads_df.groupby(["sector"]).sum()["p_set"]
 
+    def assign_length_to_grid_station(self):
+        """
+        Assign the length from the bus to the grid station for the grid.
+        The length is written written as column 'length_to_grid_station' to
+        'edisgo.topology.buses_df'.
+        """
+        buses_df = self._edisgo_obj.topology.buses_df
+        graph = self.graph
+        station = self.station.index[0]
+
+        for bus in self.buses_df.index:
+            buses_df.at[bus, "length_to_grid_station"] = nx.shortest_path_length(
+                graph, source=station, target=bus, weight="length"
+            )
+
+    def assign_grid_feeder(self):
+        """
+        Assign the the nodes of the grid to the associated feeder. The names of the
+        Feeders are the names of the neighboring nodes of the grid station node.
+        The feeder name is written as column 'feeder' to 'edisgo.topology.buses_df'.
+        """
+        buses_df = self._edisgo_obj.topology.buses_df
+        graph = self.graph
+        station = self.station.index[0]
+
+        # get all buses in network and remove station to get separate subgraphs
+        graph_nodes = list(graph.nodes())
+        graph_nodes.remove(station)
+        subgraph = graph.subgraph(graph_nodes)
+
+        buses_df.at[station, "feeder"] = "station_node"
+        for neighbor in graph.neighbors(station):
+            # get all nodes in that feeder by doing a DFS in the disconnected
+            # subgraph starting from the node adjacent to the station `neighbor`
+            feeder_graph = nx.dfs_tree(subgraph, source=neighbor)
+            for node in feeder_graph.nodes():
+                buses_df.at[node, "feeder"] = neighbor
+
+    def get_feeder_stats(self):
+        """
+        Generate stats of the feeders for the grid: feeder_length
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with feeder name as index and feeder length as column 'length'.
+        """
+        self.assign_grid_feeder()
+        self.assign_length_to_grid_station()
+        buses_df = self.buses_df
+        feeders = (
+            buses_df.loc[
+                buses_df["feeder"] != "station_node",
+                ["feeder", "length_to_grid_station"],
+            ]
+            .groupby("feeder")
+            .max()
+            .rename(columns={"length_to_grid_station": "length"})
+        )
+        return feeders
+
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self.id)])
 
