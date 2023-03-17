@@ -378,7 +378,7 @@ class Grid(ABC):
             for node in feeder_graph.nodes():
                 buses_df.at[node, "feeder"] = neighbor
 
-    def get_feeder_stats(self):
+    def get_feeder_stats(self) -> pd.DataFrame:
         """
         Generate stats of the feeders for the grid: feeder_length
 
