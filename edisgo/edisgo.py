@@ -16,7 +16,10 @@ from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
 )
-from edisgo.flex_opt.reinforce_grid import reinforce_grid
+from edisgo.flex_opt.reinforce_grid import (
+    catch_convergence_reinforce_grid,
+    reinforce_grid,
+)
 from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
@@ -943,195 +946,82 @@ class EDisGo:
             LV grid id to specify the grid to check, if mode is "lv".
 
         """
-        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
+        if copy_grid:
+            edisgo_obj = copy.deepcopy(self)
+        else:
+            edisgo_obj = self
 
+        # Build reinforce run settings
+        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
             logger.debug(
                 "Running reinforcement in worst-case mode by differentiating between "
                 "MV and LV load and feed-in cases."
             )
-
-            if copy_grid:
-                edisgo_obj = copy.deepcopy(self)
-            else:
-                edisgo_obj = self
-
             timeindex_worst_cases = self.timeseries.timeindex_worst_cases
+            timesteps_mv = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("mv")
+                ]
+            )
+            timesteps_lv = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("lv")
+                ]
+            )
+            # Run everytime the analyze-method at the end, to get a power flow for all
+            # timesteps for reinforced components
+            run_analyze_at_the_end = True
+            if mode is None:
+                setting_list = [
+                    {"mode": "mv", "timesteps_pfa": timesteps_mv},
+                    {"mode": "lv", "timesteps_pfa": timesteps_lv},
+                ]
+            elif mode == "mv":
+                setting_list = [
+                    {"mode": "mv", "timesteps_pfa": timesteps_mv},
+                ]
+            elif mode == "mvlv":
+                setting_list = [{"mode": "mvlv", "timesteps_pfa": timesteps_mv}]
+            elif mode == "lv":
+                setting_list = [{"mode": "lv", "timesteps_pfa": timesteps_lv}]
 
-            if mode != "lv":
-
-                timesteps_pfa = pd.DatetimeIndex(
-                    timeindex_worst_cases.loc[
-                        timeindex_worst_cases.index.str.contains("mv")
-                    ]
-                )
-                reinforce_grid(
-                    edisgo_obj,
-                    max_while_iterations=max_while_iterations,
-                    copy_grid=False,
-                    timesteps_pfa=timesteps_pfa,
-                    combined_analysis=combined_analysis,
-                    mode="mv",
-                    without_generator_import=without_generator_import,
-                    **kwargs,
-                )
-
-            if mode != "mv":
-                timesteps_pfa = pd.DatetimeIndex(
-                    timeindex_worst_cases.loc[
-                        timeindex_worst_cases.index.str.contains("lv")
-                    ]
-                )
-                reinforce_mode = mode if mode == "mvlv" else "lv"
-                reinforce_grid(
-                    edisgo_obj,
-                    max_while_iterations=max_while_iterations,
-                    copy_grid=False,
-                    timesteps_pfa=timesteps_pfa,
-                    combined_analysis=combined_analysis,
-                    mode=reinforce_mode,
-                    without_generator_import=without_generator_import,
-                    **kwargs,
-                )
-
-            if mode not in ["mv", "lv"]:
-                edisgo_obj.analyze(mode=mode)
-            results = edisgo_obj.results
-
+            else:
+                raise ValueError(f"Mode {mode} does not exist.")
         else:
+            setting_list = [{"mode": mode, "timesteps_pfa": timesteps_pfa}]
+            run_analyze_at_the_end = False
+
+        for setting in setting_list:
             if not catch_convergence_problems:
-                results = reinforce_grid(
-                    self,
+                reinforce_grid(
+                    edisgo_obj,
                     max_while_iterations=max_while_iterations,
-                    copy_grid=copy_grid,
-                    timesteps_pfa=timesteps_pfa,
+                    copy_grid=False,
+                    timesteps_pfa=setting["timesteps_pfa"],
                     combined_analysis=combined_analysis,
-                    mode=mode,
+                    mode=setting["mode"],
                     without_generator_import=without_generator_import,
                     **kwargs,
                 )
             else:
-                # Initial try
-                try:
-                    logger.info("Initial reinforcement try.")
-                    results = reinforce_grid(
-                        self,
-                        max_while_iterations=max_while_iterations,
-                        copy_grid=copy_grid,
-                        timesteps_pfa=timesteps_pfa,
-                        combined_analysis=combined_analysis,
-                        mode=mode,
-                        without_generator_import=without_generator_import,
-                        **kwargs,
-                    )
-                    converged = True
-                    fully_converged = True
-                except ValueError:
-                    logger.info("Initial reinforcement doesn't converged.")
-                    converged = False
-                    fully_converged = False
+                catch_convergence_reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=setting["timesteps_pfa"],
+                    combined_analysis=combined_analysis,
+                    mode=setting["mode"],
+                    without_generator_import=without_generator_import,
+                    **kwargs,
+                )
+        if run_analyze_at_the_end:
+            edisgo_obj.analyze()
 
-                # traceback.print_exc()
-                set_scaling_factor = 1
-                initial_timerseries = copy.deepcopy(self.timeseries)
-                minimal_scaling_factor = 0.05
-                max_iterations = 10
-                iteration = 0
-                highest_converged_scaling_factor = 0
-
-                if not fully_converged:
-                    # Find non converging timesteps
-                    logger.info("Find converging and non converging timesteps.")
-                    converging_timesteps, non_converging_timesteps = self.analyze(
-                        timesteps=timesteps_pfa, raise_not_converged=False
-                    )
-                    logger.debug(
-                        f"Following timesteps {converging_timesteps} converged."
-                    )
-                    logger.debug(
-                        f"Following timesteps {non_converging_timesteps} "
-                        f"doesnt't converged."
-                    )
-
-                def reinforce():
-                    try:
-                        results = reinforce_grid(
-                            self,
-                            max_while_iterations=max_while_iterations,
-                            copy_grid=copy_grid,
-                            timesteps_pfa=selected_timesteps,
-                            combined_analysis=combined_analysis,
-                            mode=mode,
-                            without_generator_import=without_generator_import,
-                            **kwargs,
-                        )
-                        converged = True
-                        logger.info(
-                            f"Reinforcement succeeded for {set_scaling_factor=} "
-                            f"at {iteration=}"
-                        )
-                    except ValueError:
-                        results = self.results
-                        converged = False
-                        logger.info(
-                            f"Reinforcement failed for {set_scaling_factor=} "
-                            f"at {iteration=}"
-                        )
-                    return converged, results
-
-                if not converged:
-                    logger.info("Reinforce only converged timesteps")
-                    selected_timesteps = converging_timesteps
-                    _, _ = reinforce()
-
-                    logger.info("Reinforce only non converged timesteps")
-                    selected_timesteps = non_converging_timesteps
-                    converged, results = reinforce()
-
-                while iteration < max_iterations:
-                    iteration += 1
-                    if converged:
-                        if set_scaling_factor == 1:
-                            # Initial iteration (0) worked
-                            break
-                        else:
-                            highest_converged_scaling_factor = set_scaling_factor
-                            set_scaling_factor = 1
-                    else:
-                        if set_scaling_factor == minimal_scaling_factor:
-                            raise ValueError(
-                                f"Not reinforceable with {minimal_scaling_factor=}!"
-                            )
-                        elif iteration == 1:
-                            set_scaling_factor = minimal_scaling_factor
-                        else:
-                            set_scaling_factor = (
-                                (set_scaling_factor - highest_converged_scaling_factor)
-                                * 0.25
-                            ) + highest_converged_scaling_factor
-
-                    self.timeseries = copy.deepcopy(initial_timerseries)
-                    self.timeseries.scale_timeseries(
-                        p_scaling_factor=set_scaling_factor,
-                        q_scaling_factor=set_scaling_factor,
-                    )
-                    logger.info(
-                        f"Try reinforce with {set_scaling_factor=} at {iteration=}"
-                    )
-                    converged, results = reinforce()
-                    if converged is False and iteration == max_iterations:
-                        raise ValueError(
-                            f"Not reinforceable, max iterations ({max_iterations}) "
-                            f"reached!"
-                        )
-
-                self.timeseries = initial_timerseries
-                selected_timesteps = timesteps_pfa
-                converged, results = reinforce()
         # add measure to Results object
         if not copy_grid:
             self.results.measures = "grid_expansion"
 
-        return results
+        return edisgo_obj.results
 
     def perform_mp_opf(self, timesteps, storage_series=None, **kwargs):
         """
