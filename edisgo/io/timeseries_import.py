@@ -148,7 +148,7 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None):
     )
     feedin_df.index = timeindex_full
 
-    return feedin_df.loc[timeindex, :]
+    return feedin_df.loc[timeindex, :].astype("float")
 
 
 def feedin_oedb(
@@ -225,7 +225,7 @@ def feedin_oedb(
     )
     feedin_df.index = timeindex_full
 
-    return feedin_df.loc[timeindex, :]
+    return feedin_df.loc[timeindex, :].astype("float")
 
 
 def load_time_series_demandlib(edisgo_obj, timeindex=None):
@@ -929,7 +929,7 @@ def get_district_heating_heat_demand_profiles(district_heating_ids, scenario, en
     df["hour_of_year"] = df.groupby("area_id").cumcount() + 1
     df = df.pivot(index="hour_of_year", columns="area_id", values="dist_aggregated_mw")
 
-    return df
+    return df.astype("float")
 
 
 def get_cts_profiles_per_building(
@@ -1354,6 +1354,8 @@ def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
     profiles_df["time_step"] = len(profiles_df) * [np.arange(0, 8760)]
     # un-nest p_set and pivot so that time_step becomes index and site_id the
     # name of the columns
-    return profiles_df.explode(["p_set", "time_step"]).pivot(
-        index="time_step", columns="site_id", values="p_set"
+    return (
+        profiles_df.explode(["p_set", "time_step"])
+        .pivot(index="time_step", columns="site_id", values="p_set")
+        .astype("float")
     )
