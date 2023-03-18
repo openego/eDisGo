@@ -316,7 +316,7 @@ class Topology:
 
             subtype : str
                 Further specification of type, e.g. 'solar_roof_mounted'.
-                Currently not required for any functionality.
+                Currently, not required for any functionality.
 
         Returns
         --------
