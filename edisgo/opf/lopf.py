@@ -405,7 +405,9 @@ def setup_model(
             initial charging value of component (first timestep)
 
         energy_level_end_ev : (default: None)
-        energy_level_end_hp : (default: None)
+            relative energy level at beginning of iteration
+        energy_level_end_tes : (default: None)
+            relative energy level at beginning of iteration
         energy_level_beginning_ev : (default: None)
             wurde eingeführt um Differenz zu referenzladen zu beheben
             letzter Iterationsschritt auf mean energyband if True
@@ -547,7 +549,7 @@ def setup_model(
             fixed_parameters=fixed_parameters,
             # energy_level_start=kwargs.get("energy_level_start_hp", None),
             energy_level_starts=kwargs.get("energy_level_start", {"tes": None}),
-            energy_level_end=kwargs.get("energy_level_end_hp", None),
+            energy_level_end=kwargs.get("energy_level_end_tes", None),
             energy_level_beginning=kwargs.get("energy_level_beginning_hp", None),
             charging_starts=kwargs.get("charging_starts", {"hp": None, "tes": None}),
         )
