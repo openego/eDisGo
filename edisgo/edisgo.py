@@ -1439,7 +1439,7 @@ class EDisGo:
 
             else:
                 max_distance_from_target_bus = kwargs.pop(
-                    "max_distance_from_target_bus", 0.1
+                    "max_distance_from_target_bus", 0.02
                 )
                 comp_name = self.topology.connect_to_lv_based_on_geolocation(
                     self, kwargs, comp_type, max_distance_from_target_bus
