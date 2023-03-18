@@ -401,13 +401,13 @@ def setup_model(
 
         energy_level_starts : dict('ev':pd.Series, 'tes':pd.Series)
             initial energy level of component (first timestep)
-        charging_starts : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
+            Not really necessary anymore. As initial timestep starts with 50%
+        charging_starts : dict('ev':pd.Series, 'tes':pd.Series)
+            dict('ev':None, 'tes':None, 'hp':None)
             initial charging value of component (first timestep)
-
-        energy_level_end_ev : (default: None)
-            relative energy level at beginning of iteration
-        energy_level_end_tes : (default: None)
-            relative energy level at beginning of iteration
+        energy_level_ends : dict('ev': bool/pd.Series, 'tes':bool/pd.Series)
+            If True, final energy level is 50% capacity
+            (default: dict("ev": None, "tes": None)
         energy_level_beginning_ev : (default: None)
             wurde eingeführt um Differenz zu referenzladen zu beheben
             letzter Iterationsschritt auf mean energyband if True
@@ -534,9 +534,8 @@ def setup_model(
             charging_efficiency=fixed_parameters[
                 "edisgo_object"
             ].electromobility.eta_charging_points,
-            # energy_level_start=kwargs.get("energy_level_start_ev", None),
             energy_level_starts=kwargs.get("energy_level_start", {"ev": None}),
-            energy_level_end=kwargs.get("energy_level_end_ev", None),
+            energy_level_ends=kwargs.get("energy_level_ends", {"ev": None}),
             energy_level_beginning=kwargs.get("energy_level_beginning_ev", None),
             # charging_start=kwargs.get("charging_start_ev", None),
             charging_starts=kwargs.get("charging_starts", {"ev": None}),
@@ -547,9 +546,8 @@ def setup_model(
         model = add_heat_pump_model(
             model=model,
             fixed_parameters=fixed_parameters,
-            # energy_level_start=kwargs.get("energy_level_start_hp", None),
             energy_level_starts=kwargs.get("energy_level_start", {"tes": None}),
-            energy_level_end=kwargs.get("energy_level_end_tes", None),
+            energy_level_ends=kwargs.get("energy_level_ends", {"tes": None}),
             energy_level_beginning=kwargs.get("energy_level_beginning_hp", None),
             charging_starts=kwargs.get("charging_starts", {"hp": None, "tes": None}),
         )
@@ -865,20 +863,20 @@ def add_ev_model_bands(
     fixed_parameters,
     charging_efficiency,
     energy_level_starts={"ev": None},
-    energy_level_end=None,
+    energy_level_ends={"ev": None},
     energy_level_beginning=None,
     charging_starts={"ev": None},
 ):
     """
-    Method to add sets, variables and constraints for including EV flexibility in terms
-    of energy bands.
+    Method to add sets, variables and constraints for including EV flexibility
+    in terms of energy bands.
 
     Parameters
     ----------
     model :
     fixed_parameters :
     energy_level_starts : dict('ev':pd.Series)
-    energy_level_end :
+    energy_level_ends : dict('ev':bool/pd.Series)
     energy_level_beginning :
     charging_starts : dict('ev':pd.Series)
 
@@ -938,7 +936,7 @@ def add_ev_model_bands(
         comp_type="ev",
         charging_starts=charging_starts,
         energy_level_beginning=energy_level_beginning,
-        energy_level_end=energy_level_end,
+        energy_level_ends=energy_level_ends,
         energy_level_starts=energy_level_starts,
         model=model,
     )
@@ -950,7 +948,7 @@ def add_rolling_horizon(
     comp_type,
     charging_starts,
     energy_level_beginning,
-    energy_level_end,
+    energy_level_ends,
     energy_level_starts,
     model,
 ):
@@ -958,10 +956,10 @@ def add_rolling_horizon(
 
     Parameters
     ----------
-    comp_type : "ev" or "hp"
+    comp_type : "ev", "hp"
     charging_starts : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
     energy_level_beginning :
-    energy_level_end :
+    energy_level_ends : dict('ev':bool/pd.Series, 'tes':bool/pd.Series)
     energy_level_starts : dict('ev':pd.Series, 'tes':pd.Series)
     model :
 
@@ -1010,7 +1008,7 @@ def add_rolling_horizon(
             f"energy_level_end_{energy_attr}",
             pm.Param(
                 flex_set,
-                initialize=energy_level_end,
+                initialize=energy_level_ends[energy_attr],
                 mutable=True,
                 within=pm.Any,
             ),
@@ -1045,13 +1043,14 @@ def add_rolling_horizon(
                 rule=globals()[f"final_energy_level_{energy_attr}"],
             ),
         )
-        if energy_level_end is None:
+        if energy_level_ends[energy_attr] is None:
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
             getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
+            # TODO Check with Anya what is level fix und level end
         else:
-            if comp_type(energy_level_end) != bool:
+            if energy_level_ends[energy_attr] != bool:
                 getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
-            elif comp_type(energy_level_end) == bool:
+            elif energy_level_ends[energy_attr] == bool:
                 getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
 
         # If grid power is maximised, deactivate all final energy constraints
@@ -1121,7 +1120,7 @@ def add_heat_pump_model(
     model,
     fixed_parameters,
     energy_level_starts={"tes": None},
-    energy_level_end=None,
+    energy_level_ends={"tes": None},
     energy_level_beginning=None,
     charging_starts={"hp": None, "tes": None},
 ):
@@ -1132,7 +1131,7 @@ def add_heat_pump_model(
     model :
     fixed_parameters :
     energy_level_starts : dict('ev':pd.Series, 'tes':pd.Series)
-    energy_level_end :
+    energy_level_ends : dict('ev':bool/pd.Series, 'tes':floatbool/pd.Series
     energy_level_beginning :
     charging_starts : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
 
@@ -1170,8 +1169,7 @@ def add_heat_pump_model(
         else:
             energy_level_pre = model.energy_level_tes[hp, time - 1]
         return model.energy_level_tes[hp, time] == (
-            1 - 0.04 * pd.to_timedelta(model.time_increment) /
-            pd.to_timedelta("24h")
+            1 - 0.04 * pd.to_timedelta(model.time_increment) / pd.to_timedelta("24h")
         ) * energy_level_pre + model.charging_tes[hp, time] * (
             pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h")
         )
@@ -1230,7 +1228,7 @@ def add_heat_pump_model(
         comp_type="hp",
         charging_starts=charging_starts,
         energy_level_beginning=energy_level_beginning,
-        energy_level_end=energy_level_end,
+        energy_level_ends=energy_level_ends,
         energy_level_starts=energy_level_starts,
         model=model,
     )
@@ -1254,8 +1252,8 @@ def update_model(
     fixed_parameters :
     kwargs :
         energy_level_beginning : default None
-        energy_level_end_tes : default None
-        energy_level_end_ev : default None
+        energy_level_ends : dict('ev':bool/pd.Series, 'tes':floatbool/pd.Series
+            default dict('ev': None, 'tes': None)
 
         charging_starts : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
             starting value after 1st Iteration, dynamic
@@ -1268,7 +1266,8 @@ def update_model(
     """
     logger.info("Updating model")
     t1 = time.perf_counter()
-    # TODO Warum iteration über jeden Zeitschritt?
+
+    # Update every timestep
     for i in model.time_set:
         overlap = i - len(timesteps) + 1
         if overlap > 0:
@@ -1358,13 +1357,13 @@ def update_rolling_horizon(comp_type, model, **kwargs):
 
     Parameters
     ----------
-    comp_type :
+    comp_type : "hp, "ev"
     model :
     kwargs :
         energy_level_beginning : default None
         energy_level_end_tes : default None
         energy_level_end_ev : default None
-
+        energy_level_ends : dict('ev':bool/pd.Series, 'tes':bool/pd.Series
         charging_starts : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
         energy_level_starts : dict('ev':pd.Series, 'tes':pd.Series)
     Returns
@@ -1401,17 +1400,20 @@ def update_rolling_horizon(comp_type, model, **kwargs):
                 )
 
         # set final energy level and if necessary charging power
-        energy_level_end = kwargs.get(f"energy_level_end_{energy_attr}", None)
-        if energy_level_end is None:
+        energy_level_ends = kwargs.get(f"energy_level_ends", {"ev": None, "tes": None})
+
+        if energy_level_ends[energy_attr] is None:
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
             getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
-        elif energy_level_end is True:
+        # Fix to 50% of capacity if True
+        elif energy_level_ends[energy_attr] is True:
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").activate()
             getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
+        # set specific value per component, pd.Series needed
         else:
             for comp in flex_set:
                 getattr(model, f"energy_level_end_{energy_attr}")[comp].set_value(
-                    energy_level_end[comp]
+                    energy_level_ends[energy_attr][comp]
                 )
             getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").activate()
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
