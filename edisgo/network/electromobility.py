@@ -80,8 +80,7 @@ class Electromobility:
     @property
     def charging_processes_df(self):
         """
-        DataFrame with all `SimBEV <https://github.com/rl-institut/simbev>`_
-        charging processes.
+        DataFrame with all charging processes.
 
         Returns
         -------
@@ -143,8 +142,7 @@ class Electromobility:
     @property
     def potential_charging_parks_gdf(self):
         """
-        GeoDataFrame with all `TracBEV <https://github.com/rl-institut/tracbev>`_
-        potential charging parks.
+        GeoDataFrame with all potential charging parks.
 
         Returns
         -------
@@ -192,7 +190,7 @@ class Electromobility:
     @property
     def simbev_config_df(self):
         """
-        Dict with all `SimBEV <https://github.com/rl-institut/simbev>`_ config data.
+        Dictionary containing configuration data.
 
         Returns
         -------
