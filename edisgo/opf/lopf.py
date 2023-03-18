@@ -1257,7 +1257,7 @@ def update_model(
         energy_level_end_tes : default None
         energy_level_end_ev : default None
 
-        charging_start : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
+        charging_starts : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
             starting value after 1st Iteration, dynamic
         energy_level_starts : dict('ev':pd.Series, 'tes':pd.Series)
             starting value after 1st Iteration, dynamic
@@ -1365,8 +1365,8 @@ def update_rolling_horizon(comp_type, model, **kwargs):
         energy_level_end_tes : default None
         energy_level_end_ev : default None
 
-        charging_start : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
-        energy_level_start : dict('ev':pd.Series, 'tes':pd.Series)
+        charging_starts : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
+        energy_level_starts : dict('ev':pd.Series, 'tes':pd.Series)
     Returns
     -------
 
