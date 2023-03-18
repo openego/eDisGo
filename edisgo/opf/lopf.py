@@ -1148,7 +1148,8 @@ def add_heat_pump_model(
     def charging_tes(model, hp, time):
         """
         Charging balance with tes standing losses of 5% per day
-
+        https://irees.de/wp-content/uploads/2021/02/EDUARD_Latentwaermespeicher_Final_IREES.pdf
+        page 9
         Parameters
         ----------
         model :
@@ -1167,7 +1168,8 @@ def add_heat_pump_model(
         else:
             energy_level_pre = model.energy_level_tes[hp, time - 1]
         return model.energy_level_tes[hp, time] == (
-            1 - 0.05 * pd.to_timedelta(model.time_increment) / pd.to_timedelta("24h")
+            1 - 0.04 * pd.to_timedelta(model.time_increment) /
+            pd.to_timedelta("24h")
         ) * energy_level_pre + model.charging_tes[hp, time] * (
             pd.to_timedelta(model.time_increment) / pd.to_timedelta("1h")
         )
