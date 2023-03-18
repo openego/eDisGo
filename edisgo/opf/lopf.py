@@ -1365,7 +1365,8 @@ def update_rolling_horizon(comp_type, model, **kwargs):
         energy_level_end_ev : default None
         energy_level_ends : dict('ev':bool/pd.Series, 'tes':bool/pd.Series
         charging_starts : dict('ev':pd.Series, 'tes':pd.Series, 'hp':pd.Series)
-        energy_level_starts : dict('ev':pd.Series, 'tes':pd.Series)
+        energy_level_starts : dict('ev':float/pd.Series, 'tes':float/pd.Series)
+            if float, relative value of capacity is taken as start value
     Returns
     -------
 
@@ -1382,6 +1383,29 @@ def update_rolling_horizon(comp_type, model, **kwargs):
         # otherwise activate initial energy and charging
         if energy_level_starts[energy_attr] is None:
             getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").deactivate()
+        # Set for all same value
+        elif type(energy_level_starts[energy_attr]) is float:
+            for comp in flex_set:
+
+                if energy_attr == "ev":
+
+                    start_value = energy_level_starts[energy_attr] * (
+                        model.lower_ev_energy[comp].loc[
+                            model.timeindex.extract_values()[0]
+                        ]
+                        + model.upper_ev_energy[comp].loc[
+                            model.timeindex.extract_values()[0]
+                        ]
+                    )
+                elif energy_attr == "tes":
+                    start_value = (
+                        energy_level_starts[energy_attr] * model.tes["capacity"][comp]
+                    )
+                for comp in flex_set:
+                    getattr(model, f"energy_level_start_{energy_attr}")[comp].set_value(
+                        start_value
+                    )
+            getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").activate()
         else:
             for comp in flex_set:
                 getattr(model, f"energy_level_start_{energy_attr}")[comp].set_value(
