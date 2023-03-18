@@ -13,14 +13,13 @@ import saio
 from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
-from edisgo.io.db import (
-    get_srid_of_db_table,
-    session_scope_egon_data,
-    sql_grid_geom,
-    sql_within,
-)
+from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
 from edisgo.tools import session_scope
-from edisgo.tools.geo import find_nearest_bus, mv_grid_gdf, proj2equidistant
+from edisgo.tools.geo import find_nearest_bus, proj2equidistant
+from edisgo.tools.tools import (
+    determine_bus_voltage_level,
+    determine_grid_integration_voltage_level,
+)
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -35,16 +34,31 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def oedb(edisgo_object, generator_scenario, **kwargs):
+def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     """
-    Gets generator park for specified scenario from oedb and integrates them
-    into the grid.
+    Gets generator park for specified scenario from oedb and integrates generators into
+    the grid.
 
-    The importer uses SQLAlchemy ORM objects.
-    These are defined in
+    The importer uses SQLAlchemy ORM objects. These are defined in
     `ego.io <https://github.com/openego/ego.io/tree/dev/egoio/db_tables/>`_.
+    The data is imported from the tables
+    `conventional power plants <https://openenergy-platform.org/dataedit/\
+    view/supply/ego_dp_conv_powerplant>`_ and
+    `renewable power plants <https://openenergy-platform.org/dataedit/\
+    view/supply/ego_dp_res_powerplant>`_.
 
-    For further information see also :attr:`~.EDisGo.import_generators`.
+    When the generator data is retrieved, the following steps are conducted:
+
+        * Step 1: Update capacity of existing generators if `update_existing` is True,
+          which it is by default.
+        * Step 2: Remove decommissioned generators if
+          `remove_decommissioned` is True, which it is by default.
+        * Step 3: Integrate new MV generators.
+        * Step 4: Integrate new LV generators.
+
+    For more information on how generators are integrated, see
+    :attr:`~.network.topology.Topology.connect_to_mv` and
+    :attr:`~.network.topology.Topology.connect_to_lv`.
 
     Parameters
     ----------
@@ -71,8 +85,8 @@ def oedb(edisgo_object, generator_scenario, **kwargs):
         technology types (e.g. 'wind' or 'solar') as keys and corresponding
         target capacities in MW as values.
         If a target capacity is given that is smaller than the total capacity
-        of all generators of that type in the future scenario, only some of
-        the generators in the future scenario generator park are installed,
+        of all generators of that type in the future scenario, only some
+        generators in the future scenario generator park are installed,
         until the target capacity is reached.
         If the given target capacity is greater than that of all generators
         of that type in the future scenario, then each generator capacity is
@@ -750,254 +764,672 @@ def _update_grids(
             )
 
 
-def generators_from_database(
+def oedb(
     edisgo_object: EDisGo,
+    scenario: str,
     engine: Engine,
-    scenario: str = "eGon2035",
-    remove_existing: bool = True,
 ):
     """
-    TODO
-    :return:
+    Gets generator park for specified scenario from oedb and integrates generators into
+    the grid.
+
+    The data is imported from the tables supply.egon_chp_plants,
+    supply.egon_power_plants and supply.egon_power_plants_pv_roof_building.
+
+    For the grid integration it is distinguished between PV rooftop plants and all
+    other power plants.
+    For PV rooftop the following steps are conducted:
+
+    * Removes decommissioned PV rooftop plants (plants whose building ID is not
+      in pv_rooftop_df.building_id).
+    * Updates existing PV rooftop plants (plants whose building ID is in
+      pv_rooftop_df.building_id). The following two cases are distinguished:
+
+      * p_nom increases: It is checked, if plant needs to be connected to a higher
+        voltage level and if that is the case, the existing plant is removed from the
+        grid and the new one integrated based on the geolocation.
+      * p_nom decreases: p_nom of existing plant is overwritten.
+    * Integrates new PV rooftop plants at corresponding building ID. If the plant needs
+      to be connected to a higher voltage level than the building, it is integrated
+      based on the geolocation.
+
+    For all other power plants the following steps are conducted:
+
+    * Removes decommissioned power and CHP plants (all plants that do not have a source
+      ID or whose source ID can not be matched to a new plant and are not of subtype
+      pv_rooftop, as these are handled in a separate function)
+    * Updates existing power plants (plants whose source ID is in
+      power_plants_gdf.source_id; solar, wind and CHP plants never have a source ID in
+      the future scenarios and are therefore never updated). The following two cases
+      are distinguished:
+
+      * p_nom increases: It is checked, if plant needs to be connected to a higher
+        voltage level and if that is the case, the existing plant is removed from the
+        grid and the new one integrated based on the geolocation.
+      * p_nom decreases: p_nom of existing plant is overwritten.
+    * Integrates new power and CHP plants based on the geolocation.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    scenario : str
+        Scenario for which to retrieve generator data. Possible options
+        are "eGon2035" and "eGon100RE".
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
     """
-    data = get_generators_from_database(
-        edisgo_object=edisgo_object, engine=engine, scenario=scenario
-    )
 
-    data = preprocess_data(data=data)
-
-    if remove_existing:
-        remove_existing_gens(edisgo_object=edisgo_object)
-
-    add_generators(edisgo_object=edisgo_object, data=data)
-
-
-def remove_existing_gens(edisgo_object: EDisGo) -> None:
-    # TODO: check if gens already exists in status quo / previous scenario
-    generators_df = edisgo_object.topology.generators_df.copy()
-
-    for name in generators_df.index:
-        edisgo_object.remove_component(comp_type="generator", comp_name=name)
-
-
-def add_generators(edisgo_object: EDisGo, data: dict[str, gpd.GeoDataFrame]) -> None:
-    cols_to_iterate = [
-        "id",
-        "type",
-        "p_nom",
-        "voltage_level",
-        "geom",
-        "subtype",
-        "weather_cell_id",
-        "building_id",
-    ]
-    # TODO: integration of LV generators needs to be changed to previously determine the
-    #  closest MV-LV station
-    # TODO: change to add pv rooftop to specific buildings as soon as building id is
-    #  given
-
-    for gdf in data.values():
-        for (
-            index,
-            gen_type,
-            p_nom,
-            voltage_level,
-            geom,
-            subtype,
-            weather_cell_id,
-            building_id,
-        ) in gdf[cols_to_iterate].itertuples(index=False):
-            index = f"egon_{subtype}_{index}"
-
-            edisgo_object.integrate_component_based_on_geolocation(
-                comp_type="generator",
-                generator_id=index,
-                geolocation=geom,
-                voltage_level=voltage_level,
-                add_ts=False,
-                p_nom=p_nom,
-                generator_type=gen_type,
-                subtype=subtype,
-                weather_cell_id=weather_cell_id,
-                building_id=building_id,
+    def _get_egon_power_plants():
+        with session_scope_egon_data(engine) as session:
+            srid_table = get_srid_of_db_table(session, egon_power_plants.geom)
+            query = (
+                session.query(
+                    egon_power_plants.id.label("generator_id"),
+                    egon_power_plants.source_id,
+                    egon_power_plants.carrier.label("type"),
+                    egon_power_plants.el_capacity.label("p_nom"),
+                    egon_power_plants.voltage_level,
+                    egon_power_plants.weather_cell_id,
+                    egon_power_plants.geom,
+                )
+                .filter(
+                    egon_power_plants.scenario == scenario,
+                    egon_power_plants.voltage_level >= 4,
+                    egon_power_plants.bus_id == edisgo_object.topology.id,
+                )
+                .order_by(egon_power_plants.id)
             )
-
-
-def preprocess_data(data: dict[str, gpd.GeoDataFrame]) -> dict[str, gpd.GeoDataFrame]:
-    # 1. firm
-    rename = {
-        "el_capacity": "p_nom",
-        "carrier": "type",
-    }
-
-    data["firm_gdf"] = (
-        data["firm_gdf"]
-        .assign(
-            subtype=data["firm_gdf"]["carrier"],
-            weather_cell_id=np.nan,
-            building_id=np.nan,
+            power_plants_gdf = gpd.read_postgis(
+                sql=query.statement, con=engine, crs=f"EPSG:{srid_table}"
+            ).to_crs(srid_edisgo)
+        # rename wind_onshore to wind
+        power_plants_gdf["type"] = power_plants_gdf["type"].str.replace("_onshore", "")
+        # set subtype
+        mapping = {
+            "wind": "wind_onshore",
+            "solar": "solar_ground_mounted",
+        }
+        power_plants_gdf = power_plants_gdf.assign(
+            subtype=power_plants_gdf["type"].map(mapping)
         )
-        .rename(columns=rename, errors="raise")
-    )
-
-    # 2. fluc
-    mapping = {"wind_onshore": "wind", "solar": "solar"}
-
-    data["fluc_gdf"] = (
-        data["fluc_gdf"]
-        .assign(carrier=data["fluc_gdf"].carrier.map(mapping), building_id=np.nan)
-        .rename(columns=rename, errors="raise")
-    )
-
-    mapping = {
-        "wind": "wind_onshore",
-        "solar": "solar_ground_mounted",
-    }
-
-    data["fluc_gdf"] = data["fluc_gdf"].assign(
-        subtype=data["fluc_gdf"]["type"].map(mapping)
-    )
-
-    # 3. chp
-    data["chp_gdf"] = (
-        data["chp_gdf"]
-        .assign(
-            subtype=data["chp_gdf"].carrier, weather_cell_id=np.nan, building_id=np.nan
+        # unwrap source ID
+        power_plants_gdf["source_id"] = power_plants_gdf.apply(
+            lambda _: (
+                list(_["source_id"].values())[0]
+                if isinstance(_["source_id"], dict)
+                else None
+            ),
+            axis=1,
         )
-        .rename(columns=rename, errors="raise")
-    )
+        return power_plants_gdf
 
-    # 4. pv rooftop
-    rename = {"capacity": "p_nom", "index": "id"}
-
-    data["pv_roof_gdf"] = (
-        data["pv_roof_gdf"]
-        .assign(
+    def _get_egon_pv_rooftop():
+        # egon_power_plants_pv_roof_building - queried using building IDs instead of
+        # grid ID because it can happen that buildings lie outside an MV grid but within
+        # a zensus cell that is assigned to that MV grid and are therefore sometimes
+        # mapped to the MV grid they lie within and sometimes to the MV grid the zensus
+        # cell is mapped to
+        building_ids = edisgo_object.topology.loads_df.building_id.unique()
+        with session_scope_egon_data(engine) as session:
+            query = (
+                session.query(
+                    egon_power_plants_pv_roof_building.index.label("generator_id"),
+                    egon_power_plants_pv_roof_building.building_id,
+                    egon_power_plants_pv_roof_building.gens_id.label("source_id"),
+                    egon_power_plants_pv_roof_building.capacity.label("p_nom"),
+                    egon_power_plants_pv_roof_building.voltage_level,
+                    egon_power_plants_pv_roof_building.weather_cell_id,
+                )
+                .filter(
+                    egon_power_plants_pv_roof_building.scenario == scenario,
+                    egon_power_plants_pv_roof_building.building_id.in_(building_ids),
+                    egon_power_plants_pv_roof_building.voltage_level >= 4,
+                )
+                .order_by(egon_power_plants_pv_roof_building.index)
+            )
+            pv_roof_df = pd.read_sql(sql=query.statement, con=engine)
+        # add type and subtype
+        pv_roof_df = pv_roof_df.assign(
             type="solar",
-            subtype="solar_roof_mounted",
+            subtype="pv_rooftop",
         )
-        .rename(columns=rename, errors="raise")
-    )
+        return pv_roof_df
 
-    return data
+    def _get_egon_chp_plants():
+        with session_scope_egon_data(engine) as session:
+            srid_table = get_srid_of_db_table(session, egon_chp_plants.geom)
+            query = (
+                session.query(
+                    egon_chp_plants.id.label("generator_id"),
+                    egon_chp_plants.carrier.label("type"),
+                    egon_chp_plants.district_heating_area_id.label(
+                        "district_heating_id"
+                    ),
+                    egon_chp_plants.el_capacity.label("p_nom"),
+                    egon_chp_plants.th_capacity.label("p_nom_th"),
+                    egon_chp_plants.geom,
+                    egon_chp_plants.voltage_level,
+                )
+                .filter(
+                    egon_chp_plants.scenario == scenario,
+                    egon_chp_plants.voltage_level >= 4,
+                    egon_chp_plants.electrical_bus_id == edisgo_object.topology.id,
+                )
+                .order_by(egon_chp_plants.id)
+            )
+            chp_gdf = gpd.read_postgis(
+                sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid_table}"
+            ).to_crs(srid_edisgo)
+        return chp_gdf
 
-
-def get_generators_from_database(
-    edisgo_object: EDisGo, engine: Engine, scenario: str = "eGon2035"
-) -> dict[str, gpd.GeoDataFrame]:
     saio.register_schema("supply", engine)
-    saio.register_schema("openstreetmap", engine)
-
-    from saio.openstreetmap import osm_buildings_filtered
     from saio.supply import (
         egon_chp_plants,
         egon_power_plants,
         egon_power_plants_pv_roof_building,
     )
 
-    fluctuating = ["wind_onshore", "solar"]
-    firm = ["others", "gas", "oil", "biomass", "run_of_river", "reservoir"]
+    # get generator data from database
+    srid_edisgo = edisgo_object.topology.grid_district["srid"]
+    pv_rooftop_df = _get_egon_pv_rooftop()
+    power_plants_gdf = _get_egon_power_plants()
+    chp_gdf = _get_egon_chp_plants()
 
-    sql_geom = sql_grid_geom(edisgo_object)
-    crs = mv_grid_gdf(edisgo_object).crs
+    # determine number of generators and installed capacity in future scenario
+    # for validation of grid integration
+    total_p_nom_scenario = (
+        pv_rooftop_df.p_nom.sum() + power_plants_gdf.p_nom.sum() + chp_gdf.p_nom.sum()
+    )
+    total_gen_count_scenario = len(pv_rooftop_df) + len(power_plants_gdf) + len(chp_gdf)
 
-    data = dict()
+    # integrate into grid (including removal of decommissioned plants and update of
+    # still existing power plants)
+    _integrate_pv_rooftop(edisgo_object, pv_rooftop_df)
+    _integrate_power_and_chp_plants(edisgo_object, power_plants_gdf, chp_gdf)
 
-    # 1. firm egon_power_plants
-    with session_scope_egon_data(engine) as session:
-        srid = get_srid_of_db_table(session, egon_power_plants.geom)
+    # check number of generators and installed capacity in grid
+    gens_in_grid = edisgo_object.topology.generators_df
+    if not len(gens_in_grid) == total_gen_count_scenario:
+        raise ValueError(
+            f"Number of power plants in future scenario is not correct. Should be "
+            f"{total_gen_count_scenario} instead of {len(gens_in_grid)}."
+        )
+    if not np.isclose(gens_in_grid.p_nom.sum(), total_p_nom_scenario, atol=1e-4):
+        raise ValueError(
+            f"Capacity of power plants in future scenario not correct. Should be "
+            f"{total_p_nom_scenario} instead of "
+            f"{gens_in_grid.p_nom.sum()}."
+        )
 
-        query = (
-            session.query(egon_power_plants)
-            .filter(
-                egon_power_plants.scenario == scenario,
-                egon_power_plants.carrier.in_(firm),
-                egon_power_plants.voltage_level >= 4,
-                sql_within(egon_power_plants.geom, sql_geom, srid),
+    return
+
+
+def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
+    """
+    This function updates generator park for PV rooftop plants.
+    See function :func:`~.io.generators_import.oedb` for more information.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    pv_rooftop_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing data on PV rooftop plants per building.
+        Columns are:
+
+            * p_nom : float
+                Nominal power in MW.
+            * building_id : int
+                Building ID of the building the PV plant is allocated.
+            * generator_id : int
+                ID of the PV plant from database.
+            * type : str
+                Generator type, which here is always "solar".
+            * subtype
+                Further specification of generator type, which here is always
+                "pv_rooftop".
+            * weather_cell_id : int
+                Weather cell the PV plant is in used to obtain the potential feed-in
+                time series.
+            * voltage_level : int
+                Voltage level the PV plant is connected to.
+            * source_id : int
+                MaStR ID of the PV plant.
+
+    """
+    # ToDo PV rooftop plants should be matched using the source ID instead of building
+    #  ID
+    # match building ID to existing solar generators
+    loads_df = edisgo_object.topology.loads_df
+    busses_building_id = (
+        loads_df[loads_df.type == "conventional_load"]
+        .drop_duplicates(subset=["building_id"])
+        .set_index("bus")
+        .loc[:, ["building_id"]]
+    )
+    gens_df = edisgo_object.topology.generators_df[
+        edisgo_object.topology.generators_df.subtype == "pv_rooftop"
+    ].copy()
+    gens_df_building_id = gens_df.loc[:, ["bus"]].join(
+        busses_building_id, how="left", on="bus"
+    )
+    # using update to make sure to not overwrite existing building ID information
+    if "building_id" not in gens_df.columns:
+        gens_df["building_id"] = None
+    gens_df.update(gens_df_building_id, overwrite=False)
+
+    # remove decommissioned PV rooftop plants
+    gens_decommissioned = gens_df[
+        ~gens_df.building_id.isin(pv_rooftop_df.building_id.unique())
+    ]
+    for gen in gens_decommissioned.index:
+        edisgo_object.remove_component(comp_type="generator", comp_name=gen)
+
+    # update existing PV rooftop plants
+    gens_existing = gens_df[
+        gens_df.building_id.isin(pv_rooftop_df.building_id.unique())
+    ]
+    # merge new information
+    gens_existing.index.name = "gen_name"
+    pv_rooftop_df.index.name = "gen_index_new"
+    gens_existing = pd.merge(
+        gens_existing.reset_index(),
+        pv_rooftop_df.reset_index(),
+        how="left",
+        on="building_id",
+        suffixes=("_old", ""),
+    ).set_index("gen_name")
+    # add building id
+    edisgo_object.topology.generators_df.loc[
+        gens_existing.index, "building_id"
+    ] = gens_existing.building_id
+    # update plants where capacity decreased
+    gens_decreased_cap = gens_existing.query("p_nom < p_nom_old")
+    if len(gens_decreased_cap) > 0:
+        edisgo_object.topology.generators_df.loc[
+            gens_decreased_cap.index, "p_nom"
+        ] = gens_decreased_cap.p_nom
+    # update plants where capacity increased
+    gens_increased_cap = gens_existing.query("p_nom > p_nom_old")
+    for gen in gens_increased_cap.index:
+        voltage_level_new = determine_grid_integration_voltage_level(
+            edisgo_object, gens_increased_cap.at[gen, "p_nom"]
+        )
+        voltage_level_old = determine_bus_voltage_level(
+            edisgo_object, gens_increased_cap.at[gen, "bus"]
+        )
+        if voltage_level_new >= voltage_level_old:
+            # simply update p_nom if plant doesn't need to be connected to higher
+            # voltage level
+            edisgo_object.topology.generators_df.at[
+                gen, "p_nom"
+            ] = gens_increased_cap.at[gen, "p_nom"]
+        else:
+            # if plant needs to be connected to higher voltage level, remove existing
+            # plant and integrate new component based on geolocation
+            bus = gens_increased_cap.at[gen, "bus"]
+            x_coord = edisgo_object.topology.buses_df.at[bus, "x"]
+            y_coord = edisgo_object.topology.buses_df.at[bus, "y"]
+            edisgo_object.remove_component(comp_type="generator", comp_name=gen)
+            edisgo_object.integrate_component_based_on_geolocation(
+                comp_type="generator",
+                voltage_level=voltage_level_new,
+                geolocation=(
+                    x_coord,
+                    y_coord,
+                ),
+                add_ts=False,
+                generator_id=gens_increased_cap.at[gen, "generator_id"],
+                p_nom=gens_increased_cap.at[gen, "p_nom"],
+                building_id=gens_increased_cap.at[gen, "building_id"],
+                generator_type=gens_increased_cap.at[gen, "type"],
+                subtype=gens_increased_cap.at[gen, "subtype"],
+                weather_cell_id=gens_increased_cap.at[gen, "weather_cell_id"],
             )
-            .order_by(egon_power_plants.id)
+
+    # integrate new PV rooftop plants into grid
+    new_pv_rooftop_plants = pv_rooftop_df[
+        ~pv_rooftop_df.index.isin(gens_existing.gen_index_new)
+    ]
+    if len(new_pv_rooftop_plants) > 0:
+        _integrate_new_pv_rooftop_to_buildings(edisgo_object, new_pv_rooftop_plants)
+
+    # check number of PV rooftop plants in grid
+    pv_rooftop_gens_in_grid = edisgo_object.topology.generators_df[
+        edisgo_object.topology.generators_df.subtype == "pv_rooftop"
+    ]
+    if not len(pv_rooftop_gens_in_grid) == len(pv_rooftop_df):
+        raise ValueError(
+            f"Number of PV rooftop plants in future scenario is not correct. Should be "
+            f"{len(pv_rooftop_df)} instead of {len(pv_rooftop_gens_in_grid)}."
+        )
+    if not np.isclose(
+        pv_rooftop_gens_in_grid.p_nom.sum(), pv_rooftop_df.p_nom.sum(), atol=1e-4
+    ):
+        raise ValueError(
+            f"Capacity of PV rooftop plants in future scenario is not correct. Should "
+            f"be {pv_rooftop_df.p_nom.sum()} instead of "
+            f"{pv_rooftop_gens_in_grid.p_nom.sum()}."
         )
 
-        data["firm_gdf"] = gpd.read_postgis(
-            sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
-        ).to_crs(crs)
-
-    # 2. fluctuating egon_power_plants
-    with session_scope_egon_data(engine) as session:
-        srid = get_srid_of_db_table(session, egon_power_plants.geom)
-
-        query = (
-            session.query(egon_power_plants)
-            .filter(
-                egon_power_plants.scenario == scenario,
-                egon_power_plants.carrier.in_(fluctuating),
-                egon_power_plants.voltage_level >= 4,
-                sql_within(egon_power_plants.geom, sql_geom, srid),
-            )
-            .order_by(egon_power_plants.id)
-        )
-
-        data["fluc_gdf"] = gpd.read_postgis(
-            sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
-        ).to_crs(crs)
-
-    # 3. pv rooftop egon_power_plants_pv_roof_building
-    with session_scope_egon_data(engine) as session:
-        srid = get_srid_of_db_table(session, osm_buildings_filtered.geom_point)
-
-        query = session.query(
-            func.ST_Transform(
-                osm_buildings_filtered.geom_point,
-                srid,
-            ).label("geom"),
-            osm_buildings_filtered.id,
-        ).filter(
-            sql_within(osm_buildings_filtered.geom_point, sql_geom, srid),
-        )
-
-        buildings_gdf = gpd.read_postgis(
-            sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
-        ).to_crs(crs)
-
-    building_ids = buildings_gdf.id
-
-    with session_scope_egon_data(engine) as session:
-        query = (
-            session.query(egon_power_plants_pv_roof_building)
-            .filter(
-                egon_power_plants_pv_roof_building.scenario == scenario,
-                egon_power_plants_pv_roof_building.building_id.in_(building_ids),
-                egon_power_plants_pv_roof_building.voltage_level >= 4,
-            )
-            .order_by(egon_power_plants_pv_roof_building.index)
-        )
-
-        pv_roof_df = pd.read_sql(sql=query.statement, con=query.session.bind)
-
-    data["pv_roof_gdf"] = gpd.GeoDataFrame(
-        pv_roof_df.merge(
-            buildings_gdf, how="left", left_on="building_id", right_on="id"
-        ).drop(columns=["id"]),
-        geometry="geom",
-        crs=buildings_gdf.crs,
+    # logging message
+    logger.debug(
+        f"{pv_rooftop_gens_in_grid.p_nom.sum():.2f} MW of PV rooftop plants integrated."
+        f"Of this, {gens_existing.p_nom.sum():.2f} MW could be matched to "
+        f"an existing PV rooftop plant."
     )
 
-    # 4. chp plants egon_chp_plants
-    with session_scope_egon_data(engine) as session:
-        srid = get_srid_of_db_table(session, egon_chp_plants.geom)
 
-        query = (
-            session.query(egon_chp_plants)
-            .filter(
-                egon_chp_plants.scenario == scenario,
-                egon_chp_plants.voltage_level >= 4,
-                sql_within(egon_chp_plants.geom, sql_geom, srid),
+def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
+    """
+    Integrates new PV rooftop plants based on corresponding building ID.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    pv_rooftop_df : :pandas:`pandas.DataFrame<DataFrame>`
+        See :attr:`~.io.generators_import._integrate_pv_rooftop` for more information.
+
+    Returns
+    -------
+    list(str)
+        List with names (as in index of
+        :attr:`~.network.topology.Topology.generators_df`) of integrated PV rooftop
+        plants.
+
+    """
+    # join busses corresponding to building ID
+    loads_df = edisgo_object.topology.loads_df
+    building_id_busses = (
+        loads_df[loads_df.type == "conventional_load"]
+        .drop_duplicates(subset=["building_id"])
+        .set_index("building_id")
+        .loc[:, ["bus"]]
+    )
+    pv_rooftop_df = pv_rooftop_df.join(building_id_busses, how="left", on="building_id")
+
+    # add further information needed in generators_df
+    pv_rooftop_df["control"] = "PQ"
+    # add generator name as index
+    pv_rooftop_df["index"] = pv_rooftop_df.apply(
+        lambda _: f"Generator_pv_rooftop_{_.building_id}", axis=1
+    )
+    pv_rooftop_df.set_index("index", drop=True, inplace=True)
+
+    # check for duplicated generator names and choose random name for duplicates
+    tmp = pv_rooftop_df.index.append(edisgo_object.topology.storage_units_df.index)
+    duplicated_indices = tmp[tmp.duplicated()]
+    for duplicate in duplicated_indices:
+        # find unique name
+        random.seed(a=duplicate)
+        new_name = duplicate
+        while new_name in tmp:
+            new_name = f"{duplicate}_{random.randint(10 ** 1, 10 ** 2)}"
+        # change name in batteries_df
+        pv_rooftop_df.rename(index={duplicate: new_name}, inplace=True)
+
+    # filter PV plants that are too large to be integrated into LV
+    pv_rooftop_large = pv_rooftop_df[pv_rooftop_df.voltage_level < 7]
+    pv_rooftop_small = pv_rooftop_df[pv_rooftop_df.voltage_level == 7]
+
+    # integrate small batteries at buildings
+    cols = [
+        "bus",
+        "control",
+        "p_nom",
+        "weather_cell_id",
+        "building_id",
+        "type",
+        "subtype",
+        "source_id",
+    ]
+    edisgo_object.topology.generators_df = pd.concat(
+        [edisgo_object.topology.generators_df, pv_rooftop_small.loc[:, cols]]
+    )
+    integrated_plants = pv_rooftop_small.index
+
+    # integrate larger PV rooftop plants - if load is already connected to
+    # higher voltage level it can be integrated at same bus, otherwise it is
+    # integrated based on geolocation
+    integrated_plants_own_grid_conn = pd.Index([])
+    for pv_pp in pv_rooftop_large.index:
+        # check if building is already connected to a voltage level equal to or
+        # higher than the voltage level the PV plant should be connected to
+        bus = pv_rooftop_large.at[pv_pp, "bus"]
+        voltage_level_bus = determine_bus_voltage_level(edisgo_object, bus)
+        voltage_level_pv = pv_rooftop_large.at[pv_pp, "voltage_level"]
+
+        if voltage_level_pv >= voltage_level_bus:
+            # integrate at same bus as load
+            edisgo_object.topology.generators_df = pd.concat(
+                [
+                    edisgo_object.topology.generators_df,
+                    pv_rooftop_large.loc[[pv_pp], cols],
+                ]
             )
-            .order_by(egon_chp_plants.id)
+            integrated_plants = integrated_plants.append(pd.Index([pv_pp]))
+        else:
+            # integrate based on geolocation
+            pv_pp_name = edisgo_object.integrate_component_based_on_geolocation(
+                comp_type="generator",
+                voltage_level=voltage_level_pv,
+                geolocation=(
+                    edisgo_object.topology.buses_df.at[bus, "x"],
+                    edisgo_object.topology.buses_df.at[bus, "y"],
+                ),
+                add_ts=False,
+                generator_id=pv_rooftop_large.at[pv_pp, "generator_id"],
+                p_nom=pv_rooftop_large.at[pv_pp, "p_nom"],
+                building_id=pv_rooftop_large.at[pv_pp, "building_id"],
+                generator_type=pv_rooftop_large.at[pv_pp, "type"],
+                subtype=pv_rooftop_large.at[pv_pp, "subtype"],
+                weather_cell_id=pv_rooftop_large.at[pv_pp, "weather_cell_id"],
+                source_id=pv_rooftop_large.at[pv_pp, "source_id"],
+            )
+            integrated_plants = integrated_plants.append(pd.Index([pv_pp_name]))
+            integrated_plants_own_grid_conn = integrated_plants_own_grid_conn.append(
+                pd.Index([pv_pp])
+            )
+
+    # check if all PV plants were integrated
+    if not len(pv_rooftop_df) == len(integrated_plants):
+        raise ValueError("Not all PV rooftop plants could be integrated into the grid.")
+
+    # logging messages
+    logger.debug(f"{sum(pv_rooftop_df.p_nom):.2f} MW of PV roof-top plants integrated.")
+    if len(integrated_plants_own_grid_conn) > 0:
+        logger.debug(
+            f"Of this, "
+            f"{sum(pv_rooftop_df.loc[integrated_plants_own_grid_conn, 'p_nom']):.2f} "
+            f"MW of PV roof-top capacity was integrated at a new bus."
         )
 
-        data["chp_gdf"] = gpd.read_postgis(
-            sql=query.statement, con=query.session.bind, crs=f"EPSG:{srid}"
-        ).to_crs(crs)
+    return integrated_plants
 
-    return data
+
+def _integrate_power_and_chp_plants(edisgo_object, power_plants_gdf, chp_gdf):
+    """
+    This function updates generator park for all power plants except PV rooftop.
+    See function :func:`~.io.generators_import.oedb` for more information.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    power_plants_gdf : :geopandas:`geopandas.GeoDataFrame<GeoDataFrame>`
+        Dataframe containing data on power plants.
+        Columns are:
+
+            * p_nom : float
+                Nominal power in MW.
+            * generator_id : int
+                ID of the power plant from database.
+            * type : str
+                Generator type, e.g. "wind".
+            * subtype
+                Further specification of generator type, e.g. "wind_onshore".
+            * weather_cell_id : int
+                Weather cell the power plant is in used to obtain the potential feed-in
+                time series. Only given for solar and wind generators.
+            * voltage_level : int
+                Voltage level the power plant is connected to.
+            * source_id : int
+                MaStR ID of the power plant.
+            * geom : geometry
+                Geolocation of power plant.
+    chp_gdf : :geopandas:`geopandas.GeoDataFrame<GeoDataFrame>`
+        Dataframe containing data on CHP plants.
+        Columns are:
+
+            * p_nom : float
+                Nominal power in MW.
+            * p_nom_th : float
+                Thermal nominal power in MW.
+            * generator_id : int
+                ID of the CHP plant from database.
+            * type : str
+                Generator type, e.g. "gas".
+            * district_heating_id : int
+                ID of district heating network the CHP plant is in.
+            * voltage_level : int
+                Voltage level the PV plant is connected to.
+            * geom : geometry
+                Geolocation of power plant.
+
+    """
+
+    def _integrate_new_chp_plant(edisgo_object, comp_data):
+        edisgo_object.integrate_component_based_on_geolocation(
+            comp_type="generator",
+            generator_id=comp_data.at["generator_id"],
+            geolocation=comp_data.at["geom"],
+            voltage_level=comp_data.at["voltage_level"],
+            add_ts=False,
+            p_nom=comp_data.at["p_nom"],
+            p_nom_th=comp_data.at["p_nom_th"],
+            generator_type=comp_data.at["type"],
+            district_heating_id=comp_data.at["district_heating_id"],
+        )
+
+    def _integrate_new_power_plant(edisgo_object, comp_data):
+        edisgo_object.integrate_component_based_on_geolocation(
+            comp_type="generator",
+            generator_id=comp_data.at["generator_id"],
+            geolocation=comp_data.at["geom"],
+            voltage_level=comp_data.at["voltage_level"],
+            add_ts=False,
+            p_nom=comp_data.at["p_nom"],
+            generator_type=comp_data.at["type"],
+            subtype=comp_data.at["subtype"],
+            weather_cell_id=comp_data.at["weather_cell_id"],
+            source_id=comp_data.at["source_id"],
+        )
+
+    # determine number of generators and installed capacity in future scenario
+    # for validation of grid integration
+    total_p_nom_scenario = power_plants_gdf.p_nom.sum() + chp_gdf.p_nom.sum()
+    total_gen_count_scenario = len(power_plants_gdf) + len(chp_gdf)
+
+    # remove all power plants that are not PV rooftop and do not have a source ID
+    gens_df = edisgo_object.topology.generators_df[
+        edisgo_object.topology.generators_df.subtype != "pv_rooftop"
+    ].copy()
+    if "source_id" not in gens_df.columns:
+        gens_df["source_id"] = None
+    gens_decommissioned = gens_df[gens_df.source_id.isna()]
+    for gen in gens_decommissioned.index:
+        edisgo_object.remove_component(comp_type="generator", comp_name=gen)
+
+    # try matching power plants with source ID, to update power plants that exist in
+    # status quo and future scenario
+    existing_gens_with_source = gens_df[~gens_df.source_id.isna()]
+    if len(existing_gens_with_source) > 0:
+
+        # join dataframes at source ID
+        existing_gens_with_source.index.name = "gen_name"
+        power_plants_gdf.index.name = "gen_index_new"
+        existing_gens_with_source_matched = pd.merge(
+            existing_gens_with_source.reset_index(),
+            power_plants_gdf.reset_index(),
+            how="inner",
+            on="source_id",
+            suffixes=("_old", ""),
+        ).set_index("gen_name")
+
+        # remove existing gens where source ID could not be matched
+        existing_gens_without_source_matched = [
+            _
+            for _ in existing_gens_with_source.index
+            if _ not in existing_gens_with_source_matched.index
+        ]
+        for gen in existing_gens_without_source_matched:
+            edisgo_object.remove_component(comp_type="generator", comp_name=gen)
+
+        # where source ID could be matched, check if capacity increased or decreased
+        # update plants where capacity decreased
+        gens_decreased_cap = existing_gens_with_source_matched.query(
+            "p_nom < p_nom_old"
+        )
+        if len(gens_decreased_cap) > 0:
+            edisgo_object.topology.generators_df.loc[
+                gens_decreased_cap.index, "p_nom"
+            ] = gens_decreased_cap.p_nom
+        # update plants where capacity increased
+        gens_increased_cap = existing_gens_with_source_matched.query(
+            "p_nom > p_nom_old"
+        )
+        for gen in gens_increased_cap.index:
+            voltage_level_new = determine_grid_integration_voltage_level(
+                edisgo_object, gens_increased_cap.at[gen, "p_nom"]
+            )
+            voltage_level_old = determine_bus_voltage_level(
+                edisgo_object, gens_increased_cap.at[gen, "bus"]
+            )
+            if voltage_level_new >= voltage_level_old:
+                # simply update p_nom if plant doesn't need to be connected to higher
+                # voltage level
+                edisgo_object.topology.generators_df.at[
+                    gen, "p_nom"
+                ] = gens_increased_cap.at[gen, "p_nom"]
+            else:
+                # if plant needs to be connected to higher voltage level, remove
+                # existing plant and integrate new component based on geolocation
+                edisgo_object.remove_component(comp_type="generator", comp_name=gen)
+                _integrate_new_power_plant(edisgo_object, gens_increased_cap.loc[gen])
+    else:
+        existing_gens_with_source_matched = pd.DataFrame(
+            columns=["gen_index_new", "p_nom"]
+        )
+
+    # gens where source ID could not be matched are all new
+    new_power_plants = power_plants_gdf[
+        ~power_plants_gdf.index.isin(existing_gens_with_source_matched.gen_index_new)
+    ]
+    for gen in new_power_plants.index:
+        _integrate_new_power_plant(edisgo_object, new_power_plants.loc[gen])
+
+    # add all CHP plants based on geolocation
+    for gen in chp_gdf.index:
+        _integrate_new_chp_plant(edisgo_object, chp_gdf.loc[gen])
+
+    # check number of power and CHP plants in grid as well as installed capacity
+    gens_in_grid = edisgo_object.topology.generators_df[
+        edisgo_object.topology.generators_df.subtype != "pv_rooftop"
+    ]
+    if not len(gens_in_grid) == total_gen_count_scenario:
+        raise ValueError(
+            f"Number of power plants in future scenario is not correct. Should be "
+            f"{total_gen_count_scenario} instead of {len(gens_in_grid)}."
+        )
+    if not np.isclose(gens_in_grid.p_nom.sum(), total_p_nom_scenario, atol=1e-4):
+        raise ValueError(
+            f"Capacity of power plants in future scenario not correct. Should be "
+            f"{total_p_nom_scenario} instead of "
+            f"{gens_in_grid.p_nom.sum()}."
+        )
+
+    # logging messages
+    cap_matched = existing_gens_with_source_matched.p_nom.sum()
+    logger.debug(
+        f"{total_p_nom_scenario:.2f} MW of power and CHP plants integrated. Of this, "
+        f"{cap_matched:.2f} MW could be matched to existing power plants."
+    )

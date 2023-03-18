@@ -19,7 +19,7 @@ from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
 )
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
-from edisgo.io import pypsa_io, timeseries_import
+from edisgo.io import generators_import, pypsa_io, timeseries_import
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.dsm_import import dsm_from_database
 from edisgo.io.electromobility_import import (
@@ -28,8 +28,6 @@ from edisgo.io.electromobility_import import (
     import_electromobility_from_oedb,
     integrate_charging_parks,
 )
-from edisgo.io.generators_import import generators_from_database
-from edisgo.io.generators_import import oedb as import_generators_oedb
 from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.io.storage_import import home_batteries_oedb
 from edisgo.network import timeseries
@@ -804,79 +802,62 @@ class EDisGo:
 
     def import_generators(self, generator_scenario=None, **kwargs):
         """
-        Gets generator park for specified scenario and integrates them into
-        the grid.
+        Gets generator park for specified scenario and integrates generators into grid.
 
-        Currently, the only supported data source is scenario data generated
-        in the research project
+        The generator data is retrieved from the
+        `open energy platform <https://openenergy-platform.org/>`_. Decommissioned
+        generators are removed from the grid, generators with changed capacity
+        updated and new generators newly integrated into the grid.
+
+        In case you are using new ding0 grids, where the LV is geo-referenced, the
+        supported data source is scenario data generated in the research project
+        `eGo^n <https://ego-n.org/>`_. You can choose between two scenarios:
+        'eGon2035' and 'eGon100RE'. For more information on database tables used and
+        how generator park is adapted see :func:`~.io.generators_import.oedb`.
+
+        In case you are using old ding0 grids, where the LV is not geo-referenced,
+        the supported data source is scenario data generated in the research project
         `open_eGo <https://openegoproject.wordpress.com/>`_. You can choose
         between two scenarios: 'nep2035' and 'ego100'. You can get more
         information on the scenarios in the
         `final report <https://www.uni-flensburg.de/fileadmin/content/\
         abteilungen/industrial/dokumente/downloads/veroeffentlichungen/\
         forschungsergebnisse/20190426endbericht-openego-fkz0325881-final\
-        .pdf>`_.
+        .pdf>`_. For more information on database tables used and
+        how generator park is adapted see :func:`~.io.generators_import.oedb_legacy`.
 
-        The generator data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_
-        from tables for
-        `conventional power plants <https://openenergy-platform.org/dataedit/\
-        view/supply/ego_dp_conv_powerplant>`_ and
-        `renewable power plants <https://openenergy-platform.org/dataedit/\
-        view/supply/ego_dp_res_powerplant>`_.
-
-        When the generator data is retrieved, the following steps are
-        conducted:
-
-            * Step 1: Update capacity of existing generators if `
-              update_existing` is True, which it is by default.
-            * Step 2: Remove decommissioned generators if
-              `remove_decommissioned` is True, which it is by default.
-            * Step 3: Integrate new MV generators.
-            * Step 4: Integrate new LV generators.
-
-        For more information on how generators are integrated, see
-        :attr:`~.network.topology.Topology.connect_to_mv` and
-        :attr:`~.network.topology.Topology.connect_to_lv`.
-
-        After the generator park is changed there may be grid issues due to the
-        additional in-feed. These are not solved automatically. If you want to
+        After the generator park is adapted there may be grid issues due to the
+        additional feed-in. These are not solved automatically. If you want to
         have a stable grid without grid issues you can invoke the automatic
         grid expansion through the function :attr:`~.EDisGo.reinforce`.
 
         Parameters
         ----------
         generator_scenario : str
-            Scenario for which to retrieve generator data. Possible options
-            are 'nep2035' and 'ego100'.
+            Scenario for which to retrieve generator data. In case you are using new
+            ding0 grids, where the LV is geo-referenced, possible options are
+            'eGon2035' and 'eGon100RE'. In case you are using old ding0 grids, where
+            the LV is not geo-referenced, possible options are 'nep2035' and 'ego100'.
 
         Other Parameters
         ----------------
         kwargs :
-            See :func:`edisgo.io.generators_import.oedb`.
+            In case you are using new  ing0 grids, where the LV is geo-referenced, a
+            database engine needs to be provided through keyword argument `engine`.
+            In case you are using old ding0 grids, where the LV is not geo-referenced,
+            you can check :func:`edisgo.io.generators_import.oedb_legacy` for possible
+            keyword arguments.
 
         """
-        if generator_scenario in ["nep2035", "ego100"]:
-            import_generators_oedb(
+        if self.legacy_grids is True:
+            generators_import.oedb_legacy(
                 edisgo_object=self, generator_scenario=generator_scenario, **kwargs
             )
-        elif generator_scenario in ["eGon2035", "eGon100RE"]:
-            engine = kwargs.pop("engine")
-
-            if not isinstance(engine, Engine):
-                raise ValueError(
-                    "Please provide a valide sqlalchemy engine when loading scenarios "
-                    "'eGon2035' and 'eGon100RE'."
-                )
-
-            generators_from_database(
-                edisgo_object=self, engine=engine, scenario=generator_scenario, **kwargs
-            )
         else:
-            raise ValueError(
-                f"Unknown generator scenario {generator_scenario}. The following "
-                f"scenarios are currently supported: 'nep2035', 'ego100', 'eGon2035' "
-                f"and 'eGon100RE'."
+            generators_import.oedb(
+                edisgo_object=self,
+                engine=kwargs.get("engine"),
+                scenario=generator_scenario,
             )
 
     def analyze(
