@@ -28,6 +28,7 @@ class TestStorageImport:
 
     @pytest.mark.local
     def test_oedb(self, caplog):
+        # test without new PV rooftop plants
         with caplog.at_level(logging.DEBUG):
             integrated_storages = storage_import.home_batteries_oedb(
                 self.edisgo, scenario="eGon2035", engine=pytest.engine
@@ -41,6 +42,25 @@ class TestStorageImport:
             "Of this 2.01 MW do not have a generator with the same building ID."
             in caplog.text
         )
+        caplog.clear()
+
+        # test with new PV rooftop plants
+        self.edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        self.edisgo.import_generators(
+            generator_scenario="eGon2035", engine=pytest.engine
+        )
+        with caplog.at_level(logging.DEBUG):
+            integrated_storages = storage_import.home_batteries_oedb(
+                self.edisgo, scenario="eGon2035", engine=pytest.engine
+            )
+        storage_df = self.edisgo.topology.storage_units_df
+        assert len(integrated_storages) == 659
+        assert len(storage_df) == 659
+        assert np.isclose(storage_df.p_nom.sum(), 2.0144, atol=1e-3)
+        assert "2.01 MW of home batteries integrated." in caplog.text
+        assert "do not have a generator with the same building ID." not in caplog.text
 
     def test__grid_integration(self, caplog):
 
