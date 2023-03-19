@@ -1046,13 +1046,18 @@ def add_rolling_horizon(
         if energy_level_ends[energy_attr] is None:
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
             getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
-            # TODO Check with Anya what is level fix und level end
+        # Fix to 50% of capacity if True
+        elif energy_level_ends[energy_attr] is True:
+            getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").activate()
+            getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
+        # set specific value per component, pd.Series needed
         else:
-            if energy_level_ends[energy_attr] != bool:
-                getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
-            elif energy_level_ends[energy_attr] == bool:
-                getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
-
+            for comp in flex_set:
+                getattr(model, f"energy_level_end_{energy_attr}")[comp].set_value(
+                    energy_level_ends[energy_attr][comp]
+                )
+            getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").activate()
+            getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
         # If grid power is maximised, deactivate all final energy constraints
         if model.objective_name in ["maximize_grid_power", "minimize_grid_power"]:
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
@@ -1415,7 +1420,7 @@ def update_rolling_horizon(comp_type, model, **kwargs):
 
         # set energy level beginning if necessary
         # this is implemented to compensate difference to reference charging
-        # scenario
+        # scenario ... probably not used anymore
         energy_level_beginning = kwargs.get("energy_level_beginning", None)
         if energy_level_beginning is not None:
             for comp in flex_set:
@@ -1424,7 +1429,7 @@ def update_rolling_horizon(comp_type, model, **kwargs):
                 )
 
         # set final energy level and if necessary charging power
-        energy_level_ends = kwargs.get(f"energy_level_ends", {"ev": None, "tes": None})
+        energy_level_ends = kwargs.get("energy_level_ends", {"ev": None, "tes": None})
 
         if energy_level_ends[energy_attr] is None:
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
@@ -2319,7 +2324,8 @@ def initial_energy_level_tes(model, heat_pump, time):
 
 def fixed_energy_level_ev(model, charging_point, time):
     """
-    Constraint for initial value of energy
+    Constraint to fix ev energy level of specifc charging point and time
+    to 50% of flexband potential (1/2 (lower_band + upper_band))
 
     Parameters
     ----------
