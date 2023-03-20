@@ -2,6 +2,7 @@ import copy
 import logging
 import math
 
+from hashlib import md5
 from time import time
 
 import networkx as nx
@@ -14,6 +15,11 @@ from sklearn.metrics import mean_squared_error
 
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.network import timeseries
+
+
+def hash_df(df):
+    s = df.to_json()
+    return md5(s.encode()).hexdigest()
 
 
 # Preprocessing
@@ -236,7 +242,7 @@ def aggregate_to_bus(edisgo_root, aggregate_charging_points_mode=True):
     def aggregate_loads(df):
         series = pd.Series(index=df.columns, dtype="object")
         series.loc["bus"] = df.loc[:, "bus"].values[0]
-        series.loc["peak_load"] = df.loc[:, "peak_load"].sum()
+        series.loc["p_set"] = df.loc[:, "p_set"].sum()
         series.loc["annual_consumption"] = df.loc[:, "annual_consumption"].sum()
         if load_aggregation_mode == "sector":
             series.loc["sector"] = df.loc[:, "sector"].values[0]
@@ -476,10 +482,10 @@ def make_busmap_from_clustering(
             edisgo_obj.topology.generators_df.bus == series.name, "p_nom"
         ].sum()
         p_load = edisgo_obj.topology.loads_df.loc[
-            edisgo_obj.topology.loads_df.bus == series.name, "peak_load"
+            edisgo_obj.topology.loads_df.bus == series.name, "p_set"
         ].sum()
         p_charge = edisgo_obj.topology.charging_points_df.loc[
-            edisgo_obj.topology.charging_points_df.bus == series.name, "p_nom"
+            edisgo_obj.topology.charging_points_df.bus == series.name, "p_set"
         ].sum()
         if str(grid).split("_")[0] == "MVGrid":
             s_tran = edisgo_obj.topology.transformers_df.loc[
@@ -649,8 +655,7 @@ def make_busmap_from_feeders(
     grid=None,
     mode=None,
     reduction_factor=None,
-    focus_mode=False,
-    reduction_factor_not_focused_feeder=0,
+    reduction_factor_not_focused=0,
 ):
     def make_name(number_of_feeder_node):
         if number_of_feeder_node == 0:
@@ -686,10 +691,10 @@ def make_busmap_from_feeders(
             edisgo_obj.topology.generators_df.bus.isin(buses), "p_nom"
         ].sum()
         p_load = edisgo_obj.topology.loads_df.loc[
-            edisgo_obj.topology.loads_df.bus.isin(buses), "peak_load"
+            edisgo_obj.topology.loads_df.bus.isin(buses), "p_set"
         ].sum()
         p_charge = edisgo_obj.topology.charging_points_df.loc[
-            edisgo_obj.topology.charging_points_df.bus.isin(buses), "p_nom"
+            edisgo_obj.topology.charging_points_df.bus.isin(buses), "p_set"
         ].sum()
         if str(grid).split("_")[0] == "MVGrid":
             s_tran = edisgo_obj.topology.transformers_df.loc[
@@ -729,6 +734,11 @@ def make_busmap_from_feeders(
     busmap_df = pd.DataFrame()
     mvgd_id = edisgo_obj.topology.mv_grid.id
 
+    if reduction_factor_not_focused is False:
+        focus_mode = False
+    else:
+        focus_mode = True
+
     if focus_mode:
         buses_of_interest = find_buses_of_interest(edisgo_obj)
 
@@ -745,6 +755,7 @@ def make_busmap_from_feeders(
         logger.debug("Transformer node: {}".format(transformer_node))
 
         neighbors = list(nx.neighbors(graph_root, transformer_node))
+        neighbors.sort()
         logger.debug(
             "Transformer neighbors has {} neighbors: {}".format(
                 len(neighbors), neighbors
@@ -762,13 +773,18 @@ def make_busmap_from_feeders(
             partial_busmap_df.loc[index, ["new_x", "new_y"]] = coordinates
 
         number_of_feeder = 0
-        for feeder_nodes in nx.connected_components(graph_without_transformer):
+        feeder_graphs = list(nx.connected_components(graph_without_transformer))
+        feeder_graphs.sort()
+        for feeder_nodes in feeder_graphs:
+            feeder_nodes = list(feeder_nodes)
+            feeder_nodes.sort()
+
             feeder_buses_df = grid.buses_df.loc[feeder_nodes, :]
             # return feeder_buses_df
             feeder_buses_df = feeder_buses_df.apply(calculate_weighting, axis="columns")
 
             if focus_mode:
-                selected_reduction_factor = reduction_factor_not_focused_feeder
+                selected_reduction_factor = reduction_factor_not_focused
                 for bus in feeder_nodes:
                     if bus in buses_of_interest:
                         selected_reduction_factor = reduction_factor
@@ -856,7 +872,7 @@ def make_busmap_from_feeders(
         busmap_df = pd.concat([busmap_df, partial_busmap_df])
 
     busmap_df = busmap_df.apply(transform_coordinates_back, axis="columns")
-
+    busmap_df.sort_index(inplace=True)
     logger.info("Finished in {}s".format(time() - start_time))
     return busmap_df
 
@@ -866,8 +882,7 @@ def make_busmap_from_main_feeders(
     grid=None,
     mode=None,
     reduction_factor=None,
-    focus_mode=False,
-    reduction_factor_not_focused_feeder=0,
+    reduction_factor_not_focused=0,
 ):
     def make_name(number_of_feeder_node):
         if number_of_feeder_node == 0:
@@ -952,6 +967,11 @@ def make_busmap_from_main_feeders(
     busmap_df = pd.DataFrame()
     mvgd_id = edisgo_obj.topology.mv_grid.id
 
+    if reduction_factor_not_focused is False:
+        focus_mode = False
+    else:
+        focus_mode = True
+
     if focus_mode:
         buses_of_interest = find_buses_of_interest(edisgo_obj)
 
@@ -968,6 +988,7 @@ def make_busmap_from_main_feeders(
         logger.debug("Transformer node: {}".format(transformer_node))
 
         neighbors = list(nx.neighbors(graph_root, transformer_node))
+        neighbors.sort()
         logger.debug(
             "Transformer neighbors has {} neighbors: {}".format(
                 len(neighbors), neighbors
@@ -1032,7 +1053,7 @@ def make_busmap_from_main_feeders(
             partial_busmap_df.loc[node_to_delete, ["new_x", "new_y"]] = coordinates
 
         # Advanced method
-        if mode == "feeder_replacement_with_equidistant_nodes":
+        if mode == "equidistant_nodes":
 
             def short_coordinates(root_node, end_node, branch_length, node_number):
                 angle = math.degrees(
@@ -1057,7 +1078,7 @@ def make_busmap_from_main_feeders(
 
                 # Calculate nodes per feeder
                 if focus_mode:
-                    selected_reduction_factor = reduction_factor_not_focused_feeder
+                    selected_reduction_factor = reduction_factor_not_focused
                     for node in feeder.path[1:]:
                         buses = partial_busmap_df.loc[
                             partial_busmap_df.new_bus.isin([node])
@@ -1084,7 +1105,7 @@ def make_busmap_from_main_feeders(
                 new_feeder = np.zeros(nodes_per_feeder + 1)
                 for n in range(0, new_feeder.shape[0]):
                     new_feeder[n] = n * branch_length
-                old_feeder = np.zeros(feeder.number_of_nodes_in_path + 1, dtype=np.int)
+                old_feeder = np.zeros(feeder.number_of_nodes_in_path + 1, dtype=int)
                 node_number = 0
                 for node in feeder.path:
                     distance_from_transformer = nx.shortest_path_length(
@@ -1130,7 +1151,7 @@ def make_busmap_from_main_feeders(
                 )
 
                 if focus_mode:
-                    selected_reduction_factor = reduction_factor_not_focused_feeder
+                    selected_reduction_factor = reduction_factor_not_focused
                     for node in feeder_buses_df.index.to_list():
                         buses = partial_busmap_df.loc[
                             partial_busmap_df.new_bus.isin([node])
@@ -1239,143 +1260,58 @@ def make_busmap_from_main_feeders(
     return busmap_df
 
 
-def make_busmap(edisgo_root=None, mode=None, reduction_factor=None, grid=None):
-    if mode == "km":
+def make_busmap(
+    edisgo_root,
+    mode=None,
+    cluster_area=None,
+    reduction_factor=None,
+    reduction_factor_not_focused=None,
+    grid=None,
+):
+    # Check for false input.
+    if not 0 < reduction_factor < 1.0:
+        raise ValueError("Reduction factor must bigger than 0 and smaller than 1.")
+    if mode not in [
+        "aggregate_to_main_feeder",
+        "kmeans",
+        "kmeansdijkstra",
+        "equidistant_nodes",
+    ]:
+        raise ValueError(f"Selected false {mode=}.")
+    if (reduction_factor_not_focused is not False) and not (
+        0 <= reduction_factor_not_focused < 1.0
+    ):
+        raise ValueError(
+            f"{reduction_factor_not_focused=}, should be 'False' "
+            f"or 0 or bigger than 0 but smaller than 1."
+        )
+
+    if cluster_area == "grid":
         busmap_df = make_busmap_from_clustering(
             edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            mode="kmeans",
+            mode=mode,
             grid=grid,
-        )
-    elif mode == "kmd":
-        busmap_df = make_busmap_from_clustering(
-            edisgo_root=edisgo_root,
             reduction_factor=reduction_factor,
-            mode="kmeansdijkstra",
-            grid=grid,
         )
-    elif mode == "atmf":
-        busmap_df = make_busmap_from_main_feeders(
-            edisgo_root=edisgo_root, mode="aggregate_to_longest_feeder", grid=grid
-        )
-    elif mode == "frwen":
-        busmap_df = make_busmap_from_main_feeders(
-            edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            mode="feeder_replacement_with_equidistant_nodes",
-            grid=grid,
-        )
-    elif mode == "frwenwf0.1":
-        busmap_df = make_busmap_from_main_feeders(
-            edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            grid=grid,
-            mode="feeder_replacement_with_equidistant_nodes",
-            focus_mode=True,
-            reduction_factor_not_focused_feeder=0.1,
-        )
-    elif mode == "kmpmf":
-        busmap_df = make_busmap_from_main_feeders(
-            edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            mode="kmeans",
-            grid=grid,
-        )
-    elif mode == "kmdpmf":
-        busmap_df = make_busmap_from_main_feeders(
-            edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            mode="kmeansdijkstra",
-            grid=grid,
-        )
-    elif mode == "kmpmfwf0":
-        busmap_df = make_busmap_from_main_feeders(
-            edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            grid=grid,
-            mode="kmeans",
-            focus_mode=True,
-            reduction_factor_not_focused_feeder=0,
-        )
-    elif mode == "kmdpmfwf0":
-        busmap_df = make_busmap_from_main_feeders(
-            edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            grid=grid,
-            mode="kmeansdijkstra",
-            focus_mode=True,
-            reduction_factor_not_focused_feeder=0,
-        )
-    elif mode == "kmpmfwf0.1":
-        busmap_df = make_busmap_from_main_feeders(
-            edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            grid=grid,
-            mode="kmeans",
-            focus_mode=True,
-            reduction_factor_not_focused_feeder=0.1,
-        )
-    elif mode == "kmdpmfwf0.1":
-        busmap_df = make_busmap_from_main_feeders(
-            edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            grid=grid,
-            mode="kmeansdijkstra",
-            focus_mode=True,
-            reduction_factor_not_focused_feeder=0.1,
-        )
-    elif mode == "kmpf":
+    elif cluster_area == "feeder":
         busmap_df = make_busmap_from_feeders(
             edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
             grid=grid,
-            mode="kmeans",
+            mode=mode,
+            reduction_factor=reduction_factor,
+            reduction_factor_not_focused=reduction_factor_not_focused,
         )
-    elif mode == "kmdpf":
-        busmap_df = make_busmap_from_feeders(
+    elif cluster_area == "main_feeder":
+        busmap_df = make_busmap_from_main_feeders(
             edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
             grid=grid,
-            mode="kmeansdijkstra",
-        )
-    elif mode == "kmpfwf0":
-        busmap_df = make_busmap_from_feeders(
-            edisgo_root=edisgo_root,
+            mode=mode,
             reduction_factor=reduction_factor,
-            grid=grid,
-            mode="kmeans",
-            focus_mode=True,
-            reduction_factor_not_focused_feeder=0,
-        )
-    elif mode == "kmdpfwf0":
-        busmap_df = make_busmap_from_feeders(
-            edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            grid=grid,
-            mode="kmeansdijkstra",
-            focus_mode=True,
-            reduction_factor_not_focused_feeder=0,
-        )
-    elif mode == "kmpfwf0.1":
-        busmap_df = make_busmap_from_feeders(
-            edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            grid=grid,
-            mode="kmeans",
-            focus_mode=True,
-            reduction_factor_not_focused_feeder=0.1,
-        )
-    elif mode == "kmdpfwf0.1":
-        busmap_df = make_busmap_from_feeders(
-            edisgo_root=edisgo_root,
-            reduction_factor=reduction_factor,
-            grid=grid,
-            mode="kmeansdijkstra",
-            focus_mode=True,
-            reduction_factor_not_focused_feeder=0.1,
+            reduction_factor_not_focused=reduction_factor_not_focused,
         )
     else:
-        return False
+        raise ValueError(f"Selected false {cluster_area=}!")
+
     return busmap_df
 
 
@@ -2144,6 +2080,9 @@ def find_buses_of_interest(edisgo_root):
         buses_of_interest.update(value.index.tolist())
 
     logger.info("Finished in {}s".format(time() - start_time))
+    # Sort for deterministic reasons
+    buses_of_interest = list(buses_of_interest)
+    buses_of_interest.sort()
     return buses_of_interest
 
 
@@ -2184,3 +2123,26 @@ def rename_virtual_buses(logger, partial_busmap_df, transformer_node):
                         + partial_busmap_df.loc[feeder_non_virtual, "new_bus"]
                     )
     return partial_busmap_df
+
+
+def spatial_complexity_reduction(
+    edisgo_root,
+    mode=None,
+    cluster_area=None,
+    reduction_factor=None,
+    reduction_factor_not_focused=None,
+):
+    edisgo_obj = copy.deepcopy(edisgo_root)
+    # edisgo_obj.results.equipment_changes = pd.DataFrame()
+
+    busmap_df = make_busmap(
+        mode=mode,
+        cluster_area=cluster_area,
+        reduction_factor=reduction_factor,
+        reduction_factor_not_focused=reduction_factor_not_focused,
+    )
+    edisgo_reduced, linemap_df = reduce_edisgo(
+        edisgo_obj, busmap_df, aggregation_mode=False
+    )
+
+    return edisgo_reduced, busmap_df, linemap_df
