@@ -672,12 +672,12 @@ def catch_convergence_reinforce_grid(
         logger.info("Initial reinforcement doesn't converged.")
         fully_converged = False
 
-        set_scaling_factor = 1
-        initial_timerseries = copy.deepcopy(edisgo.timeseries)
-        minimal_scaling_factor = 0.05
-        max_iterations = 10
-        iteration = 0
-        highest_converged_scaling_factor = 0
+    set_scaling_factor = 1
+    initial_timerseries = copy.deepcopy(edisgo.timeseries)
+    minimal_scaling_factor = 0.05
+    max_iterations = 10
+    iteration = 0
+    highest_converged_scaling_factor = 0
 
     if fully_converged is False:
         # Find non converging timesteps
@@ -687,13 +687,14 @@ def catch_convergence_reinforce_grid(
         )
         logger.debug(f"Following timesteps {converging_timesteps} converged.")
         logger.debug(
-            f"Following timesteps {non_converging_timesteps} doesnt't " "converge."
+            f"Following timesteps {non_converging_timesteps} doesnt't converge."
         )
 
-        # if not converged:
-        logger.info("Reinforce only converged timesteps")
-        selected_timesteps = converging_timesteps
-        _, _ = reinforce()
+    if not converged:
+        if not converging_timesteps.empty:
+            logger.info("Reinforce only converged timesteps")
+            selected_timesteps = converging_timesteps
+            _, _ = reinforce()
 
         logger.info("Reinforce only non converged timesteps")
         selected_timesteps = non_converging_timesteps
