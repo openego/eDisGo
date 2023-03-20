@@ -7,6 +7,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
 from edisgo.flex_opt import check_tech_constraints
+from edisgo.flex_opt.costs import line_expansion_costs
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +52,44 @@ def _scored_most_critical_loading(edisgo_obj):
     # Sort according to highest cumulated relative overloading
     crit_lines_score = (crit_lines_score - 1).sum(axis=1)
     return crit_lines_score.sort_values(ascending=False)
+
+
+def _scored_most_critical_loading_MH(edisgo_obj, window_days):
+    """
+    Method to get time intervall which causes highest network expansion costs
+    """
+
+    # Get current relative to allowed current
+    relative_i_res = check_tech_constraints.components_relative_load(edisgo_obj)
+
+    # Get lines that have violations and replace nan values with 0
+    crit_lines_score = relative_i_res[relative_i_res > 1].fillna(0)
+
+    # weight line violations with expansion costs
+    costs_lines = (
+        line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
+    )
+    costs_trafos = pd.Series(
+        index=crit_lines_score.drop(columns=costs_lines.index).columns,
+        data=edisgo_obj.config._data["costs_transformers"]["lv"],
+    )
+    costs = pd.concat([costs_lines, costs_trafos])
+    crit_lines_score = crit_lines_score * costs
+    # Get most "expensive" time intervall over all components
+    crit_timesteps = (
+        crit_lines_score.rolling(window=window_days * 24, closed="right")
+        .max()
+        .sum(axis=1)
+    )
+    # time intervall starts at 4am on every considered day
+    crit_timesteps = crit_timesteps.iloc[4::24].sort_values(ascending=False)
+    timesteps = crit_timesteps.index - pd.DateOffset(days=window_days)
+    time_intervalls = [
+        pd.date_range(start=timestep, periods=window_days * 24 + 1, freq="h")
+        for timestep in timesteps
+    ]
+
+    return time_intervalls
 
 
 def _scored_critical_overvoltage(edisgo_obj):
@@ -243,6 +282,75 @@ def get_steps_storage(edisgo_obj, window=5):
         logger.warning("No critical steps detected. No network expansion required.")
 
     return pd.DatetimeIndex(reduced)
+
+
+def get_steps_flex_opf(
+    edisgo_obj,
+    num_steps_loading=None,
+    num_steps_voltage=None,
+    percentage=1.0,
+    window_days=7,
+):
+    """
+    Get the time steps with the most critical violations for curtailment
+    optimization.
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object
+    num_steps_loading: int
+        The number of most critical overloading events to select, if None percentage
+        is used
+    num_steps_voltage: int
+        The number of most critical voltage issues to select, if None percentage is used
+    percentage : float
+        The percentage of most critical time steps to select
+    Returns
+    --------
+    `pandas.DatetimeIndex`
+        the reduced time index for modeling curtailment
+    """
+    # Run power flow if not available
+    if edisgo_obj.results.i_res is None or edisgo_obj.results.i_res.empty:
+        logger.debug("Running initial power flow")
+        edisgo_obj.analyze(raise_not_converged=False)  # Todo: raise warning?
+
+    # Select most critical steps based on current violations
+    loading_scores = _scored_most_critical_loading_MH(edisgo_obj, window_days)
+    if num_steps_loading is None:
+        num_steps_loading = int(len(loading_scores) * percentage)
+    else:
+        if num_steps_loading > len(loading_scores):
+            logger.info(
+                f"The number of time steps with highest overloading "
+                f"({len(loading_scores)}) is lower than the defined number of "
+                f"loading time steps ({num_steps_loading}). Therefore, only "
+                f"{len(loading_scores)} time steps are exported."
+            )
+            num_steps_loading = len(loading_scores)
+    steps = loading_scores[:num_steps_loading].index
+
+    # Select most critical steps based on voltage violations
+    voltage_scores = _scored_most_critical_voltage_issues(edisgo_obj)
+    if num_steps_voltage is None:
+        num_steps_voltage = int(len(voltage_scores) * percentage)
+    else:
+        if num_steps_voltage > len(voltage_scores):
+            logger.info(
+                f"The number of time steps with highest voltage issues "
+                f"({len(voltage_scores)}) is lower than the defined number of "
+                f"voltage time steps ({num_steps_voltage}). Therefore, only "
+                f"{len(voltage_scores)} time steps are exported."
+            )
+            num_steps_voltage = len(voltage_scores)
+    steps = steps.append(
+        voltage_scores[:num_steps_voltage].index
+    )  # Todo: Can this cause duplicated?
+
+    if len(steps) == 0:
+        logger.warning("No critical steps detected. No network expansion required.")
+
+    return pd.DatetimeIndex(steps.unique())
 
 
 def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):

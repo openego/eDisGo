@@ -216,11 +216,11 @@ def reinforce_grid(
         else checks.mv_lv_station_overload(edisgo_reinforce)
     )
     logger.debug("==> Check line load.")
-    if (kwargs.get("lv_grid_id", None)) or (mode == "mv"):
-        overloaded_lv_stations = pd.DataFrame(dtype=float)
-    else:
-        overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce, **kwargs)
-        logger.debug("==> Check line load.")
+    # if (kwargs.get("lv_grid_id", None)) or (mode == "mv"):
+    #     overloaded_lv_stations = pd.DataFrame(dtype=float)
+    # else:
+    #     overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce, **kwargs)
+    #     logger.debug("==> Check line load.")
 
     crit_lines = (
         pd.DataFrame(dtype=float)
@@ -300,7 +300,7 @@ def reinforce_grid(
             crit_lines = pd.concat(
                 [
                     crit_lines,
-                    checks.lv_line_overload(edisgo_reinforce**kwargs),
+                    checks.lv_line_overload(edisgo_reinforce, **kwargs),
                 ]
             )
 

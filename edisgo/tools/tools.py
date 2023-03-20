@@ -951,7 +951,7 @@ def determine_observation_periods(edisgo_obj, window_days, idx="min", absolute=F
     else:
         raise NotImplementedError
 
-    timestep = timestep - pd.DateOffset(days=window_days)
+    timestep = timestep - pd.DateOffset(days=window_days)  # ToDo: window_days - 1 ???
 
     timeframe = pd.date_range(start=timestep, periods=window_days * 24, freq="h")
 
