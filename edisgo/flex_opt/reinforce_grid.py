@@ -95,6 +95,11 @@ def reinforce_grid(
         connect new generators to the topology from calculation of topology expansion
         costs. Default: False.
 
+    Other Parameters
+    -----------------
+    lv_grid_id : str or int
+        LV grid id to specify the grid to check, if mode is "lv".
+
     Returns
     -------
     :class:`~.network.network.Results`
@@ -143,8 +148,6 @@ def reinforce_grid(
 
         edisgo_reinforce.results.equipment_changes = pd.concat(df_list)
 
-    raise_not_converged = kwargs.get("raise_not_converged", True)
-    troubleshooting_mode = kwargs.get("troubleshooting_mode", None)
     # check if provided mode is valid
     if mode and mode not in ["mv", "mvlv", "lv"]:
         raise ValueError(f"Provided mode {mode} is not a valid mode.")
@@ -155,6 +158,8 @@ def reinforce_grid(
         edisgo_reinforce = copy.deepcopy(edisgo)
     else:
         edisgo_reinforce = edisgo
+
+    logger.info("Start reinforcement.")
 
     if timesteps_pfa is not None:
         if isinstance(timesteps_pfa, str) and timesteps_pfa == "snapshot_analysis":
@@ -180,14 +185,14 @@ def reinforce_grid(
                 )
 
     iteration_step = 1
-    analyze_mode = None if mode == "lv" else mode
+    if mode == "lv" and kwargs.get("lv_grid_id", None):
+        analyze_mode = "lv"
+    elif mode == "lv":
+        analyze_mode = None
+    else:
+        analyze_mode = mode
 
-    edisgo_reinforce.analyze(
-        mode=analyze_mode,
-        timesteps=timesteps_pfa,
-        raise_not_converged=raise_not_converged,
-        troubleshooting_mode=troubleshooting_mode,
-    )
+    edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa, **kwargs)
 
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
     logger.debug("==> Check station load.")
@@ -197,13 +202,11 @@ def reinforce_grid(
         if mode == "lv"
         else checks.hv_mv_station_load(edisgo_reinforce)
     )
-
-    overloaded_lv_stations = (
-        pd.DataFrame(dtype=float)
-        if mode == "mv"
-        else checks.mv_lv_station_load(edisgo_reinforce)
-    )
-    logger.debug("==> Check line load.")
+    if (kwargs.get("lv_grid_id", None)) or (mode == "mv"):
+        overloaded_lv_stations = pd.DataFrame(dtype=float)
+    else:
+        overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce, **kwargs)
+        logger.debug("==> Check line load.")
 
     crit_lines = (
         pd.DataFrame(dtype=float)
@@ -215,7 +218,7 @@ def reinforce_grid(
         crit_lines = pd.concat(
             [
                 crit_lines,
-                checks.lv_line_load(edisgo_reinforce),
+                checks.lv_line_load(edisgo_reinforce, **kwargs),
             ]
         )
 
@@ -259,12 +262,7 @@ def reinforce_grid(
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
         logger.debug("==> Run power flow analysis.")
-        edisgo_reinforce.analyze(
-            mode=analyze_mode,
-            timesteps=timesteps_pfa,
-            raise_not_converged=raise_not_converged,
-            troubleshooting_mode=troubleshooting_mode,
-        )
+        edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa, **kwargs)
 
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = (
@@ -273,7 +271,7 @@ def reinforce_grid(
             else checks.hv_mv_station_load(edisgo_reinforce)
         )
 
-        if mode != "mv":
+        if mode != "mv" and (not kwargs.get("lv_grid_id", None)):
             overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce)
 
         logger.debug("==> Recheck line load.")
@@ -288,7 +286,7 @@ def reinforce_grid(
             crit_lines = pd.concat(
                 [
                     crit_lines,
-                    checks.lv_line_load(edisgo_reinforce),
+                    checks.lv_line_load(edisgo_reinforce, **kwargs),
                 ]
             )
 
@@ -349,12 +347,7 @@ def reinforce_grid(
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-voltage problems were solved
         logger.debug("==> Run power flow analysis.")
-        edisgo_reinforce.analyze(
-            mode=analyze_mode,
-            timesteps=timesteps_pfa,
-            raise_not_converged=raise_not_converged,
-            troubleshooting_mode=troubleshooting_mode,
-        )
+        edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa, **kwargs)
 
         logger.debug("==> Recheck voltage in MV topology.")
         crit_nodes = checks.mv_voltage_deviation(
@@ -388,10 +381,12 @@ def reinforce_grid(
         logger.debug("==> Check voltage at secondary side of LV stations.")
 
         voltage_levels = "mv_lv" if combined_analysis else "lv"
-
-        crit_stations = checks.lv_voltage_deviation(
-            edisgo_reinforce, mode="stations", voltage_levels=voltage_levels
-        )
+        if kwargs.get("lv_grid_id", None):
+            crit_stations = {}
+        else:
+            crit_stations = checks.lv_voltage_deviation(
+                edisgo_reinforce, mode="stations", voltage_levels=voltage_levels
+            )
 
         while_counter = 0
         while crit_stations and while_counter < max_while_iterations:
@@ -408,10 +403,7 @@ def reinforce_grid(
             # check if all over-voltage problems were solved
             logger.debug("==> Run power flow analysis.")
             edisgo_reinforce.analyze(
-                mode=analyze_mode,
-                timesteps=timesteps_pfa,
-                raise_not_converged=raise_not_converged,
-                troubleshooting_mode=troubleshooting_mode,
+                mode=analyze_mode, timesteps=timesteps_pfa, **kwargs
             )
 
             logger.debug("==> Recheck voltage at secondary side of LV stations.")
@@ -447,7 +439,7 @@ def reinforce_grid(
     if not mode or mode == "lv":
         logger.debug("==> Check voltage in LV grids.")
         crit_nodes = checks.lv_voltage_deviation(
-            edisgo_reinforce, voltage_levels=voltage_levels
+            edisgo_reinforce, voltage_levels=voltage_levels, **kwargs
         )
 
         while_counter = 0
@@ -467,15 +459,12 @@ def reinforce_grid(
             # and check if all over-voltage problems were solved
             logger.debug("==> Run power flow analysis.")
             edisgo_reinforce.analyze(
-                mode=analyze_mode,
-                timesteps=timesteps_pfa,
-                raise_not_converged=raise_not_converged,
-                troubleshooting_mode=troubleshooting_mode,
+                mode=analyze_mode, timesteps=timesteps_pfa, **kwargs
             )
 
             logger.debug("==> Recheck voltage in LV grids.")
             crit_nodes = checks.lv_voltage_deviation(
-                edisgo_reinforce, voltage_levels=voltage_levels
+                edisgo_reinforce, voltage_levels=voltage_levels, **kwargs
             )
 
             iteration_step += 1
@@ -509,7 +498,7 @@ def reinforce_grid(
         else checks.hv_mv_station_load(edisgo_reinforce)
     )
 
-    if mode != "mv":
+    if mode != "mv" and (not kwargs.get("lv_grid_id", None)):
         overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce)
 
     logger.debug("==> Recheck line load.")
@@ -524,7 +513,7 @@ def reinforce_grid(
         crit_lines = pd.concat(
             [
                 crit_lines,
-                checks.lv_line_load(edisgo_reinforce),
+                checks.lv_line_load(edisgo_reinforce, **kwargs),
             ]
         )
 
@@ -568,12 +557,7 @@ def reinforce_grid(
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
         logger.debug("==> Run power flow analysis.")
-        edisgo_reinforce.analyze(
-            mode=analyze_mode,
-            timesteps=timesteps_pfa,
-            raise_not_converged=raise_not_converged,
-            troubleshooting_mode=troubleshooting_mode,
-        )
+        edisgo_reinforce.analyze(mode=analyze_mode, timesteps=timesteps_pfa, **kwargs)
 
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = (
@@ -638,3 +622,118 @@ def reinforce_grid(
     )
 
     return edisgo_reinforce.results
+
+
+def catch_convergence_reinforce_grid(
+    edisgo: EDisGo,
+    timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
+    copy_grid: bool = False,
+    max_while_iterations: int = 20,
+    combined_analysis: bool = False,
+    mode: str | None = None,
+    without_generator_import: bool = False,
+    **kwargs,
+) -> Results:
+    def reinforce():
+        try:
+            results = reinforce_grid(
+                edisgo,
+                max_while_iterations=max_while_iterations,
+                copy_grid=copy_grid,
+                timesteps_pfa=selected_timesteps,
+                combined_analysis=combined_analysis,
+                mode=mode,
+                without_generator_import=without_generator_import,
+                **kwargs,
+            )
+            converged = True
+            logger.info(
+                f"Reinforcement succeeded for {set_scaling_factor=} " f"at {iteration=}"
+            )
+        except ValueError:
+            results = edisgo.results
+            converged = False
+            logger.info(
+                f"Reinforcement failed for {set_scaling_factor=} " f"at {iteration=}"
+            )
+        return converged, results
+
+    # Initial try
+    logger.info("Start catch convergence reinforcement")
+    logger.info("Initial reinforcement try.")
+    selected_timesteps = timesteps_pfa
+    set_scaling_factor = 1.0
+    iteration = 0
+    fully_converged = True
+
+    converged, results = reinforce()
+
+    if converged is False:
+        logger.info("Initial reinforcement doesn't converged.")
+        fully_converged = False
+
+        set_scaling_factor = 1
+        initial_timerseries = copy.deepcopy(edisgo.timeseries)
+        minimal_scaling_factor = 0.05
+        max_iterations = 10
+        iteration = 0
+        highest_converged_scaling_factor = 0
+
+    if fully_converged is False:
+        # Find non converging timesteps
+        logger.info("Find converging and non converging timesteps.")
+        converging_timesteps, non_converging_timesteps = edisgo.analyze(
+            timesteps=timesteps_pfa, raise_not_converged=False
+        )
+        logger.debug(f"Following timesteps {converging_timesteps} converged.")
+        logger.debug(
+            f"Following timesteps {non_converging_timesteps} doesnt't " "converge."
+        )
+
+        # if not converged:
+        logger.info("Reinforce only converged timesteps")
+        selected_timesteps = converging_timesteps
+        _, _ = reinforce()
+
+        logger.info("Reinforce only non converged timesteps")
+        selected_timesteps = non_converging_timesteps
+        converged, results = reinforce()
+
+    while iteration < max_iterations:
+        iteration += 1
+        if converged:
+            if set_scaling_factor == 1:
+                # Initial iteration (0) worked
+                break
+            else:
+                highest_converged_scaling_factor = set_scaling_factor
+                set_scaling_factor = 1
+        else:
+            if set_scaling_factor == minimal_scaling_factor:
+                raise ValueError(
+                    "Not able to reinforce with " f"{minimal_scaling_factor=}!"
+                )
+            elif iteration == 1:
+                set_scaling_factor = minimal_scaling_factor
+            else:
+                set_scaling_factor = (
+                    (set_scaling_factor - highest_converged_scaling_factor) * 0.25
+                ) + highest_converged_scaling_factor
+
+        edisgo.timeseries = copy.deepcopy(initial_timerseries)
+        edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=set_scaling_factor,
+            q_scaling_factor=set_scaling_factor,
+        )
+        logger.info(f"Try reinforce with {set_scaling_factor=} at {iteration=}")
+        converged, results = reinforce()
+        if converged is False and iteration == max_iterations:
+            raise ValueError(
+                f"Not reinforceable, max iterations ({max_iterations}) " f"reached!"
+            )
+
+    edisgo.timeseries = initial_timerseries
+    selected_timesteps = timesteps_pfa
+    converged, results = reinforce()
+
+    return edisgo.results

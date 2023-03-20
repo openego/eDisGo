@@ -3040,5 +3040,35 @@ class Topology:
                 f"are in a different reference system."
             )
 
+    def aggregate_lv_grid_buses_on_station(self, lv_grid_id: int | str) -> None:
+        """
+        Aggregates all lv grid buses on secondary station side bus. Drop all lines of
+        lv grid and replaces bus names in "loads_df", "storages_df",
+        "charging_points_df" and "storages_df".
+
+        Parameters
+        ----------
+        lv_grid_id : int or str
+        """
+        lv_grid = self.get_lv_grid(name=lv_grid_id)
+        lines_to_drop = lv_grid.lines_df.index.to_list()
+        station_bus = lv_grid.station.index[0]
+        buses_to_drop = lv_grid.buses_df.loc[
+            lv_grid.buses_df.index != station_bus
+        ].index.to_list()
+
+        self.buses_df = self.buses_df[~self.buses_df.index.isin(buses_to_drop)]
+        self.lines_df = self.lines_df[~self.lines_df.index.isin(lines_to_drop)]
+        self.loads_df.loc[self.loads_df.bus.isin(buses_to_drop), "bus"] = station_bus
+        self.generators_df.loc[
+            self.generators_df.bus.isin(buses_to_drop), "bus"
+        ] = station_bus
+        self.charging_points_df.loc[
+            self.charging_points_df.bus.isin(buses_to_drop), "bus"
+        ] = station_bus
+        self.storage_units_df.loc[
+            self.storage_units_df.bus.isin(buses_to_drop), "bus"
+        ] = station_bus
+
     def __repr__(self):
         return f"Network topology {self.id}"

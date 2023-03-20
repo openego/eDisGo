@@ -410,14 +410,33 @@ class TestEDisGo:
         assert results.v_res.shape == (4, 142)
         assert self.edisgo.results.v_res.shape == (4, 142)
 
-        # ###################### test mode lv and copy grid ##########################
+        # ###################### test without worst case settings ####################
+        self.setup_worst_case_time_series()
+        results = self.edisgo.reinforce(is_worst_case=False)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 10
+        assert len(results.equipment_changes) == 10
+        assert results.v_res.shape == (4, 142)
+        assert self.edisgo.results.v_res.shape == (4, 142)
+
+        # ###################### test mode mv and copy grid ##########################
         self.setup_edisgo_object()
         self.setup_worst_case_time_series()
+        results = self.edisgo.reinforce(mode="mv", copy_grid=True)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 4
+        assert len(results.equipment_changes) == 4
+        assert results.v_res.shape == (4, 142)
+        assert self.edisgo.results.v_res.empty
+
+        # ###################### test mode lv and copy grid ##########################
+        # self.setup_edisgo_object()
+        # self.setup_worst_case_time_series()
         results = self.edisgo.reinforce(mode="lv", copy_grid=True)
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 6
         assert len(results.equipment_changes) == 6
-        assert results.v_res.shape == (2, 142)
+        assert results.v_res.shape == (4, 142)
         assert self.edisgo.results.v_res.empty
 
         # ################# test mode mvlv and combined analysis ####################
@@ -427,7 +446,45 @@ class TestEDisGo:
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 8
         assert len(results.equipment_changes) == 8
-        assert results.v_res.shape == (4, 41)
+        assert results.v_res.shape == (4, 142)
+
+    def test_reinforce_catch_convergence(self):
+        # ###################### test with catch convergence ##########################
+        self.setup_worst_case_time_series()
+        self.edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=10, q_scaling_factor=10
+        )
+        results = self.edisgo.reinforce(
+            catch_convergence_problems=True, is_worst_case=False
+        )
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 109
+        assert len(results.equipment_changes) == 186
+        assert results.v_res.shape == (4, 142)
+
+        # ############### test with catch convergence worst case false ################
+        self.setup_worst_case_time_series()
+        self.edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=10, q_scaling_factor=10
+        )
+        results = self.edisgo.reinforce(catch_convergence_problems=True)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 109
+        assert len(results.equipment_changes) == 186
+        assert results.v_res.shape == (4, 142)
+
+    def test_reinforce_one_lv_grid(self):
+        # ###################### test with only one lv grid ##########################
+        self.setup_worst_case_time_series()
+        lv_grid_id = list(self.edisgo.topology.mv_grid.lv_grids)[0].id
+        results = self.edisgo.reinforce(
+            mode="lv", copy_grid=True, lv_grid_id=lv_grid_id
+        )
+
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 6
+        assert len(results.equipment_changes) == 6
+        assert results.v_res.shape == (4, 142)
 
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()

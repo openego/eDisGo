@@ -16,7 +16,10 @@ from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
 )
-from edisgo.flex_opt.reinforce_grid import reinforce_grid
+from edisgo.flex_opt.reinforce_grid import (
+    catch_convergence_reinforce_grid,
+    reinforce_grid,
+)
 from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
@@ -655,7 +658,7 @@ class EDisGo:
 
         Returns
         -------
-        :networkx:`networkx.Graph<>`
+        :networkx:`networkx.Graph<network.Graph>`
             Graph representation of the grid as networkx Ordered Graph,
             where lines are represented by edges in the graph, and buses and
             transformers are represented by nodes.
@@ -886,7 +889,7 @@ class EDisGo:
                         setattr(obj1, attr, getattr(obj2, attr) * fraction)
                 # run power flow analysis
                 pf_results = pypsa_network.pf(timesteps, use_seed=True)
-                logging.warning(
+                logger.warning(
                     "Current fraction in iterative process: {}.".format(fraction)
                 )
                 # get converged and not converged time steps
@@ -902,7 +905,7 @@ class EDisGo:
         # handle converged time steps
         pypsa_io.process_pfa_results(self, pypsa_network, timesteps_converged)
 
-        return timesteps_not_converged
+        return timesteps_converged, timesteps_not_converged
 
     def reinforce(
         self,
@@ -912,6 +915,7 @@ class EDisGo:
         combined_analysis: bool = False,
         mode: str | None = None,
         without_generator_import: bool = False,
+        catch_convergence_problems: bool = False,
         **kwargs,
     ) -> Results:
         """
@@ -930,95 +934,94 @@ class EDisGo:
             Is used to overwrite the return value from
             :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case`. If True
             reinforcement is calculated for worst-case MV and LV cases separately.
-        troubleshooting_mode : str or None
-            Two optional troubleshooting methods in case of nonconvergence of nonlinear
-            power flow (cf. [1])
 
-            * None (default)
-                Power flow analysis is conducted using nonlinear power flow method.
-            * 'lpf'
-                Non-linear power flow initial guess is seeded with the voltage angles
-                from the linear power flow.
-            * 'iteration'
-                Power flow analysis is conducted by reducing all power values of
-                generators and loads to a fraction, e.g. 10%, solving the load flow and
-                using it as a seed for the power at 20%, iteratively up to 100%.
-        raise_not_converged : bool
-            If True, an error is raised in case power flow analysis did not converge
-            for all time steps.
-            Default: True.
+        catch_convergence_problems : bool
+            Uses reinforcement strategy to reinforce not converging grid.
+            Reinforces first with only converging timesteps. Reinforce again with at
+            start not converging timesteps. If still not converging, scale timeseries.
+            To use method "is_worst_case" must be "False".
+            Default: False
+
+        lv_grid_id : str or int
+            LV grid id to specify the grid to check, if mode is "lv".
 
         """
-        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
+        if copy_grid:
+            edisgo_obj = copy.deepcopy(self)
+        else:
+            edisgo_obj = self
 
+        # Build reinforce run settings
+        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
             logger.debug(
                 "Running reinforcement in worst-case mode by differentiating between "
                 "MV and LV load and feed-in cases."
             )
-
-            if copy_grid:
-                edisgo_obj = copy.deepcopy(self)
-            else:
-                edisgo_obj = self
-
             timeindex_worst_cases = self.timeseries.timeindex_worst_cases
+            timesteps_mv = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("mv")
+                ]
+            )
+            timesteps_lv = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("lv")
+                ]
+            )
+            # Run everytime the analyze-method at the end, to get a power flow for all
+            # timesteps for reinforced components
+            run_analyze_at_the_end = True
+            if mode is None:
+                setting_list = [
+                    {"mode": "mv", "timesteps_pfa": timesteps_mv},
+                    {"mode": "lv", "timesteps_pfa": timesteps_lv},
+                ]
+            elif mode == "mv":
+                setting_list = [
+                    {"mode": "mv", "timesteps_pfa": timesteps_mv},
+                ]
+            elif mode == "mvlv":
+                setting_list = [{"mode": "mvlv", "timesteps_pfa": timesteps_mv}]
+            elif mode == "lv":
+                setting_list = [{"mode": "lv", "timesteps_pfa": timesteps_lv}]
 
-            if mode != "lv":
+            else:
+                raise ValueError(f"Mode {mode} does not exist.")
+        else:
+            setting_list = [{"mode": mode, "timesteps_pfa": timesteps_pfa}]
+            run_analyze_at_the_end = False
 
-                timesteps_pfa = pd.DatetimeIndex(
-                    timeindex_worst_cases.loc[
-                        timeindex_worst_cases.index.str.contains("mv")
-                    ]
-                )
+        for setting in setting_list:
+            if not catch_convergence_problems:
                 reinforce_grid(
                     edisgo_obj,
                     max_while_iterations=max_while_iterations,
                     copy_grid=False,
-                    timesteps_pfa=timesteps_pfa,
+                    timesteps_pfa=setting["timesteps_pfa"],
                     combined_analysis=combined_analysis,
-                    mode="mv",
-                    without_generator_import=without_generator_import,
-                )
-
-            if mode != "mv":
-                timesteps_pfa = pd.DatetimeIndex(
-                    timeindex_worst_cases.loc[
-                        timeindex_worst_cases.index.str.contains("lv")
-                    ]
-                )
-                reinforce_mode = mode if mode == "mvlv" else "lv"
-                reinforce_grid(
-                    edisgo_obj,
-                    max_while_iterations=max_while_iterations,
-                    copy_grid=False,
-                    timesteps_pfa=timesteps_pfa,
-                    combined_analysis=combined_analysis,
-                    mode=reinforce_mode,
+                    mode=setting["mode"],
                     without_generator_import=without_generator_import,
                     **kwargs,
                 )
-
-            if mode not in ["mv", "lv"]:
-                edisgo_obj.analyze(mode=mode)
-            results = edisgo_obj.results
-
-        else:
-            results = reinforce_grid(
-                self,
-                max_while_iterations=max_while_iterations,
-                copy_grid=copy_grid,
-                timesteps_pfa=timesteps_pfa,
-                combined_analysis=combined_analysis,
-                mode=mode,
-                without_generator_import=without_generator_import,
-                **kwargs,
-            )
+            else:
+                catch_convergence_reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=setting["timesteps_pfa"],
+                    combined_analysis=combined_analysis,
+                    mode=setting["mode"],
+                    without_generator_import=without_generator_import,
+                    **kwargs,
+                )
+        if run_analyze_at_the_end:
+            edisgo_obj.analyze()
 
         # add measure to Results object
         if not copy_grid:
             self.results.measures = "grid_expansion"
 
-        return results
+        return edisgo_obj.results
 
     def perform_mp_opf(self, timesteps, storage_series=None, **kwargs):
         """
@@ -1139,7 +1142,7 @@ class EDisGo:
                     )
                 elif ts_reactive_power == "default":
                     if ts_active_power is None:
-                        logging.warning(
+                        logger.warning(
                             f"Default reactive power time series of {comp_name} cannot "
                             "be set as active power time series was not provided."
                         )
@@ -1808,13 +1811,13 @@ class EDisGo:
         """
         try:
             if self.results.v_res is None:
-                logging.warning(
+                logger.warning(
                     "Voltages from power flow "
                     "analysis must be available to plot them."
                 )
                 return
         except AttributeError:
-            logging.warning(
+            logger.warning(
                 "Results must be available to plot voltages. "
                 "Please analyze grid first."
             )
@@ -1846,13 +1849,13 @@ class EDisGo:
         """
         try:
             if self.results.i_res is None:
-                logging.warning(
+                logger.warning(
                     "Currents `i_res` from power flow analysis "
                     "must be available to plot line loading."
                 )
                 return
         except AttributeError:
-            logging.warning(
+            logger.warning(
                 "Results must be available to plot line loading. "
                 "Please analyze grid first."
             )
@@ -1888,13 +1891,13 @@ class EDisGo:
         """
         try:
             if self.results.grid_expansion_costs is None:
-                logging.warning(
+                logger.warning(
                     "Grid expansion cost results needed to plot "
                     "them. Please do grid reinforcement."
                 )
                 return
         except AttributeError:
-            logging.warning(
+            logger.warning(
                 "Results of MV topology needed to  plot topology "
                 "expansion costs. Please reinforce first."
             )
@@ -2319,9 +2322,7 @@ class EDisGo:
                     f" the following {comp_type}: {exceeding.values}"
                 )
 
-            logger.info(
-                "Integrity check finished. Please pay attention to " "warnings."
-            )
+            logger.info("Integrity check finished. Please pay attention to warnings.")
 
     def resample_timeseries(
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
@@ -2505,7 +2506,7 @@ def import_edisgo_from_files(
 
     if not from_zip_archive and str(edisgo_path).endswith(".zip"):
         from_zip_archive = True
-        logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
+        logger.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
 
     edisgo_obj = EDisGo()
     try:
@@ -2515,7 +2516,7 @@ def import_edisgo_from_files(
             "from_zip_archive": from_zip_archive,
         }
     except FileNotFoundError:
-        logging.info(
+        logger.info(
             "Configuration data could not be loaded from json wherefore "
             "the default configuration data is loaded."
         )
@@ -2534,7 +2535,7 @@ def import_edisgo_from_files(
         if os.path.exists(directory):
             edisgo_obj.topology.from_csv(directory, edisgo_obj, from_zip_archive)
         else:
-            logging.warning("No topology data found. Topology not imported.")
+            logger.warning("No topology data found. Topology not imported.")
 
     if import_timeseries:
         dtype = kwargs.get("dtype", None)
@@ -2549,7 +2550,7 @@ def import_edisgo_from_files(
                 directory, dtype=dtype, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning("No time series data found. Timeseries not imported.")
+            logger.warning("No time series data found. Timeseries not imported.")
 
     if import_results:
         parameters = kwargs.get("parameters", None)
@@ -2565,7 +2566,7 @@ def import_edisgo_from_files(
                 directory, parameters, dtype=dtype, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning("No results data found. Results not imported.")
+            logger.warning("No results data found. Results not imported.")
 
     if import_electromobility:
         if not from_zip_archive:
@@ -2579,7 +2580,7 @@ def import_edisgo_from_files(
                 directory, edisgo_obj, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning(
+            logger.warning(
                 "No electromobility data found. Electromobility not imported."
             )
 
@@ -2593,6 +2594,6 @@ def import_edisgo_from_files(
         if os.path.exists(directory):
             edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
-            logging.warning("No heat pump data found. Heat pump data not imported.")
+            logger.warning("No heat pump data found. Heat pump data not imported.")
 
     return edisgo_obj

@@ -54,13 +54,18 @@ def mv_line_load(edisgo_obj):
     return crit_lines
 
 
-def lv_line_load(edisgo_obj):
+def lv_line_load(edisgo_obj, **kwargs):
     """
     Checks for over-loading issues in LV network.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+
+    Other Parameters
+    -----------------
+    lv_grid_id : str or int
+        LV grid id to specify the grid to check, if mode is "lv".
 
     Returns
     -------
@@ -83,7 +88,7 @@ def lv_line_load(edisgo_obj):
 
     """
 
-    crit_lines = _line_load(edisgo_obj, voltage_level="lv")
+    crit_lines = _line_load(edisgo_obj, voltage_level="lv", **kwargs)
 
     if not crit_lines.empty:
         logger.debug(
@@ -97,7 +102,7 @@ def lv_line_load(edisgo_obj):
     return crit_lines
 
 
-def lines_allowed_load(edisgo_obj, voltage_level):
+def lines_allowed_load(edisgo_obj, voltage_level, **kwargs):
     """
     Get allowed maximum current per line per time step
 
@@ -107,6 +112,11 @@ def lines_allowed_load(edisgo_obj, voltage_level):
     voltage_level : str
         Grid level, allowed line load is returned for. Possible options are
         "mv" or "lv".
+
+    Other Parameters
+    -----------------
+    lv_grid_id : str or int
+        LV grid id to specify the grid to check, if mode is "lv".
 
     Returns
     -------
@@ -120,9 +130,13 @@ def lines_allowed_load(edisgo_obj, voltage_level):
     # get lines and nominal voltage
     mv_grid = edisgo_obj.topology.mv_grid
     if voltage_level == "lv":
-        lines_df = edisgo_obj.topology.lines_df[
-            ~edisgo_obj.topology.lines_df.index.isin(mv_grid.lines_df.index)
-        ]
+        if kwargs.get("lv_grid_id", None):
+            lv_grid = edisgo_obj.topology.get_lv_grid(kwargs.get("lv_grid_id", None))
+            lines_df = lv_grid.lines_df
+        else:
+            lines_df = edisgo_obj.topology.lines_df[
+                ~edisgo_obj.topology.lines_df.index.isin(mv_grid.lines_df.index)
+            ]
         lv_grids = list(edisgo_obj.topology.lv_grids)
         if len(lv_grids) > 0:
             nominal_voltage = lv_grids[0].nominal_voltage
@@ -215,7 +229,7 @@ def lines_relative_load(edisgo_obj, lines_allowed_load):
     return i_lines_pfa / lines_allowed_load
 
 
-def _line_load(edisgo_obj, voltage_level):
+def _line_load(edisgo_obj, voltage_level, **kwargs):
     """
     Checks for over-loading issues of lines.
 
@@ -225,6 +239,11 @@ def _line_load(edisgo_obj, voltage_level):
     voltage_level : str
         Voltage level, over-loading is checked for. Possible options are
         "mv" or "lv".
+
+    Other Parameters
+    -----------------
+    lv_grid_id : str or int
+        LV grid id to specify the grid to check, if mode is "lv".
 
     Returns
     -------
@@ -247,7 +266,7 @@ def _line_load(edisgo_obj, voltage_level):
         )
 
     # get allowed line load
-    i_lines_allowed = lines_allowed_load(edisgo_obj, voltage_level)
+    i_lines_allowed = lines_allowed_load(edisgo_obj, voltage_level, **kwargs)
 
     # calculate relative line load and keep maximum over-load of each line
     relative_i_res = lines_relative_load(edisgo_obj, i_lines_allowed)
@@ -305,13 +324,18 @@ def hv_mv_station_load(edisgo_obj):
     return crit_stations
 
 
-def mv_lv_station_load(edisgo_obj):
+def mv_lv_station_load(edisgo_obj, **kwargs):
     """
     Checks for over-loading of MV/LV stations.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+
+    Other Parameters
+    -----------------
+    lv_grid_id : str or int
+        LV grid id to specify the grid to check, if mode is "lv".
 
     Returns
     -------
@@ -498,7 +522,7 @@ def mv_voltage_deviation(edisgo_obj, voltage_levels="mv_lv"):
     return crit_buses
 
 
-def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
+def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv", **kwargs):
     """
     Checks for voltage stability issues in LV networks.
 
@@ -522,6 +546,11 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
           Use this to handle allowed voltage limits in the MV and LV
           topology differently. In that case, load and feed-in case are
           differentiated.
+
+    Other Parameters
+    -----------------
+    lv_grid_id : str or int
+        LV grid id to specify the grid to check, if mode is "lv".
 
     Returns
     -------
@@ -554,7 +583,12 @@ def lv_voltage_deviation(edisgo_obj, mode=None, voltage_levels="mv_lv"):
             "'lv'.".format(voltage_levels)
         )
 
-    for lv_grid in edisgo_obj.topology.lv_grids:
+    if kwargs.get("lv_grid_id", None):
+        lv_grids = [edisgo_obj.topology.get_lv_grid(kwargs.get("lv_grid_id", None))]
+    else:
+        lv_grids = edisgo_obj.topology.lv_grids
+
+    for lv_grid in lv_grids:
 
         if mode:
             if mode == "stations":
