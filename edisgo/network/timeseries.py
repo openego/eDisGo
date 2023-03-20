@@ -455,7 +455,7 @@ class TimeSeries:
             ts_generators = ts_generators.loc[:, comps_in_network]
 
             # drop generators time series from self.generators_(re)active_power that may
-            # already exist for some of the given generators
+            # already exist for some given generators
             df_name = f"generators_{mode}_power"
             # set (re)active power
             self.add_component_time_series(df_name=df_name, ts_new=ts_generators)
@@ -469,7 +469,7 @@ class TimeSeries:
             ts_loads = ts_loads.loc[:, comps_in_network]
 
             # drop load time series from self.loads_(re)active_power that may
-            # already exist for some of the given loads
+            # already exist for some given loads
             df_name = f"loads_{mode}_power"
             # set (re)active power
             self.add_component_time_series(df_name=df_name, ts_new=ts_loads)
@@ -2137,7 +2137,7 @@ class TimeSeries:
         """
         Checks if all provided components exist in the network.
 
-        Raises warning if there any provided components that are not in the network.
+        Raises warning if there are any provided components that are not in the network.
 
         Parameters
         ----------

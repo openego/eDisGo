@@ -352,7 +352,7 @@ class Electromobility:
     def flexibility_bands(self, flex_dict):
         self._flexibility_bands = flex_dict
 
-    def get_flexibility_bands(self, edisgo_obj, use_case, resample=True):
+    def get_flexibility_bands(self, edisgo_obj, use_case, resample=True, tol=1e-6):
         """
         Method to determine flexibility bands (lower and upper energy band as well as
         upper power band).
@@ -370,6 +370,13 @@ class Electromobility:
             series data in :class:`~.network.timeseries.TimeSeries` object. If False,
             original frequency is kept.
             Default: True.
+        tol : float
+            Tolerance to reduce or increase flexibility band values by to fix
+            possible rounding errors that may lead to failing integrity checks
+            and infeasibility when used to optimise charging.
+            See :py:attr:`~fix_flexibility_bands_rounding_errors`
+            for more information. To avoid this behaviour, set `tol` to 0.0.
+            Default: 1e-6.
 
         Returns
         --------
@@ -381,8 +388,6 @@ class Electromobility:
             Index is a time index.
 
         """
-
-        # Todo: change such that first day is replaced by (365+1)th day
 
         if isinstance(use_case, str):
             use_case = [use_case]
@@ -484,10 +489,13 @@ class Electromobility:
         }
         self.flexibility_bands = flex_band_dict
 
+        # fix rounding errors
+        self.fix_flexibility_bands_rounding_errors(tol=tol)
+
+        edisgo_timeindex = edisgo_obj.timeseries.timeindex
         if resample:
             # check if time index matches Timeseries.timeindex and if not resample flex
             # bands
-            edisgo_timeindex = edisgo_obj.timeseries.timeindex
             if len(edisgo_timeindex) > 1:
                 # check if frequencies match
                 freq_edisgo = edisgo_timeindex[1] - edisgo_timeindex[0]
@@ -497,8 +505,114 @@ class Electromobility:
 
         # sanity check
         self.check_integrity()
-
+        # check time index
+        if len(edisgo_timeindex) > 0:
+            missing_indices = [_ for _ in edisgo_timeindex if _ not in flex_band_index]
+            if len(missing_indices) > 0:
+                logger.warning(
+                    "There are time steps in timeindex of TimeSeries object that "
+                    "are not in the index of the flexibility bands. This may lead "
+                    "to problems."
+                )
         return self.flexibility_bands
+
+    def fix_flexibility_bands_rounding_errors(self, tol=1e-6):
+        """
+        Fixes possible rounding errors that may lead to failing integrity checks.
+
+        Due to rounding errors it may occur, that e.g. the upper energy band is lower
+        than the lower energy band. This does in some cases lead to infeasibilities
+        when used to optimise charging processes.
+
+        This function increases or reduces a flexibility band by the specified tolerance
+        in case an integrity check fails as follows:
+
+        * If there are cases where the upper power band is not sufficient to meet
+          the charged upper energy, the upper power band is increased for all
+          charging points and all time steps.
+        * If there are cases where the lower energy band is larger than the upper
+          energy band, the lower energy band is reduced for all charging points and
+          all time steps.
+        * If there are cases where upper power band is not sufficient
+          to meet charged lower energy, the upper power band is increased for all
+          charging points and all time steps.
+
+        Parameters
+        -----------
+        tol : float
+            Tolerance to reduce or increase values by to fix rounding errors.
+            Default: 1e-6.
+
+        """
+
+        flex_band = list(self.flexibility_bands.values())[0]
+        # if there are no flex bands, skip
+        if flex_band.empty:
+            return
+
+        efficiency = self.eta_charging_points
+        freq_orig = flex_band.index[1] - flex_band.index[0]
+        hourly_steps = int(60 / (freq_orig.total_seconds() / 60))
+
+        # increase upper power, if there are cases where upper power is not sufficient
+        # to meet charged upper energy
+        if (
+            (
+                (
+                    self.flexibility_bands["upper_energy"].diff()
+                    - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
+                )
+                > 0.0
+            )
+            .any()
+            .any()
+        ):
+            logger.debug(
+                "There are cases when upper power is not sufficient to meet charged "
+                "upper energy. Upper power band is therefore increased to avoid "
+                "infeasibilities arising from rounding errors."
+            )
+            self.flexibility_bands["upper_power"] += tol
+
+        # reduce lower energy band if there are cases where it is larger than upper
+        # energy band
+        if (
+            (
+                (
+                    self.flexibility_bands["upper_energy"]
+                    - self.flexibility_bands["lower_energy"]
+                )
+                < 0.0
+            )
+            .any()
+            .any()
+        ):
+            logger.debug(
+                "There are cases when lower energy band is larger than upper energy "
+                "band. Lower energy band is therefore reduced to avoid infeasibilities "
+                "arising from rounding errors."
+            )
+            self.flexibility_bands["lower_energy"] -= tol
+
+        # increase upper power, if there are cases where upper power is not sufficient
+        # to meet charged lower energy
+        if (
+            (
+                (
+                    self.flexibility_bands["lower_energy"].diff()
+                    - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
+                )
+                > 0.0
+            )
+            .any()
+            .any()
+        ):
+            logger.debug(
+                "There are cases when upper power is not sufficient to meet charged "
+                "lower energy. Upper power band is therefore increased to avoid "
+                "infeasibilities arising from rounding errors."
+            )
+            self.flexibility_bands["upper_power"] += tol
 
     def resample(self, freq: str = "15min"):
         """
@@ -515,10 +629,25 @@ class Electromobility:
         """
 
         flex_band = list(self.flexibility_bands.values())[0]
-        if flex_band.empty:
+        if flex_band.empty or len(flex_band.index) < 2:
             return
 
+        # check if frequency is always the same (can only be checked for more than two
+        # time steps as pd.infer_freq needs more than two time steps)
+        if len(flex_band.index) > 2:
+            freq_inferred = pd.infer_freq(flex_band.index)
+            if freq_inferred is None:
+                logger.warning(
+                    "Index of flexibility bands does not have a discernible frequency. "
+                    "The flexibility bands can therefore not be resampled."
+                )
+                return
+
+        # determine frequency of flexibility bands
+        # pd.infer_freq is not used to determine frequency as it is not always
+        # compatible with pd.Timedelta() needed to check whether to sample down or up
         freq_orig = flex_band.index[1] - flex_band.index[0]
+
         if not isinstance(freq, pd.Timedelta):
             freq = pd.Timedelta(freq)
         # in case of up-sampling, check if index is continuous and if new index fits
@@ -546,12 +675,12 @@ class Electromobility:
         for band in self.flexibility_bands.keys():
             df_dict[band] = getattr(self, "flexibility_bands")[band]
             if freq < freq_orig:  # up-sampling
-                new_dates = pd.DatetimeIndex([df_dict[band].index[-1] + freq_orig])
+                end_date = pd.DatetimeIndex([df_dict[band].index[-1] + freq_orig])
             else:  # down-sampling (nothing happens)
-                new_dates = pd.DatetimeIndex([df_dict[band].index[-1]])
+                end_date = pd.DatetimeIndex([df_dict[band].index[-1]])
             df_dict[band] = (
                 df_dict[band]
-                .reindex(df_dict[band].index.union(new_dates).unique().sort_values())
+                .reindex(df_dict[band].index.union(end_date).unique().sort_values())
                 .ffill()
             )
 
@@ -574,10 +703,19 @@ class Electromobility:
                     df_dict[band].index = df_dict[band].index.shift(
                         int(freq.total_seconds()) * (num_times - 1), "s"
                     )
+                    # values of first time step are energy values minus possible change
+                    # in energy negative values are set to zero
+                    index_pre_values = (
+                        df_dict[band].iloc[0]
+                        - df_dict["upper_power"].iloc[0] / num_times
+                    )
+                    index_pre_values[index_pre_values < 0.0] = 0.0
                     df_dict[band] = pd.concat(
                         [
                             pd.DataFrame(
-                                index=[index_pre], columns=df_dict[band].columns, data=0
+                                index=[index_pre],
+                                columns=df_dict[band].columns,
+                                data=index_pre_values.to_dict(),
                             ),
                             df_dict[band],
                         ]
@@ -590,7 +728,7 @@ class Electromobility:
 
                     # drop time steps - time step that was added in the beginning
                     # and time steps that were added due to the shift
-                    df_dict[band] = df_dict[band].loc[: new_dates[0], :]
+                    df_dict[band] = df_dict[band].loc[: end_date[0], :]
                     df_dict[band] = df_dict[band].iloc[1:-1, :]
         else:  # down-sampling
             for band in self.flexibility_bands.keys():
@@ -620,49 +758,43 @@ class Electromobility:
         freq_orig = flex_band.index[1] - flex_band.index[0]
         hourly_steps = int(60 / (freq_orig.total_seconds() / 60))
 
-        if (
-            (
-                (
-                    self.flexibility_bands["upper_energy"]
-                    - self.flexibility_bands["lower_energy"]
-                )
-                < -1e-6
-            )
-            .any()
-            .any()
-        ):
+        diff = (
+            self.flexibility_bands["upper_energy"]
+            - self.flexibility_bands["lower_energy"]
+        )
+        tmp = (diff < 0.0).any()
+        if tmp.any():
+            max_exceedance = abs(diff.min().min())
             raise ValueError(
-                "Lower energy bound is higher than upper energy bound. Please check."
+                f"Lower energy band is higher than upper energy band for the "
+                f"following charging points: {list(tmp[tmp].index)}. The maximum "
+                f"exceedance is {max_exceedance}. Please check."
             )
-        if (
-            (
-                (
-                    self.flexibility_bands["upper_energy"].diff()
-                    - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
-                )
-                > 1e-6
-            )
-            .any()
-            .any()
-        ):
+
+        diff = (
+            self.flexibility_bands["upper_energy"].diff()
+            - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
+        )
+        tmp = (diff > 0.0).any()
+        if tmp.any():
+            max_exceedance = diff.max().max()
             raise ValueError(
-                "Upper energy band has power values higher than nominal power. "
-                "Please check."
+                f"Upper energy band has power values higher than nominal power for the "
+                f"following charging points: {list(tmp[tmp].index)}. The maximum "
+                f"exceedance is {max_exceedance}. Please check."
             )
-        if (
-            (
-                (
-                    self.flexibility_bands["lower_energy"].diff()
-                    - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
-                )
-                > 1e-6
-            )
-            .any()
-            .any()
-        ):
+
+        diff = (
+            self.flexibility_bands["lower_energy"].diff()
+            - self.flexibility_bands["upper_power"] * efficiency / hourly_steps
+        )
+        tmp = (diff > 0.0).any()
+        if tmp.any():
+            max_exceedance = diff.max().max()
             raise ValueError(
-                "Lower energy band has power values higher than nominal power. "
-                "Please check."
+                f"Lower energy band has power values higher than nominal power for the "
+                f"following charging points: {list(tmp[tmp].index)}. The maximum "
+                f"exceedance is {max_exceedance}. Please check."
             )
 
     def to_csv(self, directory, attributes=None):
@@ -801,6 +933,11 @@ class Electromobility:
                         df, geometry="geometry", crs={"init": "epsg:4326"}
                     )
 
+            if attr == "simbev_config_df":
+                for col in ["start_date", "end_date"]:
+                    if col in df.columns:
+                        df[col] = pd.to_datetime(df[col])
+
             setattr(self, attr, df)
 
         if from_zip_archive:
@@ -893,7 +1030,7 @@ def _get_matching_dict_of_attributes_and_file_names():
 
     Is used in functions
     :attr:`~.network.electromobility.Electromobility.from_csv` and
-    attr:`~.network.electromobility.Electromobility.to_csv`.
+    :attr:`~.network.electromobility.Electromobility.to_csv`.
 
     Returns
     -------
