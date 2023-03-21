@@ -1473,8 +1473,8 @@ class Topology:
         )
         self.buses_df = pd.concat(
             [
-                self.buses_df,
                 new_bus_df,
+                self.buses_df,
             ]
         )
         return bus_name
