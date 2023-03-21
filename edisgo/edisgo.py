@@ -842,7 +842,7 @@ class EDisGo:
         Other Parameters
         ----------------
         kwargs :
-            In case you are using new  ing0 grids, where the LV is geo-referenced, a
+            In case you are using new ding0 grids, where the LV is geo-referenced, a
             database engine needs to be provided through keyword argument `engine`.
             In case you are using old ding0 grids, where the LV is not geo-referenced,
             you can check :func:`edisgo.io.generators_import.oedb_legacy` for possible
@@ -1882,14 +1882,6 @@ class EDisGo:
             are 'eGon2035' and 'eGon100RE'.
         engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
             Database engine.
-        year : int or None
-            Year to index COP and heat demand data by.
-            If none is provided and :py:attr:`~.network.timeseries.TimeSeries.timeindex`
-            is already set, data is indexed by the same year. Otherwise, time index will
-            be set according to the scenario (2035 in case of the 'eGon2035' scenario
-            and 2045 in case of the 'eGon100RE' scenario).
-            A leap year can currently not be handled. In case a leap year is given, the
-            time index is set according to the chosen scenario.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to set COP and heat demand data. Leap years
             can currently not be handled. In case the given
