@@ -8,6 +8,7 @@ from sklearn.preprocessing import StandardScaler
 
 from edisgo.flex_opt import check_tech_constraints
 from edisgo.flex_opt.costs import line_expansion_costs
+from edisgo.tools.tools import assign_feeder
 
 logger = logging.getLogger(__name__)
 
@@ -69,11 +70,18 @@ def _scored_most_critical_loading_MH(edisgo_obj, window_days):
     costs_lines = (
         line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
     )
-    costs_trafos = pd.Series(
-        index=crit_lines_score.drop(columns=costs_lines.index).columns,
+    costs_trafos_lv = pd.Series(
+        index=[
+            lv_grid.station.index[0] for lv_grid in edisgo_obj.topology.mv_grid.lv_grids
+        ],
         data=edisgo_obj.config._data["costs_transformers"]["lv"],
     )
-    costs = pd.concat([costs_lines, costs_trafos])
+    costs_trafos_mv = pd.Series(
+        index=[edisgo_obj.topology.mv_grid.station.index[0]],
+        data=edisgo_obj.config._data["costs_transformers"]["mv"],
+    )
+    costs = pd.concat([costs_lines, costs_trafos_lv, costs_trafos_mv])
+
     crit_lines_score = crit_lines_score * costs
     # Get most "expensive" time intervall over all components
     crit_timesteps = (
@@ -124,6 +132,84 @@ def _scored_most_critical_voltage_issues(edisgo_obj):
     voltage_diff = voltage_diff.sum(axis=1)
 
     return voltage_diff.sort_values(ascending=False)
+
+
+def _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days):
+    voltage_diff = check_tech_constraints.voltage_deviation_from_allowed_voltage_limits(
+        edisgo_obj
+    )
+
+    # Get score for nodes that are over or under the allowed deviations
+    voltage_diff = voltage_diff.abs()[voltage_diff.abs() > 0]
+
+    assign_feeder(edisgo_obj, mode="mv_feeder")
+
+    # determine costs per feeder
+    costs_lines = (
+        line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
+    )
+    costs_trafos_lv = pd.Series(
+        index=[
+            lv_grid.station.index[0] for lv_grid in edisgo_obj.topology.mv_grid.lv_grids
+        ],
+        data=edisgo_obj.config._data["costs_transformers"]["lv"],
+    )
+    costs_trafos_mv = pd.Series(
+        index=[edisgo_obj.topology.mv_grid.station.index[0]],
+        data=edisgo_obj.config._data["costs_transformers"]["mv"],
+    )
+    costs = pd.concat([costs_lines, costs_trafos_lv, costs_trafos_mv])
+
+    feeder_lines = edisgo_obj.topology.lines_df.mv_feeder
+    feeder_trafos_lv = pd.Series(
+        index=[
+            lv_grid.station.index[0] for lv_grid in edisgo_obj.topology.mv_grid.lv_grids
+        ],
+        data=[
+            lv_grid.station.mv_feeder[0]
+            for lv_grid in edisgo_obj.topology.mv_grid.lv_grids
+        ],
+    )
+    feeder_trafos_mv = pd.Series(
+        index=[edisgo_obj.topology.mv_grid.station.index[0]],
+        data=[edisgo_obj.topology.mv_grid.station.mv_feeder[0]],
+    )
+    feeders = pd.concat([feeder_lines, feeder_trafos_lv, feeder_trafos_mv])
+    costs_per_feeder = (
+        pd.concat([costs.rename("costs"), feeders.rename("feeder")], axis=1)
+        .groupby(by="feeder")[["costs"]]
+        .sum()
+    )
+
+    feeders_buses = edisgo_obj.topology.buses_df.mv_feeder
+    columns = [
+        feeders_buses.loc[voltage_diff.columns[i]]
+        for i in range(len(voltage_diff.columns))
+    ]
+    voltage_diff.columns = columns
+    voltage_diff_feeder = (
+        voltage_diff.transpose().reset_index().groupby(by="index").sum().transpose()
+    )
+    voltage_diff_feeder[voltage_diff_feeder != 0] = 1
+
+    # weigth feeder voltage violation with costs per feeder
+    voltage_diff_feeder = voltage_diff_feeder * costs_per_feeder.squeeze()
+    # Todo: should there be different ones for over and undervoltage?
+    # Get most "expensive" time intervall over all feeders
+    crit_timesteps = (
+        voltage_diff_feeder.rolling(window=window_days * 24, closed="right")
+        .max()
+        .sum(axis=1)
+    )
+    # time intervall starts at 4am on every considered day
+    crit_timesteps = crit_timesteps.iloc[4::24].sort_values(ascending=False)
+    timesteps = crit_timesteps.index - pd.DateOffset(days=window_days)
+    time_intervalls = [
+        pd.date_range(start=timestep, periods=window_days * 24 + 1, freq="h")
+        for timestep in timesteps
+    ]
+
+    return time_intervalls
 
 
 def get_steps_reinforcement(
@@ -286,9 +372,9 @@ def get_steps_storage(edisgo_obj, window=5):
 
 def get_steps_flex_opf(
     edisgo_obj,
-    num_steps_loading=None,
-    num_steps_voltage=None,
-    percentage=1.0,
+    num_ti_loading=None,
+    num_ti_voltage=None,
+    percentage=0.1,
     window_days=7,
 ):
     """
@@ -298,59 +384,57 @@ def get_steps_flex_opf(
     -----------
     edisgo_obj : :class:`~.EDisGo`
         The eDisGo API object
-    num_steps_loading: int
-        The number of most critical overloading events to select, if None percentage
-        is used
-    num_steps_voltage: int
+    num_ti_loading: int
+        The number of most critical overloading time intervals to select, if None
+        percentage is used
+    num_ti_voltage: int
         The number of most critical voltage issues to select, if None percentage is used
     percentage : float
-        The percentage of most critical time steps to select
+        The percentage of most critical time intervals to select
     Returns
     --------
-    `pandas.DatetimeIndex`
-        the reduced time index for modeling curtailment
+    list containing multiple `pandas.DatetimeIndex`
+        list of time intervals (`pandas.DatetimeIndex`) for OPF
     """
     # Run power flow if not available
     if edisgo_obj.results.i_res is None or edisgo_obj.results.i_res.empty:
         logger.debug("Running initial power flow")
         edisgo_obj.analyze(raise_not_converged=False)  # Todo: raise warning?
 
-    # Select most critical steps based on current violations
+    # Select most critical time intervalls based on current violations
     loading_scores = _scored_most_critical_loading_MH(edisgo_obj, window_days)
-    if num_steps_loading is None:
-        num_steps_loading = int(len(loading_scores) * percentage)
+    if num_ti_loading is None:
+        num_ti_loading = int(np.ceil(len(loading_scores) * percentage))
     else:
-        if num_steps_loading > len(loading_scores):
+        if num_ti_loading > len(loading_scores):
             logger.info(
-                f"The number of time steps with highest overloading "
+                f"The number of time intervals with highest overloading "
                 f"({len(loading_scores)}) is lower than the defined number of "
-                f"loading time steps ({num_steps_loading}). Therefore, only "
-                f"{len(loading_scores)} time steps are exported."
+                f"loading time intervals ({num_ti_loading}). Therefore, only "
+                f"{len(loading_scores)} time intervals are exported."
             )
-            num_steps_loading = len(loading_scores)
-    steps = loading_scores[:num_steps_loading].index
+            num_ti_loading = len(loading_scores)
+    steps = loading_scores[:num_ti_loading]
 
     # Select most critical steps based on voltage violations
-    voltage_scores = _scored_most_critical_voltage_issues(edisgo_obj)
-    if num_steps_voltage is None:
-        num_steps_voltage = int(len(voltage_scores) * percentage)
+    voltage_scores = _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days)
+    if num_ti_voltage is None:
+        num_ti_voltage = int(np.ceil(len(voltage_scores) * percentage))
     else:
-        if num_steps_voltage > len(voltage_scores):
+        if num_ti_voltage > len(voltage_scores):
             logger.info(
                 f"The number of time steps with highest voltage issues "
                 f"({len(voltage_scores)}) is lower than the defined number of "
-                f"voltage time steps ({num_steps_voltage}). Therefore, only "
+                f"voltage time steps ({num_ti_voltage}). Therefore, only "
                 f"{len(voltage_scores)} time steps are exported."
             )
-            num_steps_voltage = len(voltage_scores)
-    steps = steps.append(
-        voltage_scores[:num_steps_voltage].index
-    )  # Todo: Can this cause duplicated?
+            num_ti_voltage = len(voltage_scores)
+    steps.append(voltage_scores[:num_ti_voltage])  # Todo: Can this cause duplicated?
 
     if len(steps) == 0:
         logger.warning("No critical steps detected. No network expansion required.")
 
-    return pd.DatetimeIndex(steps.unique())
+    return steps
 
 
 def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):
