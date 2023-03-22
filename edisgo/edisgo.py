@@ -2338,7 +2338,7 @@ class EDisGo:
             Main directory to save EDisGo object to.
         save_topology : bool, optional
             Indicates whether to save :class:`~.network.topology.Topology` object.
-            Per default it is saved to sub-directory 'topology'. See
+            Per default, it is saved to sub-directory 'topology'. See
             :attr:`~.network.topology.Topology.to_csv` for more information.
             Default: True.
         save_timeseries : bool, optional
@@ -2351,7 +2351,7 @@ class EDisGo:
             Default: True.
         save_results : bool, optional
             Indicates whether to save :class:`~.network.results.Results`
-            object. Per default it is saved to subdirectory 'results'.
+            object. Per default, it is saved to subdirectory 'results'.
             Through the keyword argument `parameters` the results that should
             be stored can be specified. Further, through the keyword parameters
             `reduce_memory` and `to_type` it can be chosen if memory should be reduced.
@@ -2359,18 +2359,18 @@ class EDisGo:
             Default: True.
         save_electromobility : bool, optional
             Indicates whether to save
-            :class:`~.network.electromobility.Electromobility` object. Per default it is
-            not saved. If set to True, it is saved to subdirectory 'electromobility'.
+            :class:`~.network.electromobility.Electromobility` object. Per default, it
+            is not saved. If set to True, it is saved to subdirectory 'electromobility'.
             See :attr:`~.network.electromobility.Electromobility.to_csv` for more
             information.
         save_heatpump : bool, optional
             Indicates whether to save
-            :class:`~.network.heat.HeatPump` object. Per default it is not saved.
+            :class:`~.network.heat.HeatPump` object. Per default, it is not saved.
             If set to True, it is saved to subdirectory 'heat_pump'.
             See :attr:`~.network.heat.HeatPump.to_csv` for more information.
         save_overlying_grid : bool, optional
             Indicates whether to save
-            :class:`~.network.overlying_grid.OverlyingGrid` object. Per default it is
+            :class:`~.network.overlying_grid.OverlyingGrid` object. Per default, it is
             not saved. If set to True, it is saved to subdirectory 'overlying_grid'.
             See :attr:`~.network.overlying_grid.OverlyingGrid.to_csv` for more
             information.
@@ -2392,13 +2392,13 @@ class EDisGo:
             Data type to convert time series data to. This is a trade-off
             between precision and memory. Default: "float32".
         parameters : None or dict
-            Specifies which results to store. By default this is set to None,
+            Specifies which results to store. By default, this is set to None,
             in which case all available results are stored.
             To only store certain results provide a dictionary. See function docstring
             `parameters` parameter in :func:`~.network.results.Results.to_csv`
             for more information.
         electromobility_attributes : None or list(str)
-            Specifies which electromobility attributes to store. By default this is set
+            Specifies which electromobility attributes to store. By default, this is set
             to None, in which case all attributes are stored.
             See function docstring `attributes` parameter in
             :attr:`~.network.electromobility.Electromobility.to_csv` for more
@@ -2757,28 +2757,28 @@ def import_edisgo_from_files(
         is the name of the archive.
     import_topology : bool
         Indicates whether to import :class:`~.network.topology.Topology` object.
-        Per default it is set to True, in which case topology data is imported.
+        Per default, it is set to True, in which case topology data is imported.
         The default directory topology data is imported from is the sub-directory
         'topology'. A different directory can be specified through keyword argument
         `topology_directory`.
         Default: True.
     import_timeseries : bool
         Indicates whether to import :class:`~.network.timeseries.Timeseries` object.
-        Per default it is set to False, in which case timeseries data is not imported.
+        Per default, it is set to False, in which case timeseries data is not imported.
         The default directory time series data is imported from is the sub-directory
         'timeseries'. A different directory can be specified through keyword argument
         `timeseries_directory`.
         Default: False.
     import_results : bool
         Indicates whether to import :class:`~.network.results.Results` object.
-        Per default it is set to False, in which case results data is not imported.
+        Per default, it is set to False, in which case results data is not imported.
         The default directory results data is imported from is the sub-directory
         'results'. A different directory can be specified through keyword argument
         `results_directory`.
         Default: False.
     import_electromobility : bool
         Indicates whether to import :class:`~.network.electromobility.Electromobility`
-        object. Per default it is set to False, in which case electromobility data is
+        object. Per default, it is set to False, in which case electromobility data is
         not imported.
         The default directory electromobility data is imported from is the sub-directory
         'electromobility'. A different directory can be specified through keyword
@@ -2786,7 +2786,7 @@ def import_edisgo_from_files(
         Default: False.
     import_heat_pump : bool
         Indicates whether to import :class:`~.network.heat.HeatPump` object.
-        Per default it is set to False, in which case heat pump data containing
+        Per default, it is set to False, in which case heat pump data containing
         information on COP, heat demand time series, etc. is not imported.
         The default directory heat pump data is imported from is the sub-directory
         'heat_pump'. A different directory can be specified through keyword
@@ -2794,7 +2794,7 @@ def import_edisgo_from_files(
         Default: False.
     import_overlying_grid : bool
         Indicates whether to import :class:`~.network.overlying_grid.OverlyingGrid`
-        object. Per default it is set to False, in which case overlying grid data
+        object. Per default, it is set to False, in which case overlying grid data
         containing information on renewables curtailment requirements, generator
         dispatch, etc. is not imported.
         The default directory overlying grid data is imported from is the sub-directory
@@ -2809,33 +2809,33 @@ def import_edisgo_from_files(
     -----------------
     topology_directory : str
         Indicates directory :class:`~.network.topology.Topology` object is imported
-        from. Per default topology data is imported from `edisgo_path` sub-directory
+        from. Per default, topology data is imported from `edisgo_path` sub-directory
         'topology'.
     timeseries_directory : str
         Indicates directory :class:`~.network.timeseries.Timeseries` object is imported
-        from. Per default time series data is imported from `edisgo_path` sub-directory
+        from. Per default, time series data is imported from `edisgo_path` sub-directory
         'timeseries'.
     results_directory : str
         Indicates directory :class:`~.network.results.Results` object is imported
-        from. Per default results data is imported from `edisgo_path` sub-directory
+        from. Per default, results data is imported from `edisgo_path` sub-directory
         'results'.
     electromobility_directory : str
         Indicates directory :class:`~.network.electromobility.Electromobility` object is
-        imported from. Per default electromobility data is imported from `edisgo_path`
+        imported from. Per default, electromobility data is imported from `edisgo_path`
         sub-directory 'electromobility'.
     heat_pump_directory : str
         Indicates directory :class:`~.network.heat.HeatPump` object is
-        imported from. Per default heat pump data is imported from `edisgo_path`
+        imported from. Per default, heat pump data is imported from `edisgo_path`
         sub-directory 'heat_pump'.
     overlying_grid_directory : str
         Indicates directory :class:`~.network.overlying_grid.OverlyingGrid` object is
-        imported from. Per default overlying grid data is imported from `edisgo_path`
+        imported from. Per default, overlying grid data is imported from `edisgo_path`
         sub-directory 'overlying_grid'.
     dtype : str
         Numerical data type for time series and results data to be imported,
-        e.g. "float32". Per default this is None in which case data type is inferred.
+        e.g. "float32". Per default, this is None in which case data type is inferred.
     parameters : None or dict
-        Specifies which results to restore. By default this is set to None,
+        Specifies which results to restore. By default, this is set to None,
         in which case all available results are restored.
         To only restore certain results provide a dictionary. See function docstring
         `parameters` parameter in :func:`~.network.results.Results.to_csv`

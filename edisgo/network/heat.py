@@ -17,8 +17,8 @@ class HeatPump:
     """
     Data container for all heat pump data.
 
-    This class holds data on heat pump COP, heat demand time series, thermal storage
-    data...
+    This class holds data on heat pump COP, heat demand time series, and thermal storage
+    data.
 
     """
 
