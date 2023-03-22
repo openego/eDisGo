@@ -116,6 +116,33 @@ function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
     println(factor)
     return JuMP.@objective(pm.model, Min,
         factor * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from) if storage[b] == 0) for n in nws) # minimize line losses
+        + 100* sum(ll[(b,i,j)] * c[1][b] * l[1][b]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading
+    )
+end
+
+function objective_min_line_loading_max_OG(pm::AbstractBFModelEdisgo)
+    nws = PowerModels.nw_ids(pm)
+    ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
+    r = Dict(n => Dict(i => get(branch, "br_r", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)
+    ll = PowerModels.var(pm, 1, :ll)
+    l = Dict(n => Dict(i => get(branch, "length", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
+    c = Dict(n => Dict(i => get(branch, "cost", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
+    storage = Dict(i => get(branch, "storage", 1.0) for (i,branch) in PowerModels.ref(pm, 1, :branch))
+    phvs = Dict(n => PowerModels.var(pm, n, :phvs) for n in nws)
+    parameters = [r[1][i] for i in keys(r[1])]
+    parameters = parameters[parameters .>0]
+    factor = 1
+    while true
+        if minimum(factor*parameters) > 1e-3
+            break
+        else
+            factor = 10*factor
+        end
+    end
+    println(factor)
+    return JuMP.@objective(pm.model, Min,
+        factor * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from) if storage[b] == 0) for n in nws) # minimize line losses
         + sum(ll[(b,i,j)] * c[1][b] * l[1][b]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading
+        + sum(sum(phvs[n][i]^2 * 1e4 for (i, flex) in PowerModels.ref(pm, n, :HV_requirements)) for n in nws)
     )
 end

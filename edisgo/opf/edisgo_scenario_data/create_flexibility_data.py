@@ -27,12 +27,12 @@ def create_hp_data(edisgo_obj, directory=None, save_edisgo=False):
 
 
 def create_storage_data(edisgo_obj, directory=None, save_edisgo=False):
-    storages = edisgo_obj.topology.generators_df.loc[
+    storage_units = edisgo_obj.topology.generators_df.loc[
         edisgo_obj.topology.generators_df.index.str.contains("solar_roof")
     ]
     SOC_df = pd.DataFrame(index=edisgo_obj.timeseries.timeindex)
     # one storage per roof mounted solar generator
-    for row in storages.iterrows():
+    for row in storage_units.iterrows():
         pv_feedin = edisgo_obj.timeseries.generators_active_power[row[0]]
         loads = edisgo_obj.topology.loads_df.loc[
             edisgo_obj.topology.loads_df.bus == row[1].bus
@@ -58,6 +58,58 @@ def create_storage_data(edisgo_obj, directory=None, save_edisgo=False):
                 max_hours=1,
                 ts_active_power=storage_ts.storage_power,
             )
+            SOC_df = pd.concat([SOC_df, storage_ts.storage_charge], axis=1)
+
+    SOC_df.columns = edisgo_obj.topology.storage_units_df.index
+    edisgo_obj.timeseries.storage_units_state_of_charge = SOC_df
+    edisgo_obj.set_time_series_reactive_power_control()
+    if save_edisgo:
+        edisgo_obj.save(
+            os.path.join(f"{directory}"),
+            save_results=False,
+            save_timeseries=True,
+            save_electromobility=True,
+            save_heatpump=True,
+            save_dsm=True,
+        )
+
+
+def create_storage_data_NG(edisgo_obj, directory=None, save_edisgo=False):
+    storage_units = edisgo_obj.topology.storage_units_df
+    SOC_df = pd.DataFrame(index=edisgo_obj.timeseries.timeindex)
+    # one storage per roof mounted solar generator
+    for row in storage_units.iterrows():
+        building_id = row[1]["building_id"]
+        pv_gen = edisgo_obj.topology.generators_df.loc[
+            edisgo_obj.topology.generators_df.building_id == building_id
+        ].index[0]
+        # lieber über building id?
+        pv_feedin = edisgo_obj.timeseries.generators_active_power[pv_gen]
+        loads = edisgo_obj.topology.loads_df.loc[
+            edisgo_obj.topology.loads_df.building_id == building_id
+        ].index
+        if len(loads) == 0:
+            pass
+        else:
+            house_demand = deepcopy(
+                edisgo_obj.timeseries.loads_active_power[loads].sum(axis=1)
+            )
+            storage_ts = battery_storage_reference_operation(
+                pd.DataFrame(columns=["house_demand"], data=pv_feedin - house_demand),
+                0,
+                row[1].p_nom,
+                row[1].p_nom,
+                1,
+            )
+            # Add storage ts to storage_units_active_power dataframe
+            edisgo_obj.set_time_series_manual(
+                storage_units_p=pd.DataFrame(
+                    columns=[row[0]],
+                    index=storage_ts.index,
+                    data=storage_ts.storage_power.values,
+                )
+            )
+
             SOC_df = pd.concat([SOC_df, storage_ts.storage_charge], axis=1)
 
     SOC_df.columns = edisgo_obj.topology.storage_units_df.index

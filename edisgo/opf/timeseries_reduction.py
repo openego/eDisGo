@@ -1,5 +1,7 @@
 import logging
 
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 
@@ -65,39 +67,52 @@ def _scored_most_critical_loading_MH(edisgo_obj, window_days):
 
     # Get lines that have violations and replace nan values with 0
     crit_lines_score = relative_i_res[relative_i_res > 1].fillna(0)
-
+    max_per_line = crit_lines_score.max()
     # weight line violations with expansion costs
     costs_lines = (
         line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
     )
     costs_trafos_lv = pd.Series(
         index=[
-            lv_grid.station.index[0] for lv_grid in edisgo_obj.topology.mv_grid.lv_grids
+            str(lv_grid) + "_station"
+            for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids)
         ],
         data=edisgo_obj.config._data["costs_transformers"]["lv"],
     )
     costs_trafos_mv = pd.Series(
-        index=[edisgo_obj.topology.mv_grid.station.index[0]],
+        index=["MVGrid_" + str(edisgo_obj.topology.id) + "_station"],
         data=edisgo_obj.config._data["costs_transformers"]["mv"],
     )
     costs = pd.concat([costs_lines, costs_trafos_lv, costs_trafos_mv])
 
-    crit_lines_score = crit_lines_score * costs
+    crit_lines_cost = crit_lines_score * costs
     # Get most "expensive" time intervall over all components
     crit_timesteps = (
-        crit_lines_score.rolling(window=window_days * 24, closed="right")
+        crit_lines_cost.rolling(window=window_days * 24, closed="right")
         .max()
         .sum(axis=1)
     )
     # time intervall starts at 4am on every considered day
     crit_timesteps = crit_timesteps.iloc[4::24].sort_values(ascending=False)
     timesteps = crit_timesteps.index - pd.DateOffset(days=window_days)
-    time_intervalls = [
+    time_intervals = [
         pd.date_range(start=timestep, periods=window_days * 24 + 1, freq="h")
         for timestep in timesteps
     ]
-
-    return time_intervalls
+    lines_no_max = crit_lines_score.columns.values
+    # check if worst overloading of every line is included in worst three time intervals
+    for i in range(3):
+        max_per_lin_ti = crit_lines_score.loc[time_intervals[i]].max()
+        lines_no_max = np.intersect1d(
+            lines_no_max,
+            max_per_lin_ti[max_per_lin_ti < max_per_line * 0.95].index.values,
+        )
+    if len(lines_no_max) > 0:
+        logger.warning(
+            "Highest overloading of following lines does not lie within the "
+            "overall worst three time intervals: " + str(lines_no_max)
+        )
+    return time_intervals
 
 
 def _scored_critical_overvoltage(edisgo_obj):
@@ -141,6 +156,7 @@ def _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days):
 
     # Get score for nodes that are over or under the allowed deviations
     voltage_diff = voltage_diff.abs()[voltage_diff.abs() > 0]
+    max_per_bus = voltage_diff.max().fillna(0)
 
     assign_feeder(edisgo_obj, mode="mv_feeder")
 
@@ -174,18 +190,21 @@ def _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days):
         index=[edisgo_obj.topology.mv_grid.station.index[0]],
         data=[edisgo_obj.topology.mv_grid.station.mv_feeder[0]],
     )
-    feeders = pd.concat([feeder_lines, feeder_trafos_lv, feeder_trafos_mv])
+    feeder = pd.concat([feeder_lines, feeder_trafos_lv, feeder_trafos_mv])
     costs_per_feeder = (
-        pd.concat([costs.rename("costs"), feeders.rename("feeder")], axis=1)
+        pd.concat([costs.rename("costs"), feeder.rename("feeder")], axis=1)
         .groupby(by="feeder")[["costs"]]
         .sum()
     )
 
-    feeders_buses = edisgo_obj.topology.buses_df.mv_feeder
+    # check vor every feeder if any of the buses within violate the allowed voltage
+    # deviation
+    feeder_buses = edisgo_obj.topology.buses_df.mv_feeder
     columns = [
-        feeders_buses.loc[voltage_diff.columns[i]]
+        feeder_buses.loc[voltage_diff.columns[i]]
         for i in range(len(voltage_diff.columns))
     ]
+    voltage_diff_copy = deepcopy(voltage_diff)
     voltage_diff.columns = columns
     voltage_diff_feeder = (
         voltage_diff.transpose().reset_index().groupby(by="index").sum().transpose()
@@ -204,12 +223,26 @@ def _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days):
     # time intervall starts at 4am on every considered day
     crit_timesteps = crit_timesteps.iloc[4::24].sort_values(ascending=False)
     timesteps = crit_timesteps.index - pd.DateOffset(days=window_days)
-    time_intervalls = [
+    time_intervals = [
         pd.date_range(start=timestep, periods=window_days * 24 + 1, freq="h")
         for timestep in timesteps
     ]
 
-    return time_intervalls
+    buses_no_max = max_per_bus.index.values
+    # check if worst overloading of every line is included in worst three time intervals
+    for i in range(3):
+        max_per_bus_ti = voltage_diff_copy.loc[time_intervals[i]].max()
+        buses_no_max = np.intersect1d(
+            buses_no_max,
+            max_per_bus_ti[max_per_bus_ti < max_per_bus * 0.95].index.values,
+        )
+    if len(buses_no_max) > 0:
+        logger.warning(
+            "Highest voltage deviation of following buses does not lie within "
+            "the overall worst three time intervals: " + str(buses_no_max)
+        )
+
+    return time_intervals
 
 
 def get_steps_reinforcement(
@@ -393,7 +426,7 @@ def get_steps_flex_opf(
         The percentage of most critical time intervals to select
     Returns
     --------
-    list containing multiple `pandas.DatetimeIndex`
+    list
         list of time intervals (`pandas.DatetimeIndex`) for OPF
     """
     # Run power flow if not available

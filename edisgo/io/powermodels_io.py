@@ -880,8 +880,8 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "pf": pf,
             "sign": sign,
             "virtual_branch": str(stor_i + len(branches.index) + 1),
-            "ps": psa_net.storage_units_t.p_set[flexible_storages[stor_i]][0] / s_base,
-            "qs": psa_net.storage_units_t.q_set[flexible_storages[stor_i]][0] / s_base,
+            "ps": psa_net.storage_units.p_set[flexible_storages[stor_i]] / s_base,
+            "qs": psa_net.storage_units.q_set[flexible_storages[stor_i]] / s_base,
             "pmax": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]] / s_base,
             "pmin": -psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
             / s_base,
@@ -891,23 +891,23 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "qmin": -np.tan(np.arccos(pf))
             * psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
             / s_base,
-            "energy": psa_net.storage_units.state_of_charge_initial.loc[
-                flexible_storages[stor_i]
-            ]
-            * e_max
-            / s_base,
-            "soc_initial": (
-                edisgo_obj.timeseries.storage_units_state_of_charge[
-                    flexible_storages[stor_i]
-                ].iloc[0]
-                + edisgo_obj.timeseries.storage_units_active_power[
-                    flexible_storages[stor_i]
-                ].iloc[0]
-                * 0.9
-            ),
-            "soc_end": edisgo_obj.timeseries.storage_units_state_of_charge[
-                flexible_storages[stor_i]
-            ].iloc[-1],
+            "energy": 0,  # psa_net.storage_units.state_of_charge_initial.loc[
+            #     flexible_storages[stor_i]
+            # ]
+            # * e_max
+            # / s_base,
+            "soc_initial": 0,  # ( ToDo: Berechnung überprüfen
+            #     edisgo_obj.timeseries.storage_units_state_of_charge[
+            #         flexible_storages[stor_i]
+            #     ].iloc[0]
+            #     + edisgo_obj.timeseries.storage_units_active_power[
+            #         flexible_storages[stor_i]
+            #     ].iloc[0]
+            #     * 0.9
+            # ),
+            "soc_end": 0,  # edisgo_obj.timeseries.storage_units_state_of_charge[
+            #     flexible_storages[stor_i]
+            # ].iloc[-1],
             "energy_rating": e_max / s_base,
             "thermal_rating": 100,
             "charge_rating": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
@@ -1049,9 +1049,9 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
             logger.warning(
                 "Heat demand at bus {} is higher than maximum heatpump power"
                 " of heatpump {}. Demand can not be covered if no sufficient"
-                " heat storage capaciies are available. This will cause "
-                "problems in the optimization process if OPF version is"
-                "set to 3".format(pm["bus"][str(idx_bus)]["name"], heat_df.index[hp_i])
+                " heat storage capacities are available.".format(
+                    pm["bus"][str(idx_bus)]["name"], heat_df.index[hp_i]
+                )
             )
         pm["heatpumps"][str(hp_i + 1)] = {
             "pd": p_d[0] / s_base,  # heat demand
@@ -1087,6 +1087,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         attached heat storage.
     """
     heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df.loc[flexible_hps]
+    heat_storage_df["state_of_charge_initial"] = 0  # ToDo: Zeile löschen
     for stor_i in np.arange(len(heat_storage_df.index)):
         idx_bus = _mapping(psa_net, psa_net.loads.bus[stor_i])
         pm["heat_storage"][str(stor_i + 1)] = {
@@ -1316,7 +1317,7 @@ def _build_timeseries(
         "gen_nd",
         "gen_slack",
         "load",
-        "storage",
+        # "storage",
         "electromobility",
         "heatpumps",
         "dsm",
@@ -1542,15 +1543,17 @@ def _build_component_timeseries(
                 "pd": p_d.tolist(),
                 "qd": q_d.tolist(),
             }
-    elif kind == "storage":
-        p_set = psa_net.storage_units_t.p_set[flexible_storages] / s_base
-        q_set = psa_net.storage_units_t.q_set[flexible_storages] / s_base
-        for comp in p_set.columns:
-            comp_i = _mapping(psa_net, comp, kind, flexible_storages=flexible_storages)
-            pm_comp[str(comp_i)] = {
-                "ps": p_set[comp].values.tolist(),
-                "qs": q_set[comp].values.tolist(),
-            }
+    # elif kind == "storage":
+    #     pass
+    #     p_set = psa_net.storage_units_t.p_set[flexible_storages] / s_base
+    #     q_set = psa_net.storage_units_t.q_set[flexible_storages] / s_base
+    #     for comp in p_set.columns:
+    #         comp_i = _mapping(psa_net, comp, kind, flexible_storages=
+    #         flexible_storages)
+    #         pm_comp[str(comp_i)] = {
+    #             "ps": p_set[comp].values.tolist(),
+    #             "qs": q_set[comp].values.tolist(),
+    #         }
     elif kind == "electromobility":
         if len(flexible_cps) > 0:
             p_set = (

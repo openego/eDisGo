@@ -89,12 +89,11 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
     end
 
     # OBJECTIVE FUNCTION
-    if PowerModels.ref(pm, 1, :opf_version) in(1,3)
+    if PowerModels.ref(pm, 1, :opf_version) == 1
         #eDisGo_OPF.objective_min_losses(pm)
         eDisGo_OPF.objective_min_line_loading_max(pm) # Eq. (3.1 i)
-        if (PowerModels.ref(pm, 1, :opf_version) == 3) # Nicht Teil der MA
-            #objective_min_hv_slacks(pm)
-        end
+    elseif (PowerModels.ref(pm, 1, :opf_version) == 3) # Nicht Teil der MA
+        eDisGo_OPF.objective_min_line_loading_max_OG(pm)
     elseif PowerModels.ref(pm, 1, :opf_version) in(2,4)
         eDisGo_OPF.objective_min_losses_slacks(pm)  # Eq. (3.1 ii)
         if (PowerModels.ref(pm, 1, :opf_version) == 4) # Nicht Teil der MA

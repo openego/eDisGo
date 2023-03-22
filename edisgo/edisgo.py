@@ -2852,6 +2852,22 @@ class EDisGo:
                     f"OverlyingGrid.{param_name}",
                 )
 
+        # check if heat demand can be met by corresponding heatpump at all times.
+        hp_cop = self.heat_pump.cop_df
+        hp_p_nom = self.topology.loads_df.loc[self.heat_pump.cop_df.columns.values][
+            ["p_set"]
+        ]
+        heat_demand = self.heat_pump.heat_demand_df
+        comparison = (heat_demand[hp_p_nom.index] > hp_cop * hp_p_nom.squeeze()).any()
+        if comparison.any():
+            logger.warning(
+                "Heat demand is higher than rated heatpump power"
+                " of heatpumps: {}. Demand can not be covered if no sufficient"
+                " heat storage capacities are available.".format(
+                    comparison.index[comparison.values].values
+                )
+            )
+
         logging.info("Integrity check finished. Please pay attention to warnings.")
 
     def resample_timeseries(
