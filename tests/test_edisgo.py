@@ -1379,7 +1379,7 @@ class TestEDisGo:
         self.setup_worst_case_time_series()
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
 
-        # add heat pump, electromobility and overlying grid dummy data
+        # add heat pump, electromobility, overlying grid and dsm dummy data
         self.edisgo.heat_pump.cop = pd.DataFrame(
             data={
                 "hp1": [5.0, 6.0, 5.0, 6.0],
@@ -1410,6 +1410,13 @@ class TestEDisGo:
                 index=self.edisgo.timeseries.timeindex[0:2],
             )
         )
+        self.edisgo.dsm.p_max = pd.DataFrame(
+            data={
+                "load_1": [5.0, 6.0],
+                "load_2": [7.0, 8.0],
+            },
+            index=self.edisgo.timeseries.timeindex[0:2],
+        )
 
         # ################### test with default parameters ###################
         self.edisgo.save(save_dir)
@@ -1427,12 +1434,13 @@ class TestEDisGo:
             save_electromobility=True,
             save_heatpump=True,
             save_overlying_grid=True,
+            save_dsm=True,
             electromobility_attributes=["charging_processes_df"],
         )
 
         # check that sub-directories are created
         dirs_in_save_dir = os.listdir(save_dir)
-        assert len(dirs_in_save_dir) == 7
+        assert len(dirs_in_save_dir) == 8
         assert "electromobility" in dirs_in_save_dir
         assert "overlying_grid" in dirs_in_save_dir
 
@@ -1732,8 +1740,8 @@ class TestEDisGo:
         ] = 2.0
 
         # ########################### check time index ##########################
-        # test heat pump and overlying grid time index not matching (electromobility is
-        # checked above)
+        # test heat pump, overlying grid and dsm time index not matching
+        # (electromobility is checked above)
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.edisgo.heat_pump.cop_df = pd.DataFrame(
             data={"hp1": [5.0, 6.0], "hp2": [7.0, 8.0]},
@@ -1741,6 +1749,10 @@ class TestEDisGo:
         )
         self.edisgo.overlying_grid.dsm_active_power = pd.DataFrame(
             {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]}, index=timeindex
+        )
+        self.edisgo.dsm.p_max = pd.DataFrame(
+            data={"load_1": [5.0, 6.0], "load_2": [7.0, 8.0]},
+            index=self.edisgo.timeseries.timeindex[0:2],
         )
         self.edisgo.check_integrity()
         assert (
@@ -1750,6 +1762,10 @@ class TestEDisGo:
         assert (
             "There are time steps in timeindex of TimeSeries object that are not in "
             "the index of HeatPump.cop_df" in caplog.text
+        )
+        assert (
+            "There are time steps in timeindex of TimeSeries object that are not in "
+            "the index of DSM.p_max" in caplog.text
         )
 
     def test_resample_timeseries(self):
@@ -1776,7 +1792,7 @@ class TestEDisGoFunc:
         edisgo_obj.analyze()
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
 
-        # add heat pump, electromobility and overlying grid dummy data
+        # add heat pump, electromobility, overlying grid dummy data
         edisgo_obj.heat_pump.cop = pd.DataFrame(
             data={
                 "hp1": [5.0, 6.0, 5.0, 6.0],
@@ -1803,6 +1819,10 @@ class TestEDisGoFunc:
         edisgo_obj.overlying_grid.heat_pump_decentral_active_power = pd.Series(
             data=[2.4], index=[edisgo_obj.timeseries.timeindex[0]]
         )
+        edisgo_obj.dsm.p_min = pd.DataFrame(
+            data={"load_1": [5.0, 6.0], "load_2": [7.0, 8.0]},
+            index=edisgo_obj.timeseries.timeindex[0:2],
+        )
 
         # ################ test with non-existing path ######################
 
@@ -1817,6 +1837,7 @@ class TestEDisGoFunc:
             save_electromobility=True,
             save_heatpump=True,
             save_overlying_grid=True,
+            save_dsm=True,
         )
 
         edisgo_obj_loaded = import_edisgo_from_files(save_dir)
@@ -1834,13 +1855,14 @@ class TestEDisGoFunc:
         # check results
         assert edisgo_obj_loaded.results.i_res.empty
 
-        # ############ test with loading electromobility and heat pump data ###########
+        # ############ test with loading other data ###########
 
         edisgo_obj_loaded = import_edisgo_from_files(
             save_dir,
             import_electromobility=True,
             import_heat_pump=True,
             import_overlying_grid=True,
+            import_dsm=True,
         )
 
         # check electromobility
@@ -1859,13 +1881,23 @@ class TestEDisGoFunc:
             check_names=False,
             check_freq=False,
         )
+        # check dsm
+        assert_frame_equal(
+            edisgo_obj_loaded.dsm.p_min,
+            edisgo_obj.dsm.p_min,
+            check_freq=False,
+        )
 
         # delete directory
         shutil.rmtree(save_dir)
 
         # ########### test with loading from zip ###########
         edisgo_obj.save(
-            save_dir, archive=True, save_electromobility=True, save_overlying_grid=True
+            save_dir,
+            archive=True,
+            save_electromobility=True,
+            save_overlying_grid=True,
+            save_dsm=True,
         )
         zip_file = f"{save_dir}.zip"
         edisgo_obj_loaded = import_edisgo_from_files(
@@ -1874,6 +1906,7 @@ class TestEDisGoFunc:
             import_timeseries=True,
             import_electromobility=True,
             import_overlying_grid=True,
+            import_dsm=True,
             from_zip_archive=True,
         )
 
@@ -1913,6 +1946,12 @@ class TestEDisGoFunc:
             edisgo_obj_loaded.overlying_grid.heat_pump_decentral_active_power,
             edisgo_obj.overlying_grid.heat_pump_decentral_active_power,
             check_names=False,
+            check_freq=False,
+        )
+        # check dsm
+        assert_frame_equal(
+            edisgo_obj_loaded.dsm.p_min,
+            edisgo_obj.dsm.p_min,
             check_freq=False,
         )
 

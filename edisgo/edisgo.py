@@ -140,6 +140,8 @@ class EDisGo:
     overlying_grid : :class:`~.network.overlying_grid.OverlyingGrid`
         This is a container holding data from the overlying grid such as curtailment
         requirements or power plant dispatch.
+    dsm : :class:`~.network.dsm.DSM`
+        This is a container holding data on demand side management potential.
 
     """
 
@@ -164,7 +166,7 @@ class EDisGo:
         )
         self.electromobility = Electromobility(edisgo_obj=self)
         self.heat_pump = HeatPump()
-        self.dsm = DSM(edisgo_obj=self)
+        self.dsm = DSM()
         self.overlying_grid = OverlyingGrid()
 
         # import new generators
@@ -2374,6 +2376,10 @@ class EDisGo:
             not saved. If set to True, it is saved to subdirectory 'overlying_grid'.
             See :attr:`~.network.overlying_grid.OverlyingGrid.to_csv` for more
             information.
+        save_dsm : bool, optional
+            Indicates whether to save :class:`~.network.dsm.DSM` object. Per default,
+            it is not saved. If set to True, it is saved to subdirectory 'dsm'. See
+            :attr:`~.network.dsm.DSM.to_csv` for more information.
 
         Other Parameters
         ------------------
@@ -2381,8 +2387,9 @@ class EDisGo:
             If True, size of dataframes containing time series in
             :class:`~.network.results.Results`,
             :class:`~.network.timeseries.TimeSeries`,
-            :class:`~.network.heat.HeatPump` and
-            :class:`~.network.overlying_grid.OverlyingGrid`
+            :class:`~.network.heat.HeatPump`,
+            :class:`~.network.overlying_grid.OverlyingGrid` and
+            :class:`~.network.dsm.DSM`
             is reduced. See respective classes `reduce_memory` functions for more
             information. Type to convert to can be specified by providing
             `to_type` as keyword argument. Further parameters of reduce_memory
@@ -2453,6 +2460,8 @@ class EDisGo:
         if save_dsm:
             self.dsm.to_csv(
                 os.path.join(directory, "dsm"),
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32"),
             )
 
         if save_overlying_grid:
@@ -2527,6 +2536,10 @@ class EDisGo:
             See `attr_to_reduce` parameter in
             :attr:`~.network.overlying_grid.OverlyingGrid.reduce_memory` for more
             information.
+        dsm_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.overlying_grid.OverlyingGrid.reduce_memory` for more
+            information.
 
         """
         # time series
@@ -2561,6 +2574,12 @@ class EDisGo:
         Further, checks integrity of electromobility object (see
         :func:`edisgo.network.electromobility.Electromobility.check_integrity`) if
         there is electromobility data.
+        Additionally, checks whether time series data in
+        :class:`~.network.heat.HeatPump`,
+        :class:`~.network.electromobility.Electromobility`,
+        :class:`~.network.overlying_grid.OverlyingGrid` and :class:`~.network.dsm.DSM`
+        contains all time steps in
+        :attr:`edisgo.network.timeseries.TimeSeries.timeindex`.
 
         """
         self.topology.check_integrity()
@@ -2641,6 +2660,12 @@ class EDisGo:
                 _check_timeindex(
                     getattr(self.overlying_grid, param_name),
                     f"OverlyingGrid.{param_name}",
+                )
+            # check time index of DSM data
+            for param_name in self.dsm._attributes:
+                _check_timeindex(
+                    getattr(self.dsm, param_name),
+                    f"DSM.{param_name}",
                 )
 
         logging.info("Integrity check finished. Please pay attention to warnings.")
@@ -2801,6 +2826,13 @@ def import_edisgo_from_files(
         'overlying_grid'. A different directory can be specified through keyword
         argument `overlying_grid_directory`.
         Default: False.
+    import_dsm : bool
+        Indicates whether to import :class:`~.network.dsm.DSM`
+        object. Per default, it is set to False, in which case DSM data is not imported.
+        The default directory DSM data is imported from is the sub-directory
+        'dsm'. A different directory can be specified through keyword
+        argument `dsm_directory`.
+        Default: False.
     from_zip_archive : bool
         Set to True if data needs to be imported from an archive, e.g. a zip
         archive. Default: False.
@@ -2831,6 +2863,9 @@ def import_edisgo_from_files(
         Indicates directory :class:`~.network.overlying_grid.OverlyingGrid` object is
         imported from. Per default, overlying grid data is imported from `edisgo_path`
         sub-directory 'overlying_grid'.
+    dsm_directory : str
+        Indicates directory :class:`~.network.dsm.DSM` object is imported from. Per
+        default, DSM data is imported from `edisgo_path` sub-directory 'dsm'.
     dtype : str
         Numerical data type for time series and results data to be imported,
         e.g. "float32". Per default, this is None in which case data type is inferred.
@@ -2953,7 +2988,7 @@ def import_edisgo_from_files(
         if os.path.exists(directory):
             edisgo_obj.dsm.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
-            logging.warning("No dsm data found. DSM data not imported.")
+            logging.warning("No DSM data found. DSM data not imported.")
 
     if import_overlying_grid:
         if not from_zip_archive:
