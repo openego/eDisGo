@@ -56,11 +56,27 @@ extensions = [
     "sphinx.ext.napoleon",  # enable Napoleon Sphinx v>1.3
     "sphinx.ext.extlinks",  # enables external links with a key
     "sphinx_autodoc_typehints",
+    "sphinx.ext.inheritance_diagram",
 ]
 # Autoapi settings
 autoapi_type = "python"
 autoapi_dirs = ["../edisgo"]
-
+autoapi_options = [
+    "members",
+    "undoc-members",
+    "private-members",
+    "show-inheritance",
+    "show-inheritance-diagram",
+    "show-module-summary",
+    "special-members",
+    "imported-members",
+]
+# Files to ignore when building api documentation
+autoapi_ignore = [
+    "*/flex_opt/curtailment.py",
+    "*/flex_opt/storage_positioning.py",
+    "*/opf/*",
+]
 # Napoleon settings
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
