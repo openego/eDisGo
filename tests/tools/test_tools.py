@@ -22,7 +22,7 @@ class TestTools:
     def test_calculate_relative_line_load(self):
         # test without providing lines and time steps
         rel_line_load = tools.calculate_relative_line_load(self.edisgo)
-        assert rel_line_load.shape == (4, 129)
+        assert rel_line_load.shape == (4, 131)
 
         # test with providing lines
         rel_line_load = tools.calculate_relative_line_load(
@@ -235,6 +235,26 @@ class TestTools:
             .lv_feeder.isna()
             .any()
         )
+
+    def test_get_downstream_buses(self):
+
+        # ######## test with LV bus ########
+        buses_downstream = tools.get_downstream_buses(
+            self.edisgo, "BusBar_MVGrid_1_LVGrid_1_LV"
+        )
+
+        lv_grid = self.edisgo.topology.get_lv_grid(1)
+        assert len(buses_downstream) == len(lv_grid.buses_df)
+        assert all([_ in buses_downstream for _ in lv_grid.buses_df.index])
+
+        # ######## test with MV line ########
+        buses_downstream = tools.get_downstream_buses(
+            self.edisgo, "Line_10010", comp_type="line"
+        )
+
+        lv_grid = self.edisgo.topology.get_lv_grid(5)
+        assert len(buses_downstream) == len(lv_grid.buses_df) + 4
+        assert all([_ in buses_downstream for _ in lv_grid.buses_df.index])
 
     def test_get_weather_cells_intersecting_with_grid_district(self):
         weather_cells = tools.get_weather_cells_intersecting_with_grid_district(

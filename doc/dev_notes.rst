@@ -47,7 +47,7 @@ Activate the newly created environment and install the pre-commit hooks with:
     conda activate eDisGo_env_dev
     pre-commit install  # install pre-commit hooks
 
-This will install eDisGo with all it's dependencies.
+This will install eDisGo with all its dependencies.
 
 Installation using MacOS
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -63,7 +63,7 @@ Code standards
 * **pytest**: Make sure that all pytest tests are passing and add tests for every new code base
 * **Documentation of `@property` functions**: Put documentation of getter and setter
   both in Docstring of getter, see
-  `on Stackoverflow <https://stackoverflow.com/a/16025754/6385207>`_
+  `on Stackoverflow <https://stackoverflow.com/questions/16025462/what-is-the-right-way-to-put-a-docstring-on-python-property/16025754#16025754>`_
 * Order of public/private/protected methods, property decorators, etc. in a class: TBD
 
 
@@ -82,3 +82,10 @@ And then you build the html docs on your computer with
 .. code-block:: bash
 
     sphinx-build -E -a doc/ doc/_html
+
+To manually check if external links in the documentation work, change into the doc
+repository and run the following command (internal links are not checked by this):
+
+.. code-block:: bash
+
+   sphinx-build . -b linkcheck -d _build/doctrees _build/html

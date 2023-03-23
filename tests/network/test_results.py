@@ -85,7 +85,6 @@ class TestResults:
 
         shutil.rmtree(os.path.join(cur_dir, "powerflow_results"))
 
-        os.remove(os.path.join(cur_dir, "configs.csv"))
         os.remove(os.path.join(cur_dir, "measures.csv"))
 
     def test_from_csv(self):
@@ -146,5 +145,4 @@ class TestResults:
         shutil.rmtree(os.path.join(cur_dir, "powerflow_results"))
         shutil.rmtree(os.path.join(cur_dir, "grid_expansion_results"))
 
-        os.remove(os.path.join(cur_dir, "configs.csv"))
         os.remove(os.path.join(cur_dir, "measures.csv"))

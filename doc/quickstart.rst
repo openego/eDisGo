@@ -6,7 +6,7 @@ Getting started
 Installation using Linux
 -------------------------
 
-.. warning:: Make sure to use python 3.7 or higher!
+.. warning:: Make sure to use python 3.8 or higher!
 
 Install latest eDisGo version through pip. Therefore, we highly recommend using
 a virtual environment and its pip.
@@ -15,25 +15,13 @@ a virtual environment and its pip.
 
     python -m pip install edisgo
 
-The above will install all packages for the basic usage of eDisGo. To install
-additional packages e.g. needed to create plots with background maps or to run
-the jupyter notebook examples, we provide installation with extra packages:
-
-.. code-block:: bash
-
-    python -m pip install edisgo[geoplot]  # for plotting with background maps
-    python -m pip install edisgo[examples]  # to run examples
-    python -m pip install edisgo[dev]  # developer packages
-    python -m pip install edisgo[full]  # combines all of the extras above
-
-
 You may also consider installing a developer version as detailed in
 :ref:`dev-notes`.
 
 Installation using Windows
 --------------------------
 
-.. warning:: Make sure to use python 3.7 or higher!
+.. warning:: Make sure to use python 3.8 or higher!
 
 For Windows users we recommend using Anaconda and to install the geo stack
 using the conda-forge channel prior to installing eDisGo. You may use the provided
@@ -49,8 +37,6 @@ Activate the newly created environment with:
 .. code-block:: bash
 
     conda activate eDisGo_env
-
-This will install eDisGo with all it's dependencies ([full] flag).
 
 Installation using MacOS
 --------------------------
@@ -105,7 +91,7 @@ The steps required to set up HSL  are also described in the
 Here is a short version for reference:
 
 First, you need to obtain an academic license for HSL Solvers.
-Under http://www.hsl.rl.ac.uk/ipopt/ download the sources for Coin-HSL Full (Stable).
+Under https://www.hsl.rl.ac.uk/ipopt/ download the sources for Coin-HSL Full (Stable).
 You will need to provide an institutional e-mail to gain access.
 
 Unpack the tar.gz:
@@ -196,18 +182,18 @@ details are provided in :ref:`usage-details`. Further examples can be found in t
 All following examples assume you have a ding0 grid topology (directory containing
 csv files, defining the grid topology) in a directory "ding0_example_grid" in
 the directory from where you run your example. If you do not have an example grid, you
-can download one `here <https://raw.githubusercontent.com/openego/eDisGo/dev/tests/ding0_test_network_2/>`_.
+can download one `here <https://github.com/openego/eDisGo/tree/dev/tests/data/ding0_test_network_2/>`_.
 
 Aside from grid topology data you may eventually need a dataset on future
 installation of power plants. You may therefore use the scenarios developed in
 the `open_eGo <https://openegoproject.wordpress.com>`_ project that
 are available in the
-`OpenEnergy DataBase (oedb) <https://openenergy-platform.org/dataedit/>`_
-hosted on the `OpenEnergy Platform (OEP) <https://oep.iks.cs.ovgu.de/>`_.
+`OpenEnergy DataBase (oedb) <https://openenergy-platform.org/dataedit/schemas>`_
+hosted on the `OpenEnergy Platform (OEP) <https://openenergy-platform.org/>`_.
 eDisGo provides an interface to the oedb using the package
 `ego.io <https://github.com/openego/ego.io>`_. ego.io gives you a python
 SQL-Alchemy representations of the oedb and access to it by using the
-`oedialect <https://github.com/openego/oedialect>`_, an SQL-Alchemy dialect
+`oedialect <https://github.com/OpenEnergyPlatform/oedialect>`_, an SQL-Alchemy dialect
 used by the OEP.
 
 You can run a worst-case scenario as follows:

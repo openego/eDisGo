@@ -8,7 +8,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pandas.util.testing import assert_frame_equal, assert_series_equal
+from pandas.util.testing import (
+    assert_frame_equal,
+    assert_index_equal,
+    assert_series_equal,
+)
 
 from edisgo import EDisGo
 from edisgo.network import timeseries
@@ -1522,7 +1526,7 @@ class TestTimeSeries:
         # define expected profiles
         profiles = pd.DataFrame(
             index=index,
-            columns=["retail", "residential", "agricultural", "industrial"],
+            columns=["cts", "residential", "agricultural", "industrial"],
             data=[
                 [0.0000597, 0.0000782, 0.0000654, 0.0000992],
                 [0.0000526, 0.0000563, 0.0000611, 0.0000992],
@@ -1585,7 +1589,7 @@ class TestTimeSeries:
                 self.edisgo.topology.loads_df.loc[
                     "Load_retail_LVGrid_9_14", "annual_consumption"
                 ]
-                * profiles["retail"]
+                * profiles["cts"]
             ).values,
             atol=1e-4,
         ).all()
@@ -1641,7 +1645,7 @@ class TestTimeSeries:
         # test manual - all
         profiles = pd.DataFrame(
             index=index,
-            columns=["retail", "residential", "agricultural", "industrial"],
+            columns=["cts", "residential", "agricultural", "industrial"],
             data=[
                 [0.003, 0.02, 0.00, 0.1],
                 [0.004, 0.01, 0.10, 0.2],
@@ -1679,7 +1683,7 @@ class TestTimeSeries:
                 self.edisgo.topology.loads_df.loc[
                     "Load_retail_LVGrid_9_14", "annual_consumption"
                 ]
-                * profiles["retail"]
+                * profiles["cts"]
             ).values,
         ).all()
         assert np.isclose(
@@ -1697,7 +1701,7 @@ class TestTimeSeries:
         profiles_new = (
             pd.DataFrame(
                 index=index,
-                columns=["retail", "residential", "agricultural", "industrial"],
+                columns=["cts", "residential", "agricultural", "industrial"],
                 data=[
                     [0.003, 0.02, 0.00, 0.1],
                     [0.004, 0.01, 0.10, 0.2],
@@ -1738,7 +1742,7 @@ class TestTimeSeries:
                 self.edisgo.topology.loads_df.loc[
                     "Load_retail_LVGrid_9_14", "annual_consumption"
                 ]
-                * profiles["retail"]
+                * profiles["cts"]
             ).values,
         ).all()
         assert np.isclose(
@@ -1878,6 +1882,37 @@ class TestTimeSeries:
         self.edisgo.set_time_series_manual(
             storage_units_p=pd.DataFrame({"Storage_1": ts_wind}, index=timeindex)
         )
+        # create heat pumps and charging points in MV and LV
+        df_cp = pd.DataFrame(
+            {
+                "bus": [
+                    "Bus_BranchTee_MVGrid_1_2",
+                    "Bus_BranchTee_MVGrid_1_2",
+                    "Bus_BranchTee_LVGrid_1_5",
+                    "Bus_BranchTee_LVGrid_1_5",
+                ],
+                "p_set": [0.1, 0.2, 0.3, 0.4],
+                "type": [
+                    "charging_point",
+                    "heat_pump",
+                    "charging_point",
+                    "heat_pump",
+                ],
+            },
+            index=["CP1", "HP1", "CP2", "HP2"],
+        )
+        self.edisgo.topology.loads_df = pd.concat(
+            [
+                self.edisgo.topology.loads_df,
+                df_cp,
+            ]
+        )
+        self.edisgo.set_time_series_manual(
+            loads_p=pd.DataFrame(
+                {"CP1": ts_wind, "HP1": ts_wind, "CP2": ts_wind, "HP2": ts_wind},
+                index=timeindex,
+            )
+        )
 
         # test different options (default, Dataframe with default, Dataframe with
         # different settings) - None is already tested in eDisGo class tests
@@ -1896,7 +1931,10 @@ class TestTimeSeries:
             ),
             loads_parametrisation=pd.DataFrame(
                 {
-                    "components": [[load_1], [load_2, load_3]],
+                    "components": [
+                        [load_1, "CP1", "HP1", "CP2", "HP2"],
+                        [load_2, load_3],
+                    ],
                     "mode": ["default", "capacitive"],
                     "power_factor": ["default", 0.98],
                 },
@@ -1905,7 +1943,7 @@ class TestTimeSeries:
             storage_units_parametrisation="default",
         )
         assert self.edisgo.timeseries.generators_reactive_power.shape == (3, 1)
-        assert self.edisgo.timeseries.loads_reactive_power.shape == (3, 3)
+        assert self.edisgo.timeseries.loads_reactive_power.shape == (3, 7)
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (3, 1)
         assert (
             np.isclose(
@@ -1918,6 +1956,14 @@ class TestTimeSeries:
                 self.edisgo.timeseries.loads_reactive_power.loc[:, load_1],
                 self.edisgo.timeseries.loads_active_power.loc[:, load_1]
                 * np.tan(np.arccos(0.95)),
+            )
+        ).all()
+        assert (
+            np.isclose(
+                self.edisgo.timeseries.loads_reactive_power.loc[
+                    :, ["CP1", "HP1", "CP2", "HP2"]
+                ],
+                0.0,
             )
         ).all()
         assert (
@@ -2317,6 +2363,7 @@ class TestTimeSeries:
 
         len_timeindex_orig = len(self.edisgo.timeseries.timeindex)
         mean_value_orig = self.edisgo.timeseries.generators_active_power.mean()
+        index_orig = self.edisgo.timeseries.timeindex.copy()
 
         # test up-sampling
         self.edisgo.timeseries.resample_timeseries()
@@ -2332,6 +2379,9 @@ class TestTimeSeries:
                 atol=1e-5,
             )
         ).all()
+        # check if index is the same after resampled back
+        self.edisgo.timeseries.resample_timeseries(freq="1h")
+        assert_index_equal(self.edisgo.timeseries.timeindex, index_orig)
 
         # same tests for down-sampling
         self.edisgo.timeseries.resample_timeseries(freq="2h")
