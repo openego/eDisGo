@@ -9,7 +9,7 @@ from edisgo.network.grids import LVGrid, MVGrid
 logger = logging.getLogger(__name__)
 
 
-def mv_line_overload(edisgo_obj):
+def mv_line_max_overload(edisgo_obj):
     """
     Returns time step and value of most severe overloading of lines in MV network.
 

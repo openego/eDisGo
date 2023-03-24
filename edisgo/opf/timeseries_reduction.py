@@ -115,7 +115,7 @@ def get_steps_storage(edisgo_obj, window=5):
         edisgo_obj, voltage_level="mv", split_voltage_band=True
     )
     # Get periods with current violations
-    crit_lines = check_tech_constraints.mv_line_overload(edisgo_obj)
+    crit_lines = check_tech_constraints.mv_line_max_overload(edisgo_obj)
 
     crit_periods = crit_nodes["time_index"].append(crit_lines["time_index"]).unique()
 
