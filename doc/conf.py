@@ -75,6 +75,18 @@ autoapi_ignore = [
     "*/flex_opt/storage_positioning.py",
     "*/opf/*",
 ]
+
+
+def skip_autoapi_parts(app, what, name, obj, skip, options):
+    if obj.type == "data":
+        skip = True
+    return skip
+
+
+def setup(sphinx):
+    sphinx.connect("autoapi-skip-member", skip_autoapi_parts)
+
+
 # Napoleon settings
 napoleon_google_docstring = True
 napoleon_numpy_docstring = True
