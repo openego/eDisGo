@@ -1543,7 +1543,6 @@ def plot_dash_app(
 
     app = JupyterDash(__name__)
     # Workaround to use standard python logging with plotly dash
-    logger.handlers.pop()
     if debug:
         app.logger.disabled = False
         app.logger.setLevel(logging.DEBUG)
