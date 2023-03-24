@@ -2387,7 +2387,7 @@ class Topology:
                 * repr : str
                     Name of line or bus to connect to.
                 * shp : :shapely:`Shapely Point object<points>` or \
-                :shapely:`Shapely Line object<lines>`
+                :shapely:`Shapely Line object<linestrings>`
                     Geometry of line or bus to connect to.
 
         line_type : str
