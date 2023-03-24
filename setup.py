@@ -33,7 +33,7 @@ def read(fname):
 requirements = [
     "beautifulsoup4",
     "contextily",
-    "dash < 2.9",
+    "dash",
     "demandlib",
     "descartes",
     "egoio >= 0.4.7",
