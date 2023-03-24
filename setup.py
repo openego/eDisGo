@@ -65,6 +65,7 @@ dev_requirements = [
     "sphinx >= 4.3.0, < 5.1.0",
     "sphinx_rtd_theme >=0.5.2",
     "sphinx-autodoc-typehints",
+    "sphinx-autoapi",
     "pre-commit",
     "black",
     "isort",
