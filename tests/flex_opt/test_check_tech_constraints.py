@@ -37,10 +37,10 @@ class TestCheckTechConstraints:
         )
         assert df.at["Line_10005", "time_index"] == self.timesteps[3]
 
-    def test_lv_line_overload(self):
+    def test_lv_line_max_overload(self):
         # implicitly checks function _line_overload
 
-        df = check_tech_constraints.lv_line_overload(self.edisgo)
+        df = check_tech_constraints.lv_line_max_overload(self.edisgo)
         # check shape of dataframe
         assert (2, 3) == df.shape
         # check relative overload of one line
@@ -144,7 +144,7 @@ class TestCheckTechConstraints:
         # check shape of dataframe
         assert (4, 2) == df.shape
 
-    def test_hv_mv_station_overload(self):
+    def test_hv_mv_station_max_overload(self):
         # implicitly checks function _station_overload
 
         # create over-load problem with highest over-load in first time step (as it is
@@ -153,7 +153,7 @@ class TestCheckTechConstraints:
             data={"p": [30, 25, 30, 20], "q": [30, 25, 30, 20]}, index=self.timesteps
         )
 
-        df = check_tech_constraints.hv_mv_station_overload(self.edisgo)
+        df = check_tech_constraints.hv_mv_station_max_overload(self.edisgo)
         # check shape of dataframe
         assert (1, 3) == df.shape
         # check missing transformer capacity
@@ -163,10 +163,10 @@ class TestCheckTechConstraints:
         )
         assert df.at["MVGrid_1_station", "time_index"] == self.timesteps[0]
 
-    def test_mv_lv_station_overload(self):
+    def test_mv_lv_station_max_overload(self):
         # implicitly checks function _station_overload
 
-        df = check_tech_constraints.mv_lv_station_overload(self.edisgo)
+        df = check_tech_constraints.mv_lv_station_max_overload(self.edisgo)
         # check shape of dataframe
         assert (4, 3) == df.shape
         # check missing transformer capacity of one grid

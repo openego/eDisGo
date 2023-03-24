@@ -52,7 +52,7 @@ def mv_line_max_overload(edisgo_obj):
     return crit_lines
 
 
-def lv_line_overload(edisgo_obj):
+def lv_line_max_overload(edisgo_obj):
     """
     Returns time step and value of most severe overloading of lines in LV networks.
 
@@ -328,7 +328,7 @@ def lines_relative_load(edisgo_obj, lines=None):
     return loading / allowed_loading
 
 
-def hv_mv_station_overload(edisgo_obj):
+def hv_mv_station_max_overload(edisgo_obj):
     """
     Checks for over-loading of HV/MV station.
 
@@ -354,7 +354,7 @@ def hv_mv_station_overload(edisgo_obj):
     section 'grid_expansion_load_factors'.
 
     """
-    crit_stations = _station_overload(edisgo_obj, edisgo_obj.topology.mv_grid)
+    crit_stations = _station_max_overload(edisgo_obj, edisgo_obj.topology.mv_grid)
     if not crit_stations.empty:
         logger.debug("==> HV/MV station has load issues.")
     else:
@@ -363,7 +363,7 @@ def hv_mv_station_overload(edisgo_obj):
     return crit_stations
 
 
-def mv_lv_station_overload(edisgo_obj):
+def mv_lv_station_max_overload(edisgo_obj):
     """
     Checks for over-loading of MV/LV stations.
 
@@ -395,7 +395,7 @@ def mv_lv_station_overload(edisgo_obj):
         crit_stations = pd.concat(
             [
                 crit_stations,
-                _station_overload(edisgo_obj, lv_grid),
+                _station_max_overload(edisgo_obj, lv_grid),
             ]
         )
     if not crit_stations.empty:
@@ -410,7 +410,7 @@ def mv_lv_station_overload(edisgo_obj):
     return crit_stations
 
 
-def _station_overload(edisgo_obj, grid):
+def _station_max_overload(edisgo_obj, grid):
     """
     Checks for over-loading of stations.
 
