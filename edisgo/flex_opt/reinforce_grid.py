@@ -738,3 +738,115 @@ def catch_convergence_reinforce_grid(
     converged, results = reinforce()
 
     return edisgo.results
+
+
+def enhanced_reinforce_wrapper(
+    edisgo_obj: EDisGo, activate_cost_results_disturbing_mode: bool = False, **kwargs
+) -> EDisGo:
+    """
+    A Wrapper around the reinforce method, to catch exceptions and try to counter them
+    through reinforcing the grid in small portions:
+    Reinforcement mode mv, then mvlv mode, then lv powerflow per lv_grid.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+        The eDisGo object
+    activate_cost_results_disturbing_mode: :obj:`bool`
+        If this option is activated to methods are used to fix the problem. These
+        methods are currently not reinforcement costs increasing.
+        If the lv_reinforcement fails all branches of the lv_grid are replaced by the
+        standard type. Should this not work all lv nodes are aggregated to the station
+        node.
+
+    Returns
+    -------
+    :class:`~.EDisGo`
+        The reinforced eDisGo object
+
+    """
+    try:
+        logger.info("Try initial reinforcement.")
+        edisgo_obj.reinforce(mode=None, **kwargs)
+        logger.info("Initial succeeded.")
+    except:  # noqa: E722
+        logger.info("Initial failed.")
+
+        logger.info("Try mode 'mv' reinforcement.")
+        try:
+            edisgo_obj.reinforce(mode="mv", catch_convergence_problems=True, **kwargs)
+            logger.info("Mode 'mv' succeeded.")
+        except:  # noqa: E722
+            logger.info("Mode 'mv' failed.")
+
+        logger.info("Try mode 'mvlv' reinforcement.")
+        try:
+            edisgo_obj.reinforce(mode="mvlv", catch_convergence_problems=True, **kwargs)
+            logger.info("Mode 'mvlv' succeeded.")
+        except:  # noqa: E722
+            logger.info("Mode 'mvlv' failed.")
+
+        for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids):
+            try:
+                logger.info(f"Try mode 'lv' reinforcement for {lv_grid=}.")
+                edisgo_obj.reinforce(
+                    mode="lv",
+                    lv_grid_id=lv_grid.id,
+                    catch_convergence_problems=True,
+                    **kwargs,
+                )
+                logger.info(f"Mode 'lv' for {lv_grid} successful.")
+            except:  # noqa: E722
+                logger.info(f"Mode 'lv' for {lv_grid} failed.")
+                if activate_cost_results_disturbing_mode:
+                    try:
+                        logger.warning(
+                            f"Change all lines to standard type in {lv_grid=}."
+                        )
+                        lv_standard_line_type = edisgo_obj.config.from_cfg()[
+                            "grid_expansion_standard_equipment"
+                        ]["lv_line"]
+                        edisgo_obj.topology.change_line_type(
+                            lv_grid.lines_df.index.to_list(), lv_standard_line_type
+                        )
+                        edisgo_obj.reinforce(
+                            mode="lv",
+                            lv_grid_id=lv_grid.id,
+                            catch_convergence_problems=True,
+                            **kwargs,
+                        )
+                        logger.info(
+                            f"Changed lines mode 'lv' for {lv_grid} successful."
+                        )
+                    except:  # noqa: E722
+                        logger.info(f"Changed lines mode 'lv' for {lv_grid} failed.")
+                        logger.warning(
+                            f"Aggregate all lines to station bus in {lv_grid=}."
+                        )
+                        try:
+                            edisgo_obj.topology.aggregate_lv_grid_buses_on_station(
+                                lv_grid_id=lv_grid.id
+                            )
+                            edisgo_obj.reinforce(
+                                mode="lv",
+                                lv_grid_id=lv_grid.id,
+                                catch_convergence_problems=True,
+                                **kwargs,
+                            )
+                            logger.info(
+                                f"Aggregate to station mode 'lv' for {lv_grid} "
+                                f"successful."
+                            )
+                        except:  # noqa: E722
+                            logger.info(
+                                f"Aggregate to station mode 'lv' for {lv_grid} failed."
+                            )
+
+        try:
+            edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
+            logger.info("Enhanced reinforcement succeeded.")
+        except Exception as e:  # noqa: E722
+            logger.info("Enhanced reinforcement failed.")
+            raise e
+
+    return edisgo_obj

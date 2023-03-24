@@ -16,6 +16,7 @@ from shapely.geometry import Point
 
 from edisgo import EDisGo
 from edisgo.edisgo import import_edisgo_from_files
+from edisgo.flex_opt.reinforce_grid import enhanced_reinforce_wrapper
 
 
 class TestEDisGo:
@@ -484,6 +485,22 @@ class TestEDisGo:
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 6
         assert len(results.equipment_changes) == 6
+        assert results.v_res.shape == (4, 142)
+
+    def test_enhanced_reinforce(self):
+        self.setup_edisgo_object()
+        self.setup_worst_case_time_series()
+        self.edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=10, q_scaling_factor=10
+        )
+        edisgo_obj = copy.deepcopy(self.edisgo)
+        edisgo_obj = enhanced_reinforce_wrapper(edisgo_obj)
+
+        results = edisgo_obj.results
+
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 108
+        assert len(results.equipment_changes) == 162
         assert results.v_res.shape == (4, 142)
 
     def test_add_component(self, caplog):
