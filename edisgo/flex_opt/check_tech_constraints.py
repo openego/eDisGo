@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 def mv_line_overload(edisgo_obj):
     """
-    Checks for over-loading issues in MV network.
+    Returns time step and value of most severe overloading of lines in MV network.
 
     Parameters
     ----------
@@ -54,7 +54,7 @@ def mv_line_overload(edisgo_obj):
 
 def lv_line_overload(edisgo_obj):
     """
-    Checks for over-loading issues in LV networks.
+    Returns time step and value of most severe overloading of lines in LV networks.
 
     Parameters
     ----------
@@ -97,7 +97,7 @@ def lv_line_overload(edisgo_obj):
 
 def _line_max_overload(edisgo_obj, voltage_level):
     """
-    Checks for over-loading issues of lines.
+    Returns time step and value of most severe overloading of lines.
 
     Parameters
     ----------
