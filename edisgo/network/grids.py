@@ -342,9 +342,11 @@ class Grid(ABC):
 
     def assign_length_to_grid_station(self):
         """
-        Assign the length from the bus to the grid station for the grid.
-        The length is written written as column 'length_to_grid_station' to
-        'edisgo.topology.buses_df'.
+        Assign length in km from each bus in the grid to the grid's station.
+
+        The length is written to column 'length_to_grid_station' in
+        :attr:`~.network.topology.Topology.buses_df`.
+
         """
         buses_df = self._edisgo_obj.topology.buses_df
         graph = self.graph
