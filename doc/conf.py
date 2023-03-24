@@ -64,7 +64,6 @@ autoapi_dirs = ["../edisgo"]
 autoapi_options = [
     "members",
     "undoc-members",
-    "private-members",
     "show-inheritance",
     "show-inheritance-diagram",
     "show-module-summary",
