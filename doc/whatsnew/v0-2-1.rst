@@ -11,3 +11,5 @@ Changes
 * Added automatic link checking `#297 <https://github.com/openego/eDisGo/pull/297>`_
 * Bug fix `#346 <https://github.com/openego/eDisGo/pull/346>`_
 * Add methods to the Grid class to get information of the feeders `#360 <https://github.com/openego/eDisGo/pull/360>`_
+* Added method to scale timeseries `#353 <https://github.com/openego/eDisGo/pull/353>`_
+* Added method to aggregate lv grid buses to station bus secondary side `#353 <https://github.com/openego/eDisGo/pull/353>`_

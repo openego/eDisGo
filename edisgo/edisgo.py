@@ -16,7 +16,10 @@ from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
 )
-from edisgo.flex_opt.reinforce_grid import reinforce_grid
+from edisgo.flex_opt.reinforce_grid import (
+    catch_convergence_reinforce_grid,
+    reinforce_grid,
+)
 from edisgo.io import pypsa_io
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
@@ -665,7 +668,7 @@ class EDisGo:
 
         Returns
         -------
-        :networkx:`networkx.Graph<>`
+        :networkx:`networkx.Graph<network.Graph>`
             Graph representation of the grid as networkx Ordered Graph,
             where lines are represented by edges in the graph, and buses and
             transformers are represented by nodes.
@@ -912,7 +915,7 @@ class EDisGo:
         # handle converged time steps
         pypsa_io.process_pfa_results(self, pypsa_network, timesteps_converged)
 
-        return timesteps_not_converged
+        return timesteps_converged, timesteps_not_converged
 
     def reinforce(
         self,
@@ -922,6 +925,7 @@ class EDisGo:
         combined_analysis: bool = False,
         mode: str | None = None,
         without_generator_import: bool = False,
+        catch_convergence_problems: bool = False,
         **kwargs,
     ) -> Results:
         """
@@ -941,75 +945,93 @@ class EDisGo:
             :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case`. If True
             reinforcement is calculated for worst-case MV and LV cases separately.
 
-        """
-        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
+        catch_convergence_problems : bool
+            Uses reinforcement strategy to reinforce not converging grid.
+            Reinforces first with only converging timesteps. Reinforce again with at
+            start not converging timesteps. If still not converging, scale timeseries.
+            To use method "is_worst_case" must be "False".
+            Default: False
 
+        lv_grid_id : str or int
+            LV grid id to specify the grid to check, if mode is "lv".
+
+        """
+        if copy_grid:
+            edisgo_obj = copy.deepcopy(self)
+        else:
+            edisgo_obj = self
+
+        # Build reinforce run settings
+        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
             logger.debug(
                 "Running reinforcement in worst-case mode by differentiating between "
                 "MV and LV load and feed-in cases."
             )
-
-            if copy_grid:
-                edisgo_obj = copy.deepcopy(self)
-            else:
-                edisgo_obj = self
-
             timeindex_worst_cases = self.timeseries.timeindex_worst_cases
-
-            if mode != "lv":
-
-                timesteps_pfa = pd.DatetimeIndex(
-                    timeindex_worst_cases.loc[
-                        timeindex_worst_cases.index.str.contains("mv")
-                    ]
-                )
-                reinforce_grid(
-                    edisgo_obj,
-                    max_while_iterations=max_while_iterations,
-                    copy_grid=False,
-                    timesteps_pfa=timesteps_pfa,
-                    combined_analysis=combined_analysis,
-                    mode="mv",
-                    without_generator_import=without_generator_import,
-                )
-
-            if mode != "mv":
-                timesteps_pfa = pd.DatetimeIndex(
-                    timeindex_worst_cases.loc[
-                        timeindex_worst_cases.index.str.contains("lv")
-                    ]
-                )
-                reinforce_mode = mode if mode == "mvlv" else "lv"
-                reinforce_grid(
-                    edisgo_obj,
-                    max_while_iterations=max_while_iterations,
-                    copy_grid=False,
-                    timesteps_pfa=timesteps_pfa,
-                    combined_analysis=combined_analysis,
-                    mode=reinforce_mode,
-                    without_generator_import=without_generator_import,
-                )
-
-            if mode not in ["mv", "lv"]:
-                edisgo_obj.analyze(mode=mode)
-            results = edisgo_obj.results
-
-        else:
-            results = reinforce_grid(
-                self,
-                max_while_iterations=max_while_iterations,
-                copy_grid=copy_grid,
-                timesteps_pfa=timesteps_pfa,
-                combined_analysis=combined_analysis,
-                mode=mode,
-                without_generator_import=without_generator_import,
+            timesteps_mv = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("mv")
+                ]
             )
+            timesteps_lv = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("lv")
+                ]
+            )
+            # Run everytime the analyze-method at the end, to get a power flow for all
+            # timesteps for reinforced components
+            run_analyze_at_the_end = True
+            if mode is None:
+                setting_list = [
+                    {"mode": "mv", "timesteps_pfa": timesteps_mv},
+                    {"mode": "lv", "timesteps_pfa": timesteps_lv},
+                ]
+            elif mode == "mv":
+                setting_list = [
+                    {"mode": "mv", "timesteps_pfa": timesteps_mv},
+                ]
+            elif mode == "mvlv":
+                setting_list = [{"mode": "mvlv", "timesteps_pfa": timesteps_mv}]
+            elif mode == "lv":
+                setting_list = [{"mode": "lv", "timesteps_pfa": timesteps_lv}]
+
+            else:
+                raise ValueError(f"Mode {mode} does not exist.")
+        else:
+            setting_list = [{"mode": mode, "timesteps_pfa": timesteps_pfa}]
+            run_analyze_at_the_end = False
+
+        for setting in setting_list:
+            if not catch_convergence_problems:
+                reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=setting["timesteps_pfa"],
+                    combined_analysis=combined_analysis,
+                    mode=setting["mode"],
+                    without_generator_import=without_generator_import,
+                    **kwargs,
+                )
+            else:
+                catch_convergence_reinforce_grid(
+                    edisgo_obj,
+                    max_while_iterations=max_while_iterations,
+                    copy_grid=False,
+                    timesteps_pfa=setting["timesteps_pfa"],
+                    combined_analysis=combined_analysis,
+                    mode=setting["mode"],
+                    without_generator_import=without_generator_import,
+                    **kwargs,
+                )
+        if run_analyze_at_the_end:
+            edisgo_obj.analyze()
 
         # add measure to Results object
         if not copy_grid:
             self.results.measures = "grid_expansion"
 
-        return results
+        return edisgo_obj.results
 
     def perform_mp_opf(self, timesteps, storage_series=None, **kwargs):
         """
