@@ -364,6 +364,7 @@ class Grid(ABC):
         The feeder name is written as column 'feeder' to 'edisgo.topology.buses_df'.
         """
         buses_df = self._edisgo_obj.topology.buses_df
+        lines_df = self._edisgo_obj.topology.lines_df
         graph = self.graph
         station = self.station.index[0]
 
@@ -377,8 +378,13 @@ class Grid(ABC):
             # get all nodes in that feeder by doing a DFS in the disconnected
             # subgraph starting from the node adjacent to the station `neighbor`
             feeder_graph = nx.dfs_tree(subgraph, source=neighbor)
+            feeder_lines = set()
             for node in feeder_graph.nodes():
                 buses_df.at[node, "feeder"] = neighbor
+                feeder_lines.update(
+                    {edge[2]["branch_name"] for edge in graph.edges(node, data=True)}
+                )
+            lines_df.loc[lines_df.index.isin(feeder_lines), "feeder"] = neighbor
 
     def get_feeder_stats(self) -> pd.DataFrame:
         """

@@ -126,8 +126,16 @@ class TestGrids:
             "station_node",
             "Bus_BranchTee_MVGrid_1_1",
         ]
+        assert mv_grid.lines_df.iloc[0:2]["feeder"].to_list() == [
+            "Bus_BranchTee_MVGrid_1_1",
+            "Bus_BranchTee_MVGrid_1_4",
+        ]
         assert lv_grid.buses_df.iloc[0:2]["feeder"].to_list() == [
             "station_node",
+            "Bus_BranchTee_LVGrid_3_1",
+        ]
+        assert lv_grid.lines_df.iloc[0:2]["feeder"].to_list() == [
+            "Bus_BranchTee_LVGrid_3_1",
             "Bus_BranchTee_LVGrid_3_1",
         ]
 

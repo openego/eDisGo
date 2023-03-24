@@ -13,7 +13,7 @@ from shapely.geometry import Point
 from edisgo import EDisGo
 from edisgo.io import ding0_import
 from edisgo.network.components import Switch
-from edisgo.network.grids import LVGrid
+from edisgo.network.grids import LVGrid, MVGrid
 from edisgo.network.topology import Topology
 from edisgo.tools.geopandas_helper import GeoPandasGridContainer
 
@@ -30,6 +30,12 @@ class TestTopology:
     def setup_fixture(self):
         self.topology = Topology()
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
+
+    def test_get_grids(self):
+        grids = list(self.topology.grids)
+        assert len(grids) == 11
+        assert isinstance(grids[0], MVGrid)
+        assert isinstance(grids[1], LVGrid)
 
     def test_lv_grids(self):
         lv_grids = list(self.topology.lv_grids)
@@ -868,6 +874,17 @@ class TestTopology:
         assert "generators.csv" in saved_files
 
         shutil.rmtree(dir)
+
+    def test_assign_feeders(self):
+        self.topology.assign_feeders()
+        assert self.topology.buses_df.iloc[0:2]["feeder"].to_list() == [
+            "station_node",
+            "Bus_BranchTee_MVGrid_1_1",
+        ]
+        assert self.topology.lines_df.iloc[0:2]["feeder"].to_list() == [
+            "Bus_BranchTee_MVGrid_1_1",
+            "Bus_BranchTee_MVGrid_1_4",
+        ]
 
 
 class TestTopologyWithEdisgoObject:

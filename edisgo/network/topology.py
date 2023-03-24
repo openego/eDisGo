@@ -644,6 +644,11 @@ class Topology:
         return self.mv_grid.id
 
     @property
+    def grids(self):
+        """Gives a list of all grids."""
+        return [self._mv_grid] + list(self.lv_grids)
+
+    @property
     def mv_grid(self):
         """
         Medium voltage network.
@@ -3002,6 +3007,11 @@ class Topology:
                 f"{min_length} km). This might cause problems in the power flow or "
                 f"optimisation."
             )
+
+    def assign_feeders(self):
+        """Assign the feeder to all grids."""
+        for grid in self.grids:
+            grid.assign_grid_feeder()
 
     def __repr__(self):
         return f"Network topology {self.id}"
