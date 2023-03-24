@@ -494,11 +494,13 @@ class TestEDisGo:
             p_scaling_factor=10, q_scaling_factor=10
         )
         edisgo_obj = copy.deepcopy(self.edisgo)
-        results = enhanced_reinforce_wrapper(edisgo_obj)
+        edisgo_obj = enhanced_reinforce_wrapper(edisgo_obj)
+
+        results = edisgo_obj.results
 
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 6
-        assert len(results.equipment_changes) == 6
+        assert len(results.grid_expansion_costs) == 108
+        assert len(results.equipment_changes) == 162
         assert results.v_res.shape == (4, 142)
 
     def test_add_component(self, caplog):
