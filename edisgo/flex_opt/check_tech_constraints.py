@@ -938,7 +938,7 @@ def _mv_allowed_voltage_limits(edisgo_obj):
     upper_limit = (
         1
         + offset
-        + control_deviation
+        - control_deviation
         + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
             "mv_max_v_rise"
         ]
@@ -946,7 +946,7 @@ def _mv_allowed_voltage_limits(edisgo_obj):
     lower_limit = (
         1
         + offset
-        - control_deviation
+        + control_deviation
         - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
             "mv_max_v_drop"
         ]
