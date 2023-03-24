@@ -26,7 +26,7 @@ def mv_line_max_overload(edisgo_obj):
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
         over-loading as float, 'time_index' containing the corresponding
-        time step the over-loading occured in as
+        time step the over-loading occurred in as
         :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
         the voltage level the line is in (either 'mv' or 'lv').
 
@@ -69,7 +69,7 @@ def lv_line_overload(edisgo_obj):
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
         over-loading as float, 'time_index' containing the corresponding
-        time step the over-loading occured in as
+        time step the over-loading occurred in as
         :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
         the voltage level the line is in (either 'mv' or 'lv').
 
