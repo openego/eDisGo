@@ -38,7 +38,7 @@ def mv_line_overload(edisgo_obj):
 
     """
 
-    crit_lines = _line_overload(edisgo_obj, voltage_level="mv")
+    crit_lines = _line_max_overload(edisgo_obj, voltage_level="mv")
 
     if not crit_lines.empty:
         logger.debug(
@@ -81,7 +81,7 @@ def lv_line_overload(edisgo_obj):
 
     """
 
-    crit_lines = _line_overload(edisgo_obj, voltage_level="lv")
+    crit_lines = _line_max_overload(edisgo_obj, voltage_level="lv")
 
     if not crit_lines.empty:
         logger.debug(
@@ -95,7 +95,7 @@ def lv_line_overload(edisgo_obj):
     return crit_lines
 
 
-def _line_overload(edisgo_obj, voltage_level):
+def _line_max_overload(edisgo_obj, voltage_level):
     """
     Checks for over-loading issues of lines.
 
