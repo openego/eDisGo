@@ -644,6 +644,11 @@ class Topology:
         return self.mv_grid.id
 
     @property
+    def grids(self):
+        """Gives a list of all grids."""
+        return [self._mv_grid] + list(self.lv_grids)
+
+    @property
     def mv_grid(self):
         """
         Medium voltage network.
@@ -3032,6 +3037,11 @@ class Topology:
         self.storage_units_df.loc[
             self.storage_units_df.bus.isin(buses_to_drop), "bus"
         ] = station_bus
+
+    def assign_feeders(self):
+        """Assign the feeder to all grids."""
+        for grid in self.grids:
+            grid.assign_grid_feeder()
 
     def __repr__(self):
         return f"Network topology {self.id}"

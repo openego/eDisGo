@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 from edisgo.io import ding0_import
@@ -95,14 +96,18 @@ class TestGrids:
         assert not lv_grid.buses_df["length_to_grid_station"].isnull().any()
 
         # Check that length to station node is 0 and check for one other node
-        assert mv_grid.buses_df.iloc[0:2]["length_to_grid_station"].to_list() == [
-            0.0,
-            1.783874739231968,
-        ]
-        assert lv_grid.buses_df.iloc[0:2]["length_to_grid_station"].to_list() == [
-            0.0,
+        assert mv_grid.buses_df.at["Bus_MVStation_1", "length_to_grid_station"] == 0.0
+        assert np.isclose(
+            mv_grid.buses_df.at["Bus_Generator_1", "length_to_grid_station"], 1.783874
+        )
+        assert (
+            lv_grid.buses_df.at["BusBar_MVGrid_1_LVGrid_3_LV", "length_to_grid_station"]
+            == 0.0
+        )
+        assert np.isclose(
+            lv_grid.buses_df.at["Bus_BranchTee_LVGrid_3_1", "length_to_grid_station"],
             0.16,
-        ]
+        )
 
     def test_assign_grid_feeder(self):
         mv_grid = self.topology.mv_grid
@@ -121,8 +126,16 @@ class TestGrids:
             "station_node",
             "Bus_BranchTee_MVGrid_1_1",
         ]
+        assert mv_grid.lines_df.iloc[0:2]["feeder"].to_list() == [
+            "Bus_BranchTee_MVGrid_1_1",
+            "Bus_BranchTee_MVGrid_1_4",
+        ]
         assert lv_grid.buses_df.iloc[0:2]["feeder"].to_list() == [
             "station_node",
+            "Bus_BranchTee_LVGrid_3_1",
+        ]
+        assert lv_grid.lines_df.iloc[0:2]["feeder"].to_list() == [
+            "Bus_BranchTee_LVGrid_3_1",
             "Bus_BranchTee_LVGrid_3_1",
         ]
 
