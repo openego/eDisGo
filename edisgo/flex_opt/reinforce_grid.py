@@ -826,12 +826,11 @@ def enhanced_reinforce_wrapper(
                                 lv_grid_id=lv_grid.id
                             )
                             logger.info(
-                                f"Aggregate to station mode 'lv' for {lv_grid} "
-                                f"successful."
+                                f"Aggregate to station for {lv_grid} successful."
                             )
                         except:  # noqa: E722
                             logger.info(
-                                f"Aggregate to station mode 'lv' for {lv_grid} failed."
+                                f"Aggregate to station for {lv_grid} failed."
                             )
 
         try:
