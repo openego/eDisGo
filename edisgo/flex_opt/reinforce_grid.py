@@ -825,19 +825,12 @@ def enhanced_reinforce_wrapper(
                             edisgo_obj.topology.aggregate_lv_grid_buses_on_station(
                                 lv_grid_id=lv_grid.id
                             )
-                            edisgo_obj.reinforce(
-                                mode="lv",
-                                lv_grid_id=lv_grid.id,
-                                catch_convergence_problems=True,
-                                **kwargs,
-                            )
                             logger.info(
-                                f"Aggregate to station mode 'lv' for {lv_grid} "
-                                f"successful."
+                                f"Aggregate to station for {lv_grid} successful."
                             )
                         except:  # noqa: E722
                             logger.info(
-                                f"Aggregate to station mode 'lv' for {lv_grid} failed."
+                                f"Aggregate to station for {lv_grid} failed."
                             )
 
         try:
