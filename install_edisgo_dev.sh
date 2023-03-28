@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to install the venv in the ./venv dir, install pre-commit hooks and build jupyterlab.
+# Script to install the venv in the ./venv dir, install pre-commit hooks.
 
 set -euo pipefail
 #set -x
@@ -35,4 +35,3 @@ python -m pip -q freeze >> "$workflow_dir/venv/freeze.txt"
 
 
 pre-commit install
-jupyter-lab build
