@@ -182,26 +182,15 @@ class EDisGo:
                 record.grid_id = self.topology.id
                 return True
 
-            file_formatter = logging.Formatter(
-                "%(asctime)s - %(name)s - %(levelname)s - "
-                "MVGrid(%(grid_id)s): %(message)s"
-            )
-            stream_formatter = logging.Formatter(
-                "%(name)s - %(levelname)s - MVGrid(%(grid_id)s): %(message)s"
-            )
-
             logger_edisgo = logging.getLogger("edisgo")
             for handler in logger_edisgo.handlers:
-                if isinstance(logger_edisgo.handlers[0], logging.StreamHandler):
-                    handler.setFormatter(stream_formatter)
-                elif isinstance(logger_edisgo.handlers[0], logging.FileHandler):
-                    handler.setFormatter(file_formatter)
-                else:
-                    raise ValueError(
-                        "Disable the log_grid_id function when using other"
-                        " handlers than StreamHandler or FileHandler"
-                    )
-                handler.filters.clear()
+                fmt = handler.formatter._fmt
+                colon_idx = fmt.index(":")
+                formatter_str = (
+                    f"{fmt[:colon_idx]} - MVGrid(%(grid_id)s){fmt[colon_idx:]}"
+                )
+                formatter = logging.Formatter(formatter_str)
+                handler.setFormatter(formatter)
                 handler.addFilter(add_grid_id_filter)
 
     @property
