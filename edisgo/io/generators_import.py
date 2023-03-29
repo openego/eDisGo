@@ -1092,9 +1092,13 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
         ~pv_rooftop_df.index.isin(gens_existing.gen_index_new)
     ]
     if len(new_pv_rooftop_plants) > 0:
-        _integrate_new_pv_rooftop_to_buildings(edisgo_object, new_pv_rooftop_plants)
+        _, new_pv_own_grid_conn = _integrate_new_pv_rooftop_to_buildings(
+            edisgo_object, new_pv_rooftop_plants
+        )
+    else:
+        new_pv_own_grid_conn = []
 
-    # check number of PV rooftop plants in grid
+    # check number and installed capacity of PV rooftop plants in grid
     pv_rooftop_gens_in_grid = edisgo_object.topology.generators_df[
         edisgo_object.topology.generators_df.subtype == "pv_rooftop"
     ]
@@ -1112,12 +1116,19 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
             f"{pv_rooftop_gens_in_grid.p_nom.sum()}."
         )
 
-    # logging message
+    # logging messages
     logger.debug(
-        f"{pv_rooftop_gens_in_grid.p_nom.sum():.2f} MW of PV rooftop plants integrated."
-        f"Of this, {gens_existing.p_nom.sum():.2f} MW could be matched to "
+        f"{pv_rooftop_gens_in_grid.p_nom.sum():.2f} MW of PV rooftop plants "
+        f"integrated. Of this, {gens_existing.p_nom.sum():.2f} MW could be matched to "
         f"an existing PV rooftop plant."
     )
+    if len(new_pv_own_grid_conn) > 0:
+        logger.debug(
+            f"Of the PV rooftop plants that could not be matched to an existing PV "
+            f"plant, "
+            f"{sum(pv_rooftop_gens_in_grid.loc[new_pv_own_grid_conn, 'p_nom']):.2f} "
+            f"MW was integrated at a new bus."
+        )
 
 
 def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
@@ -1132,10 +1143,11 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
 
     Returns
     -------
-    list(str)
-        List with names (as in index of
-        :attr:`~.network.topology.Topology.generators_df`) of integrated PV rooftop
-        plants.
+    (list(str), list(str))
+        Two lists with names (as in index of
+        :attr:`~.network.topology.Topology.generators_df`) of all integrated PV rooftop
+        plants and PV rooftop plants integrated to a different grid connection point
+        than the building.
 
     """
     # join busses corresponding to building ID
@@ -1228,23 +1240,14 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
             )
             integrated_plants = integrated_plants.append(pd.Index([pv_pp_name]))
             integrated_plants_own_grid_conn = integrated_plants_own_grid_conn.append(
-                pd.Index([pv_pp])
+                pd.Index([pv_pp_name])
             )
 
     # check if all PV plants were integrated
     if not len(pv_rooftop_df) == len(integrated_plants):
         raise ValueError("Not all PV rooftop plants could be integrated into the grid.")
 
-    # logging messages
-    logger.debug(f"{sum(pv_rooftop_df.p_nom):.2f} MW of PV roof-top plants integrated.")
-    if len(integrated_plants_own_grid_conn) > 0:
-        logger.debug(
-            f"Of this, "
-            f"{sum(pv_rooftop_df.loc[integrated_plants_own_grid_conn, 'p_nom']):.2f} "
-            f"MW of PV roof-top capacity was integrated at a new bus."
-        )
-
-    return integrated_plants
+    return integrated_plants, integrated_plants_own_grid_conn
 
 
 def _integrate_power_and_chp_plants(edisgo_object, power_plants_gdf, chp_gdf):

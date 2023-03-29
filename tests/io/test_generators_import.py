@@ -269,9 +269,10 @@ class TestGeneratorsImport:
         ] = "BusBar_mvgd_33532_lvgd_1163850014_LV"
         num_gens_before = len(edisgo.topology.generators_df)
         with caplog.at_level(logging.DEBUG):
-            integrated_pv = generators_import._integrate_new_pv_rooftop_to_buildings(
-                edisgo, pv_df
-            )
+            (
+                integrated_pv,
+                integrated_pv_own_grid_conn,
+            ) = generators_import._integrate_new_pv_rooftop_to_buildings(edisgo, pv_df)
 
         assert num_gens_before + 3 == len(edisgo.topology.generators_df)
         gens_df = edisgo.topology.generators_df.loc[integrated_pv, :]
@@ -286,10 +287,12 @@ class TestGeneratorsImport:
         bus_gen_voltage_level_5 = gens_df[gens_df.p_nom == 2.0].bus[0]
         assert edisgo.topology.buses_df.at[bus_gen_voltage_level_5, "v_nom"] == 20.0
 
-        assert "2.15 MW of PV roof-top plants integrated." in caplog.text
+        assert edisgo.topology.generators_df.loc[integrated_pv, "p_nom"].sum() == 2.155
         assert (
-            "Of this, 2.00 MW of PV roof-top capacity was integrated at a new bus."
-            in caplog.text
+            edisgo.topology.generators_df.loc[
+                integrated_pv_own_grid_conn, "p_nom"
+            ].sum()
+            == 2.0
         )
 
     def test__integrate_power_and_chp_plants(self, caplog):
