@@ -19,9 +19,8 @@ from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
 )
 from edisgo.flex_opt.reinforce_grid import reinforce_grid
-from edisgo.io import generators_import, pypsa_io, timeseries_import
+from edisgo.io import dsm_import, generators_import, pypsa_io, timeseries_import
 from edisgo.io.ding0_import import import_ding0_grid
-from edisgo.io.dsm_import import dsm_from_database
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
     import_electromobility_from_dir,
@@ -1988,8 +1987,45 @@ class EDisGo:
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
-    def import_dsm(self, engine: Engine, scenario: str = "eGon2035"):
-        dsm_from_database(edisgo_obj=self, engine=engine, scenario=scenario)
+    def import_dsm(self, engine: Engine, scenario: str):
+        """
+        Gets industrial and CTS DSM profiles from the
+        `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+
+        Profiles comprise minimum and maximum load increase in MW as well as maximum
+        energy pre- and postponing in MWh. The data is written to the
+        :class:`~.network.dsm.DSM` object.
+
+        Currently, the only supported data source is scenario data generated
+        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        between two scenarios: 'eGon2035' and 'eGon100RE'.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        scenario : str
+            Scenario for which to retrieve DSM data. Possible options
+            are 'eGon2035' and 'eGon100RE'.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            Specifies time steps for which to get data. Leap years can currently not be
+            handled. In case the given timeindex contains a leap year, the data will be
+            indexed using the default year (2035 in case of the 'eGon2035' and to 2045
+            in case of the 'eGon100RE' scenario) and returned for the whole year.
+            If no timeindex is provided, the timeindex set in
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+            is indexed using the default year and returned for the whole year.
+
+        """
+        dsm_profiles = dsm_import.oedb(
+            edisgo_obj=self, engine=engine, scenario=scenario
+        )
+        self.dsm.p_min = dsm_profiles["p_min"]
+        self.dsm.p_max = dsm_profiles["p_max"]
+        self.dsm.e_min = dsm_profiles["e_min"]
+        self.dsm.e_max = dsm_profiles["e_max"]
 
     def import_home_batteries(
         self,
