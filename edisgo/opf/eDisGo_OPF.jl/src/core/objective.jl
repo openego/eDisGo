@@ -43,6 +43,7 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     pgens = Dict(n => PowerModels.var(pm, n, :pgens) for n in nws)
     pds = Dict(n => PowerModels.var(pm, n, :pds) for n in nws)
     pcps = Dict(n => PowerModels.var(pm, n, :pcps) for n in nws)
+    phps = Dict(n => PowerModels.var(pm, n, :phps) for n in nws)
     c = Dict(n => Dict(i => get(branch, "cost_factor", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
     storage = Dict(i => get(branch, "storage", 1.0) for (i,branch) in PowerModels.ref(pm, 1, :branch))
     parameters = [r[1][i] for i in keys(c[1])]
