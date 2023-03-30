@@ -891,23 +891,23 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "qmin": -np.tan(np.arccos(pf))
             * psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
             / s_base,
-            "energy": 0,  # psa_net.storage_units.state_of_charge_initial.loc[
-            #     flexible_storages[stor_i]
-            # ]
-            # * e_max
-            # / s_base,
-            "soc_initial": 0,  # ( ToDo: Berechnung überprüfen
-            #     edisgo_obj.timeseries.storage_units_state_of_charge[
-            #         flexible_storages[stor_i]
-            #     ].iloc[0]
-            #     + edisgo_obj.timeseries.storage_units_active_power[
-            #         flexible_storages[stor_i]
-            #     ].iloc[0]
-            #     * 0.9
-            # ),
-            "soc_end": 0,  # edisgo_obj.timeseries.storage_units_state_of_charge[
-            #     flexible_storages[stor_i]
-            # ].iloc[-1],
+            "energy": psa_net.storage_units.state_of_charge_initial.loc[  # 0, für OG
+                flexible_storages[stor_i]
+            ]
+            * e_max
+            / s_base,
+            "soc_initial": (  # 0, für OG
+                edisgo_obj.timeseries.storage_units_state_of_charge[
+                    flexible_storages[stor_i]
+                ].iloc[0]
+                + edisgo_obj.timeseries.storage_units_active_power[
+                    flexible_storages[stor_i]
+                ].iloc[0]
+                * 0.9
+            ),
+            "soc_end": edisgo_obj.timeseries.storage_units_state_of_charge[  # 0, für OG
+                flexible_storages[stor_i]
+            ].iloc[-1],
             "energy_rating": e_max / s_base,
             "thermal_rating": 100,
             "charge_rating": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
@@ -1543,17 +1543,6 @@ def _build_component_timeseries(
                 "pd": p_d.tolist(),
                 "qd": q_d.tolist(),
             }
-    # elif kind == "storage":
-    #     pass
-    #     p_set = psa_net.storage_units_t.p_set[flexible_storages] / s_base
-    #     q_set = psa_net.storage_units_t.q_set[flexible_storages] / s_base
-    #     for comp in p_set.columns:
-    #         comp_i = _mapping(psa_net, comp, kind, flexible_storages=
-    #         flexible_storages)
-    #         pm_comp[str(comp_i)] = {
-    #             "ps": p_set[comp].values.tolist(),
-    #             "qs": q_set[comp].values.tolist(),
-    #         }
     elif kind == "electromobility":
         if len(flexible_cps) > 0:
             p_set = (

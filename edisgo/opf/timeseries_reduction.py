@@ -93,26 +93,48 @@ def _scored_most_critical_loading_MH(edisgo_obj, window_days):
         .sum(axis=1)
     )
     # time intervall starts at 4am on every considered day
-    crit_timesteps = crit_timesteps.iloc[4::24].sort_values(ascending=False)
+    crit_timesteps = (
+        crit_timesteps.iloc[window_days * 24 - 1 :]
+        .iloc[5::24]
+        .sort_values(ascending=False)
+    )
     timesteps = crit_timesteps.index - pd.DateOffset(days=window_days)
     time_intervals = [
         pd.date_range(start=timestep, periods=window_days * 24 + 1, freq="h")
         for timestep in timesteps
     ]
+    time_intervals_df = pd.DataFrame(
+        index=range(len(time_intervals)), columns=["OL_ts", "OL_max"]
+    )
+    for i in range(len(time_intervals)):
+        time_intervals_df["OL_ts"][i] = time_intervals[i]
     lines_no_max = crit_lines_score.columns.values
+    total_lines = len(lines_no_max)
     # check if worst overloading of every line is included in worst three time intervals
-    for i in range(3):
+    for i in range(len(time_intervals)):
         max_per_lin_ti = crit_lines_score.loc[time_intervals[i]].max()
+        time_intervals_df["OL_max"][i] = (
+            len(
+                np.intersect1d(
+                    lines_no_max,
+                    max_per_lin_ti[max_per_lin_ti >= max_per_line * 0.95].index.values,
+                )
+            )
+            / total_lines
+        )
         lines_no_max = np.intersect1d(
             lines_no_max,
             max_per_lin_ti[max_per_lin_ti < max_per_line * 0.95].index.values,
         )
-    if len(lines_no_max) > 0:
-        logger.warning(
-            "Highest overloading of following lines does not lie within the "
-            "overall worst three time intervals: " + str(lines_no_max)
-        )
-    return time_intervals
+
+        if i == 2:
+            if len(lines_no_max) > 0:
+                logger.warning(
+                    "Highest overloading of following lines does not lie within the "
+                    "overall worst three time intervals: " + str(lines_no_max)
+                )
+
+    return time_intervals_df
 
 
 def _scored_critical_overvoltage(edisgo_obj):
@@ -152,7 +174,7 @@ def _scored_most_critical_voltage_issues(edisgo_obj):
 def _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days):
     voltage_diff = check_tech_constraints.voltage_deviation_from_allowed_voltage_limits(
         edisgo_obj
-    )
+    ).fillna(0)
 
     # Get score for nodes that are over or under the allowed deviations
     voltage_diff = voltage_diff.abs()[voltage_diff.abs() > 0]
@@ -204,7 +226,7 @@ def _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days):
         feeder_buses.loc[voltage_diff.columns[i]]
         for i in range(len(voltage_diff.columns))
     ]
-    voltage_diff_copy = deepcopy(voltage_diff)
+    voltage_diff_copy = deepcopy(voltage_diff).fillna(0)
     voltage_diff.columns = columns
     voltage_diff_feeder = (
         voltage_diff.transpose().reset_index().groupby(by="index").sum().transpose()
@@ -221,28 +243,50 @@ def _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days):
         .sum(axis=1)
     )
     # time intervall starts at 4am on every considered day
-    crit_timesteps = crit_timesteps.iloc[4::24].sort_values(ascending=False)
+    crit_timesteps = (
+        crit_timesteps.iloc[window_days * 24 - 1 :]
+        .iloc[5::24]
+        .sort_values(ascending=False)
+    )
     timesteps = crit_timesteps.index - pd.DateOffset(days=window_days)
     time_intervals = [
         pd.date_range(start=timestep, periods=window_days * 24 + 1, freq="h")
         for timestep in timesteps
     ]
+    time_intervals_df = pd.DataFrame(
+        index=range(len(time_intervals)), columns=["V_ts", "V_max"]
+    )
+    for i in range(len(time_intervals)):
+        time_intervals_df["V_ts"][i] = time_intervals[i]
 
     buses_no_max = max_per_bus.index.values
-    # check if worst overloading of every line is included in worst three time intervals
-    for i in range(3):
+    total_buses = len(buses_no_max)
+
+    # check if worst voltage deviation of every bus is included in worst three time
+    # intervals
+    for i in range(len(time_intervals)):
         max_per_bus_ti = voltage_diff_copy.loc[time_intervals[i]].max()
+        time_intervals_df["V_max"][i] = (
+            len(
+                np.intersect1d(
+                    buses_no_max,
+                    max_per_bus_ti[max_per_bus_ti >= max_per_bus * 0.95].index.values,
+                )
+            )
+            / total_buses
+        )
         buses_no_max = np.intersect1d(
             buses_no_max,
             max_per_bus_ti[max_per_bus_ti < max_per_bus * 0.95].index.values,
         )
-    if len(buses_no_max) > 0:
-        logger.warning(
-            "Highest voltage deviation of following buses does not lie within "
-            "the overall worst three time intervals: " + str(buses_no_max)
-        )
+        if i == 2:
+            if len(buses_no_max) > 0:
+                logger.warning(
+                    "Highest voltage deviation of following buses does not lie within "
+                    "the overall worst three time intervals: " + str(buses_no_max)
+                )
 
-    return time_intervals
+    return time_intervals_df
 
 
 def get_steps_reinforcement(
@@ -437,32 +481,32 @@ def get_steps_flex_opf(
     # Select most critical time intervalls based on current violations
     loading_scores = _scored_most_critical_loading_MH(edisgo_obj, window_days)
     if num_ti_loading is None:
-        num_ti_loading = int(np.ceil(len(loading_scores) * percentage))
+        num_ti_loading = int(np.ceil(len(loading_scores.OL_ts) * percentage))
     else:
-        if num_ti_loading > len(loading_scores):
+        if num_ti_loading > len(loading_scores.OL_ts):
             logger.info(
                 f"The number of time intervals with highest overloading "
-                f"({len(loading_scores)}) is lower than the defined number of "
+                f"({len(loading_scores.OL_ts)}) is lower than the defined number of "
                 f"loading time intervals ({num_ti_loading}). Therefore, only "
-                f"{len(loading_scores)} time intervals are exported."
+                f"{len(loading_scores.OL_ts)} time intervals are exported."
             )
-            num_ti_loading = len(loading_scores)
-    steps = loading_scores[:num_ti_loading]
+            num_ti_loading = len(loading_scores.OL_ts)
+    steps = loading_scores.iloc[:num_ti_loading]
 
     # Select most critical steps based on voltage violations
     voltage_scores = _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days)
     if num_ti_voltage is None:
-        num_ti_voltage = int(np.ceil(len(voltage_scores) * percentage))
+        num_ti_voltage = int(np.ceil(len(voltage_scores.V_ts) * percentage))
     else:
-        if num_ti_voltage > len(voltage_scores):
+        if num_ti_voltage > len(voltage_scores.V_ts):
             logger.info(
                 f"The number of time steps with highest voltage issues "
-                f"({len(voltage_scores)}) is lower than the defined number of "
+                f"({len(voltage_scores.V_ts)}) is lower than the defined number of "
                 f"voltage time steps ({num_ti_voltage}). Therefore, only "
-                f"{len(voltage_scores)} time steps are exported."
+                f"{len(voltage_scores.V_ts)} time steps are exported."
             )
-            num_ti_voltage = len(voltage_scores)
-    steps.append(voltage_scores[:num_ti_voltage])  # Todo: Can this cause duplicated?
+            num_ti_voltage = len(voltage_scores.V_ts)
+    steps = pd.concat([steps, voltage_scores.iloc[:num_ti_voltage]], axis=1)
 
     if len(steps) == 0:
         logger.warning("No critical steps detected. No network expansion required.")

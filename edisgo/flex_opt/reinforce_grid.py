@@ -216,11 +216,6 @@ def reinforce_grid(
         else checks.mv_lv_station_overload(edisgo_reinforce)
     )
     logger.debug("==> Check line load.")
-    # if (kwargs.get("lv_grid_id", None)) or (mode == "mv"):
-    #     overloaded_lv_stations = pd.DataFrame(dtype=float)
-    # else:
-    #     overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce, **kwargs)
-    #     logger.debug("==> Check line load.")
 
     crit_lines = (
         pd.DataFrame(dtype=float)
@@ -398,13 +393,6 @@ def reinforce_grid(
             voltage_level="mv_lv",
             split_voltage_band=split_voltage_band,
         )
-        # voltage_levels = "mv_lv" if combined_analysis else "lv"
-        # if kwargs.get("lv_grid_id", None):
-        #     crit_stations = {}
-        # else:
-        #     crit_stations = checks.lv_voltage_deviation(
-        #         edisgo_reinforce, mode="stations", voltage_levels=voltage_levels
-        #     )
 
         while_counter = 0
         while not crit_stations.empty and while_counter < max_while_iterations:
@@ -456,9 +444,6 @@ def reinforce_grid(
     # solve voltage problems in LV grids
     if not mode or mode == "lv":
         logger.debug("==> Check voltage in LV grids.")
-        # crit_nodes = checks.lv_voltage_deviation(
-        #     edisgo_reinforce, voltage_levels=voltage_levels, **kwargs
-        # )
         crit_nodes = checks.voltage_issues(
             edisgo_reinforce, voltage_level="lv", split_voltage_band=split_voltage_band
         )
@@ -489,9 +474,6 @@ def reinforce_grid(
                 voltage_level="lv",
                 split_voltage_band=split_voltage_band,
             )
-            # crit_nodes = checks.lv_voltage_deviation(
-            #     edisgo_reinforce, voltage_levels=voltage_levels, **kwargs
-            # )
 
             iteration_step += 1
             while_counter += 1
@@ -526,8 +508,6 @@ def reinforce_grid(
 
     if mode != "mv":
         overloaded_lv_stations = checks.mv_lv_station_overload(edisgo_reinforce)
-    # if mode != "mv" and (not kwargs.get("lv_grid_id", None)):
-    #     overloaded_lv_stations = checks.mv_lv_station_load(edisgo_reinforce)
 
     logger.debug("==> Recheck line load.")
 
@@ -542,7 +522,6 @@ def reinforce_grid(
             [
                 crit_lines,
                 checks.lv_line_overload(edisgo_reinforce),
-                # checks.lv_line_load(edisgo_reinforce, **kwargs),
             ]
         )
 
