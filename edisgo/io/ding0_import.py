@@ -93,8 +93,10 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
         # set up columns that are added in new ding0 version
         grid.loads["building_id"] = None
         grid.loads["number_households"] = None
+        grid.generators["source_id"] = None
     else:
         edisgo_obj.topology.buses_df["in_building"] = False
+        grid.generators = grid.generators.rename(columns={"gens_id": "source_id"})
     edisgo_obj.topology.loads_df = grid.loads[edisgo_obj.topology.loads_df.columns]
     # drop slack generator from generators
     slack = grid.generators.loc[grid.generators.control == "Slack"].index
@@ -102,6 +104,7 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
     edisgo_obj.topology.generators_df = grid.generators[
         edisgo_obj.topology.generators_df.columns
     ]
+
     edisgo_obj.topology.storage_units_df = grid.storage_units[
         edisgo_obj.topology.storage_units_df.columns
     ]

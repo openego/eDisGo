@@ -49,6 +49,7 @@ COLUMNS = {
         "control",
         "weather_cell_id",
         "subtype",
+        "source_id",
     ],
     "storage_units_df": ["bus", "control", "p_nom", "max_hours"],
     "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
