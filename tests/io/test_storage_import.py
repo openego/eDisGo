@@ -34,12 +34,12 @@ class TestStorageImport:
                 self.edisgo, scenario="eGon2035", engine=pytest.engine
             )
         storage_df = self.edisgo.topology.storage_units_df
-        assert len(integrated_storages) == 659
-        assert len(storage_df) == 659
-        assert np.isclose(storage_df.p_nom.sum(), 2.0144, atol=1e-3)
-        assert "2.01 MW of home batteries integrated." in caplog.text
+        assert len(integrated_storages) == 666
+        assert len(storage_df) == 666
+        assert np.isclose(storage_df.p_nom.sum(), 2.02723, atol=1e-3)
+        assert "2.03 MW of home batteries integrated." in caplog.text
         assert (
-            "Of this 2.01 MW do not have a generator with the same building ID."
+            "Of this 2.03 MW do not have a generator with the same building ID."
             in caplog.text
         )
         caplog.clear()
@@ -56,10 +56,10 @@ class TestStorageImport:
                 self.edisgo, scenario="eGon2035", engine=pytest.engine
             )
         storage_df = self.edisgo.topology.storage_units_df
-        assert len(integrated_storages) == 659
-        assert len(storage_df) == 659
-        assert np.isclose(storage_df.p_nom.sum(), 2.0144, atol=1e-3)
-        assert "2.01 MW of home batteries integrated." in caplog.text
+        assert len(integrated_storages) == 666
+        assert len(storage_df) == 666
+        assert np.isclose(storage_df.p_nom.sum(), 2.02723, atol=1e-3)
+        assert "2.03 MW of home batteries integrated." in caplog.text
         assert "do not have a generator with the same building ID." not in caplog.text
 
     def test__grid_integration(self, caplog):
@@ -129,12 +129,12 @@ class TestStorageImport:
         pv_df = pd.DataFrame(
             data={
                 "bus": [
-                    "BranchTee_mvgd_33532_lvgd_1163940001_building_446651",
-                    "BusBar_mvgd_33532_lvgd_1163850014_LV",
+                    "BranchTee_mvgd_33535_lvgd_1164120011_building_442002",
+                    "BusBar_mvgd_33535_lvgd_1164120011_LV",
                 ],
                 "p_nom": [0.005, 0.15],
                 "type": ["solar", "solar"],
-                "building_id": [446651, 445710],
+                "building_id": [442002, 445710],
             },
             index=[1, 2],
         )
@@ -156,7 +156,7 @@ class TestStorageImport:
         ).all()
         # check that medium storage is integrated at same bus as PV system
         bus_bat_voltage_level_6 = storage_df[storage_df.p_nom == 0.15].bus[0]
-        assert "BusBar_mvgd_33532_lvgd_1163850014_LV" == bus_bat_voltage_level_6
+        assert "BusBar_mvgd_33535_lvgd_1164120011_LV" == bus_bat_voltage_level_6
         # check that largest storage can be connected to building because the building
         # is already connected to the MV
         bus_bat_voltage_level_5 = storage_df[storage_df.p_nom == 2.0].bus[0]

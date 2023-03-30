@@ -43,7 +43,7 @@ class TestHeatPump:
             "Heat_Pump_LVGrid_1163850014_district_heating_6",
             "HP_448156",
         ]
-        building_ids = [442081, None, 448156]
+        building_ids = [442081, None, 430859]
         sector = ["individual_heating", "district_heating", "individual_heating"]
         weather_cell_ids = [11051, 11051, 11052]
         district_heating_ids = [None, 5, None]

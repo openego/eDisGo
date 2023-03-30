@@ -313,7 +313,7 @@ class TestGeneratorsImport:
             data={
                 "p_nom": [0.005, 0.15, 2.0],
                 "weather_cell_id": [11051, 11051, 11052],
-                "building_id": [446651, 445710, 446933],
+                "building_id": [430903, 445710, 446933],
                 "generator_id": [1, 2, 3],
                 "type": ["solar", "solar", "solar"],
                 "subtype": ["pv_rooftop", "pv_rooftop", "pv_rooftop"],
@@ -327,9 +327,11 @@ class TestGeneratorsImport:
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         # manipulate grid so that building 445710 is connected to MV/LV station
-        edisgo.topology.loads_df.at[
-            "Load_mvgd_33532_lvgd_1163850014_103_residential", "bus"
-        ] = "BusBar_mvgd_33532_lvgd_1163850014_LV"
+        load = edisgo.topology.loads_df[
+            edisgo.topology.loads_df.building_id == 445710
+        ].index[0]
+        busbar_bus = "BusBar_mvgd_33535_lvgd_1164120011_LV"
+        edisgo.topology.loads_df.at[load, "bus"] = busbar_bus
         num_gens_before = len(edisgo.topology.generators_df)
         with caplog.at_level(logging.DEBUG):
             (
@@ -345,7 +347,7 @@ class TestGeneratorsImport:
         assert edisgo.topology.buses_df.at[bus_gen_voltage_level_7, "v_nom"] == 0.4
         # check that medium PV plant is connected same bus as building
         bus_gen_voltage_level_6 = gens_df[gens_df.p_nom == 0.15].bus[0]
-        assert bus_gen_voltage_level_6 == "BusBar_mvgd_33532_lvgd_1163850014_LV"
+        assert bus_gen_voltage_level_6 == busbar_bus
         # check that largest heat pump is connected to MV
         bus_gen_voltage_level_5 = gens_df[gens_df.p_nom == 2.0].bus[0]
         assert edisgo.topology.buses_df.at[bus_gen_voltage_level_5, "v_nom"] == 20.0
@@ -370,8 +372,8 @@ class TestGeneratorsImport:
         # * one where capacity will decrease ("SEE97")
         # * one where capacity stayed the same ("SEE98")
         # * one with source ID that does not exist in future scenario ("SEE99")
-        random_bus = "BusBar_mvgd_33532_lvgd_1151750000_MV"
-        random_lv_bus = "BranchTee_mvgd_33532_lvgd_1151770000_1"
+        random_bus = "BusBar_mvgd_33535_lvgd_1156570000_MV"
+        random_lv_bus = "BranchTee_mvgd_33535_lvgd_1150630000_35"
         x = edisgo.topology.buses_df.at[random_bus, "x"]
         y = edisgo.topology.buses_df.at[random_bus, "y"]
         geom = Point((x, y))
@@ -720,4 +722,4 @@ class TestGeneratorsImportOEDB:
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         edisgo.import_generators(generator_scenario="eGon2035", engine=pytest.engine)
-        assert len(edisgo.topology.generators_df) == 670
+        assert len(edisgo.topology.generators_df) == 677

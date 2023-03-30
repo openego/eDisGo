@@ -22,7 +22,7 @@ class TestHeatPumpImport:
             data={
                 "p_set": [0.005, 0.15, 2.0],
                 "weather_cell_id": [11051, 11051, 11052],
-                "building_id": [446651, 445710, 446933],
+                "building_id": [446963, 445710, 446933],
             },
             index=[1, 2, 3],
         )
@@ -50,14 +50,14 @@ class TestHeatPumpImport:
         loads_df = self.edisgo.topology.loads_df
         hp_df = loads_df[loads_df.type == "heat_pump"]
         assert "Capacity of individual heat pumps" not in caplog.text
-        assert len(hp_df) == 177
-        assert len(hp_df[hp_df.sector == "individual_heating"]) == 176
+        assert len(hp_df) == 151
+        assert len(hp_df[hp_df.sector == "individual_heating"]) == 150
         assert np.isclose(
-            hp_df[hp_df.sector == "individual_heating"].p_set.sum(), 2.97388
+            hp_df[hp_df.sector == "individual_heating"].p_set.sum(), 2.97316
         )
         assert len(hp_df[hp_df.sector == "district_heating"]) == 1
         assert np.isclose(
-            hp_df[hp_df.sector == "district_heating"].p_set.sum(), 0.095348
+            hp_df[hp_df.sector == "district_heating"].p_set.sum(), 0.095202
         )
 
     def test__grid_integration(self, caplog):
@@ -109,7 +109,7 @@ class TestHeatPumpImport:
         # check that smallest heat pump is integrated at same bus as building
         bus_hp_voltage_level_7 = hp_df[hp_df.p_set == 0.005].bus[0]
         assert (
-            loads_df[loads_df.building_id == 446651].bus.values
+            loads_df[loads_df.building_id == 446963].bus.values
             == bus_hp_voltage_level_7
         ).all()
         # check that medium heat pump cannot be integrated at same bus as building

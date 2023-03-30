@@ -115,7 +115,7 @@ class TestTimeseriesImport:
             "Heat_Pump_LVGrid_1163850014_district_heating_6",
             "HP_448156",
         ]
-        building_ids = [431821, None, 448156]
+        building_ids = [431821, None, 430859]
         sector = ["individual_heating", "district_heating", "individual_heating"]
         weather_cell_ids = [11051, 11051, 11052]
         district_heating_ids = [None, 5, None]
@@ -173,9 +173,9 @@ class TestTimeseriesImport:
             "eGon2035",
             pytest.engine,
             load_names=[
-                "Load_mvgd_33532_1_industrial",
-                "Load_mvgd_33532_lvgd_1140900000_1_residential",
-                "Load_mvgd_33532_lvgd_1163850001_47_cts",
+                "Load_mvgd_33535_1_industrial",
+                "Load_mvgd_33535_lvgd_1141170000_1_residential",
+                "Load_mvgd_33535_lvgd_1164120005_60_cts",
             ],
         )
         assert df.shape == (8760, 3)
@@ -189,7 +189,7 @@ class TestTimeseriesImport:
             edisgo_object,
             "eGon2035",
             pytest.engine,
-            load_names=["Load_mvgd_33532_1_industrial"],
+            load_names=["Load_mvgd_33535_1_industrial"],
             timeindex=pd.date_range("1/1/2011", periods=4, freq="H"),
         )
         assert df.shape == (4, 1)
@@ -204,7 +204,7 @@ class TestTimeseriesImport:
                 timeindex=pd.date_range("1/1/2020", periods=4, freq="H"),
             )
         assert "A leap year was given." in caplog.text
-        assert df.shape == (8760, 2463)
+        assert df.shape == (8760, 2472)
         assert df.index[0].year == 2045
 
         # ToDo add further tests to check values
@@ -212,7 +212,7 @@ class TestTimeseriesImport:
     @pytest.mark.local
     def test_get_residential_heat_profiles_per_building(self):
         df = timeseries_import.get_residential_heat_profiles_per_building(
-            [442081, 448156], "eGon2035", pytest.engine
+            [442081, 430859], "eGon2035", pytest.engine
         )
         assert df.shape == (8760, 2)
         # ToDo add further tests
@@ -227,12 +227,13 @@ class TestTimeseriesImport:
 
     @pytest.mark.local
     def test_get_cts_profiles_per_building(self):
+
         df = timeseries_import.get_cts_profiles_per_building(
-            33532, "eGon2035", "heat", pytest.engine
+            33535, "eGon2035", "heat", pytest.engine
         )
         assert df.shape == (8760, 85)
         df = timeseries_import.get_cts_profiles_per_building(
-            33532, "eGon2035", "electricity", pytest.engine
+            33535, "eGon2035", "electricity", pytest.engine
         )
         assert df.shape == (8760, 85)
         # ToDo add further tests
@@ -243,7 +244,7 @@ class TestTimeseriesImport:
             [-1, 442081], "eGon2035", pytest.engine
         )
         assert df.shape == (8760, 1)
-        assert np.isclose(df.loc[:, 442081].sum(), 7.799, atol=1e-3)
+        assert np.isclose(df.loc[:, 442081].sum(), 3.20688, atol=1e-3)
 
     @pytest.mark.local
     def test_get_industrial_electricity_profiles_per_site(self):

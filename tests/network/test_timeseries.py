@@ -1442,18 +1442,18 @@ class TestTimeSeries:
         # fmt: on
 
         # check values
-        comp = (
-            "Generator_mvgd_33532_lvgd_1203710000_pv_rooftop_142"  # solar, w_id = 11052
-        )
-        p_nom = 0.0033
+        # solar, w_id = 11052
+        comp = "Generator_mvgd_33535_lvgd_1204030000_pv_rooftop_337"
+        p_nom = 0.00441
         exp = pd.Series(
             data=[0.548044 * p_nom, 0.568356 * p_nom],
             name=comp,
             index=timeindex,
         )
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
-        comp = "Generator_mvgd_33532_pv_rooftop_160"  # solar, w_id = 11051
-        p_nom = 0.08
+        # solar, w_id = 11051
+        comp = "Generator_mvgd_33535_lvgd_1164120002_pv_rooftop_324"
+        p_nom = 0.0033
         exp = pd.Series(
             data=[0.505049 * p_nom, 0.555396 * p_nom],
             name=comp,

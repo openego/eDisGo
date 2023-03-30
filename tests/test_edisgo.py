@@ -265,14 +265,15 @@ class TestEDisGo:
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         edisgo_object.set_timeindex(pd.date_range("1/1/2011", periods=8760, freq="H"))
-
         edisgo_object.set_time_series_active_power_predefined(
             conventional_loads_ts="oedb",
             fluctuating_generators_ts="oedb",
             scenario="eGon2035",
             engine=pytest.engine,
             timeindex=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
-            conventional_loads_names=["Load_mvgd_33532_lvgd_1163850002_9_residential"],
+            conventional_loads_names=[
+                "Load_mvgd_33535_lvgd_1164210000_244_residential"
+            ],
         )
 
         assert edisgo_object.timeseries.loads_active_power.dropna().shape == (
@@ -1209,7 +1210,7 @@ class TestEDisGo:
             data_source="oedb", scenario="eGon2035", engine=pytest.engine
         )
 
-        assert len(self.edisgo.electromobility.charging_processes_df) == 323507
+        assert len(self.edisgo.electromobility.charging_processes_df) == 324117
         assert self.edisgo.electromobility.eta_charging_points == 0.9
 
         total_charging_demand_at_charging_parks = sum(
@@ -1276,10 +1277,10 @@ class TestEDisGo:
 
         loads_df = edisgo_object.topology.loads_df
         hp_df = loads_df[loads_df.type == "heat_pump"]
-        assert len(hp_df) == 177
-        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 177)
+        assert len(hp_df) == 151
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 151)
         assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2035
-        assert edisgo_object.heat_pump.cop_df.shape == (8760, 177)
+        assert edisgo_object.heat_pump.cop_df.shape == (8760, 151)
         assert edisgo_object.heat_pump.cop_df.index[0].year == 2035
 
     def test_apply_charging_strategy(self):
