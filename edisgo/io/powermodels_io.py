@@ -862,6 +862,14 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
         Default: 100 MVA
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
+    if edisgo_obj.timeseries.storage_units_state_of_charge.empty:
+        edisgo_obj.timeseries.storage_units_state_of_charge = pd.DataFrame(
+            columns=flexible_storages, data=0, index=edisgo_obj.timeseries.timeindex
+        )
+    if edisgo_obj.timeseries.storage_units_active_power.empty:
+        edisgo_obj.timeseries.storage_units_active_power = pd.DataFrame(
+            columns=flexible_storages, data=0, index=edisgo_obj.timeseries.timeindex
+        )
     for stor_i in np.arange(len(flexible_storages)):
         idx_bus = _mapping(
             psa_net, psa_net.storage_units.bus.loc[flexible_storages[stor_i]]
@@ -891,12 +899,12 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "qmin": -np.tan(np.arccos(pf))
             * psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
             / s_base,
-            "energy": psa_net.storage_units.state_of_charge_initial.loc[  # 0, für OG
+            "energy": psa_net.storage_units.state_of_charge_initial.loc[
                 flexible_storages[stor_i]
             ]
             * e_max
             / s_base,
-            "soc_initial": (  # 0, für OG
+            "soc_initial": (
                 edisgo_obj.timeseries.storage_units_state_of_charge[
                     flexible_storages[stor_i]
                 ].iloc[0]
@@ -905,7 +913,7 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
                 ].iloc[0]
                 * 0.9
             ),
-            "soc_end": edisgo_obj.timeseries.storage_units_state_of_charge[  # 0, für OG
+            "soc_end": edisgo_obj.timeseries.storage_units_state_of_charge[
                 flexible_storages[stor_i]
             ].iloc[-1],
             "energy_rating": e_max / s_base,

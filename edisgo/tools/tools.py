@@ -1033,10 +1033,10 @@ def get_sample_using_time(
                     * (
                         edisgo_obj.electromobility.flexibility_bands[
                             "upper_energy"
-                        ].loc[start_date]
+                        ].loc[timeframe[0]]
                         + edisgo_obj.electromobility.flexibility_bands[
                             "lower_energy"
-                        ].loc[start_date]
+                        ].loc[timeframe[0]]
                     )
                 )
             edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
