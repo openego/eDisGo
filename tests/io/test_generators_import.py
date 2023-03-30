@@ -8,6 +8,7 @@ from shapely.geometry import Point
 
 from edisgo import EDisGo
 from edisgo.io import generators_import
+from edisgo.tools.tools import determine_bus_voltage_level
 
 
 class TestGeneratorsImport:
@@ -243,6 +244,68 @@ class TestGeneratorsImport:
         ) == len(gens_before[gens_before["type"] == "gas"])
         assert (
             self.edisgo.topology.generators_df.at["Generator_1", "p_nom"] == 0.775 + 1.5
+        )
+
+    def test__integrate_pv_rooftop(self, caplog):
+        # set up dataframe with:
+        # * one gen where capacity will increase and voltage level
+        #   changes ("SEE980819686674")
+        # * one where capacity will decrease ("SEE970362202254")
+        # * one where capacity stayed the same ("SEE960032475262")
+        # * one with source ID that does not exist in future scenario ("SEE2")
+        pv_df = pd.DataFrame(
+            data={
+                "p_nom": [0.005, 0.15, 0.068, 2.0],
+                "weather_cell_id": [11051, 11051, 11052, 11052],
+                "building_id": [430903, 445710, 431094, 446933],
+                "generator_id": [1, 2, 3, 4],
+                "type": ["solar", "solar", "solar", "solar"],
+                "subtype": ["pv_rooftop", "pv_rooftop", "pv_rooftop", "pv_rooftop"],
+                "voltage_level": [7, 6, 7, 5],
+                "source_id": [
+                    "SEE970362202254",
+                    "SEE980819686674",
+                    "SEE960032475262",
+                    "SEE2",
+                ],
+            },
+            index=[1, 2, 3, 4],
+        )
+
+        edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+
+        gens_before = edisgo.topology.generators_df.copy()
+        with caplog.at_level(logging.DEBUG):
+            generators_import._integrate_pv_rooftop(edisgo, pv_df)
+
+        gens_df = edisgo.topology.generators_df[
+            edisgo.topology.generators_df.subtype == "pv_rooftop"
+        ].copy()
+
+        assert len(gens_df) == 4
+        # check gen where capacity increases and voltage level changes
+        gen_name = gens_df[gens_df.source_id == "SEE980819686674"].index[0]
+        assert gen_name not in gens_before.index
+        bus_gen = gens_df.at[gen_name, "bus"]
+        assert determine_bus_voltage_level(edisgo, bus_gen) == 6
+        # check gen where capacity decreases
+        gen_name = gens_df[gens_df.source_id == "SEE970362202254"].index[0]
+        assert gen_name in gens_before.index
+        assert gens_df.at[gen_name, "p_nom"] == 0.005
+        # check gen where capacity stayed the same
+        gen_name = gens_df[gens_df.source_id == "SEE960032475262"].index[0]
+        assert gen_name in gens_before.index
+        assert gens_df.at[gen_name, "p_nom"] == 0.068
+        # check new gen
+        gen_name = gens_df[gens_df.source_id == "SEE2"].index[0]
+        assert gen_name not in gens_before.index
+        assert gens_df.at[gen_name, "p_nom"] == 2.0
+        # check logging
+        assert (
+            "2.22 MW of PV rooftop plants integrated. Of this, 0.22 MW could be "
+            "matched to an existing PV rooftop plant." in caplog.text
         )
 
     def test__integrate_new_pv_rooftop_to_buildings(self, caplog):

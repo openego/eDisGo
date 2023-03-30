@@ -997,8 +997,6 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
                 MaStR ID of the PV plant.
 
     """
-    # ToDo PV rooftop plants should be matched using the source ID instead of building
-    #  ID
     # match building ID to existing solar generators
     loads_df = edisgo_object.topology.loads_df
     busses_building_id = (
@@ -1020,15 +1018,13 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
 
     # remove decommissioned PV rooftop plants
     gens_decommissioned = gens_df[
-        ~gens_df.building_id.isin(pv_rooftop_df.building_id.unique())
+        ~gens_df.source_id.isin(pv_rooftop_df.source_id.unique())
     ]
     for gen in gens_decommissioned.index:
         edisgo_object.remove_component(comp_type="generator", comp_name=gen)
 
     # update existing PV rooftop plants
-    gens_existing = gens_df[
-        gens_df.building_id.isin(pv_rooftop_df.building_id.unique())
-    ]
+    gens_existing = gens_df[gens_df.source_id.isin(pv_rooftop_df.source_id.unique())]
     # merge new information
     gens_existing.index.name = "gen_name"
     pv_rooftop_df.index.name = "gen_index_new"
@@ -1036,7 +1032,7 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
         gens_existing.reset_index(),
         pv_rooftop_df.reset_index(),
         how="left",
-        on="building_id",
+        on="source_id",
         suffixes=("_old", ""),
     ).set_index("gen_name")
     # add building id
@@ -1085,6 +1081,7 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
                 generator_type=gens_increased_cap.at[gen, "type"],
                 subtype=gens_increased_cap.at[gen, "subtype"],
                 weather_cell_id=gens_increased_cap.at[gen, "weather_cell_id"],
+                source_id=gens_increased_cap.at[gen, "source_id"],
             )
 
     # integrate new PV rooftop plants into grid
