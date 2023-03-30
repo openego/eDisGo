@@ -248,6 +248,7 @@ def remove_one_meter_lines(edisgo_root: EDisGo) -> EDisGo:
             (len(unused_lines) / lines_df.shape[0] * 100),
         )
     )
+    # Apply the busmap on the components
     lines_df = lines_df.drop(unused_lines)
     lines_df = lines_df.apply(apply_busmap_on_lines_df, axis="columns")
 
@@ -361,7 +362,7 @@ def remove_lines_under_one_meter(edisgo_root: EDisGo) -> EDisGo:
                 unused_lines.append(index)
 
     logger.debug("Busmap: {}".format(busmap))
-
+    # Apply the busmap on the components
     transformers_df = edisgo_obj.topology.transformers_df.copy()
     transformers_df = transformers_df.apply(apply_busmap_on_lines_df, axis="columns")
     edisgo_obj.topology.transformers_df = transformers_df
@@ -494,7 +495,7 @@ def make_busmap_from_clustering(
     grid_list = make_grid_list(edisgo_obj, grid=grid)
 
     busmap_df = pd.DataFrame()
-
+    # Cluster every grid
     for grid in grid_list:
         v_grid = grid.nominal_voltage
         logger.debug("Make busmap for grid: {}, v_nom={}".format(grid, v_grid))
@@ -505,12 +506,12 @@ def make_busmap_from_clustering(
 
         buses_df = buses_df.apply(transform_coordinates, axis="columns")
         buses_df = buses_df.apply(calculate_weighting, axis="columns")
-
+        # Calculate number of clusters
         number_of_distinct_nodes = buses_df.groupby(by=["x", "y"]).first().shape[0]
         logger.debug("Number_of_distinct_nodes = " + str(number_of_distinct_nodes))
         n_clusters = math.ceil(number_of_distinct_nodes * reduction_factor)
         logger.debug("n_clusters = {}".format(n_clusters))
-
+        # Cluster with kmeans
         kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
 
         kmeans.fit(buses_df.loc[:, ["x", "y"]], sample_weight=buses_df.loc[:, "weight"])
@@ -527,6 +528,7 @@ def make_busmap_from_clustering(
                 ] = kmeans.cluster_centers_[new_bus]
 
         elif mode == "kmeansdijkstra":
+            # Use dijkstra to select clusters
             dist_to_cluster_center = pd.DataFrame(
                 data=kmeans.transform(buses_df.loc[:, ["x", "y"]]), index=buses_df.index
             ).min(axis="columns")
@@ -570,7 +572,7 @@ def make_busmap_from_clustering(
             ),
             "new_bus",
         ] = transformer_bus
-
+        # Write trafo coordinates back, this helps to get better results
         if preserve_trafo_bus_coordinates:
             partial_busmap_df.loc[
                 partial_busmap_df.new_bus.isin(
@@ -1063,6 +1065,7 @@ def make_busmap_from_main_feeders(
         if mode == "equidistant_nodes":
 
             def short_coordinates(root_node, end_node, branch_length, node_number):
+                # Calculate coordinates for the feeder nodes
                 angle = math.degrees(
                     math.atan2(end_node[1] - root_node[1], end_node[0] - root_node[0])
                 )
@@ -1290,6 +1293,7 @@ def make_busmap(
         "kmeans", "kmeansdijkstra", "aggregate_to_main_feeder" or
         "equidistant_nodes" as clustering method. "aggregate_to_main_feeder" or
         "equidistant_nodes" only work with the cluster area "main_feeder".
+
         - "kmeans":
             Perform the k-means algorithm on the cluster area and map then the buses to
             the cluster centers.
