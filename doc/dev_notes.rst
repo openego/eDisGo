@@ -63,22 +63,22 @@ Code standards
 * **pytest**: Make sure that all pytest tests are passing and add tests for every new code base
 * **Documentation of `@property` functions**: Put documentation of getter and setter
   both in Docstring of getter, see
-  `on Stackoverflow <https://stackoverflow.com/a/16025754/6385207>`_
+  `on Stackoverflow <https://stackoverflow.com/questions/16025462/what-is-the-right-way-to-put-a-docstring-on-python-property/16025754#16025754>`_
 * Order of public/private/protected methods, property decorators, etc. in a class: TBD
 
 
 Documentation
 -------------
 
-Build the docs locally by first setting up the sphinx environment with (executed
-from top-level folder)
+You can build the docs locally as follows (executed from top-level eDisGo directory):
 
 .. code-block:: bash
 
-    sphinx-apidoc -f -o doc/api edisgo
+    sphinx-build -E -a -b html ./doc/ <outputdir>
 
-And then you build the html docs on your computer with
+To manually check if external links in the documentation work, you can run the following command (internal links are not checked by this):
 
 .. code-block:: bash
 
-    sphinx-build -E -a doc/ doc/_html
+   sphinx-build ./doc/ -b linkcheck -d _build/doctrees _build/html
+

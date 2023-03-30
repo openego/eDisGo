@@ -15,7 +15,7 @@ The toolbox currently includes:
 
   * `ding0 <https://github.com/openego/ding0>`_ tool for synthetic medium and low
     voltage grid topologies for the whole of Germany
-  * `OpenEnergy DataBase (oedb) <https://openenergy-platform.org/dataedit/>`_ for
+  * `OpenEnergy DataBase (oedb) <https://openenergy-platform.org/dataedit/schemas>`_ for
     feed-in time series of fluctuating renewables and scenarios for future
     power plant park of Germany
   * `demandlib <https://github.com/oemof/demandlib>`_ for electrical load time series
@@ -45,7 +45,7 @@ See :ref:`quickstart` for the first steps.
 A deeper guide is provided in :ref:`usage-details`.
 Methodologies are explained in detail in :ref:`features-in-detail`.
 For those of you who want to contribute see :ref:`dev-notes` and the
-:ref:`api` reference.
+API reference.
 
 eDisGo was initially developed in the
 `open_eGo <https://openegoproject.wordpress.com>`_ research project as part of
@@ -69,6 +69,5 @@ Contents
    definitions_and_units
    configs
    equipment
-   api
    whatsnew
    genindex
