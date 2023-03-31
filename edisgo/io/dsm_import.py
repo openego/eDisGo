@@ -135,125 +135,57 @@ def get_profiles_per_industrial_load(
 
     dsm_dict = {}
 
-    if hasattr(egon_sites_ind_load_curves_individual_dsm_timeseries, "p_min_pu"):
-        with session_scope_egon_data(engine) as session:
-            query = session.query(
-                egon_sites_ind_load_curves_individual_dsm_timeseries.site_id,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.p_nom,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.p_min_pu,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.p_max_pu,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.e_nom,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.e_min_pu,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.e_max_pu,
-            ).filter(
-                egon_sites_ind_load_curves_individual_dsm_timeseries.scn_name
-                == scenario,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.site_id.in_(
-                    load_ids
-                ),
-            )
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            egon_sites_ind_load_curves_individual_dsm_timeseries.site_id,
+            egon_sites_ind_load_curves_individual_dsm_timeseries.p_min,
+            egon_sites_ind_load_curves_individual_dsm_timeseries.p_max,
+            egon_sites_ind_load_curves_individual_dsm_timeseries.e_min,
+            egon_sites_ind_load_curves_individual_dsm_timeseries.e_max,
+        ).filter(
+            egon_sites_ind_load_curves_individual_dsm_timeseries.scn_name == scenario,
+            egon_sites_ind_load_curves_individual_dsm_timeseries.site_id.in_(load_ids),
+        )
 
-            df_sites_1 = pd.read_sql(sql=query.statement, con=engine)
+        df_sites_1 = pd.read_sql(sql=query.statement, con=engine)
 
-            query = session.query(
-                sites_ind_dsm_ts.industrial_sites_id.label("site_id"),
-                sites_ind_dsm_ts.p_nom,
-                sites_ind_dsm_ts.p_min_pu,
-                sites_ind_dsm_ts.p_max_pu,
-                sites_ind_dsm_ts.e_nom,
-                sites_ind_dsm_ts.e_min_pu,
-                sites_ind_dsm_ts.e_max_pu,
-            ).filter(
-                sites_ind_dsm_ts.scn_name == scenario,
-                sites_ind_dsm_ts.industrial_sites_id.in_(load_ids),
-            )
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            sites_ind_dsm_ts.industrial_sites_id.label("site_id"),
+            sites_ind_dsm_ts.p_min,
+            sites_ind_dsm_ts.p_max,
+            sites_ind_dsm_ts.e_min,
+            sites_ind_dsm_ts.e_max,
+        ).filter(
+            sites_ind_dsm_ts.scn_name == scenario,
+            sites_ind_dsm_ts.industrial_sites_id.in_(load_ids),
+        )
 
-            df_sites_2 = pd.read_sql(sql=query.statement, con=engine)
+        df_sites_2 = pd.read_sql(sql=query.statement, con=engine)
 
-            query = session.query(
-                egon_osm_ind_load_curves_individual_dsm_timeseries.osm_id.label(
-                    "site_id"
-                ),
-                egon_osm_ind_load_curves_individual_dsm_timeseries.p_nom,
-                egon_osm_ind_load_curves_individual_dsm_timeseries.p_min_pu,
-                egon_osm_ind_load_curves_individual_dsm_timeseries.p_max_pu,
-                egon_osm_ind_load_curves_individual_dsm_timeseries.e_nom,
-                egon_osm_ind_load_curves_individual_dsm_timeseries.e_min_pu,
-                egon_osm_ind_load_curves_individual_dsm_timeseries.e_max_pu,
-            ).filter(
-                egon_osm_ind_load_curves_individual_dsm_timeseries.scn_name == scenario,
-                egon_osm_ind_load_curves_individual_dsm_timeseries.osm_id.in_(load_ids),
-            )
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            egon_osm_ind_load_curves_individual_dsm_timeseries.osm_id.label("site_id"),
+            egon_osm_ind_load_curves_individual_dsm_timeseries.p_min,
+            egon_osm_ind_load_curves_individual_dsm_timeseries.p_max,
+            egon_osm_ind_load_curves_individual_dsm_timeseries.e_min,
+            egon_osm_ind_load_curves_individual_dsm_timeseries.e_max,
+        ).filter(
+            egon_osm_ind_load_curves_individual_dsm_timeseries.scn_name == scenario,
+            egon_osm_ind_load_curves_individual_dsm_timeseries.osm_id.in_(load_ids),
+        )
 
-            df_areas = pd.read_sql(sql=query.statement, con=engine)
+        df_areas = pd.read_sql(sql=query.statement, con=engine)
 
-        df = pd.concat([df_sites_1, df_sites_2, df_areas])
-        # add time step column
-        df["time_step"] = len(df) * [np.arange(0, 8760)]
-        # un-nest time series data and pivot so that time_step becomes index and
-        # site_id column names
-        dsm_dict["p_min"] = _pivot_pu_helper(df, "p_min", "p_nom")
-        dsm_dict["p_max"] = _pivot_pu_helper(df, "p_max", "p_nom")
-        dsm_dict["e_min"] = _pivot_pu_helper(df, "e_min", "e_nom")
-        dsm_dict["e_max"] = _pivot_pu_helper(df, "e_max", "e_nom")
-
-    else:
-        with session_scope_egon_data(engine) as session:
-            query = session.query(
-                egon_sites_ind_load_curves_individual_dsm_timeseries.site_id,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.p_min,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.p_max,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.e_min,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.e_max,
-            ).filter(
-                egon_sites_ind_load_curves_individual_dsm_timeseries.scn_name
-                == scenario,
-                egon_sites_ind_load_curves_individual_dsm_timeseries.site_id.in_(
-                    load_ids
-                ),
-            )
-
-            df_sites_1 = pd.read_sql(sql=query.statement, con=engine)
-
-        with session_scope_egon_data(engine) as session:
-            query = session.query(
-                sites_ind_dsm_ts.industrial_sites_id.label("site_id"),
-                sites_ind_dsm_ts.p_min,
-                sites_ind_dsm_ts.p_max,
-                sites_ind_dsm_ts.e_min,
-                sites_ind_dsm_ts.e_max,
-            ).filter(
-                sites_ind_dsm_ts.scn_name == scenario,
-                sites_ind_dsm_ts.industrial_sites_id.in_(load_ids),
-            )
-
-            df_sites_2 = pd.read_sql(sql=query.statement, con=engine)
-
-        with session_scope_egon_data(engine) as session:
-            query = session.query(
-                egon_osm_ind_load_curves_individual_dsm_timeseries.osm_id.label(
-                    "site_id"
-                ),
-                egon_osm_ind_load_curves_individual_dsm_timeseries.p_min,
-                egon_osm_ind_load_curves_individual_dsm_timeseries.p_max,
-                egon_osm_ind_load_curves_individual_dsm_timeseries.e_min,
-                egon_osm_ind_load_curves_individual_dsm_timeseries.e_max,
-            ).filter(
-                egon_osm_ind_load_curves_individual_dsm_timeseries.scn_name == scenario,
-                egon_osm_ind_load_curves_individual_dsm_timeseries.osm_id.in_(load_ids),
-            )
-
-            df_areas = pd.read_sql(sql=query.statement, con=engine)
-
-        df = pd.concat([df_sites_1, df_sites_2, df_areas])
-        # add time step column
-        df["time_step"] = len(df) * [np.arange(0, 8760)]
-        # un-nest time series data and pivot so that time_step becomes index and
-        # site_id column names
-        dsm_dict["p_min"] = _pivot_abs_helper(df, "p_min")
-        dsm_dict["p_max"] = _pivot_abs_helper(df, "p_max")
-        dsm_dict["e_min"] = _pivot_abs_helper(df, "e_min")
-        dsm_dict["e_max"] = _pivot_abs_helper(df, "e_max")
+    df = pd.concat([df_sites_1, df_sites_2, df_areas])
+    # add time step column
+    df["time_step"] = len(df) * [np.arange(0, 8760)]
+    # un-nest time series data and pivot so that time_step becomes index and
+    # site_id column names
+    dsm_dict["p_min"] = _pivot_helper(df, "p_min")
+    dsm_dict["p_max"] = _pivot_helper(df, "p_max")
+    dsm_dict["e_min"] = _pivot_helper(df, "e_min")
+    dsm_dict["e_max"] = _pivot_helper(df, "e_max")
 
     return dsm_dict
 
@@ -289,60 +221,27 @@ def get_profile_cts(
 
     # get data
     dsm_dict = {}
-    if hasattr(egon_etrago_electricity_cts_dsm_timeseries, "p_min_pu"):
-        with session_scope_egon_data(engine) as session:
-            query = session.query(
-                egon_etrago_electricity_cts_dsm_timeseries.bus.label("site_id"),
-                egon_etrago_electricity_cts_dsm_timeseries.p_nom,
-                egon_etrago_electricity_cts_dsm_timeseries.p_min_pu,
-                egon_etrago_electricity_cts_dsm_timeseries.p_max_pu,
-                egon_etrago_electricity_cts_dsm_timeseries.e_nom,
-                egon_etrago_electricity_cts_dsm_timeseries.e_min_pu,
-                egon_etrago_electricity_cts_dsm_timeseries.e_max_pu,
-            ).filter(
-                egon_etrago_electricity_cts_dsm_timeseries.scn_name == scenario,
-                egon_etrago_electricity_cts_dsm_timeseries.bus
-                == edisgo_obj.topology.id,
-            )
-            df = pd.read_sql(sql=query.statement, con=engine)
-        # add time step column
-        df["time_step"] = len(df) * [np.arange(0, 8760)]
-        # un-nest time series data and pivot so that time_step becomes index and
-        # site_id column names
-        dsm_dict["p_min"] = _pivot_pu_helper(df, "p_min", "p_nom")
-        dsm_dict["p_max"] = _pivot_pu_helper(df, "p_max", "p_nom")
-        dsm_dict["e_min"] = _pivot_pu_helper(df, "e_min", "e_nom")
-        dsm_dict["e_max"] = _pivot_pu_helper(df, "e_max", "e_nom")
 
-        # temporary! set negative p_max and e_max values and positive p_min and e_min
-        # values to zero
-        dsm_dict["p_min"][dsm_dict["p_min"] > 0.0] = 0.0
-        dsm_dict["e_min"][dsm_dict["e_min"] > 0.0] = 0.0
-        dsm_dict["p_max"][dsm_dict["p_max"] < 0.0] = 0.0
-        dsm_dict["e_max"][dsm_dict["e_max"] < 0.0] = 0.0
-
-    else:
-        with session_scope_egon_data(engine) as session:
-            query = session.query(
-                egon_etrago_electricity_cts_dsm_timeseries.bus.label("site_id"),
-                egon_etrago_electricity_cts_dsm_timeseries.p_min,
-                egon_etrago_electricity_cts_dsm_timeseries.p_max,
-                egon_etrago_electricity_cts_dsm_timeseries.e_min,
-                egon_etrago_electricity_cts_dsm_timeseries.e_max,
-            ).filter(
-                egon_etrago_electricity_cts_dsm_timeseries.scn_name == scenario,
-                egon_etrago_electricity_cts_dsm_timeseries.bus
-                == edisgo_obj.topology.id,
-            )
-            df = pd.read_sql(sql=query.statement, con=engine)
-        # add time step column
-        df["time_step"] = len(df) * [np.arange(0, 8760)]
-        # un-nest time series data and pivot so that time_step becomes index and
-        # site_id column names
-        dsm_dict["p_min"] = _pivot_abs_helper(df, "p_min")
-        dsm_dict["p_max"] = _pivot_abs_helper(df, "p_max")
-        dsm_dict["e_min"] = _pivot_abs_helper(df, "e_min")
-        dsm_dict["e_max"] = _pivot_abs_helper(df, "e_max")
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            egon_etrago_electricity_cts_dsm_timeseries.bus.label("site_id"),
+            egon_etrago_electricity_cts_dsm_timeseries.p_min,
+            egon_etrago_electricity_cts_dsm_timeseries.p_max,
+            egon_etrago_electricity_cts_dsm_timeseries.e_min,
+            egon_etrago_electricity_cts_dsm_timeseries.e_max,
+        ).filter(
+            egon_etrago_electricity_cts_dsm_timeseries.scn_name == scenario,
+            egon_etrago_electricity_cts_dsm_timeseries.bus == edisgo_obj.topology.id,
+        )
+        df = pd.read_sql(sql=query.statement, con=engine)
+    # add time step column
+    df["time_step"] = len(df) * [np.arange(0, 8760)]
+    # un-nest time series data and pivot so that time_step becomes index and
+    # site_id column names
+    dsm_dict["p_min"] = _pivot_helper(df, "p_min")
+    dsm_dict["p_max"] = _pivot_helper(df, "p_max")
+    dsm_dict["e_min"] = _pivot_helper(df, "e_min")
+    dsm_dict["e_max"] = _pivot_helper(df, "e_max")
 
     # distribute over all CTS loads
     cts_loads = edisgo_obj.topology.loads_df[
@@ -367,18 +266,7 @@ def get_profile_cts(
     return dsm_dict
 
 
-def _pivot_pu_helper(df_db, pu_col, scale_col):
-    df = (
-        df_db.loc[:, ["site_id", scale_col, f"{pu_col}_pu", "time_step"]]
-        .explode([f"{pu_col}_pu", "time_step"])
-        .astype({f"{pu_col}_pu": "float"})
-    )
-    df[pu_col] = df[f"{pu_col}_pu"] * df[scale_col]
-    df = df.pivot(index="time_step", columns="site_id", values=pu_col)
-    return df
-
-
-def _pivot_abs_helper(df_db, col):
+def _pivot_helper(df_db, col):
     df = (
         df_db.loc[:, ["site_id", col, "time_step"]]
         .explode([col, "time_step"])
