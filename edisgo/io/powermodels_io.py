@@ -1037,19 +1037,26 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     """
     heat_df = psa_net.loads.loc[flexible_hps]  # electric load
     heat_df2 = edisgo_obj.heat_pump.heat_demand_df[flexible_hps]  # thermal load
-    # solarthermal_feedin = (
-    # edisgo_obj.overlying_grid.geothermal_energy_feedin_district_heating)
-    # geothermal_feedin = (
-    # edisgo_obj.overlying_grid.solarthermal_energy_feedin_district_heating)
+    geothermal_feedin = (
+        edisgo_obj.overlying_grid.geothermal_energy_feedin_district_heating
+    )
+    solarthermal_feedin = (
+        edisgo_obj.overlying_grid.solarthermal_energy_feedin_district_heating
+    )
+    # reduce heat demand of district heating by geothermal and solarthermal feedin
+    heat_df2.loc[:, heat_df2.columns.str.contains("district")] = (
+        heat_df2.loc[:, heat_df2.columns.str.contains("district")].values
+        - solarthermal_feedin.values
+        - geothermal_feedin.values
+    ).clip(
+        min=0
+    )  # ToDo: nur ein district heating?
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
         q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
         p_d = heat_df2[heat_df.index[hp_i]]
-        # TODO: hier den Demand um das solar/geothermal feedin verringern
-        # TODO: check einbauen ob Einspeisung höher als Verbrauch. Dann Verbrauch auf 0
-        # setzen
         if (
             max(p_d)
             > heat_df.p_set[hp_i] * edisgo_obj.heat_pump.cop_df[heat_df.index[hp_i]][0]

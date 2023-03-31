@@ -969,6 +969,7 @@ def get_sample_using_time(
     save_ev_soc_initial=True,
     hp=True,
     dsm=True,
+    OG=True,
 ):
     if periods is None:
         raise TypeError(
@@ -1061,6 +1062,24 @@ def get_sample_using_time(
                     edisgo_obj.dsm,
                     attr,
                     getattr(edisgo_obj.dsm, attr).loc[timeframe],
+                )
+
+    if OG:
+        for attr in [
+            "dsm_active_power",
+            "electromobility_active_power",
+            "geothermal_energy_feedin_district_heating",
+            "heat_pump_central_active_power",
+            "heat_pump_decentral_active_power",
+            "renewables_curtailment",
+            "solarthermal_energy_feedin_district_heating",
+            "storage_units_active_power",
+        ]:
+            if not getattr(edisgo_obj.overlying_grid, attr).empty:
+                setattr(
+                    edisgo_obj.overlying_grid,
+                    attr,
+                    getattr(edisgo_obj.overlying_grid, attr).loc[timeframe],
                 )
 
 
