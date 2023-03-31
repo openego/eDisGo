@@ -14,6 +14,7 @@ pyomo >= 6.0
 pypower
 pyproj >= 3.0.0
 pypsa >=0.17.0, <=0.20.1
+pyyaml
 saio
 scikit-learn
 sphinx >= 4.3.0, < 5.1.0
@@ -22,4 +23,3 @@ sphinx-autodoc-typehints
 sphinx-autoapi
 sshtunnel
 workalendar
-pyyaml

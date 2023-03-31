@@ -75,14 +75,12 @@ class Electromobility:
     """
 
     def __init__(self, **kwargs):
-        self._edisgo_obj = kwargs.get("edisgo_obj", None)
+        self._edisgo_obj = kwargs.get("edisgo_obj")
 
     @property
     def charging_processes_df(self):
         """
-        DataFrame with all
-        `SimBEV <https://github.com/rl-institut/simbev>`_
-        charging processes.
+        DataFrame with all charging processes.
 
         Returns
         -------
@@ -144,15 +142,13 @@ class Electromobility:
     @property
     def potential_charging_parks_gdf(self):
         """
-        GeoDataFrame with all
-        `TracBEV <https://github.com/rl-institut/tracbev>`_
-        potential charging parks.
+        GeoDataFrame with all potential charging parks.
 
         Returns
         -------
-        :geopandas:`GeoDataFrame`
+        :geopandas:`geopandas.GeoDataFrame<GeoDataFrame>`
             GeoDataFrame with ID as index, AGS, charging use case (home, work, public or
-            hpc), user centric weight and geometry. Columns are:
+            hpc), user-centric weight and geometry. Columns are:
 
                 index : int
                     Charging park ID.
@@ -194,9 +190,7 @@ class Electromobility:
     @property
     def simbev_config_df(self):
         """
-        Dict with all
-        `SimBEV <https://github.com/rl-institut/simbev>`_
-        config data.
+        Dictionary containing configuration data.
 
         Returns
         -------
@@ -222,7 +216,7 @@ class Electromobility:
                     End date of the SimBEV simulation.
 
                 soc_min : float
-                    Minimum SoC when a HPC event is initialized in SimBEV.
+                    Minimum SoC when an HPC event is initialized in SimBEV.
 
                 grid_timeseries : bool
                     Setting whether a grid timeseries is generated within the SimBEV

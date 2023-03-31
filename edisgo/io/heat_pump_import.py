@@ -6,9 +6,7 @@ import numpy as np
 import pandas as pd
 import saio
 
-from sqlalchemy import func
-
-from edisgo.io.db import session_scope_egon_data
+from edisgo.io import db
 from edisgo.tools.tools import (
     determine_bus_voltage_level,
     determine_grid_integration_voltage_level,
@@ -31,9 +29,9 @@ def oedb(edisgo_object, scenario, engine):
     edisgo_object : :class:`~.EDisGo`
     scenario : str
         Scenario for which to retrieve heat pump data. Possible options
-        are 'eGon2035' and 'eGon100RE'.
+        are "eGon2035" and "eGon100RE".
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        Database engine.
 
     Returns
     --------
@@ -112,24 +110,19 @@ def oedb(edisgo_object, scenario, engine):
             .filter(
                 egon_district_heating.scenario == scenario,
                 egon_district_heating.carrier == "heat_pump",
-                func.ST_Contains(  # filter heat pumps inside MV grid district geometry
-                    func.ST_GeomFromText(mv_grid_geom.wkt, mv_grid_geom_srid),
-                    # transform to same SRID as MV grid district geometry
-                    func.ST_Transform(
-                        egon_district_heating.geometry,
-                        mv_grid_geom_srid,
-                    ),
+                # filter heat pumps inside MV grid district geometry
+                db.sql_within(
+                    egon_district_heating.geometry,
+                    db.sql_grid_geom(edisgo_object),
+                    mv_grid_geom_srid,
                 ),
             )
             .outerjoin(  # join to obtain weather cell ID
                 egon_era5_weather_cells,
-                func.ST_Contains(
+                db.sql_within(
+                    egon_district_heating.geometry,
                     egon_era5_weather_cells.geom,
-                    # transform to same SRID as weather cell geometry
-                    func.ST_Transform(
-                        egon_district_heating.geometry,
-                        egon_era5_weather_cells.geom.expression.type.srid,
-                    ),
+                    mv_grid_geom_srid,
                 ),
             )
         )
@@ -173,16 +166,15 @@ def oedb(edisgo_object, scenario, engine):
     )
 
     building_ids = edisgo_object.topology.loads_df.building_id.unique()
-    mv_grid_geom = edisgo_object.topology.grid_district["geom"]
     mv_grid_geom_srid = edisgo_object.topology.grid_district["srid"]
 
     # get individual and district heating heat pumps
-    with session_scope_egon_data(engine) as session:
+    with db.session_scope_egon_data(engine) as session:
         hp_individual = _get_individual_heat_pumps()
         hp_central = _get_central_heat_pumps()
 
     # sanity check
-    with session_scope_egon_data(engine) as session:
+    with db.session_scope_egon_data(engine) as session:
         hp_individual_cap = _get_individual_heat_pump_capacity()
     if not np.isclose(hp_individual_cap, hp_individual.p_set.sum(), atol=1e-3):
         logger.warning(
@@ -206,13 +198,8 @@ def _grid_integration(
     """
     Integrates heat pumps for individual and district heating into the grid.
 
-    Grid connection points of heat pumps for individual heating are determined based
-    on the corresponding building ID.
-
-    Grid connection points of heat pumps for district
-    heating are determined based on their geolocation and installed capacity. See
-    :attr:`~.network.topology.Topology.connect_to_mv` and
-    :attr:`~.network.topology.Topology.connect_to_lv` for more information.
+    See :attr:`~.edisgo.EDisGo.import_heat_pumps` for more information on grid
+    integration.
 
     Parameters
     ----------
@@ -300,7 +287,6 @@ def _grid_integration(
         )
 
         integrated_hps = hp_individual_small.index
-        integrated_hps_building = hp_individual_small.index
 
         # integrate large individual heat pumps - if building is already connected to
         # higher voltage level it can be integrated at same bus, otherwise it is
@@ -323,7 +309,6 @@ def _grid_integration(
                     [edisgo_object.topology.loads_df, hp_individual_large.loc[[hp], :]]
                 )
                 integrated_hps = integrated_hps.append(pd.Index([hp]))
-                integrated_hps_building = integrated_hps_building.append(pd.Index([hp]))
             else:
                 # integrate based on geolocation
                 hp_name = edisgo_object.integrate_component_based_on_geolocation(
@@ -343,14 +328,17 @@ def _grid_integration(
                 integrated_hps_own_grid_conn = integrated_hps_own_grid_conn.append(
                     pd.Index([hp])
                 )
+        # logging messages
         logger.debug(
             f"{sum(hp_individual.p_set):.2f} MW of heat pumps for individual heating "
-            f"integrated. Of this "
-            f"{sum(hp_individual.loc[integrated_hps_building, 'p_set']):.2f} MW are "
-            f"integrated at same grid connection point as building and "
-            f"{sum(hp_individual.loc[integrated_hps_own_grid_conn, 'p_set']):.2f} "
-            f"MW have separate grid connection point."
+            f"integrated."
         )
+        if len(integrated_hps_own_grid_conn) > 0:
+            logger.debug(
+                f"Of this, "
+                f"{sum(hp_individual.loc[integrated_hps_own_grid_conn, 'p_set']):.2f} "
+                f"MW have separate grid connection point."
+            )
     else:
         integrated_hps = pd.Index([])
 

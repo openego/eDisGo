@@ -11,11 +11,7 @@ import pytest
 from pandas.util.testing import assert_frame_equal
 
 from edisgo.edisgo import EDisGo
-from edisgo.io.electromobility_import import (
-    distribute_charging_demand,
-    import_electromobility,
-    integrate_charging_parks,
-)
+from edisgo.io import electromobility_import
 from edisgo.network.electromobility import Electromobility
 from edisgo.network.timeseries import TimeSeries
 
@@ -26,9 +22,11 @@ class TestElectromobility:
         self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         self.simbev_path = pytest.simbev_example_scenario_path
         self.tracbev_path = pytest.tracbev_example_scenario_path
-        import_electromobility(self.edisgo_obj, self.simbev_path, self.tracbev_path)
-        distribute_charging_demand(self.edisgo_obj)
-        integrate_charging_parks(self.edisgo_obj)
+        electromobility_import.import_electromobility_from_dir(
+            self.edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(self.edisgo_obj)
+        electromobility_import.integrate_charging_parks(self.edisgo_obj)
 
     def setup_simple_flex_band_data(self):
         """
