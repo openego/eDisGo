@@ -780,15 +780,14 @@ def oedb(
     other power plants.
     For PV rooftop the following steps are conducted:
 
-    * Removes decommissioned PV rooftop plants (plants whose building ID is not
-      in pv_rooftop_df.building_id).
-    * Updates existing PV rooftop plants (plants whose building ID is in
-      pv_rooftop_df.building_id). The following two cases are distinguished:
+    * Removes decommissioned PV rooftop plants (plants whose source ID cannot
+      be matched to a source ID of an existing plant).
+    * Updates existing PV rooftop plants. The following two cases are distinguished:
 
-      * p_nom increases: It is checked, if plant needs to be connected to a higher
-        voltage level and if that is the case, the existing plant is removed from the
-        grid and the new one integrated based on the geolocation.
-      * p_nom decreases: p_nom of existing plant is overwritten.
+      * Nominal power increases: It is checked, if plant needs to be connected to a
+        higher voltage level and if that is the case, the existing plant is removed from
+        the grid and the new one integrated based on the geolocation.
+      * Nominal power decreases: Nominal power of existing plant is overwritten.
     * Integrates new PV rooftop plants at corresponding building ID. If the plant needs
       to be connected to a higher voltage level than the building, it is integrated
       based on the geolocation.
@@ -799,14 +798,14 @@ def oedb(
       ID or whose source ID can not be matched to a new plant and are not of subtype
       pv_rooftop, as these are handled in a separate function)
     * Updates existing power plants (plants whose source ID is in
-      power_plants_gdf.source_id; solar, wind and CHP plants never have a source ID in
+      can be matched; solar, wind and CHP plants never have a source ID in
       the future scenarios and are therefore never updated). The following two cases
       are distinguished:
 
-      * p_nom increases: It is checked, if plant needs to be connected to a higher
-        voltage level and if that is the case, the existing plant is removed from the
-        grid and the new one integrated based on the geolocation.
-      * p_nom decreases: p_nom of existing plant is overwritten.
+      * Nominal power increases: It is checked, if plant needs to be connected to a
+        higher voltage level and if that is the case, the existing plant is removed from
+        the grid and the new one integrated based on the geolocation.
+      * Nominal power decreases: Nominal power of existing plant is overwritten.
     * Integrates new power and CHP plants based on the geolocation.
 
     Parameters
