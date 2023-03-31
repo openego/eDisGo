@@ -768,7 +768,7 @@ def weighted_random_choice(
 ):
     """
     Weighted random choice of a potential charging park. Setting the chosen
-    values into :obj:`~.network.electromobility.charging_processes_df`
+    values into :obj:`~.network.electromobility.Electromobility.charging_processes_df`
 
     Parameters
     ----------

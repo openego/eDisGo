@@ -332,7 +332,7 @@ class EDisGo:
         Sets demand and feed-in of all loads, generators and storage units for the
         specified worst cases.
 
-        See :func:`~.network.timeseries.TimeSeries.set_worst_case` for more information.
+        See :attr:`~.network.timeseries.TimeSeries.set_worst_case` for more information.
 
         Parameters
         -----------
@@ -445,19 +445,19 @@ class EDisGo:
         fluctuating_generators_names : list(str) or None
             Defines for which fluctuating generators to apply technology-specific time
             series. See parameter `generator_names` in
-            :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
+            :attr:`~.network.timeseries.TimeSeries.predefined_fluctuating_generators_by_technology`
             for more information. Default: None.
         dispatchable_generators_ts : :pandas:`pandas.DataFrame<DataFrame>` or None
             Defines which technology-specific time series to use to set active power
             time series of dispatchable generators.
             See parameter `ts_generators` in
-            :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
+            :attr:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
             for more information. If None, no time series of dispatchable generators
             are set. Default: None.
         dispatchable_generators_names : list(str) or None
             Defines for which dispatchable generators to apply technology-specific time
             series. See parameter `generator_names` in
-            :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
+            :attr:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
             for more information. Default: None.
         conventional_loads_ts : str or :pandas:`pandas.DataFrame<DataFrame>` or None
             Defines option to set active power time series of conventional loads.
@@ -507,19 +507,19 @@ class EDisGo:
             `conventional_loads_ts` is 'oedb' see parameter `load_names` in
             :func:`edisgo.io.timeseries_import.electricity_demand_oedb` for more
             information. For other cases see parameter `load_names` in
-            :func:`~.network.timeseries.TimeSeries.predefined_conventional_loads_by_sector`
+            :attr:`~.network.timeseries.TimeSeries.predefined_conventional_loads_by_sector`
             for more information. Default: None.
         charging_points_ts : :pandas:`pandas.DataFrame<DataFrame>` or None
             Defines which use-case-specific time series to use to set active power
             time series of charging points.
             See parameter `ts_loads` in
-            :func:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
+            :attr:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
             for more information. If None, no time series of charging points
             are set. Default: None.
         charging_points_names : list(str) or None
             Defines for which charging points to apply use-case-specific time
             series. See parameter `load_names` in
-            :func:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
+            :attr:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
             for more information. Default: None.
 
         Other Parameters
@@ -603,20 +603,20 @@ class EDisGo:
         Parameters
         -----------
         control : str
-            Type of reactive power control to apply. Currently the only option is
-            'fixed_coshpi'. See :func:`~.network.timeseries.TimeSeries.fixed_cosphi`
+            Type of reactive power control to apply. Currently, the only option is
+            'fixed_coshpi'. See :attr:`~.network.timeseries.TimeSeries.fixed_cosphi`
             for further information.
         generators_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `generators_parametrisation` in
-            :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
+            :attr:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
         loads_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `loads_parametrisation` in
-            :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
+            :attr:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
         storage_units_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `storage_units_parametrisation` in
-            :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
+            :attr:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
 
         Notes
@@ -664,7 +664,7 @@ class EDisGo:
 
         In the example above, `generators_parametrisation` and
         `storage_units_parametrisation` do not need to be set as default configurations
-        are per default used for all generators and storage units anyways.
+        are per default used for all generators and storage units anyway.
 
         """
         if control == "fixed_cosphi":
@@ -2273,7 +2273,7 @@ class EDisGo:
         Plots histogram of relative line loads.
 
         For more information on how the relative line load is calculated see
-        :func:`edisgo.tools.tools.get_line_loading_from_network`.
+        :func:`edisgo.tools.tools.calculate_relative_line_load`.
         For more information on the histogram plot and possible configurations
         see :func:`edisgo.tools.plots.histogram`.
 
@@ -2369,11 +2369,11 @@ class EDisGo:
             :attr:`~.network.topology.Topology.to_csv` for more information.
             Default: True.
         save_timeseries : bool, optional
-            Indicates whether to save :class:`~.network.timeseries.Timeseries` object.
+            Indicates whether to save :class:`~.network.timeseries.TimeSeries` object.
             Per default it is saved to subdirectory 'timeseries'.
             Through the keyword arguments `reduce_memory`
             and `to_type` it can be chosen if memory should be reduced. See
-            :attr:`~.network.timeseries.Timeseries.to_csv` for more
+            :attr:`~.network.timeseries.TimeSeries.to_csv` for more
             information.
             Default: True.
         save_results : bool, optional
@@ -2427,7 +2427,7 @@ class EDisGo:
             Specifies which results to store. By default, this is set to None,
             in which case all available results are stored.
             To only store certain results provide a dictionary. See function docstring
-            `parameters` parameter in :func:`~.network.results.Results.to_csv`
+            `parameters` parameter in :attr:`~.network.results.Results.to_csv`
             for more information.
         electromobility_attributes : None or list(str)
             Specifies which electromobility attributes to store. By default, this is set
@@ -2793,9 +2793,9 @@ def import_edisgo_from_files(
     """
     Sets up EDisGo object from csv files.
 
-    This is the reverse function of :func:`~.edisgo.EDisGo.save` and if not specified
+    This is the reverse function of :attr:`~.edisgo.EDisGo.save` and if not specified
     differently assumes all data in the default sub-directories created in the
-    :func:`~.edisgo.EDisGo.save` function.
+    :attr:`~.edisgo.EDisGo.save` function.
 
     Parameters
     -----------
@@ -2813,7 +2813,7 @@ def import_edisgo_from_files(
         `topology_directory`.
         Default: True.
     import_timeseries : bool
-        Indicates whether to import :class:`~.network.timeseries.Timeseries` object.
+        Indicates whether to import :class:`~.network.timeseries.TimeSeries` object.
         Per default, it is set to False, in which case timeseries data is not imported.
         The default directory time series data is imported from is the sub-directory
         'timeseries'. A different directory can be specified through keyword argument
@@ -2869,7 +2869,7 @@ def import_edisgo_from_files(
         from. Per default, topology data is imported from `edisgo_path` sub-directory
         'topology'.
     timeseries_directory : str
-        Indicates directory :class:`~.network.timeseries.Timeseries` object is imported
+        Indicates directory :class:`~.network.timeseries.TimeSeries` object is imported
         from. Per default, time series data is imported from `edisgo_path` sub-directory
         'timeseries'.
     results_directory : str

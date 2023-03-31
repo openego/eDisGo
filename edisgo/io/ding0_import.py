@@ -104,7 +104,6 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
     edisgo_obj.topology.generators_df = grid.generators[
         edisgo_obj.topology.generators_df.columns
     ]
-
     edisgo_obj.topology.storage_units_df = grid.storage_units[
         edisgo_obj.topology.storage_units_df.columns
     ]

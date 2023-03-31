@@ -89,7 +89,7 @@ class BasicComponent(ABC):
 
         Returns
         --------
-        :class:`~.network.components.Grid`
+        :class:`~.network.grids.Grid`
             Grid component is in.
 
         """
@@ -147,7 +147,7 @@ class Component(BasicComponent):
 
         Returns
         --------
-        :class:`~.network.components.Grid`
+        :class:`~.network.grids.Grid`
             Grid object the component is in.
 
         """
@@ -690,7 +690,7 @@ class Switch(BasicComponent):
 
         Returns
         --------
-        :class:`~.topology.components.Grid`
+        :class:`~.topology.grids.Grid`
             Grid switch is in.
 
         """
@@ -778,7 +778,7 @@ class PotentialChargingParks(BasicComponent):
 
         Returns
         --------
-        :class:`~.network.components.Grid`
+        :class:`~.network.grids.Grid`
             Grid component is in.
 
         """

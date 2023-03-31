@@ -381,10 +381,10 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
 
     Heat demand data is returned for all heat pumps in the grid.
     For more information on how individual heat demand profiles are obtained see
-    functions :attr:`~.io.timeseries_import.get_residential_heat_profiles_per_building`
-    and :attr:`~.io.timeseries_import.get_cts_profiles_per_building`.
+    functions :func:`~.io.timeseries_import.get_residential_heat_profiles_per_building`
+    and :func:`~.io.timeseries_import.get_cts_profiles_per_building`.
     For more information on how district heating heat demand profiles are obtained see
-    function :attr:`~.io.timeseries_import.get_district_heating_heat_demand_profiles`.
+    function :func:`~.io.timeseries_import.get_district_heating_heat_demand_profiles`.
 
     Parameters
     ----------
@@ -494,9 +494,9 @@ def electricity_demand_oedb(
     Conventional loads comprise conventional electricity applications in the
     residential, CTS and industrial sector.
     For more information on how the demand profiles are obtained see functions
-    :attr:`~.io.timeseries_import.get_residential_electricity_profiles_per_building`,
-    :attr:`~.io.timeseries_import.get_cts_profiles_per_building` and
-    :attr:`~.io.timeseries_import.get_industrial_electricity_profiles_per_site`.
+    :func:`~.io.timeseries_import.get_residential_electricity_profiles_per_building`,
+    :func:`~.io.timeseries_import.get_cts_profiles_per_building` and
+    :func:`~.io.timeseries_import.get_industrial_electricity_profiles_per_site`.
 
     Parameters
     ----------
