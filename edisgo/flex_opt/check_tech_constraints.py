@@ -1062,14 +1062,14 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         )
 
         # rename columns to secondary side
-        for colname, values in upper_limits_df_tmp.iteritems():
+        for colname, values in upper_limits_df_tmp.items():
             tmp = pd.DataFrame(
                 data=np.tile(values, (len(buses_dict[colname]), 1)).T,
                 columns=buses_dict[colname],
                 index=values.index,
             )
             upper_limits_df = pd.concat([upper_limits_df, tmp], axis=1)
-        for colname, values in lower_limits_df_tmp.iteritems():
+        for colname, values in lower_limits_df_tmp.items():
             tmp = pd.DataFrame(
                 data=np.tile(values, (len(buses_dict[colname]), 1)).T,
                 columns=buses_dict[colname],

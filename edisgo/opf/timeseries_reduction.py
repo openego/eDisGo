@@ -1,4 +1,5 @@
 import logging
+import os
 
 from copy import deepcopy
 
@@ -104,8 +105,9 @@ def _scored_most_critical_loading_MH(edisgo_obj, window_days):
         for timestep in timesteps
     ]
     time_intervals_df = pd.DataFrame(
-        index=range(len(time_intervals)), columns=["OL_ts", "OL_max"]
+        index=range(len(time_intervals)), columns=["OL_ts", "OL_first_t", "OL_max"]
     )
+    time_intervals_df["OL_first_t"] = timesteps
     for i in range(len(time_intervals)):
         time_intervals_df["OL_ts"][i] = time_intervals[i]
     lines_no_max = crit_lines_score.columns.values
@@ -254,8 +256,9 @@ def _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days):
         for timestep in timesteps
     ]
     time_intervals_df = pd.DataFrame(
-        index=range(len(time_intervals)), columns=["V_ts", "V_max"]
+        index=range(len(time_intervals)), columns=["V_ts", "V_first_t", "V_max"]
     )
+    time_intervals_df["V_first_t"] = timesteps
     for i in range(len(time_intervals)):
         time_intervals_df["V_ts"][i] = time_intervals[i]
 
@@ -453,6 +456,8 @@ def get_steps_flex_opf(
     num_ti_voltage=None,
     percentage=0.1,
     window_days=7,
+    save_steps=False,
+    path="",
 ):
     """
     Get the time steps with the most critical violations for curtailment
@@ -468,6 +473,10 @@ def get_steps_flex_opf(
         The number of most critical voltage issues to select, if None percentage is used
     percentage : float
         The percentage of most critical time intervals to select
+    window_days : int
+
+    save_steps : bool
+
     Returns
     --------
     list
@@ -511,6 +520,14 @@ def get_steps_flex_opf(
     if len(steps) == 0:
         logger.warning("No critical steps detected. No network expansion required.")
 
+    if save_steps:
+        abs_path = os.path.abspath(path)
+        steps[["OL_first_t", "OL_max", "V_first_t", "V_max"]].to_csv(
+            os.path.join(
+                abs_path,
+                str(edisgo_obj.topology.id) + "_t" + str(window_days * 24 + 1) + ".csv",
+            )
+        )
     return steps
 
 
