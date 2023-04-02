@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import logging
 import os
 
@@ -415,6 +417,61 @@ def get_path_length_to_station(edisgo_obj):
     return edisgo_obj.topology.buses_df.path_length_to_station
 
 
+def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
+    """
+    Returns all buses downstream (farther away from station) of the given bus or line.
+
+    In case a bus is given, returns all buses downstream of the given bus plus the
+    given bus itself.
+    In case a line is given, returns all buses downstream of the bus that is closer to
+    the station (thus only one bus of the line is included in the returned buses).
+
+    Parameters
+    ------------
+    edisgo_obj : EDisGo object
+    comp_name : str
+        Name of bus or line (as in index of :attr:`~.network.topology.Topology.buses_df`
+        or :attr:`~.network.topology.Topology.lines_df`) to get downstream buses for.
+    comp_type : str
+        Can be either 'bus' or 'line'. Default: 'bus'.
+
+    Returns
+    -------
+    list(str)
+        List of buses (as in index of :attr:`~.network.topology.Topology.buses_df`)
+        downstream of the given component.
+
+    """
+    graph = edisgo_obj.topology.to_graph()
+    station_node = edisgo_obj.topology.transformers_hvmv_df.bus1.values[0]
+
+    if comp_type == "bus":
+        # get upstream bus to determine which edge to remove to create subgraph
+        bus = comp_name
+        path_to_station = nx.shortest_path(graph, station_node, comp_name)
+        bus_upstream = path_to_station[-2]
+    elif comp_type == "line":
+        # get bus further downstream to determine which buses downstream are affected
+        bus0 = edisgo_obj.topology.lines_df.at[comp_name, "bus0"]
+        bus1 = edisgo_obj.topology.lines_df.at[comp_name, "bus1"]
+        path_to_station_bus0 = nx.shortest_path(graph, station_node, bus0)
+        path_to_station_bus1 = nx.shortest_path(graph, station_node, bus1)
+        bus = bus0 if len(path_to_station_bus0) > len(path_to_station_bus1) else bus1
+        bus_upstream = bus0 if bus == bus1 else bus1
+    else:
+        return None
+
+    # remove edge between bus and next bus upstream
+    graph.remove_edge(bus, bus_upstream)
+
+    # get subgraph containing relevant bus
+    subgraphs = list(graph.subgraph(c) for c in nx.connected_components(graph))
+    for subgraph in subgraphs:
+        if bus in subgraph.nodes():
+            return list(subgraph.nodes())
+    return None
+
+
 def assign_voltage_level_to_component(df, buses_df):
     """
     Adds column with specification of voltage level component is in.
@@ -490,7 +547,7 @@ def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
             f"Grid district geometry is of type {type(mv_geom)}."
             " Only Shapely Polygon or MultiPolygon are accepted."
         )
-    mv_geom_gdf = gpd.GeoDataFrame(m, crs=f"EPSG:{srid}", columns=["geometry"])
+    mv_geom_gdf = gpd.GeoDataFrame(data={"geometry": [m]}, crs=f"EPSG:{srid}")
 
     return set(
         np.append(
@@ -508,7 +565,9 @@ def get_directory_size(start_dir):
 
     Walks through all files and sub-directories within a given directory and
     calculate the sum of size of all files in the directory.
-    See: https://stackoverflow.com/a/1392549/13491957
+    See also
+    `stackoverflow <https://stackoverflow.com/questions/1392413/\
+    calculating-a-directorys-size-using-python/1392549#1392549>`_.
 
     Parameters
     ----------
@@ -631,3 +690,74 @@ def add_line_susceptance(
         )
 
     return edisgo_obj
+
+
+def resample(
+    object, freq_orig, method: str = "ffill", freq: str | pd.Timedelta = "15min"
+):
+    """
+    Resamples all time series data in given object to a desired resolution.
+
+    Parameters
+    ----------
+    object : :class:`~.network.timeseries.TimeSeries`
+        Object of which to resample time series data.
+    freq_orig : :pandas:`pandas.Timedelta<Timedelta>`
+        Frequency of original time series data.
+    method : str, optional
+        See `method` parameter in :attr:`~.EDisGo.resample_timeseries` for more
+        information.
+    freq : str, optional
+        See `freq` parameter in :attr:`~.EDisGo.resample_timeseries` for more
+        information.
+
+    """
+
+    # add time step at the end of the time series in case of up-sampling so that
+    # last time interval in the original time series is still included
+    df_dict = {}
+    for attr in object._attributes:
+        if not getattr(object, attr).empty:
+            df_dict[attr] = getattr(object, attr)
+            if pd.Timedelta(freq) < freq_orig:  # up-sampling
+                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1] + freq_orig])
+            else:  # down-sampling
+                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1]])
+            df_dict[attr] = (
+                df_dict[attr]
+                .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
+                .ffill()
+            )
+
+    # resample time series
+    if pd.Timedelta(freq) < freq_orig:  # up-sampling
+        if method == "interpolate":
+            for attr in df_dict.keys():
+                setattr(
+                    object,
+                    attr,
+                    df_dict[attr].resample(freq, closed="left").interpolate().iloc[:-1],
+                )
+        elif method == "ffill":
+            for attr in df_dict.keys():
+                setattr(
+                    object,
+                    attr,
+                    df_dict[attr].resample(freq, closed="left").ffill().iloc[:-1],
+                )
+        elif method == "bfill":
+            for attr in df_dict.keys():
+                setattr(
+                    object,
+                    attr,
+                    df_dict[attr].resample(freq, closed="left").bfill().iloc[:-1],
+                )
+        else:
+            raise NotImplementedError(f"Resampling method {method} is not implemented.")
+    else:  # down-sampling
+        for attr in df_dict.keys():
+            setattr(
+                object,
+                attr,
+                df_dict[attr].resample(freq).mean(),
+            )

@@ -1594,7 +1594,10 @@ class TestEDisGoFunc:
         assert edisgo_obj_loaded.config._data == edisgo_obj.config._data
         # check results
         assert_frame_equal(
-            edisgo_obj_loaded.results.i_res, edisgo_obj.results.i_res, check_freq=False
+            edisgo_obj_loaded.results.i_res,
+            edisgo_obj.results.i_res,
+            check_freq=False,
+            check_names=False,
         )
         # check electromobility
         assert_frame_equal(
