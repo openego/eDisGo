@@ -115,7 +115,7 @@ extlinks = {
         "networkx.%s",
     ),
     "sqlalchemy": (
-        "http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s",
+        "http://docs.sqlalchemy.org/en/latest/core/connections.html#%s",
         "sqlalchemy.%s",
     ),
     "shapely": (

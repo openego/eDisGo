@@ -45,13 +45,13 @@ def reinforce_grid(
         conducted and therefore which time steps to consider when checking
         for over-loading and over-voltage issues.
         It defaults to None in which case all timesteps in
-        timeseries.timeindex (see :class:`~.network.network.TimeSeries`) are
+        timeseries.timeindex (see :class:`~.network.timeseries.TimeSeries`) are
         used.
         Possible options are:
 
         * None
           Time steps in timeseries.timeindex (see
-          :class:`~.network.network.TimeSeries`) are used.
+          :class:`~.network.timeseries.TimeSeries`) are used.
         * 'snapshot_analysis'
           Reinforcement is conducted for two worst-case snapshots. See
           :meth:`edisgo.tools.tools.select_worstcase_snapshots()` for further
@@ -96,7 +96,7 @@ def reinforce_grid(
 
     Returns
     -------
-    :class:`~.network.network.Results`
+    :class:`~.network.results.Results`
         Returns the Results object holding network expansion costs, equipment
         changes, etc.
 

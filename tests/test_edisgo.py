@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 from matplotlib import pyplot as plt
-from pandas.util.testing import assert_frame_equal
+from pandas.util.testing import assert_frame_equal, assert_series_equal
 from shapely.geometry import Point
 
 from edisgo import EDisGo
@@ -202,13 +202,12 @@ class TestEDisGo:
         )
 
     def test_set_time_series_active_power_predefined(self, caplog):
+        # options where database connection is needed are tested in separate function
 
         # check warning
-        self.edisgo.set_time_series_active_power_predefined(
-            fluctuating_generators_ts="oedb"
-        )
+        self.edisgo.set_time_series_active_power_predefined()
         assert (
-            "When setting time series using predefined profiles a time index is"
+            "When setting time series using predefined profiles it is better"
             in caplog.text
         )
 
@@ -257,6 +256,37 @@ class TestEDisGo:
         assert self.edisgo.timeseries.loads_reactive_power.shape == (2, 0)
         assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 0)
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
+
+    @pytest.mark.local
+    def test_set_time_series_active_power_predefined_oedb(self):
+
+        # test conventional_loads_ts="oedb" for all loads in grid
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        edisgo_object.set_timeindex(pd.date_range("1/1/2011", periods=8760, freq="H"))
+        edisgo_object.set_time_series_active_power_predefined(
+            conventional_loads_ts="oedb",
+            fluctuating_generators_ts="oedb",
+            scenario="eGon2035",
+            engine=pytest.engine,
+            timeindex=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
+            conventional_loads_names=[
+                "Load_mvgd_33535_lvgd_1164210000_244_residential"
+            ],
+        )
+
+        assert edisgo_object.timeseries.loads_active_power.dropna().shape == (
+            2,
+            1,
+        )
+        fluctuating_gens = edisgo_object.topology.generators_df[
+            edisgo_object.topology.generators_df.type.isin(["wind", "solar"])
+        ]
+        assert edisgo_object.timeseries.generators_active_power.dropna().shape == (
+            2,
+            len(fluctuating_gens),
+        )
 
     def test_set_time_series_reactive_power_control(self):
         # set active power time series for fixed cosphi
@@ -1052,12 +1082,19 @@ class TestEDisGo:
         self.edisgo.analyze()
 
     def test_import_electromobility(self):
+        """
+        Test import from directories.
+        """
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
 
         # test with default parameters
         simbev_path = pytest.simbev_example_scenario_path
         tracbev_path = pytest.tracbev_example_scenario_path
-        self.edisgo.import_electromobility(simbev_path, tracbev_path)
+        self.edisgo.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=simbev_path,
+            potential_charging_points_dir=tracbev_path,
+        )
 
         assert len(self.edisgo.electromobility.charging_processes_df) == 48
         assert len(self.edisgo.electromobility.potential_charging_parks_gdf) == 1621
@@ -1109,10 +1146,11 @@ class TestEDisGo:
         # test with kwargs
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         self.edisgo.import_electromobility(
-            simbev_path,
-            tracbev_path,
-            {"mode_parking_times": "not_frugal"},
-            {"mode": "grid_friendly"},
+            data_source="directory",
+            charging_processes_dir=simbev_path,
+            potential_charging_points_dir=tracbev_path,
+            import_electromobility_data_kwds={"mode_parking_times": "not_frugal"},
+            allocate_charging_demand_kwds={"mode": "grid_friendly"},
         )
 
         # Length of charging_processes_df, potential_charging_parks_gdf and
@@ -1158,6 +1196,93 @@ class TestEDisGo:
         )
         # fmt: on
 
+    @pytest.mark.local
+    def test_import_electromobility_oedb(self):
+        """
+        Test import from oedb.
+        """
+        self.edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+
+        # test with default parameters
+        self.edisgo.import_electromobility(
+            data_source="oedb", scenario="eGon2035", engine=pytest.engine
+        )
+
+        assert len(self.edisgo.electromobility.charging_processes_df) == 324117
+        assert self.edisgo.electromobility.eta_charging_points == 0.9
+
+        total_charging_demand_at_charging_parks = sum(
+            cp.charging_processes_df.chargingdemand_kWh.sum()
+            for cp in list(self.edisgo.electromobility.potential_charging_parks)
+            if cp.designated_charging_point_capacity > 0
+        )
+        total_charging_demand = (
+            self.edisgo.electromobility.charging_processes_df.chargingdemand_kWh.sum()
+        )
+        assert np.isclose(
+            total_charging_demand_at_charging_parks, total_charging_demand
+        )
+
+        # fmt: off
+        charging_park_ids = (
+            self.edisgo.electromobility.charging_processes_df.charging_park_id.
+            sort_values().unique()
+        )
+        potential_charging_parks_with_capacity = np.sort(
+            [
+                cp.id
+                for cp in list(self.edisgo.electromobility.potential_charging_parks)
+                if cp.designated_charging_point_capacity > 0.0
+            ]
+        )
+        # fmt: on
+
+        assert set(charging_park_ids) == set(potential_charging_parks_with_capacity)
+
+        # fmt: off
+        assert set(
+            self.edisgo.electromobility.integrated_charging_parks_df.edisgo_id.
+            sort_values().values
+        ) == set(
+            self.edisgo.topology.loads_df[
+                self.edisgo.topology.loads_df.type == "charging_point"
+            ]
+            .index.sort_values()
+            .values
+        )
+        # fmt: on
+
+    @pytest.mark.local
+    def test_import_heat_pumps(self):
+
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+
+        # ################# test with wrong scenario name #############
+        with pytest.raises(ValueError):
+            edisgo_object.import_heat_pumps(
+                scenario="eGon",
+                engine=pytest.engine,
+            )
+
+        # ################# test with leap year #############
+        edisgo_object.import_heat_pumps(
+            scenario="eGon2035",
+            engine=pytest.engine,
+            timeindex=pd.date_range("1/1/2020", periods=2, freq="H"),
+        )
+
+        loads_df = edisgo_object.topology.loads_df
+        hp_df = loads_df[loads_df.type == "heat_pump"]
+        assert len(hp_df) == 151
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 151)
+        assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2035
+        assert edisgo_object.heat_pump.cop_df.shape == (8760, 151)
+        assert edisgo_object.heat_pump.cop_df.index[0].year == 2035
+
     def test_apply_charging_strategy(self):
         self.edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
@@ -1167,7 +1292,11 @@ class TestEDisGo:
         # test with default parameters
         simbev_path = pytest.simbev_example_scenario_path
         tracbev_path = pytest.tracbev_example_scenario_path
-        self.edisgo_obj.import_electromobility(simbev_path, tracbev_path)
+        self.edisgo_obj.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=simbev_path,
+            potential_charging_points_dir=tracbev_path,
+        )
         self.edisgo_obj.apply_charging_strategy()
 
         # Check if all charging points have a valid chargingdemand_kWh > 0
@@ -1251,7 +1380,7 @@ class TestEDisGo:
         self.setup_worst_case_time_series()
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
 
-        # add heat pump and electromobility dummy data
+        # add heat pump, electromobility, overlying grid and dsm dummy data
         self.edisgo.heat_pump.cop = pd.DataFrame(
             data={
                 "hp1": [5.0, 6.0, 5.0, 6.0],
@@ -1273,6 +1402,22 @@ class TestEDisGo:
             },
             index=[0, 1],
         )
+        self.edisgo.overlying_grid.dsm_active_power = pd.Series(
+            data=[2.4], index=[self.edisgo.timeseries.timeindex[0]]
+        )
+        self.edisgo.overlying_grid.solarthermal_energy_feedin_district_heating = (
+            pd.DataFrame(
+                {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]},
+                index=self.edisgo.timeseries.timeindex[0:2],
+            )
+        )
+        self.edisgo.dsm.p_max = pd.DataFrame(
+            data={
+                "load_1": [5.0, 6.0],
+                "load_2": [7.0, 8.0],
+            },
+            index=self.edisgo.timeseries.timeindex[0:2],
+        )
 
         # ################### test with default parameters ###################
         self.edisgo.save(save_dir)
@@ -1284,42 +1429,70 @@ class TestEDisGo:
 
         shutil.rmtree(save_dir)
 
-        # ############## test with saving heat pump and electromobility #############
+        # ############## test with saving additional data #############
         self.edisgo.save(
             save_dir,
             save_electromobility=True,
             save_heatpump=True,
+            save_overlying_grid=True,
+            save_dsm=True,
             electromobility_attributes=["charging_processes_df"],
         )
 
-        # check that sub-directory are created
+        # check that sub-directories are created
         dirs_in_save_dir = os.listdir(save_dir)
-        assert len(dirs_in_save_dir) == 6
+        assert len(dirs_in_save_dir) == 8
         assert "electromobility" in dirs_in_save_dir
+        assert "overlying_grid" in dirs_in_save_dir
 
         shutil.rmtree(save_dir)
 
-        # ############## test with archiving and electromobility ##############
-        self.edisgo.save(save_dir, archive=True, save_electromobility=True)
+        # ############## test with archiving ##############
+        self.edisgo.save(
+            save_dir, archive=True, save_electromobility=True, save_overlying_grid=True
+        )
         zip_file = os.path.join(os.path.dirname(save_dir), "edisgo_network.zip")
         assert os.path.exists(zip_file)
 
         zip = ZipFile(zip_file)
         files = zip.namelist()
         zip.close()
-        assert len(files) == 25
+        assert len(files) == 28
 
         os.remove(zip_file)
 
     def test_reduce_memory(self):
+        # set up test data
         self.setup_worst_case_time_series()
         self.edisgo.analyze()
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
+            data={
+                "hp1": [1.0, 2.0],
+                "hp2": [3.0, 4.0],
+            },
+            index=timeindex,
+        )
+        og = self.edisgo.overlying_grid
+        og.dsm_active_power = pd.Series(
+            data=[2.4], index=[self.edisgo.timeseries.timeindex[0]]
+        )
+        og.solarthermal_energy_feedin_district_heating = pd.DataFrame(
+            {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]},
+            index=self.edisgo.timeseries.timeindex[0:2],
+        )
 
-        # check one time series attribute and one results attribute
+        # check one attribute from each class
         mem_ts_before = self.edisgo.timeseries.generators_active_power.memory_usage(
             deep=True
         ).sum()
         mem_res_before = self.edisgo.results.pfa_p.memory_usage(deep=True).sum()
+        mem_hp_before = self.edisgo.heat_pump.heat_demand_df.memory_usage(
+            deep=True
+        ).sum()
+        mem_og_before = og.solarthermal_energy_feedin_district_heating.memory_usage(
+            deep=True
+        ).sum()
 
         # check with default value
         self.edisgo.reduce_memory()
@@ -1328,20 +1501,32 @@ class TestEDisGo:
             self.edisgo.timeseries.generators_active_power.memory_usage(deep=True).sum()
         )
         mem_res_with_default = self.edisgo.results.pfa_p.memory_usage(deep=True).sum()
+        mem_hp_with_default = self.edisgo.heat_pump.heat_demand_df.memory_usage(
+            deep=True
+        ).sum()
+        mem_og_with_default = (
+            og.solarthermal_energy_feedin_district_heating.memory_usage(deep=True).sum()
+        )
 
         assert mem_ts_before > mem_ts_with_default
         assert mem_res_before > mem_res_with_default
+        assert mem_hp_before > mem_hp_with_default
+        assert mem_og_before > mem_og_with_default
 
         mem_ts_with_default_2 = self.edisgo.timeseries.loads_active_power.memory_usage(
             deep=True
         ).sum()
         mem_res_with_default_2 = self.edisgo.results.i_res.memory_usage(deep=True).sum()
+        mem_og_with_default_2 = og.dsm_active_power.memory_usage(deep=True)
 
         # check passing kwargs
         self.edisgo.reduce_memory(
             to_type="float16",
             results_attr_to_reduce=["pfa_p"],
             timeseries_attr_to_reduce=["generators_active_power"],
+            overlying_grid_attr_to_reduce=[
+                "solarthermal_energy_feedin_district_heating"
+            ],
         )
 
         assert (
@@ -1354,7 +1539,13 @@ class TestEDisGo:
             mem_res_with_default
             > self.edisgo.results.pfa_p.memory_usage(deep=True).sum()
         )
-        # check that i_res and loads_active_power were not reduced
+        assert (
+            mem_og_with_default
+            > og.solarthermal_energy_feedin_district_heating.memory_usage(
+                deep=True
+            ).sum()
+        )
+        # check that i_res, loads_active_power and dsm_active_power were not reduced
         assert np.isclose(
             mem_ts_with_default_2,
             self.edisgo.timeseries.loads_active_power.memory_usage(deep=True).sum(),
@@ -1362,6 +1553,10 @@ class TestEDisGo:
         assert np.isclose(
             mem_res_with_default_2,
             self.edisgo.results.i_res.memory_usage(deep=True).sum(),
+        )
+        assert np.isclose(
+            mem_og_with_default_2,
+            og.dsm_active_power.memory_usage(deep=True),
         )
 
     def test_check_integrity(self, caplog):
@@ -1393,6 +1588,8 @@ class TestEDisGo:
             in caplog.text
         )
         caplog.clear()
+
+        # ########################### check time series ##############################
         # set timeseries
         index = pd.date_range("1/1/2018", periods=3, freq="H")
         ts_gens = pd.DataFrame(
@@ -1411,9 +1608,10 @@ class TestEDisGo:
         self.edisgo.timeseries.loads_reactive_power = ts_loads
         self.edisgo.timeseries.storage_units_active_power = ts_stor
         self.edisgo.timeseries.storage_units_reactive_power = ts_stor
-        # check that no warning is raised
+        # check that time series warnings are not raised anymore
         self.edisgo.check_integrity()
-        assert not caplog.text
+        assert len(caplog.records) == 1
+        assert "There are lines with very short line lengths" in caplog.text
         manipulated_comps = {
             "generators": ["Generator_1", "GeneratorFluctuating_4"],
             "loads": ["Load_agricultural_LVGrid_1_3"],
@@ -1491,6 +1689,102 @@ class TestEDisGo:
             )
             caplog.clear()
 
+        # ########################### check electromobility ##########################
+        # test electromobility time index not matching
+        # set up valid flexibility bands
+        timeindex = pd.date_range("1/1/1970", periods=6, freq="30min")
+        flex_bands = {}
+        flex_bands["upper_power"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 12.0, 12.0, 12.0, 12.0, 0.0],
+                "CP2": [3.0, 3.0, 0.0, 0.0, 3.0, 3.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["upper_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 6.0, 12.0, 12.0, 12.0, 12.0],
+                "CP2": [1.5, 2.0, 2.0, 2.0, 3.5, 4.0],
+            },
+            index=timeindex,
+        )
+        flex_bands["lower_energy"] = pd.DataFrame(
+            data={
+                "CP1": [0.0, 0.0, 0.0, 6.0, 12.0, 12.0],
+                "CP2": [0.5, 2.0, 2.0, 2.0, 2.5, 4.0],
+            },
+            index=timeindex,
+        )
+        self.edisgo.electromobility.flexibility_bands = flex_bands
+        self.edisgo.electromobility.simbev_config_df = pd.DataFrame(
+            data={"eta_cp": [1.0]}, index=[0]
+        )
+        self.edisgo.check_integrity()
+        assert (
+            "There are time steps in timeindex of TimeSeries object that are not in "
+            "the index of Electromobility.flexibility_bands" in caplog.text
+        )
+
+        # check electromobility upper energy band lower than lower energy band
+        # modify flex band such that error is raised
+        self.edisgo.electromobility.flexibility_bands["upper_energy"].at[
+            timeindex[1], "CP2"
+        ] = 1.0
+        msg = "Lower energy band is higher than upper energy band for the "
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo.check_integrity()
+
+        # reset values
+        caplog.clear()
+        self.edisgo.electromobility.flexibility_bands["upper_energy"].at[
+            timeindex[1], "CP2"
+        ] = 2.0
+
+        # ########################### check time index ##########################
+        # test heat pump, overlying grid and dsm time index not matching
+        # (electromobility is checked above)
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.heat_pump.cop_df = pd.DataFrame(
+            data={"hp1": [5.0, 6.0], "hp2": [7.0, 8.0]},
+            index=timeindex,
+        )
+        self.edisgo.overlying_grid.dsm_active_power = pd.DataFrame(
+            {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]}, index=timeindex
+        )
+        self.edisgo.dsm.p_max = pd.DataFrame(
+            data={"load_1": [5.0, 6.0], "load_2": [7.0, 8.0]},
+            index=self.edisgo.timeseries.timeindex[0:2],
+        )
+        self.edisgo.check_integrity()
+        assert (
+            "There are time steps in timeindex of TimeSeries object that are not in "
+            "the index of OverlyingGrid.dsm_active_power" in caplog.text
+        )
+        assert (
+            "There are time steps in timeindex of TimeSeries object that are not in "
+            "the index of HeatPump.cop_df" in caplog.text
+        )
+        assert (
+            "There are time steps in timeindex of TimeSeries object that are not in "
+            "the index of DSM.p_max" in caplog.text
+        )
+
+    def test_resample_timeseries(self):
+        self.setup_worst_case_time_series()
+        self.edisgo.resample_timeseries()
+        assert len(self.edisgo.timeseries.loads_active_power) == 16
+
+        self.edisgo.heat_pump.cop_df = pd.DataFrame(
+            data={
+                "hp1": [5.0, 6.0],
+                "hp2": [7.0, 8.0],
+            },
+            index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
+        )
+        self.edisgo.resample_timeseries(freq="30min")
+        assert len(self.edisgo.timeseries.loads_active_power) == 8
+        assert len(self.edisgo.heat_pump.cop_df) == 4
+
 
 class TestEDisGoFunc:
     def test_import_edisgo_from_files(self):
@@ -1499,7 +1793,7 @@ class TestEDisGoFunc:
         edisgo_obj.analyze()
         save_dir = os.path.join(os.getcwd(), "edisgo_network")
 
-        # add heat pump and electromobility dummy data
+        # add heat pump, electromobility, overlying grid dummy data
         edisgo_obj.heat_pump.cop = pd.DataFrame(
             data={
                 "hp1": [5.0, 6.0, 5.0, 6.0],
@@ -1523,6 +1817,13 @@ class TestEDisGoFunc:
             ),
         }
         edisgo_obj.electromobility.flexibility_bands = flex_bands
+        edisgo_obj.overlying_grid.heat_pump_decentral_active_power = pd.Series(
+            data=[2.4], index=[edisgo_obj.timeseries.timeindex[0]]
+        )
+        edisgo_obj.dsm.p_min = pd.DataFrame(
+            data={"load_1": [5.0, 6.0], "load_2": [7.0, 8.0]},
+            index=edisgo_obj.timeseries.timeindex[0:2],
+        )
 
         # ################ test with non-existing path ######################
 
@@ -1532,14 +1833,21 @@ class TestEDisGoFunc:
 
         # ######################## test with default ########################
         edisgo_obj.save(
-            save_dir, save_results=False, save_electromobility=True, save_heatpump=True
+            save_dir,
+            save_results=False,
+            save_electromobility=True,
+            save_heatpump=True,
+            save_overlying_grid=True,
+            save_dsm=True,
         )
 
         edisgo_obj_loaded = import_edisgo_from_files(save_dir)
 
         # check topology
         assert_frame_equal(
-            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+            edisgo_obj_loaded.topology.loads_df,
+            edisgo_obj.topology.loads_df,
+            check_dtype=False,
         )
         # check time series
         assert edisgo_obj_loaded.timeseries.timeindex.empty
@@ -1548,12 +1856,14 @@ class TestEDisGoFunc:
         # check results
         assert edisgo_obj_loaded.results.i_res.empty
 
-        # ############ test with loading electromobility and heat pump data ###########
+        # ############ test with loading other data ###########
 
         edisgo_obj_loaded = import_edisgo_from_files(
             save_dir,
             import_electromobility=True,
             import_heat_pump=True,
+            import_overlying_grid=True,
+            import_dsm=True,
         )
 
         # check electromobility
@@ -1565,24 +1875,47 @@ class TestEDisGoFunc:
         assert_frame_equal(
             edisgo_obj_loaded.heat_pump.cop_df, edisgo_obj.heat_pump.cop_df
         )
+        # check overlying grid
+        assert_series_equal(
+            edisgo_obj_loaded.overlying_grid.heat_pump_decentral_active_power,
+            edisgo_obj.overlying_grid.heat_pump_decentral_active_power,
+            check_names=False,
+            check_freq=False,
+        )
+        # check dsm
+        assert_frame_equal(
+            edisgo_obj_loaded.dsm.p_min,
+            edisgo_obj.dsm.p_min,
+            check_freq=False,
+        )
 
         # delete directory
         shutil.rmtree(save_dir)
 
-        # ########### test with loading time series, results, emob from zip ###########
-        edisgo_obj.save(save_dir, archive=True, save_electromobility=True)
+        # ########### test with loading from zip ###########
+        edisgo_obj.save(
+            save_dir,
+            archive=True,
+            save_electromobility=True,
+            save_overlying_grid=True,
+            save_dsm=True,
+        )
         zip_file = f"{save_dir}.zip"
         edisgo_obj_loaded = import_edisgo_from_files(
             zip_file,
             import_results=True,
             import_timeseries=True,
             import_electromobility=True,
+            import_overlying_grid=True,
+            import_dsm=True,
             from_zip_archive=True,
         )
 
         # check topology
         assert_frame_equal(
-            edisgo_obj_loaded.topology.loads_df, edisgo_obj.topology.loads_df
+            edisgo_obj_loaded.topology.loads_df,
+            edisgo_obj.topology.loads_df,
+            check_dtype=False,
         )
         # check time series
         assert_frame_equal(
@@ -1608,6 +1941,19 @@ class TestEDisGoFunc:
         assert_frame_equal(
             edisgo_obj_loaded.electromobility.charging_processes_df,
             edisgo_obj.electromobility.charging_processes_df,
+        )
+        # check overlying grid
+        assert_series_equal(
+            edisgo_obj_loaded.overlying_grid.heat_pump_decentral_active_power,
+            edisgo_obj.overlying_grid.heat_pump_decentral_active_power,
+            check_names=False,
+            check_freq=False,
+        )
+        # check dsm
+        assert_frame_equal(
+            edisgo_obj_loaded.dsm.p_min,
+            edisgo_obj.dsm.p_min,
+            check_freq=False,
         )
 
         # delete zip file
