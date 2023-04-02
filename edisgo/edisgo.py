@@ -1976,7 +1976,7 @@ class EDisGo:
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
-    def import_dsm(self, engine: Engine, scenario: str):
+    def import_dsm(self, scenario: str, engine: Engine, timeindex=None):
         """
         Gets industrial and CTS DSM profiles from the
         `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
@@ -2009,7 +2009,7 @@ class EDisGo:
 
         """
         dsm_profiles = dsm_import.oedb(
-            edisgo_obj=self, engine=engine, scenario=scenario
+            edisgo_obj=self, scenario=scenario, engine=engine, timeindex=timeindex
         )
         self.dsm.p_min = dsm_profiles["p_min"]
         self.dsm.p_max = dsm_profiles["p_max"]
