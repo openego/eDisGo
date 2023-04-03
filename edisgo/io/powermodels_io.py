@@ -8,6 +8,7 @@ Call :func:`to_powermodels` to retrieve the PowerModels network container and
 
 import json
 import logging
+import math
 
 import numpy as np
 import pandas as pd
@@ -154,8 +155,8 @@ def to_powermodels(
             "storage": edisgo_object.overlying_grid.storage_units_active_power / s_base,
             "cp": edisgo_object.overlying_grid.electromobility_active_power / s_base,
             "hp": (
-                edisgo_object.overlying_grid.heat_pump_rural_active_power
-                + edisgo_object.overlying_grid.heat_central_active_power
+                edisgo_object.overlying_grid.heat_pump_decentral_active_power
+                + edisgo_object.overlying_grid.heat_pump_central_active_power
             )
             / s_base,
             "dsm": edisgo_object.overlying_grid.dsm_active_power / s_base,
@@ -676,29 +677,25 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     transformer = ~branches.tap_ratio.isna()
     tap = branches.tap_ratio.fillna(1)
     shift = branches.phase_shift.fillna(0)
-    length = branches.length.fillna(1)
-    for par, val, decimal, decade, quant, text, unit in [
-        ("r_pu", branches.r_pu, 5, 1e5, 0.005, "resistance", "p.u."),
-        ("x_pu", branches.x_pu, 5, 1e5, 0.005, "reactance", "p.u."),
-        ("length", length, 3, 1e3, 0.002, "branch length", "km"),
+    # length = branches.length.fillna(1)
+    for par, val, quant, text, unit in [
+        ("r_pu", branches.r_pu, 0.002, "resistance", "p.u."),
+        ("x_pu", branches.x_pu, 0.002, "reactance", "p.u."),
+        # ("length", length, 1e3, 0.002, "branch length", "km"),
     ]:
-        max_value = np.round(max(val.loc[val < val.quantile(1 - quant)]), decimal)
-        min_value = np.round(min(val.loc[val > val.quantile(quant)]), decimal)
-        if val.max() / val.min() > decade:
+        # max_value = max(val.loc[val < val.quantile(1 - quant)])
+        min_value = min(val.loc[val > val.quantile(quant)])
+        if math.floor(math.log10(val.min())) <= -4:
             # only modify r, x and l values if min/max value differences are too big
-            branches[par] = val.clip(lower=min_value, upper=max_value)
+            branches[par] = val.clip(lower=min_value)
             logger.warning(
-                "Range between min and max {} values is too high. Highest and "
-                "lowest {}% of {} values will be set to {} {} and"
-                " {} {}, respectively.".format(
-                    text, 100 * quant, text, max_value, unit, min_value, unit
-                )
+                "Min value of {} is too small. Lowest {}% of {} values will be set "
+                "to {} {}".format(text, 100 * quant, text, min_value, unit)
             )
 
     for branch_i in np.arange(len(branches.index)):
         idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
         idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
-        cost_factor = {"mv": 1, "lv": 100}
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
             "br_r": branches.r_pu[branch_i] * s_base,
@@ -722,7 +719,6 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "tap": tap[branch_i],
             "length": branches.length.fillna(1)[branch_i],
             "cost": branches.capital_cost[branch_i],
-            "cost_factor": cost_factor[pm["bus"][str(idx_f_bus)]["grid_level"]],
             "cost_inverse": 1
             / (branches.length.fillna(1)[branch_i] * branches.capital_cost[branch_i]),
             "storage_pf": 0,
@@ -760,7 +756,6 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "tap": 1,
             "length": 1,
             "cost": 0,
-            "cost_factor": 0,
             "cost_inverse": 0,
             "storage_pf": np.tan(np.arccos(pf)) * sign,
             "index": stor_i + len(branches.index) + 1,
@@ -1037,20 +1032,20 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     """
     heat_df = psa_net.loads.loc[flexible_hps]  # electric load
     heat_df2 = edisgo_obj.heat_pump.heat_demand_df[flexible_hps]  # thermal load
-    geothermal_feedin = (
-        edisgo_obj.overlying_grid.geothermal_energy_feedin_district_heating
-    )
-    solarthermal_feedin = (
-        edisgo_obj.overlying_grid.solarthermal_energy_feedin_district_heating
-    )
+    # geothermal_feedin = (
+    #     edisgo_obj.overlying_grid.geothermal_energy_feedin_district_heating
+    # )
+    # solarthermal_feedin = (
+    #     edisgo_obj.overlying_grid.solarthermal_energy_feedin_district_heating
+    # )
     # reduce heat demand of district heating by geothermal and solarthermal feedin
-    heat_df2.loc[:, heat_df2.columns.str.contains("district")] = (
-        heat_df2.loc[:, heat_df2.columns.str.contains("district")].values
-        - solarthermal_feedin.values
-        - geothermal_feedin.values
-    ).clip(
-        min=0
-    )  # ToDo: nur ein district heating?
+    # heat_df2.loc[:, heat_df2.columns.str.contains("district")] = (
+    #     heat_df2.loc[:, heat_df2.columns.str.contains("district")].values
+    #     - solarthermal_feedin.values
+    #     - geothermal_feedin.values
+    # ).clip(
+    #     min=0
+    # )  # ToDo: nur ein district heating?
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
@@ -1224,7 +1219,7 @@ def _build_hv_requirements(
         Base value of apparent power for per unit system.
         Default: 100 MVA
     opf_flex : list
-        List of flexibilities that should be considered in the optimization. Must be any
+        Flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]. For more information see
         :func:`edisgo.opf.powermodels_opf.pm_optimize`.
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
