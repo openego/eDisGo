@@ -877,14 +877,36 @@ class TestTopology:
 
     def test_assign_feeders(self):
         self.topology.assign_feeders()
-        assert self.topology.buses_df.iloc[0:2]["feeder"].to_list() == [
+        assert self.topology.buses_df.iloc[0:2]["grid_feeder"].to_list() == [
             "station_node",
             "Bus_BranchTee_MVGrid_1_1",
         ]
-        assert self.topology.lines_df.iloc[0:2]["feeder"].to_list() == [
+        assert self.topology.lines_df.iloc[0:2]["grid_feeder"].to_list() == [
             "Bus_BranchTee_MVGrid_1_1",
             "Bus_BranchTee_MVGrid_1_4",
         ]
+
+        assert self.topology.buses_df.iloc[0:2]["mv_feeder"].to_list() == [
+            "station_node",
+            "Bus_BranchTee_MVGrid_1_1",
+        ]
+        assert self.topology.lines_df.iloc[0:2]["mv_feeder"].to_list() == [
+            "Bus_BranchTee_MVGrid_1_1",
+            "Bus_BranchTee_MVGrid_1_4",
+        ]
+
+        lv_grids_mv_bus = self.topology.grids[2].transformers_df["bus0"][0]
+        feeder_of_lv_grids_mv_bus = self.topology.buses_df.loc[
+            lv_grids_mv_bus, "mv_feeder"
+        ]
+        list_of_feeders = self.topology.grids[2].buses_df["mv_feeder"].to_list()
+        assert len(list_of_feeders) == 15
+        assert len(set(list_of_feeders)) == 1
+        assert list_of_feeders[0] == feeder_of_lv_grids_mv_bus
+        list_of_feeders = self.topology.grids[2].lines_df["mv_feeder"].to_list()
+        assert len(list_of_feeders) == 14
+        assert len(set(list_of_feeders)) == 1
+        assert list_of_feeders[0] == feeder_of_lv_grids_mv_bus
 
 
 class TestTopologyWithEdisgoObject:

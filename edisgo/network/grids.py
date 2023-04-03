@@ -357,34 +357,51 @@ class Grid(ABC):
                 graph, source=station, target=bus, weight="length"
             )
 
-    def assign_grid_feeder(self):
+    def assign_grid_feeder(self, mode: str = "grid_feeder"):
         """
-        Assign the the nodes of the grid to the associated feeder. The names of the
+        Assign the nodes of the grid to the associated feeder. The names of the
         Feeders are the names of the neighboring nodes of the grid station node.
-        The feeder name is written as column 'feeder' to 'edisgo.topology.buses_df'.
+        The feeder name is written as column to 'edisgo.topology.buses_df'.
+        The feeder of the source node is "station_node".
+
+        Parameters
+        ----------
+        mode : str
+            If mode is "mv_feeder" the nodes of the lv grids are assigned according to
+            their mv feeder. If mode is "grid_feeder" nodes are assigned according to
+            their feeder (neighbors of the station node.) Default: "grid_feeder"
         """
         buses_df = self._edisgo_obj.topology.buses_df
         lines_df = self._edisgo_obj.topology.lines_df
-        graph = self.graph
-        station = self.station.index[0]
+
+        if mode == "grid_feeder":
+            graph = self.graph
+            station = self.station.index[0]
+            column_name = "grid_feeder"
+        elif mode == "mv_feeder":
+            graph = self._edisgo_obj.topology.to_graph()
+            station = self._edisgo_obj.topology.transformers_hvmv_df["bus1"][0]
+            column_name = "mv_feeder"
+        else:
+            raise ValueError("Choose an existing mode.")
 
         # get all buses in network and remove station to get separate subgraphs
         graph_nodes = list(graph.nodes())
         graph_nodes.remove(station)
         subgraph = graph.subgraph(graph_nodes)
 
-        buses_df.at[station, "feeder"] = "station_node"
+        buses_df.at[station, column_name] = "station_node"
         for neighbor in graph.neighbors(station):
             # get all nodes in that feeder by doing a DFS in the disconnected
             # subgraph starting from the node adjacent to the station `neighbor`
             feeder_graph = nx.dfs_tree(subgraph, source=neighbor)
             feeder_lines = set()
             for node in feeder_graph.nodes():
-                buses_df.at[node, "feeder"] = neighbor
+                buses_df.at[node, column_name] = neighbor
                 feeder_lines.update(
                     {edge[2]["branch_name"] for edge in graph.edges(node, data=True)}
                 )
-            lines_df.loc[lines_df.index.isin(feeder_lines), "feeder"] = neighbor
+            lines_df.loc[lines_df.index.isin(feeder_lines), column_name] = neighbor
 
     def get_feeder_stats(self) -> pd.DataFrame:
         """
@@ -400,10 +417,10 @@ class Grid(ABC):
         buses_df = self.buses_df
         feeders = (
             buses_df.loc[
-                buses_df["feeder"] != "station_node",
-                ["feeder", "length_to_grid_station"],
+                buses_df["grid_feeder"] != "station_node",
+                ["grid_feeder", "length_to_grid_station"],
             ]
-            .groupby("feeder")
+            .groupby("grid_feeder")
             .max()
             .rename(columns={"length_to_grid_station": "length"})
         )

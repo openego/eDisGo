@@ -117,24 +117,24 @@ class TestGrids:
         lv_grid.assign_grid_feeder()
 
         # Check that all buses get an assignment
-        assert not mv_grid.buses_df["feeder"].isnull().any()
-        assert not lv_grid.buses_df["feeder"].isnull().any()
+        assert not mv_grid.buses_df["grid_feeder"].isnull().any()
+        assert not lv_grid.buses_df["grid_feeder"].isnull().any()
 
         # Check that feeder to station node of station node is 'station_node' and
         # one other feeder get the right feeder assigned
-        assert mv_grid.buses_df.iloc[0:2]["feeder"].to_list() == [
+        assert mv_grid.buses_df.iloc[0:2]["grid_feeder"].to_list() == [
             "station_node",
             "Bus_BranchTee_MVGrid_1_1",
         ]
-        assert mv_grid.lines_df.iloc[0:2]["feeder"].to_list() == [
+        assert mv_grid.lines_df.iloc[0:2]["grid_feeder"].to_list() == [
             "Bus_BranchTee_MVGrid_1_1",
             "Bus_BranchTee_MVGrid_1_4",
         ]
-        assert lv_grid.buses_df.iloc[0:2]["feeder"].to_list() == [
+        assert lv_grid.buses_df.iloc[0:2]["grid_feeder"].to_list() == [
             "station_node",
             "Bus_BranchTee_LVGrid_3_1",
         ]
-        assert lv_grid.lines_df.iloc[0:2]["feeder"].to_list() == [
+        assert lv_grid.lines_df.iloc[0:2]["grid_feeder"].to_list() == [
             "Bus_BranchTee_LVGrid_3_1",
             "Bus_BranchTee_LVGrid_3_1",
         ]

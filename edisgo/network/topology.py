@@ -3009,9 +3009,12 @@ class Topology:
             )
 
     def assign_feeders(self):
-        """Assign the feeder to all grids."""
+        """Assign the feeder of the grid and the mv feeder to all grids."""
+
         for grid in self.grids:
-            grid.assign_grid_feeder()
+            grid.assign_grid_feeder(mode="grid_feeder")
+
+        self.grids[0].assign_grid_feeder(mode="mv_feeder")
 
     def __repr__(self):
         return f"Network topology {self.id}"
