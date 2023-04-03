@@ -1285,8 +1285,6 @@ def update_model(
             fixed_parameters["res_load_inflexible_units"][indexer]
         )
         if model.objective_name not in [
-            "maximize_grid_power",
-            "minimize_grid_power",
             "maximize_energy_level",
             "minimize_energy_level",
         ]:
