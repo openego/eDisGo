@@ -367,7 +367,9 @@ def reinforce_grid(
 
     # check if all voltage problems were solved after maximum number of
     # iterations allowed
-    if while_counter == max_while_iterations and crit_nodes:
+    if (
+        while_counter == max_while_iterations and not crit_nodes.empty
+    ):  # ToDo: ist das hier richtig?
         edisgo_reinforce.results.unresolved_issues = pd.concat(
             [
                 edisgo_reinforce.results.unresolved_issues,
