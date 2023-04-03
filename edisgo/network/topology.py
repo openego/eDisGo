@@ -645,7 +645,11 @@ class Topology:
 
     @property
     def grids(self):
-        """Gives a list of all grids."""
+        """
+        Gives a list with :class:`~.network.grids.MVGrid` object and all
+        :class:`~.network.grids.LVGrid` objects.
+
+        """
         return [self._mv_grid] + list(self.lv_grids)
 
     @property
