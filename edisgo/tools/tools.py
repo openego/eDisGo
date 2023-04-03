@@ -969,7 +969,7 @@ def get_sample_using_time(
     save_ev_soc_initial=True,
     hp=True,
     dsm=True,
-    OG=True,
+    og=True,
 ):
     if periods is None:
         raise TypeError(
@@ -1064,7 +1064,7 @@ def get_sample_using_time(
                     getattr(edisgo_obj.dsm, attr).loc[timeframe],
                 )
 
-    if OG:
+    if og:
         for attr in [
             "dsm_active_power",
             "electromobility_active_power",
