@@ -817,6 +817,15 @@ def oedb(
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
 
+    Notes
+    ------
+    Note, that PV rooftop plants are queried using the building IDs not the MV grid ID
+    as in egon_data buildings are mapped to a grid based on the
+    zensus cell they are in whereas in ding0 buildings are mapped to a grid based on
+    the geolocation. As it can happen that buildings lie outside an MV grid but within
+    a zensus cell that is assigned to that MV grid, they are mapped differently in
+    egon_data and ding0, and it is therefore better to query using the building IDs.
+
     """
 
     def _get_egon_power_plants():

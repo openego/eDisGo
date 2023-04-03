@@ -215,6 +215,16 @@ def get_profile_cts(
         hourly resolution in MW. Index contains hour of the year (from 0 to 8759) and
         column names are site ID as integer.
 
+    Notes
+    ------
+    Be aware, that in this function the DSM time series are disaggregated to all CTS
+    loads in the grid. In some cases, this can lead to an over- or underestimation of
+    the DSM potential, as in egon_data buildings are mapped to a grid based on the
+    zensus cell they are in whereas in ding0 buildings are mapped to a grid based on
+    the geolocation. As it can happen that buildings lie outside an MV grid but within
+    a zensus cell that is assigned to that MV grid, they are mapped differently in
+    egon_data and ding0.
+
     """
     saio.register_schema("demand", engine)
     from saio.demand import egon_etrago_electricity_cts_dsm_timeseries
