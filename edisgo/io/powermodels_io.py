@@ -296,7 +296,10 @@ def from_powermodels(
             efficiency = pd.DataFrame(
                 index=edisgo_object.timeseries.timeindex,
                 columns=names,
-                data=abs(pd.DataFrame(data) / pd.DataFrame(data2)).values,
+                data=(
+                    abs(pd.DataFrame(data) - pd.DataFrame(data2))
+                    / abs(pd.DataFrame(data2))
+                ).values,
             )
             edisgo_object.opf_results.storage_efficiency = efficiency
         else:
