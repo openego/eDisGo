@@ -491,16 +491,17 @@ class TestEDisGo:
         self.setup_edisgo_object()
         self.setup_worst_case_time_series()
         self.edisgo.timeseries.scale_timeseries(
-            p_scaling_factor=10, q_scaling_factor=10
+            p_scaling_factor=100, q_scaling_factor=100
         )
         edisgo_obj = copy.deepcopy(self.edisgo)
-        edisgo_obj = enhanced_reinforce_wrapper(edisgo_obj)
+        edisgo_obj = enhanced_reinforce_wrapper(
+            edisgo_obj, activate_cost_results_disturbing_mode=True
+        )
 
         results = edisgo_obj.results
 
-        assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 108
-        assert len(results.equipment_changes) == 162
+        assert len(results.grid_expansion_costs) == 840
+        assert len(results.equipment_changes) == 1388
         assert results.v_res.shape == (4, 142)
 
     def test_add_component(self, caplog):

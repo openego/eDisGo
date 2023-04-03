@@ -765,7 +765,7 @@ def enhanced_reinforce_wrapper(
     """
     try:
         logger.info("Try initial reinforcement.")
-        edisgo_obj.reinforce(mode=None, **kwargs)
+        edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
         logger.info("Initial succeeded.")
     except:  # noqa: E722
         logger.info("Initial failed.")
@@ -829,9 +829,7 @@ def enhanced_reinforce_wrapper(
                                 f"Aggregate to station for {lv_grid} successful."
                             )
                         except:  # noqa: E722
-                            logger.info(
-                                f"Aggregate to station for {lv_grid} failed."
-                            )
+                            logger.info(f"Aggregate to station for {lv_grid} failed.")
 
         try:
             edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
