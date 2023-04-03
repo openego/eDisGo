@@ -591,3 +591,151 @@ def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):
             linked_steps[step + 1] = representatives[cluster_id] + 1
 
     return linked_steps
+
+
+def distribute_og_timeseries(edisgo_obj):
+    edisgo_copy = deepcopy(edisgo_obj)
+    hp_loads = edisgo_obj.topology.loads_df.index[
+        edisgo_obj.topology.loads_df.type == "heat_pump"
+    ]
+    cp_loads = edisgo_obj.topology.loads_df.index[
+        edisgo_obj.topology.loads_df.type == "charging_point"
+    ]
+    dsm_loads = edisgo_copy.dsm.p_max.columns
+    if not edisgo_copy.overlying_grid.electromobility_active_power.empty:
+        # scale flexibility band upper power timeseries
+        scaling_df = (
+            edisgo_obj.electromobility.flexibility_bands["upper_power"].transpose()
+            / edisgo_obj.electromobility.flexibility_bands["upper_power"].sum(axis=1)
+        ).transpose()
+        edisgo_copy.timeseries._loads_active_power.loc[:, cp_loads] = (
+            scaling_df.transpose()
+            * edisgo_copy.overlying_grid.storage_units_active_power
+        ).transpose()
+        # Scale dumb charging timeseries
+        # scaling_factor = edisgo_copy.overlying_grid.electromobility_active_power /
+        # edisgo_copy.timeseries.loads_active_power.loc[
+        #                                                   :,cp_loads].sum(axis=1)
+        # edisgo_copy.timeseries._loads_active_power.loc[
+        # :,
+        # cp_loads] = (edisgo_copy.timeseries.loads_active_power.loc[
+        # :,cp_loads].transpose() * scaling_factor).transpose()
+    if not edisgo_copy.overlying_grid.storage_units_active_power.empty:
+        scaling_factor = (
+            edisgo_copy.topology.storage_units_df.p_nom
+            / edisgo_copy.topology.storage_units_df.p_nom.sum()
+        )
+        scaling_df = pd.DataFrame(
+            columns=scaling_factor.index,
+            index=edisgo_copy.timeseries.timeindex,
+            data=pd.concat(
+                [scaling_factor] * len(edisgo_copy.timeseries.timeindex), axis=1
+            )
+            .transpose()
+            .values,
+        )
+        edisgo_copy.timeseries._storage_units_active_power = (
+            scaling_df.transpose()
+            * edisgo_copy.overlying_grid.storage_units_active_power
+        ).transpose()
+    if not edisgo_copy.overlying_grid.heat_pump_central_active_power.empty:
+        # ToDo: nur ein district heating?
+        hp_central = [hp for hp in hp_loads if "district" in hp]
+        edisgo_copy.timeseries._loads_active_power.loc[
+            :, hp_central
+        ] = edisgo_copy.overlying_grid.heat_pump_central_active_power.sum(axis=1)[0]
+    if not edisgo_copy.overlying_grid.heat_pump_decentral_active_power.empty:
+        hp_decentral = [hp for hp in hp_loads if "district" not in hp]
+        # scale with heat pump upper power
+        scaling_factor = (
+            edisgo_obj.topology.loads_df.p_set.loc[hp_decentral]
+            / edisgo_obj.topology.loads_df.p_set.loc[hp_decentral].sum()
+        )
+        scaling_df = pd.DataFrame(
+            columns=scaling_factor.index,
+            index=edisgo_copy.timeseries.timeindex,
+            data=pd.concat(
+                [scaling_factor] * len(edisgo_copy.timeseries.timeindex), axis=1
+            )
+            .transpose()
+            .values,
+        )
+        edisgo_copy.timeseries._loads_active_power.loc[:, hp_decentral] = (
+            scaling_df.transpose()
+            * edisgo_copy.overlying_grid.heat_pump_decentral_active_power
+        ).transpose()
+        # scale with original heat pump time series
+        # scaling_factor = (edisgo_copy.overlying_grid.heat_pump_decentral_active_power
+        #                       /
+        #                   edisgo_copy.timeseries.loads_active_power.loc[:,
+        #                   hp_decentral].sum(axis=1))
+        # edisgo_copy.timeseries._loads_active_power.loc[
+        # :,hp_decentral] = (edisgo_copy.timeseries.loads_active_power.loc[
+        #                     :,hp_decentral].transpose() * scaling_factor).transpose()
+    if not edisgo_copy.overlying_grid.dsm_active_power.empty:
+        scaling_df = (
+            edisgo_copy.dsm.p_max.transpose() / edisgo_copy.dsm.p_max.sum(axis=1)
+        ).transpose()
+
+        edisgo_copy.timeseries._loads_active_power.loc[:, dsm_loads] = (
+            edisgo_copy.timeseries._loads_active_power.loc[:, dsm_loads]
+            + (
+                scaling_df.transpose() * edisgo_copy.overlying_grid.dsm_active_power
+            ).transpose()
+        )
+
+    if not edisgo_copy.overlying_grid.renewables_curtailment.empty:
+        # solar
+        solar_gens = edisgo_obj.topology.generators_df.index[
+            edisgo_obj.topology.generators_df.type == "solar"
+        ]
+        gen_per_ts = edisgo_copy.timeseries.generators_active_power.loc[
+            :, solar_gens
+        ].sum(axis=1)
+        scaling_factor = (
+            (
+                edisgo_copy.timeseries.generators_active_power.loc[
+                    :, solar_gens
+                ].transpose()
+                * 1
+                / gen_per_ts
+            )
+            .transpose()
+            .fillna(0)
+        )
+        curtailment = (
+            scaling_factor.transpose()
+            * edisgo_obj.overlying_grid.renewables_curtailment.solar
+        ).transpose()
+        edisgo_copy.timeseries._generators_active_power.loc[:, solar_gens] = (
+            edisgo_copy.timeseries._generators_active_power.loc[:, solar_gens]
+            - curtailment
+        )  # ToDo: check obs funktioniert
+        # wind
+        wind_gens = edisgo_obj.topology.generators_df.index[
+            edisgo_obj.topology.generators_df.type == "wind"
+        ]
+        gen_per_ts = edisgo_copy.timeseries.generators_active_power.loc[
+            :, wind_gens
+        ].sum(axis=1)
+        scaling_factor = (
+            (
+                edisgo_copy.timeseries.generators_active_power.loc[
+                    :, wind_gens
+                ].transpose()
+                * 1
+                / gen_per_ts
+            )
+            .transpose()
+            .fillna(0)
+        )
+        curtailment = (
+            scaling_factor.transpose()
+            * edisgo_obj.overlying_grid.renewables_curtailment.solar
+        ).transpose()
+        edisgo_copy.timeseries._generators_active_power.loc[:, wind_gens] = (
+            edisgo_copy.timeseries._generators_active_power.loc[:, wind_gens]
+            - curtailment
+        )
+    edisgo_copy.set_time_series_reactive_power_control()
+    return edisgo_copy
