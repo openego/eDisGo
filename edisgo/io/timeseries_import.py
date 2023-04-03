@@ -437,7 +437,7 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
             building_ids, scenario, engine
         )
         cts_profiles_df = get_cts_profiles_per_building(
-            edisgo_obj.topology.id, scenario, "heat", engine
+            edisgo_obj, scenario, "heat", engine
         )
         # drop CTS profiles for buildings without a heat pump
         buildings_no_hp = [_ for _ in cts_profiles_df.columns if _ not in building_ids]
@@ -575,7 +575,7 @@ def electricity_demand_oedb(
     cts_building_ids = cts_loads.building_id.dropna().unique()
     if len(cts_building_ids) > 0:
         cts_profiles_df = get_cts_profiles_per_building(
-            edisgo_obj.topology.id, scenario, "electricity", engine
+            edisgo_obj, scenario, "electricity", engine
         )
         drop_buildings = [
             _ for _ in cts_profiles_df.columns if _ not in cts_building_ids
@@ -932,14 +932,78 @@ def get_district_heating_heat_demand_profiles(district_heating_ids, scenario, en
     return df.astype("float")
 
 
-def get_cts_profiles_per_building(
+def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
+    """
+    Gets CTS heat demand profiles per CTS building for all CTS buildings in MV grid.
+
+    This function is a helper function that should not be but is necessary, as in
+    egon_data buildings are mapped to a grid based on the zensus cell they are in
+    whereas in ding0 buildings are mapped to a grid based on the geolocation. As it can
+    happen that buildings lie outside an MV grid but within a zensus cell that is
+    assigned to that MV grid, they are mapped differently in egon_data and ding0.
+    This function therefore checks, if there are CTS loads with other grid IDs and if
+    so, gets profiles for other grid IDs (by calling
+    :func:`~.io.timeseries_import.get_cts_profiles_per_grid` with different grid IDs)
+    in order to obtain a demand profile for all CTS loads.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    scenario : str
+        Scenario for which to retrieve demand data. Possible options
+        are 'eGon2035' and 'eGon100RE'.
+    sector : str
+        Demand sector for which profile is calculated: "electricity" or "heat"
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with CTS demand profiles per building for one year in an
+        hourly resolution in MW. Index contains hour of the year (from 0 to 8759) and
+        column names are building ID as integer.
+
+    """
+    saio.register_schema("boundaries", engine)
+    from saio.boundaries import egon_map_zensus_mvgd_buildings
+
+    # get MV grid IDs of CTS loads
+    cts_loads = edisgo_obj.topology.loads_df[
+        (edisgo_obj.topology.loads_df.type == "conventional_load")
+        & (edisgo_obj.topology.loads_df.sector == "cts")
+    ]
+    cts_building_ids = cts_loads.building_id.dropna().unique()
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            egon_map_zensus_mvgd_buildings.building_id,
+            egon_map_zensus_mvgd_buildings.bus_id,
+        ).filter(
+            egon_map_zensus_mvgd_buildings.building_id.in_(cts_building_ids),
+        )
+        df = pd.read_sql(query.statement, engine, index_col="building_id")
+
+    # iterate over grid IDs
+    profiles_df = pd.DataFrame()
+    for bus_id in df.bus_id.unique():
+        profiles_grid_df = get_cts_profiles_per_grid(
+            bus_id=bus_id, scenario=scenario, sector=sector, engine=engine
+        )
+        profiles_df = pd.concat([profiles_df, profiles_grid_df], axis=1)
+
+    # filter CTS loads in grid
+    return profiles_df.loc[:, cts_building_ids]
+
+
+def get_cts_profiles_per_grid(
     bus_id,
     scenario,
     sector,
     engine,
 ):
     """
-    Gets CTS heat demand profiles per building for all buildings in MV grid.
+    Gets CTS heat or electricity demand profiles per building for all buildings in the
+    given MV grid.
 
     Parameters
     ----------
@@ -951,7 +1015,7 @@ def get_cts_profiles_per_building(
     sector : str
         Demand sector for which profile is calculated: "electricity" or "heat"
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        Database engine.
 
     Returns
     -------
