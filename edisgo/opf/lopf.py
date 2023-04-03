@@ -1202,7 +1202,6 @@ def add_heat_pump_model(
         within=pm.Any,
     )
     # set up variables
-    # Only constrain lower bound if grid powr is optimized:
     if model.objective_name in ["maximize_grid_power", "minimize_grid_power"]:
         model.energy_level_tes = pm.Var(
             model.flexible_heat_pumps_set,
@@ -1375,6 +1374,7 @@ def update_rolling_horizon(comp_type, model, **kwargs):
     """
     charging_attrs, energy_attrs, flex_set = get_attrs_rolling_horizon(comp_type, model)
 
+    # ################# Energy level
     # set energy level start
     for energy_attr in energy_attrs[comp_type.lower()]:
 
@@ -1385,12 +1385,12 @@ def update_rolling_horizon(comp_type, model, **kwargs):
         # otherwise activate initial energy and charging
         if energy_level_starts[energy_attr] is None:
             getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").deactivate()
-        # Set for all same value
+        # Set same relative value for all for all
         elif type(energy_level_starts[energy_attr]) is float:
             for comp in flex_set:
 
                 if energy_attr == "ev":
-
+                    # define value relativ to (lower - upper) energy value
                     start_value = energy_level_starts[energy_attr] * (
                         model.lower_ev_energy[comp].loc[
                             model.timeindex.extract_values()[0]
@@ -1400,15 +1400,20 @@ def update_rolling_horizon(comp_type, model, **kwargs):
                         ]
                     )
                 elif energy_attr == "tes":
+                    # define value relativ nominal capacitiy
                     start_value = (
                         energy_level_starts[energy_attr] * model.tes["capacity"][comp]
                     )
+
                 for comp in flex_set:
+                    # set value for every flexible component
                     getattr(model, f"energy_level_start_{energy_attr}")[comp].set_value(
                         start_value
                     )
+            # Activate constraint incl slacks for relaxation
             getattr(model, f"InitialEnergyLevel{energy_attr.upper()}").activate()
         else:
+            # Set specific values for each component
             for comp in flex_set:
                 getattr(model, f"energy_level_start_{energy_attr}")[comp].set_value(
                     energy_level_starts[energy_attr][comp]
@@ -1449,10 +1454,12 @@ def update_rolling_horizon(comp_type, model, **kwargs):
             getattr(model, f"FinalEnergyLevelFix{energy_attr.upper()}").deactivate()
             getattr(model, f"FinalEnergyLevelEnd{energy_attr.upper()}").deactivate()
 
+    # ################# CHARGING
     # set initial charging value
     for charging_attr in charging_attrs[comp_type.lower()]:
         charging_starts = kwargs.get(
             "charging_starts",
+            #  None to deactivate if kwarg is empty
             {
                 "ev": None,
                 "tes": None,
