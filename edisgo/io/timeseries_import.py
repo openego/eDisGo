@@ -1319,7 +1319,7 @@ def get_residential_electricity_profiles_per_building(building_ids, scenario, en
 
     # calculate demand profile per building
     ts_df = pd.DataFrame()
-    for building_id, df in profile_ids_buildings.groupby(by=["building_id"]):
+    for building_id, df in profile_ids_buildings.groupby(by="building_id"):
         load_ts_building = (
             profiles_df.loc[:, df["profile_id"]].sum(axis=1)
             * df["factor"].iloc[0]
