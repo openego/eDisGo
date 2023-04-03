@@ -462,7 +462,10 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
         individual_heating_df = pd.DataFrame(index=timeindex_full)
 
     # get district heating profiles from oedb
-    dh_ids = hp_df.district_heating_id.dropna().unique()
+    if "district_heating_id" in hp_df.columns:
+        dh_ids = hp_df.district_heating_id.dropna().unique()
+    else:
+        dh_ids = []
     if len(dh_ids) > 0:
         dh_profile_df = get_district_heating_heat_demand_profiles(
             dh_ids, scenario, engine
