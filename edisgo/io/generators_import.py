@@ -945,6 +945,33 @@ def oedb(
     power_plants_gdf = _get_egon_power_plants()
     chp_gdf = _get_egon_chp_plants()
 
+    # sanity check - kick out generators that are too large
+    p_nom_upper = edisgo_object.config["grid_connection"]["upper_limit_voltage_level_4"]
+    drop_ind = pv_rooftop_df[pv_rooftop_df.p_nom > p_nom_upper].index
+    if len(drop_ind) > 0:
+        logger.warning(
+            f"There are {len(drop_ind)} PV rooftop plants with a nominal capacity "
+            f"larger {p_nom_upper} MW. Connecting them to the MV is not valid, "
+            f"wherefore they are dropped."
+        )
+        pv_rooftop_df.drop(index=drop_ind, inplace=True)
+    drop_ind = power_plants_gdf[power_plants_gdf.p_nom > p_nom_upper].index
+    if len(drop_ind) > 0:
+        logger.warning(
+            f"There are {len(drop_ind)} power plants with a nominal capacity "
+            f"larger {p_nom_upper} MW. Connecting them to the MV is not valid, "
+            f"wherefore they are dropped."
+        )
+        power_plants_gdf.drop(index=drop_ind, inplace=True)
+    drop_ind = chp_gdf[chp_gdf.p_nom > p_nom_upper].index
+    if len(drop_ind) > 0:
+        logger.warning(
+            f"There are {len(drop_ind)} CHP plants with a nominal capacity "
+            f"larger {p_nom_upper} MW. Connecting them to the MV is not valid, "
+            f"wherefore they are dropped."
+        )
+        chp_gdf.drop(index=drop_ind, inplace=True)
+
     # determine number of generators and installed capacity in future scenario
     # for validation of grid integration
     total_p_nom_scenario = (
