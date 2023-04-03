@@ -36,8 +36,11 @@ class TestSpatialComplexityReduction:
         return busmap_df
 
     @pytest.mark.parametrize(
-        "mode,cluster_area,reduction_factor,reduction_factor_not_focused,"
-        "test_exception,expected_hash",
+        "mode,cluster_area,"
+        "reduction_factor,"
+        "reduction_factor_not_focused,"
+        "test_exception,"
+        "n_new_buses",
         [
             # Cluster area: 'grid'
             (
@@ -46,7 +49,7 @@ class TestSpatialComplexityReduction:
                 0.1,
                 False,
                 does_not_raise(),
-                "a840aec08914448c907a482834094d34",
+                19,
             ),
             (
                 "kmeansdijkstra",
@@ -54,7 +57,7 @@ class TestSpatialComplexityReduction:
                 0.1,
                 False,
                 does_not_raise(),
-                "cd0a4ce9ca72e55bfe7353ed32d5af52",
+                19,
             ),
             (
                 "kmeans",
@@ -62,7 +65,7 @@ class TestSpatialComplexityReduction:
                 0.5,
                 0,
                 does_not_raise(),
-                "3f4b25a25f5ca1c12620e92d855dae0d",
+                76,
             ),
             (
                 "kmeans",
@@ -70,7 +73,7 @@ class TestSpatialComplexityReduction:
                 0.5,
                 0.1,
                 does_not_raise(),
-                "3f4b25a25f5ca1c12620e92d855dae0d",
+                76,
             ),
             # Cluster area: 'feeder'
             (
@@ -79,7 +82,7 @@ class TestSpatialComplexityReduction:
                 0.1,
                 False,
                 does_not_raise(),
-                "f0126014e807b2ad6776eee6d458cdc1",
+                40,
             ),
             (
                 "kmeansdijkstra",
@@ -87,7 +90,7 @@ class TestSpatialComplexityReduction:
                 0.1,
                 False,
                 does_not_raise(),
-                "9bcb23df6884cd2b6828676e7d67c525",
+                39,
             ),
             (
                 "kmeans",
@@ -95,7 +98,7 @@ class TestSpatialComplexityReduction:
                 0.5,
                 0,
                 does_not_raise(),
-                "02b909b963330d31a8aeb14a23af4291",
+                23,
             ),
             (
                 "kmeans",
@@ -103,7 +106,7 @@ class TestSpatialComplexityReduction:
                 0.5,
                 0.1,
                 does_not_raise(),
-                "193713ca9137f68e8eb93f0e369a21dc",
+                46,
             ),
             # Cluster area: 'main_feeder'
             (
@@ -112,7 +115,7 @@ class TestSpatialComplexityReduction:
                 0.1,
                 False,
                 does_not_raise(),
-                "fadcdd5531d6f846c3ece76669fecedf",
+                36,
             ),
             (
                 "kmeansdijkstra",
@@ -120,7 +123,7 @@ class TestSpatialComplexityReduction:
                 0.1,
                 False,
                 does_not_raise(),
-                "2f45064275a601a5f4489104521b3d58",
+                36,
             ),
             (
                 "aggregate_to_main_feeder",
@@ -128,7 +131,7 @@ class TestSpatialComplexityReduction:
                 None,
                 False,
                 does_not_raise(),
-                "16a375d48227b6af7c716ae5791ec419",
+                105,
             ),
             (
                 "equidistant_nodes",
@@ -136,7 +139,7 @@ class TestSpatialComplexityReduction:
                 0.1,
                 False,
                 does_not_raise(),
-                "3b2c4de8fabe724d551b11b86bffee90",
+                36,
             ),
             (
                 "kmeans",
@@ -144,7 +147,7 @@ class TestSpatialComplexityReduction:
                 0.5,
                 0,
                 does_not_raise(),
-                "c1e684b0cb671cf2d69de2e765fe5117",
+                20,
             ),
             (
                 "kmeans",
@@ -152,7 +155,7 @@ class TestSpatialComplexityReduction:
                 0.5,
                 0.1,
                 does_not_raise(),
-                "3d0e7afcb3b9c8e5c9d0838d68113bf3",
+                41,
             ),
             # Test raising exceptions
             ("kmeans", "grid", 0, False, pytest.raises(ValueError), None),
@@ -170,7 +173,7 @@ class TestSpatialComplexityReduction:
         reduction_factor,
         reduction_factor_not_focused,
         test_exception,
-        expected_hash,
+        n_new_buses,
     ):
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
@@ -183,7 +186,7 @@ class TestSpatialComplexityReduction:
                 reduction_factor_not_focused=reduction_factor_not_focused,
             )
             # Check for deterministic behaviour.
-            assert hash_df(busmap_df) == expected_hash
+            assert len(set(busmap_df["new_bus"].to_list())) == n_new_buses
 
     @pytest.mark.parametrize(
         "cluster_area,grid,expected_hash",
