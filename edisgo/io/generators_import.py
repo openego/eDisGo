@@ -862,14 +862,15 @@ def oedb(
             subtype=power_plants_gdf["type"].map(mapping)
         )
         # unwrap source ID
-        power_plants_gdf["source_id"] = power_plants_gdf.apply(
-            lambda _: (
-                list(_["source_id"].values())[0]
-                if isinstance(_["source_id"], dict)
-                else None
-            ),
-            axis=1,
-        )
+        if not power_plants_gdf.empty:
+            power_plants_gdf["source_id"] = power_plants_gdf.apply(
+                lambda _: (
+                    list(_["source_id"].values())[0]
+                    if isinstance(_["source_id"], dict)
+                    else None
+                ),
+                axis=1,
+            )
         return power_plants_gdf
 
     def _get_egon_pv_rooftop():
