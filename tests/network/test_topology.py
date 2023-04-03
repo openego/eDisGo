@@ -31,7 +31,7 @@ class TestTopology:
         self.topology = Topology()
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
 
-    def test_get_grids(self):
+    def test_grids(self):
         grids = list(self.topology.grids)
         assert len(grids) == 11
         assert isinstance(grids[0], MVGrid)
