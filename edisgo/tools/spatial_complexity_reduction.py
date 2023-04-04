@@ -19,6 +19,7 @@ from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.network import timeseries
 from edisgo.network.grids import Grid
+from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates
 
 logger = logging.getLogger(__name__)
 
@@ -1879,17 +1880,25 @@ def spatial_complexity_reduction(
     cluster_area: str = "feeder",
     reduction_factor: float = 0.5,
     reduction_factor_not_focused: Union[float, bool] = 0.2,
+    apply_pseudo_coordinates: bool = True,
 ) -> Tuple[EDisGo, DataFrame, DataFrame]:
     """
     Wrapper around the functions :func:`make_busmap<edisgo.tools.make_busmap>` and
     :func:`reduce_edisgo <edisgo.tools.spatial_complexity_reduction.reduce_edisgo>`
     look there for more information.
+
+    Parameters
+    ----------
+    apply_pseudo_coordinates : bool
+        If True Pseudo Coordinates are applied. The spatial complexity reduction method
+        is only tested for pseudo coordinates.
     """
     edisgo_obj = copy.deepcopy(edisgo_root)
-    # edisgo_obj.results.equipment_changes = pd.DataFrame()
+    if apply_pseudo_coordinates:
+        edisgo_obj = make_pseudo_coordinates(edisgo_obj)
 
     busmap_df = make_busmap(
-        edisgo_root,
+        edisgo_obj,
         mode=mode,
         cluster_area=cluster_area,
         reduction_factor=reduction_factor,
