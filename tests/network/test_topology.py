@@ -876,25 +876,35 @@ class TestTopology:
         shutil.rmtree(dir)
 
     def test_assign_feeders(self):
-        self.topology.assign_feeders()
-        assert self.topology.buses_df.iloc[0:2]["grid_feeder"].to_list() == [
+        # Test mode 'grid_feeder'
+        self.topology.assign_feeders(mode="grid_feeder")
+        assert self.topology.buses_df.loc[
+            ["Bus_MVStation_1", "Bus_Generator_1"], "grid_feeder"
+        ].to_list() == [
             "station_node",
             "Bus_BranchTee_MVGrid_1_1",
         ]
-        assert self.topology.lines_df.iloc[0:2]["grid_feeder"].to_list() == [
+        assert self.topology.lines_df.loc[
+            ["Line_10003", "Line_10004"], "grid_feeder"
+        ].to_list() == [
             "Bus_BranchTee_MVGrid_1_1",
             "Bus_BranchTee_MVGrid_1_4",
         ]
 
-        assert self.topology.buses_df.iloc[0:2]["mv_feeder"].to_list() == [
+        # test mode 'mv_feeder'
+        self.topology.assign_feeders(mode="mv_feeder")
+        assert self.topology.buses_df.loc[
+            ["Bus_MVStation_1", "Bus_Generator_1"], "mv_feeder"
+        ].to_list() == [
             "station_node",
             "Bus_BranchTee_MVGrid_1_1",
         ]
-        assert self.topology.lines_df.iloc[0:2]["mv_feeder"].to_list() == [
+        assert self.topology.lines_df.loc[
+            ["Line_10003", "Line_10004"], "mv_feeder"
+        ].to_list() == [
             "Bus_BranchTee_MVGrid_1_1",
             "Bus_BranchTee_MVGrid_1_4",
         ]
-
         lv_grids_mv_bus = self.topology.grids[2].transformers_df["bus0"][0]
         feeder_of_lv_grids_mv_bus = self.topology.buses_df.loc[
             lv_grids_mv_bus, "mv_feeder"

@@ -3012,13 +3012,21 @@ class Topology:
                 f"optimisation."
             )
 
-    def assign_feeders(self):
-        """Assign the feeder of the grid and the mv feeder to all grids."""
+    def assign_feeders(self, mode: str = "grid_feeder"):
+        """Assign the feeder of the grid or the mv feeder to all grids.
 
-        for grid in self.grids:
-            grid.assign_grid_feeder(mode="grid_feeder")
-
-        self.grids[0].assign_grid_feeder(mode="mv_feeder")
+        Parameters
+        ----------
+        mode : str
+            Select 'grid_feeder' or 'mv_feeder' to assign the feeders.
+        """
+        if mode == "grid_feeder":
+            for grid in self.grids:
+                grid.assign_grid_feeder(mode="grid_feeder")
+        elif mode == "mv_feeder":
+            self.grids[0].assign_grid_feeder(mode="mv_feeder")
+        else:
+            raise ValueError(f"Invalid mode '{mode}'!")
 
     def __repr__(self):
         return f"Network topology {self.id}"
