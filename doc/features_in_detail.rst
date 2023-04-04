@@ -343,8 +343,95 @@ over from the given storage operation.
 
 A more thorough documentation will follow soon.
 
+Spatial complexity reduction
+----------------------------
+A spatial complexity method is implemented. The method is based on the reduction of the number of nodes in the grid
+through a spatial clustering. It is a two-step procedure. At first a Busmap is calculated and then according to
+the Busmap the eDisGo object is reduced. Some parts of the methods are based on the spatial clustering of [PyPSA]_.
+
+There are different methods implemented to the creation of the Busmap for more details look into the documentation
+of the function and into the thesis where the methods were implemented and tested [SCR]_.
+
+The easiest way is to run the complexity reduction with the following code.
+
+.. code-block:: python
+
+    from edisgo.tools.spatial_complexity_reduction import spatial_complexity_reduction
+
+    edisgo_reduced, busmap_df, linemap_df = spatial_complexity_reduction(edisgo_obj)
+
+
+If you want more flexibility in using the complexity reduction, you can also run the functions manually.
+
+Important is that all grid buses have coordinates and the line length can be calculated through the Euclidean distance
+and a detour factor. If the grids don't match these conditions, the complexity reduction might not work as expected.
+But this is not a problem, you can calculate new coordinates with the function 'make_pseudo_coordinates'.
+Then coordinates for the grids are calculated based on the tree/radial topology of the grid graph.
+
+The methods are selected by the 'mode' parameter. There are four methods implemented: 'kmeans', 'kmeansdijkstra',
+'aggregate_to_main_feeder' and 'equidistant_nodes'. Every node of the grid is assigned to a new node with new
+coordinates.
+
+    *   'kmeans' - Assignment to cluster centers of the K-Means clustering.
+    *   'kmeansdijkstra' - Assignment to the nearest nodes of the cluster center through the distance in the graph,
+        for distance calculation, the Dijkstra algorithm is used.
+    *   'aggregate_to_main_feeder' - Assignment to the nearest node of the main feeder.
+    *   'equidistant_nodes' - Distribute nodes equidistant on the main feeder and then assign main feeder nodes,
+        to the new nodes.
+
+Different cluster areas can be selected. The cluster area is the area on which the clustering method is applied.
+You can choose between: 'grid', 'feeder' and 'main_feeder'. The main feeder is defined as the longest path in
+the feeder and is calculated with the method 'aggregate_to_main_feeder'.
+
+The reduction factor describes how great the reduction of nodes is. A small reduction factor leads to a big reduction
+of the number of nodes and vice versa.
+
+.. math::
+    n_buses = k_reduction \cdot n_buses_cluster_area
+
+Also, there is the possibility to reduce the number of nodes more in areas with no predicted reinforcement.
+Therefore, you can choose a second reduction factor which is used on these areas. The areas which are not focused, are
+the areas which don't have components with voltage and overloading problems for the worst case power flow.
+
+For the reduction of the grid graph, the function 'reduce_edisgo' is used. With this method, every line and all their
+parameters are recalculated and sometimes lines are combined to a new line. This is the part where the magic of
+reducing the grid object happens. For more information, read: [HoerschBrown]_ and [SCR]_.
+
+.. code-block:: python
+
+    from edisgo.tools.spatial_complexity_reduction import make_busmap, reduce_edisgo
+    from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates
+
+    # Applying of pseudo coordinates
+    edisgo_obj = make_pseudo_coordinates(edisgo_obj)
+
+    # Calculation of the busmap
+    busmap_df = make_busmap(
+        edisgo_obj,
+        mode=mode,  # 'kmeans' or 'kmeansdijkstra' or 'aggregate_to_main_feeder' or 'equidistant_nodes',
+        cluster_area=cluster_area,  # 'grid' or 'feeder' or 'main_feeder'
+        reduction_factor=k_rf,  # 0 < k_rf < 1
+        reduction_factor_not_focused=k_rf_not_focused',  # 0 <= k_rf_not_focused < 1
+    )
+    # Reduction of the EDisGo object
+    edisgo_reduced, linemap_df = reduce_edisgo(edisgo_obj, busmap_df)
+
+For more details read look into the documentation of the functions or read [SCR]_.
+
+
 References
 ----------
 
 .. [DENA] A.C. Agricola et al.:
     *dena-Verteilnetzstudie: Ausbau- und Innovationsbedarf der Stromverteilnetze in Deutschland bis 2030*. 2012.
+
+.. [PyPSA] `PyPSA - Spatial Clustering Documentation
+            <https://pypsa.readthedocs.io/en/latest/examples/spatial-clustering.html>`_
+
+.. [SCR]    `Master Thesis - Malte Jahn - Analysis of the effects of spatial complexity reduction on Distribution
+            network expansion planning with flexibilities (written in German)
+            <https://github.com/mltja/eDisGo/blob/dev_with_literature/literature/Masterarbeit%20-%20Malte%20Jahn.pdf>`_
+
+.. [HoerschBrown]   `Jonas Hörsch, Tom Brown: The role of spatial scale in joint optimisations of
+                    generation and transmission for European highly renewable scenarios
+                    <https://arxiv.org/pdf/1705.07617.pdf>`_
