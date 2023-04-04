@@ -1081,37 +1081,40 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     """
     heat_df = psa_net.loads.loc[flexible_hps]  # electric load
     heat_df2 = edisgo_obj.heat_pump.heat_demand_df[flexible_hps]  # thermal load
-    # geothermal_feedin = (
-    #     edisgo_obj.overlying_grid.geothermal_energy_feedin_district_heating
-    # )
-    # solarthermal_feedin = (
-    #     edisgo_obj.overlying_grid.solarthermal_energy_feedin_district_heating
-    # )
-    # reduce heat demand of district heating by geothermal and solarthermal feedin
-    # heat_df2.loc[:, heat_df2.columns.str.contains("district")] = (
-    #     heat_df2.loc[:, heat_df2.columns.str.contains("district")].values
-    #     - solarthermal_feedin.values
-    #     - geothermal_feedin.values
-    # ).clip(
-    #     min=0
-    # )  # ToDo: nur ein district heating?
+    hp_cop = edisgo_obj.heat_pump.cop_df[flexible_hps]
+    hp_p_nom = edisgo_obj.topology.loads_df.loc[
+        edisgo_obj.heat_pump.cop_df.columns.values
+    ][["p_set"]][flexible_hps]
+    comparison = (heat_df2[hp_p_nom.index] > hp_cop * hp_p_nom.squeeze()).any()
+    if comparison.any():
+        logger.warning(
+            "Heat demand is higher than rated heatpump power"
+            " of heatpumps: {}. Demand can not be covered if no sufficient"
+            " heat storage capacities are available.".format(
+                comparison.index[comparison.values].values
+            )
+        )
+    geothermal_feedin = (
+        edisgo_obj.overlying_grid.geothermal_energy_feedin_district_heating
+    )
+    solarthermal_feedin = (
+        edisgo_obj.overlying_grid.solarthermal_energy_feedin_district_heating
+    )
+    if not (geothermal_feedin.empty | solarthermal_feedin.empty):
+        # reduce heat demand of district heating by geothermal and solarthermal feedin
+        heat_df2.loc[:, heat_df2.columns.str.contains("district")] = (
+            heat_df2.loc[:, heat_df2.columns.str.contains("district")].values
+            - solarthermal_feedin.values
+            - geothermal_feedin.values
+        ).clip(
+            min=0
+        )  # ToDo: nur ein district heating?
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
         q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
         p_d = heat_df2[heat_df.index[hp_i]]
-        if (
-            max(p_d)
-            > heat_df.p_set[hp_i] * edisgo_obj.heat_pump.cop_df[heat_df.index[hp_i]][0]
-        ):
-            logger.warning(
-                "Heat demand at bus {} is higher than maximum heatpump power"
-                " of heatpump {}. Demand can not be covered if no sufficient"
-                " heat storage capacities are available.".format(
-                    pm["bus"][str(idx_bus)]["name"], heat_df.index[hp_i]
-                )
-            )
         pm["heatpumps"][str(hp_i + 1)] = {
             "pd": p_d[0] / s_base,  # heat demand
             "pf": pf,
@@ -1120,7 +1123,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
             "p_max": heat_df.p_set[hp_i] / s_base,
             "q_min": min(q, 0) / s_base,
             "q_max": max(q, 0) / s_base,
-            "cop": edisgo_obj.heat_pump.cop_df[heat_df.index[hp_i]][0],
+            "cop": hp_cop[heat_df.index[hp_i]][0],
             "hp_bus": idx_bus,
             "name": heat_df.index[hp_i],
             "index": hp_i + 1,
