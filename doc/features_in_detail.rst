@@ -387,7 +387,7 @@ The reduction factor describes how great the reduction of nodes is. A small redu
 of the number of nodes and vice versa.
 
 .. math::
-    n_buses = k_reduction \cdot n_buses_cluster_area
+    n\_buses = k\_reduction \cdot n\_buses\_cluster\_area
 
 Also, there is the possibility to reduce the number of nodes more in areas with no predicted reinforcement.
 Therefore, you can choose a second reduction factor which is used on these areas. The areas which are not focused, are
