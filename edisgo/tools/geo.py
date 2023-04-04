@@ -1,13 +1,21 @@
+from __future__ import annotations
+
+import logging
 import os
+
+from typing import TYPE_CHECKING
 
 from geopy.distance import geodesic
 from pyproj import Transformer
 
 if "READTHEDOCS" not in os.environ:
+    import geopandas as gpd
+
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
 
-import logging
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +200,7 @@ def find_nearest_bus(point, bus_target):
     Parameters
     ----------
     point : :shapely:`shapely.Point<Point>`
-        Point to find nearest bus for.
+        Point to find the nearest bus for.
     bus_target : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with candidate buses and their positions given in 'x' and 'y'
         columns. The dataframe has the same format as
@@ -201,7 +209,7 @@ def find_nearest_bus(point, bus_target):
     Returns
     -------
     tuple(str, float)
-        Tuple that contains the name of the nearest bus and its distance.
+        Tuple that contains the name of the nearest bus and its distance in km.
 
     """
     bus_target["dist"] = [
@@ -310,3 +318,10 @@ def find_nearest_conn_objects(grid_topology, bus, lines, conn_diff_tolerance=0.0
     ]
 
     return conn_objects_min_stack
+
+
+def mv_grid_gdf(edisgo_obj: EDisGo):
+    return gpd.GeoDataFrame(
+        geometry=[edisgo_obj.topology.grid_district["geom"]],
+        crs=f"EPSG:{edisgo_obj.topology.grid_district['srid']}",
+    )

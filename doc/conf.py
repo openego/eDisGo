@@ -115,7 +115,7 @@ extlinks = {
         "networkx.%s",
     ),
     "sqlalchemy": (
-        "http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s",
+        "http://docs.sqlalchemy.org/en/latest/core/connections.html#%s",
         "sqlalchemy.%s",
     ),
     "shapely": (
@@ -153,7 +153,7 @@ author = "open_eGo-Team"
 # built documents.
 #
 # The short X.Y version.
-version = "0.2.0"
+version = "0.2.1"
 # The full version, including alpha/beta/rc tags.
 release = version
 

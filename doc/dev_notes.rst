@@ -82,3 +82,9 @@ To manually check if external links in the documentation work, you can run the f
 
    sphinx-build ./doc/ -b linkcheck -d _build/doctrees _build/html
 
+Internal links can be checked adding -n option when building the documentation. This will
+also raise warnings for type hinting, so it is a bit confusing, but can still be helpful.
+
+.. code-block:: bash
+
+    sphinx-build -n -E -a -b html ./doc/ <outputdir>
