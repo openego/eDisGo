@@ -710,7 +710,7 @@ def distribute_og_timeseries(edisgo_obj):
         edisgo_copy.timeseries._generators_active_power.loc[:, solar_gens] = (
             edisgo_copy.timeseries._generators_active_power.loc[:, solar_gens]
             - curtailment
-        )  # ToDo: check obs funktioniert
+        )
         # wind
         wind_gens = edisgo_obj.topology.generators_df.index[
             edisgo_obj.topology.generators_df.type == "wind"

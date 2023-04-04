@@ -26,7 +26,7 @@ def to_powermodels(
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
-    flexible_storages=None,
+    flexible_storage_units=None,
     opf_version=1,
 ):
     """
@@ -47,7 +47,7 @@ def to_powermodels(
     flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
-    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all flexible storages. Non-flexible storages operate to
         optimize self consumption.
         Default: None
@@ -74,8 +74,8 @@ def to_powermodels(
         flexible_hps = []
     if flexible_loads is None:
         flexible_loads = []
-    if flexible_storages is None:
-        flexible_storages = []
+    if flexible_storage_units is None:
+        flexible_storage_units = []
     # Append names of flexibilities for OPF
     for (flex, loads, text) in [
         ("cp", flexible_cps, "Flexible charging parks"),
@@ -83,7 +83,7 @@ def to_powermodels(
         ("dsm", flexible_loads, "Flexible loads"),
         (
             "storage",
-            flexible_storages,
+            flexible_storage_units,
             "Storage units",
         ),  # edisgo_object.topology.storage_units_df
     ]:
@@ -119,11 +119,13 @@ def to_powermodels(
     pm["baseMVA"] = s_base
     pm["source_version"] = 2
     pm["flexibilities"] = opf_flex
-    _build_bus(psa_net, pm, flexible_storages)
-    _build_gen(edisgo_object, psa_net, pm, flexible_storages, s_base)
-    _build_branch(edisgo_object, psa_net, pm, flexible_storages, s_base)
-    if len(flexible_storages) > 0:
-        _build_battery_storage(edisgo_object, psa_net, pm, flexible_storages, s_base)
+    _build_bus(psa_net, edisgo_object, pm, flexible_storage_units)
+    _build_gen(edisgo_object, psa_net, pm, flexible_storage_units, s_base)
+    _build_branch(edisgo_object, psa_net, pm, flexible_storage_units, s_base)
+    if len(flexible_storage_units) > 0:
+        _build_battery_storage(
+            edisgo_object, psa_net, pm, flexible_storage_units, s_base
+        )
     if len(flexible_cps) > 0:
         flexible_cps = _build_electromobility(
             edisgo_object,
@@ -145,7 +147,7 @@ def to_powermodels(
             s_base,
             flexible_cps,
             flexible_hps,
-            flexible_storages,
+            flexible_storage_units,
         )
     else:
         logger.warning("No loads found in network.")
@@ -164,12 +166,13 @@ def to_powermodels(
         try:
             _build_hv_requirements(
                 psa_net,
+                edisgo_object,
                 pm,
                 s_base,
                 opf_flex,
                 flexible_cps,
                 flexible_hps,
-                flexible_storages,
+                flexible_storage_units,
                 hv_flex_dict,
             )
         except IndexError:
@@ -190,7 +193,7 @@ def to_powermodels(
         flexible_cps,
         flexible_hps,
         flexible_loads,
-        flexible_storages,
+        flexible_storage_units,
         opf_flex,
         hv_flex_dict,
     )
@@ -413,6 +416,7 @@ def from_powermodels(
             ("gen_nd", "pgc"),
             ("load", "pds"),
             ("electromobility", "pcps"),
+            ("heatpumps", "phps"),
         ]
         for comp, var in slacks:
             # save slacks to edisgo object
@@ -427,6 +431,8 @@ def from_powermodels(
                 edisgo_object.opf_results.grid_slacks_t.load_shedding = df
             elif comp == "electromobility":
                 edisgo_object.opf_results.grid_slacks_t.cp_load_shedding = df
+            elif comp == "heatpumps":
+                edisgo_object.opf_results.grid_slacks_t.hp_load_shedding = df
 
     # save line flows and currents to edisgo object
     for variable in ["pf", "qf", "ccm"]:
@@ -501,7 +507,7 @@ def _init_pm():
     return pm
 
 
-def _build_bus(psa_net, pm, flexible_storages):
+def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
     """
     Build bus dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'.
@@ -510,8 +516,11 @@ def _build_bus(psa_net, pm, flexible_storages):
     ----------
     psa_net : :pypsa:`PyPSA.Network<network>`
         :pypsa:`PyPSA.Network<network>` representation of network.
+    edisgo_obj :
     pm : dict
         (PowerModels) dictionary.
+    flexible_storage_units:
+
     """
     bus_types = ["PQ", "PV", "Slack", "None"]
     bus_types_int = np.array(
@@ -537,9 +546,11 @@ def _build_bus(psa_net, pm, flexible_storages):
             "grid_level": grid_level[psa_net.buses.v_nom[bus_i]],
         }
 
-    for stor_i in np.arange(len(flexible_storages)):
+    for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
-            psa_net, psa_net.storage_units.bus.loc[flexible_storages[stor_i]]
+            psa_net,
+            edisgo_obj,
+            psa_net.storage_units.bus.loc[flexible_storage_units[stor_i]],
         )
         pm["bus"][str(stor_i + len(psa_net.buses.index) + 1)] = {
             "index": stor_i + len(psa_net.buses.index) + 1,
@@ -557,7 +568,7 @@ def _build_bus(psa_net, pm, flexible_storages):
         }
 
 
-def _build_gen(edisgo_obj, psa_net, pm, flexible_storages, s_base):
+def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
     """
     Build slack, dispatchable and non-dispatchable generator dictionaries in PowerModels
     network data format and add them to PowerModels dictionary 'pm'.
@@ -574,18 +585,26 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storages, s_base):
         Default: 100 MVA
     """
     # Divide in slack, dispatchable and non-dispatchable generator sets
+    solar_gens = edisgo_obj.topology.generators_df.index[
+        edisgo_obj.topology.generators_df.type == "solar"
+    ]
+    wind_gens = edisgo_obj.topology.generators_df.index[
+        edisgo_obj.topology.generators_df.type == "wind"
+    ]
+    disp_gens = edisgo_obj.topology.generators_df.index[
+        (edisgo_obj.topology.generators_df.type != "wind")
+        & (edisgo_obj.topology.generators_df.type != "solar")
+    ]
+
     gen_slack = psa_net.generators.loc[psa_net.generators.index == "Generator_slack"]
     gen_nondisp = psa_net.generators.loc[
-        (psa_net.generators.index.str.contains("solar"))
-        | (psa_net.generators.index.str.contains("wind"))
+        np.concatenate((solar_gens.values, wind_gens.values))
     ]
-    gen_disp = psa_net.generators.drop(
-        np.concatenate((gen_nondisp.index, gen_slack.index))
-    )
+    gen_disp = psa_net.generators.loc[disp_gens]
     # determine slack buses through slack generators
     slack_gens_bus = gen_slack.bus.values
     for bus in slack_gens_bus:
-        pm["bus"][str(_mapping(psa_net, bus))]["bus_type"] = 3
+        pm["bus"][str(_mapping(psa_net, edisgo_obj, bus))]["bus_type"] = 3
 
     for gen, text in [
         (gen_disp, "gen"),
@@ -593,7 +612,7 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storages, s_base):
         (gen_slack, "gen_slack"),
     ]:
         for gen_i in np.arange(len(gen.index)):
-            idx_bus = _mapping(psa_net, gen.bus[gen_i])
+            idx_bus = _mapping(psa_net, edisgo_obj, gen.bus[gen_i])
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "gen")
             q = [
                 sign * np.tan(np.arccos(pf)) * gen.p_nom[gen_i],
@@ -618,49 +637,60 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storages, s_base):
                 "index": gen_i + 1,
             }
 
-    inflexible_storages = psa_net.storage_units.index[
-        [storage not in flexible_storages for storage in psa_net.storage_units.index]
+    inflexible_storage_units = psa_net.storage_units.index[
+        [
+            storage not in flexible_storage_units
+            for storage in psa_net.storage_units.index
+        ]
     ]
-    if len(inflexible_storages) > 0:
-        for stor_i in np.arange(len(inflexible_storages)):
+    if len(inflexible_storage_units) > 0:
+        for stor_i in np.arange(len(inflexible_storage_units)):
             idx_bus = _mapping(
-                psa_net, psa_net.storage_units.bus.loc[inflexible_storages[stor_i]]
+                psa_net,
+                edisgo_obj,
+                psa_net.storage_units.bus.loc[inflexible_storage_units[stor_i]],
             )
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
             p_g = max(
-                [psa_net.storage_units_t.p_set[inflexible_storages[stor_i]][0], 0]
+                [psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0], 0]
             )
             q_g = min(
-                [psa_net.storage_units_t.q_set[inflexible_storages[stor_i]][0], 0]
+                [psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0], 0]
             )
             pm["gen"][str(stor_i + len(gen_disp.index) + 1)] = {
                 "pg": p_g / s_base,
                 "qg": q_g / s_base,
-                "pmax": psa_net.storage_units.p_nom.loc[inflexible_storages[stor_i]]
+                "pmax": psa_net.storage_units.p_nom.loc[
+                    inflexible_storage_units[stor_i]
+                ]
                 / s_base,
-                "pmin": -psa_net.storage_units.p_nom.loc[inflexible_storages[stor_i]]
+                "pmin": -psa_net.storage_units.p_nom.loc[
+                    inflexible_storage_units[stor_i]
+                ]
                 / s_base,
                 "qmax": np.tan(np.arccos(pf))
-                * psa_net.storage_units.p_nom.loc[inflexible_storages[stor_i]]
+                * psa_net.storage_units.p_nom.loc[inflexible_storage_units[stor_i]]
                 / s_base,
                 "qmin": -np.tan(np.arccos(pf))
-                * psa_net.storage_units.p_nom.loc[inflexible_storages[stor_i]]
+                * psa_net.storage_units.p_nom.loc[inflexible_storage_units[stor_i]]
                 / s_base,
                 "P": 0,
                 "Q": 0,
                 "vg": 1,
                 "pf": pf,
                 "sign": sign,
-                "mbase": psa_net.storage_units.p_nom.loc[inflexible_storages[stor_i]]
+                "mbase": psa_net.storage_units.p_nom.loc[
+                    inflexible_storage_units[stor_i]
+                ]
                 / s_base,
                 "gen_bus": idx_bus,
                 "gen_status": 1,
-                "name": inflexible_storages[stor_i],
+                "name": inflexible_storage_units[stor_i],
                 "index": stor_i + len(gen_disp.index) + 1,
             }
 
 
-def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
+def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
     """
     Build branch dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'.
@@ -697,8 +727,8 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             )
 
     for branch_i in np.arange(len(branches.index)):
-        idx_f_bus = _mapping(psa_net, branches.bus0[branch_i])
-        idx_t_bus = _mapping(psa_net, branches.bus1[branch_i])
+        idx_f_bus = _mapping(psa_net, edisgo_obj, branches.bus0[branch_i])
+        idx_t_bus = _mapping(psa_net, edisgo_obj, branches.bus1[branch_i])
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
             "br_r": branches.r_pu[branch_i] * s_base,
@@ -728,9 +758,11 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "index": branch_i + 1,
         }
 
-    for stor_i in np.arange(len(flexible_storages)):
+    for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
-            psa_net, psa_net.storage_units.bus.loc[flexible_storages[stor_i]]
+            psa_net,
+            edisgo_obj,
+            psa_net.storage_units.bus.loc[flexible_storage_units[stor_i]],
         )
         # retrieve power factor from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
@@ -748,7 +780,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "b_fr": 0,
             "shift": 0,
             "br_status": 1.0,
-            "rate_a": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            "rate_a": psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
             / s_base,
             "rate_b": 250 / s_base,
             "rate_c": 250 / s_base,
@@ -766,7 +798,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storages, s_base):
 
 
 def _build_load(
-    edisgo_obj, psa_net, pm, s_base, flexible_cps, flexible_hps, flexible_storages
+    edisgo_obj, psa_net, pm, s_base, flexible_cps, flexible_hps, flexible_storage_units
 ):
     """
     Build load dictionary in PowerModels network data format and add it to
@@ -787,21 +819,24 @@ def _build_load(
     flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
-    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all flexible storages. Non-flexible storages operate to
         optimize self consumption.
         Default: None
     """
     flex_loads = np.concatenate((flexible_hps, flexible_cps))
-    inflexible_storages = psa_net.storage_units.index[
-        [storage not in flexible_storages for storage in psa_net.storage_units.index]
+    inflexible_storage_units = psa_net.storage_units.index[
+        [
+            storage not in flexible_storage_units
+            for storage in psa_net.storage_units.index
+        ]
     ]
     if len(flex_loads) == 0:
         loads_df = psa_net.loads
     else:
         loads_df = psa_net.loads.drop(flex_loads)
     for load_i in np.arange(len(loads_df.index)):
-        idx_bus = _mapping(psa_net, loads_df.bus[load_i])
+        idx_bus = _mapping(psa_net, edisgo_obj, loads_df.bus[load_i])
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
         q_d = psa_net.loads_t.q_set[loads_df.index[load_i]]
@@ -815,17 +850,19 @@ def _build_load(
             "name": loads_df.index[load_i],
             "index": load_i + 1,
         }
-    if len(inflexible_storages) > 0:
-        for stor_i in np.arange(len(inflexible_storages)):
+    if len(inflexible_storage_units) > 0:
+        for stor_i in np.arange(len(inflexible_storage_units)):
             idx_bus = _mapping(
-                psa_net, psa_net.storage_units.bus.loc[inflexible_storages[stor_i]]
+                psa_net,
+                edisgo_obj,
+                psa_net.storage_units.bus.loc[inflexible_storage_units[stor_i]],
             )
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
             p_d = -min(
-                [psa_net.storage_units_t.p_set[inflexible_storages[stor_i]][0], 0]
+                [psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0], 0]
             )
             q_d = -max(
-                [psa_net.storage_units_t.q_set[inflexible_storages[stor_i]][0], 0]
+                [psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0], 0]
             )
             pm["load"][str(stor_i + len(loads_df.index) + 1)] = {
                 "pd": p_d / s_base,
@@ -834,12 +871,12 @@ def _build_load(
                 "status": True,
                 "pf": pf,
                 "sign": sign,
-                "name": inflexible_storages[stor_i],
+                "name": inflexible_storage_units[stor_i],
                 "index": stor_i + len(loads_df.index) + 1,
             }
 
 
-def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
+def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
     """
     Build battery storage dictionary in PowerModels network data format and add
     it to PowerModels dictionary 'pm'.
@@ -851,7 +888,7 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
         (PowerModels) dictionary.
-    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all flexible storages. Non-flexible storages operate to
         optimize self consumption.
         Default: None
@@ -862,21 +899,27 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
     branches = pd.concat([psa_net.lines, psa_net.transformers])
     if edisgo_obj.timeseries.storage_units_state_of_charge.empty:
         edisgo_obj.timeseries.storage_units_state_of_charge = pd.DataFrame(
-            columns=flexible_storages, data=0, index=edisgo_obj.timeseries.timeindex
+            columns=flexible_storage_units,
+            data=0,
+            index=edisgo_obj.timeseries.timeindex,
         )
     if edisgo_obj.timeseries.storage_units_active_power.empty:
         edisgo_obj.timeseries.storage_units_active_power = pd.DataFrame(
-            columns=flexible_storages, data=0, index=edisgo_obj.timeseries.timeindex
+            columns=flexible_storage_units,
+            data=0,
+            index=edisgo_obj.timeseries.timeindex,
         )
-    for stor_i in np.arange(len(flexible_storages)):
+    for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
-            psa_net, psa_net.storage_units.bus.loc[flexible_storages[stor_i]]
+            psa_net,
+            edisgo_obj,
+            psa_net.storage_units.bus.loc[flexible_storage_units[stor_i]],
         )
         # retrieve power factor from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
         e_max = (
-            psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
-            * psa_net.storage_units.max_hours.loc[flexible_storages[stor_i]]
+            psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
+            * psa_net.storage_units.max_hours.loc[flexible_storage_units[stor_i]]
         )
         pm["storage"][str(stor_i + 1)] = {
             "r": 0,
@@ -886,46 +929,49 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storages, s_base):
             "pf": pf,
             "sign": sign,
             "virtual_branch": str(stor_i + len(branches.index) + 1),
-            "ps": psa_net.storage_units.p_set[flexible_storages[stor_i]] / s_base,
-            "qs": psa_net.storage_units.q_set[flexible_storages[stor_i]] / s_base,
-            "pmax": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]] / s_base,
-            "pmin": -psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            "ps": psa_net.storage_units.p_set[flexible_storage_units[stor_i]] / s_base,
+            "qs": psa_net.storage_units.q_set[flexible_storage_units[stor_i]] / s_base,
+            "pmax": psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
+            / s_base,
+            "pmin": -psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
             / s_base,
             "qmax": np.tan(np.arccos(pf))
-            * psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            * psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
             / s_base,
             "qmin": -np.tan(np.arccos(pf))
-            * psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            * psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
             / s_base,
             "energy": psa_net.storage_units.state_of_charge_initial.loc[
-                flexible_storages[stor_i]
+                flexible_storage_units[stor_i]
             ]
             * e_max
             / s_base,
             "soc_initial": (
                 edisgo_obj.timeseries.storage_units_state_of_charge[
-                    flexible_storages[stor_i]
+                    flexible_storage_units[stor_i]
                 ].iloc[0]
                 + edisgo_obj.timeseries.storage_units_active_power[
-                    flexible_storages[stor_i]
+                    flexible_storage_units[stor_i]
                 ].iloc[0]
                 * 0.9
             ),
             "soc_end": edisgo_obj.timeseries.storage_units_state_of_charge[
-                flexible_storages[stor_i]
+                flexible_storage_units[stor_i]
             ].iloc[-1],
             "energy_rating": e_max / s_base,
             "thermal_rating": 100,
-            "charge_rating": psa_net.storage_units.p_nom.loc[flexible_storages[stor_i]]
+            "charge_rating": psa_net.storage_units.p_nom.loc[
+                flexible_storage_units[stor_i]
+            ]
             / s_base,
             "discharge_rating": psa_net.storage_units.p_nom.loc[
-                flexible_storages[stor_i]
+                flexible_storage_units[stor_i]
             ]
             / s_base,
             "charge_efficiency": 0.9,
             "discharge_efficiency": 0.9,
             "storage_bus": stor_i + len(psa_net.buses.index) + 1,
-            "name": flexible_storages[stor_i],
+            "name": flexible_storage_units[stor_i],
             "status": True,
             "index": stor_i + 1,
         }
@@ -978,7 +1024,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         ]
     emob_df = psa_net.loads.loc[flexible_cps]
     for cp_i in np.arange(len(emob_df.index)):
-        idx_bus = _mapping(psa_net, emob_df.bus[cp_i])
+        idx_bus = _mapping(psa_net, edisgo_obj, emob_df.bus[cp_i])
         # retrieve power factor and sign from config
         eta = edisgo_obj.electromobility.simbev_config_df.eta_cp.values[0]
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "cp")
@@ -1050,7 +1096,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     #     min=0
     # )  # ToDo: nur ein district heating?
     for hp_i in np.arange(len(heat_df.index)):
-        idx_bus = _mapping(psa_net, heat_df.bus[hp_i])
+        idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
         q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
@@ -1102,7 +1148,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df.loc[flexible_hps]
     heat_storage_df["state_of_charge_initial"] = 0  # ToDo: Zeile löschen
     for stor_i in np.arange(len(heat_storage_df.index)):
-        idx_bus = _mapping(psa_net, psa_net.loads.bus[stor_i])
+        idx_bus = _mapping(psa_net, edisgo_obj, psa_net.loads.bus[stor_i])
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
             "p_loss": 0.04,  # 4% of SOC per day
@@ -1166,7 +1212,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
         ]
     dsm_df = psa_net.loads.loc[flexible_loads]
     for dsm_i in np.arange(len(dsm_df.index)):
-        idx_bus = _mapping(psa_net, dsm_df.bus[dsm_i])
+        idx_bus = _mapping(psa_net, edisgo_obj, dsm_df.bus[dsm_i])
         # retrieve power factor and sign from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
         p_max = edisgo_obj.dsm.p_max[dsm_df.index[dsm_i]]
@@ -1200,12 +1246,13 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
 
 def _build_hv_requirements(
     psa_net,
+    edisgo_obj,
     pm,
     s_base,
     opf_flex,
     flexible_cps,
     flexible_hps,
-    flexible_storages,
+    flexible_storage_units,
     hv_flex_dict,
 ):
     """
@@ -1216,6 +1263,8 @@ def _build_hv_requirements(
     ----------
     psa_net : :pypsa:`PyPSA.Network<network>`
         :pypsa:`PyPSA.Network<network>` representation of network.
+    edisgo_obj:
+
     pm : dict
         (PowerModels) dictionary.
     s_base : int
@@ -1230,7 +1279,7 @@ def _build_hv_requirements(
     flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
-    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all flexible storages. Non-flexible storages operate to
         optimize self consumption.
         Default: None
@@ -1240,20 +1289,23 @@ def _build_hv_requirements(
     """
     inflexible_cps = [
         cp
-        for cp in psa_net.loads.loc[
-            psa_net.loads.index.str.contains("Charging")
-        ].index.values
+        for cp in edisgo_obj.topology.loads_df.index[
+            edisgo_obj.topology.loads_df.type == "charging_point"
+        ]
         if cp not in flexible_cps
     ]
     inflexible_hps = [
         hp
-        for hp in psa_net.loads.loc[
-            psa_net.loads.index.str.contains("Heat")
-        ].index.values
+        for hp in edisgo_obj.topology.loads_df.index[
+            edisgo_obj.topology.loads_df.type == "heat_pump"
+        ]
         if hp not in flexible_hps
     ]
-    inflexible_storages = psa_net.storage_units.index[
-        [storage not in flexible_storages for storage in psa_net.storage_units.index]
+    inflexible_storage_units = psa_net.storage_units.index[
+        [
+            storage not in flexible_storage_units
+            for storage in psa_net.storage_units.index
+        ]
     ]
     if len(inflexible_cps) > 0:
         hv_flex_dict["cp"] = (
@@ -1265,10 +1317,10 @@ def _build_hv_requirements(
             hv_flex_dict["hp"]
             - psa_net.loads_t.p_set.loc[:, inflexible_hps].sum(axis=1) / s_base
         )
-    if len(inflexible_storages) > 0:
+    if len(inflexible_storage_units) > 0:
         hv_flex_dict["storage"] = (
             hv_flex_dict["storage"]
-            - psa_net.storage_units_t.p_set.loc[:, inflexible_storages].sum(axis=1)
+            - psa_net.storage_units_t.p_set.loc[:, inflexible_storage_units].sum(axis=1)
             / s_base
         )
     for i in np.arange(len(opf_flex)):
@@ -1286,7 +1338,7 @@ def _build_timeseries(
     flexible_cps,
     flexible_hps,
     flexible_loads,
-    flexible_storages,
+    flexible_storage_units,
     opf_flex,
     hv_flex_dict,
 ):
@@ -1314,7 +1366,7 @@ def _build_timeseries(
     flexible_loads : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
-    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all flexible storages. Non-flexible storages operate to
         optimize self consumption.
         Default: None
@@ -1345,7 +1397,7 @@ def _build_timeseries(
             flexible_cps,
             flexible_hps,
             flexible_loads,
-            flexible_storages,
+            flexible_storage_units,
             opf_flex,
             hv_flex_dict,
         )
@@ -1361,7 +1413,7 @@ def _build_component_timeseries(
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
-    flexible_storages=None,
+    flexible_storage_units=None,
     opf_flex=None,
     hv_flex_dict=None,
 ):
@@ -1390,32 +1442,34 @@ def _build_component_timeseries(
     flexible_loads : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
-    flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all flexible storages. Non-flexible storages operate to
         optimize self consumption.
         Default: None
     opf_flex: list
-        List of flexibilities that should be considered in the optimization. Must be any
+        Flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from overlying grid component of edisgo object.
     """
     pm_comp = dict()
+    solar_gens = edisgo_obj.topology.generators_df.index[
+        edisgo_obj.topology.generators_df.type == "solar"
+    ]
+    wind_gens = edisgo_obj.topology.generators_df.index[
+        edisgo_obj.topology.generators_df.type == "wind"
+    ]
+    disp_gens = edisgo_obj.topology.generators_df.index[
+        (edisgo_obj.topology.generators_df.type != "wind")
+        & (edisgo_obj.topology.generators_df.type != "solar")
+    ]
     if kind == "gen":
-        p_set2 = (
-            psa_net.generators_t.p_set.loc[
-                :,
-                ~(psa_net.generators_t.p_set.columns.str.contains("solar"))
-                & ~(psa_net.generators_t.p_set.columns.str.contains("wind"))
-                & ~(psa_net.generators_t.p_set.columns.str.contains("slack")),
-            ]
-            / s_base
-        )
-        q_set2 = psa_net.generators_t.q_set[p_set2.columns] / s_base
-        inflexible_storages = psa_net.storage_units.index[
+        p_set2 = psa_net.generators_t.p_set[disp_gens] / s_base
+        q_set2 = psa_net.generators_t.q_set[disp_gens] / s_base
+        inflexible_storage_units = psa_net.storage_units.index[
             [
-                storage not in flexible_storages
+                storage not in flexible_storage_units
                 for storage in psa_net.storage_units.index
             ]
         ]
@@ -1423,7 +1477,9 @@ def _build_component_timeseries(
             pd.concat(
                 [
                     p_set2,
-                    psa_net.storage_units_t.p_set[inflexible_storages].clip(lower=0),
+                    psa_net.storage_units_t.p_set[inflexible_storage_units].clip(
+                        lower=0
+                    ),
                 ],
                 axis=1,
             )
@@ -1433,7 +1489,9 @@ def _build_component_timeseries(
             pd.concat(
                 [
                     q_set2,
-                    psa_net.storage_units_t.q_set[inflexible_storages].clip(upper=0),
+                    psa_net.storage_units_t.q_set[inflexible_storage_units].clip(
+                        upper=0
+                    ),
                 ],
                 axis=1,
             )
@@ -1441,7 +1499,13 @@ def _build_component_timeseries(
         )
 
         for comp in p_set.columns:
-            comp_i = _mapping(psa_net, comp, kind, flexible_storages=flexible_storages)
+            comp_i = _mapping(
+                psa_net,
+                edisgo_obj,
+                comp,
+                kind,
+                flexible_storage_units=flexible_storage_units,
+            )
             pm_comp[str(comp_i)] = {
                 "pg": p_set[comp].values.tolist(),
                 "qg": q_set[comp].values.tolist(),
@@ -1449,16 +1513,14 @@ def _build_component_timeseries(
 
     elif kind == "gen_nd":
         p_set = (
-            psa_net.generators_t.p_set.loc[
-                :,
-                psa_net.generators_t.p_set.columns.str.contains("solar")
-                | psa_net.generators_t.p_set.columns.str.contains("wind"),
+            psa_net.generators_t.p_set[
+                np.concatenate((solar_gens.values, wind_gens.values))
             ]
             / s_base
         )
         q_set = psa_net.generators_t.q_set[p_set.columns] / s_base
         for comp in p_set.columns:
-            comp_i = _mapping(psa_net, comp, kind)
+            comp_i = _mapping(psa_net, edisgo_obj, comp, kind)
             pm_comp[str(comp_i)] = {
                 "pg": p_set[comp].values.tolist(),
                 "qg": q_set[comp].values.tolist(),
@@ -1473,16 +1535,16 @@ def _build_component_timeseries(
         )
         q_set = psa_net.generators_t.q_set[p_set.columns] / s_base
         for comp in p_set.columns:
-            comp_i = _mapping(psa_net, comp, kind)
+            comp_i = _mapping(psa_net, edisgo_obj, comp, kind)
             pm_comp[str(comp_i)] = {
                 "pg": p_set[comp].values.tolist(),
                 "qg": q_set[comp].values.tolist(),
             }
     elif kind == "load":
         flex_loads = np.concatenate((flexible_hps, flexible_cps))
-        inflexible_storages = psa_net.storage_units.index[
+        inflexible_storage_units = psa_net.storage_units.index[
             [
-                storage not in flexible_storages
+                storage not in flexible_storage_units
                 for storage in psa_net.storage_units.index
             ]
         ]
@@ -1492,7 +1554,7 @@ def _build_component_timeseries(
                     [
                         psa_net.loads_t.p_set,
                         -1
-                        * psa_net.storage_units_t.p_set[inflexible_storages].clip(
+                        * psa_net.storage_units_t.p_set[inflexible_storage_units].clip(
                             upper=0
                         ),
                     ],
@@ -1505,7 +1567,7 @@ def _build_component_timeseries(
                     [
                         psa_net.loads_t.q_set,
                         -1
-                        * psa_net.storage_units_t.q_set[inflexible_storages].clip(
+                        * psa_net.storage_units_t.q_set[inflexible_storage_units].clip(
                             lower=0
                         ),
                     ],
@@ -1519,7 +1581,7 @@ def _build_component_timeseries(
                     [
                         psa_net.loads_t.p_set.drop(columns=flex_loads),
                         -1
-                        * psa_net.storage_units_t.p_set[inflexible_storages].clip(
+                        * psa_net.storage_units_t.p_set[inflexible_storage_units].clip(
                             upper=0
                         ),
                     ],
@@ -1532,7 +1594,7 @@ def _build_component_timeseries(
                     [
                         psa_net.loads_t.q_set.drop(columns=flex_loads),
                         -1
-                        * psa_net.storage_units_t.q_set[inflexible_storages].clip(
+                        * psa_net.storage_units_t.q_set[inflexible_storage_units].clip(
                             lower=0
                         ),
                     ],
@@ -1543,12 +1605,13 @@ def _build_component_timeseries(
         for comp in p_set.columns:
             comp_i = _mapping(
                 psa_net,
+                edisgo_obj,
                 comp,
                 kind,
                 flexible_cps=flexible_cps,
                 flexible_hps=flexible_hps,
                 flexible_loads=flexible_loads,
-                flexible_storages=flexible_storages,
+                flexible_storage_units=flexible_storage_units,
             )
             p_d = p_set[comp].values
             q_d = q_set[comp].values
@@ -1577,7 +1640,9 @@ def _build_component_timeseries(
                 / s_base
             )
             for comp in p_set.columns:
-                comp_i = _mapping(psa_net, comp, kind, flexible_cps=flexible_cps)
+                comp_i = _mapping(
+                    psa_net, edisgo_obj, comp, kind, flexible_cps=flexible_cps
+                )
                 pm_comp[str(comp_i)] = {
                     "p_max": p_set[comp].values.tolist(),
                     "e_min": e_min[comp].values.tolist(),
@@ -1588,7 +1653,9 @@ def _build_component_timeseries(
             p_set = edisgo_obj.heat_pump.heat_demand_df[flexible_hps] / s_base
             cop = edisgo_obj.heat_pump.cop_df[flexible_hps]
             for comp in p_set.columns:
-                comp_i = _mapping(psa_net, comp, kind, flexible_hps=flexible_hps)
+                comp_i = _mapping(
+                    psa_net, edisgo_obj, comp, kind, flexible_hps=flexible_hps
+                )
                 pm_comp[str(comp_i)] = {
                     "pd": p_set[comp].values.tolist(),
                     "cop": cop[comp].values.tolist(),
@@ -1600,7 +1667,9 @@ def _build_component_timeseries(
             e_min = edisgo_obj.dsm.e_min / s_base
             e_max = edisgo_obj.dsm.e_max / s_base
             for comp in p_set.columns:
-                comp_i = _mapping(psa_net, comp, kind, flexible_loads=flexible_loads)
+                comp_i = _mapping(
+                    psa_net, edisgo_obj, comp, kind, flexible_loads=flexible_loads
+                )
                 pm_comp[str(comp_i)] = {
                     "p_max": p_set[comp].values.tolist(),
                     "p_min": p_min[comp].values.tolist(),
@@ -1621,55 +1690,60 @@ def _build_component_timeseries(
 
 def _mapping(
     psa_net,
+    edisgo_obj,
     name,
     kind="bus",
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
-    flexible_storages=None,
+    flexible_storage_units=None,
 ):
-
+    solar_gens = edisgo_obj.topology.generators_df.index[
+        edisgo_obj.topology.generators_df.type == "solar"
+    ]
+    wind_gens = edisgo_obj.topology.generators_df.index[
+        edisgo_obj.topology.generators_df.type == "wind"
+    ]
+    disp_gens = edisgo_obj.topology.generators_df.index[
+        (edisgo_obj.topology.generators_df.type != "wind")
+        & (edisgo_obj.topology.generators_df.type != "solar")
+    ]
     if kind == "bus":
         df = psa_net.buses
     elif kind == "gen":
-        df2 = psa_net.generators.loc[
-            ~(psa_net.generators.index.str.contains("solar"))
-            & ~(psa_net.generators.index.str.contains("wind"))
-            & ~(psa_net.generators.index.str.contains("slack"))
-        ]
-        inflexible_storages = psa_net.storage_units.index[
+        df2 = psa_net.generators.loc[disp_gens]
+        inflexible_storage_units = psa_net.storage_units.index[
             [
-                storage not in flexible_storages
+                storage not in flexible_storage_units
                 for storage in psa_net.storage_units.index
             ]
         ]
-        df = pd.concat([df2, psa_net.storage_units.loc[inflexible_storages]])
+        df = pd.concat([df2, psa_net.storage_units.loc[inflexible_storage_units]])
     elif kind == "gen_nd":
         df = psa_net.generators.loc[
-            (psa_net.generators.index.str.contains("solar"))
-            | (psa_net.generators.index.str.contains("wind"))
+            np.concatenate((solar_gens.values, wind_gens.values))
         ]
     elif kind == "gen_slack":
         df = psa_net.generators.loc[(psa_net.generators.index.str.contains("slack"))]
     elif kind == "storage":
-        df = psa_net.storage_units.loc[flexible_storages]
+        df = psa_net.storage_units.loc[flexible_storage_units]
     elif kind == "load":
         flex_loads = np.concatenate((flexible_hps, flexible_cps))
-        inflexible_storages = psa_net.storage_units.index[
+        inflexible_storage_units = psa_net.storage_units.index[
             [
-                storage not in flexible_storages
+                storage not in flexible_storage_units
                 for storage in psa_net.storage_units.index
             ]
         ]
         if len(flex_loads) == 0:
             df = pd.concat(
-                [psa_net.loads, psa_net.storage_units.loc[inflexible_storages]]
+                [psa_net.loads, psa_net.storage_units.loc[inflexible_storage_units]]
             )
         else:
             df = pd.concat(
                 [
                     psa_net.loads.drop(flex_loads),
-                    psa_net.storage_units.loc[inflexible_storages],
+                    psa_net.storage_units.loc[inflexible_storage_units],
                 ]
             )
     elif kind == "electromobility":

@@ -69,7 +69,7 @@ edisgo.pm_optimize(
     flexible_cps=flexible_cps,
     flexible_hps=flexible_hps,
     flexible_loads=flexible_loads,
-    flexible_storages=flexible_storages,
+    flexible_storage_units=flexible_storages,
     opf_version=opf_version,
     silence_moi=False,
     method="soc",

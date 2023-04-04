@@ -29,6 +29,7 @@ class GridSlacks:
         self.gen_nd_crt = pd.DataFrame()
         self.load_shedding = pd.DataFrame()
         self.cp_load_shedding = pd.DataFrame()
+        self.hp_load_shedding = pd.DataFrame()
 
 
 class OPFResults:

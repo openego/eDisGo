@@ -673,7 +673,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
-        flexible_storages=None,
+        flexible_storage_units=None,
         opf_version=1,
     ):
         """
@@ -693,7 +693,7 @@ class EDisGo:
         flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
             Array containing all flexible loads that allow for application of demand
             side management strategy.
-        flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+        flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
             Array containing all flexible storages. Non-flexible storages operate to
             optimize self consumption.
             Default: None
@@ -714,7 +714,7 @@ class EDisGo:
             flexible_cps=flexible_cps,
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
-            flexible_storages=flexible_storages,
+            flexible_storage_units=flexible_storage_units,
             opf_version=opf_version,
         )
 
@@ -774,7 +774,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
-        flexible_storages=None,
+        flexible_storage_units=None,
         opf_version=1,
         method="soc",
         warm_start=False,
@@ -804,7 +804,7 @@ class EDisGo:
             Array containing all flexible loads that allow for application of demand
             side management strategy.
             Default: None
-        flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+        flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
             Array containing all flexible storages. Non-flexible storages operate to
             optimize self consumption.
             Default: None
@@ -850,7 +850,7 @@ class EDisGo:
             flexible_cps=flexible_cps,
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
-            flexible_storages=flexible_storages,
+            flexible_storage_units=flexible_storage_units,
             opf_version=opf_version,
             method=method,
             warm_start=warm_start,
@@ -2642,7 +2642,7 @@ class EDisGo:
         flexible_cps=None,
         flexible_hps=None,
         flexible_loads=None,
-        flexible_storages=None,
+        flexible_storage_units=None,
         opf_version=1,
     ):
         """
@@ -2667,7 +2667,7 @@ class EDisGo:
         flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
             Array containing all flexible loads that allow for application of demand
             side management strategy.
-        flexible_storages: :numpy:`numpy.ndarray<ndarray>` or list or None
+        flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
             Array containing all flexible storages. Non-flexible storages operate to
             optimize self consumption.
             Default: None
@@ -2687,7 +2687,7 @@ class EDisGo:
             flexible_cps=flexible_cps,
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
-            flexible_storages=flexible_storages,
+            flexible_storage_units=flexible_storage_units,
             opf_version=opf_version,
         )
 
