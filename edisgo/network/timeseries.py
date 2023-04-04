@@ -2190,7 +2190,7 @@ class TimeSeries:
                 self.timeindex[0],
                 self.timeindex[-1] + freq_orig,
                 freq=freq,
-                closed="left",
+                inclusive="left",
             )
         else:  # down-sampling
             index = pd.date_range(
