@@ -126,8 +126,13 @@ def oedb(edisgo_object, scenario, engine):
                 ),
             )
         )
-
-        df = gpd.read_postgis(query.statement, engine, index_col=None)
+        srid = db.get_srid_of_db_table(session, egon_district_heating.geometry)
+        df = gpd.read_postgis(
+            query.statement,
+            engine,
+            index_col=None,
+            crs=f"EPSG:{srid}",
+        )
 
         # transform to same SRID as MV grid district geometry
         return df.to_crs(mv_grid_geom_srid)

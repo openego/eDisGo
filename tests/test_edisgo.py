@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 from matplotlib import pyplot as plt
-from pandas.util.testing import assert_frame_equal, assert_series_equal
+from pandas.testing import assert_frame_equal, assert_series_equal
 from shapely.geometry import Point
 
 from edisgo import EDisGo

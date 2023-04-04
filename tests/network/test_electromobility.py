@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 
 from edisgo.edisgo import EDisGo
 from edisgo.io import electromobility_import
