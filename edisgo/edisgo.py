@@ -733,6 +733,7 @@ class EDisGo:
         troubleshooting_mode: str | None = None,
         range_start: Number = 0.1,
         range_num: int = 10,
+        scale_timeseries: float | None = None,
         **kwargs,
     ):
         """
@@ -818,6 +819,10 @@ class EDisGo:
             troubleshooting_mode 'iteration'. Must be non-negative.
             Default: 10.
 
+        scale_timeseries : float or None, optional
+            Scales the timeseries in the pypsa object with the factor
+            'scaling_timeseries'.
+
         Other Parameters
         -----------------
         kwargs : dict
@@ -860,6 +865,19 @@ class EDisGo:
                 )
             return timesteps_converged, timesteps_not_converged
 
+        def _scale_timeseries(pypsa_network_copy, fraction):
+            # Scales the timeseries in the pypsa object
+            # Reduce power values of generators, loads and storages to fraction of
+            for obj1, obj2 in [
+                (pypsa_network.generators_t, pypsa_network_copy.generators_t),
+                (pypsa_network.loads_t, pypsa_network_copy.loads_t),
+                (pypsa_network.storage_units_t, pypsa_network_copy.storage_units_t),
+            ]:
+                for attr in ["p_set", "q_set"]:
+                    setattr(obj1, attr, getattr(obj2, attr) * fraction)
+
+            return pypsa_network
+
         if timesteps is None:
             timesteps = self.timeseries.timeindex
         # check if timesteps is array-like, otherwise convert to list
@@ -867,6 +885,9 @@ class EDisGo:
             timesteps = [timesteps]
 
         pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps, **kwargs)
+
+        if scale_timeseries:
+            pypsa_network = _scale_timeseries(pypsa_network, scale_timeseries)
 
         if troubleshooting_mode == "lpf":
             # run linear power flow analysis
@@ -878,15 +899,7 @@ class EDisGo:
         elif troubleshooting_mode == "iteration":
             pypsa_network_copy = pypsa_network.copy()
             for fraction in np.linspace(range_start, 1, range_num):
-                # Reduce power values of generators, loads and storages to fraction of
-                # original value
-                for obj1, obj2 in [
-                    (pypsa_network.generators_t, pypsa_network_copy.generators_t),
-                    (pypsa_network.loads_t, pypsa_network_copy.loads_t),
-                    (pypsa_network.storage_units_t, pypsa_network_copy.storage_units_t),
-                ]:
-                    for attr in ["p_set", "q_set"]:
-                        setattr(obj1, attr, getattr(obj2, attr) * fraction)
+                pypsa_network = _scale_timeseries(pypsa_network_copy, fraction)
                 # run power flow analysis
                 pf_results = pypsa_network.pf(timesteps, use_seed=True)
                 logging.warning(
@@ -990,7 +1003,9 @@ class EDisGo:
             setting_list = [{"mode": mode, "timesteps_pfa": timesteps_pfa}]
             run_analyze_at_the_end = False
 
+        logger.info(f"Run the following reinforcements: {setting_list=}")
         for setting in setting_list:
+            logger.info(f"Run the following reinforcement: {setting=}")
             if not catch_convergence_problems:
                 reinforce_grid(
                     edisgo_obj,

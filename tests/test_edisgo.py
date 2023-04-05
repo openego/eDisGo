@@ -452,22 +452,26 @@ class TestEDisGo:
     def test_reinforce_catch_convergence(self):
         # ###################### test with catch convergence ##########################
         self.setup_worst_case_time_series()
-        self.edisgo.timeseries.scale_timeseries(p_scaling_factor=5, q_scaling_factor=5)
+        self.edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=10, q_scaling_factor=10
+        )
         results = self.edisgo.reinforce(
             catch_convergence_problems=True, is_worst_case=False
         )
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 91
-        assert len(results.equipment_changes) == 116
+        assert len(results.grid_expansion_costs) == 134
+        assert len(results.equipment_changes) == 231
         assert results.v_res.shape == (4, 142)
 
         # ############### test with catch convergence worst case false ################
         self.setup_worst_case_time_series()
-        self.edisgo.timeseries.scale_timeseries(p_scaling_factor=5, q_scaling_factor=5)
+        self.edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=10, q_scaling_factor=10
+        )
         results = self.edisgo.reinforce(catch_convergence_problems=True)
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 91
-        assert len(results.equipment_changes) == 116
+        assert len(results.grid_expansion_costs) == 134
+        assert len(results.equipment_changes) == 231
         assert results.v_res.shape == (4, 142)
 
     def test_reinforce_one_lv_grid(self):
@@ -483,6 +487,7 @@ class TestEDisGo:
         assert len(results.equipment_changes) == 6
         assert results.v_res.shape == (4, 142)
 
+    @pytest.mark.slow
     def test_enhanced_reinforce(self):
         self.setup_edisgo_object()
         self.setup_worst_case_time_series()
@@ -496,8 +501,8 @@ class TestEDisGo:
 
         results = edisgo_obj.results
 
-        assert len(results.grid_expansion_costs) == 154
-        assert len(results.equipment_changes) == 338
+        assert len(results.grid_expansion_costs) == 843
+        assert len(results.equipment_changes) == 1802
         assert results.v_res.shape == (4, 142)
 
     def test_add_component(self, caplog):

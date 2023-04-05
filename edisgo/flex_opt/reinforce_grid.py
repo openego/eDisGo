@@ -647,6 +647,7 @@ def catch_convergence_reinforce_grid(
             results = reinforce_grid(
                 edisgo,
                 timesteps_pfa=selected_timesteps,
+                scale_timeseries=set_scaling_factor,
                 **kwargs,
             )
             converged = True
@@ -682,7 +683,7 @@ def catch_convergence_reinforce_grid(
         logger.info("Initial reinforcement converged.")
         fully_converged = True
 
-    set_scaling_factor = 1
+    set_scaling_factor = 1.0
     initial_timerseries = copy.deepcopy(edisgo.timeseries)
     minimal_scaling_factor = 0.05
     max_iterations = 10
@@ -692,12 +693,21 @@ def catch_convergence_reinforce_grid(
     if fully_converged is False:
         # Find non converging timesteps
         logger.info("Find converging and non converging timesteps.")
+        if kwargs.get("mode", None) == "lv" and kwargs.get("lv_grid_id", None):
+            analyze_mode = "lv"
+        elif kwargs.get("mode", None) == "lv":
+            analyze_mode = None
+        else:
+            analyze_mode = kwargs.get("mode", None)
+
+        kwargs_analyze = kwargs
+        kwargs["mode"] = analyze_mode
         converging_timesteps, non_converging_timesteps = edisgo.analyze(
-            timesteps=timesteps_pfa, raise_not_converged=False
+            timesteps=timesteps_pfa, raise_not_converged=False, **kwargs_analyze
         )
-        logger.debug(f"Following timesteps {converging_timesteps} converged.")
-        logger.debug(
-            f"Following timesteps {non_converging_timesteps} " f"doesnt't converged."
+        logger.info(f"Following timesteps {converging_timesteps} converged.")
+        logger.info(
+            f"Following timesteps {non_converging_timesteps} doesnt't converged."
         )
 
     if converged is False:
@@ -729,11 +739,6 @@ def catch_convergence_reinforce_grid(
                     (set_scaling_factor - highest_converged_scaling_factor) * 0.25
                 ) + highest_converged_scaling_factor
 
-        edisgo.timeseries = copy.deepcopy(initial_timerseries)
-        edisgo.timeseries.scale_timeseries(
-            p_scaling_factor=set_scaling_factor,
-            q_scaling_factor=set_scaling_factor,
-        )
         logger.info(f"Try reinforce with {set_scaling_factor=} at {iteration=}")
         converged, results = reinforce()
         if converged is False and iteration == max_iterations:
@@ -774,12 +779,11 @@ def enhanced_reinforce_wrapper(
 
     """
     try:
-        logger.info("Try initial reinforcement.")
+        logger.info("Try initial enhanced reinforcement.")
         edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
-        logger.info("Initial succeeded.")
+        logger.info("Initial enhanced reinforcement succeeded.")
     except:  # noqa: E722
-        logger.info("Initial failed.")
-
+        logger.info("Initial enhanced reinforcement failed.")
         logger.info("Try mode 'mv' reinforcement.")
         try:
             edisgo_obj.reinforce(mode="mv", catch_convergence_problems=True, **kwargs)
@@ -829,7 +833,7 @@ def enhanced_reinforce_wrapper(
                     except:  # noqa: E722
                         logger.info(f"Changed lines mode 'lv' for {lv_grid} failed.")
                         logger.warning(
-                            f"Aggregate all lines to station bus in {lv_grid=}."
+                            f"Aggregate all nodes to station bus in {lv_grid=}."
                         )
                         try:
                             edisgo_obj.topology.aggregate_lv_grid_buses_on_station(
