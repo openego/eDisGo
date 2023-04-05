@@ -2189,7 +2189,7 @@ class TimeSeries:
     def scale_timeseries(
         self, p_scaling_factor: float = 1.0, q_scaling_factor: float = 1.0
     ):
-        attributes_type = ["generators", "storage_units", "storage_units"]
+        attributes_type = ["generators", "loads", "storage_units"]
         power_types = {
             "active_power": p_scaling_factor,
             "reactive_power": q_scaling_factor,
