@@ -538,7 +538,7 @@ def _append_lv_components(
         components aggregated in that respective key component.
         An example could look as follows:
         {'LVGrid_1_loads':
-            ['Load_agricultural_LVGrid_1_1', 'Load_retail_LVGrid_1_2']}
+            ['Load_agricultural_LVGrid_1_1', 'Load_cts_LVGrid_1_2']}
 
     """
     aggregated_elements = {}

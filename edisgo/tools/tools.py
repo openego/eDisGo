@@ -4,24 +4,24 @@ import logging
 import os
 
 from math import pi, sqrt
+from typing import TYPE_CHECKING
 
 import networkx as nx
 import numpy as np
 import pandas as pd
+import saio
 
-from sqlalchemy import func
+from sqlalchemy.engine.base import Engine
 
 from edisgo.flex_opt import exceptions
+from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
 from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
-
-    import geopandas as gpd
-
     from egoio.db_tables import climate
-    from shapely.geometry.multipolygon import MultiPolygon
-    from shapely.wkt import loads as wkt_loads
 
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -590,55 +590,49 @@ def determine_bus_voltage_level(edisgo_object, bus_name):
     return voltage_level
 
 
-def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
+def get_weather_cells_intersecting_with_grid_district(
+    edisgo_obj: EDisGo,
+    engine: Engine | None = None,
+) -> set:
     """
     Get all weather cells that intersect with the grid district.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine. Only needed when using new egon_data data.
 
     Returns
     -------
-    set
-        Set with weather cell IDs
+    set(int)
+        Set with weather cell IDs.
 
     """
-
     # Download geometries of weather cells
+    sql_geom = sql_grid_geom(edisgo_obj)
     srid = edisgo_obj.topology.grid_district["srid"]
-    table = climate.Cosmoclmgrid
-    with session_scope() as session:
-        query = session.query(
-            table.gid,
-            func.ST_AsText(func.ST_Transform(table.geom, srid)).label("geometry"),
-        )
-    geom_data = pd.read_sql_query(query.statement, query.session.bind)
-    geom_data.geometry = geom_data.apply(lambda _: wkt_loads(_.geometry), axis=1)
-    geom_data = gpd.GeoDataFrame(geom_data, crs=f"EPSG:{srid}")
 
-    # Make sure MV Geometry is MultiPolygon
-    mv_geom = edisgo_obj.topology.grid_district["geom"]
-    if mv_geom.geom_type == "Polygon":
-        # Transform Polygon to MultiPolygon and overwrite geometry
-        p = wkt_loads(str(mv_geom))
-        m = MultiPolygon([p])
-        edisgo_obj.topology.grid_district["geom"] = m
-    elif mv_geom.geom_type == "MultiPolygon":
-        m = mv_geom
+    if edisgo_obj.legacy_grids is True:
+        table = climate.Cosmoclmgrid
+        with session_scope() as session:
+            query = session.query(
+                table.gid,
+            ).filter(sql_intersects(table.geom, sql_geom, srid))
+            weather_cells = pd.read_sql(sql=query.statement, con=query.session.bind).gid
     else:
-        raise ValueError(
-            f"Grid district geometry is of type {type(mv_geom)}."
-            " Only Shapely Polygon or MultiPolygon are accepted."
-        )
-    mv_geom_gdf = gpd.GeoDataFrame(data={"geometry": [m]}, crs=f"EPSG:{srid}")
+        saio.register_schema("supply", engine)
+        from saio.supply import egon_era5_weather_cells
 
+        with session_scope_egon_data(engine=engine) as session:
+            query = session.query(
+                egon_era5_weather_cells.w_id,
+            ).filter(sql_intersects(egon_era5_weather_cells.geom, sql_geom, srid))
+            weather_cells = pd.read_sql(sql=query.statement, con=engine).w_id
     return set(
         np.append(
-            gpd.sjoin(
-                geom_data, mv_geom_gdf, how="right", op="intersects"
-            ).gid.unique(),
-            edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique(),
+            weather_cells,
+            edisgo_obj.topology.generators_df.weather_cell_id.dropna(),
         )
     )
 

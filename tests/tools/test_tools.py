@@ -302,6 +302,18 @@ class TestTools:
         # for some reason..
         assert 1122074 in weather_cells
 
+    @pytest.mark.local
+    def test_get_weather_cells_intersecting_with_grid_district_egon(self):
+        edisgo_obj = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
+            edisgo_obj, pytest.engine
+        )
+        assert len(weather_cells) == 2
+        assert 11051 in weather_cells
+        assert 11052 in weather_cells
+
     def test_add_line_susceptance(self):
         assert self.edisgo.topology.lines_df.loc["Line_10006", "b"] == 0
         assert self.edisgo.topology.lines_df.loc["Line_50000002", "b"] == 0

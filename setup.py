@@ -45,7 +45,7 @@ requirements = [
     "matplotlib >= 3.3.0",
     "multiprocess",
     "networkx >= 2.5.0",
-    "pandas >= 1.2.0",
+    "pandas >= 1.2.0, < 2.0.0",
     "plotly",
     "pydot",
     "pygeos",
@@ -53,13 +53,13 @@ requirements = [
     "pypower",
     "pyproj >= 3.0.0",
     "pypsa >= 0.17.0, <= 0.20.1",
+    "pyyaml",
     "saio",
     "scikit-learn",
     "shapely >= 1.7.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel",
     "workalendar",
-    "pyyaml",
 ]
 
 dev_requirements = [
@@ -81,7 +81,7 @@ extras = {"dev": dev_requirements}
 
 setup(
     name="eDisGo",
-    version="0.2.1dev",
+    version="0.3.0dev",
     packages=find_packages(),
     url="https://github.com/openego/eDisGo",
     license="GNU Affero General Public License v3.0",

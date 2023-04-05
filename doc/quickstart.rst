@@ -243,7 +243,7 @@ time series:
     # load time series (scaled by annual demand)
     timeseries_load = pd.DataFrame(
         {"residential": [0.0001] * len(timeindex),
-         "retail": [0.0002] * len(timeindex),
+         "cts": [0.0002] * len(timeindex),
          "industrial": [0.00015] * len(timeindex),
          "agricultural": [0.00005] * len(timeindex)
          },
