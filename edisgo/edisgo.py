@@ -939,7 +939,6 @@ class EDisGo:
             Uses reinforcement strategy to reinforce not converging grid.
             Reinforces first with only converging timesteps. Reinforce again with at
             start not converging timesteps. If still not converging, scale timeseries.
-            To use method "is_worst_case" must be "False".
             Default: False
 
         lv_grid_id : str or int

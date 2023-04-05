@@ -626,24 +626,27 @@ def reinforce_grid(
 
 def catch_convergence_reinforce_grid(
     edisgo: EDisGo,
-    timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
-    copy_grid: bool = False,
-    max_while_iterations: int = 20,
-    combined_analysis: bool = False,
-    mode: str | None = None,
-    without_generator_import: bool = False,
     **kwargs,
 ) -> Results:
+    """
+    Uses a reinforcement strategy to reinforce not converging grids. Reinforces
+    first with only converging timesteps. Reinforce again with at start not
+    converging timesteps. If still not converging, scale the timeseries iteratively.
+
+    Parameters
+    ----------
+    edisgo : :class:`~.EDisGo`
+        The eDisGo object
+
+    kwargs: :obj:`dict`
+        See :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`
+    """
+
     def reinforce():
         try:
             results = reinforce_grid(
                 edisgo,
-                max_while_iterations=max_while_iterations,
-                copy_grid=copy_grid,
                 timesteps_pfa=selected_timesteps,
-                combined_analysis=combined_analysis,
-                mode=mode,
-                without_generator_import=without_generator_import,
                 **kwargs,
             )
             converged = True
@@ -661,17 +664,23 @@ def catch_convergence_reinforce_grid(
     # Initial try
     logger.info("Start catch convergence reinforcement")
     logger.info("Initial reinforcement try.")
+
+    # Get the timesteps from kwargs and then remove it to set it later manually
+    timesteps_pfa = kwargs.get("timesteps_pfa")
+    kwargs.pop("timesteps_pfa")
     selected_timesteps = timesteps_pfa
+
     set_scaling_factor = 1.0
     iteration = 0
-    converged = True
-    fully_converged = True
 
     converged, results = reinforce()
 
     if converged is False:
         logger.info("Initial reinforcement doesn't converged.")
         fully_converged = False
+    else:
+        logger.info("Initial reinforcement converged.")
+        fully_converged = True
 
     set_scaling_factor = 1
     initial_timerseries = copy.deepcopy(edisgo.timeseries)
