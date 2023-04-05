@@ -1082,9 +1082,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     heat_df = psa_net.loads.loc[flexible_hps]  # electric load
     heat_df2 = edisgo_obj.heat_pump.heat_demand_df[flexible_hps]  # thermal load
     hp_cop = edisgo_obj.heat_pump.cop_df[flexible_hps]
-    hp_p_nom = edisgo_obj.topology.loads_df.loc[
-        edisgo_obj.heat_pump.cop_df.columns.values
-    ][["p_set"]][flexible_hps]
+    hp_p_nom = edisgo_obj.topology.loads_df.p_set[flexible_hps]
     comparison = (heat_df2[hp_p_nom.index] > hp_cop * hp_p_nom.squeeze()).any()
     if comparison.any():
         logger.warning(
@@ -1149,17 +1147,16 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         attached heat storage.
     """
     heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df.loc[flexible_hps]
-    heat_storage_df["state_of_charge_initial"] = 0  # ToDo: Zeile löschen
     for stor_i in np.arange(len(heat_storage_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, psa_net.loads.bus[stor_i])
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
             "p_loss": 0.04,  # 4% of SOC per day
-            "energy": (
-                heat_storage_df.state_of_charge_initial[stor_i]
-                * heat_storage_df.capacity[stor_i]
-                / s_base
-            ),
+            # "energy": (
+            #     heat_storage_df.state_of_charge_initial[stor_i]
+            #     * heat_storage_df.capacity[stor_i]
+            #     / s_base
+            # ),
             "capacity": heat_storage_df.capacity[stor_i] / s_base,
             "charge_efficiency": heat_storage_df.efficiency[stor_i],
             "discharge_efficiency": heat_storage_df.efficiency[stor_i],
