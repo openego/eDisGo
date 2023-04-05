@@ -881,8 +881,7 @@ def color_map_color(
         Maximum value on color map
     cmap_name : str or list
         Name of color map to use, or the colormap
-    height : int
-        Height of the plot
+
     Returns
     -------
     str
@@ -983,7 +982,7 @@ def plot_plotly(
         Only plot selected nodes. Default: False.
 
     height : int
-        Height of the plotly plot.
+        Height of the plotly plot in pixels.
 
     Returns
     -------
@@ -1531,7 +1530,7 @@ def plot_dash_app(
         eDisGo object names as keys.
 
     height : int
-        Height in pixels of the plotly plot.
+        Height of the plotly plot in pixels.
 
     debug : bool
         Debugging for the dash app:
