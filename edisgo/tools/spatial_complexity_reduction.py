@@ -172,11 +172,13 @@ def rename_virtual_buses(
 
 # endregion
 
-# region Preprocessing (Currently not tested and probably not working.)
+# region Preprocessing
 def remove_one_meter_lines(edisgo_root: EDisGo) -> EDisGo:
     """
     Remove one meter lines between the feeder and the buildings. This function is
     a relict from the legacy ding0 grids.
+
+    Only one meter lines are dropped which have on one side only one neighbour.
     """
 
     def apply_busmap_on_buses_df(series):
@@ -266,14 +268,14 @@ def remove_one_meter_lines(edisgo_root: EDisGo) -> EDisGo:
     generators_df = edisgo_obj.topology.generators_df.copy()
     generators_df = generators_df.apply(apply_busmap, axis="columns")
 
-    charging_points_df = edisgo_obj.topology.charging_points_df.copy()
-    charging_points_df = charging_points_df.apply(apply_busmap, axis="columns")
+    storage_units_df = edisgo_obj.topology.storage_units_df.copy()
+    storage_units_df = storage_units_df.apply(apply_busmap, axis="columns")
 
     edisgo_obj.topology.lines_df = lines_df
     edisgo_obj.topology.buses_df = buses_df
     edisgo_obj.topology.loads_df = loads_df
     edisgo_obj.topology.generators_df = generators_df
-    edisgo_obj.topology.charging_points_df = charging_points_df
+    edisgo_obj.topology.storage_units_df = storage_units_df
 
     logger.info("Finished in {}s".format(time() - start_time))
     return edisgo_obj
@@ -284,6 +286,8 @@ def remove_lines_under_one_meter(edisgo_root: EDisGo) -> EDisGo:
     Remove the lines under one meter. Sometimes these line are causing convergence
     problems of the power flow calculation or making problems with the clustering
     methods.
+
+    Function might be a bit overengineered, so that the station bus is never dropped.
     """
 
     def apply_busmap_on_buses_df(series):
@@ -389,6 +393,10 @@ def remove_lines_under_one_meter(edisgo_root: EDisGo) -> EDisGo:
     generators_df = edisgo_obj.topology.generators_df.copy()
     generators_df = generators_df.apply(apply_busmap, axis="columns")
     edisgo_obj.topology.generators_df = generators_df
+
+    storage_units_df = edisgo_obj.topology.storage_units_df.copy()
+    storage_units_df = storage_units_df.apply(apply_busmap, axis="columns")
+    edisgo_obj.topology.storage_units_df = storage_units_df
 
     logger.info("Finished in {}s".format(time() - start_time))
     return edisgo_obj
@@ -1913,10 +1921,22 @@ def spatial_complexity_reduction(
 
 # endregion
 
-# region Postprocessing/Evaluation (Currently not tested and probably not working.)
+# region Postprocessing/Evaluation
 def save_results_reduced_to_min_max(
     edisgo_root: EDisGo, edisgo_object_name: str
 ) -> EDisGo:
+    """
+    Save only the biggest and smallest value of the results DataFrames (v_res, i_res,
+    pfa_p, pfa_q), because they are most important for evaluating the violation of
+    operating limits.
+
+    Parameters
+    ----------
+    edisgo_root: :obj:`EDisGo`
+        EDisGo object to save.
+    edisgo_object_name: :obj:`str`
+        The path with name to save the object.
+    """
     edisgo_obj = copy.deepcopy(edisgo_root)
 
     def min_max(df):
@@ -1947,6 +1967,22 @@ def save_results_reduced_to_min_max(
 
 # Analyze results
 def length_analysis(edisgo_obj: EDisGo) -> Tuple[float, float, float]:
+    """Calculates the line length in the grid_districts and voltage levels.
+
+    Parameters
+    ----------
+    edisgo_obj: :obj:`EDisGo`
+        EDisGo object to analyze.
+
+    Returns
+    -------
+    length_total: :obj:`float`
+        Total line length of the grid district.
+    length_mv: :obj:`float`
+        Total line length of the MV grid.
+    length_lv: :obj:`float`
+        Total line length of all LV grids.
+    """
     start_time = time()
     logger.info("Start - Length analysis")
 
@@ -1966,6 +2002,33 @@ def length_analysis(edisgo_obj: EDisGo) -> Tuple[float, float, float]:
 def voltage_mapping(
     edisgo_root: EDisGo, edisgo_reduced: EDisGo, busmap_df: DataFrame, timestep: str
 ) -> Tuple[DataFrame, float]:
+    """
+    Maps the results of the node voltages between the root object and the reduced
+    object. For the mapping the busmap is used. It is calculated the voltage
+    difference and the root-mean-square error.
+
+    The calculation is performed for one timestep or the min or max values of the
+    node voltages.
+
+    Parameters
+    ----------
+    edisgo_root: :obj:`EDisGo`
+        Unreduced EDisGo object.
+    edisgo_reduced: :obj:`EDisGo`
+        Reduced EDisGo object.
+    busmap_df: :obj:`pd.DataFrame`
+        Busmap for the mapping.
+    timestep: :obj:`str`
+        Select a timestep or 'min' or 'max'.
+
+    Returns
+    -------
+    voltages_df: :obj:`pd.DataFrame`
+        DataFrame with the voltages of the nodes and the differences.
+    rms: :obj:`str`
+        Calculated root-mean-square error.
+
+    """
     start_time = time()
     logger.info("Start - Voltage mapping")
 
@@ -2020,6 +2083,33 @@ def voltage_mapping(
 def line_apparent_power_mapping(
     edisgo_root: EDisGo, edisgo_reduced: EDisGo, linemap_df: DataFrame, timestep: str
 ) -> Tuple[DataFrame, float]:
+    """
+    Maps the results of the line loads between the root object and the reduced
+    object. For the mapping the linemap is used. It is calculated the apparent power
+    difference and the root-mean-square error.
+
+    The calculation is performed for one timestep or the min or max values of the
+    line loads (apparent power).
+
+    Parameters
+    ----------
+    edisgo_root: :obj:`EDisGo`
+        Unreduced EDisGo object.
+    edisgo_reduced: :obj:`EDisGo`
+        Reduced EDisGo object.
+    linemap_df: :obj:`pd.DataFrame`
+        Linemap for the mapping.
+    timestep: :obj:`str`
+        Select a timestep or 'min' or 'max'.
+
+    Returns
+    -------
+    s_df: :obj:`pd.DataFrame`
+        DataFrame with the apparent power of the lines and the differences.
+    rms: :obj:`str`
+        Calculated root-mean-square error.
+
+    """
     start_time = time()
     logger.info("Start - Line apparent power mapping")
 

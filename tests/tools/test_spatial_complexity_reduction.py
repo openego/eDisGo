@@ -10,6 +10,8 @@ from edisgo.tools.spatial_complexity_reduction import (
     make_busmap,
     make_grid_list,
     reduce_edisgo,
+    remove_lines_under_one_meter,
+    remove_one_meter_lines,
     spatial_complexity_reduction,
 )
 
@@ -320,3 +322,37 @@ class TestSpatialComplexityReduction:
         # Check that edisgo_object can run power flow and reinforce
         edisgo_reduced.analyze()
         edisgo_reduced.reinforce()
+
+    def test_remove_one_meter_lines(self, test_edisgo_obj):
+        edisgo_root = copy.deepcopy(test_edisgo_obj)
+
+        edisgo_clean = remove_one_meter_lines(edisgo_root)
+
+        # Check that the generator changed the bus
+        df_old = edisgo_root.topology.generators_df
+        df_new = edisgo_clean.topology.generators_df
+        assert (
+            df_old.loc[df_old["bus"] == "Bus_GeneratorFluctuating_19", "bus"].index
+            == df_new.loc[df_new["bus"] == "Bus_BranchTee_LVGrid_5_6", "bus"].index
+        )
+        # Check that the load changed the bus
+        df_old = edisgo_root.topology.loads_df
+        df_new = edisgo_clean.topology.loads_df
+        assert (
+            df_old.loc[df_old["bus"] == "Bus_Load_residential_LVGrid_5_3", "bus"].index
+            == df_new.loc[df_new["bus"] == "Bus_BranchTee_LVGrid_5_6", "bus"].index
+        )
+        # Check that 2 lines were removed
+        assert len(edisgo_root.topology.lines_df) - 2 == len(
+            edisgo_clean.topology.lines_df
+        )
+
+    def test_remove_lines_under_one_meter(self, test_edisgo_obj):
+        edisgo_root = copy.deepcopy(test_edisgo_obj)
+
+        edisgo_clean = remove_lines_under_one_meter(edisgo_root)
+
+        # Check that 1 line was removed
+        assert len(edisgo_root.topology.lines_df) - 1 == len(
+            edisgo_clean.topology.lines_df
+        )
