@@ -1041,6 +1041,7 @@ class EDisGo:
         split_voltage_band: bool = True,
         mode: str | None = None,
         without_generator_import: bool = False,
+        n_minus_one: bool = False,
         **kwargs,
     ) -> Results:
         """
@@ -1090,6 +1091,7 @@ class EDisGo:
                     split_voltage_band=split_voltage_band,
                     mode="mv",
                     without_generator_import=without_generator_import,
+                    n_minus_one=n_minus_one,
                 )
 
             if mode != "mv":
@@ -1107,6 +1109,7 @@ class EDisGo:
                     split_voltage_band=split_voltage_band,
                     mode=reinforce_mode,
                     without_generator_import=without_generator_import,
+                    n_minus_one=n_minus_one,
                 )
 
             if mode not in ["mv", "lv"]:
@@ -1122,6 +1125,7 @@ class EDisGo:
                 split_voltage_band=split_voltage_band,
                 mode=mode,
                 without_generator_import=without_generator_import,
+                n_minus_one=n_minus_one,
             )
 
         # add measure to Results object
