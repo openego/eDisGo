@@ -59,7 +59,7 @@ class TestEDisGo:
             save_electromobility=False,
         )
         # overwrite config with config_path=None and check
-        self.edisgo.config = {"config_path": None}
+        self.edisgo.config = {"config_path": save_dir}
         assert config_orig._data == self.edisgo.config._data
         # overwrite config from json and check
         self.edisgo.config = {"from_json": True, "config_path": save_dir}
