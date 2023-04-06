@@ -13,7 +13,7 @@ from shapely.geometry import Point
 from edisgo import EDisGo
 from edisgo.io import ding0_import
 from edisgo.network.components import Switch
-from edisgo.network.grids import LVGrid
+from edisgo.network.grids import LVGrid, MVGrid
 from edisgo.network.topology import Topology
 from edisgo.tools.geopandas_helper import GeoPandasGridContainer
 
@@ -30,6 +30,12 @@ class TestTopology:
     def setup_fixture(self):
         self.topology = Topology()
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
+
+    def test_grids(self):
+        grids = list(self.topology.grids)
+        assert len(grids) == 11
+        assert isinstance(grids[0], MVGrid)
+        assert isinstance(grids[1], LVGrid)
 
     def test_lv_grids(self):
         lv_grids = list(self.topology.lv_grids)
@@ -868,6 +874,49 @@ class TestTopology:
         assert "generators.csv" in saved_files
 
         shutil.rmtree(dir)
+
+    def test_assign_feeders(self):
+        # Test mode 'grid_feeder'
+        self.topology.assign_feeders(mode="grid_feeder")
+        assert self.topology.buses_df.loc[
+            ["Bus_MVStation_1", "Bus_Generator_1"], "grid_feeder"
+        ].to_list() == [
+            "station_node",
+            "Bus_BranchTee_MVGrid_1_1",
+        ]
+        assert self.topology.lines_df.loc[
+            ["Line_10003", "Line_10004"], "grid_feeder"
+        ].to_list() == [
+            "Bus_BranchTee_MVGrid_1_1",
+            "Bus_BranchTee_MVGrid_1_4",
+        ]
+
+        # test mode 'mv_feeder'
+        self.topology.assign_feeders(mode="mv_feeder")
+        assert self.topology.buses_df.loc[
+            ["Bus_MVStation_1", "Bus_Generator_1"], "mv_feeder"
+        ].to_list() == [
+            "station_node",
+            "Bus_BranchTee_MVGrid_1_1",
+        ]
+        assert self.topology.lines_df.loc[
+            ["Line_10003", "Line_10004"], "mv_feeder"
+        ].to_list() == [
+            "Bus_BranchTee_MVGrid_1_1",
+            "Bus_BranchTee_MVGrid_1_4",
+        ]
+        lv_grids_mv_bus = self.topology.grids[2].transformers_df["bus0"][0]
+        feeder_of_lv_grids_mv_bus = self.topology.buses_df.loc[
+            lv_grids_mv_bus, "mv_feeder"
+        ]
+        list_of_feeders = self.topology.grids[2].buses_df["mv_feeder"].to_list()
+        assert len(list_of_feeders) == 15
+        assert len(set(list_of_feeders)) == 1
+        assert list_of_feeders[0] == feeder_of_lv_grids_mv_bus
+        list_of_feeders = self.topology.grids[2].lines_df["mv_feeder"].to_list()
+        assert len(list_of_feeders) == 14
+        assert len(set(list_of_feeders)) == 1
+        assert list_of_feeders[0] == feeder_of_lv_grids_mv_bus
 
 
 class TestTopologyWithEdisgoObject:
