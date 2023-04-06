@@ -1875,6 +1875,7 @@ class Topology:
         )
 
         # add component to newly created bus
+        comp_data.pop("geom")
         if comp_type == "generator":
             comp_name = self.add_generator(bus=bus, **comp_data)
         elif comp_type == "charging_point":
