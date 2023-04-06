@@ -1,5 +1,5 @@
 beautifulsoup4
-dash
+dash < 2.9.0
 demandlib
 docutils == 0.16.0
 egoio >= 0.4.7

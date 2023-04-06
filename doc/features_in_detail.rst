@@ -62,8 +62,8 @@ Identification of overloading and voltage issues is conducted in
 Voltage issues are determined based on allowed voltage deviations set in the config file
 :ref:`config_grid_expansion` in section `grid_expansion_allowed_voltage_deviations`. It is possible
 to set one allowed voltage deviation that is used for MV and LV or define separate allowed voltage deviations.
-Which allowed voltage deviation is used is defined through the parameter *combined_analysis* of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid`.
-By default *combined_analysis* is set to false, resulting in separate voltage limits for MV and LV, as a combined limit
+Which allowed voltage deviation is used is defined through the parameter *split_voltage_band* of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid`.
+By default *split_voltage_band* is set to True, resulting in separate voltage limits for MV and LV, as a combined limits
 may currently lead to problems if voltage deviation in MV grid is already close to the allowed limit, in which case the remaining allowed voltage deviation in the LV grids is close to zero.
 
 Overloading is determined based on allowed load factors that are also defined in the config file
@@ -92,8 +92,8 @@ details and implementation.
 Check line load
 """"""""""""""""""
 
-    Exceedance of allowed line load of MV and LV lines is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_line_load` and
-    :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_line_load`, respectively.
+    Exceedance of allowed line load of MV and LV lines is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_line_overload` and
+    :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_line_oveload`, respectively.
     The functions use the given load factor and the maximum allowed current given by the manufacturer (see *I_max_th* in tables :ref:`lv_cables_table`,
     :ref:`mv_cables_table` and :ref:`mv_lines_table`) to calculate the allowed
     line load of each LV and MV line. If the line load calculated in the power flow analysis exceeds the allowed line
@@ -103,8 +103,8 @@ Check line load
 Check station load
 """"""""""""""""""""
 
-    Exceedance of allowed station load of HV/MV and MV/LV stations is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.hv_mv_station_load` and
-    :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_lv_station_load`, respectively.
+    Exceedance of allowed station load of HV/MV and MV/LV stations is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.hv_mv_station_overload` and
+    :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_lv_station_overload`, respectively.
     The functions use the given load factor and the maximum allowed apparent power given by the manufacturer (see *S_nom* in tables :ref:`lv_transformers_table`,
     and :ref:`mv_transformers_table`) to calculate the allowed
     apparent power of the stations. If the apparent power calculated in the power flow analysis exceeds the allowed apparent power the station is reinforced
@@ -113,8 +113,8 @@ Check station load
 Check line and station voltage deviation
 """"""""""""""""""""""""""""""""""""""""""
 
-  Compliance with allowed voltage deviation limits in MV and LV grids is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_voltage_deviation` and
-  :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_voltage_deviation`, respectively.
+  Compliance with allowed voltage deviation limits in MV and LV grids is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_voltage_issue` and
+  :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_voltage_issue`, respectively.
   The functions check if the voltage deviation at a node calculated in the power flow analysis exceeds the allowed voltage deviation. If it does,
   the line is reinforced (see :ref:`grid-expansion-measure-lv-station-voltage-label` or
   :ref:`grid-expansion-measure-line-voltage-label`).

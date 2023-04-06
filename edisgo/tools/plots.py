@@ -19,7 +19,8 @@ from networkx import Graph
 from pyproj import Transformer
 from pypsa import Network as PyPSANetwork
 
-from edisgo.tools import session_scope, tools
+from edisgo.flex_opt.check_tech_constraints import lines_relative_load
+from edisgo.tools import session_scope
 from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates_graph
 
 if TYPE_CHECKING:
@@ -225,13 +226,11 @@ def mv_grid_topology(
     timestep=None,
     line_color=None,
     node_color=None,
-    line_load=None,
     grid_expansion_costs=None,
     filename=None,
     arrows=False,
     grid_district_geom=True,
     background_map=True,
-    voltage=None,
     limits_cb_lines=None,
     limits_cb_nodes=None,
     xlim=None,
@@ -279,13 +278,12 @@ def mv_grid_topology(
           Node color as well as size is set according to type of node
           (generator, MV station, etc.).
         * 'voltage'
-          Node color is set according to maximum voltage at each node.
-          Voltages of nodes in MV network must be provided by parameter
-          `voltage`.
+          Node color is set according to voltage at each node. In case several
+          time steps are selected the maximum voltage is shown.
         * 'voltage_deviation'
-          Node color is set according to voltage deviation from 1 p.u..
-          Voltages of nodes in MV network must be provided by parameter
-          `voltage`.
+          Node color is set according to voltage deviation from 1 p.u.. In case several
+          time steps are selected the maximum absolute voltage deviation from 1 p.u.
+          is shown.
         * 'storage_integration'
           Only storage units are plotted. Size of node corresponds to size of
           storage.
@@ -324,11 +322,6 @@ def mv_grid_topology(
     background_map : :obj:`Boolean`
         If True map is drawn in the background. This also requires the
         contextily package to be installed. Default: True.
-    voltage : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with voltage results from power flow analysis in p.u.. Index
-        of the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
-        columns are the bus representatives. Only needs to be provided when
-        parameter `node_color` is set to 'voltage'. Default: None.
     limits_cb_lines : :obj:`tuple`
         Tuple with limits for colorbar of line color. First entry is the
         minimum and second entry the maximum value. Only needs to be provided
@@ -455,15 +448,12 @@ def mv_grid_topology(
         return bus_sizes, bus_colors
 
     def nodes_by_voltage(buses, voltages):
-        # ToDo: Right now maximum voltage is used. Check if this should be
-        #  changed
         bus_colors_dict = {}
         bus_sizes_dict = {}
         if timestep is not None:
             bus_colors_dict.update({bus: voltages.loc[timestep, bus] for bus in buses})
         else:
             bus_colors_dict.update({bus: max(voltages.loc[:, bus]) for bus in buses})
-
         bus_sizes_dict.update({bus: 100000 ^ 2 for bus in buses})
         return bus_sizes_dict, bus_colors_dict
 
@@ -472,7 +462,7 @@ def mv_grid_topology(
         bus_sizes_dict = {}
         if timestep is not None:
             bus_colors_dict.update(
-                {bus: 100 * abs(1 - voltages.loc[timestep, bus]) for bus in buses}
+                {bus: 100 * (voltages.loc[timestep, bus] - 1) for bus in buses}
             )
         else:
             bus_colors_dict.update(
@@ -580,9 +570,11 @@ def mv_grid_topology(
 
     # line colors
     if line_color == "loading":
-        line_colors = tools.calculate_relative_line_load(
-            edisgo_obj, pypsa_plot.lines.index, timestep
-        ).max()
+        line_colors = lines_relative_load(edisgo_obj, pypsa_plot.lines.index)
+        if timestep is None:
+            line_colors = line_colors.max()
+        else:
+            line_colors = line_colors.loc[timestep, :]
     elif line_color == "expansion_costs":
         node_color = "expansion_costs"
         line_costs = pypsa_plot.lines.join(
@@ -597,11 +589,13 @@ def mv_grid_topology(
         bus_sizes, bus_colors = nodes_by_technology(pypsa_plot.buses.index, edisgo_obj)
         bus_cmap = None
     elif node_color == "voltage":
-        bus_sizes, bus_colors = nodes_by_voltage(pypsa_plot.buses.index, voltage)
+        bus_sizes, bus_colors = nodes_by_voltage(
+            pypsa_plot.buses.index, edisgo_obj.results.v_res
+        )
         bus_cmap = plt.cm.Blues
     elif node_color == "voltage_deviation":
         bus_sizes, bus_colors = nodes_by_voltage_deviation(
-            pypsa_plot.buses.index, voltage
+            pypsa_plot.buses.index, edisgo_obj.results.v_res
         )
         bus_cmap = plt.cm.Blues
     elif node_color == "storage_integration":
@@ -742,9 +736,15 @@ def mv_grid_topology(
         cb_voltage.norm.vmin = limits_cb_nodes[0]
         cb_voltage.norm.vmax = limits_cb_nodes[1]
         if node_color == "voltage":
-            cb_voltage.set_label("Maximum voltage in p.u.")
+            if timestep is not None:
+                cb_voltage.set_label("Voltage in p.u.")
+            else:
+                cb_voltage.set_label("Maximum voltage in p.u.")
         else:
-            cb_voltage.set_label("Voltage deviation in %")
+            if timestep is not None:
+                cb_voltage.set_label("Voltage deviation from 1 p.u.")
+            else:
+                cb_voltage.set_label("Maximum absolute voltage deviation from 1 p.u.")
 
     # storage_units
     if node_color == "expansion_costs":
