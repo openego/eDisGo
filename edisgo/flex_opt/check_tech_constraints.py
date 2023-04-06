@@ -940,7 +940,7 @@ def allowed_voltage_limits(edisgo_obj, buses=None, split_voltage_band=True):
         allowed_buses = upper.columns
         buses_not_incl = list(set(buses) - set(allowed_buses))
         if buses_not_incl:
-            logger.debug(
+            logger.warning(
                 f"Allowed voltage limits cannot be determined for all given buses as "
                 f"voltage information from power flow analysis is needed to calculate "
                 f"allowed voltage for the MV/LV and LV level but the buses were not "
