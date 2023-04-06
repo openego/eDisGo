@@ -65,6 +65,10 @@ def oedb(edisgo_object, scenario, engine):
             .filter(
                 egon_hp_capacity_buildings.scenario == scenario,
                 egon_hp_capacity_buildings.building_id.in_(building_ids),
+                egon_hp_capacity_buildings.hp_capacity
+                <= edisgo_object.config["grid_connection"][
+                    "upper_limit_voltage_level_4"
+                ],
             )
             .outerjoin(  # join to obtain zensus cell ID
                 egon_map_zensus_mvgd_buildings,
@@ -110,6 +114,10 @@ def oedb(edisgo_object, scenario, engine):
             .filter(
                 egon_district_heating.scenario == scenario,
                 egon_district_heating.carrier == "heat_pump",
+                egon_district_heating.capacity
+                <= edisgo_object.config["grid_connection"][
+                    "upper_limit_voltage_level_4"
+                ],
                 # filter heat pumps inside MV grid district geometry
                 db.sql_within(
                     egon_district_heating.geometry,
