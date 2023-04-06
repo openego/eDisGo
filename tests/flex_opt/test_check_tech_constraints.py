@@ -23,10 +23,10 @@ class TestCheckTechConstraints:
         """
         self.edisgo.analyze()
 
-    def test_mv_line_max_overload(self):
+    def test_mv_line_max_relative_overload(self):
         # implicitly checks function _line_overload
 
-        df = check_tech_constraints.mv_line_max_overload(self.edisgo)
+        df = check_tech_constraints.mv_line_max_relative_overload(self.edisgo)
         # check shape of dataframe
         assert (4, 3) == df.shape
         # check relative overload of one line
@@ -37,10 +37,10 @@ class TestCheckTechConstraints:
         )
         assert df.at["Line_10005", "time_index"] == self.timesteps[3]
 
-    def test_lv_line_max_overload(self):
+    def test_lv_line_max_relative_overload(self):
         # implicitly checks function _line_overload
 
-        df = check_tech_constraints.lv_line_max_overload(self.edisgo)
+        df = check_tech_constraints.lv_line_max_relative_overload(self.edisgo)
         # check shape of dataframe
         assert (2, 3) == df.shape
         # check relative overload of one line

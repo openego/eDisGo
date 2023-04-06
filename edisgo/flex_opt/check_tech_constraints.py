@@ -9,7 +9,7 @@ from edisgo.network.grids import LVGrid, MVGrid
 logger = logging.getLogger(__name__)
 
 
-def mv_line_max_overload(edisgo_obj):
+def mv_line_max_relative_overload(edisgo_obj):
     """
     Returns time step and value of most severe overloading of lines in MV network.
 
@@ -21,7 +21,7 @@ def mv_line_max_overload(edisgo_obj):
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded MV lines, their maximum relative over-loading
-        (maximum calculated apparent power over allowed apparent power) and the
+        in p.u. (maximum calculated apparent power over allowed apparent power) and the
         corresponding time step.
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
@@ -38,7 +38,7 @@ def mv_line_max_overload(edisgo_obj):
 
     """
 
-    crit_lines = _line_max_overload(edisgo_obj, voltage_level="mv")
+    crit_lines = _line_max_relative_overload(edisgo_obj, voltage_level="mv")
 
     if not crit_lines.empty:
         logger.debug(
@@ -52,7 +52,7 @@ def mv_line_max_overload(edisgo_obj):
     return crit_lines
 
 
-def lv_line_max_overload(edisgo_obj):
+def lv_line_max_relative_overload(edisgo_obj):
     """
     Returns time step and value of most severe overloading of lines in LV networks.
 
@@ -64,7 +64,7 @@ def lv_line_max_overload(edisgo_obj):
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded LV lines, their maximum relative over-loading
-        (maximum calculated apparent power over allowed apparent power) and the
+        in p.u. (maximum calculated apparent power over allowed apparent power) and the
         corresponding time step.
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
@@ -81,7 +81,7 @@ def lv_line_max_overload(edisgo_obj):
 
     """
 
-    crit_lines = _line_max_overload(edisgo_obj, voltage_level="lv")
+    crit_lines = _line_max_relative_overload(edisgo_obj, voltage_level="lv")
 
     if not crit_lines.empty:
         logger.debug(
@@ -95,7 +95,7 @@ def lv_line_max_overload(edisgo_obj):
     return crit_lines
 
 
-def _line_max_overload(edisgo_obj, voltage_level):
+def _line_max_relative_overload(edisgo_obj, voltage_level):
     """
     Returns time step and value of most severe overloading of lines.
 
@@ -110,7 +110,7 @@ def _line_max_overload(edisgo_obj, voltage_level):
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded lines, their maximum relative over-loading
-        (maximum calculated apparent power over allowed apparent power) and the
+        in p.u. (maximum calculated apparent power over allowed apparent power) and the
         corresponding time step.
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative

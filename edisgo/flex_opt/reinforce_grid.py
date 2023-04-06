@@ -209,14 +209,14 @@ def reinforce_grid(
     crit_lines = (
         pd.DataFrame(dtype=float)
         if mode == "lv"
-        else checks.mv_line_max_overload(edisgo_reinforce)
+        else checks.mv_line_max_relative_overload(edisgo_reinforce)
     )
 
     if not mode or mode == "lv":
         crit_lines = pd.concat(
             [
                 crit_lines,
-                checks.lv_line_max_overload(edisgo_reinforce),
+                checks.lv_line_max_relative_overload(edisgo_reinforce),
             ]
         )
 
@@ -277,14 +277,14 @@ def reinforce_grid(
         crit_lines = (
             pd.DataFrame(dtype=float)
             if mode == "lv"
-            else checks.mv_line_max_overload(edisgo_reinforce)
+            else checks.mv_line_max_relative_overload(edisgo_reinforce)
         )
 
         if not mode or mode == "lv":
             crit_lines = pd.concat(
                 [
                     crit_lines,
-                    checks.lv_line_max_overload(edisgo_reinforce),
+                    checks.lv_line_max_relative_overload(edisgo_reinforce),
                 ]
             )
 
@@ -499,14 +499,14 @@ def reinforce_grid(
     crit_lines = (
         pd.DataFrame(dtype=float)
         if mode == "lv"
-        else checks.mv_line_max_overload(edisgo_reinforce)
+        else checks.mv_line_max_relative_overload(edisgo_reinforce)
     )
 
     if not mode or mode == "lv":
         crit_lines = pd.concat(
             [
                 crit_lines,
-                checks.lv_line_max_overload(edisgo_reinforce),
+                checks.lv_line_max_relative_overload(edisgo_reinforce),
             ]
         )
 
@@ -567,14 +567,14 @@ def reinforce_grid(
         crit_lines = (
             pd.DataFrame(dtype=float)
             if mode == "lv"
-            else checks.mv_line_max_overload(edisgo_reinforce)
+            else checks.mv_line_max_relative_overload(edisgo_reinforce)
         )
 
         if not mode or mode == "lv":
             crit_lines = pd.concat(
                 [
                     crit_lines,
-                    checks.lv_line_max_overload(edisgo_reinforce),
+                    checks.lv_line_max_relative_overload(edisgo_reinforce),
                 ]
             )
 
