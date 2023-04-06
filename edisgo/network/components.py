@@ -837,12 +837,11 @@ class PotentialChargingParks(BasicComponent):
             Total gross designated charging park capacity
 
         """
-        return round(
+        return (
             self.charging_processes_df.groupby("charging_point_id")
             .max()
             .nominal_charging_capacity_kW.sum()
-            / self._edisgo_obj.electromobility.eta_charging_points,
-            1,
+            / self._edisgo_obj.electromobility.eta_charging_points
         )
 
     @property
