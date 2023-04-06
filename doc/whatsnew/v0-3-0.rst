@@ -15,3 +15,5 @@ Changes
 * Added class holding data from overlying grid, such as curtailment requirements and
   conventional generator dispatch `#335 <https://github.com/openego/eDisGo/pull/335>`_
 * Added integrity check for very short lines `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Refactoring of check_tech_constraints functions `#290 <https://github.com/openego/eDisGo/pull/290>`_
+* Add background map to plots `#346 <https://github.com/openego/eDisGo/pull/364>`_

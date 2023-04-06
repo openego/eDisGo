@@ -2126,7 +2126,7 @@ class TimeSeries:
         """
         Checks if all provided components exist in the network.
 
-        Raises warning if there any provided components that are not in the network.
+        Raises warning if there are any provided components that are not in the network.
 
         Parameters
         ----------
@@ -2156,9 +2156,7 @@ class TimeSeries:
             return set(component_names) - set(comps_not_in_network)
         return component_names
 
-    def resample_timeseries(
-        self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
-    ):
+    def resample(self, method: str = "ffill", freq: str | pd.Timedelta = "15min"):
         """
         Resamples all generator, load and storage time series to a desired resolution.
 
