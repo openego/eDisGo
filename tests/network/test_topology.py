@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import shutil
@@ -917,6 +918,16 @@ class TestTopology:
         assert len(list_of_feeders) == 14
         assert len(set(list_of_feeders)) == 1
         assert list_of_feeders[0] == feeder_of_lv_grids_mv_bus
+
+    def test_aggregate_lv_grid_buses_on_station(self):
+        """Test method aggregate_lv_grid_buses_on_station"""
+
+        lv_grid_id = str(list(self.topology.mv_grid.lv_grids)[1])
+        topology_obj = copy.deepcopy(self.topology)
+        topology_obj.aggregate_lv_grid_buses_on_station(lv_grid_id=lv_grid_id)
+
+        assert list(self.topology.mv_grid.lv_grids)[1].buses_df.shape[0] == 15
+        assert list(topology_obj.mv_grid.lv_grids)[1].buses_df.shape[0] == 1
 
 
 class TestTopologyWithEdisgoObject:

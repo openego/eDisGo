@@ -2202,6 +2202,19 @@ class TimeSeries:
         # set new timeindex
         self._timeindex = index
 
+    def scale_timeseries(
+        self, p_scaling_factor: float = 1.0, q_scaling_factor: float = 1.0
+    ):
+        attributes_type = ["generators", "loads", "storage_units"]
+        power_types = {
+            "active_power": p_scaling_factor,
+            "reactive_power": q_scaling_factor,
+        }
+        for suffix, scaling_factor in power_types.items():
+            for type in attributes_type:
+                attribute = f"{type}_{suffix}"
+                setattr(self, attribute, getattr(self, attribute) * scaling_factor)
+
 
 class TimeSeriesRaw:
     """
