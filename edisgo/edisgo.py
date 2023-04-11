@@ -2651,7 +2651,7 @@ class EDisGo:
                 (active_power[comps_complete].max() > comps.loc[comps_complete, attr])
             ]
 
-            if len(exceeding) > 0:
+            if len(exceeding) > 1e-6:
                 logger.warning(
                     f"Values of active power in the timeseries object exceed {attr} for"
                     f" the following {comp_type}: {exceeding.values}"
