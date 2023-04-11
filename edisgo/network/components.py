@@ -163,7 +163,7 @@ class Component(BasicComponent):
     @property
     def geom(self):
         """
-        Geo location of component.
+        Geolocation of component.
 
         Returns
         --------
@@ -827,7 +827,7 @@ class PotentialChargingParks(BasicComponent):
     @property
     def designated_charging_point_capacity(self):
         """
-        Total gross designated charging park capacity.
+        Total gross designated charging park capacity in kW.
 
         This is not necessarily equal to the connection rating.
 
