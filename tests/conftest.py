@@ -20,6 +20,10 @@ def pytest_configure(config):
     pytest.ding0_test_network_3_path = os.path.join(
         os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_3"
     )
+    # real ding0 grid containing new egon data like flexibilities
+    pytest.ding0_test_network_4_path = os.path.join(
+        os.path.realpath(os.path.dirname(__file__)), "data/ding0_test_network_4.zip"
+    )
 
     pytest.simbev_example_scenario_path = os.path.join(
         os.path.realpath(os.path.dirname(__file__)), "data/simbev_example_scenario"

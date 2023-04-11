@@ -3,7 +3,8 @@ import numpy as np
 # import pandas as pd
 import pytest
 
-from edisgo import EDisGo
+# from edisgo import EDisGo
+from edisgo.edisgo import import_edisgo_from_files
 from edisgo.opf.timeseries_reduction import (
     _scored_most_critical_loading,
     _scored_most_critical_loading_time_interval,
@@ -18,9 +19,18 @@ from edisgo.opf.timeseries_reduction import (
 class TestTimeseriesReduction:
     @classmethod
     def setup_class(self):
-        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        self.edisgo.set_time_series_worst_case_analysis()
-        self.timesteps = self.edisgo.timeseries.timeindex
+        # self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        # self.edisgo.set_time_series_worst_case_analysis()
+        # self.timesteps = self.edisgo.timeseries.timeindex
+        self.edisgo = import_edisgo_from_files(
+            pytest.ding0_test_network_4_path,
+            import_timeseries=True,
+            import_electromobility=True,
+            import_heat_pump=True,
+            import_dsm=True,
+            import_overlying_grid=True,
+            from_zip_archive=True,
+        )
         # timeindex = pd.date_range("1/1/2018", periods=168, freq="H")
         # gens_ts = pd.DataFrame(
         #     data={
