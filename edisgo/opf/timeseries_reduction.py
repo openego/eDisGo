@@ -58,9 +58,25 @@ def _scored_most_critical_loading(edisgo_obj):
     return crit_lines_score.sort_values(ascending=False)
 
 
-def _scored_most_critical_loading_MH(edisgo_obj, window_days):
+def _scored_most_critical_loading_time_interval(edisgo_obj, window_days):
     """
-    Method to get time intervall which causes highest network expansion costs
+    Get the time steps with the most critical overloadings for flexibility
+    optimization.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object
+    window_days : int
+        Amount of continuous days that violation is determined for. Default: 7
+
+    Returns
+    --------
+    `pandas.DataFrame`
+        Contains time intervals and first time step of these intervals with worst
+        overloadings for given timeframe. Also contains information of how many
+        lines and transformers have had their worst overloading within the considered
+        timeframes.
     """
 
     # Get current relative to allowed current
@@ -105,9 +121,9 @@ def _scored_most_critical_loading_MH(edisgo_obj, window_days):
         for timestep in timesteps
     ]
     time_intervals_df = pd.DataFrame(
-        index=range(len(time_intervals)), columns=["OL_ts", "OL_first_t", "OL_max"]
+        index=range(len(time_intervals)), columns=["OL_ts", "OL_t1", "OL_max"]
     )
-    time_intervals_df["OL_first_t"] = timesteps
+    time_intervals_df["OL_t1"] = timesteps
     for i in range(len(time_intervals)):
         time_intervals_df["OL_ts"][i] = time_intervals[i]
     lines_no_max = crit_lines_score.columns.values
@@ -173,7 +189,26 @@ def _scored_most_critical_voltage_issues(edisgo_obj):
     return voltage_diff.sort_values(ascending=False)
 
 
-def _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days):
+def _scored_most_critical_voltage_issues_time_interval(edisgo_obj, window_days):
+    """
+    Get the time steps with the most critical voltage violations for flexibilities
+    optimization.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object
+    window_days : int
+        Amount of continuous days that violation is determined for. Default: 7
+
+    Returns
+    --------
+    `pandas.DataFrame`
+        Contains time intervals and first time step of these intervals with worst
+        voltage violations for given timeframe. Also contains information of how many
+        lines and transformers have had their worst voltage violation within the
+        considered timeframes.
+    """
     voltage_diff = check_tech_constraints.voltage_deviation_from_allowed_voltage_limits(
         edisgo_obj
     ).fillna(0)
@@ -256,9 +291,9 @@ def _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days):
         for timestep in timesteps
     ]
     time_intervals_df = pd.DataFrame(
-        index=range(len(time_intervals)), columns=["V_ts", "V_first_t", "V_max"]
+        index=range(len(time_intervals)), columns=["V_ts", "V_t1", "V_max"]
     )
-    time_intervals_df["V_first_t"] = timesteps
+    time_intervals_df["V_t1"] = timesteps
     for i in range(len(time_intervals)):
         time_intervals_df["V_ts"][i] = time_intervals[i]
 
@@ -468,19 +503,27 @@ def get_steps_flex_opf(
         The eDisGo API object
     num_ti_loading: int
         The number of most critical overloading time intervals to select, if None
-        percentage is used
+        percentage is used. Default: None
     num_ti_voltage: int
-        The number of most critical voltage issues to select, if None percentage is used
+        The number of most critical voltage issues to select, if None percentage is
+        used. Default: None
     percentage : float
-        The percentage of most critical time intervals to select
+        The percentage of most critical time intervals to select. Default: 0.1
     window_days : int
-
+        Amount of continuous days that violation is determined for. Default: 7
     save_steps : bool
+        If set to True, dataframe with time intervals is saved to csv file.
+        Default: False
+    path:
+        Directory the csv file is saved to. Per default it takes the current
+        working directory.
 
     Returns
     --------
-    list
-        list of time intervals (`pandas.DatetimeIndex`) for OPF
+    `pandas.DataFrame`
+        Contains time intervals and first time step of these intervals with worst grid
+        violations for given timeframe. Also contains information of how many lines and
+        transformers have had their worst violation within the considered timeframes.
     """
     # Run power flow if not available
     if edisgo_obj.results.i_res is None or edisgo_obj.results.i_res.empty:
@@ -488,7 +531,9 @@ def get_steps_flex_opf(
         edisgo_obj.analyze(raise_not_converged=False)  # Todo: raise warning?
 
     # Select most critical time intervalls based on current violations
-    loading_scores = _scored_most_critical_loading_MH(edisgo_obj, window_days)
+    loading_scores = _scored_most_critical_loading_time_interval(
+        edisgo_obj, window_days
+    )
     if num_ti_loading is None:
         num_ti_loading = int(np.ceil(len(loading_scores.OL_ts) * percentage))
     else:
@@ -503,7 +548,9 @@ def get_steps_flex_opf(
     steps = loading_scores.iloc[:num_ti_loading]
 
     # Select most critical steps based on voltage violations
-    voltage_scores = _scored_most_critical_voltage_issues_MH(edisgo_obj, window_days)
+    voltage_scores = _scored_most_critical_voltage_issues_time_interval(
+        edisgo_obj, window_days
+    )
     if num_ti_voltage is None:
         num_ti_voltage = int(np.ceil(len(voltage_scores.V_ts) * percentage))
     else:
@@ -522,7 +569,7 @@ def get_steps_flex_opf(
 
     if save_steps:
         abs_path = os.path.abspath(path)
-        steps[["OL_first_t", "OL_max", "V_first_t", "V_max"]].to_csv(
+        steps.to_csv(
             os.path.join(
                 abs_path,
                 str(edisgo_obj.topology.id) + "_t" + str(window_days * 24 + 1) + ".csv",
@@ -593,9 +640,9 @@ def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):
     return linked_steps
 
 
-def distribute_og_timeseries(edisgo_obj):
+def distribute_overlying_grid_timeseries(edisgo_obj):
     edisgo_copy = deepcopy(edisgo_obj)
-    bool = False
+    a = False
     if not edisgo_copy.overlying_grid.electromobility_active_power.empty:
         cp_loads = edisgo_obj.topology.loads_df.index[
             edisgo_obj.topology.loads_df.type == "charging_point"
@@ -609,7 +656,7 @@ def distribute_og_timeseries(edisgo_obj):
             scaling_df.transpose()
             * edisgo_copy.overlying_grid.storage_units_active_power
         ).transpose()
-        bool = True
+        a = True
         # Scale dumb charging timeseries
         # scaling_factor = edisgo_copy.overlying_grid.electromobility_active_power /
         # edisgo_copy.timeseries.loads_active_power.loc[
@@ -636,7 +683,7 @@ def distribute_og_timeseries(edisgo_obj):
             scaling_df.transpose()
             * edisgo_copy.overlying_grid.storage_units_active_power
         ).transpose()
-        bool = True
+        a = True
     if not edisgo_copy.overlying_grid.heat_pump_central_active_power.empty:
         hp_district = edisgo_obj.topology.loads_df.index[
             (edisgo_obj.topology.loads_df.type == "heat_pump")
@@ -647,7 +694,7 @@ def distribute_og_timeseries(edisgo_obj):
         edisgo_copy.timeseries._loads_active_power.loc[
             :, hp_district
         ] = edisgo_copy.overlying_grid.heat_pump_central_active_power.sum(axis=1)[0]
-        bool = True
+        a = True
     if not edisgo_copy.overlying_grid.heat_pump_decentral_active_power.empty:
         hp_individual = edisgo_obj.topology.loads_df.index[
             (edisgo_obj.topology.loads_df.type == "heat_pump")
@@ -671,7 +718,7 @@ def distribute_og_timeseries(edisgo_obj):
             scaling_df.transpose()
             * edisgo_copy.overlying_grid.heat_pump_decentral_active_power
         ).transpose()
-        bool = True
+        a = True
         # scale with original heat pump time series
         # scaling_factor = (edisgo_copy.overlying_grid.heat_pump_decentral_active_power
         #                       /
@@ -700,7 +747,7 @@ def distribute_og_timeseries(edisgo_obj):
                 * edisgo_copy.overlying_grid.dsm_active_power.clip(lower=0)
             ).transpose()
         )
-        bool = True
+        a = True
     if not edisgo_copy.overlying_grid.renewables_curtailment.empty:
         # solar
         solar_gens = edisgo_obj.topology.generators_df.index[
@@ -754,7 +801,7 @@ def distribute_og_timeseries(edisgo_obj):
             edisgo_copy.timeseries._generators_active_power.loc[:, wind_gens]
             - curtailment
         )
-        bool = True
-    if bool:
+        a = True
+    if a:
         edisgo_copy.set_time_series_reactive_power_control()
     return edisgo_copy

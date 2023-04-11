@@ -1100,8 +1100,8 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     )
     if not (geothermal_feedin.empty | solarthermal_feedin.empty):
         # reduce heat demand of district heating by geothermal and solarthermal feedin
-        heat_df2.loc[:, heat_df2.columns.str.contains("district")] = (
-            heat_df2.loc[:, heat_df2.columns.str.contains("district")].values
+        heat_df2[heat_df2.columns.str.contains("district")] = (
+            heat_df2[heat_df2.columns.str.contains("district")].values
             - solarthermal_feedin.values
             - geothermal_feedin.values
         ).clip(
