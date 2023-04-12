@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import copy
 import logging
 import math
 
 from hashlib import md5
 from time import time
-from typing import Tuple, Union
+from typing import TYPE_CHECKING
 
 import networkx as nx
 import numpy as np
@@ -15,7 +17,6 @@ from pyproj import Transformer
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 
-from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.network import timeseries
 from edisgo.network.grids import Grid
@@ -23,8 +24,10 @@ from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
-# region Used functions
+
 def hash_df(df: DataFrame) -> str:
     """Calculate hash from busmap, good to check if dataframe has the same content."""
     s = df.to_json()
@@ -173,9 +176,6 @@ def rename_virtual_buses(
     return partial_busmap_df
 
 
-# endregion
-
-# region Preprocessing
 def remove_one_meter_lines(edisgo_root: EDisGo) -> EDisGo:
     """
     Remove one meter lines between the feeder and the buildings. This function is
@@ -405,12 +405,9 @@ def remove_lines_under_one_meter(edisgo_root: EDisGo) -> EDisGo:
     return edisgo_obj
 
 
-# endregion
-
-# region Complexity reduction
 def make_busmap_from_clustering(
     edisgo_root: EDisGo,
-    grid: Union[None, str] = None,
+    grid: None | str = None,
     mode: str = None,
     reduction_factor: float = 0.25,
     preserve_trafo_bus_coordinates: bool = True,
@@ -617,10 +614,10 @@ def make_busmap_from_clustering(
 
 def make_busmap_from_feeders(
     edisgo_root: EDisGo = None,
-    grid: Union[None, Grid] = None,
+    grid: None | Grid = None,
     mode: str = None,
     reduction_factor: float = 0.25,
-    reduction_factor_not_focused: Union[bool, float] = False,
+    reduction_factor_not_focused: bool | float = False,
 ) -> DataFrame:
     """
     Making busmap for the cluster area 'feeder'.
@@ -873,10 +870,10 @@ def make_busmap_from_feeders(
 
 def make_busmap_from_main_feeders(
     edisgo_root: EDisGo = None,
-    grid: Union[None, Grid] = None,
+    grid: None | Grid = None,
     mode: str = None,
     reduction_factor: float = 0.25,
-    reduction_factor_not_focused: Union[bool, float] = False,
+    reduction_factor_not_focused: bool | float = False,
 ) -> DataFrame:
     """
     Making busmap for the cluster area 'main_feeder'.
@@ -1292,8 +1289,8 @@ def make_busmap(
     mode: str = None,
     cluster_area: str = None,
     reduction_factor: float = 0.25,
-    reduction_factor_not_focused: Union[bool, float] = False,
-    grid: Union[None, Grid] = None,
+    reduction_factor_not_focused: bool | float = False,
+    grid: None | Grid = None,
 ) -> DataFrame:
     """
     Wrapper around the different make_busmap methods for the different cluster areas.
@@ -1449,7 +1446,7 @@ def reduce_edisgo(
     aggregation_mode: bool = True,
     load_aggregation_mode: str = "sector",
     generator_aggregation_mode: str = "type",
-) -> Tuple[EDisGo, DataFrame]:
+) -> tuple[EDisGo, DataFrame]:
     """
     Function to reduce the EDisGo object with a previously generated busmap.
 
@@ -1494,7 +1491,7 @@ def reduce_edisgo(
     In parts based on PyPSA spatial complexity reduction
     `https://pypsa.readthedocs.io/en/latest/examples/spatial-clustering.html`
     """
-    # region Define local functions
+
     def apply_busmap_on_busmap_df(series):
         series.loc["bus"] = busmap_df.loc[series.name, "new_bus"]
         series.loc["x"] = busmap_df.loc[series.name, "new_x"]
@@ -1711,9 +1708,6 @@ def reduce_edisgo(
         series.loc["bus1"] = busmap_df.loc[series.loc["bus1"], "new_bus"]
         return series
 
-    # endregion
-
-    # region Reduce EDisGO object
     start_time = time()
     logger.info("Start - Reducing edisgo object")
 
@@ -1887,7 +1881,6 @@ def reduce_edisgo(
             linemap_df.loc[old_line_name, "new_line_name"] = new_line_name
 
     logger.info("Finished in {}s".format(time() - start_time))
-    # endregion
 
     return edisgo_obj, linemap_df
 
@@ -1897,9 +1890,9 @@ def spatial_complexity_reduction(
     mode: str = "kmeansdijkstra",
     cluster_area: str = "feeder",
     reduction_factor: float = 0.5,
-    reduction_factor_not_focused: Union[float, bool] = 0.2,
+    reduction_factor_not_focused: float | bool = 0.2,
     apply_pseudo_coordinates: bool = True,
-) -> Tuple[EDisGo, DataFrame, DataFrame]:
+) -> tuple[EDisGo, DataFrame, DataFrame]:
     """
     Wrapper around the functions :func:`make_busmap<edisgo.tools.make_busmap>` and
     :func:`reduce_edisgo <edisgo.tools.spatial_complexity_reduction.reduce_edisgo>`
@@ -1929,133 +1922,60 @@ def spatial_complexity_reduction(
     return edisgo_reduced, busmap_df, linemap_df
 
 
-# endregion
-
-# region Postprocessing/Evaluation
-def save_results_reduced_to_min_max(
-    edisgo_root: EDisGo, edisgo_object_name: str
-) -> EDisGo:
+def compare_voltage(
+    edisgo_unreduced: EDisGo,
+    edisgo_reduced: EDisGo,
+    busmap_df: DataFrame,
+    timestep: str | pd.Timestamp,
+) -> tuple[DataFrame, float]:
     """
-    Save only the biggest and smallest value of the results DataFrames (v_res, i_res,
-    pfa_p, pfa_q), because they are most important for evaluating the violation of
-    operating limits.
+    Compares the voltages per node between the unreduced and the reduced EDisGo object.
+
+    The voltage difference for each node in p.u. as well as the root-mean-square error
+    is returned. For the mapping of nodes in the unreduced and reduced network the
+    busmap is used.
+    The calculation is performed for one timestep or the minimum or maximum values of
+    the node voltages.
 
     Parameters
     ----------
-    edisgo_root: :obj:`EDisGo`
-        EDisGo object to save.
-    edisgo_object_name: :obj:`str`
-        The path with name to save the object.
-    """
-    edisgo_obj = copy.deepcopy(edisgo_root)
-
-    def min_max(df):
-        min_df = df.min()
-        min_df.name = "min"
-        max_df = df.max()
-        max_df.name = "max"
-
-        df = pd.concat([min_df, max_df], axis=1)
-        df = df.T
-        return df
-
-    start_time = time()
-    logger.info("Start - Reduce results to min and max")
-
-    edisgo_obj.results.v_res = min_max(edisgo_obj.results.v_res)
-    edisgo_obj.results.i_res = min_max(edisgo_obj.results.i_res)
-    edisgo_obj.results.pfa_p = min_max(edisgo_obj.results.pfa_p)
-    edisgo_obj.results.pfa_q = min_max(edisgo_obj.results.pfa_q)
-
-    edisgo_obj.save(
-        edisgo_object_name, save_results=True, save_topology=True, save_timeseries=False
-    )
-
-    logger.info("Finished in {}s".format(time() - start_time))
-    return edisgo_obj
-
-
-# Analyze results
-def length_analysis(edisgo_obj: EDisGo) -> Tuple[float, float, float]:
-    """Calculates the line length in the grid_districts and voltage levels.
-
-    Parameters
-    ----------
-    edisgo_obj: :obj:`EDisGo`
-        EDisGo object to analyze.
-
-    Returns
-    -------
-    length_total: :obj:`float`
-        Total line length of the grid district.
-    length_mv: :obj:`float`
-        Total line length of the MV grid.
-    length_lv: :obj:`float`
-        Total line length of all LV grids.
-    """
-    start_time = time()
-    logger.info("Start - Length analysis")
-
-    length_total = edisgo_obj.topology.lines_df.length.sum()
-    mv_grid = edisgo_obj.topology.mv_grid
-    length_mv = mv_grid.lines_df.length.sum()
-    length_lv = length_total - length_mv
-
-    logger.info("Total length of lines: {:.2f}km".format(length_total))
-    logger.info("Total length of mv lines: {:.2f}km".format(length_mv))
-    logger.info("Total length of lv lines: {:.2f}km".format(length_lv))
-
-    logger.info("Finished in {}s".format(time() - start_time))
-    return length_total, length_mv, length_lv
-
-
-def voltage_mapping(
-    edisgo_root: EDisGo, edisgo_reduced: EDisGo, busmap_df: DataFrame, timestep: str
-) -> Tuple[DataFrame, float]:
-    """
-    Maps the results of the node voltages between the root object and the reduced
-    object. For the mapping the busmap is used. It is calculated the voltage
-    difference and the root-mean-square error.
-
-    The calculation is performed for one timestep or the min or max values of the
-    node voltages.
-
-    Parameters
-    ----------
-    edisgo_root: :obj:`EDisGo`
+    edisgo_unreduced : :class:`~.EDisGo`
         Unreduced EDisGo object.
-    edisgo_reduced: :obj:`EDisGo`
+    edisgo_reduced : :class:`~.EDisGo`
         Reduced EDisGo object.
-    busmap_df: :obj:`pd.DataFrame`
-        Busmap for the mapping.
-    timestep: :obj:`str`
-        Select a timestep or 'min' or 'max'.
+    busmap_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Busmap for the mapping of nodes.
+    timestep : str or :pandas:`pandas.Timestamp<Timestamp>`
+        Timestep for which to compare the bus voltage. Can either be a certain time
+        step or 'min' or 'max'.
 
     Returns
     -------
-    voltages_df: :obj:`pd.DataFrame`
-        DataFrame with the voltages of the nodes and the differences.
-    rms: :obj:`str`
-        Calculated root-mean-square error.
+    (:pandas:`pandas.DataFrame<DataFrame>`, rms)
+        Returns a tuple with the first entry being a DataFrame containing the node
+        voltages as well as voltage differences and the second entry being the
+        root-mean-square error.
+        Columns of the DataFrame are "v_unreduced" with voltage in p.u. in unreduced
+        EDisGo object, "v_reduced" with voltage in p.u. in reduced EDisGo object, and
+        "v_diff" with voltage difference in p.u. between voltages in unreduced and
+        reduced EDisGo object. Index of the DataFrame contains the bus names of buses in
+        the unreduced EDisGo object.
 
     """
-    start_time = time()
-    logger.info("Start - Voltage mapping")
-
     if timestep == "min":
-        logger.info("Voltage mapping for the minium values")
-        v_root = edisgo_root.results.v_res.min()
+        logger.debug("Voltage mapping for the minium values.")
+        v_root = edisgo_unreduced.results.v_res.min()
         v_reduced = edisgo_reduced.results.v_res.min()
     elif timestep == "max":
-        logger.info("Voltage mapping for the maximum values")
-        v_root = edisgo_root.results.v_res.max()
+        logger.debug("Voltage mapping for the maximum values.")
+        v_root = edisgo_unreduced.results.v_res.max()
         v_reduced = edisgo_reduced.results.v_res.max()
     else:
-        logger.info("Voltage mapping for timestep {}".format(timestep))
-        v_root = edisgo_root.results.v_res.loc[timestep]
+        logger.debug(f"Voltage mapping for timestep {timestep}.")
+        v_root = edisgo_unreduced.results.v_res.loc[timestep]
         v_reduced = edisgo_reduced.results.v_res.loc[timestep]
 
-    v_root.name = "v_root"
+    v_root.name = "v_unreduced"
     v_root = v_root.loc[busmap_df.index]
 
     voltages_df = v_root.to_frame()
@@ -2065,94 +1985,92 @@ def voltage_mapping(
             voltages_df.loc[index, "v_reduced"] = v_reduced.loc[
                 busmap_df.loc[index, "new_bus"]
             ]
-            voltages_df.loc[index, "new_bus_name"] = busmap_df.loc[index, "new_bus"]
         except KeyError:
             voltages_df.loc[index, "v_reduced"] = v_reduced.loc[
                 busmap_df.loc[index, "new_bus"].lstrip("virtual_")
             ]
-            voltages_df.loc[index, "new_bus_name"] = busmap_df.loc[
-                index, "new_bus"
-            ].lstrip("virtual_")
     voltages_df.loc[:, "v_diff"] = (
-        voltages_df.loc[:, "v_root"] - voltages_df.loc[:, "v_reduced"]
+        voltages_df.loc[:, "v_unreduced"] - voltages_df.loc[:, "v_reduced"]
     )
     rms = np.sqrt(
         mean_squared_error(
-            voltages_df.loc[:, "v_root"], voltages_df.loc[:, "v_reduced"]
+            voltages_df.loc[:, "v_unreduced"], voltages_df.loc[:, "v_reduced"]
         )
     )
-    logger.info(
-        "Root mean square value between edisgo_root "
-        "voltages and edisgo_reduced: v_rms = {:.2%}".format(rms)
+    logger.debug(
+        "Root-mean-square error between voltages in unreduced and reduced "
+        "EDisGo object is: rms = {:.2%}".format(rms)
     )
-
-    logger.info("Finished in {}s".format(time() - start_time))
     return voltages_df, rms
 
 
-def line_apparent_power_mapping(
-    edisgo_root: EDisGo, edisgo_reduced: EDisGo, linemap_df: DataFrame, timestep: str
-) -> Tuple[DataFrame, float]:
+def compare_apparent_power(
+    edisgo_unreduced: EDisGo,
+    edisgo_reduced: EDisGo,
+    linemap_df: DataFrame,
+    timestep: str,
+) -> tuple[DataFrame, float]:
     """
-    Maps the results of the line loads between the root object and the reduced
-    object. For the mapping the linemap is used. It is calculated the apparent power
-    difference and the root-mean-square error.
+    Compares the apparent power over each line between the unreduced and the reduced
+    EDisGo object.
 
-    The calculation is performed for one timestep or the min or max values of the
-    line loads (apparent power).
+    The difference of apparent power over each line in MVA as well as the
+    root-mean-square error is returned. For the mapping of lines in the unreduced and
+    reduced network the linemap is used.
+    The calculation is performed for one timestep or the minimum or maximum values of
+    the node voltages.
 
     Parameters
     ----------
-    edisgo_root: :obj:`EDisGo`
+    edisgo_unreduced : :class:`~.EDisGo`
         Unreduced EDisGo object.
-    edisgo_reduced: :obj:`EDisGo`
+    edisgo_reduced : :class:`~.EDisGo`
         Reduced EDisGo object.
-    linemap_df: :obj:`pd.DataFrame`
+    linemap_df : :pandas:`pandas.DataFrame<DataFrame>`
         Linemap for the mapping.
-    timestep: :obj:`str`
-        Select a timestep or 'min' or 'max'.
+    timestep : str or :pandas:`pandas.Timestamp<Timestamp>`
+        Timestep for which to compare the apparent power. Can either be a certain time
+        step or 'min' or 'max'.
 
     Returns
     -------
-    s_df: :obj:`pd.DataFrame`
-        DataFrame with the apparent power of the lines and the differences.
-    rms: :obj:`str`
-        Calculated root-mean-square error.
+    (:pandas:`pandas.DataFrame<DataFrame>`, rms)
+        Returns a tuple with the first entry being a DataFrame containing the apparent
+        power as well as difference of apparent power for each line and the second entry
+        being the root-mean-square error.
+        Columns of the DataFrame are "s_unreduced" with apparent power in MVA in
+        unreduced EDisGo object, "s_reduced" with apparent power in MVA in reduced
+        EDisGo object, and "s_diff" with difference in apparent power in MVA between
+        apparent power over line in unreduced and reduced EDisGo object. Index of the
+        DataFrame contains the line names of lines in the unreduced EDisGo object.
 
     """
-    start_time = time()
-    logger.info("Start - Line apparent power mapping")
-
     if timestep == "min":
-        logger.info("Apparent power mapping for the minium values")
-        s_root = edisgo_root.results.s_res.min()
+        logger.debug("Apparent power mapping for the minium values.")
+        s_root = edisgo_unreduced.results.s_res.min()
         s_reduced = edisgo_reduced.results.s_res.min()
     elif timestep == "max":
-        logger.info("Apparent power mapping for the maximum values")
-        s_root = edisgo_root.results.s_res.max()
+        logger.debug("Apparent power mapping for the maximum values.")
+        s_root = edisgo_unreduced.results.s_res.max()
         s_reduced = edisgo_reduced.results.s_res.max()
     else:
-        logger.info("Apparent power mapping for timestep {}".format(timestep))
-        s_root = edisgo_root.results.s_res.loc[timestep]
+        logger.debug("fApparent power mapping for timestep {timestep}.")
+        s_root = edisgo_unreduced.results.s_res.loc[timestep]
         s_reduced = edisgo_reduced.results.s_res.loc[timestep]
 
-    s_root.name = "s_root"
+    s_root.name = "s_unreduced"
     s_root = s_root.loc[linemap_df.index]
 
     s_df = s_root.to_frame()
 
     for index, row in s_df.iterrows():
         s_df.loc[index, "s_reduced"] = s_reduced.loc[linemap_df.loc[index][0]]
-        s_df.loc[index, "new_bus_name"] = linemap_df.loc[index][0]
-    s_df.loc[:, "s_diff"] = s_df.loc[:, "s_root"] - s_df.loc[:, "s_reduced"]
-    rms = np.sqrt(mean_squared_error(s_df.loc[:, "s_root"], s_df.loc[:, "s_reduced"]))
-    logger.info(
-        "Root mean square value between edisgo_root "
-        "s_res and edisgo_reduced: s_rms = {:.2}".format(rms)
+    s_df.loc[:, "s_diff"] = s_df.loc[:, "s_unreduced"] - s_df.loc[:, "s_reduced"]
+    rms = np.sqrt(
+        mean_squared_error(s_df.loc[:, "s_unreduced"], s_df.loc[:, "s_reduced"])
     )
-
-    logger.info("Finished in {}s".format(time() - start_time))
+    logger.debug(
+        "Root-mean-square error between apparent power in unreduced and reduced "
+        "EDisGo object is: rms = {:.2}".format(rms)
+    )
     return s_df, rms
-
-
-# endregion

@@ -2,11 +2,12 @@ import copy
 
 from contextlib import nullcontext as does_not_raise
 
+import numpy as np
 import pytest
 
 from edisgo import EDisGo
-from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates
 from edisgo.tools import spatial_complexity_reduction
+from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates
 
 
 class TestSpatialComplexityReduction:
@@ -206,9 +207,13 @@ class TestSpatialComplexityReduction:
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
         if grid == "MVGrid":
-            grid = spatial_complexity_reduction.make_grid_list(edisgo_root, grid="MVGrid_1")[0]
+            grid = spatial_complexity_reduction.make_grid_list(
+                edisgo_root, grid="MVGrid_1"
+            )[0]
         elif grid == "LVGrid":
-            grid = spatial_complexity_reduction.make_grid_list(edisgo_root, grid="LVGrid_9")[0]
+            grid = spatial_complexity_reduction.make_grid_list(
+                edisgo_root, grid="LVGrid_9"
+            )[0]
 
         busmap_df = spatial_complexity_reduction.make_busmap(
             edisgo_root,
@@ -301,7 +306,11 @@ class TestSpatialComplexityReduction:
     def test_spatial_complexity_reduction(self, test_edisgo_obj):
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
-        edisgo_reduced, busmap_df, linemap_df = spatial_complexity_reduction.spatial_complexity_reduction(
+        (
+            edisgo_reduced,
+            busmap_df,
+            linemap_df,
+        ) = spatial_complexity_reduction.spatial_complexity_reduction(
             edisgo_root,
             mode="kmeans",
             cluster_area="grid",
@@ -315,6 +324,48 @@ class TestSpatialComplexityReduction:
         # Check that edisgo_object can run power flow and reinforce
         edisgo_reduced.analyze()
         edisgo_reduced.reinforce()
+
+    def test_compare_voltage(self, test_edisgo_obj):
+        edisgo_root = copy.deepcopy(test_edisgo_obj)
+
+        (
+            edisgo_reduced,
+            busmap_df,
+            linemap_df,
+        ) = spatial_complexity_reduction.spatial_complexity_reduction(
+            edisgo_root,
+            mode="kmeans",
+            cluster_area="grid",
+            reduction_factor=0.2,
+            reduction_factor_not_focused=False,
+        )
+        edisgo_root.analyze()
+        edisgo_reduced.analyze()
+        _, rms = spatial_complexity_reduction.compare_voltage(
+            edisgo_root, edisgo_reduced, busmap_df, "max"
+        )
+        assert np.isclose(rms, 0.00766, atol=1e-5)
+
+    def test_compare_apparent_power(self, test_edisgo_obj):
+        edisgo_root = copy.deepcopy(test_edisgo_obj)
+
+        (
+            edisgo_reduced,
+            busmap_df,
+            linemap_df,
+        ) = spatial_complexity_reduction.spatial_complexity_reduction(
+            edisgo_root,
+            mode="kmeans",
+            cluster_area="grid",
+            reduction_factor=0.2,
+            reduction_factor_not_focused=False,
+        )
+        edisgo_root.analyze()
+        edisgo_reduced.analyze()
+        _, rms = spatial_complexity_reduction.compare_apparent_power(
+            edisgo_root, edisgo_reduced, linemap_df, "max"
+        )
+        assert np.isclose(rms, 2.873394, atol=1e-5)
 
     def test_remove_one_meter_lines(self, test_edisgo_obj):
         edisgo_root = copy.deepcopy(test_edisgo_obj)
@@ -343,7 +394,9 @@ class TestSpatialComplexityReduction:
     def test_remove_lines_under_one_meter(self, test_edisgo_obj):
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
-        edisgo_clean = spatial_complexity_reduction.remove_lines_under_one_meter(edisgo_root)
+        edisgo_clean = spatial_complexity_reduction.remove_lines_under_one_meter(
+            edisgo_root
+        )
 
         # Check that 1 line was removed
         assert len(edisgo_root.topology.lines_df) - 1 == len(
