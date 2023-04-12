@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 
 from edisgo.edisgo import EDisGo
 from edisgo.io import electromobility_import
@@ -156,7 +156,6 @@ class TestElectromobility:
             "Charging_Point_LVGrid_362451_public_1",
             "Charging_Point_LVGrid_136124_work_1",
         ]:
-
             charging_park_id = integrated_charging_parks.loc[
                 integrated_charging_parks.edisgo_id == cp
             ].index

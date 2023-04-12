@@ -8,11 +8,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pandas.util.testing import (
-    assert_frame_equal,
-    assert_index_equal,
-    assert_series_equal,
-)
+from pandas.testing import assert_frame_equal, assert_index_equal, assert_series_equal
 
 from edisgo import EDisGo
 from edisgo.network import timeseries
@@ -45,7 +41,6 @@ class TestTimeSeries:
             )
 
     def test_set_active_power_manual(self):
-
         # create dummy time series
         index_2 = pd.date_range("1/1/2018", periods=2, freq="H")
         index_3 = pd.date_range("1/1/2018", periods=3, freq="H")
@@ -197,7 +192,6 @@ class TestTimeSeries:
         )
 
     def test_set_reactive_power_manual(self):
-
         # create dummy time series
         index_2 = pd.date_range("1/1/2018", periods=2, freq="H")
         index_3 = pd.date_range("1/1/2018", periods=3, freq="H")
@@ -350,7 +344,6 @@ class TestTimeSeries:
         )
 
     def test_set_worst_case(self):
-
         # test - check if right functions are called for all components
 
         # change load types to have charging point, heat pump and load without set
@@ -607,7 +600,6 @@ class TestTimeSeries:
         ).all()
 
     def test_worst_case_generators(self):
-
         # ######### check both feed-in and load case
         df = assign_voltage_level_to_component(
             self.edisgo.topology.generators_df, self.edisgo.topology.buses_df
@@ -745,7 +737,6 @@ class TestTimeSeries:
             )
 
     def test_worst_case_conventional_load(self):
-
         # connect one load to MV
         self.edisgo.topology._loads_df.at[
             "Load_agricultural_LVGrid_1_1", "bus"
@@ -1142,7 +1133,6 @@ class TestTimeSeries:
             )
 
     def test_worst_case_storage_units(self):
-
         # ######### check both feed-in and load case
         df = assign_voltage_level_to_component(
             self.edisgo.topology.storage_units_df, self.edisgo.topology.buses_df
@@ -1245,7 +1235,6 @@ class TestTimeSeries:
 
     @pytest.mark.slow
     def test_predefined_fluctuating_generators_by_technology(self):
-
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.edisgo.timeseries.timeindex = timeindex
 
@@ -1415,7 +1404,6 @@ class TestTimeSeries:
 
     @pytest.mark.local
     def test_predefined_fluctuating_generators_by_technology_oedb(self):
-
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -1462,7 +1450,6 @@ class TestTimeSeries:
         assert_series_equal(p_ts.loc[:, comp], exp, check_dtype=False, atol=1e-5)
 
     def test_predefined_dispatchable_generators_by_technology(self):
-
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.edisgo.timeseries.timeindex = timeindex
 
@@ -2044,9 +2031,9 @@ class TestTimeSeries:
             self.edisgo.topology.loads_df.p_set.sum()
             + self.edisgo.topology.storage_units_df.p_nom.sum()
         )
-        assert np.isclose(
+        assert np.allclose(
             self.edisgo.timeseries.residual_load.loc[time_steps_load_case], peak_load
-        ).all()
+        )
         time_steps_feedin_case = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
         ].values
@@ -2074,7 +2061,6 @@ class TestTimeSeries:
         ).all()
 
     def test_reduce_memory(self):
-
         self.edisgo.set_time_series_worst_case_analysis()
         # fmt: off
         self.edisgo.timeseries.time_series_raw.\
@@ -2125,7 +2111,6 @@ class TestTimeSeries:
         # fmt: on
 
     def test_to_csv(self):
-
         timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
         self.edisgo.set_timeindex(timeindex)
 
@@ -2182,7 +2167,6 @@ class TestTimeSeries:
         shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-
         timeindex = pd.date_range("1/1/2018", periods=2, freq="H")
         self.edisgo.set_timeindex(timeindex)
 
@@ -2320,7 +2304,6 @@ class TestTimeSeries:
                 setattr(self.edisgo.timeseries, attr, ts_tmp)
 
     def test_drop_component_time_series(self):
-
         time_series_obj = timeseries.TimeSeries()
 
         # check that no error is raised in case of empty dataframe
@@ -2349,7 +2332,6 @@ class TestTimeSeries:
         assert time_series_obj.loads_active_power.empty
 
     def test_add_component_time_series(self):
-
         time_series_obj = timeseries.TimeSeries()
         time_series_obj.timeindex = pd.date_range("1/1/2018", periods=4, freq="H")
 
@@ -2406,7 +2388,6 @@ class TestTimeSeries:
         assert "Load_residential_LVGrid_5_3" in component_names
 
     def test_resample_timeseries(self):
-
         self.edisgo.set_time_series_worst_case_analysis()
 
         len_timeindex_orig = len(self.edisgo.timeseries.timeindex)
@@ -2502,7 +2483,6 @@ class TestTimeSeriesRaw:
         self.time_series_raw.q_control = self.q_control
 
     def test_reduce_memory(self):
-
         # check with default value
         assert (
             self.time_series_raw.conventional_loads_active_power_by_sector.dtypes
@@ -2536,7 +2516,6 @@ class TestTimeSeriesRaw:
         ).all()
 
     def test_to_csv(self):
-
         # test with default values
         save_dir = os.path.join(os.getcwd(), "timeseries_csv")
         self.time_series_raw.to_csv(save_dir)
@@ -2564,7 +2543,6 @@ class TestTimeSeriesRaw:
         shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-
         # write to csv
         save_dir = os.path.join(os.getcwd(), "timeseries_csv")
         self.time_series_raw.to_csv(save_dir, time_series_raw=True)

@@ -47,7 +47,6 @@ class TimeSeries:
     """
 
     def __init__(self, **kwargs):
-
         self._timeindex = kwargs.get("timeindex", pd.DatetimeIndex([]))
         self.time_series_raw = TimeSeriesRaw()
 
@@ -657,9 +656,14 @@ class TimeSeries:
                     periods=len(worst_cases),
                     freq="H",
                 )
-                self.timeindex_worst_cases = self.timeindex_worst_cases.append(
-                    pd.Series(time_stamps, index=worst_cases)
+
+                self.timeindex_worst_cases = pd.concat(
+                    [
+                        self.timeindex_worst_cases,
+                        pd.Series(data=time_stamps, index=worst_cases),
+                    ]
                 )
+
                 self.timeindex = self.timeindex.append(time_stamps)
 
         if generators_names is None:
@@ -789,7 +793,7 @@ class TimeSeries:
         # get power scaling factors for different technologies, voltage levels and
         # feed-in/load case
         types = ["pv", "wind", "other"]
-        power_scaling = pd.DataFrame(columns=types)
+        power_scaling = pd.DataFrame(columns=types, dtype=float)
         for t in types:
             for case in cases:
                 power_scaling.at[f"{case}_mv", t] = worst_case_scale_factors[
@@ -2153,8 +2157,8 @@ class TimeSeries:
                 f"concerns the following components: {comps_not_in_network}."
             )
 
-            return set(component_names) - set(comps_not_in_network)
-        return component_names
+            return list(set(component_names) - set(comps_not_in_network))
+        return list(component_names)
 
     def resample_timeseries(
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
@@ -2188,9 +2192,8 @@ class TimeSeries:
         if pd.Timedelta(freq) < freq_orig:  # up-sampling
             index = pd.date_range(
                 self.timeindex[0],
-                self.timeindex[-1] + freq_orig,
+                self.timeindex[-1] + freq_orig - pd.Timedelta(freq),
                 freq=freq,
-                closed="left",
             )
         else:  # down-sampling
             index = pd.date_range(
