@@ -4,7 +4,6 @@ import copy
 import logging
 import math
 
-from hashlib import md5
 from time import time
 from typing import TYPE_CHECKING
 
@@ -26,12 +25,6 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
-
-
-def hash_df(df: DataFrame) -> str:
-    """Calculate hash from busmap, good to check if dataframe has the same content."""
-    s = df.to_json()
-    return md5(s.encode()).hexdigest()
 
 
 # Transform coordinates between the different coordinates systems
