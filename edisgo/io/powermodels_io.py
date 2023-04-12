@@ -1152,7 +1152,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
             "p_loss": 0.04,  # 4% of SOC per day
-            # "energy": (
+            "energy": 0, #(
             #     heat_storage_df.state_of_charge_initial[stor_i]
             #     * heat_storage_df.capacity[stor_i]
             #     / s_base
