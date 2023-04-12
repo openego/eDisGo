@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 import saio
 
+from sqlalchemy import func
+
 from edisgo.io import db
 from edisgo.tools.tools import (
     determine_bus_voltage_level,
@@ -14,6 +16,8 @@ from edisgo.tools.tools import (
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
+
+    from shapely.geometry import Point
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +97,23 @@ def oedb(edisgo_object, scenario, engine):
         """
         Get heat pumps in district heating from oedb.
 
-        Weather cell ID is as well added in this function.
+        Weather cell ID and geolocation is as well added in this function.
+        Concerning the geolocation - the electricity bus central heat pumps are
+        attached to is not determined based on the geolocation of the heat pump (which
+        is in egon_data always set to the centroid of the district heating area they
+        are in) but based on the majority of heat demand in an MV grid area. Further,
+        large heat pumps are split into several smaller ones in egon_data. The
+        geolocation is however not adapted in egon_data. Due to this, it is often
+        the case, that the central heat pumps lie outside the MV grid district area.
+        Therefore, the geolocation is adapted in this function. It is first checked,
+        if there is a CHP plant in the same district heating area. If this is the case
+        and the CHP plant lies within the MV grid district, then the geolocation of the
+        heat pump is set to the same geolocation as the CHP plant, as it is assumed,
+        that this would be a suitable place for a heat pump as well. If there is no
+        CHP plant, then it is checked if the centroid of the district heating area lies
+        within the MV grid. If this is the case, then this is used. If neither of these
+        options can be used, then the geolocation of the HV/MV station is used, as there
+        is no better indicator where the heat pump would be placed.
 
         Returns
         -------
@@ -104,46 +124,115 @@ def oedb(edisgo_object, scenario, engine):
             :func:`~.io.heat_pump_import._grid_integration`.
 
         """
-        query = (
-            session.query(
-                egon_district_heating.district_heating_id,
-                egon_district_heating.capacity.label("p_set"),
-                egon_district_heating.geometry.label("geom"),
-                egon_era5_weather_cells.w_id.label("weather_cell_id"),
-            )
-            .filter(
-                egon_district_heating.scenario == scenario,
-                egon_district_heating.carrier == "heat_pump",
-                egon_district_heating.capacity
-                <= edisgo_object.config["grid_connection"][
-                    "upper_limit_voltage_level_4"
-                ],
-                # filter heat pumps inside MV grid district geometry
-                db.sql_within(
-                    egon_district_heating.geometry,
-                    db.sql_grid_geom(edisgo_object),
-                    mv_grid_geom_srid,
-                ),
-            )
-            .outerjoin(  # join to obtain weather cell ID
-                egon_era5_weather_cells,
-                db.sql_within(
-                    egon_district_heating.geometry,
-                    egon_era5_weather_cells.geom,
-                    mv_grid_geom_srid,
-                ),
-            )
+        query = session.query(
+            egon_etrago_link.bus0,
+            egon_etrago_link.bus1,
+            egon_etrago_link.p_nom.label("p_set"),
+        ).filter(
+            egon_etrago_link.scn_name == scenario,
+            egon_etrago_link.bus0 == edisgo_object.topology.id,
+            egon_etrago_link.carrier == "central_heat_pump",
+            egon_etrago_link.p_nom
+            <= edisgo_object.config["grid_connection"]["upper_limit_voltage_level_4"],
         )
-        srid = db.get_srid_of_db_table(session, egon_district_heating.geometry)
-        df = gpd.read_postgis(
-            query.statement,
-            engine,
-            index_col=None,
-            crs=f"EPSG:{srid}",
-        )
+        df = pd.read_sql(query.statement, engine, index_col=None)
+        if not df.empty:
+            # get geom of heat bus, weather_cell_id, district_heating_id and area_id
+            srid_etrago_bus = db.get_srid_of_db_table(session, egon_etrago_bus.geom)
+            query = (
+                session.query(
+                    egon_etrago_bus.bus_id.label("bus1"),
+                    egon_etrago_bus.geom,
+                    egon_era5_weather_cells.w_id.label("weather_cell_id"),
+                    egon_district_heating_areas.id.label("district_heating_id"),
+                    egon_district_heating_areas.area_id,
+                )
+                .filter(
+                    egon_etrago_bus.scn_name == scenario,
+                    egon_district_heating_areas.scenario == scenario,
+                    egon_etrago_bus.bus_id.in_(df.bus1),
+                )
+                .outerjoin(  # join to obtain weather cell ID
+                    egon_era5_weather_cells,
+                    db.sql_within(
+                        egon_etrago_bus.geom,
+                        egon_era5_weather_cells.geom,
+                        mv_grid_geom_srid,
+                    ),
+                )
+                .outerjoin(  # join to obtain district heating ID
+                    egon_district_heating_areas,
+                    func.ST_Transform(
+                        func.ST_Centroid(egon_district_heating_areas.geom_polygon),
+                        srid_etrago_bus,
+                    )
+                    == egon_etrago_bus.geom,
+                )
+            )
+            df_geom = gpd.read_postgis(
+                query.statement,
+                engine,
+                index_col=None,
+                crs=f"EPSG:{srid_etrago_bus}",
+            ).to_crs(mv_grid_geom_srid)
+            # merge dataframes
+            df_merge = pd.merge(
+                df_geom, df, how="right", right_on="bus1", left_on="bus1"
+            )
 
-        # transform to same SRID as MV grid district geometry
-        return df.to_crs(mv_grid_geom_srid)
+            # check if there is a CHP plant where heat pump can be located
+            srid_dh_supply = db.get_srid_of_db_table(
+                session, egon_district_heating.geometry
+            )
+            query = session.query(
+                egon_district_heating.district_heating_id,
+                egon_district_heating.geometry.label("geom"),
+            ).filter(
+                egon_district_heating.carrier == "CHP",
+                egon_district_heating.scenario == scenario,
+                egon_district_heating.district_heating_id.in_(
+                    df_geom.district_heating_id
+                ),
+            )
+            df_geom_chp = gpd.read_postgis(
+                query.statement,
+                engine,
+                index_col=None,
+                crs=f"EPSG:{srid_dh_supply}",
+            ).to_crs(mv_grid_geom_srid)
+
+            # set geolocation of central heat pump
+            for idx in df_merge.index:
+                geom = None
+                # if there is a CHP plant and it lies within the grid district, use
+                # its geolocation
+                df_chp = df_geom_chp[
+                    df_geom_chp.district_heating_id
+                    == df_merge.at[idx, "district_heating_id"]
+                ]
+                if not df_chp.empty:
+                    for idx_chp in df_chp.index:
+                        if edisgo_object.topology.grid_district["geom"].contains(
+                            df_chp.at[idx_chp, "geom"]
+                        ):
+                            geom = df_chp.at[idx_chp, "geom"]
+                            break
+                # if the heat bus lies within the grid district, use its geolocation
+                if geom is None and edisgo_object.topology.grid_district[
+                    "geom"
+                ].contains(df_merge.at[idx, "geom"]):
+                    geom = df_merge.at[idx, "geom"]
+                # if geom is still None, use geolocation of HV/MV station
+                if geom is None:
+                    hvmv_station = edisgo_object.topology.mv_grid.station
+                    geom = Point(hvmv_station.x[0], hvmv_station.y[0])
+                df_merge.at[idx, "geom"] = geom
+            return df_merge.loc[
+                :,
+                ["p_set", "weather_cell_id", "district_heating_id", "geom", "area_id"],
+            ]
+        else:
+            return df
 
     def _get_individual_heat_pump_capacity():
         """
@@ -163,7 +252,7 @@ def oedb(edisgo_object, scenario, engine):
             return np.sum(cap)
 
     saio.register_schema("demand", engine)
-    from saio.demand import egon_hp_capacity_buildings
+    from saio.demand import egon_district_heating_areas, egon_hp_capacity_buildings
 
     saio.register_schema("supply", engine)
     from saio.supply import (
@@ -177,6 +266,9 @@ def oedb(edisgo_object, scenario, engine):
         egon_map_zensus_mvgd_buildings,
         egon_map_zensus_weather_cell,
     )
+
+    saio.register_schema("grid", engine)
+    from saio.grid import egon_etrago_bus, egon_etrago_link
 
     building_ids = edisgo_object.topology.loads_df.building_id.unique()
     mv_grid_geom_srid = edisgo_object.topology.grid_district["srid"]
@@ -235,7 +327,11 @@ def _grid_integration(
             * p_set : float
                 Nominal electric power of heat pump in MW.
             * district_heating_id : int
-                ID of the district heating network the heat pump is in.
+                ID of the district heating network the heat pump is in, used to obtain
+                other heat supply technologies from supply.egon_district_heating.
+            * area_id : int
+                ID of the district heating network the heat pump is in, used to obtain
+                heat demand time series from demand.egon_timeseries_district_heating.
             * weather_cell_id : int
                 Weather cell the heat pump is in used to obtain the COP time series.
             * geom : :shapely:`Shapely Point object<points>`
@@ -366,6 +462,7 @@ def _grid_integration(
                 weather_cell_id=hp_central.at[hp, "weather_cell_id"],
                 sector="district_heating",
                 district_heating_id=hp_central.at[hp, "district_heating_id"],
+                area_id=hp_central.at[hp, "area_id"],
             )
             integrated_hps = integrated_hps.append(pd.Index([hp_name]))
 

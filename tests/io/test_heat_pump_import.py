@@ -32,9 +32,10 @@ class TestHeatPumpImport:
         geom = Point((10.02178787570608, 47.55650888787377))
         hp_df = pd.DataFrame(
             data={
-                "p_set": [0.05, 0.25, 1.0],
+                "p_set": [0.05, 0.17, 1.0],
                 "weather_cell_id": [11051, 11051, 11052],
                 "district_heating_id": [5, 5, 5],
+                "area_id": [4, 4, 4],
                 "geom": [geom, geom, geom],
             },
             index=[1, 2, 3],
@@ -75,7 +76,7 @@ class TestHeatPumpImport:
         bus_hp_voltage_level_7 = hp_df[hp_df.p_set == 0.05].bus[0]
         assert self.edisgo.topology.buses_df.at[bus_hp_voltage_level_7, "v_nom"] == 0.4
         # check that medium heat pump is connected to MV/LV station
-        bus_hp_voltage_level_6 = hp_df[hp_df.p_set == 0.25].bus[0]
+        bus_hp_voltage_level_6 = hp_df[hp_df.p_set == 0.17].bus[0]
         line_hp_voltage_level_6 = self.edisgo.topology.lines_df[
             self.edisgo.topology.lines_df.bus1 == bus_hp_voltage_level_6
         ]

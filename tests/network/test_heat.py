@@ -47,6 +47,7 @@ class TestHeatPump:
         sector = ["individual_heating", "district_heating", "individual_heating"]
         weather_cell_ids = [11051, 11051, 11052]
         district_heating_ids = [None, 5, None]
+        area_ids = [None, 4, None]
         hp_df = pd.DataFrame(
             data={
                 "bus": "dummy_bus",
@@ -56,6 +57,7 @@ class TestHeatPump:
                 "sector": sector,
                 "weather_cell_id": weather_cell_ids,
                 "district_heating_id": district_heating_ids,
+                "area_id": area_ids,
             },
             index=names,
         )
