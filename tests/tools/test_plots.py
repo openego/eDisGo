@@ -20,8 +20,12 @@ class TestPlots:
         ] = "added"
 
     @pytest.mark.parametrize(
-        "line_color, node_color, line_result_selection, node_result_selection"
-        ", center_coordinates, pseudo_coordinates",
+        "line_color,"
+        "node_color,"
+        "line_result_selection,"
+        "node_result_selection,"
+        "plot_map,"
+        "pseudo_coordinates",
         [
             ("loading", "voltage_deviation", "min", "min", True, True),
             ("relative_loading", "adjacencies", "max", "max", False, False),
@@ -52,7 +56,7 @@ class TestPlots:
         line_result_selection,
         node_result_selection,
         selected_timesteps,
-        center_coordinates,
+        plot_map,
         pseudo_coordinates,
         node_selection,
     ):
@@ -79,7 +83,7 @@ class TestPlots:
                     line_result_selection=line_result_selection,
                     node_result_selection=node_result_selection,
                     selected_timesteps=selected_timesteps,
-                    center_coordinates=center_coordinates,
+                    plot_map=plot_map,
                     pseudo_coordinates=pseudo_coordinates,
                     node_selection=node_selection,
                 )
@@ -92,7 +96,7 @@ class TestPlots:
                 line_result_selection=line_result_selection,
                 node_result_selection=node_result_selection,
                 selected_timesteps=selected_timesteps,
-                center_coordinates=center_coordinates,
+                plot_map=plot_map,
                 pseudo_coordinates=pseudo_coordinates,
                 node_selection=node_selection,
             )

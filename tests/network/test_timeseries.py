@@ -2387,7 +2387,7 @@ class TestTimeSeries:
         assert len(component_names) == 1
         assert "Load_residential_LVGrid_5_3" in component_names
 
-    def test_resample_timeseries(self):
+    def test_resample(self):
         self.edisgo.set_time_series_worst_case_analysis()
 
         len_timeindex_orig = len(self.edisgo.timeseries.timeindex)
@@ -2395,7 +2395,7 @@ class TestTimeSeries:
         index_orig = self.edisgo.timeseries.timeindex.copy()
 
         # test up-sampling
-        self.edisgo.timeseries.resample_timeseries()
+        self.edisgo.timeseries.resample()
         # check if resampled length of time index is 4 times original length of
         # timeindex
         assert len(self.edisgo.timeseries.timeindex) == 4 * len_timeindex_orig
@@ -2409,11 +2409,11 @@ class TestTimeSeries:
             )
         ).all()
         # check if index is the same after resampled back
-        self.edisgo.timeseries.resample_timeseries(freq="1h")
+        self.edisgo.timeseries.resample(freq="1h")
         assert_index_equal(self.edisgo.timeseries.timeindex, index_orig)
 
         # same tests for down-sampling
-        self.edisgo.timeseries.resample_timeseries(freq="2h")
+        self.edisgo.timeseries.resample(freq="2h")
         assert len(self.edisgo.timeseries.timeindex) == 0.5 * len_timeindex_orig
         assert (
             np.isclose(
@@ -2424,7 +2424,7 @@ class TestTimeSeries:
         ).all()
 
         # test bfill
-        self.edisgo.timeseries.resample_timeseries(method="bfill")
+        self.edisgo.timeseries.resample(method="bfill")
         assert len(self.edisgo.timeseries.timeindex) == 4 * len_timeindex_orig
         assert np.isclose(
             self.edisgo.timeseries.generators_active_power.iloc[1:, :].loc[
@@ -2441,7 +2441,7 @@ class TestTimeSeries:
         ts_orig = self.edisgo.timeseries.generators_active_power.loc[
             :, "GeneratorFluctuating_3"
         ]
-        self.edisgo.timeseries.resample_timeseries(method="interpolate")
+        self.edisgo.timeseries.resample(method="interpolate")
         assert len(self.edisgo.timeseries.timeindex) == 4 * len_timeindex_orig
         assert np.isclose(
             self.edisgo.timeseries.generators_active_power.at[

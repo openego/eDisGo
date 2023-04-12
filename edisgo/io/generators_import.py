@@ -817,6 +817,15 @@ def oedb(
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
 
+    Notes
+    ------
+    Note, that PV rooftop plants are queried using the building IDs not the MV grid ID
+    as in egon_data buildings are mapped to a grid based on the
+    zensus cell they are in whereas in ding0 buildings are mapped to a grid based on
+    the geolocation. As it can happen that buildings lie outside an MV grid but within
+    a zensus cell that is assigned to that MV grid, they are mapped differently in
+    egon_data and ding0, and it is therefore better to query using the building IDs.
+
     """
 
     def _get_egon_power_plants():
@@ -853,14 +862,15 @@ def oedb(
             subtype=power_plants_gdf["type"].map(mapping)
         )
         # unwrap source ID
-        power_plants_gdf["source_id"] = power_plants_gdf.apply(
-            lambda _: (
-                list(_["source_id"].values())[0]
-                if isinstance(_["source_id"], dict)
-                else None
-            ),
-            axis=1,
-        )
+        if not power_plants_gdf.empty:
+            power_plants_gdf["source_id"] = power_plants_gdf.apply(
+                lambda _: (
+                    list(_["source_id"].values())[0]
+                    if isinstance(_["source_id"], dict)
+                    else None
+                ),
+                axis=1,
+            )
         return power_plants_gdf
 
     def _get_egon_pv_rooftop():
@@ -934,6 +944,33 @@ def oedb(
     pv_rooftop_df = _get_egon_pv_rooftop()
     power_plants_gdf = _get_egon_power_plants()
     chp_gdf = _get_egon_chp_plants()
+
+    # sanity check - kick out generators that are too large
+    p_nom_upper = edisgo_object.config["grid_connection"]["upper_limit_voltage_level_4"]
+    drop_ind = pv_rooftop_df[pv_rooftop_df.p_nom > p_nom_upper].index
+    if len(drop_ind) > 0:
+        logger.warning(
+            f"There are {len(drop_ind)} PV rooftop plants with a nominal capacity "
+            f"larger {p_nom_upper} MW. Connecting them to the MV is not valid, "
+            f"wherefore they are dropped."
+        )
+        pv_rooftop_df.drop(index=drop_ind, inplace=True)
+    drop_ind = power_plants_gdf[power_plants_gdf.p_nom > p_nom_upper].index
+    if len(drop_ind) > 0:
+        logger.warning(
+            f"There are {len(drop_ind)} power plants with a nominal capacity "
+            f"larger {p_nom_upper} MW. Connecting them to the MV is not valid, "
+            f"wherefore they are dropped."
+        )
+        power_plants_gdf.drop(index=drop_ind, inplace=True)
+    drop_ind = chp_gdf[chp_gdf.p_nom > p_nom_upper].index
+    if len(drop_ind) > 0:
+        logger.warning(
+            f"There are {len(drop_ind)} CHP plants with a nominal capacity "
+            f"larger {p_nom_upper} MW. Connecting them to the MV is not valid, "
+            f"wherefore they are dropped."
+        )
+        chp_gdf.drop(index=drop_ind, inplace=True)
 
     # determine number of generators and installed capacity in future scenario
     # for validation of grid integration

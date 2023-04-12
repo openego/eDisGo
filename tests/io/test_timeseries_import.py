@@ -228,11 +228,33 @@ class TestTimeseriesImport:
     @pytest.mark.local
     def test_get_cts_profiles_per_building(self):
 
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        cts_loads = edisgo_object.topology.loads_df[
+            edisgo_object.topology.loads_df.sector == "cts"
+        ]
         df = timeseries_import.get_cts_profiles_per_building(
+            edisgo_object, "eGon2035", "electricity", pytest.engine
+        )
+        assert df.shape == (8760, len(cts_loads))
+
+        # manipulate CTS load to lie within another grid
+        edisgo_object.topology.loads_df.at[cts_loads.index[0], "building_id"] = 5
+        df = timeseries_import.get_cts_profiles_per_building(
+            edisgo_object, "eGon2035", "electricity", pytest.engine
+        )
+        assert df.shape == (8760, len(cts_loads))
+        # ToDo add further tests
+
+    @pytest.mark.local
+    def test_get_cts_profiles_per_grid(self):
+
+        df = timeseries_import.get_cts_profiles_per_grid(
             33535, "eGon2035", "heat", pytest.engine
         )
         assert df.shape == (8760, 85)
-        df = timeseries_import.get_cts_profiles_per_building(
+        df = timeseries_import.get_cts_profiles_per_grid(
             33535, "eGon2035", "electricity", pytest.engine
         )
         assert df.shape == (8760, 85)

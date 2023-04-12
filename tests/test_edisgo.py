@@ -58,7 +58,7 @@ class TestEDisGo:
             save_electromobility=False,
         )
         # overwrite config with config_path=None and check
-        self.edisgo.config = {"config_path": None}
+        self.edisgo.config = {"config_path": save_dir}
         assert config_orig._data == self.edisgo.config._data
         # overwrite config from json and check
         self.edisgo.config = {"from_json": True, "config_path": save_dir}
@@ -1322,6 +1322,8 @@ class TestEDisGo:
         self.edisgo.analyze()
         self.edisgo.plot_mv_line_loading()
         plt.close("all")
+        self.edisgo.plot_mv_line_loading(timestep=self.edisgo.timeseries.timeindex[0])
+        plt.close("all")
 
     def test_plot_mv_grid_expansion_costs(self):
         # test with storage
@@ -1417,7 +1419,7 @@ class TestEDisGo:
         # ################### test with default parameters ###################
         self.edisgo.save(save_dir)
 
-        # check that sub-directory are created
+        # check that sub-directories are created
         dirs_in_save_dir = os.listdir(save_dir)
         assert len(dirs_in_save_dir) == 4
         assert "configs.json" in dirs_in_save_dir
