@@ -1433,59 +1433,68 @@ def make_remaining_busmap(busmap_df: DataFrame, edisgo_root: EDisGo) -> DataFram
 
 
 def reduce_edisgo(
-    edisgo_root: EDisGo,
+    edisgo_obj: EDisGo,
     busmap_df: DataFrame,
     line_naming_convention: str = "standard_lines",
-    aggregation_mode: bool = True,
+    aggregation_mode: bool = False,
     load_aggregation_mode: str = "sector",
     generator_aggregation_mode: str = "type",
-) -> tuple[EDisGo, DataFrame]:
+) -> DataFrame:
     """
     Function to reduce the EDisGo object with a previously generated busmap.
 
-    Warning: After reducing all attributes 'in_building' of the buses is set to False.
-    Also, the method only works for lines which length can be calculated with a detour
-    factor, which has to be set in the config. Else the line length is calculated
-    false which leads to false results. If the grid doesn't have coordinates or
-    matches the requirements use the :func:`make_pseudo_coordinates
-    <edisgo.tools.pseudo_coordinates.make_pseudo_coordinates>`.
+    Warning: After reduction, 'in_building' of all buses is set to False.
+    Also, the method only works if all buses have x and y coordinates. If this is not
+    the case, you can use the function
+    :func:`~.tools.pseudo_coordinates.make_pseudo_coordinates` to set coordinates for
+    all buses.
 
     Parameters
     ----------
-    edisgo_root: :obj:`EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
         EDisGo object to reduce.
-    busmap_df: :obj:`DataFrame`
-        Busmap, holds the information which nodes are merged together.
-    aggregation_mode: :obj:`str`
-        If True loads and generators and their timeseries are aggregated
-        according to their selected modes.
-    line_naming_convention: :obj:`str`
-        Select "standard_lines" or "combined_name". When the lines are aggregated it
-        can happen that two or more lines are merged. This leads to the problem of
-        new line types. If "standard_lines" is selected. In the case of a line merge
-        as line_tipe and kind the values of the standard type of the voltage level is
-        selected. If "combined_name" is selected the new type and kind is contains the
-        concated names of the merged lines.
-
-    load_aggregation_mode: :obj:`str`
-        Choose: "bus" or "sector" if bus is chosen all loads in the loads_df are
-        aggregated per bus. When sector is chosen its aggregated by bus and sector.
-    generator_aggregation_mode: :obj:`str`
-        Choose: "bus" or "type" if bus is chosen all generators in the generators_df
-        are aggregated per bus. When type is chosen its aggregated by bus and type.
+    busmap_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Busmap holding the information which nodes are merged together.
+    line_naming_convention : str
+        Determines how to set "type_info" and "kind" in case two or more lines are
+        aggregated. Possible options are "standard_lines" or "combined_name".
+        If "standard_lines" is selected, the values of the standard line of the
+        respective voltage level are used to set "type_info" and "kind".
+        If "combined_name" is selected, "type_info" and "kind" contain the
+        concatenated values of the merged lines. x and r of the lines are not influenced
+        by this as they are always determined from the x and r values of the aggregated
+        lines.
+        Default: "standard_lines".
+    aggregation_mode : bool
+        Specifies, whether to aggregate loads and generators at the same bus or not.
+        If True, loads and generators at the same bus are aggregated
+        according to their selected modes (see parameters `load_aggregation_mode` and
+        `generator_aggregation_mode`). Default: False.
+    load_aggregation_mode : str
+        Specifies, how to aggregate loads at the same bus, in case parameter
+        `aggregation_mode` is set to True. Possible options are "bus" or "sector".
+        If "bus" is chosen, loads are aggregated per bus. When "sector" is chosen,
+        loads are aggregated by bus, type and sector. Default: "sector".
+    generator_aggregation_mode : str
+        Specifies, how to aggregate generators at the same bus, in case parameter
+        `aggregation_mode` is set to True. Possible options are "bus" or "type".
+        If "bus" is chosen, generators are aggregated per bus. When "type" is chosen,
+        generators are aggregated by bus and type.
 
     Returns
     -------
-    :obj:`EDisGo`
-        Reduced EDisGo object.
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Linemap which maps the old line names (in the index of the dataframe) to the
+        new line names (in column "new_line_name").
 
     References
     ----------
-    In parts based on PyPSA spatial complexity reduction
-    `https://pypsa.readthedocs.io/en/latest/examples/spatial-clustering.html`
+    In parts based on `PyPSA spatial complexity reduction <https://pypsa.readthedocs.io
+    /en/latest/examples/spatial-clustering.html>`_.
+
     """
 
-    def apply_busmap_on_busmap_df(series):
+    def apply_busmap_on_buses_df(series):
         series.loc["bus"] = busmap_df.loc[series.name, "new_bus"]
         series.loc["x"] = busmap_df.loc[series.name, "new_x"]
         series.loc["y"] = busmap_df.loc[series.name, "new_y"]
@@ -1498,7 +1507,7 @@ def reduce_edisgo(
 
     def remove_lines_with_the_same_bus(series):
         if series.bus0 == series.bus1:
-            return  # Drop lines which connect to the same bus.
+            return  # Drop lines which connect the same bus.
         elif (
             series.bus0.split("_")[0] == "virtual"
             and series.bus0.lstrip("virtual_") == slack_bus
@@ -1548,10 +1557,13 @@ def reduce_edisgo(
         if length == 0:
             length = 0.001
             logger.warning(
-                f"Length of line between {bus0} and {bus1} can't be 0, set to 1m."
+                f"Length of line between {bus0} and {bus1} cannot be 0 m and is "
+                f"therefore set to 1 m."
             )
         if length < 0.001:
-            logger.warning(f"Length of line between {bus0} and {bus1} smaller than 1m.")
+            logger.warning(
+                f"Length of line between {bus0} and {bus1} is " f"smaller than 1 m."
+            )
 
         # Get type of the line to get the according standard line for the voltage_level
         if np.isnan(buses_df.loc[df.bus0, "lv_grid_id"])[0]:
@@ -1589,10 +1601,7 @@ def reduce_edisgo(
                 ]
             except KeyError:
                 x_line = line_data_df.loc[line_type, "L_per_km"]
-                logger.error(
-                    f"Line type doesn't matches voltage level"
-                    f"{line_type} not in voltage level {v_nom}."
-                )
+                logger.error(f"Line type {line_type} not in voltage level {v_nom} kV.")
             x_sum = x_sum + 1 / x_line
         x_sum = 1 / x_sum
         x = length * 2 * math.pi * 50 * x_sum / 1000
@@ -1605,10 +1614,7 @@ def reduce_edisgo(
                 ]
             except KeyError:
                 r_line = line_data_df.loc[line_type, "R_per_km"]
-                logger.error(
-                    f"Line type doesn't matches voltage level"
-                    f"{line_type} not in voltage level {v_nom}."
-                )
+                logger.error(f"Line type {line_type} not in voltage level {v_nom} kV.")
 
             r_sum = r_sum + 1 / r_line
         r_sum = 1 / r_sum
@@ -1632,13 +1638,15 @@ def reduce_edisgo(
         return series
 
     def aggregate_loads_df(df):
-        series = pd.Series(index=df.columns, dtype="object")  # l.values[0],
+        series = pd.Series(index=df.columns, dtype="object")
         series.loc["bus"] = df.loc[:, "bus"].values[0]
         series.loc["p_set"] = df.loc[:, "p_set"].sum()
         series.loc["annual_consumption"] = df.loc[:, "annual_consumption"].sum()
         if load_aggregation_mode == "sector":
+            series.loc["type"] = df.loc[:, "type"].values[0]
             series.loc["sector"] = df.loc[:, "sector"].values[0]
         elif load_aggregation_mode == "bus":
+            series.loc["type"] = "aggregated"
             series.loc["sector"] = "aggregated"
         series.loc["old_name"] = df.index.tolist()
         return series
@@ -1648,7 +1656,7 @@ def reduce_edisgo(
         series.loc["bus"] = df.loc[:, "bus"].values[0]
         series.loc["p_nom"] = df.loc[:, "p_nom"].sum()
         series.loc["control"] = df.loc[:, "control"].values[0]
-        series.loc["subtype"] = df.loc[:, "subtype"].values[0]
+        series.loc["subtype"] = "aggregated"
         series.loc["old_name"] = df.index.tolist()
         if generator_aggregation_mode == "bus":
             series.loc["type"] = "aggregated"
@@ -1667,7 +1675,7 @@ def reduce_edisgo(
 
     def aggregate_timeseries(
         df: DataFrame, edisgo_obj: EDisGo, timeseries_to_aggregate: list
-    ) -> None:
+    ):
         # comp = component
         # aggregate load timeseries
         name_map_df = df.loc[:, "old_name"].to_dict()
@@ -1694,36 +1702,29 @@ def reduce_edisgo(
 
             setattr(edisgo_obj.timeseries, timeseries_name, timeseries)
 
-        return edisgo_obj
-
     def apply_busmap_on_transformers_df(series):
         series.loc["bus0"] = busmap_df.loc[series.loc["bus0"], "new_bus"]
         series.loc["bus1"] = busmap_df.loc[series.loc["bus1"], "new_bus"]
         return series
 
-    start_time = time()
-    logger.info("Start - Reducing edisgo object")
-
-    edisgo_obj = copy.deepcopy(edisgo_root)  # Make deepcopy to preserve root object
-
-    logger.info("Copy dataframes from edisgo object")
+    # Copy dataframes from edisgo object
     buses_df = edisgo_obj.topology.buses_df.copy()
     lines_df = edisgo_obj.topology.lines_df.copy()
     loads_df = edisgo_obj.topology.loads_df.copy()
     generators_df = edisgo_obj.topology.generators_df.copy()
     storage_units_df = edisgo_obj.topology.storage_units_df.copy()
+    transformers_df = edisgo_obj.topology.transformers_df.copy()
     switches_df = edisgo_obj.topology.switches_df.copy()
 
     slack_bus = edisgo_obj.topology.transformers_hvmv_df.bus1[0]
 
-    logger.info("Manipulate buses_df")
-    buses_df = buses_df.apply(apply_busmap_on_busmap_df, axis="columns")
+    # Manipulate buses_df
+    buses_df = buses_df.apply(apply_busmap_on_buses_df, axis="columns")
     buses_df = buses_df.groupby(by=["bus"], dropna=False, as_index=False).first()
-
     buses_df.loc[:, "in_building"] = False
     buses_df = buses_df.set_index("bus")
 
-    logger.info("Manipulate lines_df")
+    # Manipulate lines_df
     if not lines_df.empty:
         # Get one dataframe with all data of the line types
         line_data_df = pd.concat(
@@ -1744,17 +1745,22 @@ def reduce_edisgo(
             "Line_" + lines_df.loc[:, "bus0"] + "_to_" + lines_df.loc[:, "bus1"]
         )
 
-    logger.info("Manipulate loads_df")
+    # Manipulate loads_df
     if not loads_df.empty:
         loads_df = loads_df.apply(apply_busmap_on_components, axis="columns")
 
         if aggregation_mode:
             if load_aggregation_mode == "sector":
-                loads_df = loads_df.groupby(by=["bus", "sector"]).apply(
+                loads_df = loads_df.groupby(by=["bus", "type", "sector"]).apply(
                     aggregate_loads_df
                 )
                 loads_df.index = (
-                    "Load_" + loads_df.loc[:, "bus"] + "_" + loads_df.loc[:, "sector"]
+                    "Load_"
+                    + loads_df.loc[:, "bus"]
+                    + "_"
+                    + loads_df.loc[:, "type"]
+                    + "_"
+                    + loads_df.loc[:, "sector"]
                 )
             elif load_aggregation_mode == "bus":
                 loads_df = loads_df.groupby(by=["bus"]).apply(aggregate_loads_df)
@@ -1766,7 +1772,7 @@ def reduce_edisgo(
                 loads_df, edisgo_obj, ["loads_active_power", "loads_reactive_power"]
             )
 
-    logger.info("Manipulate generators_df")
+    # Manipulate generators_df
     if not generators_df.empty:
         generators_df = generators_df.loc[
             generators_df.loc[:, "bus"].isin(busmap_df.index), :
@@ -1800,20 +1806,18 @@ def reduce_edisgo(
                 ["generators_active_power", "generators_reactive_power"],
             )
 
-    logger.info("Manipulate storage_units_df")
-
+    # Manipulate storage_units_df
     if not storage_units_df.empty:
         storage_units_df = storage_units_df.apply(
             apply_busmap_on_components, axis="columns"
         )
 
-    logger.info("Manipulate transformers_df")
-    transformers_df = edisgo_obj.topology.transformers_df
+    # Manipulate transformers_df
     transformers_df = transformers_df.apply(
         apply_busmap_on_transformers_df, axis="columns"
     )
 
-    logger.info("Manipulate switches_df")
+    # Manipulate switches_df
     if not switches_df.empty:
         # drop switches unused switches
         switches_to_drop = []
@@ -1867,15 +1871,13 @@ def reduce_edisgo(
     edisgo_obj.topology.transformers_df = transformers_df
     edisgo_obj.topology.switches_df = switches_df
 
-    logger.info("Make linemap_df")
+    # Make linemap_df
     linemap_df = pd.DataFrame()
     for new_line_name, old_line_names in zip(lines_df.index, lines_df.old_line_name):
         for old_line_name in old_line_names:
             linemap_df.loc[old_line_name, "new_line_name"] = new_line_name
 
-    logger.info("Finished in {}s".format(time() - start_time))
-
-    return edisgo_obj, linemap_df
+    return linemap_df
 
 
 def spatial_complexity_reduction(

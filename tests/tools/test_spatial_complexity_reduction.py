@@ -265,7 +265,7 @@ class TestSpatialComplexityReduction:
         assert edisgo_root.topology.transformers_df.shape[0] == 14
         assert edisgo_root.topology.switches_df.shape[0] == 2
 
-        edisgo_reduced, linemap_df = spatial_complexity_reduction.reduce_edisgo(
+        linemap_df = spatial_complexity_reduction.reduce_edisgo(
             edisgo_root,
             busmap_df,
             line_naming_convention=line_naming_convention,
@@ -274,29 +274,29 @@ class TestSpatialComplexityReduction:
             generator_aggregation_mode=generator_aggregation_mode,
         )
 
-        assert edisgo_reduced.topology.buses_df.shape[0] == 43
-        assert edisgo_reduced.topology.lines_df.shape[0] == 34
-        assert edisgo_reduced.topology.loads_df.shape[0] == n_loads
-        assert edisgo_reduced.topology.generators_df.shape[0] == n_generators
-        assert edisgo_reduced.topology.storage_units_df.shape[0] == 1
-        assert edisgo_reduced.topology.transformers_df.shape[0] == 14
-        assert edisgo_reduced.topology.switches_df.shape[0] == 2
+        assert edisgo_root.topology.buses_df.shape[0] == 43
+        assert edisgo_root.topology.lines_df.shape[0] == 34
+        assert edisgo_root.topology.loads_df.shape[0] == n_loads
+        assert edisgo_root.topology.generators_df.shape[0] == n_generators
+        assert edisgo_root.topology.storage_units_df.shape[0] == 1
+        assert edisgo_root.topology.transformers_df.shape[0] == 14
+        assert edisgo_root.topology.switches_df.shape[0] == 2
 
         if line_naming_convention == "standard_lines":
             assert (
-                edisgo_reduced.topology.lines_df.loc[
+                edisgo_root.topology.lines_df.loc[
                     "Line_Bus_MVStation_1_to_Bus_mvgd_1_F0_B2", "type_info"
                 ]
                 == "NA2XS2Y 3x1x240"
             )
         elif line_naming_convention == "combined_name":
             assert (
-                edisgo_reduced.topology.lines_df.loc[
+                edisgo_root.topology.lines_df.loc[
                     "Line_Bus_MVStation_1_to_Bus_mvgd_1_F0_B2", "type_info"
                 ]
                 == "Merged: 48-AL1/8-ST1A 48-AL1/8-ST1A "
             )
-        timeseries = edisgo_reduced.timeseries
+        timeseries = edisgo_root.timeseries
         assert timeseries.loads_active_power.shape[1] == n_loads
         assert timeseries.loads_reactive_power.shape[1] == n_loads
         assert timeseries.generators_active_power.shape[1] == n_generators
