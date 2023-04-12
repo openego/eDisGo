@@ -98,21 +98,19 @@ def find_buses_of_interest(edisgo_root: EDisGo) -> set:
     edisgo_obj.analyze()
 
     buses_of_interest = set()
-    mv_lines = checks.mv_line_load(edisgo_obj)
-    lv_lines = checks.lv_line_load(edisgo_obj)
+    mv_lines = checks.mv_line_max_relative_overload(edisgo_obj)
+    lv_lines = checks.lv_line_max_relative_overload(edisgo_obj)
     lines = mv_lines.index.tolist()
     lines = lines + lv_lines.index.tolist()
     for line in lines:
         buses_of_interest.add(edisgo_obj.topology.lines_df.loc[line, "bus0"])
         buses_of_interest.add(edisgo_obj.topology.lines_df.loc[line, "bus1"])
 
-    mv_buses = checks.mv_voltage_deviation(edisgo_obj, voltage_levels="mv")
-    for value in mv_buses.values():
-        buses_of_interest.update(value.index.tolist())
+    mv_buses = checks.voltage_issues(edisgo_obj, voltage_level="mv")
+    buses_of_interest.update(mv_buses.index.tolist())
 
-    lv_buses = checks.lv_voltage_deviation(edisgo_obj, voltage_levels="lv")
-    for value in lv_buses.values():
-        buses_of_interest.update(value.index.tolist())
+    lv_buses = checks.voltage_issues(edisgo_obj, voltage_level="lv")
+    buses_of_interest.update(lv_buses.index.tolist())
 
     logger.debug("Finished in {}s".format(time() - start_time))
     return buses_of_interest
