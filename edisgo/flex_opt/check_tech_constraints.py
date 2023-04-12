@@ -1038,22 +1038,21 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
 
     upper_limits_df = pd.DataFrame()
     lower_limits_df = pd.DataFrame()
-    buses_in_pfa = edisgo_obj.results.v_res.columns
+    voltages_pfa = edisgo_obj.results.v_res
+    buses_in_pfa = voltages_pfa.columns
 
     if mode == "stations":
 
         config_string = "mv_lv_station"
 
-        # get all primary and secondary sides
-        primary_sides = pd.Series()
-        secondary_sides = pd.Series()
+        # get base voltage (voltage at primary side) for each station
+        voltage_base = pd.DataFrame()
         for grid in lv_grids:
-            primary_side = grid.transformers_df.iloc[0].bus0
+            transformers_df = grid.transformers_df
+            primary_side = transformers_df.iloc[0].bus0
+            secondary_side = transformers_df.iloc[0].bus1
             if primary_side in buses_in_pfa:
-                primary_sides[grid] = primary_side
-                secondary_sides[grid] = grid.station.index[0]
-
-        voltage_base = edisgo_obj.results.v_res.loc[:, primary_sides.values]
+                voltage_base[secondary_side] = voltages_pfa.loc[:, primary_side]
 
         upper_limits_df = (
             voltage_base
@@ -1067,14 +1066,6 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
                 "{}_max_v_drop".format(config_string)
             ]
         )
-
-        # rename columns to secondary side
-        rename_dict = {
-            primary_sides[g]: secondary_sides[g] for g in primary_sides.keys()
-        }
-        upper_limits_df.rename(columns=rename_dict, inplace=True)
-        lower_limits_df.rename(columns=rename_dict, inplace=True)
-
     else:
         config_string = "lv"
 
@@ -1089,7 +1080,7 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
                     grid.station.index[0]
                 )
 
-        voltage_base = edisgo_obj.results.v_res.loc[:, secondary_sides.values]
+        voltage_base = voltages_pfa.loc[:, secondary_sides.values]
 
         upper_limits_df_tmp = (
             voltage_base
