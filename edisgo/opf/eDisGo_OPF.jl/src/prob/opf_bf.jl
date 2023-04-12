@@ -12,6 +12,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
     for (n, network) in PowerModels.nws(pm)
         # VARIABLES
         if PowerModels.ref(pm, 1, :opf_version) in(1, 2, 3, 4)
+            eDisGo_OPF.variable_branch_power_radial(pm, nw=n, bounded=false)
             if PowerModels.ref(pm, 1, :opf_version) in(1, 3)
                 eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false) # Eq. 3.9i (für Version 1 bzw. 3 keine Eq. (3.9))
                 eDisGo_OPF.variable_bus_voltage(pm, nw=n, bounded=false)
@@ -22,7 +23,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
                 eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.29)-(3.32)
                 eDisGo_OPF.variable_bus_voltage(pm, nw=n)  # Eq. (3.10)
             end
-            eDisGo_OPF.variable_branch_power_radial(pm, nw=n, bounded=false)
+
             eDisGo_OPF.variable_battery_storage_power(pm, nw=n)  # Eq. (3.13) und (3.14)
             eDisGo_OPF.variable_heat_storage(pm, nw=n)  # Eq. (3.19)
             eDisGo_OPF.variable_heat_pump_power(pm, nw=n)  # Eq. (3.16)

@@ -9,8 +9,6 @@ try
     using JuMP
     using JSON
     using Gurobi
-    #using Mosek
-    #using MosekTools
 catch e
     Pkg.instantiate()
     using eDisGo_OPF
@@ -19,14 +17,11 @@ catch e
     using JuMP
     using JSON
     using Gurobi
-    #using Mosek
-    #using MosekTools
 end
 
 
 
 PowerModels.logger_config!("debug")
-
 json_str = readline(stdin)
 ding0_grid = ARGS[1]
 results_path = ARGS[2]
@@ -36,8 +31,7 @@ warm_start = ARGS[5].=="True"
 
 # Set solver attributes
 const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>1e-6)
-const gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "Presolve" => 1, "FeasibilityTol"=>1e-4, "BarConvTol"=>1e-6, "BarQCPConvTol"=>1e-4) #"NumericFocus"=> 1, "BarHomogeneous"=> 1,
-#const mosek = optimizer_with_attributes(Mosek.Optimizer, MOI.Silent() => silence_moi)
+const gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "FeasibilityTol"=>1e-4, "BarQCPConvTol"=>1e-4) #"NumericFocus"=> 1, "BarConvTol"=>1e-4,  "BarHomogeneous"=> 1,
 
 function optimize_edisgo()
   # read in data and create multinetwork
@@ -60,7 +54,7 @@ function optimize_edisgo()
       soc_tight, soc_dict = eDisGo_OPF.check_SOC_equality(result_soc, data_edisgo)
       # Save SOC violations if SOC is not tight
       if !soc_tight
-        open(joinpath(results_path, ding0_grid*"_"*join(data_edisgo["flexibilities"])*".json"), "w") do f
+        open(joinpath(results_path, "OPF_grids", ding0_grid*"_"*join(data_edisgo["flexibilities"])*".json"), "w") do f
             write(f, JSON.json(soc_dict))
         end
       end

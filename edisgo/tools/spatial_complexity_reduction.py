@@ -820,7 +820,7 @@ def make_busmap_from_feeders(
                                 graph_root, bus, cutoff=None, weight="length"
                             )
                         )
-                        dijkstra_distances_df.loc[:, bus] = path_series
+                        dijkstra_distances_df[bus] = path_series
 
                     feeder_buses_df.loc[:, "medoid"] = dijkstra_distances_df.idxmin(
                         axis=1
