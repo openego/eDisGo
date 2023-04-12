@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -32,7 +33,6 @@ class TestPowerModelsOPF:
             bus=self.edisgo.topology.buses_df.index[30],
             p_set=3,
         )
-        # self.edisgo.analyze()
 
         # add heat pump, electromobility, overlying grid dummy data
         self.edisgo.heat_pump.cop_df = pd.DataFrame(
@@ -56,13 +56,7 @@ class TestPowerModelsOPF:
             },
             index=self.edisgo.heat_pump.heat_demand_df.columns,
         )
-        # self.edisgo.electromobility.charging_processes_df = pd.DataFrame(
-        #     data={
-        #         "ags": [5.0, 6.0],
-        #         "car_id": [7.0, 8.0],
-        #     },
-        #     index=[0, 1],
-        # )
+
         self.edisgo.add_component(
             comp_type="load",
             type="charging_point",
@@ -141,7 +135,7 @@ class TestPowerModelsOPF:
         # ToDo: add overlying grid dummy data
 
     def test_pm_optimize(self):
-        # OPF without all flexibilities
+        # OPF with all flexibilities
         pm_optimize(
             self.edisgo,
             opf_version=2,
@@ -152,6 +146,26 @@ class TestPowerModelsOPF:
             flexible_storage_units=self.edisgo.topology.storage_units_df.index.values,
         )
 
-        print(" ")
-        # assert
+        assert np.isclose(self.edisgo.opf_results.slack_generator_t.pg[-1], -20.6107)
+        assert np.isclose(
+            self.edisgo.opf_results.heat_storage_t.p.Heat_Pump_LVGrid_3_1[-1], -0.66486
+        )
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power.Charging_Point_LVGrid_6_1[-1],
+            0.731367,
+        )
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power.Heat_Pump_LVGrid_5_1[-1], 0.524957
+        )
+        assert np.isclose(
+            self.edisgo.timeseries.storage_units_active_power.Storage_1[-1], 0.0180237
+        )
+        assert np.isclose(
+            self.edisgo.timeseries.loads_active_power[
+                "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"
+            ][-1],
+            0.031 + 0.208118859,
+        )
+        assert self.edisgo.opf_results.status == "OPTIMAL"
+
         # ToDo: add assertions for overlying grid OPF

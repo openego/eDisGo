@@ -48,7 +48,7 @@ def to_powermodels(
         Array containing all flexible loads that allow for application of demand side
         management strategy.
     flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
-        Array containing all flexible storages. Non-flexible storages operate to
+        Array containing all flexible storages. Non-flexible storage units operate to
         optimize self consumption.
         Default: None
     opf_version: Int
@@ -62,7 +62,8 @@ def to_powermodels(
         format.
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
-        retrieved from overlying_grid component of edisgo object.
+        retrieved from overlying_grid component of edisgo object and reduced by non-
+        flexible components.
     """
     if opf_version in [2, 3, 4]:
         opf_flex = ["curt"]
@@ -228,7 +229,7 @@ def from_powermodels(
     save_heat_storage: bool
         Indicates whether to save results of heat storage variables from the
         optimization to eDisGo object.
-            Default: True
+        Default: True
     save_slack_gen: bool
         Indicates whether to save results of slack generator variables from the
         optimization to eDisGo object.
@@ -242,8 +243,7 @@ def from_powermodels(
             generator curtailment, heat pump slack)
         3 : high voltage requirement slacks
         4 : high voltage requirements slacks and grid related slacks cf. version 2
-
-        Default: False
+        Default: True
     """
 
     if type(pm_results) == str:
@@ -516,10 +516,11 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
     ----------
     psa_net : :pypsa:`PyPSA.Network<network>`
         :pypsa:`PyPSA.Network<network>` representation of network.
-    edisgo_obj :
+    edisgo_obj : :class:`~.EDisGo`
     pm : dict
         (PowerModels) dictionary.
-    flexible_storage_units:
+    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
+        Array containing all flexible storage units.
 
     """
     bus_types = ["PQ", "PV", "Slack", "None"]
@@ -583,6 +584,8 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
     s_base : int
         Base value of apparent power for per unit system.
         Default: 100 MVA
+    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
+        Array containing all flexible storage units.
     """
     # Divide in slack, dispatchable and non-dispatchable generator sets
     solar_gens = edisgo_obj.topology.generators_df.index[
@@ -702,6 +705,8 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
         :pypsa:`PyPSA.Network<network>` representation of network.
     pm : dict
         (PowerModels) dictionary.
+    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
+        Array containing all flexible storage units.
     s_base : int
         Base value of apparent power for per unit system.
         Default: 1 MVA
@@ -710,13 +715,10 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
     transformer = ~branches.tap_ratio.isna()
     tap = branches.tap_ratio.fillna(1)
     shift = branches.phase_shift.fillna(0)
-    # length = branches.length.fillna(1)
     for par, val, quant, text, unit in [
         ("r_pu", branches.r_pu, 0.002, "resistance", "p.u."),
         ("x_pu", branches.x_pu, 0.002, "reactance", "p.u."),
-        # ("length", length, 1e3, 0.002, "branch length", "km"),
     ]:
-        # max_value = max(val.loc[val < val.quantile(1 - quant)])
         min_value = min(val.loc[val > val.quantile(quant)])
         if math.floor(math.log10(val.min())) <= -4:
             # only modify r, x and l values if min/max value differences are too big
@@ -813,16 +815,13 @@ def _build_load(
         (PowerModels) dictionary.
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
     flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
     flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
-        Array containing all flexible storages. Non-flexible storages operate to
-        optimize self consumption.
-        Default: None
+        Array containing all flexible storage units.
     """
     flex_loads = np.concatenate((flexible_hps, flexible_cps))
     inflexible_storage_units = psa_net.storage_units.index[
@@ -889,12 +888,9 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storage_units, s_ba
     pm : dict
         (PowerModels) dictionary.
     flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
-        Array containing all flexible storages. Non-flexible storages operate to
-        optimize self consumption.
-        Default: None
+        Array containing all flexible storage units.
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
     if edisgo_obj.timeseries.storage_units_state_of_charge.empty:
@@ -990,7 +986,6 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         (PowerModels) dictionary.
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
 
@@ -1022,7 +1017,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         try:
             eta = edisgo_obj.electromobility.simbev_config_df.eta_cp.values[0]
         except IndexError:
-            eta = [0.9] * len(emob_df.index)
+            eta = 0.9
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "cp")
         q = (
             sign
@@ -1069,7 +1064,6 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     edisgo_obj : :class:`~.EDisGo`
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
     flexible_hps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
@@ -1102,7 +1096,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
             - geothermal_feedin.values
         ).clip(
             min=0
-        )  # ToDo: nur ein district heating?
+        )  # ToDo: if multiple district heatings: filter via district id
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
@@ -1137,7 +1131,6 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     edisgo_obj : :class:`~.EDisGo`
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
     flexible_hps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
@@ -1148,11 +1141,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
             "p_loss": 0.04,  # 4% of SOC per day
-            "energy": 0, #(
-            #     heat_storage_df.state_of_charge_initial[stor_i]
-            #     * heat_storage_df.capacity[stor_i]
-            #     / s_base
-            # ),
+            "energy": 0,
             "capacity": heat_storage_df.capacity[stor_i] / s_base,
             "charge_efficiency": heat_storage_df.efficiency[stor_i],
             "discharge_efficiency": heat_storage_df.efficiency[stor_i],
@@ -1176,7 +1165,6 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
         (PowerModels) dictionary.
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
     flexible_loads : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all flexible loads that allow for application of demand side
         management strategy.
@@ -1265,7 +1253,6 @@ def _build_hv_requirements(
         (PowerModels) dictionary.
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
     opf_flex : list
         Flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]. For more information see
@@ -1276,9 +1263,7 @@ def _build_hv_requirements(
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
     flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
-        Array containing all flexible storages. Non-flexible storages operate to
-        optimize self consumption.
-        Default: None
+        Array containing all flexible storage units.
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from overlying grid component of edisgo object.
@@ -1341,8 +1326,8 @@ def _build_timeseries(
     """
     Build timeseries dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'. PowerModels' timeseries dictionary contains one
-    timeseries dictionary each for: gen, load, battery storage,
-    electromobility, heat pumps and dsm storage.
+    timeseries dictionary each for: gen, load, battery storage, electromobility, heat
+    pumps and dsm storage.
 
     Parameters
     ----------
@@ -1353,7 +1338,6 @@ def _build_timeseries(
     edisgo_obj : :class:`~.EDisGo`
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all charging points that allow for flexible charging.
     flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list
@@ -1363,11 +1347,9 @@ def _build_timeseries(
         Array containing all flexible loads that allow for application of demand side
         management strategy.
     flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
-        Array containing all flexible storages. Non-flexible storages operate to
-        optimize self consumption.
-        Default: None
+        Array containing all flexible storage units.
     opf_flex: list
-        List of flexibilities that should be considered in the optimization. Must be any
+        Flexibilities that should be considered in the optimization. Must be any
         subset of ["curt", "storage", "cp", "hp", "dsm"]
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
@@ -1378,7 +1360,6 @@ def _build_timeseries(
         "gen_nd",
         "gen_slack",
         "load",
-        # "storage",
         "electromobility",
         "heatpumps",
         "dsm",
@@ -1425,7 +1406,6 @@ def _build_component_timeseries(
         (PowerModels) dictionary.
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
     kind: str
         Must be one of ["gen", "gen_nd", "gen_slack", "load", "storage",
         "electromobility", "heatpumps", "heat_storage", "dsm", "HV_requirements"]
@@ -1439,12 +1419,9 @@ def _build_component_timeseries(
         Array containing all flexible loads that allow for application of demand side
         management strategy.
     flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
-        Array containing all flexible storages. Non-flexible storages operate to
-        optimize self consumption.
-        Default: None
+        Array containing all flexible storage units.
     opf_flex: list
-        Flexibilities that should be considered in the optimization. Must be any
-        subset of ["curt", "storage", "cp", "hp", "dsm"]
+        Flexibilities that should be considered in the optimization.
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from overlying grid component of edisgo object.

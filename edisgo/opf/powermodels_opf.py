@@ -46,8 +46,8 @@ def pm_optimize(
         management strategy.
         Default: None
     flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
-        Array containing all flexible storages. Non-flexible storages operate to
-        optimize self consumption.
+        Array containing all flexible storage units. Non-flexible storage units operate
+        to optimize self consumption.
         Default: None
     opf_version: Int
         Version of optimization models to choose from. The grid model is a radial branch
@@ -55,17 +55,13 @@ def pm_optimize(
         constraints and the objective function.
         Implemented version are:
         1 : - Lifted constraints: grid restrictions
-            - Objective: minimize line losses and line loading
-        2 : - Objective: minimize line losses, line loading and grid related slacks
+            - Objective: minimize line losses and max line loading
+        2 : - Objective: minimize line losses and grid related slacks
         3 : - Additional constraints: high voltage requirements
             - Lifted constraints: grid restrictions
-            - Objective: minimize line losses, line loading and HV slacks
-            # ToDo: add HV slacks to objective (see `Gurobi's multiple objectives
-            <https://www.gurobi.com/documentation/9.1/refman/multiple_objectives.html>`_
-            ).
+            - Objective: minimize line losses, max line loading and HV slacks
         4 : - Additional constraints: high voltage requirements
-            - Objective: minimize line losses, line loading, HV slacks and grid related
-             slacks
+            - Objective: minimize line losses, HV slacks and grid related slacks
         Must be one of [1, 2, 3, 4].
         Default: 1
     method: str
@@ -90,27 +86,20 @@ def pm_optimize(
         Default: False
     save_heat_storage: bool
         Indicates whether to save results of heat storage variables from the
-        optimization to csv file in the current working directory. Set parameter
-        "path" to change the directory the file is saved to.
-        directory.
-        Default: False
+        optimization to eDisGo object.
+        Default: True
     save_slack_gen: bool
         Indicates whether to save results of slack generator variables from the
-        optimization to csv file in the current working directory. Set parameter
-        "path" to change the directory the file is saved to.
-        Default: False
+        optimization to eDisGo object.
+        Default: True
     save_slacks: bool
         Indicates whether to save results of slack variables of OPF. Depending on
          chosen opf_version, different slacks are used. For more information see
          :func:`edisgo.io.powermodels_io.from_powermodels`.
-        Default: False
+        Default: True
     """
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
-    # edisgo_obj.topology.loads_df["opt"] = [
-    #     load in np.concatenate([flexible_hps, flexible_cps, flexible_loads])
-    #     for load in edisgo_obj.topology.loads_df.index
-    # ]
     pm, hv_flex_dict = edisgo_obj.to_powermodels(
         s_base=s_base,
         flexible_cps=flexible_cps,
