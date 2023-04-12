@@ -6,14 +6,7 @@ import pytest
 
 from edisgo import EDisGo
 from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates
-from edisgo.tools.spatial_complexity_reduction import (
-    make_busmap,
-    make_grid_list,
-    reduce_edisgo,
-    remove_lines_under_one_meter,
-    remove_one_meter_lines,
-    spatial_complexity_reduction,
-)
+from edisgo.tools import spatial_complexity_reduction
 
 
 class TestSpatialComplexityReduction:
@@ -27,7 +20,7 @@ class TestSpatialComplexityReduction:
 
     @pytest.fixture(scope="class")
     def test_busmap_df(self, test_edisgo_obj):
-        busmap_df = make_busmap(
+        busmap_df = spatial_complexity_reduction.make_busmap(
             test_edisgo_obj,
             mode="kmeansdijkstra",
             cluster_area="main_feeder",
@@ -179,7 +172,7 @@ class TestSpatialComplexityReduction:
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
         with test_exception:
-            busmap_df = make_busmap(
+            busmap_df = spatial_complexity_reduction.make_busmap(
                 edisgo_root,
                 mode=mode,
                 cluster_area=cluster_area,
@@ -213,11 +206,11 @@ class TestSpatialComplexityReduction:
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
         if grid == "MVGrid":
-            grid = make_grid_list(edisgo_root, grid="MVGrid_1")[0]
+            grid = spatial_complexity_reduction.make_grid_list(edisgo_root, grid="MVGrid_1")[0]
         elif grid == "LVGrid":
-            grid = make_grid_list(edisgo_root, grid="LVGrid_9")[0]
+            grid = spatial_complexity_reduction.make_grid_list(edisgo_root, grid="LVGrid_9")[0]
 
-        busmap_df = make_busmap(
+        busmap_df = spatial_complexity_reduction.make_busmap(
             edisgo_root,
             mode="kmeans",
             grid=grid,
@@ -267,7 +260,7 @@ class TestSpatialComplexityReduction:
         assert edisgo_root.topology.transformers_df.shape[0] == 14
         assert edisgo_root.topology.switches_df.shape[0] == 2
 
-        edisgo_reduced, linemap_df = reduce_edisgo(
+        edisgo_reduced, linemap_df = spatial_complexity_reduction.reduce_edisgo(
             edisgo_root,
             busmap_df,
             line_naming_convention=line_naming_convention,
@@ -308,7 +301,7 @@ class TestSpatialComplexityReduction:
     def test_spatial_complexity_reduction(self, test_edisgo_obj):
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
-        edisgo_reduced, busmap_df, linemap_df = spatial_complexity_reduction(
+        edisgo_reduced, busmap_df, linemap_df = spatial_complexity_reduction.spatial_complexity_reduction(
             edisgo_root,
             mode="kmeans",
             cluster_area="grid",
@@ -326,7 +319,7 @@ class TestSpatialComplexityReduction:
     def test_remove_one_meter_lines(self, test_edisgo_obj):
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
-        edisgo_clean = remove_one_meter_lines(edisgo_root)
+        edisgo_clean = spatial_complexity_reduction.remove_one_meter_lines(edisgo_root)
 
         # Check that the generator changed the bus
         df_old = edisgo_root.topology.generators_df
@@ -350,7 +343,7 @@ class TestSpatialComplexityReduction:
     def test_remove_lines_under_one_meter(self, test_edisgo_obj):
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
-        edisgo_clean = remove_lines_under_one_meter(edisgo_root)
+        edisgo_clean = spatial_complexity_reduction.remove_lines_under_one_meter(edisgo_root)
 
         # Check that 1 line was removed
         assert len(edisgo_root.topology.lines_df) - 1 == len(
