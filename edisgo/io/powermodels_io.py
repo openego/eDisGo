@@ -1000,14 +1000,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         Updated array containing all charging points that allow for flexible charging.
     """
     flex_bands_df = edisgo_obj.electromobility.flexibility_bands
-    if (
-        len(
-            flexible_cps[
-                (flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]).any()
-            ]
-        )
-        > 0
-    ):
+    if (flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]).any().any():
         logger.warning(
             "Upper energy level is smaller than lower energy level for "
             "charging parks {}! Charging Parks will be changed into inflexible "
@@ -1015,7 +1008,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
                 flexible_cps[
                     (
                         flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]
-                    ).any()
+                    ).any()[0]
                 ]
             )
         )
@@ -1026,7 +1019,10 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
     for cp_i in np.arange(len(emob_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, emob_df.bus[cp_i])
         # retrieve power factor and sign from config
-        eta = edisgo_obj.electromobility.simbev_config_df.eta_cp.values[0]
+        try:
+            eta = edisgo_obj.electromobility.simbev_config_df.eta_cp.values[0]
+        except IndexError:
+            eta = [0.9] * len(emob_df.index)
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "cp")
         q = (
             sign

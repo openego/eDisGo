@@ -1392,8 +1392,8 @@ class EDisGo:
         Parameters
         ----------
         comp_type : str
-            Type of added component. Can be 'bus', 'line', 'load', 'generator', or
-            'storage_unit'.
+            Type of added component. Can be 'bus', 'line', 'load', 'generator',
+            'storage_unit', 'heat_pump' or 'charging_point'.
         ts_active_power : :pandas:`pandas.Series<Series>` or None
             Active power time series of added component.
             Index of the series must contain all time steps in
@@ -1440,6 +1440,10 @@ class EDisGo:
 
             * 'storage_unit' : :attr:`~.network.topology.Topology.add_storage_unit`
 
+            * 'heat_pump' : :attr:`~.network.topology.Topology.add_heat_pump`
+
+            * 'charging_point' : :attr:`~.network.topology.Topology.add_charging_point`
+
         """
         # ToDo: Add option to add transformer.
         # Todo: change into add_components to allow adding of several components
@@ -1458,18 +1462,32 @@ class EDisGo:
 
         def _set_timeseries():
             if ts_active_power is not None:
-                self.set_time_series_manual(
-                    **{f"{comp_type}s_p": pd.DataFrame({comp_name: ts_active_power})}
-                )
-            if ts_reactive_power is not None:
-                if isinstance(ts_reactive_power, pd.Series):
+                if comp_type in ["heat_pump", "charging_point"]:
+                    self.set_time_series_manual(
+                        **{"loads_p": pd.DataFrame({comp_name: ts_active_power})}
+                    )
+                else:
                     self.set_time_series_manual(
                         **{
-                            f"{comp_type}s_q": pd.DataFrame(
-                                {comp_name: ts_reactive_power}
+                            f"{comp_type}s_p": pd.DataFrame(
+                                {comp_name: ts_active_power}
                             )
                         }
                     )
+            if ts_reactive_power is not None:
+                if isinstance(ts_reactive_power, pd.Series):
+                    if comp_type in ["heat_pump", "charging_point"]:
+                        self.set_time_series_manual(
+                            **{"loads_q": pd.DataFrame({comp_name: ts_active_power})}
+                        )
+                    else:
+                        self.set_time_series_manual(
+                            **{
+                                f"{comp_type}s_q": pd.DataFrame(
+                                    {comp_name: ts_reactive_power}
+                                )
+                            }
+                        )
                 elif ts_reactive_power == "default":
                     if ts_active_power is None:
                         logging.warning(
@@ -1482,16 +1500,22 @@ class EDisGo:
                             for _ in ["generator", "load", "storage_unit"]
                             if _ != comp_type
                         ]
+
                         parameter_dict = {
                             f"{t}s_parametrisation": None for t in other_comps
                         }
-                        parameter_dict.update(
-                            {
-                                f"{comp_type}s_parametrisation": _get_q_default_df(
-                                    comp_name
-                                )
-                            }
-                        )
+                        if comp_type in ["heat_pump", "charging_point"]:
+                            parameter_dict.update(
+                                {"loads_parametrisation": _get_q_default_df(comp_name)}
+                            )
+                        else:
+                            parameter_dict.update(
+                                {
+                                    f"{comp_type}s_parametrisation": _get_q_default_df(
+                                        comp_name
+                                    )
+                                }
+                            )
                         self.set_time_series_reactive_power_control(**parameter_dict)
 
         if comp_type == "bus":
@@ -1510,6 +1534,14 @@ class EDisGo:
 
         elif comp_type == "load":
             comp_name = self.topology.add_load(**kwargs)
+            _set_timeseries()
+
+        elif comp_type == "heat_pump":
+            comp_name = self.topology.add_heat_pump(**kwargs)
+            _set_timeseries()
+
+        elif comp_type == "charging_point":
+            comp_name = self.topology.add_charging_point(**kwargs)
             _set_timeseries()
 
         else:
