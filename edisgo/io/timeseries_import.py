@@ -462,8 +462,8 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
         individual_heating_df = pd.DataFrame(index=timeindex_full)
 
     # get district heating profiles from oedb
-    if "district_heating_id" in hp_df.columns:
-        dh_ids = hp_df.district_heating_id.dropna().unique()
+    if "area_id" in hp_df.columns:
+        dh_ids = hp_df.area_id.dropna().unique()
     else:
         dh_ids = []
     if len(dh_ids) > 0:
@@ -472,10 +472,10 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
         )
         # set column names to be heat pump names instead of district heating IDs
         rename_series = (
-            hp_df.loc[:, ["district_heating_id"]]
+            hp_df.loc[:, ["area_id"]]
             .dropna()
             .reset_index()
-            .set_index("district_heating_id")
+            .set_index("area_id")
             .iloc[:, 0]
         )
         dh_profile_df.rename(columns=rename_series, inplace=True)
