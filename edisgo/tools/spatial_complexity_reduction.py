@@ -398,8 +398,8 @@ def remove_lines_under_one_meter(edisgo_root: EDisGo) -> EDisGo:
     return edisgo_obj
 
 
-def make_busmap_from_clustering(
-    edisgo_root: EDisGo,
+def make_busmap_grid(
+    edisgo_obj: EDisGo,
     grid: None | str = None,
     mode: str = None,
     reduction_factor: float = 0.25,
@@ -413,7 +413,7 @@ def make_busmap_from_clustering(
 
     Parameters
     ----------
-    edisgo_root : :class:`~.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
         EDisGo object for which the busmap is created.
     grid : str or None
         If None, busmap is created for all grids, else only for the selected grid.
@@ -429,6 +429,7 @@ def make_busmap_from_clustering(
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Busmap which maps the old bus names to the new bus names with new coordinates.
+        See return value in function :func:`~make_busmap` for more information.
 
     References
     ----------
@@ -491,10 +492,8 @@ def make_busmap_from_clustering(
             logger.error("Grid is None")
         return series
 
-    start_time = time()
-    logger.debug("Start - Make busmap from clustering, mode = {}".format(mode))
+    logger.debug("Start making busmap for grids.")
 
-    edisgo_obj = copy.deepcopy(edisgo_root)
     grid_list = make_grid_list(edisgo_obj, grid=grid)
 
     busmap_df = pd.DataFrame()
@@ -601,12 +600,11 @@ def make_busmap_from_clustering(
 
         busmap_df = pd.concat([busmap_df, partial_busmap_df])
 
-    logger.debug("Finished in {}s".format(time() - start_time))
     return busmap_df
 
 
-def make_busmap_from_feeders(
-    edisgo_root: EDisGo = None,
+def make_busmap_feeders(
+    edisgo_obj: EDisGo = None,
     grid: None | Grid = None,
     mode: str = None,
     reduction_factor: float = 0.25,
@@ -620,7 +618,7 @@ def make_busmap_from_feeders(
 
     Parameters
     ----------
-    edisgo_root : :class:`~.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
         EDisGo object for which the busmap is created.
     grid : str or None
         If None, busmap is created for all grids, else only for the selected grid.
@@ -637,6 +635,7 @@ def make_busmap_from_feeders(
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Busmap which maps the old bus names to the new bus names with new coordinates.
+        See return value in function :func:`~make_busmap` for more information.
 
     References
     ----------
@@ -706,9 +705,7 @@ def make_busmap_from_feeders(
         ser["new_y"] = y
         return ser
 
-    edisgo_obj = copy.deepcopy(edisgo_root)
-    start_time = time()
-    logger.debug("Start - Make busmap from feeders, mode = {}".format(mode))
+    logger.debug("Start making busmap for feeders.")
 
     edisgo_obj.topology.buses_df = edisgo_obj.topology.buses_df.apply(
         transform_coordinates, axis="columns"
@@ -741,9 +738,7 @@ def make_busmap_from_feeders(
         neighbors = list(nx.neighbors(graph_root, transformer_node))
         neighbors.sort()
         logger.debug(
-            "Transformer neighbors has {} neighbors: {}".format(
-                len(neighbors), neighbors
-            )
+            "Transformer has {} neighbors: {}".format(len(neighbors), neighbors)
         )
 
         graph_without_transformer = copy.deepcopy(graph_root)
@@ -857,12 +852,11 @@ def make_busmap_from_feeders(
 
     busmap_df = busmap_df.apply(transform_coordinates_back, axis="columns")
     busmap_df.sort_index(inplace=True)
-    logger.debug("Finished in {}s".format(time() - start_time))
     return busmap_df
 
 
-def make_busmap_from_main_feeders(
-    edisgo_root: EDisGo = None,
+def make_busmap_main_feeders(
+    edisgo_obj: EDisGo = None,
     grid: None | Grid = None,
     mode: str = None,
     reduction_factor: float = 0.25,
@@ -878,7 +872,7 @@ def make_busmap_from_main_feeders(
 
     Parameters
     ----------
-    edisgo_root : :class:`~.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
         EDisGo object for which the busmap is created.
     grid : str or None
         If None, busmap is created for all grids, else only for the selected grid.
@@ -896,6 +890,7 @@ def make_busmap_from_main_feeders(
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Busmap which maps the old bus names to the new bus names with new coordinates.
+        See return value in function :func:`~make_busmap` for more information.
 
     References
     ----------
@@ -970,9 +965,7 @@ def make_busmap_from_main_feeders(
             if node in main_feeder_nodes:
                 return node
 
-    edisgo_obj = copy.deepcopy(edisgo_root)
-    start_time = time()
-    logger.debug("Start - Make busmap from main feeders, mode = {}".format(mode))
+    logger.debug("Start making busmap for main feeders")
 
     if mode != "aggregate_to_main_feeder":
         edisgo_obj.topology.buses_df = edisgo_obj.topology.buses_df.apply(
@@ -1006,9 +999,7 @@ def make_busmap_from_main_feeders(
         neighbors = list(nx.neighbors(graph_root, transformer_node))
         neighbors.sort()
         logger.debug(
-            "Transformer neighbors has {} neighbors: {}".format(
-                len(neighbors), neighbors
-            )
+            "Transformer has {} neighbors: {}".format(len(neighbors), neighbors)
         )
 
         graph_without_transformer = copy.deepcopy(graph_root)
@@ -1273,12 +1264,11 @@ def make_busmap_from_main_feeders(
     if mode != "aggregate_to_main_feeder":
         busmap_df = busmap_df.apply(transform_coordinates_back, axis="columns")
 
-    logger.debug("Finished in {}s".format(time() - start_time))
     return busmap_df
 
 
 def make_busmap(
-    edisgo_root: EDisGo,
+    edisgo_obj: EDisGo,
     mode: str = None,
     cluster_area: str = None,
     reduction_factor: float = 0.25,
@@ -1295,27 +1285,28 @@ def make_busmap(
 
     Parameters
     ----------
-    edisgo_root : :class:`~.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
         EDisGo object for which the busmap is created.
     mode : str
-        "kmeans", "kmeansdijkstra", "aggregate_to_main_feeder" or
-        "equidistant_nodes" as clustering method. "aggregate_to_main_feeder" or
-        "equidistant_nodes" only work with the cluster area "main_feeder".
+        Clustering method to use. Possible options are "kmeans", "kmeansdijkstra",
+        "aggregate_to_main_feeder" or "equidistant_nodes". The clustering methods
+        "aggregate_to_main_feeder" and "equidistant_nodes" only work for the cluster
+        area "main_feeder".
 
         - "kmeans":
-            Perform the k-means algorithm on the cluster area and map then the buses to
+            Perform the k-means algorithm on the cluster area and then map the buses to
             the cluster centers.
         - "kmeansdijkstra":
-            Perform the k-mean algorithm but then map the nodes to the cluster centers
-            through the distance shortest distance in the graph. The distances are
-            calculated by the dijkstra algorithm.
+            Perform the k-means algorithm and then map the nodes to the cluster centers
+            through the shortest distance in the graph. The distances are
+            calculated using the dijkstra algorithm.
         - "aggregate_to_main_feeder":
             Aggregate the nodes in the feeder to the longest path in the feeder, here
-            named main feeder.
+            called main feeder.
         - "equidistant_nodes":
-            Use the method aggregate to main feeder and then reduce the nodes again.
-            Through a reduction of the nodes by the reduction factor and then
-            distributing the remaining nodes on the graph.
+            Uses the method "aggregate_to_main_feeder" and then reduces the nodes again
+            through a reduction of the nodes by the specified reduction factor and
+            distributing the remaining nodes on the graph equidistantly.
 
     cluster_area : str
         The cluster area is the area the different clustering methods are applied to.
@@ -1323,16 +1314,22 @@ def make_busmap(
     reduction_factor : float
         Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
     reduction_factor_not_focused : bool or float
-        If False, the focus method is not used. If between 0 and 1, this sets the
-        reduction factor for buses not of interest. When selecting 0, the nodes of the
-        clustering area are aggregated to the transformer bus.
-    grid: :obj:`str` or None
-        If None, busmap is created for all grids, else only for the selected Grid.
+        If False, uses the same reduction factor for all cluster areas. If between 0
+        and 1, this sets the reduction factor for buses not of interest (these are buses
+        without voltage or overloading issues, that are determined through a worst case
+        power flow analysis). When selecting 0, the nodes of the clustering area are
+        aggregated to the transformer bus. This parameter is only used when parameter
+        `cluster_area` is set to 'feeder' or 'main_feeder'.
+    grid : str or None
+        If None, busmap is created for all grids, else only for the selected grid.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Busmap which maps the old bus names to the new bus names with new coordinates.
+        Columns are "new_bus" with new bus name, "new_x" with new x-coordinate and
+        "new_y" with new y-coordinate. Index of the dataframe holds bus names of
+        original buses as in buses_df.
 
     References
     ----------
@@ -1340,95 +1337,58 @@ def make_busmap(
     /en/latest/examples/spatial-clustering.html>`_.
 
     """
+
     # Check for false input.
     if mode == "aggregate_to_main_feeder":
         pass  # Aggregate to the main feeder
     elif not 0 < reduction_factor < 1.0:
-        raise ValueError("Reduction factor must bigger than 0 and smaller than 1")
+        raise ValueError("Reduction factor must be between 0 and 1.")
 
-    if mode not in [
+    modes = [
         "aggregate_to_main_feeder",
         "kmeans",
         "kmeansdijkstra",
         "equidistant_nodes",
-    ]:
-        raise ValueError(f"Selected false {mode=}")
+    ]
+    if mode not in modes:
+        raise ValueError(f"Invalid input for parameter 'mode'. Must be one of {modes}.")
     if (reduction_factor_not_focused is not False) and not (
         0 <= reduction_factor_not_focused < 1.0
     ):
         raise ValueError(
-            f"{reduction_factor_not_focused=}, should be 'False' "
-            f"or 0 or bigger than 0 but smaller than 1"
+            "Invalid input for parameter 'reduction_factor_not_focused'. Should be"
+            "'False' or between 0 and 1."
         )
 
     if cluster_area == "grid":
-        busmap_df = make_busmap_from_clustering(
-            edisgo_root,
+        busmap_df = make_busmap_grid(
+            edisgo_obj,
             mode=mode,
             grid=grid,
             reduction_factor=reduction_factor,
         )
     elif cluster_area == "feeder":
-        busmap_df = make_busmap_from_feeders(
-            edisgo_root,
+        busmap_df = make_busmap_feeders(
+            edisgo_obj,
             grid=grid,
             mode=mode,
             reduction_factor=reduction_factor,
             reduction_factor_not_focused=reduction_factor_not_focused,
         )
     elif cluster_area == "main_feeder":
-        busmap_df = make_busmap_from_main_feeders(
-            edisgo_root,
+        busmap_df = make_busmap_main_feeders(
+            edisgo_obj,
             grid=grid,
             mode=mode,
             reduction_factor=reduction_factor,
             reduction_factor_not_focused=reduction_factor_not_focused,
         )
     else:
-        raise ValueError(f"Selected false {cluster_area=}!")
+        raise ValueError(
+            "Invalid input for parameter 'cluster_area'. Must be one of 'grid', "
+            "'feeder' or 'main_feeder'."
+        )
 
-    return busmap_df
-
-
-def make_remaining_busmap(busmap_df: DataFrame, edisgo_root: EDisGo) -> DataFrame:
-    """
-    Make the remaining busmap out of an existing busmap and the EDisGo object.
-    If only the busmap for one grid is generated than with this function the remaining
-    busmap can be generated. Cause the
-    :func:`reduce_edisgo <edisgo.tools.spatial_complexity_reduction.reduce_edisgo>`
-    needs a busmap with all nodes of a bus.
-
-    Parameters
-    ----------
-    busmap_df: :obj:`pd.DataFrame`
-        Busmap with missing nodes.
-    edisgo_root: :obj:`EDisGo`
-        EDisGo object for which the busmap is generated.
-
-    Returns
-    -------
-    :obj:`DataFrame`
-        Busmap for the full edisgo object.
-    """
-
-    start_time = time()
-    logger.info("Start - Make remaining busmap")
-
-    remaining_busmap_df = edisgo_root.topology.buses_df.loc[
-        ~edisgo_root.topology.buses_df.index.isin(busmap_df.index)
-    ].copy()
-    remaining_busmap_df.loc[
-        remaining_busmap_df.index, "new_bus"
-    ] = remaining_busmap_df.index
-    remaining_busmap_df.loc[remaining_busmap_df.index, "new_x"] = remaining_busmap_df.x
-    remaining_busmap_df.loc[remaining_busmap_df.index, "new_y"] = remaining_busmap_df.y
-    remaining_busmap_df = remaining_busmap_df.drop(
-        labels=["v_nom", "mv_grid_id", "lv_grid_id", "in_building", "x", "y"], axis=1
-    )
-    remaining_busmap_df.index.name = "old_bus"
-    busmap_df = pd.concat([busmap_df, remaining_busmap_df])
-
-    logger.info("Finished in {}s".format(time() - start_time))
     return busmap_df
 
 
