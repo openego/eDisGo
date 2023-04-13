@@ -7,7 +7,7 @@ from zipfile import ZipFile
 
 import pandas as pd
 
-from edisgo.io import timeseries_import
+from edisgo.io import heat_pump_import, timeseries_import
 from edisgo.tools import tools
 
 logger = logging.getLogger(__name__)
@@ -148,12 +148,15 @@ class HeatPump:
 
             * 'oedb'
 
-                Weather cell specific hourly COP time series are obtained
-                from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_ (see
-                :func:`edisgo.io.timeseries_import.cop_oedb` for more information).
-                Using information on which weather cell each heat pump is in, the
-                weather cell specific time series are mapped to each heat pump.
+                COP / efficiency data are obtained from the `OpenEnergy DataBase
+                <https://openenergy-platform.org/dataedit/schemas>`_.
+                In case of heat pumps weather cell specific hourly COP time series
+                are obtained (see :func:`edisgo.io.timeseries_import.cop_oedb` for more
+                information). Using information on which weather cell each heat pump
+                is in, the weather cell specific time series are mapped to each heat
+                pump.
+                In case of resistive heaters a constant efficiency is set (see
+                :func:`edisgo.io.heat_pump_import.efficiency_resistive_heaters_oedb`).
 
                 Weather cell information of heat pumps is obtained from column
                 'weather_cell_id' in :attr:`~.network.topology.Topology.loads_df`. In
@@ -176,7 +179,7 @@ class HeatPump:
         engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
             Database engine. This parameter is required in case `ts_cop` is 'oedb'.
         heat_pump_names : list(str) or None
-            Defines for which heat pumps to get COP time series for in case `ts_cop` is
+            Defines for which heat pumps to set COP time series in case `ts_cop` is
             'oedb'. If None, all heat pumps in
             :attr:`~.network.topology.Topology.loads_df` (type is 'heat_pump') are
             used. Default: None.
@@ -199,9 +202,19 @@ class HeatPump:
                     edisgo_object.topology.loads_df.type == "heat_pump"
                 ].index
 
-            if len(heat_pump_names) > 0:
+            pth_df = edisgo_object.topology.loads_df.loc[heat_pump_names, :]
+            hp_df = pth_df[
+                ~pth_df.sector.isin(
+                    [
+                        "individual_heating_resistive_heater",
+                        "district_heating_resistive_heater",
+                    ]
+                )
+            ]
+
+            # set COP of heat pumps
+            if len(hp_df) > 0:
                 # check weather cell information of heat pumps
-                hp_df = edisgo_object.topology.loads_df.loc[heat_pump_names, :]
                 # if no heat pump has weather cell information, throw an error
                 if (
                     "weather_cell_id" not in hp_df.columns
@@ -247,6 +260,48 @@ class HeatPump:
                 )
             else:
                 cop_df = pd.DataFrame()
+
+            # set efficiency of resistive heaters
+            rh_df = pth_df[
+                pth_df.sector.isin(
+                    [
+                        "individual_heating_resistive_heater",
+                        "district_heating_resistive_heater",
+                    ]
+                )
+            ]
+            if len(rh_df) > 0:
+                # get efficiencies of resistive heaters
+                eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
+                    scenario="eGon2035",  # currently only possible scenario
+                    engine=kwargs.get("engine", None),
+                )
+                # determine timeindex to use
+                if not cop_df.empty:
+                    timeindex = cop_df.index
+                else:
+                    timeindex, _ = timeseries_import._timeindex_helper_func(
+                        edisgo_object,
+                        kwargs.get("timeindex", None),
+                        default_year=2011,
+                        allow_leap_year=False,
+                    )
+                # assign efficiency time series to each heat pump
+                eta_df = pd.DataFrame(
+                    data={
+                        _: (
+                            eta_dict["central_resistive_heater"]
+                            if rh_df.at[_, "sector"]
+                            == "district_heating_resistive_heater"
+                            else eta_dict["rural_resistive_heater"]
+                        )
+                        for _ in rh_df.index
+                    },
+                    index=timeindex,
+                )
+            else:
+                eta_df = pd.DataFrame()
+            cop_df = pd.concat([cop_df, eta_df], axis=1)
         elif isinstance(ts_cop, pd.DataFrame):
             cop_df = ts_cop
         else:
