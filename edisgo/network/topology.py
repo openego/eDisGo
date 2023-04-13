@@ -217,7 +217,9 @@ class Topology:
                 Peak load or nominal capacity in MW.
 
             type : str
-                Type of load, e.g. 'conventional_load', 'charging_point' or 'heat_pump'.
+                Type of load, e.g. 'conventional_load', 'charging_point' or 'heat_pump'
+                (resistive heaters are as well treated as heat pumps with a COP smaller
+                than 1).
                 This information is for example currently necessary when setting up a
                 worst case analysis, as different types of loads are treated
                 differently.
@@ -248,8 +250,12 @@ class Topology:
                 In case of heat pumps it is used when heat pumps are integrated into
                 the grid, as e.g. heat pumps for individual heating are allocated to an
                 existing load (see
-                function :attr:`~.network.topology.Topology.connect_to_lv`). The sector
-                needs to either be 'individual_heating' or 'district_heating'.
+                function :attr:`~.network.topology.Topology.connect_to_lv`). It is
+                further used to specify, if component is a resistive heater, as
+                resistive heaters are treated as heat pumps. The sector
+                needs to either be 'individual_heating', 'district_heating',
+                'individual_heating_resistive_heater' or
+                'district_heating_resistive_heater'.
 
             building_id : int
                 ID of the building the load is associated with. This is e.g. used to
@@ -2017,9 +2023,10 @@ class Topology:
                   (fallback)
 
             * Heat pumps with specified voltage level 7
-                * with sector 'individual_heating' to LV loads
-                * with sector 'individual_heating' to some bus in the grid that
-                  is not a house connection
+                * with sector 'individual_heating' or
+                  'individual_heating_resistive_heater' to LV loads
+                * with sector 'district_heating' or 'district_heating_resistive_heater'
+                  to some bus in the grid that is not a house connection
                 * to random bus in the LV grid that if no appropriate load is available
                   (fallback)
 
@@ -2201,9 +2208,15 @@ class Topology:
                         ~lv_grid.buses_df.in_building.astype(bool)
                     ].index
             else:
-                if comp_data["sector"] == "individual_heating":
+                if comp_data["sector"] in [
+                    "individual_heating",
+                    "individual_heating_resistive_heater",
+                ]:
                     target_buses = lv_loads.bus.values
-                elif comp_data["sector"] == "district_heating":
+                elif comp_data["sector"] in [
+                    "district_heating",
+                    "district_heating_resistive_heater",
+                ]:
                     target_buses = lv_grid.buses_df[
                         ~lv_grid.buses_df.in_building.astype(bool)
                     ].index
