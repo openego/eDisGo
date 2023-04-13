@@ -146,6 +146,97 @@ class TestTimeseriesReduction:
 
         # ToDo: Add OG Data
 
+        self.edisgo.resample_timeseries(freq="1min")
+        self.timesteps = pd.date_range(start="01/01/2018", periods=240, freq="h")
+
+        attributes = self.edisgo.timeseries._attributes
+
+        for attr in attributes:
+            if not getattr(self.edisgo.timeseries, attr).empty:
+                df = pd.DataFrame(
+                    index=self.timesteps,
+                    columns=getattr(self.edisgo.timeseries, attr).columns,
+                    data=getattr(self.edisgo.timeseries, attr).values,
+                )
+                setattr(
+                    self.edisgo.timeseries,
+                    attr,
+                    df,
+                )
+        self.edisgo.timeseries.timeindex = self.timesteps
+        # # Battery electric vehicle timeseries
+        # if bev:
+        #     if save_ev_soc_initial:
+        #         # timestep EV SOC from timestep before if possible
+        #         ts_before = pd.to_datetime(timeframe[0]) - pd.Timedelta(hours=1)
+        #         try:
+        #             initial_soc_cp = (
+        #                     1
+        #                     / 2
+        #                     * (
+        #                             edisgo_obj.electromobility.flexibility_bands[
+        #                                 "upper_energy"
+        #                             ].loc[ts_before]
+        #                             + edisgo_obj.electromobility.flexibility_bands[
+        #                                 "lower_energy"
+        #                             ].loc[ts_before]
+        #                     )
+        #             )
+        #         except KeyError:
+        #             initial_soc_cp = (
+        #                     1
+        #                     / 2
+        #                     * (
+        #                             edisgo_obj.electromobility.flexibility_bands[
+        #                                 "upper_energy"
+        #                             ].loc[timeframe[0]]
+        #                             + edisgo_obj.electromobility.flexibility_bands[
+        #                                 "lower_energy"
+        #                             ].loc[timeframe[0]]
+        #                     )
+        #             )
+        #         edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
+        #     for key, df in edisgo_obj.electromobility.flexibility_bands.items():
+        #         if not df.empty:
+        #             df = df.loc[timeframe]
+        #             edisgo_obj.electromobility.flexibility_bands.update({key: df})
+        # # Heat pumps timeseries
+        # if hp:
+        #     for attr in ["cop_df", "heat_demand_df"]:
+        #         if not getattr(edisgo_obj.heat_pump, attr).empty:
+        #             setattr(
+        #                 edisgo_obj.heat_pump,
+        #                 attr,
+        #                 getattr(edisgo_obj.heat_pump, attr).loc[timeframe],
+        #             )
+        # # Demand Side Management timeseries
+        # if dsm:
+        #     for attr in ["e_min", "e_max", "p_min", "p_max"]:
+        #         if not getattr(edisgo_obj.dsm, attr).empty:
+        #             setattr(
+        #                 edisgo_obj.dsm,
+        #                 attr,
+        #                 getattr(edisgo_obj.dsm, attr).loc[timeframe],
+        #             )
+        #
+        # if og:
+        #     for attr in [
+        #         "dsm_active_power",
+        #         "electromobility_active_power",
+        #         "geothermal_energy_feedin_district_heating",
+        #         "heat_pump_central_active_power",
+        #         "heat_pump_decentral_active_power",
+        #         "renewables_curtailment",
+        #         "solarthermal_energy_feedin_district_heating",
+        #         "storage_units_active_power",
+        #     ]:
+        #         if not getattr(edisgo_obj.overlying_grid, attr).empty:
+        #             setattr(
+        #                 edisgo_obj.overlying_grid,
+        #                 attr,
+        #                 getattr(edisgo_obj.overlying_grid, attr).loc[timeframe],
+        #                 )
+
     @pytest.fixture(autouse=True)
     def run_power_flow(self):
         """
