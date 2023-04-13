@@ -140,32 +140,57 @@ class TestPowerModelsOPF:
             self.edisgo,
             opf_version=2,
             silence_moi=True,
+            method="nc",
             flexible_cps=["Charging_Point_LVGrid_6_1"],
             flexible_hps=self.edisgo.heat_pump.cop_df.columns.values,
             flexible_loads=self.edisgo.dsm.e_min.columns.values,
             flexible_storage_units=self.edisgo.topology.storage_units_df.index.values,
         )
 
-        assert np.isclose(self.edisgo.opf_results.slack_generator_t.pg[-1], -20.6107)
         assert np.isclose(
-            self.edisgo.opf_results.heat_storage_t.p.Heat_Pump_LVGrid_3_1[-1], -0.66486
+            np.round(self.edisgo.opf_results.slack_generator_t.pg[-1], 3),
+            -20.75,
+            atol=1e-3,
         )
         assert np.isclose(
-            self.edisgo.timeseries.loads_active_power.Charging_Point_LVGrid_6_1[-1],
-            0.731367,
+            np.round(
+                self.edisgo.opf_results.heat_storage_t.p.Heat_Pump_LVGrid_3_1[-1], 3
+            ),
+            -0.666,
+            atol=1e-3,
         )
         assert np.isclose(
-            self.edisgo.timeseries.loads_active_power.Heat_Pump_LVGrid_5_1[-1], 0.524957
+            np.round(
+                self.edisgo.timeseries.loads_active_power.Charging_Point_LVGrid_6_1[-1],
+                3,
+            ),
+            0.761,
+            atol=1e-3,
         )
         assert np.isclose(
-            self.edisgo.timeseries.storage_units_active_power.Storage_1[-1], 0.0180237
+            np.round(
+                self.edisgo.timeseries.loads_active_power.Heat_Pump_LVGrid_5_1[-1], 3
+            ),
+            0.525,
+            atol=1e-3,
         )
         assert np.isclose(
-            self.edisgo.timeseries.loads_active_power[
-                "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"
-            ][-1],
-            0.031 + 0.208118859,
+            np.round(
+                self.edisgo.timeseries.storage_units_active_power.Storage_1[-1], 3
+            ),
+            0.0157,
+            atol=1e-3,
         )
-        assert self.edisgo.opf_results.status == "OPTIMAL"
+        assert np.isclose(
+            np.round(
+                self.edisgo.timeseries.loads_active_power[
+                    "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"
+                ][-1],
+                3,
+            ),
+            0.031 + 0.208,
+            atol=1e-3,
+        )
+        assert self.edisgo.opf_results.status == "LOCALLY_SOLVED"
 
         # ToDo: add assertions for overlying grid OPF
