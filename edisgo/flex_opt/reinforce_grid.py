@@ -28,6 +28,7 @@ def reinforce_grid(
     split_voltage_band: bool = True,
     mode: str | None = None,
     without_generator_import: bool = False,
+    n_minus_one: bool = False,
 ) -> Results:
     """
     Evaluates network reinforcement needs and performs measures.
@@ -45,13 +46,13 @@ def reinforce_grid(
         conducted and therefore which time steps to consider when checking
         for over-loading and over-voltage issues.
         It defaults to None in which case all timesteps in
-        timeseries.timeindex (see :class:`~.network.network.TimeSeries`) are
+        timeseries.timeindex (see :class:`~.network.timeseries.TimeSeries`) are
         used.
         Possible options are:
 
         * None
           Time steps in timeseries.timeindex (see
-          :class:`~.network.network.TimeSeries`) are used.
+          :class:`~.network.timeseries.TimeSeries`) are used.
         * 'snapshot_analysis'
           Reinforcement is conducted for two worst-case snapshots. See
           :meth:`edisgo.tools.tools.select_worstcase_snapshots()` for further
@@ -94,10 +95,14 @@ def reinforce_grid(
         If True excludes lines that were added in the generator import to
         connect new generators to the topology from calculation of topology expansion
         costs. Default: False.
+    n_minus_one : bool
+        Determines whether n-1 security should be checked. Currently, n-1 security
+        cannot be handled correctly, wherefore the case where this parameter is set to
+        True will lead to an error being raised.
 
     Returns
     -------
-    :class:`~.network.network.Results`
+    :class:`~.network.results.Results`
         Returns the Results object holding network expansion costs, equipment
         changes, etc.
 
@@ -142,6 +147,9 @@ def reinforce_grid(
         )
 
         edisgo_reinforce.results.equipment_changes = pd.concat(df_list)
+
+    if n_minus_one is True:
+        raise NotImplementedError("n-1 security can currently not be checked.")
 
     # check if provided mode is valid
     if mode and mode not in ["mv", "mvlv", "lv"]:
@@ -196,27 +204,27 @@ def reinforce_grid(
     overloaded_mv_station = (
         pd.DataFrame(dtype=float)
         if mode == "lv"
-        else checks.hv_mv_station_overload(edisgo_reinforce)
+        else checks.hv_mv_station_max_overload(edisgo_reinforce)
     )
 
     overloaded_lv_stations = (
         pd.DataFrame(dtype=float)
         if mode == "mv"
-        else checks.mv_lv_station_overload(edisgo_reinforce)
+        else checks.mv_lv_station_max_overload(edisgo_reinforce)
     )
     logger.debug("==> Check line load.")
 
     crit_lines = (
         pd.DataFrame(dtype=float)
         if mode == "lv"
-        else checks.mv_line_overload(edisgo_reinforce)
+        else checks.mv_line_max_relative_overload(edisgo_reinforce)
     )
 
     if not mode or mode == "lv":
         crit_lines = pd.concat(
             [
                 crit_lines,
-                checks.lv_line_overload(edisgo_reinforce),
+                checks.lv_line_max_relative_overload(edisgo_reinforce),
             ]
         )
 
@@ -266,25 +274,25 @@ def reinforce_grid(
         overloaded_mv_station = (
             pd.DataFrame(dtype=float)
             if mode == "lv"
-            else checks.hv_mv_station_overload(edisgo_reinforce)
+            else checks.hv_mv_station_max_overload(edisgo_reinforce)
         )
 
         if mode != "mv":
-            overloaded_lv_stations = checks.mv_lv_station_overload(edisgo_reinforce)
+            overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo_reinforce)
 
         logger.debug("==> Recheck line load.")
 
         crit_lines = (
             pd.DataFrame(dtype=float)
             if mode == "lv"
-            else checks.mv_line_overload(edisgo_reinforce)
+            else checks.mv_line_max_relative_overload(edisgo_reinforce)
         )
 
         if not mode or mode == "lv":
             crit_lines = pd.concat(
                 [
                     crit_lines,
-                    checks.lv_line_overload(edisgo_reinforce),
+                    checks.lv_line_max_relative_overload(edisgo_reinforce),
                 ]
             )
 
@@ -488,25 +496,25 @@ def reinforce_grid(
     overloaded_mv_station = (
         pd.DataFrame(dtype=float)
         if mode == "lv"
-        else checks.hv_mv_station_overload(edisgo_reinforce)
+        else checks.hv_mv_station_max_overload(edisgo_reinforce)
     )
 
     if mode != "mv":
-        overloaded_lv_stations = checks.mv_lv_station_overload(edisgo_reinforce)
+        overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo_reinforce)
 
     logger.debug("==> Recheck line load.")
 
     crit_lines = (
         pd.DataFrame(dtype=float)
         if mode == "lv"
-        else checks.mv_line_overload(edisgo_reinforce)
+        else checks.mv_line_max_relative_overload(edisgo_reinforce)
     )
 
     if not mode or mode == "lv":
         crit_lines = pd.concat(
             [
                 crit_lines,
-                checks.lv_line_overload(edisgo_reinforce),
+                checks.lv_line_max_relative_overload(edisgo_reinforce),
             ]
         )
 
@@ -556,25 +564,25 @@ def reinforce_grid(
         overloaded_mv_station = (
             pd.DataFrame(dtype=float)
             if mode == "lv"
-            else checks.hv_mv_station_overload(edisgo_reinforce)
+            else checks.hv_mv_station_max_overload(edisgo_reinforce)
         )
 
         if mode != "mv":
-            overloaded_lv_stations = checks.mv_lv_station_overload(edisgo_reinforce)
+            overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo_reinforce)
 
         logger.debug("==> Recheck line load.")
 
         crit_lines = (
             pd.DataFrame(dtype=float)
             if mode == "lv"
-            else checks.mv_line_overload(edisgo_reinforce)
+            else checks.mv_line_max_relative_overload(edisgo_reinforce)
         )
 
         if not mode or mode == "lv":
             crit_lines = pd.concat(
                 [
                     crit_lines,
-                    checks.lv_line_overload(edisgo_reinforce),
+                    checks.lv_line_max_relative_overload(edisgo_reinforce),
                 ]
             )
 

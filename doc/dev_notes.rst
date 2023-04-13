@@ -70,22 +70,21 @@ Code standards
 Documentation
 -------------
 
-Build the docs locally by first setting up the sphinx environment with (executed
-from top-level folder)
+You can build the docs locally as follows (executed from top-level eDisGo directory):
 
 .. code-block:: bash
 
-    sphinx-apidoc -f -o doc/api edisgo
+    sphinx-build -E -a -b html ./doc/ <outputdir>
 
-And then you build the html docs on your computer with
-
-.. code-block:: bash
-
-    sphinx-build -E -a doc/ doc/_html
-
-To manually check if external links in the documentation work, change into the doc
-repository and run the following command (internal links are not checked by this):
+To manually check if external links in the documentation work, you can run the following command (internal links are not checked by this):
 
 .. code-block:: bash
 
-   sphinx-build . -b linkcheck -d _build/doctrees _build/html
+   sphinx-build ./doc/ -b linkcheck -d _build/doctrees _build/html
+
+Internal links can be checked adding -n option when building the documentation. This will
+also raise warnings for type hinting, so it is a bit confusing, but can still be helpful.
+
+.. code-block:: bash
+
+    sphinx-build -n -E -a -b html ./doc/ <outputdir>
