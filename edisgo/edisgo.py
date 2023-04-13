@@ -1216,6 +1216,14 @@ class EDisGo:
 
             * 'storage_unit' : :attr:`~.network.topology.Topology.add_storage_unit`
 
+        Returns
+        --------
+        str
+            The identifier of the newly integrated component as in index of
+            :attr:`~.network.topology.Topology.generators_df`,
+            :attr:`~.network.topology.Topology.loads_df`, etc., depending on component
+            type.
+
         """
         # ToDo: Add option to add transformer.
         # Todo: change into add_components to allow adding of several components
@@ -1359,6 +1367,15 @@ class EDisGo:
             :attr:`~.network.topology.Topology.add_storage_unit` respectively
             :attr:`~.network.topology.Topology.add_load` methods
             for more information on required and optional parameters.
+
+        Returns
+        -------
+        str
+            The identifier of the newly integrated component as in index of
+            :attr:`~.network.topology.Topology.generators_df`,
+            :attr:`~.network.topology.Topology.loads_df` or
+            :attr:`~.network.topology.Topology.storage_units_df`, depending on component
+            type.
 
         """
         supported_voltage_levels = {4, 5, 6, 7}
