@@ -1829,7 +1829,7 @@ class EDisGo:
         """
         charging_strategy(self, strategy=strategy, **kwargs)
 
-    def import_heat_pumps(self, scenario, engine, timeindex=None):
+    def import_heat_pumps(self, scenario, engine, timeindex=None, import_types=None):
         """
         Gets heat pump data for specified scenario from oedb and integrates the heat
         pumps into the grid.
@@ -1899,6 +1899,10 @@ class EDisGo:
             :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
             If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
             is indexed using the default year and returned for the whole year.
+        import_types : list(str) or None
+            Specifies which technologies to import. Possible options are
+            "individual_heat_pumps", "central_heat_pumps" and
+            "central_resistive_heaters". If None, all are imported.
 
         """
         # set up year to index data by
@@ -1927,10 +1931,14 @@ class EDisGo:
                 scenario,
                 engine,
                 timeindex=pd.date_range(f"1/1/{year}", periods=8760, freq="H"),
+                import_types=import_types,
             )
 
         integrated_heat_pumps = import_heat_pumps_oedb(
-            edisgo_object=self, scenario=scenario, engine=engine
+            edisgo_object=self,
+            scenario=scenario,
+            engine=engine,
+            import_types=import_types,
         )
         if len(integrated_heat_pumps) > 0:
             self.heat_pump.set_heat_demand(
