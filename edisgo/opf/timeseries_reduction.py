@@ -487,8 +487,7 @@ def get_steps_storage(edisgo_obj, window=5):
 
 def get_steps_flex_opf(
     edisgo_obj,
-    num_ti_loading=None,
-    num_ti_voltage=None,
+    num_ti=None,
     percentage=0.1,
     window_days=7,
     save_steps=False,
@@ -501,12 +500,9 @@ def get_steps_flex_opf(
     -----------
     edisgo_obj : :class:`~.EDisGo`
         The eDisGo API object
-    num_ti_loading: int
-        The number of most critical overloading time intervals to select, if None
+    num_ti: int
+        The number of most critical line loading and voltage issues to select. If None
         percentage is used. Default: None
-    num_ti_voltage: int
-        The number of most critical voltage issues to select, if None percentage is
-        used. Default: None
     percentage : float
         The percentage of most critical time intervals to select. Default: 0.1
     window_days : int
@@ -534,35 +530,35 @@ def get_steps_flex_opf(
     loading_scores = _scored_most_critical_loading_time_interval(
         edisgo_obj, window_days
     )
-    if num_ti_loading is None:
-        num_ti_loading = int(np.ceil(len(loading_scores.OL_ts) * percentage))
+    if num_ti is None:
+        num_ti = int(np.ceil(len(loading_scores) * percentage))
     else:
-        if num_ti_loading > len(loading_scores.OL_ts):
+        if num_ti > len(loading_scores):
             logger.info(
                 f"The number of time intervals with highest overloading "
-                f"({len(loading_scores.OL_ts)}) is lower than the defined number of "
-                f"loading time intervals ({num_ti_loading}). Therefore, only "
-                f"{len(loading_scores.OL_ts)} time intervals are exported."
+                f"({len(loading_scores)}) is lower than the defined number of "
+                f"loading time intervals ({num_ti}). Therefore, only "
+                f"{len(loading_scores)} time intervals are exported."
             )
-            num_ti_loading = len(loading_scores.OL_ts)
-    steps = loading_scores.iloc[:num_ti_loading]
+            num_ti = len(loading_scores)
+    steps = loading_scores.iloc[:num_ti]
 
     # Select most critical steps based on voltage violations
     voltage_scores = _scored_most_critical_voltage_issues_time_interval(
         edisgo_obj, window_days
     )
-    if num_ti_voltage is None:
-        num_ti_voltage = int(np.ceil(len(voltage_scores.V_ts) * percentage))
+    if num_ti is None:
+        num_ti = int(np.ceil(len(voltage_scores) * percentage))
     else:
-        if num_ti_voltage > len(voltage_scores.V_ts):
+        if num_ti > len(voltage_scores):
             logger.info(
                 f"The number of time steps with highest voltage issues "
-                f"({len(voltage_scores.V_ts)}) is lower than the defined number of "
-                f"voltage time steps ({num_ti_voltage}). Therefore, only "
-                f"{len(voltage_scores.V_ts)} time steps are exported."
+                f"({len(voltage_scores)}) is lower than the defined number of "
+                f"voltage time steps ({num_ti}). Therefore, only "
+                f"{len(voltage_scores)} time steps are exported."
             )
-            num_ti_voltage = len(voltage_scores.V_ts)
-    steps = pd.concat([steps, voltage_scores.iloc[:num_ti_voltage]], axis=1)
+            num_ti = len(voltage_scores)
+    steps = pd.concat([steps, voltage_scores.iloc[:num_ti]], axis=1)
 
     if len(steps) == 0:
         logger.warning("No critical steps detected. No network expansion required.")
@@ -667,7 +663,7 @@ def distribute_overlying_grid_timeseries(edisgo_obj):
         ).transpose()
         edisgo_copy.timeseries._loads_active_power.loc[:, cp_loads] = (
             scaling_df.transpose()
-            * edisgo_obj.overlying_grid.storage_units_active_power
+            * edisgo_obj.overlying_grid.electromobility_active_power
         ).transpose()
     if not edisgo_copy.overlying_grid.storage_units_active_power.empty:
         scaling_factor = (
