@@ -576,3 +576,40 @@ def _grid_integration(
         )
 
     return integrated_hps
+
+
+def efficiency_resistive_heaters_oedb(scenario, engine):
+    """
+    Get efficiency of resistive heaters from the
+    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+
+    Parameters
+    ----------
+    scenario : str
+        Scenario for which to retrieve efficiency data. Possible options
+        are "eGon2035" and "eGon100RE".
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Returns
+    -------
+    dict
+        Dictionary with efficiency of resistive heaters in district and individual
+        heating. Keys of the dictionary are
+        "central_resistive_heater" giving the efficiency of resistive heaters in
+        district heating and "rural_resistive_heater" giving the efficiency of
+        resistive heaters in individual heating systems. Values are of type float and
+        given in p.u.
+
+    """
+    saio.register_schema("scenario", engine)
+    from saio.scenario import egon_scenario_parameters
+
+    # get cop from database
+    with db.session_scope_egon_data(engine) as session:
+        query = session.query(
+            egon_scenario_parameters.heat_parameters,
+        ).filter(egon_scenario_parameters.name == scenario)
+        eta_dict = query.first()[0]["efficiency"]
+
+    return eta_dict

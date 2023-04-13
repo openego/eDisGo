@@ -196,3 +196,12 @@ class TestHeatPumpImport:
         # in voltage level 6
         bus_rh = hp_df[hp_df.p_set == 0.17].bus[0]
         assert determine_bus_voltage_level(self.edisgo, bus_rh) == 6
+
+    @pytest.mark.local
+    def test_efficiency_resistive_heaters_oedb(self):
+
+        eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
+            scenario="eGon2035", engine=pytest.engine
+        )
+        assert eta_dict["central_resistive_heater"] == 0.99
+        assert eta_dict["rural_resistive_heater"] == 0.9
