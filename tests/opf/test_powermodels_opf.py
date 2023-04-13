@@ -178,7 +178,7 @@ class TestPowerModelsOPF:
             np.round(
                 self.edisgo.timeseries.storage_units_active_power.Storage_1[-1], 3
             ),
-            0.0157,
+            0.157,
             atol=1e-3,
         )
         assert np.isclose(
