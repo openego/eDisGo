@@ -80,7 +80,7 @@ requirements = [
     "pypsa >= 0.17.0",
     "saio",
     "shapely >= 1.7.0",
-    "sklearn",
+    # "sklearn",
     "sqlalchemy < 1.4.0",
     "sshtunnel",
     "werkzeug == 2.2.0",
