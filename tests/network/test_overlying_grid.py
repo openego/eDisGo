@@ -21,7 +21,7 @@ class TestOverlyingGrid:
         self.overlying_grid.renewables_curtailment = pd.Series(
             data=[2.4], index=[self.timeindex[0]]
         )
-        self.overlying_grid.geothermal_energy_feedin_district_heating = pd.DataFrame(
+        self.overlying_grid.feedin_district_heating = pd.DataFrame(
             {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]}, index=self.timeindex
         )
 
@@ -29,17 +29,11 @@ class TestOverlyingGrid:
 
         # check with default value
         assert self.overlying_grid.renewables_curtailment.dtypes == "float64"
-        assert (
-            self.overlying_grid.geothermal_energy_feedin_district_heating.dtypes
-            == "float64"
-        ).all()
+        assert (self.overlying_grid.feedin_district_heating.dtypes == "float64").all()
 
         self.overlying_grid.reduce_memory()
         assert self.overlying_grid.renewables_curtailment.dtypes == "float32"
-        assert (
-            self.overlying_grid.geothermal_energy_feedin_district_heating.dtypes
-            == "float32"
-        ).all()
+        assert (self.overlying_grid.feedin_district_heating.dtypes == "float32").all()
 
         # check with arguments
         self.overlying_grid.reduce_memory(
@@ -48,10 +42,7 @@ class TestOverlyingGrid:
         )
 
         assert self.overlying_grid.renewables_curtailment.dtypes == "float16"
-        assert (
-            self.overlying_grid.geothermal_energy_feedin_district_heating.dtypes
-            == "float32"
-        ).all()
+        assert (self.overlying_grid.feedin_district_heating.dtypes == "float32").all()
 
     def test_to_csv(self):
 
@@ -62,17 +53,14 @@ class TestOverlyingGrid:
         files_in_dir = os.listdir(save_dir)
         assert len(files_in_dir) == 2
         assert "renewables_curtailment.csv" in files_in_dir
-        assert "geothermal_energy_feedin_district_heating.csv" in files_in_dir
+        assert "feedin_district_heating.csv" in files_in_dir
 
         shutil.rmtree(save_dir)
 
         # test with reduce memory True and to_type = float16
         self.overlying_grid.to_csv(save_dir, reduce_memory=True, to_type="float16")
 
-        assert (
-            self.overlying_grid.geothermal_energy_feedin_district_heating.dtypes
-            == "float16"
-        ).all()
+        assert (self.overlying_grid.feedin_district_heating.dtypes == "float16").all()
         files_in_dir = os.listdir(save_dir)
         assert len(files_in_dir) == 2
 
@@ -81,9 +69,7 @@ class TestOverlyingGrid:
     def test_from_csv(self):
 
         renewables_curtailment = self.overlying_grid.renewables_curtailment
-        geothermal_energy_feedin_district_heating = (
-            self.overlying_grid.geothermal_energy_feedin_district_heating
-        )
+        feedin_district_heating = self.overlying_grid.feedin_district_heating
 
         # write to csv
         save_dir = os.path.join(os.getcwd(), "overlying_grid_csv")
@@ -102,34 +88,29 @@ class TestOverlyingGrid:
             check_freq=False,
         )
         pd.testing.assert_frame_equal(
-            self.overlying_grid.geothermal_energy_feedin_district_heating,
-            geothermal_energy_feedin_district_heating,
+            self.overlying_grid.feedin_district_heating,
+            feedin_district_heating,
             check_freq=False,
         )
 
         # test with dtype = float32
         self.overlying_grid.from_csv(save_dir, dtype="float32")
-        assert (
-            self.overlying_grid.geothermal_energy_feedin_district_heating.dtypes
-            == "float32"
-        ).all()
+        assert (self.overlying_grid.feedin_district_heating.dtypes == "float32").all()
 
         shutil.rmtree(save_dir)
 
     def test_resample(self, caplog):
 
         mean_value_curtailment_orig = self.overlying_grid.renewables_curtailment.mean()
-        mean_value_geothermal_orig = (
-            self.overlying_grid.geothermal_energy_feedin_district_heating.mean()
-        )
+        mean_value_feedin_dh_orig = self.overlying_grid.feedin_district_heating.mean()
 
         # test up-sampling with ffill (default)
         self.overlying_grid.resample()
         # check if resampled length of time index is 4 times original length of
         # timeindex
-        assert len(
-            self.overlying_grid.geothermal_energy_feedin_district_heating.index
-        ) == 4 * len(self.timeindex)
+        assert len(self.overlying_grid.feedin_district_heating.index) == 4 * len(
+            self.timeindex
+        )
         # check if mean value of resampled data is the same as mean value of original
         # data
         assert np.isclose(
@@ -139,23 +120,23 @@ class TestOverlyingGrid:
         )
         assert (
             np.isclose(
-                self.overlying_grid.geothermal_energy_feedin_district_heating.mean(),
-                mean_value_geothermal_orig,
+                self.overlying_grid.feedin_district_heating.mean(),
+                mean_value_feedin_dh_orig,
                 atol=1e-5,
             )
         ).all()
         # check if index is the same after resampled back
         self.overlying_grid.resample(freq="1h")
         pd.testing.assert_index_equal(
-            self.overlying_grid.geothermal_energy_feedin_district_heating.index,
+            self.overlying_grid.feedin_district_heating.index,
             self.timeindex,
         )
 
         # same tests for down-sampling
         self.overlying_grid.resample(freq="2h")
-        assert len(
-            self.overlying_grid.geothermal_energy_feedin_district_heating.index
-        ) == 0.5 * len(self.timeindex)
+        assert len(self.overlying_grid.feedin_district_heating.index) == 0.5 * len(
+            self.timeindex
+        )
         assert np.isclose(
             self.overlying_grid.renewables_curtailment.mean(),
             mean_value_curtailment_orig,
@@ -163,8 +144,8 @@ class TestOverlyingGrid:
         )
         assert (
             np.isclose(
-                self.overlying_grid.geothermal_energy_feedin_district_heating.mean(),
-                mean_value_geothermal_orig,
+                self.overlying_grid.feedin_district_heating.mean(),
+                mean_value_feedin_dh_orig,
                 atol=1e-5,
             )
         ).all()

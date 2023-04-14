@@ -64,6 +64,8 @@ def home_batteries_oedb(
                 egon_home_batteries.building_id.in_(
                     edisgo_obj.topology.loads_df.building_id.unique()
                 ),
+                egon_home_batteries.p_nom
+                <= edisgo_obj.config["grid_connection"]["upper_limit_voltage_level_4"],
             )
             .order_by(egon_home_batteries.index)
         )

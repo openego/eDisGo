@@ -1221,6 +1221,14 @@ class EDisGo:
 
             * 'storage_unit' : :attr:`~.network.topology.Topology.add_storage_unit`
 
+        Returns
+        --------
+        str
+            The identifier of the newly integrated component as in index of
+            :attr:`~.network.topology.Topology.generators_df`,
+            :attr:`~.network.topology.Topology.loads_df`, etc., depending on component
+            type.
+
         """
         # ToDo: Add option to add transformer.
         # Todo: change into add_components to allow adding of several components
@@ -1364,6 +1372,15 @@ class EDisGo:
             :attr:`~.network.topology.Topology.add_storage_unit` respectively
             :attr:`~.network.topology.Topology.add_load` methods
             for more information on required and optional parameters.
+
+        Returns
+        -------
+        str
+            The identifier of the newly integrated component as in index of
+            :attr:`~.network.topology.Topology.generators_df`,
+            :attr:`~.network.topology.Topology.loads_df` or
+            :attr:`~.network.topology.Topology.storage_units_df`, depending on component
+            type.
 
         """
         supported_voltage_levels = {4, 5, 6, 7}
@@ -1817,7 +1834,7 @@ class EDisGo:
         """
         charging_strategy(self, strategy=strategy, **kwargs)
 
-    def import_heat_pumps(self, scenario, engine, timeindex=None):
+    def import_heat_pumps(self, scenario, engine, timeindex=None, import_types=None):
         """
         Gets heat pump data for specified scenario from oedb and integrates the heat
         pumps into the grid.
@@ -1887,6 +1904,10 @@ class EDisGo:
             :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
             If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
             is indexed using the default year and returned for the whole year.
+        import_types : list(str) or None
+            Specifies which technologies to import. Possible options are
+            "individual_heat_pumps", "central_heat_pumps" and
+            "central_resistive_heaters". If None, all are imported.
 
         """
         # set up year to index data by
@@ -1915,10 +1936,14 @@ class EDisGo:
                 scenario,
                 engine,
                 timeindex=pd.date_range(f"1/1/{year}", periods=8760, freq="H"),
+                import_types=import_types,
             )
 
         integrated_heat_pumps = import_heat_pumps_oedb(
-            edisgo_object=self, scenario=scenario, engine=engine
+            edisgo_object=self,
+            scenario=scenario,
+            engine=engine,
+            import_types=import_types,
         )
         if len(integrated_heat_pumps) > 0:
             self.heat_pump.set_heat_demand(
@@ -2599,8 +2624,9 @@ class EDisGo:
         :func:`edisgo.network.timeseries.TimeSeries.check_integrity`) and the interplay
         of both.
         Further, checks integrity of electromobility object (see
-        :func:`edisgo.network.electromobility.Electromobility.check_integrity`) if
-        there is electromobility data.
+        :func:`edisgo.network.electromobility.Electromobility.check_integrity`),
+        the heat pump object (see :func:`edisgo.network.heat.HeatPump.check_integrity`)
+        and the DSM object (see :func:`edisgo.network.dsm.DSM.check_integrity`).
         Additionally, checks whether time series data in
         :class:`~.network.heat.HeatPump`,
         :class:`~.network.electromobility.Electromobility`,
@@ -2612,6 +2638,8 @@ class EDisGo:
         self.topology.check_integrity()
         self.timeseries.check_integrity()
         self.electromobility.check_integrity()
+        self.dsm.check_integrity()
+        self.heat_pump.check_integrity()
 
         # check consistency of topology and timeseries
         comp_types = ["generators", "loads", "storage_units"]
@@ -2653,7 +2681,7 @@ class EDisGo:
                 (active_power[comps_complete].max() > comps.loc[comps_complete, attr])
             ]
 
-            if len(exceeding) > 0:
+            if len(exceeding) > 1e-6:
                 logger.warning(
                     f"Values of active power in the timeseries object exceed {attr} for"
                     f" the following {comp_type}: {exceeding.values}"
