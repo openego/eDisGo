@@ -11,9 +11,11 @@ class TestPowerModelsOPF:
     def setup_class(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
+        # add heat pump dummy data
         self.edisgo.add_component(
             comp_type="load",
             type="heat_pump",
+            sector="individual_heating",
             ts_active_power=pd.Series(
                 index=self.edisgo.timeseries.timeindex,
                 data=[1.0 / 5, 2.0 / 6, 2.0 / 5, 1.0 / 6],
@@ -25,6 +27,7 @@ class TestPowerModelsOPF:
         self.edisgo.add_component(
             comp_type="load",
             type="heat_pump",
+            sector="individual_heating",
             ts_active_power=pd.Series(
                 index=self.edisgo.timeseries.timeindex,
                 data=[2.0 / 7.0, 4.0 / 8.0, 3.0 / 7.0, 3.0 / 8.0],
@@ -56,7 +59,7 @@ class TestPowerModelsOPF:
             },
             index=self.edisgo.heat_pump.heat_demand_df.columns,
         )
-
+        # add electromobility dummy data
         self.edisgo.add_component(
             comp_type="load",
             type="charging_point",
@@ -83,6 +86,7 @@ class TestPowerModelsOPF:
             ),
         }
         self.edisgo.electromobility.flexibility_bands = flex_bands
+        # add DSM dummy data
         self.edisgo.dsm.p_min = pd.DataFrame(
             data={
                 "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1": [
@@ -132,7 +136,41 @@ class TestPowerModelsOPF:
             index=self.edisgo.timeseries.timeindex,
         )
 
-        # ToDo: add overlying grid dummy data
+        # add overlying grid dummy data
+        for attr in [
+            "dsm_active_power",
+            "electromobility_active_power",
+            "heat_pump_decentral_active_power",
+            "renewables_curtailment",
+            "storage_units_active_power",
+            # ToDo: add dummy Data
+            # "solarthermal_energy_feedin_district_heating",
+            # "geothermal_energy_feedin_district_heating"
+        ]:
+            if attr == "dsm_active_power":
+                data = [0.1, -0.1, -0.1, 0.1]
+            elif attr == "electromobility_active_power":
+                data = [0.4, 0.5, 0.5, 0.6]
+            elif attr == "heat_pump_decentral_active_power":
+                data = [0.5, 0.85, 0.85, 0.55]
+            elif attr == "storage_units_active_power":
+                data = [-0.35, -0.35, 0.35, 0.35]
+            if attr == "renewables_curtailment":
+                df = pd.DataFrame(
+                    index=self.edisgo.timeseries.timeindex,
+                    columns=["solar", "wind"],
+                    data=[[0, 0], [0, 0], [0.1, 0.1], [0.1, 0.1]],
+                )
+            else:
+                df = pd.Series(
+                    index=self.edisgo.timeseries.timeindex,
+                    data=data,
+                )
+            setattr(
+                self.edisgo.overlying_grid,
+                attr,
+                df,
+            )
 
     def test_pm_optimize(self):
         # OPF with all flexibilities

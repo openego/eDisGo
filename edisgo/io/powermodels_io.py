@@ -82,11 +82,7 @@ def to_powermodels(
         ("cp", flexible_cps, "Flexible charging parks"),
         ("hp", flexible_hps, "Flexible heatpumps"),
         ("dsm", flexible_loads, "Flexible loads"),
-        (
-            "storage",
-            flexible_storage_units,
-            "Storage units",
-        ),  # edisgo_object.topology.storage_units_df
+        ("storage", flexible_storage_units, "Storage units"),
     ]:
         if (flex not in opf_flex) & (len(loads) != 0):
             logger.info("{} will be optimized.".format(text))
@@ -154,7 +150,8 @@ def to_powermodels(
         logger.warning("No loads found in network.")
     if (opf_version == 3) | (opf_version == 4):
         hv_flex_dict = {
-            "curt": edisgo_object.overlying_grid.renewables_curtailment / s_base,
+            "curt": edisgo_object.overlying_grid.renewables_curtailment.sum(axis=1)
+            / s_base,
             "storage": edisgo_object.overlying_grid.storage_units_active_power / s_base,
             "cp": edisgo_object.overlying_grid.electromobility_active_power / s_base,
             "hp": (
@@ -174,15 +171,16 @@ def to_powermodels(
                 flexible_cps,
                 flexible_hps,
                 flexible_storage_units,
+                flexible_loads,
                 hv_flex_dict,
             )
         except IndexError:
             logger.warning(
                 "Overlying grid component of eDisGo object has no entries."
-                " Changing optimization version to '4' (without high voltage"
+                " Changing optimization version to '2' (without high voltage"
                 " requirements)."
             )
-            opf_version = 1
+            opf_version = 2
 
     pm["opf_version"] = opf_version
 
@@ -276,7 +274,7 @@ def from_powermodels(
             for flex_comp in list(pm["nw"]["1"][flex].keys())
         ]
         # replace storage power values by branch power values of virtual branch to
-        # account for losses and save efficiency values to edisgo object
+        # account for losses
         if flex == "storage":
             branches = [
                 pm["nw"]["1"][flex][flex_comp]["virtual_branch"]
@@ -289,22 +287,6 @@ def from_powermodels(
                 ]
                 for t in timesteps
             ]
-            data2 = [
-                [
-                    pm["nw"][str(t)][flex][flex_comp]["ps"] * s_base
-                    for flex_comp in list(pm["nw"]["1"][flex].keys())
-                ]
-                for t in timesteps
-            ]
-            efficiency = pd.DataFrame(
-                index=edisgo_object.timeseries.timeindex,
-                columns=names,
-                data=(
-                    abs(pd.DataFrame(data) - pd.DataFrame(data2))
-                    / abs(pd.DataFrame(data2))
-                ).values,
-            )
-            edisgo_object.opf_results.storage_efficiency = efficiency
         else:
             data = [
                 [
@@ -314,12 +296,11 @@ def from_powermodels(
                 for t in timesteps
             ]
         results = pd.DataFrame(index=timesteps, columns=names, data=data)
-        if flex == "gen_nd":
-            # edisgo_object.timeseries._generators_active_power.loc[:, names] = (
-            #     edisgo_object.timeseries.generators_active_power.loc[:, names].values
-            #     - results[names].values
-            # )
-            pass
+        if (flex == "gen_nd") & (pm["nw"]["1"]["opf_version"] in [3, 4]):
+            edisgo_object.timeseries._generators_active_power.loc[:, names] = (
+                edisgo_object.timeseries.generators_active_power.loc[:, names].values
+                - results[names].values
+            )
         elif flex in ["heatpumps", "electromobility"]:
             edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
                 names
@@ -329,7 +310,6 @@ def from_powermodels(
                 edisgo_object.timeseries._loads_active_power.loc[:, names].values
                 + results[names].values
             )
-
         elif flex == "storage":
             edisgo_object.timeseries._storage_units_active_power.loc[
                 :, names
@@ -1088,15 +1068,14 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     solarthermal_feedin = (
         edisgo_obj.overlying_grid.solarthermal_energy_feedin_district_heating
     )
+    # ToDo: filter via district id
     if not (geothermal_feedin.empty | solarthermal_feedin.empty):
         # reduce heat demand of district heating by geothermal and solarthermal feedin
         heat_df2[heat_df2.columns.str.contains("district")] = (
             heat_df2[heat_df2.columns.str.contains("district")].values
             - solarthermal_feedin.values
             - geothermal_feedin.values
-        ).clip(
-            min=0
-        )  # ToDo: if multiple district heatings: filter via district id
+        ).clip(min=0)
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
@@ -1174,25 +1153,61 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
         Updated array containing all flexible loads that allow for application of demand
         side management strategy.
     """
-    if len(flexible_loads[(edisgo_obj.dsm.p_min > edisgo_obj.dsm.p_max).any()]) > 0:
+    if (
+        len(
+            flexible_loads[
+                (
+                    edisgo_obj.dsm.p_min[flexible_loads]
+                    > edisgo_obj.dsm.p_max[flexible_loads]
+                ).any()
+            ]
+        )
+        > 0
+    ):
         logger.warning(
             "Upper power level is smaller than lower power level for "
             "DSM loads {}! DSM loads will be changed into inflexible loads.".format(
-                flexible_loads[(edisgo_obj.dsm.p_min > edisgo_obj.dsm.p_max).any()]
+                flexible_loads[
+                    (
+                        edisgo_obj.dsm.p_min[flexible_loads]
+                        > edisgo_obj.dsm.p_max[flexible_loads]
+                    ).any()
+                ]
             )
         )
         flexible_loads = flexible_loads[
-            ~(edisgo_obj.dsm.p_min > edisgo_obj.dsm.p_max).any()
+            ~(
+                edisgo_obj.dsm.p_min[flexible_loads]
+                > edisgo_obj.dsm.p_max[flexible_loads]
+            ).any()
         ]
-    if len(flexible_loads[(edisgo_obj.dsm.e_min > edisgo_obj.dsm.e_max).any()]) > 0:
+    if (
+        len(
+            flexible_loads[
+                (
+                    edisgo_obj.dsm.e_min[flexible_loads]
+                    > edisgo_obj.dsm.e_max[flexible_loads]
+                ).any()
+            ]
+        )
+        > 0
+    ):
         logger.warning(
             "Upper energy level is smaller than lower energy level for "
             "DSM loads {}! DSM loads will be changed into inflexible loads.".format(
-                flexible_loads[(edisgo_obj.dsm.e_min > edisgo_obj.dsm.e_max).any()]
+                flexible_loads[
+                    (
+                        edisgo_obj.dsm.e_min[flexible_loads]
+                        > edisgo_obj.dsm.e_max[flexible_loads]
+                    ).any()
+                ]
             )
         )
         flexible_loads = flexible_loads[
-            ~(edisgo_obj.dsm.e_min > edisgo_obj.dsm.e_max).any()
+            ~(
+                edisgo_obj.dsm.e_min[flexible_loads]
+                > edisgo_obj.dsm.e_max[flexible_loads]
+            ).any()
         ]
     dsm_df = psa_net.loads.loc[flexible_loads]
     for dsm_i in np.arange(len(dsm_df.index)):
@@ -1237,6 +1252,7 @@ def _build_hv_requirements(
     flexible_cps,
     flexible_hps,
     flexible_storage_units,
+    flexible_loads,
     hv_flex_dict,
 ):
     """
@@ -1264,6 +1280,9 @@ def _build_hv_requirements(
         attached heat storage.
     flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
         Array containing all flexible storage units.
+    flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list
+        Array containing all flexible loads that allow for application of demand side
+        management strategy.
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from overlying grid component of edisgo object.
@@ -1282,11 +1301,13 @@ def _build_hv_requirements(
         ]
         if hp not in flexible_hps
     ]
-    inflexible_storage_units = psa_net.storage_units.index[
-        [
-            storage not in flexible_storage_units
-            for storage in psa_net.storage_units.index
-        ]
+    inflexible_storage_units = [
+        storage
+        for storage in psa_net.storage_units.index
+        if storage not in flexible_storage_units
+    ]
+    inflexible_loads = [
+        load for load in edisgo_obj.dsm.e_min.columns if load not in flexible_loads
     ]
     if len(inflexible_cps) > 0:
         hv_flex_dict["cp"] = (
@@ -1303,6 +1324,11 @@ def _build_hv_requirements(
             hv_flex_dict["storage"]
             - psa_net.storage_units_t.p_set.loc[:, inflexible_storage_units].sum(axis=1)
             / s_base
+        )
+    if len(inflexible_loads) > 0:
+        hv_flex_dict["dsm"] = (
+            hv_flex_dict["dsm"]
+            - psa_net.loads_t.p_set.loc[:, inflexible_loads].sum(axis=1) / s_base
         )
     for i in np.arange(len(opf_flex)):
         pm["HV_requirements"][str(i + 1)] = {
@@ -1650,9 +1676,7 @@ def _build_component_timeseries(
                     "e_max": e_max[comp].values.tolist(),
                 }
 
-    if (kind == "HV_requirements") & (
-        (pm["opf_version"] == 3) | (pm["opf_version"] == 4)
-    ):
+    if (kind == "HV_requirements") & (pm["opf_version"] in [3, 4]):
         for i in np.arange(len(opf_flex)):
             pm_comp[(str(i + 1))] = {
                 "P": hv_flex_dict[opf_flex[i]].tolist(),

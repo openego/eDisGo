@@ -933,6 +933,27 @@ def battery_storage_reference_operation(
 
 
 def determine_observation_periods(edisgo_obj, window_days, idx="min", absolute=False):
+    """
+    Determine observation period for OPF depending on residual load, generation or
+    load timeseries.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+    window_days : int
+        Length of time interval in days.
+    idx : str
+        Specification on how to choose time interval. Either depending on residual load,
+        generation or load timeseries. Has to be one of ["min", "max", "gen_max",
+        "load_max"]. Default: "min"
+    absolute : bool
+        Determines whether to use absolute values of residual load for time interval
+        determination. Default: False
+
+    Returns
+    ---------
+    :pandas: `pandas.DatetimeIndex < DatetimeIndex > `
+    """
     if absolute:
         residual_load = edisgo_obj.timeseries.residual_load.abs()
     else:
@@ -971,6 +992,43 @@ def get_sample_using_time(
     dsm=True,
     og=True,
 ):
+    """
+    Reduces timeseries in eDisGo object to sample using time. Time interval can either
+    be specified directly or determined via
+    :func:`edisgo.tools.tools.determine_observation_periods`.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+    start_date : int
+        First timestep of date range. Default: None
+    periods : str
+        Amount of periods of date range. Default: None
+    freq : str, optional
+        Frequency of date range. Default: '1h'.
+    res_load:
+        If not None, time interval is determined using
+        :func:`edisgo.tools.tools.determine_observation_periods`. Has to be one of
+        [None, "balanced", "min", "max", "gen_max", "load_max"]. Default: None.
+    ts: bool
+        Determines whether loads, generators and storage units timeseries are reduced to
+        sample using time. Default: True.
+    bev: bool
+        Determines whether electormobility timeseries is reduced to sample using time.
+        Default: True.
+    save_ev_soc_initial: bool
+        Determines whether to save initial ev soc from timestep before first timestep of
+        sample using time for OPF. Default: True.
+    hp: bool
+        Determines whether heat pump and heat storage timeseries are reduced to sample
+        using time. Default: True.
+    dsm: bool
+        Determines whether DSM timeseries are reduced to sample using time.
+        Default: True.
+    og: bool
+        Determines whetheroverlying grid timeseries are reduced to sample using time.
+        Default: True.
+    """
     if periods is None:
         raise TypeError(
             "get_sample_using_time() missing required argument: " "'periods'"

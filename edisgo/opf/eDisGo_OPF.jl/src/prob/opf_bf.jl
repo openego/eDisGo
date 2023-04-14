@@ -31,13 +31,13 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             eDisGo_OPF.variable_dsm_storage_power(pm, nw=n)  # Eq. (3.26), (3.27)
             eDisGo_OPF.variable_slack_gen(pm, nw=n)  # keine Bounds für Slack Generator
 
-            if PowerModels.ref(pm, 1, :opf_version) in(3, 4)
-                eDisGo_OPF.variable_slack_HV_requirements(pm, nw=n) # Nicht Teil der MA
+            if PowerModels.ref(pm, 1, :opf_version) in(3, 4) # Nicht Teil der MA
+                eDisGo_OPF.variable_slack_HV_requirements(pm, nw=n)
                 if PowerModels.ref(pm, 1, :opf_version) in(3)
-                    eDisGo_OPF.variable_gen_power_curt(pm, nw=n) # Nicht Teil der MA
+                    eDisGo_OPF.variable_gen_power_curt(pm, nw=n)
                 end
                 for i in PowerModels.ids(pm, :HV_requirements, nw=n)
-                    eDisGo_OPF.constraint_HV_requirements(pm, i, n) # Nicht Teil der MA
+                    eDisGo_OPF.constraint_HV_requirements(pm, i, n)
                 end
             end
         else
@@ -97,7 +97,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         #eDisGo_OPF.objective_min_losses(pm)
         eDisGo_OPF.objective_min_line_loading_max(pm) # Eq. (3.1 i)
     elseif (PowerModels.ref(pm, 1, :opf_version) == 3) # Nicht Teil der MA
-        eDisGo_OPF.objective_min_line_loading_max_OG(pm)
+        eDisGo_OPF.objective_min_lsine_loading_max_OG(pm)
     elseif PowerModels.ref(pm, 1, :opf_version) == 2
         eDisGo_OPF.objective_min_losses_slacks(pm)  # Eq. (3.1 ii)
     elseif PowerModels.ref(pm, 1, :opf_version) == 4
