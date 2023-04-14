@@ -1406,11 +1406,9 @@ class TestEDisGo:
         self.edisgo.overlying_grid.dsm_active_power = pd.Series(
             data=[2.4], index=[self.edisgo.timeseries.timeindex[0]]
         )
-        self.edisgo.overlying_grid.solarthermal_energy_feedin_district_heating = (
-            pd.DataFrame(
-                {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]},
-                index=self.edisgo.timeseries.timeindex[0:2],
-            )
+        self.edisgo.overlying_grid.feedin_district_heating = pd.DataFrame(
+            {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]},
+            index=self.edisgo.timeseries.timeindex[0:2],
         )
         self.edisgo.dsm.p_max = pd.DataFrame(
             data={
@@ -1478,7 +1476,7 @@ class TestEDisGo:
         og.dsm_active_power = pd.Series(
             data=[2.4], index=[self.edisgo.timeseries.timeindex[0]]
         )
-        og.solarthermal_energy_feedin_district_heating = pd.DataFrame(
+        og.feedin_district_heating = pd.DataFrame(
             {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]},
             index=self.edisgo.timeseries.timeindex[0:2],
         )
@@ -1491,9 +1489,7 @@ class TestEDisGo:
         mem_hp_before = self.edisgo.heat_pump.heat_demand_df.memory_usage(
             deep=True
         ).sum()
-        mem_og_before = og.solarthermal_energy_feedin_district_heating.memory_usage(
-            deep=True
-        ).sum()
+        mem_og_before = og.feedin_district_heating.memory_usage(deep=True).sum()
 
         # check with default value
         self.edisgo.reduce_memory()
@@ -1505,9 +1501,7 @@ class TestEDisGo:
         mem_hp_with_default = self.edisgo.heat_pump.heat_demand_df.memory_usage(
             deep=True
         ).sum()
-        mem_og_with_default = (
-            og.solarthermal_energy_feedin_district_heating.memory_usage(deep=True).sum()
-        )
+        mem_og_with_default = og.feedin_district_heating.memory_usage(deep=True).sum()
 
         assert mem_ts_before > mem_ts_with_default
         assert mem_res_before > mem_res_with_default
@@ -1525,9 +1519,7 @@ class TestEDisGo:
             to_type="float16",
             results_attr_to_reduce=["pfa_p"],
             timeseries_attr_to_reduce=["generators_active_power"],
-            overlying_grid_attr_to_reduce=[
-                "solarthermal_energy_feedin_district_heating"
-            ],
+            overlying_grid_attr_to_reduce=["feedin_district_heating"],
         )
 
         assert (
@@ -1542,9 +1534,7 @@ class TestEDisGo:
         )
         assert (
             mem_og_with_default
-            > og.solarthermal_energy_feedin_district_heating.memory_usage(
-                deep=True
-            ).sum()
+            > og.feedin_district_heating.memory_usage(deep=True).sum()
         )
         # check that i_res, loads_active_power and dsm_active_power were not reduced
         assert np.isclose(

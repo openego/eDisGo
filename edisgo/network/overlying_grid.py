@@ -32,11 +32,8 @@ class OverlyingGrid:
         Aggregated demand of flexible decentral heat pumps per time step in MW.
     heat_pump_central_active_power : :pandas:`pandas.Series<Series>`
         Aggregated demand of flexible central heat pumps per time step in MW.
-    geothermal_energy_feedin_district_heating : :pandas:`pandas.DataFrame<DataFrame>`
-        Geothermal feed-in into district heating per district heating area (in columns)
-        and time step (in index) in MW.
-    solarthermal_energy_feedin_district_heating : :pandas:`pandas.DataFrame<DataFrame>`
-        Solarthermal feed-in into district heating per district heating area (in
+    feedin_district_heating : :pandas:`pandas.DataFrame<DataFrame>`
+        Other thermal feed-in into district heating per district heating area (in
         columns) and time step (in index) in MW.
 
     """
@@ -61,12 +58,8 @@ class OverlyingGrid:
         self.heat_pump_central_active_power = kwargs.get(
             "heat_pump_central_active_power", pd.Series(dtype="float64")
         )
-
-        self.geothermal_energy_feedin_district_heating = kwargs.get(
-            "geothermal_energy_feedin_district_heating", pd.DataFrame(dtype="float64")
-        )
-        self.solarthermal_energy_feedin_district_heating = kwargs.get(
-            "solarthermal_energy_feedin_district_heating", pd.DataFrame(dtype="float64")
+        self.feedin_district_heating = kwargs.get(
+            "feedin_district_heating", pd.DataFrame(dtype="float64")
         )
 
     @property
@@ -78,8 +71,7 @@ class OverlyingGrid:
             "electromobility_active_power",
             "heat_pump_decentral_active_power",
             "heat_pump_central_active_power",
-            "geothermal_energy_feedin_district_heating",
-            "solarthermal_energy_feedin_district_heating",
+            "feedin_district_heating",
         ]
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
