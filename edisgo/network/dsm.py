@@ -271,9 +271,8 @@ class DSM:
         Checks for duplicated and missing labels as well as implausible values.
 
         """
-        # check for duplicate labels (of components)
+        # check for duplicate columns
         duplicated_labels = []
-
         for ts in self._attributes:
             df = getattr(self, ts)
             if any(df.columns.duplicated()):
