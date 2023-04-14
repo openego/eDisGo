@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 
@@ -114,3 +115,55 @@ class TestDSM:
         )
 
         shutil.rmtree(save_dir)
+
+    def test_check_integrity(self, caplog):
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        # create duplicate entries and loads that do not appear in each DSM dataframe
+        self.dsm.p_max = pd.concat(
+            [
+                self.dsm.p_max,
+                pd.DataFrame(
+                    data={
+                        "load_2": [5.0, 6.0],
+                        "load_3": [7.0, 8.0],
+                    },
+                    index=timeindex,
+                ),
+            ],
+            axis=1,
+        )
+        self.dsm.p_min = pd.concat(
+            [
+                self.dsm.p_min,
+                pd.DataFrame(
+                    data={
+                        "load_2": [5.0, 6.0],
+                        "load_3": [7.0, 8.0],
+                    },
+                    index=timeindex,
+                ),
+            ],
+            axis=1,
+        )
+
+        with caplog.at_level(logging.WARNING):
+            self.dsm.check_integrity()
+        assert len(caplog.messages) == 5
+        assert "DSM timeseries contain the following duplicates:" in caplog.text
+        assert "DSM timeseries e_min is missing the following entries:" in caplog.text
+        assert "DSM timeseries e_max is missing the following entries:" in caplog.text
+        assert (
+            "DSM timeseries p_min contains values larger than zero, which is not "
+            "allowed." in caplog.text
+        )
+        assert (
+            "DSM timeseries e_min contains values larger than zero, which is not "
+            "allowed." in caplog.text
+        )
+
+        caplog.clear()
+        # check for empty DSM class
+        self.dsm = DSM()
+        with caplog.at_level(logging.WARNING):
+            self.dsm.check_integrity()
+        assert len(caplog.text) == 0
