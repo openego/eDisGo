@@ -13,7 +13,7 @@ import saio
 
 from sqlalchemy.engine.base import Engine
 
-from edisgo.flex_opt import check_tech_constraints, exceptions
+from edisgo.flex_opt import exceptions
 from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
 from edisgo.tools import session_scope
 
@@ -60,55 +60,6 @@ def select_worstcase_snapshots(edisgo_obj):
     }
 
     return timestamp
-
-
-def calculate_relative_line_load(edisgo_obj, lines=None, timesteps=None):
-    """
-    Calculates relative line loading for specified lines and time steps.
-
-    Line loading is calculated by dividing the current at the given time step
-    by the allowed current.
-
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    lines : list(str) or None, optional
-        Line names/representatives of lines to calculate line loading for. If
-        None, line loading is calculated for all lines in the network.
-        Default: None.
-    timesteps : :pandas:`pandas.Timestamp<Timestamp>` or \
-        list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
-        Specifies time steps to calculate line loading for. If timesteps is
-        None, all time steps power flow analysis was conducted for are used.
-        Default: None.
-
-    Returns
-    --------
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with relative line loading (unitless). Index of
-        the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
-        columns are the line representatives.
-
-    """
-    if timesteps is None:
-        timesteps = edisgo_obj.results.i_res.index
-    # check if timesteps is array-like, otherwise convert to list
-    if not hasattr(timesteps, "__len__"):
-        timesteps = [timesteps]
-
-    if lines is not None:
-        line_indices = lines
-    else:
-        line_indices = edisgo_obj.topology.lines_df.index
-
-    mv_lines_allowed_load = check_tech_constraints.lines_allowed_load(edisgo_obj, "mv")
-    lv_lines_allowed_load = check_tech_constraints.lines_allowed_load(edisgo_obj, "lv")
-    lines_allowed_load = pd.concat(
-        [mv_lines_allowed_load, lv_lines_allowed_load], axis=1, sort=False
-    ).loc[timesteps, line_indices]
-
-    return check_tech_constraints.lines_relative_load(edisgo_obj, lines_allowed_load)
 
 
 def calculate_line_reactance(line_inductance_per_km, line_length, num_parallel):

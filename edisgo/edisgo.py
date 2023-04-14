@@ -15,6 +15,7 @@ import pandas as pd
 from sqlalchemy.engine.base import Engine
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
+from edisgo.flex_opt.check_tech_constraints import lines_relative_load
 from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
 )
@@ -1037,9 +1038,10 @@ class EDisGo:
         timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
         copy_grid: bool = False,
         max_while_iterations: int = 20,
-        combined_analysis: bool = False,
+        split_voltage_band: bool = True,
         mode: str | None = None,
         without_generator_import: bool = False,
+        n_minus_one: bool = False,
         **kwargs,
     ) -> Results:
         """
@@ -1086,9 +1088,10 @@ class EDisGo:
                     max_while_iterations=max_while_iterations,
                     copy_grid=False,
                     timesteps_pfa=timesteps_pfa,
-                    combined_analysis=combined_analysis,
+                    split_voltage_band=split_voltage_band,
                     mode="mv",
                     without_generator_import=without_generator_import,
+                    n_minus_one=n_minus_one,
                 )
 
             if mode != "mv":
@@ -1103,9 +1106,10 @@ class EDisGo:
                     max_while_iterations=max_while_iterations,
                     copy_grid=False,
                     timesteps_pfa=timesteps_pfa,
-                    combined_analysis=combined_analysis,
+                    split_voltage_band=split_voltage_band,
                     mode=reinforce_mode,
                     without_generator_import=without_generator_import,
+                    n_minus_one=n_minus_one,
                 )
 
             if mode not in ["mv", "lv"]:
@@ -1118,9 +1122,10 @@ class EDisGo:
                 max_while_iterations=max_while_iterations,
                 copy_grid=copy_grid,
                 timesteps_pfa=timesteps_pfa,
-                combined_analysis=combined_analysis,
+                split_voltage_band=split_voltage_band,
                 mode=mode,
                 without_generator_import=without_generator_import,
+                n_minus_one=n_minus_one,
             )
 
         # add measure to Results object
@@ -2138,7 +2143,6 @@ class EDisGo:
             filename=kwargs.get("filename", None),
             grid_district_geom=kwargs.get("grid_district_geom", True),
             background_map=kwargs.get("background_map", True),
-            voltage=self.results.v_res,
             limits_cb_nodes=kwargs.get("limits_cb_nodes", None),
             xlim=kwargs.get("xlim", None),
             ylim=kwargs.get("ylim", None),
@@ -2172,7 +2176,6 @@ class EDisGo:
             timestep=kwargs.get("timestep", None),
             line_color="loading",
             node_color=kwargs.get("node_color", None),
-            line_load=self.results.i_res,
             filename=kwargs.get("filename", None),
             arrows=kwargs.get("arrows", None),
             grid_district_geom=kwargs.get("grid_district_geom", True),
@@ -2342,15 +2345,14 @@ class EDisGo:
         else:
             lines = self.topology.lines_df
 
-        rel_line_loading = tools.calculate_relative_line_load(
-            self, lines.index, timestep
-        )
+        rel_line_loading = lines_relative_load(self, lines.index)
 
         if timestep is None:
             timestep = rel_line_loading.index
         # check if timesteps is array-like, otherwise convert to list
         if not hasattr(timestep, "__len__"):
             timestep = [timestep]
+        rel_line_loading = rel_line_loading.loc[timestep, :]
 
         if title is True:
             if len(timestep) == 1:
@@ -2783,7 +2785,7 @@ class EDisGo:
             Default: '15min'.
 
         """
-        self.timeseries.resample_timeseries(method=method, freq=freq)
+        self.timeseries.resample(method=method, freq=freq)
         self.electromobility.resample(freq=freq)
         self.heat_pump.resample_timeseries(method=method, freq=freq)
         self.overlying_grid.resample(method=method, freq=freq)

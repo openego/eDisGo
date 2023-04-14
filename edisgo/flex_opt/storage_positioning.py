@@ -118,7 +118,7 @@ def one_storage_per_feeder(
         critical_lines_feeder : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe containing over-loaded lines in MV feeder, their maximum
             relative over-loading and the corresponding time step. See
-            :func:`edisgo.flex_opt.check_tech_constraints.mv_line_load` for
+            :func:`edisgo.flex_opt.check_tech_constraints.mv_line_overload` for
             more information.
         critical_nodes_feeder : :obj:`list`
             List with all nodes in MV feeder with voltage issues.
@@ -278,7 +278,7 @@ def one_storage_per_feeder(
 
         """
         # get all nodes with voltage issues in MV network
-        critical_nodes = check_tech_constraints.mv_voltage_deviation(
+        critical_nodes = check_tech_constraints.voltage_issues(
             edisgo.network, voltage_levels="mv"
         )
         if critical_nodes:
@@ -305,7 +305,7 @@ def one_storage_per_feeder(
         :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe containing over-loaded lines in MV feeder, their maximum
             relative over-loading and the corresponding time step. See
-            :func:`edisgo.flex_opt.check_tech_constraints.mv_line_load` for
+            :func:`edisgo.flex_opt.check_tech_constraints.mv_line_overload` for
             more information.
 
         """
@@ -313,7 +313,7 @@ def one_storage_per_feeder(
         #     (grid_expansion_costs_feeder_ranking.mv_feeder == feeder) &
         #     (grid_expansion_costs_feeder_ranking.voltage_level == 'mv')]
         # get all overloaded MV lines
-        critical_lines = check_tech_constraints.mv_line_load(edisgo.network)
+        critical_lines = check_tech_constraints.mv_line_overload(edisgo.network)
         # filter overloaded lines in feeder
         critical_lines_feeder = [
             line
