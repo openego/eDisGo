@@ -4,7 +4,6 @@ import copy
 import logging
 import math
 
-from time import time
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -27,14 +26,12 @@ if TYPE_CHECKING:
     from edisgo import EDisGo
 
 
-# Transform coordinates between the different coordinates systems
-# ToDo: The spatial complexity reduction forces the usage of EPSG:4326 and than
-# transforms to other coordinate systems if needed. Maybe write it more dynamically.
+# Transform coordinates between the different coordinate systems
 coor_transform = Transformer.from_crs("EPSG:4326", "EPSG:3035", always_xy=True)
 coor_transform_back = Transformer.from_crs("EPSG:3035", "EPSG:4326", always_xy=True)
 
 
-def make_grid_list(edisgo_obj: EDisGo, grid: object = None) -> list:
+def _make_grid_list(edisgo_obj: EDisGo, grid: object = None) -> list:
     """
     Get a list of all grids in the EDisGo object or a list with the specified grid.
 
@@ -43,7 +40,7 @@ def make_grid_list(edisgo_obj: EDisGo, grid: object = None) -> list:
     edisgo_obj : :class:`~.EDisGo`
         EDisGo object to get the grids from.
     grid : str
-        Name of the grid. If None, than all grids of the EDisGo objects are used.
+        Name of the grid. If None, all grids of the EDisGo objects are used.
         Default: None.
 
     Returns
@@ -85,8 +82,7 @@ def find_buses_of_interest(edisgo_root: EDisGo) -> set:
         Set with the names of the buses with load and voltage issues.
 
     """
-    start_time = time()
-    logger.debug("Start - Find buses of interest")
+    logger.debug("Find buses of interest.")
 
     edisgo_obj = copy.deepcopy(edisgo_root)
     edisgo_obj.timeseries = timeseries.TimeSeries()
@@ -108,7 +104,6 @@ def find_buses_of_interest(edisgo_root: EDisGo) -> set:
     lv_buses = checks.voltage_issues(edisgo_obj, voltage_level="lv")
     buses_of_interest.update(lv_buses.index.tolist())
 
-    logger.debug("Finished in {}s".format(time() - start_time))
     return buses_of_interest
 
 
@@ -169,12 +164,20 @@ def rename_virtual_buses(
     return partial_busmap_df
 
 
-def remove_one_meter_lines(edisgo_root: EDisGo) -> EDisGo:
+def remove_short_end_lines(edisgo_obj: EDisGo):
     """
-    Remove one meter lines between the feeder and the buildings. This function is
-    a relict from the legacy ding0 grids.
+    Method to remove end lines under 1 meter to reduce size of edisgo object.
 
-    Only one meter lines are dropped which have on one side only one neighbour.
+    Short lines inside at the end are removed in this function, including the end node.
+    Components that were originally connected to the end node are reconnected to the
+    upstream node.
+
+    This function does currently not remove short lines that are no end lines.
+
+    Parameters
+    ----------
+    edisgo : :class:`~.EDisGo`
+
     """
 
     def apply_busmap_on_buses_df(series):
@@ -199,22 +202,14 @@ def remove_one_meter_lines(edisgo_root: EDisGo) -> EDisGo:
 
         return series
 
-    start_time = time()
-    logger.debug("Start - Removing 1m lines")
+    logger.debug("Removing 1 m end lines.")
 
-    edisgo_obj = copy.deepcopy(edisgo_root)
     G = edisgo_obj.to_graph()
     lines_df = edisgo_obj.topology.lines_df.copy()
     busmap = {}
     unused_lines = []
     for index, row in lines_df.iterrows():
-        if row.length < 0.001:
-            logger.debug(
-                'Line "{}" is {:.3f}m long and will not be removed.'.format(
-                    index, row.length * 1000
-                )
-            )
-        if row.length == 0.001:
+        if row.length <= 0.001:
             # find lines that have at one bus only one neighbor
             # and at the other more than one
             number_of_neighbors_bus0 = G.degree(row.bus0)
@@ -234,37 +229,26 @@ def remove_one_meter_lines(edisgo_root: EDisGo) -> EDisGo:
                 ) and number_of_neighbors_bus0 == 1:
                     unused_lines.append(index)
                     busmap[row.bus0] = row.bus1
-            else:
-                logger.info(
-                    'Line "{}" is {:.3f}m long and will not be removed.'.format(
-                        index, row.length * 1000
-                    )
-                )
-    logger.info(
-        "Drop {} of {} short lines ({:.0f}%)".format(
-            len(unused_lines),
-            lines_df.shape[0],
-            (len(unused_lines) / lines_df.shape[0] * 100),
-        )
-    )
+
+    logger.info(f"Drop {len(unused_lines)} of {lines_df.shape[0]} 1 m lines.")
     # Apply the busmap on the components
     lines_df = lines_df.drop(unused_lines)
     lines_df = lines_df.apply(apply_busmap_on_lines_df, axis="columns")
 
-    buses_df = edisgo_obj.topology.buses_df.copy()
+    buses_df = edisgo_obj.topology.buses_df
     buses_df = buses_df.apply(apply_busmap_on_buses_df, axis="columns")
     buses_df = buses_df.groupby(
         by=["new_bus"], dropna=False, as_index=False, sort=False
     ).first()
     buses_df = buses_df.set_index("new_bus")
 
-    loads_df = edisgo_obj.topology.loads_df.copy()
+    loads_df = edisgo_obj.topology.loads_df
     loads_df = loads_df.apply(apply_busmap, axis="columns")
 
-    generators_df = edisgo_obj.topology.generators_df.copy()
+    generators_df = edisgo_obj.topology.generators_df
     generators_df = generators_df.apply(apply_busmap, axis="columns")
 
-    storage_units_df = edisgo_obj.topology.storage_units_df.copy()
+    storage_units_df = edisgo_obj.topology.storage_units_df
     storage_units_df = storage_units_df.apply(apply_busmap, axis="columns")
 
     edisgo_obj.topology.lines_df = lines_df
@@ -273,11 +257,8 @@ def remove_one_meter_lines(edisgo_root: EDisGo) -> EDisGo:
     edisgo_obj.topology.generators_df = generators_df
     edisgo_obj.topology.storage_units_df = storage_units_df
 
-    logger.debug("Finished in {}s".format(time() - start_time))
-    return edisgo_obj
 
-
-def remove_lines_under_one_meter(edisgo_root: EDisGo) -> EDisGo:
+def remove_lines_under_one_meter(edisgo_obj: EDisGo) -> EDisGo:
     """
     Remove the lines under one meter. Sometimes these line are causing convergence
     problems of the power flow calculation or making problems with the clustering
@@ -285,117 +266,116 @@ def remove_lines_under_one_meter(edisgo_root: EDisGo) -> EDisGo:
 
     Function might be a bit overengineered, so that the station bus is never dropped.
     """
-
-    def apply_busmap_on_buses_df(series):
-        if series.name in busmap:
-            series.loc["new_bus"] = busmap[series.name]
-        else:
-            series.loc["new_bus"] = series.name
-        return series
-
-    def apply_busmap_on_lines_df(series):
-        if series.bus0 in busmap:
-            series.loc["bus0"] = busmap[series.bus0]
-        if series.bus1 in busmap:
-            series.loc["bus1"] = busmap[series.bus1]
-
-        return series
-
-    def apply_busmap(series):
-        if series.bus in busmap:
-            series.loc["bus"] = busmap[series.bus]
-
-        return series
-
-    start_time = time()
-    logger.info("Start - Removing lines under 1m")
-
-    edisgo_obj = copy.deepcopy(edisgo_root)
-
-    busmap = {}
-    unused_lines = []
-
-    grid_list = [edisgo_obj.topology.mv_grid]
-    grid_list = grid_list + list(edisgo_obj.topology.mv_grid.lv_grids)
-
-    for grid in grid_list:
-        G = grid.graph
-
-        transformer_node = grid.transformers_df.bus1.values[0]
-
-        lines_df = grid.lines_df.copy()
-
-        for index, row in lines_df.iterrows():
-            if row.length < 0.001:
-
-                distance_bus_0, path = nx.single_source_dijkstra(
-                    G, source=transformer_node, target=row.bus0, weight="length"
-                )
-                distance_bus_1, path = nx.single_source_dijkstra(
-                    G, source=transformer_node, target=row.bus1, weight="length"
-                )
-
-                logger.debug(
-                    'Line "{}" is {:.5f}m long and will be removed.'.format(
-                        index, row.length * 1000
-                    )
-                )
-                logger.debug(
-                    "Bus0: {} - Distance0: {}".format(row.bus0, distance_bus_0)
-                )
-                logger.debug(
-                    "Bus1: {} - Distance1: {}".format(row.bus1, distance_bus_1)
-                )
-
-                if distance_bus_0 < distance_bus_1:
-                    busmap[row.bus1] = row.bus0
-                    if distance_bus_0 < 0.001:
-                        busmap[row.bus0] = transformer_node
-                        busmap[row.bus1] = transformer_node
-                elif distance_bus_0 > distance_bus_1:
-                    busmap[row.bus0] = row.bus1
-                    if distance_bus_1 < 0.001:
-                        busmap[row.bus0] = transformer_node
-                        busmap[row.bus1] = transformer_node
-                else:
-                    raise ValueError("ERROR")
-
-                unused_lines.append(index)
-
-    logger.debug("Busmap: {}".format(busmap))
-    # Apply the busmap on the components
-    transformers_df = edisgo_obj.topology.transformers_df.copy()
-    transformers_df = transformers_df.apply(apply_busmap_on_lines_df, axis="columns")
-    edisgo_obj.topology.transformers_df = transformers_df
-
-    lines_df = edisgo_obj.topology.lines_df.copy()
-    lines_df = lines_df.drop(unused_lines)
-    lines_df = lines_df.apply(apply_busmap_on_lines_df, axis="columns")
-    edisgo_obj.topology.lines_df = lines_df
-
-    buses_df = edisgo_obj.topology.buses_df.copy()
-    buses_df.index.name = "bus"
-    buses_df = buses_df.apply(apply_busmap_on_buses_df, axis="columns")
-    buses_df = buses_df.groupby(
-        by=["new_bus"], dropna=False, as_index=False, sort=False
-    ).first()
-    buses_df = buses_df.set_index("new_bus")
-    edisgo_obj.topology.buses_df = buses_df
-
-    loads_df = edisgo_obj.topology.loads_df.copy()
-    loads_df = loads_df.apply(apply_busmap, axis="columns")
-    edisgo_obj.topology.loads_df = loads_df
-
-    generators_df = edisgo_obj.topology.generators_df.copy()
-    generators_df = generators_df.apply(apply_busmap, axis="columns")
-    edisgo_obj.topology.generators_df = generators_df
-
-    storage_units_df = edisgo_obj.topology.storage_units_df.copy()
-    storage_units_df = storage_units_df.apply(apply_busmap, axis="columns")
-    edisgo_obj.topology.storage_units_df = storage_units_df
-
-    logger.info("Finished in {}s".format(time() - start_time))
-    return edisgo_obj
+    # ToDo this function does currently not work correctly as it may lead to
+    #  isolated nodes and possibly broken switches, plus it should be merged with
+    #  function remove_one_meter_lines
+    # def apply_busmap_on_buses_df(series):
+    #     if series.name in busmap:
+    #         series.loc["new_bus"] = busmap[series.name]
+    #     else:
+    #         series.loc["new_bus"] = series.name
+    #     return series
+    #
+    # def apply_busmap_on_lines_df(series):
+    #     if series.bus0 in busmap:
+    #         series.loc["bus0"] = busmap[series.bus0]
+    #     if series.bus1 in busmap:
+    #         series.loc["bus1"] = busmap[series.bus1]
+    #
+    #     return series
+    #
+    # def apply_busmap(series):
+    #     if series.bus in busmap:
+    #         series.loc["bus"] = busmap[series.bus]
+    #
+    #     return series
+    #
+    # busmap = {}
+    # unused_lines = []
+    #
+    # grid_list = [edisgo_obj.topology.mv_grid]
+    # grid_list = grid_list + list(edisgo_obj.topology.mv_grid.lv_grids)
+    #
+    # for grid in grid_list:
+    #     G = grid.graph
+    #
+    #     transformer_node = grid.transformers_df.bus1.values[0]
+    #
+    #     lines_df = grid.lines_df.copy()
+    #
+    #     for index, row in lines_df.iterrows():
+    #         if row.length < 0.001:
+    #
+    #             distance_bus_0, path = nx.single_source_dijkstra(
+    #                 G, source=transformer_node, target=row.bus0, weight="length"
+    #             )
+    #             distance_bus_1, path = nx.single_source_dijkstra(
+    #                 G, source=transformer_node, target=row.bus1, weight="length"
+    #             )
+    #
+    #             logger.debug(
+    #                 'Line "{}" is {:.5f}m long and will be removed.'.format(
+    #                     index, row.length * 1000
+    #                 )
+    #             )
+    #             logger.debug(
+    #                 "Bus0: {} - Distance0: {}".format(row.bus0, distance_bus_0)
+    #             )
+    #             logger.debug(
+    #                 "Bus1: {} - Distance1: {}".format(row.bus1, distance_bus_1)
+    #             )
+    #             # map bus farther away to bus closer to the station
+    #             # ToDo check if either node is already in the busmap
+    #             # ToDo make sure no virtual bus is dropped
+    #             if distance_bus_0 < distance_bus_1:
+    #                 busmap[row.bus1] = row.bus0
+    #                 if distance_bus_0 < 0.001:
+    #                     busmap[row.bus0] = transformer_node
+    #                     busmap[row.bus1] = transformer_node
+    #             elif distance_bus_0 > distance_bus_1:
+    #                 busmap[row.bus0] = row.bus1
+    #                 if distance_bus_1 < 0.001:
+    #                     busmap[row.bus0] = transformer_node
+    #                     busmap[row.bus1] = transformer_node
+    #             else:
+    #                 raise ValueError("ERROR")
+    #
+    #             unused_lines.append(index)
+    #
+    # logger.debug("Busmap: {}".format(busmap))
+    # # Apply the busmap on the components
+    # transformers_df = edisgo_obj.topology.transformers_df.copy()
+    # transformers_df = transformers_df.apply(apply_busmap_on_lines_df, axis="columns")
+    # edisgo_obj.topology.transformers_df = transformers_df
+    #
+    # lines_df = edisgo_obj.topology.lines_df.copy()
+    # lines_df = lines_df.drop(unused_lines)
+    # lines_df = lines_df.apply(apply_busmap_on_lines_df, axis="columns")
+    # edisgo_obj.topology.lines_df = lines_df
+    #
+    # buses_df = edisgo_obj.topology.buses_df.copy()
+    # buses_df.index.name = "bus"
+    # buses_df = buses_df.apply(apply_busmap_on_buses_df, axis="columns")
+    # buses_df = buses_df.groupby(
+    #     by=["new_bus"], dropna=False, as_index=False, sort=False
+    # ).first()
+    # buses_df = buses_df.set_index("new_bus")
+    # edisgo_obj.topology.buses_df = buses_df
+    #
+    # loads_df = edisgo_obj.topology.loads_df.copy()
+    # loads_df = loads_df.apply(apply_busmap, axis="columns")
+    # edisgo_obj.topology.loads_df = loads_df
+    #
+    # generators_df = edisgo_obj.topology.generators_df.copy()
+    # generators_df = generators_df.apply(apply_busmap, axis="columns")
+    # edisgo_obj.topology.generators_df = generators_df
+    #
+    # storage_units_df = edisgo_obj.topology.storage_units_df.copy()
+    # storage_units_df = storage_units_df.apply(apply_busmap, axis="columns")
+    # edisgo_obj.topology.storage_units_df = storage_units_df
+    #
+    # return edisgo_obj
+    raise NotImplementedError
 
 
 def make_busmap_grid(
@@ -494,7 +474,7 @@ def make_busmap_grid(
 
     logger.debug("Start making busmap for grids.")
 
-    grid_list = make_grid_list(edisgo_obj, grid=grid)
+    grid_list = _make_grid_list(edisgo_obj, grid=grid)
 
     busmap_df = pd.DataFrame()
     # Cluster every grid
@@ -711,7 +691,7 @@ def make_busmap_feeders(
         transform_coordinates, axis="columns"
     )
 
-    grid_list = make_grid_list(edisgo_obj, grid=grid)
+    grid_list = _make_grid_list(edisgo_obj, grid=grid)
     busmap_df = pd.DataFrame()
     mvgd_id = edisgo_obj.topology.mv_grid.id
 
@@ -972,7 +952,7 @@ def make_busmap_main_feeders(
             transform_coordinates, axis="columns"
         )
 
-    grid_list = make_grid_list(edisgo_obj, grid=grid)
+    grid_list = _make_grid_list(edisgo_obj, grid=grid)
     busmap_df = pd.DataFrame()
     mvgd_id = edisgo_obj.topology.mv_grid.id
 

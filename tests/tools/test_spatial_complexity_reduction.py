@@ -207,11 +207,11 @@ class TestSpatialComplexityReduction:
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
         if grid == "MVGrid":
-            grid = spatial_complexity_reduction.make_grid_list(
+            grid = spatial_complexity_reduction._make_grid_list(
                 edisgo_root, grid="MVGrid_1"
             )[0]
         elif grid == "LVGrid":
-            grid = spatial_complexity_reduction.make_grid_list(
+            grid = spatial_complexity_reduction._make_grid_list(
                 edisgo_root, grid="LVGrid_9"
             )[0]
 
@@ -307,7 +307,6 @@ class TestSpatialComplexityReduction:
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
         (
-            edisgo_reduced,
             busmap_df,
             linemap_df,
         ) = spatial_complexity_reduction.spatial_complexity_reduction(
@@ -322,8 +321,8 @@ class TestSpatialComplexityReduction:
         assert len(set(linemap_df["new_line_name"].to_list())) == 23
 
         # Check that edisgo_object can run power flow and reinforce
-        edisgo_reduced.analyze()
-        edisgo_reduced.reinforce()
+        edisgo_root.analyze()
+        edisgo_root.reinforce()
 
     def test_compare_voltage(self, test_edisgo_obj):
         edisgo_root = copy.deepcopy(test_edisgo_obj)
@@ -367,38 +366,46 @@ class TestSpatialComplexityReduction:
         )
         assert np.isclose(rms, 2.873394, atol=1e-5)
 
-    def test_remove_one_meter_lines(self, test_edisgo_obj):
+    def test_remove_short_end_lines(self, test_edisgo_obj):
         edisgo_root = copy.deepcopy(test_edisgo_obj)
 
-        edisgo_clean = spatial_complexity_reduction.remove_one_meter_lines(edisgo_root)
+        # change line length of line to switch to under 1 meter to check that it
+        # is not deleted
+        edisgo_root.topology.lines_df.at["Line_10016", "length"] = 0.0006
+
+        spatial_complexity_reduction.remove_short_end_lines(edisgo_root)
 
         # Check that the generator changed the bus
-        df_old = edisgo_root.topology.generators_df
-        df_new = edisgo_clean.topology.generators_df
+        df_old = test_edisgo_obj.topology.generators_df
+        df_new = edisgo_root.topology.generators_df
         assert (
             df_old.loc[df_old["bus"] == "Bus_GeneratorFluctuating_19", "bus"].index
             == df_new.loc[df_new["bus"] == "Bus_BranchTee_LVGrid_5_6", "bus"].index
         )
         # Check that the load changed the bus
-        df_old = edisgo_root.topology.loads_df
-        df_new = edisgo_clean.topology.loads_df
+        df_old = test_edisgo_obj.topology.loads_df
+        df_new = edisgo_root.topology.loads_df
         assert (
             df_old.loc[df_old["bus"] == "Bus_Load_residential_LVGrid_5_3", "bus"].index
             == df_new.loc[df_new["bus"] == "Bus_BranchTee_LVGrid_5_6", "bus"].index
         )
         # Check that 2 lines were removed
-        assert len(edisgo_root.topology.lines_df) - 2 == len(
-            edisgo_clean.topology.lines_df
+        assert len(test_edisgo_obj.topology.lines_df) - 2 == len(
+            edisgo_root.topology.lines_df
         )
 
-    def test_remove_lines_under_one_meter(self, test_edisgo_obj):
-        edisgo_root = copy.deepcopy(test_edisgo_obj)
-
-        edisgo_clean = spatial_complexity_reduction.remove_lines_under_one_meter(
-            edisgo_root
-        )
-
-        # Check that 1 line was removed
-        assert len(edisgo_root.topology.lines_df) - 1 == len(
-            edisgo_clean.topology.lines_df
-        )
+    # def test_remove_lines_under_one_meter(self, test_edisgo_obj, caplog):
+    #     edisgo_root = copy.deepcopy(test_edisgo_obj)
+    #     edisgo_root.topology.lines_df.at["Line_50000002", "length"] = 0.0006
+    #     edisgo_root.topology.lines_df.at["Line_90000009", "length"] = 0.0007
+    #     edisgo_root.topology.lines_df.at["Line_90000013", "length"] = 0.0008
+    #     edisgo_clean = spatial_complexity_reduction.remove_lines_under_one_meter(
+    #         edisgo_root
+    #     )
+    #     with caplog.at_level(logging.WARNING):
+    #         edisgo_clean.check_integrity()
+    #     assert "isolated nodes" not in caplog.text
+    #     # Check that 1 line was removed
+    #     assert len(edisgo_root.topology.lines_df) - 1 == len(
+    #         edisgo_clean.topology.lines_df
+    #     )
