@@ -293,6 +293,7 @@ class TestTimeseriesReduction:
         assert (ts_crit == self.timesteps[[0, 1, 3]]).all()
 
     def test__scored_most_critical_loading_time_interval(self):
+        self.setup_class()
         self.setup_flexibility_data()
         self.edisgo.analyze()
         ts_crit = _scored_most_critical_loading_time_interval(self.edisgo, 1)
@@ -302,6 +303,7 @@ class TestTimeseriesReduction:
             assert ts in self.timesteps
 
     def test__scored_most_critical_voltage_issues_time_interval(self):
+        self.setup_class()
         self.setup_flexibility_data()
         self.edisgo.analyze()
         ts_crit = _scored_most_critical_voltage_issues_time_interval(self.edisgo, 1)
@@ -311,6 +313,7 @@ class TestTimeseriesReduction:
             assert ts in self.timesteps
 
     def test_get_steps_flex_opf(self):
+        self.setup_class()
         self.setup_flexibility_data()
         self.edisgo.analyze()
         steps = get_steps_flex_opf(self.edisgo, num_ti=6, window_days=1)
@@ -319,15 +322,15 @@ class TestTimeseriesReduction:
         assert len(steps.columns) == 6
 
     def test_distribute_overlying_grid_timeseries(self):
+        self.setup_class()
         self.setup_flexibility_data()
-        # self.edisgo.analyze()
         edisgo_copy = distribute_overlying_grid_timeseries(self.edisgo)
         dsm = self.edisgo.dsm.e_max.columns.values
         hps = self.edisgo.heat_pump.cop_df.columns.values
-        # res = self.edisgo.topology.generators_df.loc[
-        #     (self.edisgo.topology.generators_df.type == "solar")
-        #     | (self.edisgo.topology.generators_df.type == "wind")
-        # ].index.values
+        res = self.edisgo.topology.generators_df.loc[
+            (self.edisgo.topology.generators_df.type == "solar")
+            | (self.edisgo.topology.generators_df.type == "wind")
+        ].index.values
         assert {
             np.isclose(
                 edisgo_copy.timeseries.loads_active_power[hps].sum(axis=1)[i],
@@ -353,12 +356,22 @@ class TestTimeseriesReduction:
             )
             for i in range(len(self.timesteps))
         } == {True}
-        # ToDo: Curtailment funktioniert nicht
-        # assert set([np.isclose(edisgo_copy.timeseries.generators_active_power[
-        #             res].sum(axis=1)[i],
-        #             self.edisgo.timeseries.generators_active_power[
-        #             res].sum(
-        #     axis=1)[i] -
-        #     self.edisgo.overlying_grid.renewables_curtailment.sum(axis=1).values[i],
-        #     atol=1e-5) for i in range(len(self.timesteps))]) == {True}
-        print(" ")
+        assert {
+            np.isclose(
+                edisgo_copy.timeseries.generators_active_power[res].sum(axis=1)[i],
+                self.edisgo.timeseries.generators_active_power[res].sum(axis=1)[i]
+                - self.edisgo.overlying_grid.renewables_curtailment.sum(axis=1).values[
+                    i
+                ],
+                atol=1e-5,
+            )
+            for i in range(int(0.5 * len(self.timesteps)), len(self.timesteps))
+        } == {True}
+        assert {
+            np.isclose(
+                edisgo_copy.timeseries.generators_active_power[res].sum(axis=1)[i],
+                self.edisgo.timeseries.generators_active_power[res].sum(axis=1)[i],
+                atol=1e-5,
+            )
+            for i in range(int(0.5 * len(self.timesteps)))
+        } == {True}
