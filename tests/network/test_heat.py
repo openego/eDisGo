@@ -370,3 +370,41 @@ class TestHeatPump:
         heatpump.resample_timeseries(freq="1H")
         assert len(heatpump.heat_demand_df) == 2
         assert len(heatpump.cop_df) == 2
+
+    def test_check_integrity(self, caplog):
+        # check for empty HeatPump class
+        heatpump = HeatPump()
+        with caplog.at_level(logging.WARNING):
+            heatpump.check_integrity()
+        assert len(caplog.text) == 0
+
+        caplog.clear()
+
+        # create duplicate entries and loads that do not appear in each DSM dataframe
+        heat_demand_df = pd.concat(
+            [
+                self.heat_demand,
+                pd.DataFrame(
+                    data={
+                        "hp1": [1.0, 2.0],
+                        "hp3": [3.0, 4.0],
+                    },
+                    index=self.timeindex,
+                ),
+            ],
+            axis=1,
+        )
+        heatpump.cop_df = self.cop
+        heatpump.heat_demand_df = heat_demand_df
+
+        with caplog.at_level(logging.WARNING):
+            heatpump.check_integrity()
+        assert len(caplog.messages) == 2
+        assert (
+            "HeatPump timeseries heat_demand_df contains the following duplicates:"
+            in caplog.text
+        )
+        assert (
+            "HeatPump timeseries cop_df is missing the following entries:"
+            in caplog.text
+        )

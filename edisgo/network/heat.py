@@ -5,6 +5,7 @@ import os
 
 from zipfile import ZipFile
 
+import numpy as np
 import pandas as pd
 
 from edisgo.io import heat_pump_import, timeseries_import
@@ -584,3 +585,33 @@ class HeatPump:
             else:
                 freq_orig = attr_index[1] - attr_index[0]
                 tools.resample(self, freq_orig, method, freq, attr_to_resample=[attr])
+
+    def check_integrity(self):
+        """
+        Check data integrity.
+
+        Checks for duplicated and missing labels as well as implausible values.
+
+        """
+        check_dfs = ["heat_demand_df", "cop_df"]
+        # check for duplicate columns
+        for ts in check_dfs:
+            df = getattr(self, ts)
+            duplicated_labels = df.columns[df.columns.duplicated()].values
+
+            if len(duplicated_labels) > 0:
+                logger.warning(
+                    f"HeatPump timeseries {ts} contains the following duplicates: "
+                    f"{set(duplicated_labels)}."
+                )
+
+        # check that all profiles exist for the same heat pumps
+        columns = set(np.concatenate([getattr(self, _).columns for _ in check_dfs]))
+        for ts in check_dfs:
+            df = getattr(self, ts)
+            missing_entries = [_ for _ in columns if _ not in df.columns]
+            if len(missing_entries) > 0:
+                logger.warning(
+                    f"HeatPump timeseries {ts} is missing the following "
+                    f"entries: {missing_entries}."
+                )
