@@ -2622,8 +2622,9 @@ class EDisGo:
         :func:`edisgo.network.timeseries.TimeSeries.check_integrity`) and the interplay
         of both.
         Further, checks integrity of electromobility object (see
-        :func:`edisgo.network.electromobility.Electromobility.check_integrity`) if
-        there is electromobility data.
+        :func:`edisgo.network.electromobility.Electromobility.check_integrity`),
+        the heat pump object (see :func:`edisgo.network.heat.HeatPump.check_integrity`)
+        and the DSM object (see :func:`edisgo.network.dsm.DSM.check_integrity`).
         Additionally, checks whether time series data in
         :class:`~.network.heat.HeatPump`,
         :class:`~.network.electromobility.Electromobility`,
@@ -2635,6 +2636,8 @@ class EDisGo:
         self.topology.check_integrity()
         self.timeseries.check_integrity()
         self.electromobility.check_integrity()
+        self.dsm.check_integrity()
+        self.heat_pump.check_integrity()
 
         # check consistency of topology and timeseries
         comp_types = ["generators", "loads", "storage_units"]
