@@ -5,9 +5,10 @@ import os
 
 from zipfile import ZipFile
 
+import numpy as np
 import pandas as pd
 
-from edisgo.io import timeseries_import
+from edisgo.io import heat_pump_import, timeseries_import
 from edisgo.tools import tools
 
 logger = logging.getLogger(__name__)
@@ -17,8 +18,8 @@ class HeatPump:
     """
     Data container for all heat pump data.
 
-    This class holds data on heat pump COP, heat demand time series, thermal storage
-    data...
+    This class holds data on heat pump COP, heat demand time series, and thermal storage
+    data.
 
     """
 
@@ -148,12 +149,15 @@ class HeatPump:
 
             * 'oedb'
 
-                Weather cell specific hourly COP time series for one year are obtained
-                from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_ (see
-                :func:`edisgo.io.timeseries_import.cop_oedb` for more information).
-                Using information on which weather cell each heat pump is in, the
-                weather cell specific time series are mapped to each heat pump.
+                COP / efficiency data are obtained from the `OpenEnergy DataBase
+                <https://openenergy-platform.org/dataedit/schemas>`_.
+                In case of heat pumps weather cell specific hourly COP time series
+                are obtained (see :func:`edisgo.io.timeseries_import.cop_oedb` for more
+                information). Using information on which weather cell each heat pump
+                is in, the weather cell specific time series are mapped to each heat
+                pump.
+                In case of resistive heaters a constant efficiency is set (see
+                :func:`edisgo.io.heat_pump_import.efficiency_resistive_heaters_oedb`).
 
                 Weather cell information of heat pumps is obtained from column
                 'weather_cell_id' in :attr:`~.network.topology.Topology.loads_df`. In
@@ -163,7 +167,7 @@ class HeatPump:
                 information.
 
                 This option requires that the parameter `engine` is provided as keyword
-                argument. For further settings, the parameters `year` and
+                argument. For further settings, the parameters `timeindex` and
                 `heat_pump_names` can also be provided as keyword arguments.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
@@ -176,19 +180,19 @@ class HeatPump:
         engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
             Database engine. This parameter is required in case `ts_cop` is 'oedb'.
         heat_pump_names : list(str) or None
-            Defines for which heat pumps to get COP time series for in case `ts_cop` is
+            Defines for which heat pumps to set COP time series in case `ts_cop` is
             'oedb'. If None, all heat pumps in
             :attr:`~.network.topology.Topology.loads_df` (type is 'heat_pump') are
             used. Default: None.
-        year : int or None
-            Year to index COP data by in case `ts_heat_demand` is 'oedb'.
-            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is already set
-            COP data is indexed by the same year, otherwise time index will be set
-            for the year 2011 which is the weather year the data was generated with.
-            In case :py:attr:`~.network.timeseries.TimeSeries.timeindex` contains a
-            leap year, the COP data will as well be indexed using the year 2011, as
-            leap years can currently not be handled. See
-            :func:`edisgo.io.timeseries_import.cop_oedb` for more information.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            Specifies time steps for which to set data in case `ts_cop` is
+            'oedb'. Leap years can currently not be handled. In case the given
+            timeindex contains a leap year, the data will be indexed using the default
+            year 2011 and returned for the whole year.
+            If no timeindex is provided, the timeindex set in
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+            is indexed using the default year 2011 and returned for the whole year.
 
         """
         if isinstance(ts_cop, str) and ts_cop == "oedb":
@@ -199,9 +203,19 @@ class HeatPump:
                     edisgo_object.topology.loads_df.type == "heat_pump"
                 ].index
 
-            if len(heat_pump_names) > 0:
+            pth_df = edisgo_object.topology.loads_df.loc[heat_pump_names, :]
+            hp_df = pth_df[
+                ~pth_df.sector.isin(
+                    [
+                        "individual_heating_resistive_heater",
+                        "district_heating_resistive_heater",
+                    ]
+                )
+            ]
+
+            # set COP of heat pumps
+            if len(hp_df) > 0:
                 # check weather cell information of heat pumps
-                hp_df = edisgo_object.topology.loads_df.loc[heat_pump_names, :]
                 # if no heat pump has weather cell information, throw an error
                 if (
                     "weather_cell_id" not in hp_df.columns
@@ -229,16 +243,12 @@ class HeatPump:
                     ] = random_weather_cell_id
                 weather_cells = hp_df.weather_cell_id.dropna().unique()
 
-                # set up year to index COP data by
-                year = kwargs.get("year", None)
-                if year is None:
-                    year = tools.get_year_based_on_timeindex(edisgo_object)
-
                 # get COP per weather cell
                 ts_cop_per_weather_cell = timeseries_import.cop_oedb(
+                    edisgo_object=edisgo_object,
                     engine=kwargs.get("engine", None),
                     weather_cell_ids=weather_cells,
-                    year=year,
+                    timeindex=kwargs.get("timeindex", None),
                 )
                 # assign COP time series to each heat pump
                 cop_df = pd.DataFrame(
@@ -251,6 +261,48 @@ class HeatPump:
                 )
             else:
                 cop_df = pd.DataFrame()
+
+            # set efficiency of resistive heaters
+            rh_df = pth_df[
+                pth_df.sector.isin(
+                    [
+                        "individual_heating_resistive_heater",
+                        "district_heating_resistive_heater",
+                    ]
+                )
+            ]
+            if len(rh_df) > 0:
+                # get efficiencies of resistive heaters
+                eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
+                    scenario="eGon2035",  # currently only possible scenario
+                    engine=kwargs.get("engine", None),
+                )
+                # determine timeindex to use
+                if not cop_df.empty:
+                    timeindex = cop_df.index
+                else:
+                    timeindex, _ = timeseries_import._timeindex_helper_func(
+                        edisgo_object,
+                        kwargs.get("timeindex", None),
+                        default_year=2011,
+                        allow_leap_year=False,
+                    )
+                # assign efficiency time series to each heat pump
+                eta_df = pd.DataFrame(
+                    data={
+                        _: (
+                            eta_dict["central_resistive_heater"]
+                            if rh_df.at[_, "sector"]
+                            == "district_heating_resistive_heater"
+                            else eta_dict["rural_resistive_heater"]
+                        )
+                        for _ in rh_df.index
+                    },
+                    index=timeindex,
+                )
+            else:
+                eta_df = pd.DataFrame()
+            cop_df = pd.concat([cop_df, eta_df], axis=1)
         elif isinstance(ts_cop, pd.DataFrame):
             cop_df = ts_cop
         else:
@@ -291,7 +343,8 @@ class HeatPump:
                 into the grid.
                 This option requires that the parameters `engine` and `scenario` are
                 provided as keyword arguments. For further settings, the parameters
-                `year` and `heat_pump_names` can also be provided as keyword arguments.
+                `timeindex` and `heat_pump_names` can also be provided as keyword
+                arguments.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
 
@@ -313,14 +366,16 @@ class HeatPump:
             case `ts_heat_demand` is 'oedb'. If None, all heat pumps in
             :attr:`~.network.topology.Topology.loads_df` (type is 'heat_pump') are
             used. Default: None.
-        year : int or None
-            Year to index heat demand data by in case `ts_heat_demand` is 'oedb'.
-            If none is provided and :py:attr:`~.network.timeseries.TimeSeries.timeindex`
-            is already set, data is indexed by the same year. Otherwise, time index will
-            be set according to the scenario (2035 in case of the 'eGon2035' scenario
-            and 2045 in case of the 'eGon100RE' scenario).
-            A leap year can currently not be handled. In case a leap year is given, the
-            time index is set according to the chosen scenario.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            Specifies time steps for which to set data in case `ts_heat_demand` is
+            'oedb'. Leap years can currently not be handled. In case the given
+            timeindex contains a leap year, the data will be indexed using the default
+            year (2035 in case of the 'eGon2035' and to 2045 in case of the
+            'eGon100RE' scenario) and returned for the whole year.
+            If no timeindex is provided, the timeindex set in
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+            is indexed using the default year and returned for the whole year.
 
         """
         # in case time series from oedb are used, retrieve oedb time series
@@ -333,17 +388,12 @@ class HeatPump:
                 ].index
 
             if len(heat_pump_names) > 0:
-                # set up year to index data by
-                year = kwargs.get("year", None)
-                if year is None:
-                    year = tools.get_year_based_on_timeindex(edisgo_object)
-
                 # get heat demand per heat pump
                 heat_demand_df = timeseries_import.heat_demand_oedb(
                     edisgo_object,
                     scenario=kwargs.get("scenario", ""),
                     engine=kwargs.get("engine", None),
-                    year=year,
+                    timeindex=kwargs.get("timeindex", None),
                 )
                 heat_pump_names_select = [
                     _ for _ in heat_demand_df.columns if _ in heat_pump_names
@@ -535,3 +585,33 @@ class HeatPump:
             else:
                 freq_orig = attr_index[1] - attr_index[0]
                 tools.resample(self, freq_orig, method, freq, attr_to_resample=[attr])
+
+    def check_integrity(self):
+        """
+        Check data integrity.
+
+        Checks for duplicated and missing labels as well as implausible values.
+
+        """
+        check_dfs = ["heat_demand_df", "cop_df"]
+        # check for duplicate columns
+        for ts in check_dfs:
+            df = getattr(self, ts)
+            duplicated_labels = df.columns[df.columns.duplicated()].values
+
+            if len(duplicated_labels) > 0:
+                logger.warning(
+                    f"HeatPump timeseries {ts} contains the following duplicates: "
+                    f"{set(duplicated_labels)}."
+                )
+
+        # check that all profiles exist for the same heat pumps
+        columns = set(np.concatenate([getattr(self, _).columns for _ in check_dfs]))
+        for ts in check_dfs:
+            df = getattr(self, ts)
+            missing_entries = [_ for _ in columns if _ not in df.columns]
+            if len(missing_entries) > 0:
+                logger.warning(
+                    f"HeatPump timeseries {ts} is missing the following "
+                    f"entries: {missing_entries}."
+                )

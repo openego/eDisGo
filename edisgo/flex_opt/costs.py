@@ -15,7 +15,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
 
     Attributes
     ----------
-    edisgo_obj : :class:`~.self.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
     without_generator_import : bool
         If True excludes lines that were added in the generator import to
         connect new generators to the topology from calculation of topology expansion
@@ -215,7 +215,7 @@ def line_expansion_costs(edisgo_obj, lines_names=None):
 
     Parameters
     -----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
         eDisGo object
     lines_names: None or list(str)
         List of names of lines to return cost information for. If None, it is returned

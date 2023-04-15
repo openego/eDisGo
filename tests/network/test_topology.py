@@ -1175,6 +1175,41 @@ class TestTopologyWithEdisgoObject:
         )
         assert self.edisgo.topology.loads_df.at[comp_name, "type"] == "heat_pump"
 
+        # ######### Storage unit #############
+        # add generator
+        x = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "x"]
+        y = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "y"]
+        geom = Point((x, y))
+        test_stor = {
+            "p_nom": 2.5,
+            "geom": geom,
+            "voltage_level": 5,
+        }
+        num_storage_units_before = len(self.edisgo.topology.storage_units_df)
+        num_buses_before = len(self.edisgo.topology.buses_df)
+        num_lines_before = len(self.edisgo.topology.lines_df)
+        comp_name = self.edisgo.topology.connect_to_mv(
+            self.edisgo, test_stor, comp_type="storage_unit"
+        )
+
+        # check if number of buses increased (by one because closest connection
+        # object is a bus)
+        assert num_buses_before + 1 == len(self.edisgo.topology.buses_df)
+        # check if number of lines increased
+        assert num_lines_before + 1 == len(self.edisgo.topology.lines_df)
+        # check if number of storage units increased
+        assert num_storage_units_before + 1 == len(
+            self.edisgo.topology.storage_units_df
+        )
+
+        # check new storage
+        assert (
+            self.edisgo.topology.storage_units_df.at[comp_name, "p_nom"]
+            == test_stor["p_nom"]
+        )
+        assert self.edisgo.topology.storage_units_df.at[comp_name, "control"] == "PQ"
+        assert "Storage" in self.edisgo.topology.storage_units_df.at[comp_name, "bus"]
+
     def test_connect_to_lv(self):
 
         # ######### Generator #############
@@ -1660,6 +1695,40 @@ class TestTopologyWithEdisgoObject:
         )
         # check new heat pump
         assert self.edisgo.topology.loads_df.at[comp_name, "p_set"] == 0.3
+
+        # ############# storage unit #################
+        # test existing substation ID (voltage level 7)
+        # storage can be connected to residential load
+
+        num_lines_before = len(self.edisgo.topology.lines_df)
+        num_buses_before = len(self.edisgo.topology.buses_df)
+        num_stores_before = len(self.edisgo.topology.storage_units_df)
+
+        # add generator
+        test_stor = {
+            "p_nom": 0.03,
+            "geom": geom,
+            "voltage_level": 7,
+            "mvlv_subst_id": 1,
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_stor, comp_type="storage_unit"
+        )
+
+        # check that number of buses stayed the same
+        assert num_buses_before == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert num_lines_before == len(self.edisgo.topology.lines_df)
+        # check that number of storage units increased
+        assert num_stores_before + 1 == len(self.edisgo.topology.storage_units_df)
+
+        # check bus
+        bus = self.edisgo.topology.storage_units_df.at[comp_name, "bus"]
+        assert bus == "Bus_BranchTee_LVGrid_1_12"
+        assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 1
+        # check new storage
+        assert self.edisgo.topology.storage_units_df.at[comp_name, "p_nom"] == 0.03
 
     def test_check_integrity(self, caplog):
         """Test of validation of grids."""

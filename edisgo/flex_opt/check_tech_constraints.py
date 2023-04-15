@@ -1,4 +1,3 @@
-import itertools
 import logging
 
 import numpy as np
@@ -9,24 +8,29 @@ from edisgo.network.grids import LVGrid, MVGrid
 logger = logging.getLogger(__name__)
 
 
-def mv_line_overload(edisgo_obj):
+def mv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
     """
-    Checks for over-loading issues in MV network.
+    Returns time step and value of most severe overloading of lines in MV network.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+    n_minus_one : bool
+        Determines which allowed load factors to use (see :py:attr:`~lines_allowed_load`
+        for more information). Currently, n-1 security cannot be handled correctly,
+        wherefore the case where this parameter is set to True will lead to an error
+        being raised.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded MV lines, their maximum relative over-loading
-        (maximum calculated apparent power over allowed apparent power) and the
+        in p.u. (maximum calculated apparent power over allowed apparent power) and the
         corresponding time step.
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
         over-loading as float, 'time_index' containing the corresponding
-        time step the over-loading occured in as
+        time step the over-loading occurred in as
         :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
         the voltage level the line is in (either 'mv' or 'lv').
 
@@ -38,7 +42,9 @@ def mv_line_overload(edisgo_obj):
 
     """
 
-    crit_lines = _line_overload(edisgo_obj, voltage_level="mv")
+    crit_lines = _line_max_relative_overload(
+        edisgo_obj, voltage_level="mv", n_minus_one=n_minus_one
+    )
 
     if not crit_lines.empty:
         logger.debug(
@@ -52,24 +58,29 @@ def mv_line_overload(edisgo_obj):
     return crit_lines
 
 
-def lv_line_overload(edisgo_obj):
+def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
     """
-    Checks for over-loading issues in LV networks.
+    Returns time step and value of most severe overloading of lines in LV networks.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+    n_minus_one : bool
+        Determines which allowed load factors to use (see :py:attr:`~lines_allowed_load`
+        for more information). Currently, n-1 security cannot be handled correctly,
+        wherefore the case where this parameter is set to True will lead to an error
+        being raised.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded LV lines, their maximum relative over-loading
-        (maximum calculated apparent power over allowed apparent power) and the
+        in p.u. (maximum calculated apparent power over allowed apparent power) and the
         corresponding time step.
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
         over-loading as float, 'time_index' containing the corresponding
-        time step the over-loading occured in as
+        time step the over-loading occurred in as
         :pandas:`pandas.Timestamp<Timestamp>`, and 'voltage_level' specifying
         the voltage level the line is in (either 'mv' or 'lv').
 
@@ -81,7 +92,9 @@ def lv_line_overload(edisgo_obj):
 
     """
 
-    crit_lines = _line_overload(edisgo_obj, voltage_level="lv")
+    crit_lines = _line_max_relative_overload(
+        edisgo_obj, voltage_level="lv", n_minus_one=n_minus_one
+    )
 
     if not crit_lines.empty:
         logger.debug(
@@ -95,9 +108,9 @@ def lv_line_overload(edisgo_obj):
     return crit_lines
 
 
-def _line_overload(edisgo_obj, voltage_level):
+def _line_max_relative_overload(edisgo_obj, voltage_level, n_minus_one=False):
     """
-    Checks for over-loading issues of lines.
+    Returns time step and value of most severe overloading of lines.
 
     Parameters
     ----------
@@ -105,12 +118,15 @@ def _line_overload(edisgo_obj, voltage_level):
     voltage_level : str
         Voltage level, over-loading is checked for. Possible options are
         'mv' or 'lv'.
+    n_minus_one : bool
+        Determines which allowed load factors to use. See :py:attr:`~lines_allowed_load`
+        for more information.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe containing over-loaded lines, their maximum relative over-loading
-        (maximum calculated apparent power over allowed apparent power) and the
+        in p.u. (maximum calculated apparent power over allowed apparent power) and the
         corresponding time step.
         Index of the dataframe are the names of the over-loaded lines.
         Columns are 'max_rel_overload' containing the maximum relative
@@ -141,7 +157,7 @@ def _line_overload(edisgo_obj, voltage_level):
         )
 
     # calculate relative line load and keep maximum over-load of each line
-    relative_i_res = lines_relative_load(edisgo_obj, lines)
+    relative_i_res = lines_relative_load(edisgo_obj, lines, n_minus_one=n_minus_one)
 
     crit_lines_relative_load = relative_i_res[relative_i_res > 1].max().dropna()
     if len(crit_lines_relative_load) > 0:
@@ -161,7 +177,7 @@ def _line_overload(edisgo_obj, voltage_level):
     return crit_lines
 
 
-def lines_allowed_load(edisgo_obj, lines=None):
+def lines_allowed_load(edisgo_obj, lines=None, n_minus_one=False):
     """
     Returns allowed loading of specified lines per time step in MVA.
 
@@ -175,6 +191,13 @@ def lines_allowed_load(edisgo_obj, lines=None):
     lines : list(str)
         List of line names to get allowed loading for. Per default
         allowed loading is returned for all lines in the network. Default: None.
+    n_minus_one : bool
+        Determines which allowed load factors to use. In case it is set to False,
+        allowed load factors defined in the config file 'config_grid_expansion' in
+        section 'grid_expansion_load_factors' are used. This is the default.
+        In case it is set to True, allowed load factors defined in the config file
+        'config_grid_expansion' in section 'grid_expansion_load_factors_n_minus_one'
+        are used. This case is currently not implemented.
 
     Returns
     -------
@@ -186,8 +209,12 @@ def lines_allowed_load(edisgo_obj, lines=None):
         :attr:`~.network.topology.Topology.loads_df`.
 
     """
-    allowed_load_lv = _lines_allowed_load_voltage_level(edisgo_obj, voltage_level="lv")
-    allowed_load_mv = _lines_allowed_load_voltage_level(edisgo_obj, voltage_level="mv")
+    allowed_load_lv = _lines_allowed_load_voltage_level(
+        edisgo_obj, voltage_level="lv", n_minus_one=n_minus_one
+    )
+    allowed_load_mv = _lines_allowed_load_voltage_level(
+        edisgo_obj, voltage_level="mv", n_minus_one=n_minus_one
+    )
     allowed_load = pd.concat([allowed_load_lv, allowed_load_mv], axis=1)
     if lines is None:
         return allowed_load
@@ -195,7 +222,7 @@ def lines_allowed_load(edisgo_obj, lines=None):
         return allowed_load.loc[:, lines]
 
 
-def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
+def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level, n_minus_one=False):
     """
     Returns allowed loading per line in the specified voltage level in MVA.
 
@@ -205,6 +232,13 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
     voltage_level : str
         Grid level, allowed line load is returned for. Possible options are
         "mv" or "lv".
+    n_minus_one : bool
+        Determines which allowed load factors to use. In case it is set to False,
+        allowed load factors defined in the config file 'config_grid_expansion' in
+        section 'grid_expansion_load_factors' are used. This is the default.
+        In case it is set to True, allowed load factors defined in the config file
+        'config_grid_expansion' in section 'grid_expansion_load_factors_n_minus_one'
+        are used. This case is currently not implemented.
 
     Returns
     -------
@@ -235,47 +269,48 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
     allowed_load_per_case = {}
 
     # get allowed loads per case
-    for case in ["feed-in_case", "load_case"]:
-
-        # if load factor is not 1, handle lines in cycles differently from lines in
-        # stubs
-        if (
-            edisgo_obj.config["grid_expansion_load_factors"][
-                f"{voltage_level}_{case}_line"
-            ]
-            != 1.0
-        ):
-
-            buses_in_cycles = list(
-                set(itertools.chain.from_iterable(edisgo_obj.topology.rings))
-            )
-
-            # Find lines in cycles
-            lines_in_cycles = list(
-                lines_df.loc[
-                    lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
-                ].index.values
-            )
-            lines_radial_feeders = list(
-                lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values
-            )
-
-            # lines in cycles have to be n-1 secure
-            allowed_load_per_case[case] = (
-                lines_df.loc[lines_in_cycles].s_nom
-                * edisgo_obj.config["grid_expansion_load_factors"][
-                    f"{voltage_level}_{case}_line"
-                ]
-            )
-
-            # lines in radial feeders are not n-1 secure anyway
-            allowed_load_per_case[case] = pd.concat(
-                [
-                    allowed_load_per_case[case],
-                    lines_df.loc[lines_radial_feeders].s_nom,
-                ]
-            )
-        else:
+    if n_minus_one is True:
+        raise NotImplementedError("n-1 security can currently not be checked.")
+        # # handle lines in cycles differently from lines in stubs
+        # for case in ["feed-in_case", "load_case"]:
+        #     if (
+        #         edisgo_obj.config["grid_expansion_load_factors_n_minus_one"][
+        #             f"{voltage_level}_{case}_line"
+        #         ]
+        #         != 1.0
+        #     ):
+        #
+        #         buses_in_cycles = list(
+        #             set(itertools.chain.from_iterable(edisgo_obj.topology.rings))
+        #         )
+        #
+        #         # Find lines in cycles
+        #         lines_in_cycles = list(
+        #             lines_df.loc[
+        #                 lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
+        #             ].index.values
+        #         )
+        #         lines_radial_feeders = list(
+        #             lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values
+        #         )
+        #
+        #         # lines in cycles have to be n-1 secure
+        #         allowed_load_per_case[case] = (
+        #             lines_df.loc[lines_in_cycles].s_nom
+        #             * edisgo_obj.config["grid_expansion_load_factors_n_minus_one"][
+        #                 f"{voltage_level}_{case}_line"
+        #             ]
+        #         )
+        #
+        #         # lines in radial feeders are not n-1 secure anyway
+        #         allowed_load_per_case[case] = pd.concat(
+        #             [
+        #                 allowed_load_per_case[case],
+        #                 lines_df.loc[lines_radial_feeders].s_nom,
+        #             ]
+        #         )
+    else:
+        for case in ["feed-in_case", "load_case"]:
             allowed_load_per_case[case] = (
                 lines_df.s_nom
                 * edisgo_obj.config["grid_expansion_load_factors"][
@@ -288,7 +323,7 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level):
     ].apply(lambda _: allowed_load_per_case[_])
 
 
-def lines_relative_load(edisgo_obj, lines=None):
+def lines_relative_load(edisgo_obj, lines=None, n_minus_one=False):
     """
     Returns relative line load.
 
@@ -303,6 +338,9 @@ def lines_relative_load(edisgo_obj, lines=None):
     lines : list(str) or None
         List of line names to get relative loading for. Per default relative loading
         is returned for all lines included in the power flow analysis. Default: None.
+    n_minus_one : bool
+        Determines which allowed load factors to use. See :py:attr:`~lines_allowed_load`
+        for more information.
 
     Returns
     --------
@@ -320,7 +358,7 @@ def lines_relative_load(edisgo_obj, lines=None):
         )
 
     # get allowed loading
-    allowed_loading = lines_allowed_load(edisgo_obj, lines)
+    allowed_loading = lines_allowed_load(edisgo_obj, lines, n_minus_one=n_minus_one)
 
     # get line load from power flow analysis
     loading = edisgo_obj.results.s_res.loc[:, lines]
@@ -328,7 +366,7 @@ def lines_relative_load(edisgo_obj, lines=None):
     return loading / allowed_loading
 
 
-def hv_mv_station_overload(edisgo_obj):
+def hv_mv_station_max_overload(edisgo_obj):
     """
     Checks for over-loading of HV/MV station.
 
@@ -354,7 +392,7 @@ def hv_mv_station_overload(edisgo_obj):
     section 'grid_expansion_load_factors'.
 
     """
-    crit_stations = _station_overload(edisgo_obj, edisgo_obj.topology.mv_grid)
+    crit_stations = _station_max_overload(edisgo_obj, edisgo_obj.topology.mv_grid)
     if not crit_stations.empty:
         logger.debug("==> HV/MV station has load issues.")
     else:
@@ -363,7 +401,7 @@ def hv_mv_station_overload(edisgo_obj):
     return crit_stations
 
 
-def mv_lv_station_overload(edisgo_obj):
+def mv_lv_station_max_overload(edisgo_obj):
     """
     Checks for over-loading of MV/LV stations.
 
@@ -395,7 +433,7 @@ def mv_lv_station_overload(edisgo_obj):
         crit_stations = pd.concat(
             [
                 crit_stations,
-                _station_overload(edisgo_obj, lv_grid),
+                _station_max_overload(edisgo_obj, lv_grid),
             ]
         )
     if not crit_stations.empty:
@@ -410,7 +448,7 @@ def mv_lv_station_overload(edisgo_obj):
     return crit_stations
 
 
-def _station_overload(edisgo_obj, grid):
+def _station_max_overload(edisgo_obj, grid):
     """
     Checks for over-loading of stations.
 
@@ -655,7 +693,7 @@ def stations_relative_load(edisgo_obj, grids=None):
     return loading / allowed_loading.loc[:, loading.columns]
 
 
-def components_relative_load(edisgo_obj):
+def components_relative_load(edisgo_obj, n_minus_one=False):
     """
     Returns relative loading of all lines and stations included in power flow analysis.
 
@@ -667,6 +705,9 @@ def components_relative_load(edisgo_obj):
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+    n_minus_one : bool
+        Determines which allowed load factors to use. See :py:attr:`~lines_allowed_load`
+        for more information.
 
     Returns
     -------
@@ -682,7 +723,9 @@ def components_relative_load(edisgo_obj):
 
     """
     stations_rel_load = stations_relative_load(edisgo_obj)
-    lines_rel_load = lines_relative_load(edisgo_obj, lines=None)
+    lines_rel_load = lines_relative_load(
+        edisgo_obj, lines=None, n_minus_one=n_minus_one
+    )
     return pd.concat([lines_rel_load, stations_rel_load], axis=1)
 
 
@@ -897,7 +940,7 @@ def allowed_voltage_limits(edisgo_obj, buses=None, split_voltage_band=True):
         allowed_buses = upper.columns
         buses_not_incl = list(set(buses) - set(allowed_buses))
         if buses_not_incl:
-            logger.debug(
+            logger.warning(
                 f"Allowed voltage limits cannot be determined for all given buses as "
                 f"voltage information from power flow analysis is needed to calculate "
                 f"allowed voltage for the MV/LV and LV level but the buses were not "
@@ -938,7 +981,7 @@ def _mv_allowed_voltage_limits(edisgo_obj):
     upper_limit = (
         1
         + offset
-        + control_deviation
+        - control_deviation
         + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
             "mv_max_v_rise"
         ]
@@ -946,7 +989,7 @@ def _mv_allowed_voltage_limits(edisgo_obj):
     lower_limit = (
         1
         + offset
-        - control_deviation
+        + control_deviation
         - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
             "mv_max_v_drop"
         ]

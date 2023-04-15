@@ -907,9 +907,10 @@ def plot_plotly(
     line_result_selection: str = "max",
     node_result_selection: str = "max",
     selected_timesteps: pd.Timestamp | list | None = None,
-    center_coordinates: bool = False,
+    plot_map: bool = False,
     pseudo_coordinates: bool = False,
     node_selection: list | bool = False,
+    height: int = 500,
 ) -> BaseFigure:
     """
     Draws a plotly html figure.
@@ -971,16 +972,17 @@ def plot_plotly(
             :pandas:`pandas.Timestamp<Timestamp>`
           Selected time steps are used.
 
-    center_coordinates : bool
-        Enables the centering of the coordinates. If True the transformer node is set
-        to the coordinates x=0 and y=0. Else, the coordinates from the HV/MV-station
-        of the MV grid are used. Default: False.
+    plot_map : bool
+        Enable the plotting of a background map.
 
     pseudo_coordinates : bool
         Enable pseudo coordinates for the plotted grid. Default: False.
 
     node_selection : bool or list(str)
         Only plot selected nodes. Default: False.
+
+    height : int
+        Height of the plotly plot in pixels.
 
     Returns
     -------
@@ -1046,17 +1048,15 @@ def plot_plotly(
         logger.warning("No power flow results to show. -> Run power flow.")
         node_color = None
 
-    if center_coordinates:
-        # Center transformer coordinates on (0,0).
-        if hasattr(grid, "transformers_df"):
-            node_root = grid.transformers_df.bus1.iat[0]
-            x_root, y_root = G.nodes[node_root]["pos"]
-        else:
-            node_root = edisgo_obj.topology.transformers_hvmv_df.bus1.iat[0]
-            x_root, y_root = G.nodes[node_root]["pos"]
+    if hasattr(grid, "transformers_df"):
+        node_root = grid.transformers_df.bus1.iat[0]
+        x_center, y_center = G.nodes[node_root]["pos"]
     else:
-        x_root = 0
-        y_root = 0
+        node_root = edisgo_obj.topology.transformers_hvmv_df.bus1.iat[0]
+        x_center, y_center = G.nodes[node_root]["pos"]
+
+    x_root = 0
+    y_root = 0
 
     if pseudo_coordinates:
         G = make_pseudo_coordinates_graph(
@@ -1096,21 +1096,10 @@ def plot_plotly(
                 f"node_result_selection needs to be one of {result_selection_options}"
             )
 
-    # initialization coordinate transformation
-    transformer_4326_to_3035 = Transformer.from_crs(
-        "EPSG:4326",
-        "EPSG:3035",
-        always_xy=True,
-    )
-
     def get_coordinates_for_edge(edge):
         x0, y0 = G.nodes[edge[0]]["pos"]
         x1, y1 = G.nodes[edge[1]]["pos"]
-        x0, y0 = transformer_4326_to_3035.transform(x0, y0)
-        x1, y1 = transformer_4326_to_3035.transform(x1, y1)
         return x0, y0, x1, y1
-
-    x_root, y_root = transformer_4326_to_3035.transform(x_root, y_root)
 
     def plot_line_text():
         middle_node_x = []
@@ -1129,24 +1118,40 @@ def plot_plotly(
                 text += "<br>" + "Loading = " + str(s_res.loc[branch_name])
 
             line_parameters = edisgo_obj.topology.lines_df.loc[branch_name, :]
-            for index, value in line_parameters.iteritems():
+            for index, value in line_parameters.items():
                 text += "<br>" + str(index) + " = " + str(value)
 
             middle_node_text.append(text)
 
-        middle_node_scatter = go.Scatter(
-            x=middle_node_x,
-            y=middle_node_y,
-            text=middle_node_text,
-            mode="markers",
-            hoverinfo="text",
-            marker=dict(
-                opacity=0.0,
-                size=10,
-                color="white",
-            ),
-            showlegend=False,
-        )
+        if plot_map:
+            middle_node_scatter = go.Scattermapbox(
+                lon=middle_node_x,
+                lat=middle_node_y,
+                text=middle_node_text,
+                mode="markers",
+                hoverinfo="text",
+                marker=dict(
+                    opacity=0.0,
+                    size=10,
+                    color="white",
+                ),
+                showlegend=False,
+            )
+        else:
+            middle_node_scatter = go.Scatter(
+                x=middle_node_x,
+                y=middle_node_y,
+                text=middle_node_text,
+                mode="markers",
+                hoverinfo="text",
+                marker=dict(
+                    opacity=0.0,
+                    size=10,
+                    color="white",
+                ),
+                showlegend=False,
+            )
+
         return [middle_node_scatter]
 
     def plot_lines():
@@ -1229,19 +1234,33 @@ def plot_plotly(
                     color = "indigo"
             else:
                 color = "grey"
+            if plot_map:
+                edge_scatter = go.Scattermapbox(
+                    mode="lines",
+                    lon=edge_x,
+                    lat=edge_y,
+                    hoverinfo="none",
+                    opacity=0.8,
+                    showlegend=False,
+                    line=dict(
+                        width=2,
+                        color=color,
+                    ),
+                )
+            else:
+                edge_scatter = go.Scatter(
+                    mode="lines",
+                    x=edge_x,
+                    y=edge_y,
+                    hoverinfo="none",
+                    opacity=0.8,
+                    showlegend=False,
+                    line=dict(
+                        width=2,
+                        color=color,
+                    ),
+                )
 
-            edge_scatter = go.Scatter(
-                mode="lines",
-                x=edge_x,
-                y=edge_y,
-                hoverinfo="none",
-                opacity=0.8,
-                showlegend=False,
-                line=dict(
-                    width=2,
-                    color=color,
-                ),
-            )
             data_line_plot.append(edge_scatter)
 
         if line_color:
@@ -1304,7 +1323,6 @@ def plot_plotly(
 
         for node in G.nodes():
             x, y = G.nodes[node]["pos"]
-            x, y = transformer_4326_to_3035.transform(x, y)
             node_x.append(x - x_root)
             node_y.append(y - y_root)
 
@@ -1364,33 +1382,50 @@ def plot_plotly(
             text = text + "<br>" + "Neighbors = " + str(G.degree(node))
 
             node_parameters = edisgo_obj.topology.buses_df.loc[node]
-            for index, value in node_parameters.iteritems():
+            for index, value in node_parameters.items():
                 text += "<br>" + str(index) + " = " + str(value)
 
             node_text.append(text)
+        if plot_map:
+            node_scatter = go.Scattermapbox(
+                lon=node_x,
+                lat=node_y,
+                mode="markers",
+                hoverinfo="text",
+                text=node_text,
+                marker=dict(
+                    showscale=showscale,
+                    colorscale=colorscale,
+                    color=node_colors,
+                    size=8,
+                    cmid=cmid,
+                    colorbar=colorbar,
+                ),
+            )
+        else:
+            node_scatter = go.Scatter(
+                x=node_x,
+                y=node_y,
+                mode="markers",
+                hoverinfo="text",
+                text=node_text,
+                marker=dict(
+                    showscale=showscale,
+                    colorscale=colorscale,
+                    color=node_colors,
+                    size=8,
+                    cmid=cmid,
+                    line_width=2,
+                    colorbar=colorbar,
+                ),
+            )
 
-        node_scatter = go.Scatter(
-            x=node_x,
-            y=node_y,
-            mode="markers",
-            hoverinfo="text",
-            text=node_text,
-            marker=dict(
-                showscale=showscale,
-                colorscale=colorscale,
-                color=node_colors,
-                size=8,
-                cmid=cmid,
-                line_width=2,
-                colorbar=colorbar,
-            ),
-        )
         return [node_scatter]
 
     fig = go.Figure(
-        data=plot_line_text() + plot_lines() + plot_buses(),
+        data=plot_lines() + plot_buses() + plot_line_text(),
         layout=go.Layout(
-            height=500,
+            height=height,
             showlegend=False,
             hovermode="closest",
             margin=dict(b=20, l=5, r=5, t=40),
@@ -1405,6 +1440,16 @@ def plot_plotly(
                 showticklabels=True,
                 scaleanchor="x",
                 scaleratio=1,
+            ),
+            mapbox=dict(
+                # bearing=0,
+                center=dict(
+                    lat=y_center,
+                    lon=x_center,
+                ),
+                # pitch=0,
+                zoom=11,
+                style="open-street-map",
             ),
         ),
     )
@@ -1470,7 +1515,9 @@ def chosen_graph(
 
 
 def plot_dash_app(
-    edisgo_objects: EDisGo | dict[str, EDisGo], debug: bool = False
+    edisgo_objects: EDisGo | dict[str, EDisGo],
+    debug: bool = False,
+    height: int = 500,
 ) -> JupyterDash:
     """
     Generates a jupyter dash app from given eDisGo object(s).
@@ -1481,6 +1528,9 @@ def plot_dash_app(
         eDisGo objects to show in plotly dash app. In the case of multiple edisgo
         objects pass a dictionary with the eDisGo objects as values and the respective
         eDisGo object names as keys.
+
+    height : int
+        Height of the plotly plot in pixels.
 
     debug : bool
         Debugging for the dash app:
@@ -1543,10 +1593,11 @@ def plot_dash_app(
 
     app = JupyterDash(__name__)
     # Workaround to use standard python logging with plotly dash
-    logger.handlers.pop()
     if debug:
         app.logger.disabled = False
         app.logger.setLevel(logging.DEBUG)
+    else:
+        app.logger.disabled = True
 
     if isinstance(edisgo_objects, dict) and len(edisgo_objects) > 1:
         app.layout = html.Div(
@@ -1662,17 +1713,41 @@ def plot_dash_app(
                     [
                         html.Div(
                             [
-                                html.Label("Pseudo coordinates"),
-                                dcc.RadioItems(
-                                    id="radioitems_pseudo_coordinates",
-                                    options=[
-                                        {"label": "False", "value": False},
-                                        {"label": "True", "value": True},
+                                html.Div(
+                                    [
+                                        html.Label("Pseudo coordinates"),
+                                        dcc.RadioItems(
+                                            id="radioitems_pseudo_coordinates",
+                                            options=[
+                                                {"label": "False", "value": False},
+                                                {"label": "True", "value": True},
+                                            ],
+                                            value=False,
+                                        ),
                                     ],
-                                    value=False,
+                                    style={"padding": padding, "flex": 1},
+                                ),
+                                html.Div(
+                                    [
+                                        html.Label("Plot map"),
+                                        dcc.RadioItems(
+                                            id="radioitems_plot_map",
+                                            options=[
+                                                {"label": "False", "value": False},
+                                                {"label": "True", "value": True},
+                                            ],
+                                            value=False,
+                                        ),
+                                    ],
+                                    style={"padding": padding, "flex": 1},
                                 ),
                             ],
-                            style={"padding": padding, "flex": 1},
+                            style={
+                                "display": "flex",
+                                "flex-direction": "row",
+                                "padding": 0,
+                                "flex": 1,
+                            },
                         ),
                         html.Div(
                             [
@@ -1794,6 +1869,7 @@ def plot_dash_app(
             Input("dropdown_line_plot_mode", "value"),
             Input("dropdown_node_plot_mode", "value"),
             Input("radioitems_pseudo_coordinates", "value"),
+            Input("radioitems_plot_map", "value"),
             Input("line_result_selection", "value"),
             Input("node_result_selection", "value"),
             Input("timestep_mode_radio", "value"),
@@ -1808,6 +1884,7 @@ def plot_dash_app(
             selected_line_plot_mode,
             selected_node_plot_mode,
             pseudo_coordinates,
+            plot_map,
             line_result_selection,
             node_result_selection,
             timestep_mode,
@@ -1848,7 +1925,8 @@ def plot_dash_app(
                 node_result_selection=node_result_selection,
                 selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
-                center_coordinates=True,
+                plot_map=plot_map,
+                height=height,
             )
 
             edisgo_obj = edisgo_objects[selected_edisgo_object_2]
@@ -1863,7 +1941,8 @@ def plot_dash_app(
                 node_result_selection=node_result_selection,
                 selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
-                center_coordinates=True,
+                plot_map=plot_map,
+                height=height,
             )
 
             return fig_1, fig_2
@@ -1926,17 +2005,41 @@ def plot_dash_app(
                     [
                         html.Div(
                             [
-                                html.Label("Pseudo coordinates"),
-                                dcc.RadioItems(
-                                    id="radioitems_pseudo_coordinates",
-                                    options=[
-                                        {"label": "False", "value": False},
-                                        {"label": "True", "value": True},
+                                html.Div(
+                                    [
+                                        html.Label("Pseudo coordinates"),
+                                        dcc.RadioItems(
+                                            id="radioitems_pseudo_coordinates",
+                                            options=[
+                                                {"label": "False", "value": False},
+                                                {"label": "True", "value": True},
+                                            ],
+                                            value=False,
+                                        ),
                                     ],
-                                    value=False,
+                                    style={"padding": padding, "flex": 1},
+                                ),
+                                html.Div(
+                                    [
+                                        html.Label("Plot map"),
+                                        dcc.RadioItems(
+                                            id="radioitems_plot_map",
+                                            options=[
+                                                {"label": "False", "value": False},
+                                                {"label": "True", "value": True},
+                                            ],
+                                            value=False,
+                                        ),
+                                    ],
+                                    style={"padding": padding, "flex": 1},
                                 ),
                             ],
-                            style={"padding": padding, "flex": 1},
+                            style={
+                                "display": "flex",
+                                "flex-direction": "row",
+                                "padding": 0,
+                                "flex": 1,
+                            },
                         ),
                         html.Div(
                             [
@@ -2049,6 +2152,7 @@ def plot_dash_app(
             Input("dropdown_line_plot_mode", "value"),
             Input("dropdown_node_plot_mode", "value"),
             Input("radioitems_pseudo_coordinates", "value"),
+            Input("radioitems_plot_map", "value"),
             Input("line_result_selection", "value"),
             Input("node_result_selection", "value"),
             Input("timestep_mode_radio", "value"),
@@ -2061,6 +2165,7 @@ def plot_dash_app(
             selected_line_plot_mode,
             selected_node_plot_mode,
             pseudo_coordinates,
+            plot_map,
             line_result_selection,
             node_result_selection,
             timestep_mode,
@@ -2099,7 +2204,8 @@ def plot_dash_app(
                 node_result_selection=node_result_selection,
                 selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
-                center_coordinates=True,
+                plot_map=plot_map,
+                height=height,
             )
 
             return fig
@@ -2112,6 +2218,7 @@ def plot_dash(
     mode: str = "inline",
     debug: bool = False,
     port: int = 8050,
+    height: int = 820,
 ):
     """
     Shows the generated jupyter dash app from given eDisGo object(s).
@@ -2139,11 +2246,14 @@ def plot_dash(
     port : int
         Port which the app uses. Default: 8050.
 
+    height : int
+        Height of the jupyter dash cell.
+
     """
-    app = plot_dash_app(edisgo_objects, debug=debug)
+    app = plot_dash_app(edisgo_objects, debug=debug, height=height - 300)
     log = logging.getLogger("werkzeug")
     log.setLevel(logging.ERROR)
-    app.run_server(mode=mode, debug=debug, height=820, port=port)
+    app.run_server(mode=mode, debug=debug, height=height, port=port)
 
 
 def plot_opf_results(  # ToDo: Plots für andere Komponenten hinzufügen + schön machen

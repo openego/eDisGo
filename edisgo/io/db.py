@@ -204,7 +204,7 @@ def session_scope_egon_data(engine: Engine):
 
 def sql_grid_geom(edisgo_obj: EDisGo) -> Geometry:
     return func.ST_GeomFromText(
-        str(edisgo_obj.topology.grid_district["geom"]),
+        edisgo_obj.topology.grid_district["geom"].wkt,
         edisgo_obj.topology.grid_district["srid"],
     )
 
@@ -215,14 +215,28 @@ def get_srid_of_db_table(session: Session, geom_col: InstrumentedAttribute) -> i
     return pd.read_sql(sql=query.statement, con=query.session.bind).iat[0, 0]
 
 
-def sql_within(geom_col: InstrumentedAttribute, geom_shape: Geometry, srid: int):
+def sql_within(geom_a: Geometry, geom_b: Geometry, srid: int):
+    """
+    Checks if geometry a is completely within geometry b.
+
+    Parameters
+    ----------
+    geom_a : Geometry
+        Geometry within `geom_b`.
+    geom_b : Geometry
+        Geometry containing `geom_a`.
+    srid : int
+        SRID geometries are transformed to in order to use the same SRID for both
+        geometries.
+
+    """
     return func.ST_Within(
         func.ST_Transform(
-            geom_col,
+            geom_a,
             srid,
         ),
         func.ST_Transform(
-            geom_shape,
+            geom_b,
             srid,
         ),
     )
