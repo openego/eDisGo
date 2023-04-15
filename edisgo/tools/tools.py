@@ -1113,11 +1113,10 @@ def get_sample_using_time(
         for attr in [
             "dsm_active_power",
             "electromobility_active_power",
-            "geothermal_energy_feedin_district_heating",
             "heat_pump_central_active_power",
             "heat_pump_decentral_active_power",
             "renewables_curtailment",
-            "solarthermal_energy_feedin_district_heating",
+            "feedin_district_heating",
             "storage_units_active_power",
         ]:
             if not getattr(edisgo_obj.overlying_grid, attr).empty:

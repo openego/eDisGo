@@ -1062,18 +1062,18 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
                 comparison.index[comparison.values].values
             )
         )
-    # ToDo: filter via district id
-    # feedin_district_heating = edisgo_obj.overlying_grid.feedin_district_heating
-    # Other thermal feed-in into district heating per district heating area (in
-    #    columns) and time step (in index) in MW.
-
-    # if not (geothermal_feedin.empty | solarthermal_feedin.empty):
-    #     # reduce heat demand of district heating by geothermal and solarthermal feedin
-    #     heat_df2[heat_df2.columns.str.contains("district")] = (
-    #         heat_df2[heat_df2.columns.str.contains("district")].values
-    #         - solarthermal_feedin.values
-    #         - geothermal_feedin.values
-    #     ).clip(min=0)
+    feedin_district_heating = edisgo_obj.overlying_grid.feedin_district_heating
+    if not feedin_district_heating.empty:
+        # reduce heat demand of district heating by feedin
+        for district in feedin_district_heating.columns:
+            district_hps = edisgo_obj.topology.loads_df.loc[
+                edisgo_obj.topology.loads_df.district_heating_id == district
+            ].index
+            # ToDo: if len(district_hps) == 2: eine Zeitreihe auf 0 setzen,
+            #  die andere um feedin reduzieren
+            heat_df2[district_hps] = (
+                heat_df2[district_hps].values - feedin_district_heating.values
+            ).clip(min=0)
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
