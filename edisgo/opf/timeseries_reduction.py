@@ -105,19 +105,19 @@ def _scored_most_critical_loading_time_interval(edisgo_obj, window_days):
     crit_lines_cost = crit_lines_score * costs
     # Get most "expensive" time intervall over all components
     crit_timesteps = (
-        crit_lines_cost.rolling(window=window_days * 24, closed="right")
+        crit_lines_cost.rolling(window=int(window_days * 24), closed="right")
         .max()
         .sum(axis=1)
     )
     # time intervall starts at 4am on every considered day
     crit_timesteps = (
-        crit_timesteps.iloc[window_days * 24 - 1 :]
+        crit_timesteps.iloc[int(window_days * 24) - 1 :]
         .iloc[5::24]
         .sort_values(ascending=False)
     )
-    timesteps = crit_timesteps.index - pd.DateOffset(days=window_days)
+    timesteps = crit_timesteps.index - pd.DateOffset(hours=int(window_days * 24))
     time_intervals = [
-        pd.date_range(start=timestep, periods=window_days * 24 + 1, freq="h")
+        pd.date_range(start=timestep, periods=int(window_days * 24) + 1, freq="h")
         for timestep in timesteps
     ]
     time_intervals_df = pd.DataFrame(
@@ -275,19 +275,19 @@ def _scored_most_critical_voltage_issues_time_interval(edisgo_obj, window_days):
     # Todo: should there be different ones for over and undervoltage?
     # Get most "expensive" time intervall over all feeders
     crit_timesteps = (
-        voltage_diff_feeder.rolling(window=window_days * 24, closed="right")
+        voltage_diff_feeder.rolling(window=int(window_days * 24), closed="right")
         .max()
         .sum(axis=1)
     )
     # time intervall starts at 4am on every considered day
     crit_timesteps = (
-        crit_timesteps.iloc[window_days * 24 - 1 :]
+        crit_timesteps.iloc[int(window_days * 24) - 1 :]
         .iloc[5::24]
         .sort_values(ascending=False)
     )
-    timesteps = crit_timesteps.index - pd.DateOffset(days=window_days)
+    timesteps = crit_timesteps.index - pd.DateOffset(hours=int(window_days * 24))
     time_intervals = [
-        pd.date_range(start=timestep, periods=window_days * 24 + 1, freq="h")
+        pd.date_range(start=timestep, periods=int(window_days * 24) + 1, freq="h")
         for timestep in timesteps
     ]
     time_intervals_df = pd.DataFrame(
@@ -487,8 +487,7 @@ def get_steps_storage(edisgo_obj, window=5):
 
 def get_steps_flex_opf(
     edisgo_obj,
-    num_ti_loading=None,
-    num_ti_voltage=None,
+    num_ti=None,
     percentage=0.1,
     window_days=7,
     save_steps=False,
@@ -501,12 +500,9 @@ def get_steps_flex_opf(
     -----------
     edisgo_obj : :class:`~.EDisGo`
         The eDisGo API object
-    num_ti_loading: int
-        The number of most critical overloading time intervals to select, if None
+    num_ti: int
+        The number of most critical line loading and voltage issues to select. If None
         percentage is used. Default: None
-    num_ti_voltage: int
-        The number of most critical voltage issues to select, if None percentage is
-        used. Default: None
     percentage : float
         The percentage of most critical time intervals to select. Default: 0.1
     window_days : int
@@ -534,35 +530,35 @@ def get_steps_flex_opf(
     loading_scores = _scored_most_critical_loading_time_interval(
         edisgo_obj, window_days
     )
-    if num_ti_loading is None:
-        num_ti_loading = int(np.ceil(len(loading_scores.OL_ts) * percentage))
+    if num_ti is None:
+        num_ti = int(np.ceil(len(loading_scores) * percentage))
     else:
-        if num_ti_loading > len(loading_scores.OL_ts):
+        if num_ti > len(loading_scores):
             logger.info(
                 f"The number of time intervals with highest overloading "
-                f"({len(loading_scores.OL_ts)}) is lower than the defined number of "
-                f"loading time intervals ({num_ti_loading}). Therefore, only "
-                f"{len(loading_scores.OL_ts)} time intervals are exported."
+                f"({len(loading_scores)}) is lower than the defined number of "
+                f"loading time intervals ({num_ti}). Therefore, only "
+                f"{len(loading_scores)} time intervals are exported."
             )
-            num_ti_loading = len(loading_scores.OL_ts)
-    steps = loading_scores.iloc[:num_ti_loading]
+            num_ti = len(loading_scores)
+    steps = loading_scores.iloc[:num_ti]
 
     # Select most critical steps based on voltage violations
     voltage_scores = _scored_most_critical_voltage_issues_time_interval(
         edisgo_obj, window_days
     )
-    if num_ti_voltage is None:
-        num_ti_voltage = int(np.ceil(len(voltage_scores.V_ts) * percentage))
+    if num_ti is None:
+        num_ti = int(np.ceil(len(voltage_scores) * percentage))
     else:
-        if num_ti_voltage > len(voltage_scores.V_ts):
+        if num_ti > len(voltage_scores):
             logger.info(
                 f"The number of time steps with highest voltage issues "
-                f"({len(voltage_scores.V_ts)}) is lower than the defined number of "
-                f"voltage time steps ({num_ti_voltage}). Therefore, only "
-                f"{len(voltage_scores.V_ts)} time steps are exported."
+                f"({len(voltage_scores)}) is lower than the defined number of "
+                f"voltage time steps ({num_ti}). Therefore, only "
+                f"{len(voltage_scores)} time steps are exported."
             )
-            num_ti_voltage = len(voltage_scores.V_ts)
-    steps = pd.concat([steps, voltage_scores.iloc[:num_ti_voltage]], axis=1)
+            num_ti = len(voltage_scores)
+    steps = pd.concat([steps, voltage_scores.iloc[:num_ti]], axis=1)
 
     if len(steps) == 0:
         logger.warning("No critical steps detected. No network expansion required.")
@@ -641,8 +637,21 @@ def get_linked_steps(cluster_params, num_steps=24, keep_steps=[]):
 
 
 def distribute_overlying_grid_timeseries(edisgo_obj):
+    """
+    Distributes overlying grid timeseries of flexibilities for temporal complexity
+    reduction.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object
+
+    Returns
+    --------
+    :class:`~.EDisGo`
+        Contains adjusted timeseries for flexibilities.
+    """
     edisgo_copy = deepcopy(edisgo_obj)
-    a = False
     if not edisgo_copy.overlying_grid.electromobility_active_power.empty:
         cp_loads = edisgo_obj.topology.loads_df.index[
             edisgo_obj.topology.loads_df.type == "charging_point"
@@ -654,21 +663,12 @@ def distribute_overlying_grid_timeseries(edisgo_obj):
         ).transpose()
         edisgo_copy.timeseries._loads_active_power.loc[:, cp_loads] = (
             scaling_df.transpose()
-            * edisgo_copy.overlying_grid.storage_units_active_power
+            * edisgo_obj.overlying_grid.electromobility_active_power
         ).transpose()
-        a = True
-        # Scale dumb charging timeseries
-        # scaling_factor = edisgo_copy.overlying_grid.electromobility_active_power /
-        # edisgo_copy.timeseries.loads_active_power.loc[
-        #                                                   :,cp_loads].sum(axis=1)
-        # edisgo_copy.timeseries._loads_active_power.loc[
-        # :,
-        # cp_loads] = (edisgo_copy.timeseries.loads_active_power.loc[
-        # :,cp_loads].transpose() * scaling_factor).transpose()
     if not edisgo_copy.overlying_grid.storage_units_active_power.empty:
         scaling_factor = (
-            edisgo_copy.topology.storage_units_df.p_nom
-            / edisgo_copy.topology.storage_units_df.p_nom.sum()
+            edisgo_obj.topology.storage_units_df.p_nom
+            / edisgo_obj.topology.storage_units_df.p_nom.sum()
         )
         scaling_df = pd.DataFrame(
             columns=scaling_factor.index,
@@ -681,20 +681,28 @@ def distribute_overlying_grid_timeseries(edisgo_obj):
         )
         edisgo_copy.timeseries._storage_units_active_power = (
             scaling_df.transpose()
-            * edisgo_copy.overlying_grid.storage_units_active_power
+            * edisgo_obj.overlying_grid.storage_units_active_power
         ).transpose()
-        a = True
     if not edisgo_copy.overlying_grid.heat_pump_central_active_power.empty:
-        hp_district = edisgo_obj.topology.loads_df.index[
+        hp_district = edisgo_obj.topology.loads_df[
             (edisgo_obj.topology.loads_df.type == "heat_pump")
-            & ~(edisgo_obj.topology.loads_df.sector == "individual_heating")
-            # ToDo: sector?
+            & (edisgo_obj.topology.loads_df.sector == "district_heating")
         ]
-        # ToDo: mehrere district heatings möglich
-        edisgo_copy.timeseries._loads_active_power.loc[
-            :, hp_district
-        ] = edisgo_copy.overlying_grid.heat_pump_central_active_power.sum(axis=1)[0]
-        a = True
+        scaling_factor = hp_district.p_set / hp_district.p_set.sum()
+        scaling_df = pd.DataFrame(
+            columns=scaling_factor.index,
+            index=edisgo_copy.timeseries.timeindex,
+            data=pd.concat(
+                [scaling_factor] * len(edisgo_copy.timeseries.timeindex), axis=1
+            )
+            .transpose()
+            .values,
+        )
+        edisgo_copy.timeseries._loads_active_power.loc[:, hp_district.index] = (
+            scaling_df.transpose()
+            * edisgo_obj.overlying_grid.heat_pump_central_active_power.sum(axis=1)[0]
+        ).transpose()
+
     if not edisgo_copy.overlying_grid.heat_pump_decentral_active_power.empty:
         hp_individual = edisgo_obj.topology.loads_df.index[
             (edisgo_obj.topology.loads_df.type == "heat_pump")
@@ -716,92 +724,59 @@ def distribute_overlying_grid_timeseries(edisgo_obj):
         )
         edisgo_copy.timeseries._loads_active_power.loc[:, hp_individual] = (
             scaling_df.transpose()
-            * edisgo_copy.overlying_grid.heat_pump_decentral_active_power
+            * edisgo_obj.overlying_grid.heat_pump_decentral_active_power
         ).transpose()
-        a = True
-        # scale with original heat pump time series
-        # scaling_factor = (edisgo_copy.overlying_grid.heat_pump_decentral_active_power
-        #                       /
-        #                   edisgo_copy.timeseries.loads_active_power.loc[:,
-        #                   hp_decentral].sum(axis=1))
-        # edisgo_copy.timeseries._loads_active_power.loc[
-        # :,hp_decentral] = (edisgo_copy.timeseries.loads_active_power.loc[
-        #                     :,hp_decentral].transpose() * scaling_factor).transpose()
     if not edisgo_copy.overlying_grid.dsm_active_power.empty:
-        dsm_loads = edisgo_copy.dsm.p_max.columns
-        scaling_df_max = (
-            edisgo_copy.dsm.p_max.transpose() / edisgo_copy.dsm.p_max.sum(axis=1)
-        ).transpose()
-        scaling_df_min = (
-            edisgo_copy.dsm.p_min.transpose() / edisgo_copy.dsm.p_min.sum(axis=1)
-        ).transpose()
-        # ToDo: check ob richtig implementiert
-        edisgo_copy.timeseries._loads_active_power.loc[:, dsm_loads] = (
-            edisgo_copy.timeseries._loads_active_power.loc[:, dsm_loads]
-            + (
-                scaling_df_min.transpose()
-                * edisgo_copy.overlying_grid.dsm_active_power.clip(upper=0)
+        try:
+            dsm_loads = edisgo_copy.dsm.p_max.columns
+            scaling_df_max = (
+                edisgo_copy.dsm.p_max.transpose() / edisgo_copy.dsm.p_max.sum(axis=1)
             ).transpose()
-            + (
-                scaling_df_max.transpose()
-                * edisgo_copy.overlying_grid.dsm_active_power.clip(lower=0)
+            scaling_df_min = (
+                edisgo_copy.dsm.p_min.transpose() / edisgo_copy.dsm.p_min.sum(axis=1)
             ).transpose()
-        )
-        a = True
+            edisgo_copy.timeseries._loads_active_power.loc[:, dsm_loads] = (
+                edisgo_obj.timeseries._loads_active_power.loc[:, dsm_loads]
+                + (
+                    scaling_df_min.transpose()
+                    * edisgo_obj.overlying_grid.dsm_active_power.clip(upper=0)
+                ).transpose()
+                + (
+                    scaling_df_max.transpose()
+                    * edisgo_obj.overlying_grid.dsm_active_power.clip(lower=0)
+                ).transpose()
+            )
+        except AttributeError:
+            logger.warning(
+                "'EDisGo' object has no attribute 'dsm'. DSM timeseries from"
+                " overlying grid can not be distributed."
+            )
     if not edisgo_copy.overlying_grid.renewables_curtailment.empty:
-        # solar
-        solar_gens = edisgo_obj.topology.generators_df.index[
-            edisgo_obj.topology.generators_df.type == "solar"
-        ]
-        gen_per_ts = edisgo_copy.timeseries.generators_active_power.loc[
-            :, solar_gens
-        ].sum(axis=1)
-        scaling_factor = (
-            (
-                edisgo_copy.timeseries.generators_active_power.loc[
-                    :, solar_gens
-                ].transpose()
-                * 1
-                / gen_per_ts
+        for res in ["solar", "wind"]:
+            gens = edisgo_obj.topology.generators_df.index[
+                edisgo_obj.topology.generators_df.type == res
+            ]
+            gen_per_ts = edisgo_obj.timeseries.generators_active_power.loc[:, gens].sum(
+                axis=1
             )
-            .transpose()
-            .fillna(0)
-        )
-        curtailment = (
-            scaling_factor.transpose()
-            * edisgo_obj.overlying_grid.renewables_curtailment.solar
-        ).transpose()
-        edisgo_copy.timeseries._generators_active_power.loc[:, solar_gens] = (
-            edisgo_copy.timeseries._generators_active_power.loc[:, solar_gens]
-            - curtailment
-        )
-        # wind
-        wind_gens = edisgo_obj.topology.generators_df.index[
-            edisgo_obj.topology.generators_df.type == "wind"
-        ]
-        gen_per_ts = edisgo_copy.timeseries.generators_active_power.loc[
-            :, wind_gens
-        ].sum(axis=1)
-        scaling_factor = (
-            (
-                edisgo_copy.timeseries.generators_active_power.loc[
-                    :, wind_gens
-                ].transpose()
-                * 1
-                / gen_per_ts
+            scaling_factor = (
+                (
+                    edisgo_obj.timeseries.generators_active_power.loc[
+                        :, gens
+                    ].transpose()
+                    * 1
+                    / gen_per_ts
+                )
+                .transpose()
+                .fillna(0)
             )
-            .transpose()
-            .fillna(0)
-        )
-        curtailment = (
-            scaling_factor.transpose()
-            * edisgo_obj.overlying_grid.renewables_curtailment.solar
-        ).transpose()
-        edisgo_copy.timeseries._generators_active_power.loc[:, wind_gens] = (
-            edisgo_copy.timeseries._generators_active_power.loc[:, wind_gens]
-            - curtailment
-        )
-        a = True
-    if a:
-        edisgo_copy.set_time_series_reactive_power_control()
+            curtailment = (
+                scaling_factor.transpose()
+                * edisgo_obj.overlying_grid.renewables_curtailment[res]
+            ).transpose()
+            edisgo_copy.timeseries._generators_active_power.loc[:, gens] = (
+                edisgo_obj.timeseries.generators_active_power.loc[:, gens] - curtailment
+            )
+
+    edisgo_copy.set_time_series_reactive_power_control()
     return edisgo_copy
