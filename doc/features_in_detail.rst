@@ -351,14 +351,7 @@ mapping each bus in the original grid to a new bus in the clustered grid. Then, 
 the busmap, the eDisGo object is reduced. Some parts of the methods are based on the spatial clustering of [PyPSA]_.
 
 You can apply the complexity reduction by calling the function
-:py:func:`~edisgo.tools.spatial_complexity_reduction.spatial_complexity_reduction`:
-
-.. code-block:: python
-
-    from edisgo.tools.spatial_complexity_reduction import spatial_complexity_reduction
-
-    # call spatial complexity reduction with default values
-    edisgo_reduced, busmap_df, linemap_df = spatial_complexity_reduction(edisgo_obj)
+:py:attr:`~EDisGo.spatial_complexity_reduction`.
 
 Important is that all grid buses have coordinates and the line length can be calculated through the Euclidean distance
 and a detour factor. If the grids do not match these conditions, the complexity reduction might not work as expected.
@@ -392,9 +385,9 @@ of the number of nodes and vice versa.
 Also, there is the possibility to reduce the number of nodes to a larger degree in areas with no predicted reinforcement
 through the parameter 'reduction_factor_not_focused'.
 The areas which are not focused, are
-the areas that do not have components with voltage and overloading problems for the worst case power flow.
+the areas that do not have components with voltage and overloading problems in the worst case power flow.
 
-For the reduction of the grid graph, the function :py:func:`~edisgo.tools.spatial_complexity_reduction.reduce_edisgo` is used.
+For the reduction of the grid graph, the function :py:func:`~edisgo.tools.spatial_complexity_reduction.apply_busmap` is used.
 With this method, every line and all their
 parameters are recalculated and sometimes lines are combined to a new line. This is the part where the magic of
 reducing the grid object happens. For more information, read: [HoerschBrown]_ and [SCR]_.
@@ -403,7 +396,7 @@ If you want more flexibility in using the complexity reduction, you can also run
 
 .. code-block:: python
 
-    from edisgo.tools.spatial_complexity_reduction import make_busmap, reduce_edisgo
+    from edisgo.tools.spatial_complexity_reduction import make_busmap, apply_busmap
     from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates
 
     # create pseudo coordinates
@@ -418,7 +411,7 @@ If you want more flexibility in using the complexity reduction, you can also run
         reduction_factor_not_focused=k_rf_not_focused',  # 0 <= k_rf_not_focused < 1
     )
     # reduce EDisGo object
-    edisgo_reduced, linemap_df = reduce_edisgo(edisgo_obj, busmap_df)
+    edisgo_reduced, linemap_df = apply_busmap(edisgo_obj, busmap_df)
 
 For more details see the API documentation or the thesis where the methods were implemented and tested [SCR]_.
 

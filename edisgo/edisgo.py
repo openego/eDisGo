@@ -2730,9 +2730,11 @@ class EDisGo:
 
         Returns
         -------
-        tuple(:pandas:`pandas.DataFrame<DataFrame>`,
-        :pandas:`pandas.DataFrame<DataFrame>`)
-            Returns busmap and linemap dataframes.
+        tuple(:class:`~.EDisGo`, :pandas:`pandas.DataFrame<DataFrame>`,\
+            :pandas:`pandas.DataFrame<DataFrame>`)
+            Returns the EDisGo object (which is only relevant in case the parameter
+            `copy_edisgo` was set to True), as well as the busmap and linemap
+            dataframes.
             The busmap maps the original busses to the new busses with new coordinates.
             Columns are "new_bus" with new bus name, "new_x" with new x-coordinate and
             "new_y" with new y-coordinate. Index of the dataframe holds bus names of
@@ -3072,7 +3074,7 @@ def import_edisgo_from_files(
         `parameters` parameter in :func:`~.network.results.Results.to_csv`
         for more information.
 
-    Results
+    Returns
     ---------
     :class:`~.EDisGo`
         Restored EDisGo object.
