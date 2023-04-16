@@ -1059,33 +1059,34 @@ def get_sample_using_time(
         if save_ev_soc_initial:
             # timestep EV SOC from timestep before if possible
             ts_before = pd.to_datetime(timeframe[0]) - pd.Timedelta(hours=1)
-            try:
-                initial_soc_cp = (
-                    1
-                    / 2
-                    * (
-                        edisgo_obj.electromobility.flexibility_bands[
-                            "upper_energy"
-                        ].loc[ts_before]
-                        + edisgo_obj.electromobility.flexibility_bands[
-                            "lower_energy"
-                        ].loc[ts_before]
+            if not edisgo_obj.electromobility.flexibility_bands["upper_energy"].empty:
+                try:
+                    initial_soc_cp = (
+                        1
+                        / 2
+                        * (
+                            edisgo_obj.electromobility.flexibility_bands[
+                                "upper_energy"
+                            ].loc[ts_before]
+                            + edisgo_obj.electromobility.flexibility_bands[
+                                "lower_energy"
+                            ].loc[ts_before]
+                        )
                     )
-                )
-            except KeyError:
-                initial_soc_cp = (
-                    1
-                    / 2
-                    * (
-                        edisgo_obj.electromobility.flexibility_bands[
-                            "upper_energy"
-                        ].loc[timeframe[0]]
-                        + edisgo_obj.electromobility.flexibility_bands[
-                            "lower_energy"
-                        ].loc[timeframe[0]]
+                except KeyError:
+                    initial_soc_cp = (
+                        1
+                        / 2
+                        * (
+                            edisgo_obj.electromobility.flexibility_bands[
+                                "upper_energy"
+                            ].loc[timeframe[0]]
+                            + edisgo_obj.electromobility.flexibility_bands[
+                                "lower_energy"
+                            ].loc[timeframe[0]]
+                        )
                     )
-                )
-            edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
+                edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
         for key, df in edisgo_obj.electromobility.flexibility_bands.items():
             if not df.empty:
                 df = df.loc[timeframe]
