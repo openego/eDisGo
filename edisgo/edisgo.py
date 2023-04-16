@@ -42,6 +42,7 @@ from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
+from edisgo.tools.spatial_complexity_reduction import spatial_complexity_reduction
 from edisgo.tools.tools import determine_grid_integration_voltage_level
 
 if "READTHEDOCS" not in os.environ:
@@ -2614,6 +2615,146 @@ class EDisGo:
             to_type=kwargs.get("to_type", "float32"),
             attr_to_reduce=kwargs.get("overlying_grid_attr_to_reduce", None),
         )
+
+    def spatial_complexity_reduction(
+        self,
+        copy_edisgo: bool = False,
+        mode: str = "kmeansdijkstra",
+        cluster_area: str = "feeder",
+        reduction_factor: float = 0.25,
+        reduction_factor_not_focused: bool | float = False,
+        apply_pseudo_coordinates: bool = True,
+        **kwargs,
+    ) -> tuple[EDisGo, pd.DataFrame, pd.DataFrame]:
+        """
+        Reduces the number of busses and lines by applying a spatial clustering.
+
+        Per default, this function creates pseudo coordinates for all busses in the LV
+        grids (see function :func:`~.tools.pseudo_coordinates.make_pseudo_coordinates`).
+        In case LV grids are not geo-referenced, this is a necessary step. If they are
+        already geo-referenced it can still be useful to obtain better results.
+
+        Which busses are clustered is determined in function
+        :func:`~.tools.spatial_complexity_reduction.make_busmap`.
+        The clustering method used can be specified through the parameter `mode`.
+        Further, the clustering can be applied to different areas such as the whole grid
+        or the separate feeders, which is specified through the parameter
+        `cluster_area`, and to different degrees, specified through the parameter
+        `reduction_factor`.
+
+        The actual spatial reduction of the EDisGo object is conducted in function
+        :func:`~.tools.spatial_complexity_reduction.apply_busmap`. The changes, such as
+        dropping of lines connecting the same buses and adapting buses loads, generators
+        and storage units are connected to, are applied directly in the Topology object.
+        If you want to keep information on the original grid, hand a copy of the EDisGo
+        object to this function. You can also set how loads and generators at clustered
+        busses are aggregated through the keyword arguments
+        `load_aggregation_mode` and `generator_aggregation_mode`.
+
+        Parameters
+        ----------
+        copy_edisgo : bool
+            Defines whether to apply the spatial complexity reduction directly on the
+            EDisGo object or on a copy. Per default, the complexity reduction is
+            directly applied.
+        mode : str
+            Clustering method to use. Possible options are "kmeans", "kmeansdijkstra",
+            "aggregate_to_main_feeder" or "equidistant_nodes". The clustering methods
+            "aggregate_to_main_feeder" and "equidistant_nodes" only work for the cluster
+            area "main_feeder".
+
+            - "kmeans":
+                Perform the k-means algorithm on the cluster area and then map the buses
+                to the cluster centers.
+            - "kmeansdijkstra":
+                Perform the k-means algorithm and then map the nodes to the cluster
+                centers through the shortest distance in the graph. The distances are
+                calculated using the dijkstra algorithm.
+            - "aggregate_to_main_feeder":
+                Aggregate the nodes in the feeder to the longest path in the feeder,
+                here called main feeder.
+            - "equidistant_nodes":
+                Uses the method "aggregate_to_main_feeder" and then reduces the nodes
+                again through a reduction of the nodes by the specified reduction factor
+                and distributing the remaining nodes on the graph equidistantly.
+
+            Default: "kmeansdijkstra".
+        cluster_area : str
+            The cluster area is the area the different clustering methods are applied
+            to. Possible options are 'grid', 'feeder' or 'main_feeder'.
+            Default: "feeder".
+        reduction_factor : float
+            Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
+        reduction_factor_not_focused : bool or float
+            If False, uses the same reduction factor for all cluster areas. If between 0
+            and 1, this sets the reduction factor for buses not of interest (these are
+            buses without voltage or overloading issues, that are determined through a
+            worst case power flow analysis). When selecting 0, the nodes of the
+            clustering area are aggregated to the transformer bus. This parameter is
+            only used when parameter `cluster_area` is set to 'feeder' or 'main_feeder'.
+            Default: False.
+        apply_pseudo_coordinates : bool
+            If True pseudo coordinates are applied. The spatial complexity reduction
+            method is only tested with pseudo coordinates. Default: True.
+
+        Other Parameters
+        -----------------
+        line_naming_convention : str
+            Determines how to set "type_info" and "kind" in case two or more lines are
+            aggregated. Possible options are "standard_lines" or "combined_name".
+            If "standard_lines" is selected, the values of the standard line of the
+            respective voltage level are used to set "type_info" and "kind".
+            If "combined_name" is selected, "type_info" and "kind" contain the
+            concatenated values of the merged lines. x and r of the lines are not
+            influenced by this as they are always determined from the x and r values of
+            the aggregated lines.
+            Default: "standard_lines".
+        aggregation_mode : bool
+            Specifies, whether to aggregate loads and generators at the same bus or not.
+            If True, loads and generators at the same bus are aggregated
+            according to their selected modes (see parameters `load_aggregation_mode`
+            and `generator_aggregation_mode`). Default: False.
+        load_aggregation_mode : str
+            Specifies, how to aggregate loads at the same bus, in case parameter
+            `aggregation_mode` is set to True. Possible options are "bus" or "sector".
+            If "bus" is chosen, loads are aggregated per bus. When "sector" is chosen,
+            loads are aggregated by bus, type and sector. Default: "sector".
+        generator_aggregation_mode : str
+            Specifies, how to aggregate generators at the same bus, in case parameter
+            `aggregation_mode` is set to True. Possible options are "bus" or "type".
+            If "bus" is chosen, generators are aggregated per bus. When "type" is
+            chosen, generators are aggregated by bus and type.
+        mv_pseudo_coordinates : bool, optional
+            If True pseudo coordinates are also generated for MV grid.
+            Default: False.
+
+        Returns
+        -------
+        tuple(:pandas:`pandas.DataFrame<DataFrame>`,
+        :pandas:`pandas.DataFrame<DataFrame>`)
+            Returns busmap and linemap dataframes.
+            The busmap maps the original busses to the new busses with new coordinates.
+            Columns are "new_bus" with new bus name, "new_x" with new x-coordinate and
+            "new_y" with new y-coordinate. Index of the dataframe holds bus names of
+            original buses as in buses_df.
+            The linemap maps the original line names (in the index of the dataframe) to
+            the new line names (in column "new_line_name").
+
+        """
+        if copy_edisgo is True:
+            edisgo_obj = copy.deepcopy(self)
+        else:
+            edisgo_obj = self
+        busmap_df, linemap_df = spatial_complexity_reduction(
+            edisgo_obj=edisgo_obj,
+            mode=mode,
+            cluster_area=cluster_area,
+            reduction_factor=reduction_factor,
+            reduction_factor_not_focused=reduction_factor_not_focused,
+            apply_pseudo_coordinates=apply_pseudo_coordinates,
+            **kwargs,
+        )
+        return edisgo_obj, busmap_df, linemap_df
 
     def check_integrity(self):
         """
