@@ -1552,6 +1552,47 @@ class TestEDisGo:
             og.dsm_active_power.memory_usage(deep=True),
         )
 
+    def test_spatial_complexity_reduction(self):
+        # test with copying edisgo object
+        (edisgo_obj, busmap_df, linemap_df,) = self.edisgo.spatial_complexity_reduction(
+            copy_edisgo=True,
+            mode="kmeans",
+            cluster_area="grid",
+            reduction_factor=0.2,
+            reduction_factor_not_focused=False,
+        )
+        # check for deterministic behaviour
+        assert len(self.edisgo.topology.buses_df) != len(edisgo_obj.topology.buses_df)
+        assert len(self.edisgo.topology.loads_df) == len(edisgo_obj.topology.loads_df)
+        assert len(self.edisgo.topology.generators_df) == len(
+            edisgo_obj.topology.generators_df
+        )
+        assert len(set(busmap_df["new_bus"].to_list())) == 32
+        assert len(edisgo_obj.topology.buses_df) == 32
+        assert len(set(linemap_df["new_line_name"].to_list())) == 23
+        assert len(edisgo_obj.topology.lines_df) == 23
+
+        # test without copying edisgo object
+        edisgo_orig = copy.deepcopy(self.edisgo)
+        (_, busmap_df, linemap_df,) = self.edisgo.spatial_complexity_reduction(
+            mode="kmeans",
+            cluster_area="grid",
+            reduction_factor=0.2,
+            reduction_factor_not_focused=False,
+            aggregation_mode=True,
+            mv_pseudo_coordinates=True,
+        )
+        # Check for deterministic behaviour
+        assert len(self.edisgo.topology.buses_df) == len(edisgo_obj.topology.buses_df)
+        assert len(edisgo_orig.topology.loads_df) != len(self.edisgo.topology.loads_df)
+        assert len(edisgo_orig.topology.generators_df) != len(
+            self.edisgo.topology.generators_df
+        )
+        assert len(self.edisgo.topology.loads_df) == 28
+        assert len(self.edisgo.topology.generators_df) == 17
+        assert len(set(busmap_df["new_bus"].to_list())) == 32
+        assert len(set(linemap_df["new_line_name"].to_list())) == 21
+
     def test_check_integrity(self, caplog):
         self.edisgo.check_integrity()
         assert (

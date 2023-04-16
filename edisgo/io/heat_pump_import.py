@@ -571,7 +571,7 @@ def _grid_integration(
             integrated_hps = integrated_hps.append(pd.Index([hp_name]))
 
         logger.debug(
-            f"{sum(resistive_heaters_central.p_set):.2f} MW of resistive heaters for"
+            f"{sum(resistive_heaters_central.p_set):.2f} MW of resistive heaters for "
             f"district heating integrated."
         )
 

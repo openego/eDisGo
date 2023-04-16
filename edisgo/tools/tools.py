@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
+from hashlib import md5
 from math import pi, sqrt
 from typing import TYPE_CHECKING
 
@@ -959,3 +960,24 @@ def get_year_based_on_scenario(scenario):
         return 2045
     else:
         return None
+
+
+def hash_dataframe(df: pd.DataFrame) -> str:
+    """
+    Get hash of dataframe.
+
+    Can be used to check if dataframes have the same content.
+
+    Parameters
+    -----------
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame to hash.
+
+    Returns
+    --------
+    str
+        Hash of dataframe as string.
+
+    """
+    s = df.to_json()
+    return md5(s.encode()).hexdigest()
