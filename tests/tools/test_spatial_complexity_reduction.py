@@ -11,18 +11,16 @@ from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates
 
 
 class TestSpatialComplexityReduction:
-    @pytest.fixture(scope="class")
+    @pytest.fixture(autouse=True)
     def test_edisgo_obj(self):
-        """EDisGo-object is set up only once, during class lifetime."""
         edisgo_root = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         edisgo_root.set_time_series_worst_case_analysis()
-        edisgo_root = make_pseudo_coordinates(edisgo_root)
+        make_pseudo_coordinates(edisgo_root)
         return edisgo_root
 
-    @pytest.fixture(scope="class")
-    def test_busmap_df(self, test_edisgo_obj):
+    def setup_busmap_df(self, edisgo_obj):
         busmap_df = spatial_complexity_reduction.make_busmap(
-            test_edisgo_obj,
+            edisgo_obj,
             mode="kmeansdijkstra",
             cluster_area="main_feeder",
             reduction_factor=0.25,
@@ -170,11 +168,9 @@ class TestSpatialComplexityReduction:
         test_exception,
         n_new_buses,
     ):
-        edisgo_root = copy.deepcopy(test_edisgo_obj)
-
         with test_exception:
             busmap_df = spatial_complexity_reduction.make_busmap(
-                edisgo_root,
+                test_edisgo_obj,
                 mode=mode,
                 cluster_area=cluster_area,
                 reduction_factor=reduction_factor,
@@ -204,19 +200,17 @@ class TestSpatialComplexityReduction:
         grid,
         n_buses,
     ):
-        edisgo_root = copy.deepcopy(test_edisgo_obj)
-
         if grid == "MVGrid":
             grid = spatial_complexity_reduction._make_grid_list(
-                edisgo_root, grid="MVGrid_1"
+                test_edisgo_obj, grid="MVGrid_1"
             )[0]
         elif grid == "LVGrid":
             grid = spatial_complexity_reduction._make_grid_list(
-                edisgo_root, grid="LVGrid_9"
+                test_edisgo_obj, grid="LVGrid_9"
             )[0]
 
         busmap_df = spatial_complexity_reduction.make_busmap(
-            edisgo_root,
+            test_edisgo_obj,
             mode="kmeans",
             grid=grid,
             cluster_area=cluster_area,
@@ -238,10 +232,9 @@ class TestSpatialComplexityReduction:
             ("combined_name", False, None, None, 50, 28),
         ],
     )
-    def test_reduce_edisgo(
+    def test_apply_busmap(
         self,
         test_edisgo_obj,
-        test_busmap_df,
         line_naming_convention,
         aggregation_mode,
         load_aggregation_mode,
@@ -249,24 +242,23 @@ class TestSpatialComplexityReduction:
         n_loads,
         n_generators,
     ):
-        edisgo_root = copy.deepcopy(test_edisgo_obj)
-        busmap_df = copy.deepcopy(test_busmap_df)
+        busmap_df = self.setup_busmap_df(test_edisgo_obj)
 
         # Add second line to test line reduction
-        edisgo_root.topology.lines_df.loc[
+        test_edisgo_obj.topology.lines_df.loc[
             "Line_10003_2"
-        ] = edisgo_root.topology.lines_df.loc["Line_10003"]
+        ] = test_edisgo_obj.topology.lines_df.loc["Line_10003"]
 
-        assert edisgo_root.topology.buses_df.shape[0] == 142
-        assert edisgo_root.topology.lines_df.shape[0] == 132
-        assert edisgo_root.topology.loads_df.shape[0] == 50
-        assert edisgo_root.topology.generators_df.shape[0] == 28
-        assert edisgo_root.topology.storage_units_df.shape[0] == 1
-        assert edisgo_root.topology.transformers_df.shape[0] == 14
-        assert edisgo_root.topology.switches_df.shape[0] == 2
+        assert test_edisgo_obj.topology.buses_df.shape[0] == 142
+        assert test_edisgo_obj.topology.lines_df.shape[0] == 132
+        assert test_edisgo_obj.topology.loads_df.shape[0] == 50
+        assert test_edisgo_obj.topology.generators_df.shape[0] == 28
+        assert test_edisgo_obj.topology.storage_units_df.shape[0] == 1
+        assert test_edisgo_obj.topology.transformers_df.shape[0] == 14
+        assert test_edisgo_obj.topology.switches_df.shape[0] == 2
 
-        linemap_df = spatial_complexity_reduction.reduce_edisgo(
-            edisgo_root,
+        linemap_df = spatial_complexity_reduction.apply_busmap(
+            test_edisgo_obj,
             busmap_df,
             line_naming_convention=line_naming_convention,
             aggregation_mode=aggregation_mode,
@@ -274,29 +266,29 @@ class TestSpatialComplexityReduction:
             generator_aggregation_mode=generator_aggregation_mode,
         )
 
-        assert edisgo_root.topology.buses_df.shape[0] == 43
-        assert edisgo_root.topology.lines_df.shape[0] == 34
-        assert edisgo_root.topology.loads_df.shape[0] == n_loads
-        assert edisgo_root.topology.generators_df.shape[0] == n_generators
-        assert edisgo_root.topology.storage_units_df.shape[0] == 1
-        assert edisgo_root.topology.transformers_df.shape[0] == 14
-        assert edisgo_root.topology.switches_df.shape[0] == 2
+        assert test_edisgo_obj.topology.buses_df.shape[0] == 43
+        assert test_edisgo_obj.topology.lines_df.shape[0] == 34
+        assert test_edisgo_obj.topology.loads_df.shape[0] == n_loads
+        assert test_edisgo_obj.topology.generators_df.shape[0] == n_generators
+        assert test_edisgo_obj.topology.storage_units_df.shape[0] == 1
+        assert test_edisgo_obj.topology.transformers_df.shape[0] == 14
+        assert test_edisgo_obj.topology.switches_df.shape[0] == 2
 
         if line_naming_convention == "standard_lines":
             assert (
-                edisgo_root.topology.lines_df.loc[
+                test_edisgo_obj.topology.lines_df.loc[
                     "Line_Bus_MVStation_1_to_Bus_mvgd_1_F0_B2", "type_info"
                 ]
                 == "NA2XS2Y 3x1x240"
             )
         elif line_naming_convention == "combined_name":
             assert (
-                edisgo_root.topology.lines_df.loc[
+                test_edisgo_obj.topology.lines_df.loc[
                     "Line_Bus_MVStation_1_to_Bus_mvgd_1_F0_B2", "type_info"
                 ]
                 == "Merged: 48-AL1/8-ST1A 48-AL1/8-ST1A "
             )
-        timeseries = edisgo_root.timeseries
+        timeseries = test_edisgo_obj.timeseries
         assert timeseries.loads_active_power.shape[1] == n_loads
         assert timeseries.loads_reactive_power.shape[1] == n_loads
         assert timeseries.generators_active_power.shape[1] == n_generators
@@ -304,13 +296,11 @@ class TestSpatialComplexityReduction:
         assert len(set(linemap_df["new_line_name"].to_list())) == 34
 
     def test_spatial_complexity_reduction(self, test_edisgo_obj):
-        edisgo_root = copy.deepcopy(test_edisgo_obj)
-
         (
             busmap_df,
             linemap_df,
         ) = spatial_complexity_reduction.spatial_complexity_reduction(
-            edisgo_root,
+            test_edisgo_obj,
             mode="kmeans",
             cluster_area="grid",
             reduction_factor=0.2,
@@ -321,48 +311,45 @@ class TestSpatialComplexityReduction:
         assert len(set(linemap_df["new_line_name"].to_list())) == 23
 
         # Check that edisgo_object can run power flow and reinforce
-        edisgo_root.analyze()
-        edisgo_root.reinforce()
+        test_edisgo_obj.analyze()
+        test_edisgo_obj.reinforce()
 
     def test_compare_voltage(self, test_edisgo_obj):
-        edisgo_root = copy.deepcopy(test_edisgo_obj)
-
+        edisgo_reduced = copy.deepcopy(test_edisgo_obj)
         (
-            edisgo_reduced,
             busmap_df,
             linemap_df,
         ) = spatial_complexity_reduction.spatial_complexity_reduction(
-            edisgo_root,
+            edisgo_reduced,
             mode="kmeans",
             cluster_area="grid",
             reduction_factor=0.2,
             reduction_factor_not_focused=False,
         )
-        edisgo_root.analyze()
+        test_edisgo_obj.analyze()
         edisgo_reduced.analyze()
         _, rms = spatial_complexity_reduction.compare_voltage(
-            edisgo_root, edisgo_reduced, busmap_df, "max"
+            test_edisgo_obj, edisgo_reduced, busmap_df, "max"
         )
         assert np.isclose(rms, 0.00766, atol=1e-5)
 
     def test_compare_apparent_power(self, test_edisgo_obj):
-        edisgo_root = copy.deepcopy(test_edisgo_obj)
+        edisgo_reduced = copy.deepcopy(test_edisgo_obj)
 
         (
-            edisgo_reduced,
             busmap_df,
             linemap_df,
         ) = spatial_complexity_reduction.spatial_complexity_reduction(
-            edisgo_root,
+            edisgo_reduced,
             mode="kmeans",
             cluster_area="grid",
             reduction_factor=0.2,
             reduction_factor_not_focused=False,
         )
-        edisgo_root.analyze()
+        test_edisgo_obj.analyze()
         edisgo_reduced.analyze()
         _, rms = spatial_complexity_reduction.compare_apparent_power(
-            edisgo_root, edisgo_reduced, linemap_df, "max"
+            test_edisgo_obj, edisgo_reduced, linemap_df, "max"
         )
         assert np.isclose(rms, 2.873394, atol=1e-5)
 
