@@ -5,6 +5,7 @@ import logging
 from pathlib import Path
 from zipfile import ZipFile
 
+import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -262,3 +263,60 @@ class DSM:
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
             zip.close()
+
+    def check_integrity(self):
+        """
+        Check data integrity.
+
+        Checks for duplicated and missing labels as well as implausible values.
+
+        """
+        # check for duplicate columns
+        duplicated_labels = []
+        for ts in self._attributes:
+            df = getattr(self, ts)
+            if any(df.columns.duplicated()):
+                duplicated_labels.append(df.columns[df.columns.duplicated()].values)
+
+        if len(duplicated_labels) > 0:
+            duplicates = set(
+                np.concatenate([list.tolist() for list in duplicated_labels])
+            )
+            logger.warning(
+                f"DSM timeseries contain the following duplicates: {duplicates}."
+            )
+
+        # check that all profiles exist for the same loads
+        columns = set(
+            np.concatenate([getattr(self, _).columns for _ in self._attributes])
+        )
+        for ts in self._attributes:
+            df = getattr(self, ts)
+            missing_entries = [_ for _ in columns if _ not in df.columns]
+            if len(missing_entries) > 0:
+                logger.warning(
+                    f"DSM timeseries {ts} is missing the following "
+                    f"entries: {missing_entries}."
+                )
+
+        # check for implausible values
+        if not (self.p_min <= 0.0).all().all():
+            logger.warning(
+                "DSM timeseries p_min contains values larger than zero, which is "
+                "not allowed."
+            )
+        if not (self.e_min <= 0.0).all().all():
+            logger.warning(
+                "DSM timeseries e_min contains values larger than zero, which is "
+                "not allowed."
+            )
+        if not (self.p_max >= 0.0).all().all():
+            logger.warning(
+                "DSM timeseries p_max contains values smaller than zero, which is "
+                "not allowed."
+            )
+        if not (self.e_max >= 0.0).all().all():
+            logger.warning(
+                "DSM timeseries e_max contains values smaller than zero, which is "
+                "not allowed."
+            )

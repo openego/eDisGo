@@ -1037,7 +1037,8 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
 
     upper_limits_df = pd.DataFrame()
     lower_limits_df = pd.DataFrame()
-    buses_in_pfa = edisgo_obj.results.v_res.columns
+    voltages_pfa = edisgo_obj.results.v_res
+    buses_in_pfa = voltages_pfa.columns
 
     if mode == "stations":
         config_string = "mv_lv_station"
@@ -1067,14 +1068,6 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
                 "{}_max_v_drop".format(config_string)
             ]
         )
-
-        # rename columns to secondary side
-        rename_dict = {
-            primary_sides[g]: secondary_sides[g] for g in primary_sides.keys()
-        }
-        upper_limits_df.rename(columns=rename_dict, inplace=True)
-        lower_limits_df.rename(columns=rename_dict, inplace=True)
-
     else:
         config_string = "lv"
 
@@ -1090,7 +1083,7 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
                 )
         secondary_sides = pd.Series(secondary_sides_dict)
 
-        voltage_base = edisgo_obj.results.v_res.loc[:, secondary_sides.values]
+        voltage_base = voltages_pfa.loc[:, secondary_sides.values]
 
         upper_limits_df_tmp = (
             voltage_base
