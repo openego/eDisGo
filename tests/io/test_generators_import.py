@@ -1,3 +1,5 @@
+import logging
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -5,7 +7,8 @@ import pytest
 from shapely.geometry import Point
 
 from edisgo import EDisGo
-from edisgo.io import generators_import as generators_import
+from edisgo.io import generators_import
+from edisgo.tools.tools import determine_bus_voltage_level
 
 
 class TestGeneratorsImport:
@@ -113,13 +116,13 @@ class TestGeneratorsImport:
         )
         assert (
             self.edisgo.topology.generators_df.at[
-                "Generator_LVGrid_6_solar_456", "p_nom"
+                "Generator_LVGrid_9_solar_456", "p_nom"
             ]
             == 0.3
         )
         assert (
             self.edisgo.topology.generators_df.at[
-                "Generator_LVGrid_6_solar_456", "type"
+                "Generator_LVGrid_9_solar_456", "type"
             ]
             == "solar"
         )
@@ -243,6 +246,237 @@ class TestGeneratorsImport:
             self.edisgo.topology.generators_df.at["Generator_1", "p_nom"] == 0.775 + 1.5
         )
 
+    def test__integrate_pv_rooftop(self, caplog):
+        # set up dataframe with:
+        # * one gen where capacity will increase and voltage level
+        #   changes ("SEE980819686674")
+        # * one where capacity will decrease ("SEE970362202254")
+        # * one where capacity stayed the same ("SEE960032475262")
+        # * one with source ID that does not exist in future scenario ("SEE2")
+        pv_df = pd.DataFrame(
+            data={
+                "p_nom": [0.005, 0.15, 0.068, 2.0],
+                "weather_cell_id": [11051, 11051, 11052, 11052],
+                "building_id": [430903, 445710, 431094, 446933],
+                "generator_id": [1, 2, 3, 4],
+                "type": ["solar", "solar", "solar", "solar"],
+                "subtype": ["pv_rooftop", "pv_rooftop", "pv_rooftop", "pv_rooftop"],
+                "source_id": [
+                    "SEE970362202254",
+                    "SEE980819686674",
+                    "SEE960032475262",
+                    "SEE2",
+                ],
+            },
+            index=[1, 2, 3, 4],
+        )
+
+        edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+
+        gens_before = edisgo.topology.generators_df.copy()
+        with caplog.at_level(logging.DEBUG):
+            generators_import._integrate_pv_rooftop(edisgo, pv_df)
+
+        gens_df = edisgo.topology.generators_df[
+            edisgo.topology.generators_df.subtype == "pv_rooftop"
+        ].copy()
+
+        assert len(gens_df) == 4
+        # check gen where capacity increases and voltage level changes
+        gen_name = gens_df[gens_df.source_id == "SEE980819686674"].index[0]
+        assert gen_name not in gens_before.index
+        bus_gen = gens_df.at[gen_name, "bus"]
+        assert determine_bus_voltage_level(edisgo, bus_gen) == 6
+        # check gen where capacity decreases
+        gen_name = gens_df[gens_df.source_id == "SEE970362202254"].index[0]
+        assert gen_name in gens_before.index
+        assert gens_df.at[gen_name, "p_nom"] == 0.005
+        # check gen where capacity stayed the same
+        gen_name = gens_df[gens_df.source_id == "SEE960032475262"].index[0]
+        assert gen_name in gens_before.index
+        assert gens_df.at[gen_name, "p_nom"] == 0.068
+        # check new gen
+        gen_name = gens_df[gens_df.source_id == "SEE2"].index[0]
+        assert gen_name not in gens_before.index
+        assert gens_df.at[gen_name, "p_nom"] == 2.0
+        # check logging
+        assert (
+            "2.22 MW of PV rooftop plants integrated. Of this, 0.22 MW could be "
+            "matched to an existing PV rooftop plant." in caplog.text
+        )
+
+    def test__integrate_new_pv_rooftop_to_buildings(self, caplog):
+        pv_df = pd.DataFrame(
+            data={
+                "p_nom": [0.005, 0.15, 2.0],
+                "weather_cell_id": [11051, 11051, 11052],
+                "building_id": [430903, 445710, 446933],
+                "generator_id": [1, 2, 3],
+                "type": ["solar", "solar", "solar"],
+                "subtype": ["pv_rooftop", "pv_rooftop", "pv_rooftop"],
+                "source_id": [None, None, None],
+            },
+            index=[1, 2, 3],
+        )
+
+        edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        # manipulate grid so that building 445710 is connected to MV/LV station
+        load = edisgo.topology.loads_df[
+            edisgo.topology.loads_df.building_id == 445710
+        ].index[0]
+        busbar_bus = "BusBar_mvgd_33535_lvgd_1164120011_LV"
+        edisgo.topology.loads_df.at[load, "bus"] = busbar_bus
+        num_gens_before = len(edisgo.topology.generators_df)
+        with caplog.at_level(logging.DEBUG):
+            (
+                integrated_pv,
+                integrated_pv_own_grid_conn,
+            ) = generators_import._integrate_new_pv_rooftop_to_buildings(edisgo, pv_df)
+
+        assert num_gens_before + 3 == len(edisgo.topology.generators_df)
+        gens_df = edisgo.topology.generators_df.loc[integrated_pv, :]
+        assert len(gens_df) == 3
+        # check that smallest PV plant is connected to LV
+        bus_gen_voltage_level_7 = gens_df[gens_df.p_nom == 0.005].bus[0]
+        assert edisgo.topology.buses_df.at[bus_gen_voltage_level_7, "v_nom"] == 0.4
+        # check that medium PV plant is connected same bus as building
+        bus_gen_voltage_level_6 = gens_df[gens_df.p_nom == 0.15].bus[0]
+        assert bus_gen_voltage_level_6 == busbar_bus
+        # check that largest heat pump is connected to MV
+        bus_gen_voltage_level_5 = gens_df[gens_df.p_nom == 2.0].bus[0]
+        assert edisgo.topology.buses_df.at[bus_gen_voltage_level_5, "v_nom"] == 20.0
+
+        assert edisgo.topology.generators_df.loc[integrated_pv, "p_nom"].sum() == 2.155
+        assert (
+            edisgo.topology.generators_df.loc[
+                integrated_pv_own_grid_conn, "p_nom"
+            ].sum()
+            == 2.0
+        )
+
+    def test__integrate_power_and_chp_plants(self, caplog):
+        # set up test data
+        edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        # set up dataframe with:
+        # * one gen where capacity will increase but voltage level stays the same
+        #   ("SEE95")
+        # * one gen where capacity will increase and voltage level changes ("SEE96")
+        # * one where capacity will decrease ("SEE97")
+        # * one where capacity stayed the same ("SEE98")
+        # * one with source ID that does not exist in future scenario ("SEE99")
+        random_bus = "BusBar_mvgd_33535_lvgd_1156570000_MV"
+        random_lv_bus = "BranchTee_mvgd_33535_lvgd_1150630000_35"
+        x = edisgo.topology.buses_df.at[random_bus, "x"]
+        y = edisgo.topology.buses_df.at[random_bus, "y"]
+        geom = Point((x, y))
+        gen_df = pd.DataFrame(
+            data={
+                "bus": [random_bus, random_lv_bus, random_bus, random_bus, random_bus],
+                "p_nom": [1.9, 0.15, 2.0, 3.0, 1.3],
+                "type": ["biomass", "biomass", "biomass", "biomass", "biomass"],
+                "source_id": ["SEE95", "SEE96", "SEE97", "SEE98", "SEE99"],
+            },
+            index=[
+                "dummy_gen_1",
+                "dummy_gen_2",
+                "dummy_gen_3",
+                "dummy_gen_4",
+                "dummy_gen_5",
+            ],
+        )
+        edisgo.topology.generators_df = pd.concat(
+            [edisgo.topology.generators_df, gen_df]
+        )
+        # set up dataframes with future generators:
+        # * one without source ID
+        # * one with source ID that does not exist in future scenario ("SEE94")
+        # * one gen where capacity increases but voltage level stays the same ("SEE95")
+        # * one gen where capacity increases and voltage level changes ("SEE96")
+        # * one where capacity decreases ("SEE97")
+        # * one where capacity stayed the same ("SEE98")
+        new_pp_gdf = pd.DataFrame(
+            data={
+                "generator_id": [2853, 2854, 2855, 2856, 2857, 2858],
+                "source_id": [None, "SEE94", "SEE95", "SEE96", "SEE97", "SEE98"],
+                "type": [
+                    "biomass",
+                    "biomass",
+                    "biomass",
+                    "biomass",
+                    "biomass",
+                    "biomass",
+                ],
+                "subtype": [None, None, None, None, None, None],
+                "p_nom": [0.005, 0.15, 2.0, 1.0, 0.05, 3.0],
+                "weather_cell_id": [None, None, None, None, None, None],
+                "geom": [geom, geom, None, geom, None, None],
+            },
+            index=[0, 1, 2, 3, 4, 5],
+        )
+        new_chp_gdf = pd.DataFrame(
+            data={
+                "generator_id": [9363],
+                "type": ["biomass"],
+                "district_heating_id": [None],
+                "p_nom": [0.66],
+                "p_nom_th": [4.66],
+                "geom": [geom],
+            },
+            index=[0],
+        )
+
+        gens_before = edisgo.topology.generators_df.copy()
+        with caplog.at_level(logging.DEBUG):
+            generators_import._integrate_power_and_chp_plants(
+                edisgo, new_pp_gdf, new_chp_gdf
+            )
+
+        gens_df = edisgo.topology.generators_df[
+            edisgo.topology.generators_df.subtype != "pv_rooftop"
+        ].copy()
+
+        # check new gen without source id
+        gen_name = gens_df[gens_df.p_nom == 0.005].index[0]
+        assert gen_name not in gens_before.index
+        bus_gen = gens_df.at[gen_name, "bus"]
+        assert edisgo.topology.buses_df.at[bus_gen, "v_nom"] == 0.4
+        # check gen with source ID that does not exist in future scenario ("SEE94")
+        gen_name = gens_df[gens_df.source_id == "SEE94"].index[0]
+        assert gen_name not in gens_before.index
+        assert gens_df.at[gen_name, "p_nom"] == 0.15
+        # check gen where capacity increases but voltage level stays the same ("SEE95")
+        gen_name = gens_df[gens_df.source_id == "SEE95"].index[0]
+        assert gen_name in gens_before.index
+        assert gens_df.at[gen_name, "p_nom"] == 2.0
+        # check gen where capacity increases and voltage level changes ("SEE96")
+        gen_name = gens_df[gens_df.source_id == "SEE96"].index[0]
+        assert gen_name not in gens_before.index
+        bus_gen = gens_df.at[gen_name, "bus"]
+        assert edisgo.topology.buses_df.at[bus_gen, "v_nom"] == 20.0
+        # check gen where capacity decreases ("SEE97")
+        gen_name = gens_df[gens_df.source_id == "SEE97"].index[0]
+        assert gen_name in gens_before.index
+        assert gens_df.at[gen_name, "p_nom"] == 0.05
+        # check gen where capacity stayed the same ("SEE98")
+        gen_name = gens_df[gens_df.source_id == "SEE98"].index[0]
+        assert gen_name in gens_before.index
+        assert gens_df.at[gen_name, "bus"] == random_bus
+        # check CHP
+        gen_name = gens_df[gens_df.p_nom_th == 4.66].index[0]
+        assert gen_name not in gens_before.index
+        assert gens_df.at[gen_name, "p_nom"] == 0.66
+        # check logging
+        assert (
+            "6.87 MW of power and CHP plants integrated. Of this, 6.05 MW could be "
+            "matched to existing power plants." in caplog.text
+        )
+
 
 class TestGeneratorsImportOEDB:
     """
@@ -252,7 +486,7 @@ class TestGeneratorsImportOEDB:
     """
 
     @pytest.mark.slow
-    def test_oedb_without_timeseries(self):
+    def test_oedb_legacy_without_timeseries(self):
 
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_2_path,
@@ -266,7 +500,7 @@ class TestGeneratorsImportOEDB:
         assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 20.18783)
 
     @pytest.mark.slow
-    def test_oedb_with_worst_case_timeseries(self):
+    def test_oedb_legacy_with_worst_case_timeseries(self):
 
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.set_time_series_worst_case_analysis()
@@ -338,7 +572,7 @@ class TestGeneratorsImportOEDB:
         #     :, new_solar_gen.name] / new_solar_gen.p_nom).all()
 
     @pytest.mark.slow
-    def test_oedb_with_timeseries_by_technology(self):
+    def test_oedb_legacy_with_timeseries_by_technology(self):
 
         timeindex = pd.date_range("1/1/2012", periods=3, freq="H")
         ts_gen_dispatchable = pd.DataFrame(
@@ -477,3 +711,11 @@ class TestGeneratorsImportOEDB:
             ].p_nom.sum(),
             p_biomass_before * 1.0,
         )
+
+    @pytest.mark.local
+    def test_oedb(self):
+        edisgo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        edisgo.import_generators(generator_scenario="eGon2035", engine=pytest.engine)
+        assert len(edisgo.topology.generators_df) == 677

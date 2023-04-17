@@ -65,9 +65,9 @@ class TestCosts:
                 "quantity": [1, 1, 1, 2, 1, 1, 3, 1],
             },
             index=[
-                "MVGrid_1",
-                "LVGrid_1",
-                "LVGrid_1",
+                "MVGrid_1_station",
+                "LVGrid_1_station",
+                "LVGrid_1_station",
                 "Line_10006",
                 "Line_10019",
                 "Line_10019",
@@ -103,7 +103,7 @@ class TestCosts:
         assert costs.loc["Line_50000002", "voltage_level"] == "lv"
 
     def test_line_expansion_costs(self):
-        costs = line_expansion_costs(self.edisgo, self.edisgo.topology.lines_df.index)
+        costs = line_expansion_costs(self.edisgo)
         assert len(costs) == len(self.edisgo.topology.lines_df)
         assert (costs.index == self.edisgo.topology.lines_df.index).all()
         assert len(costs[costs.voltage_level == "mv"]) == len(
