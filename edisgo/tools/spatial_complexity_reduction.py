@@ -1,10 +1,10 @@
+from __future__ import annotations
+
 import copy
 import logging
 import math
 
-from hashlib import md5
-from time import time
-from typing import Tuple, Union
+from typing import TYPE_CHECKING
 
 import networkx as nx
 import numpy as np
@@ -15,41 +15,39 @@ from pyproj import Transformer
 from sklearn.cluster import KMeans
 from sklearn.metrics import mean_squared_error
 
-from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.network import timeseries
 from edisgo.network.grids import Grid
+from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates
 
 logger = logging.getLogger(__name__)
 
-
-# region Used functions
-def hash_df(df: DataFrame) -> str:
-    """Calculate hash from busmap, good to check if dataframe has the same content."""
-    s = df.to_json()
-    return md5(s.encode()).hexdigest()
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 
-# Transform coordinates between the different coordinates systems
-# ToDo: The spatial complexity reduction forces the usage of EPSG:4326 and than
-# transforms to other coordinate systems if needed. Maybe write it more dynamically.
+# Transform coordinates between the different coordinate systems
 coor_transform = Transformer.from_crs("EPSG:4326", "EPSG:3035", always_xy=True)
 coor_transform_back = Transformer.from_crs("EPSG:3035", "EPSG:4326", always_xy=True)
 
 
-def make_grid_list(edisgo_obj: EDisGo, grid: object = None) -> list:
+def _make_grid_list(edisgo_obj: EDisGo, grid: object = None) -> list:
     """
     Get a list of all grids in the EDisGo object or a list with the specified grid.
+
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
         EDisGo object to get the grids from.
-    grid : :obj:`str`
-        Name of the grid, if None than all grids of the EDisGo objects are used.
+    grid : str
+        Name of the grid. If None, all grids of the EDisGo objects are used.
+        Default: None.
+
     Returns
     -------
-    :obj:`list`
-        List of the Grid objects
+    list(:class:`~.network.grids.Grid`)
+        List of the :class:`~.network.grids.Grid` objects.
+
     """
     if edisgo_obj is None and grid is None:
         raise ValueError("Pass an EDisGo object and an grid")
@@ -70,19 +68,21 @@ def make_grid_list(edisgo_obj: EDisGo, grid: object = None) -> list:
 
 def find_buses_of_interest(edisgo_root: EDisGo) -> set:
     """
-    Find the buses of interest of the EDisGo object. With a worst-case powerflow the
-    buses with problems are found. Check for line load and voltage deviation.
+    Return buses with load and voltage issues, determined doing a worst-case powerflow
+    analysis.
+
     Parameters
     ----------
     edisgo_root : :class:`~.EDisGo`
         The investigated EDisGo object.
+
     Returns
     -------
-    :obj:`set`
-        Set with the names of the buses of interest.
+    set(str)
+        Set with the names of the buses with load and voltage issues.
+
     """
-    start_time = time()
-    logger.info("Start - Find buses of interest")
+    logger.debug("Find buses of interest.")
 
     edisgo_obj = copy.deepcopy(edisgo_root)
     edisgo_obj.timeseries = timeseries.TimeSeries()
@@ -90,23 +90,20 @@ def find_buses_of_interest(edisgo_root: EDisGo) -> set:
     edisgo_obj.analyze()
 
     buses_of_interest = set()
-    mv_lines = checks.mv_line_load(edisgo_obj)
-    lv_lines = checks.lv_line_load(edisgo_obj)
+    mv_lines = checks.mv_line_max_relative_overload(edisgo_obj)
+    lv_lines = checks.lv_line_max_relative_overload(edisgo_obj)
     lines = mv_lines.index.tolist()
     lines = lines + lv_lines.index.tolist()
     for line in lines:
         buses_of_interest.add(edisgo_obj.topology.lines_df.loc[line, "bus0"])
         buses_of_interest.add(edisgo_obj.topology.lines_df.loc[line, "bus1"])
 
-    mv_buses = checks.mv_voltage_deviation(edisgo_obj, voltage_levels="mv")
-    for value in mv_buses.values():
-        buses_of_interest.update(value.index.tolist())
+    mv_buses = checks.voltage_issues(edisgo_obj, voltage_level="mv")
+    buses_of_interest.update(mv_buses.index.tolist())
 
-    lv_buses = checks.lv_voltage_deviation(edisgo_obj, voltage_levels="lv")
-    for value in lv_buses.values():
-        buses_of_interest.update(value.index.tolist())
+    lv_buses = checks.voltage_issues(edisgo_obj, voltage_level="lv")
+    buses_of_interest.update(lv_buses.index.tolist())
 
-    logger.info("Finished in {}s".format(time() - start_time))
     return buses_of_interest
 
 
@@ -115,16 +112,19 @@ def rename_virtual_buses(
 ) -> DataFrame:
     """
     Rename virtual buses so that no virtual transformer bus is created.
+
     Parameters
     ----------
-    partial_busmap_df: :obj:`pd.DataFrame`
+    partial_busmap_df : :pandas:`pandas.DataFrame<DataFrame>`
         Busmap to work on.
-    transformer_node: :obj:`str`
+    transformer_node : str
         Transformer node name.
+
     Returns
     -------
-    :obj:`pd.DataFrame`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Busmap with applied changes.
+
     """
     nodes = partial_busmap_df.index.to_list()
     pairs = []
@@ -139,7 +139,7 @@ def rename_virtual_buses(
     logger.debug("Pairs: {}".format(pairs))
     logger.debug("Length pairs: {}".format(len(pairs)))
     if len(pairs) > 0:
-        logger.info("Rename virtual buses")
+        logger.debug("Rename virtual buses")
         for feeder_virtual, feeder_non_virtual in pairs:
             old_name_of_virtual_node = partial_busmap_df.loc[feeder_virtual, "new_bus"]
             nodes_in_the_same_cluster_as_virtual_node = partial_busmap_df.loc[
@@ -164,13 +164,20 @@ def rename_virtual_buses(
     return partial_busmap_df
 
 
-# endregion
-
-# region Preprocessing (Currently not tested and probably not working.)
-def remove_one_meter_lines(edisgo_root: EDisGo) -> EDisGo:
+def remove_short_end_lines(edisgo_obj: EDisGo):
     """
-    Remove one meter lines between the feeder and the buildings. This function is
-    a relict from the legacy ding0 grids.
+    Method to remove end lines under 1 meter to reduce size of edisgo object.
+
+    Short lines inside at the end are removed in this function, including the end node.
+    Components that were originally connected to the end node are reconnected to the
+    upstream node.
+
+    This function does currently not remove short lines that are no end lines.
+
+    Parameters
+    ----------
+    edisgo : :class:`~.EDisGo`
+
     """
 
     def apply_busmap_on_buses_df(series):
@@ -195,22 +202,14 @@ def remove_one_meter_lines(edisgo_root: EDisGo) -> EDisGo:
 
         return series
 
-    start_time = time()
-    logger.info("Start - Removing 1m lines")
+    logger.debug("Removing 1 m end lines.")
 
-    edisgo_obj = copy.deepcopy(edisgo_root)
     G = edisgo_obj.to_graph()
     lines_df = edisgo_obj.topology.lines_df.copy()
     busmap = {}
     unused_lines = []
     for index, row in lines_df.iterrows():
-        if row.length < 0.001:
-            logger.info(
-                'Line "{}" is {:.3f}m long and will not be removed.'.format(
-                    index, row.length * 1000
-                )
-            )
-        if row.length == 0.001:
+        if row.length <= 0.001:
             # find lines that have at one bus only one neighbor
             # and at the other more than one
             number_of_neighbors_bus0 = G.degree(row.bus0)
@@ -230,207 +229,195 @@ def remove_one_meter_lines(edisgo_root: EDisGo) -> EDisGo:
                 ) and number_of_neighbors_bus0 == 1:
                     unused_lines.append(index)
                     busmap[row.bus0] = row.bus1
-            else:
-                logger.info(
-                    'Line "{}" is {:.3f}m long and will not be removed.'.format(
-                        index, row.length * 1000
-                    )
-                )
-    logger.info(
-        "Drop {} of {} short lines ({:.0f}%)".format(
-            len(unused_lines),
-            lines_df.shape[0],
-            (len(unused_lines) / lines_df.shape[0] * 100),
-        )
-    )
+
+    logger.info(f"Drop {len(unused_lines)} of {lines_df.shape[0]} 1 m lines.")
+    # Apply the busmap on the components
     lines_df = lines_df.drop(unused_lines)
     lines_df = lines_df.apply(apply_busmap_on_lines_df, axis="columns")
 
-    buses_df = edisgo_obj.topology.buses_df.copy()
+    buses_df = edisgo_obj.topology.buses_df
     buses_df = buses_df.apply(apply_busmap_on_buses_df, axis="columns")
     buses_df = buses_df.groupby(
         by=["new_bus"], dropna=False, as_index=False, sort=False
     ).first()
     buses_df = buses_df.set_index("new_bus")
 
-    loads_df = edisgo_obj.topology.loads_df.copy()
+    loads_df = edisgo_obj.topology.loads_df
     loads_df = loads_df.apply(apply_busmap, axis="columns")
 
-    generators_df = edisgo_obj.topology.generators_df.copy()
+    generators_df = edisgo_obj.topology.generators_df
     generators_df = generators_df.apply(apply_busmap, axis="columns")
 
-    charging_points_df = edisgo_obj.topology.charging_points_df.copy()
-    charging_points_df = charging_points_df.apply(apply_busmap, axis="columns")
+    storage_units_df = edisgo_obj.topology.storage_units_df
+    storage_units_df = storage_units_df.apply(apply_busmap, axis="columns")
 
-    storage_units_df = edisgo_obj.topology.storage_units_df.copy()
-    if not storage_units_df.empty:
-        storage_units_df = storage_units_df.apply(apply_busmap, axis="columns")
-    edisgo_obj.topology.storage_units_df = storage_units_df
     edisgo_obj.topology.lines_df = lines_df
     edisgo_obj.topology.buses_df = buses_df
     edisgo_obj.topology.loads_df = loads_df
     edisgo_obj.topology.generators_df = generators_df
-    # edisgo_obj.topology.charging_points_df = charging_points_df
-
-    logger.info("Finished in {}s".format(time() - start_time))
-    return edisgo_obj
+    edisgo_obj.topology.storage_units_df = storage_units_df
 
 
-def remove_lines_under_one_meter(edisgo_root: EDisGo) -> EDisGo:
+def remove_lines_under_one_meter(edisgo_obj: EDisGo) -> EDisGo:
     """
     Remove the lines under one meter. Sometimes these line are causing convergence
     problems of the power flow calculation or making problems with the clustering
     methods.
+
+    Function might be a bit overengineered, so that the station bus is never dropped.
     """
-
-    def apply_busmap_on_buses_df(series):
-        if series.name in busmap:
-            series.loc["new_bus"] = busmap[series.name]
-        else:
-            series.loc["new_bus"] = series.name
-        return series
-
-    def apply_busmap_on_lines_df(series):
-        if series.bus0 in busmap:
-            series.loc["bus0"] = busmap[series.bus0]
-        if series.bus1 in busmap:
-            series.loc["bus1"] = busmap[series.bus1]
-
-        return series
-
-    def apply_busmap(series):
-        if series.bus in busmap:
-            series.loc["bus"] = busmap[series.bus]
-
-        return series
-
-    start_time = time()
-    logger.info("Start - Removing lines under 1m")
-
-    edisgo_obj = copy.deepcopy(edisgo_root)
-
-    busmap = {}
-    unused_lines = []
-
-    grid_list = [edisgo_obj.topology.mv_grid]
-    grid_list = grid_list + list(edisgo_obj.topology.mv_grid.lv_grids)
-
-    for grid in grid_list:
-        G = grid.graph
-
-        transformer_node = grid.transformers_df.bus1.values[0]
-
-        lines_df = grid.lines_df.copy()
-
-        for index, row in lines_df.iterrows():
-            if row.length < 0.001:
-
-                distance_bus_0, path = nx.single_source_dijkstra(
-                    G, source=transformer_node, target=row.bus0, weight="length"
-                )
-                distance_bus_1, path = nx.single_source_dijkstra(
-                    G, source=transformer_node, target=row.bus1, weight="length"
-                )
-
-                logger.debug(
-                    'Line "{}" is {:.5f}m long and will be removed.'.format(
-                        index, row.length * 1000
-                    )
-                )
-                logger.debug(
-                    "Bus0: {} - Distance0: {}".format(row.bus0, distance_bus_0)
-                )
-                logger.debug(
-                    "Bus1: {} - Distance1: {}".format(row.bus1, distance_bus_1)
-                )
-
-                if distance_bus_0 < distance_bus_1:
-                    busmap[row.bus1] = row.bus0
-                    if distance_bus_0 < 0.001:
-                        busmap[row.bus0] = transformer_node
-                        busmap[row.bus1] = transformer_node
-                elif distance_bus_0 > distance_bus_1:
-                    busmap[row.bus0] = row.bus1
-                    if distance_bus_1 < 0.001:
-                        busmap[row.bus0] = transformer_node
-                        busmap[row.bus1] = transformer_node
-                else:
-                    raise ValueError("ERROR")
-
-                unused_lines.append(index)
-
-    logger.debug("Busmap: {}".format(busmap))
-
-    transformers_df = edisgo_obj.topology.transformers_df.copy()
-    transformers_df = transformers_df.apply(apply_busmap_on_lines_df, axis="columns")
-    edisgo_obj.topology.transformers_df = transformers_df
-
-    lines_df = edisgo_obj.topology.lines_df.copy()
-    lines_df = lines_df.drop(unused_lines)
-    lines_df = lines_df.apply(apply_busmap_on_lines_df, axis="columns")
-    edisgo_obj.topology.lines_df = lines_df
-
-    buses_df = edisgo_obj.topology.buses_df.copy()
-    buses_df.index.name = "bus"
-    buses_df = buses_df.apply(apply_busmap_on_buses_df, axis="columns")
-    buses_df = buses_df.groupby(
-        by=["new_bus"], dropna=False, as_index=False, sort=False
-    ).first()
-    buses_df = buses_df.set_index("new_bus")
-    edisgo_obj.topology.buses_df = buses_df
-
-    loads_df = edisgo_obj.topology.loads_df.copy()
-    loads_df = loads_df.apply(apply_busmap, axis="columns")
-    edisgo_obj.topology.loads_df = loads_df
-
-    generators_df = edisgo_obj.topology.generators_df.copy()
-    generators_df = generators_df.apply(apply_busmap, axis="columns")
-    edisgo_obj.topology.generators_df = generators_df
-
-    storage_units_df = edisgo_obj.topology.storage_units_df.copy()
-    if not storage_units_df.empty:
-        storage_units_df = storage_units_df.apply(apply_busmap, axis="columns")
-    edisgo_obj.topology.storage_units_df = storage_units_df
-
-    logger.info("Finished in {}s".format(time() - start_time))
-    return edisgo_obj
+    # ToDo this function does currently not work correctly as it may lead to
+    #  isolated nodes and possibly broken switches, plus it should be merged with
+    #  function remove_one_meter_lines
+    # def apply_busmap_on_buses_df(series):
+    #     if series.name in busmap:
+    #         series.loc["new_bus"] = busmap[series.name]
+    #     else:
+    #         series.loc["new_bus"] = series.name
+    #     return series
+    #
+    # def apply_busmap_on_lines_df(series):
+    #     if series.bus0 in busmap:
+    #         series.loc["bus0"] = busmap[series.bus0]
+    #     if series.bus1 in busmap:
+    #         series.loc["bus1"] = busmap[series.bus1]
+    #
+    #     return series
+    #
+    # def apply_busmap(series):
+    #     if series.bus in busmap:
+    #         series.loc["bus"] = busmap[series.bus]
+    #
+    #     return series
+    #
+    # busmap = {}
+    # unused_lines = []
+    #
+    # grid_list = [edisgo_obj.topology.mv_grid]
+    # grid_list = grid_list + list(edisgo_obj.topology.mv_grid.lv_grids)
+    #
+    # for grid in grid_list:
+    #     G = grid.graph
+    #
+    #     transformer_node = grid.transformers_df.bus1.values[0]
+    #
+    #     lines_df = grid.lines_df.copy()
+    #
+    #     for index, row in lines_df.iterrows():
+    #         if row.length < 0.001:
+    #
+    #             distance_bus_0, path = nx.single_source_dijkstra(
+    #                 G, source=transformer_node, target=row.bus0, weight="length"
+    #             )
+    #             distance_bus_1, path = nx.single_source_dijkstra(
+    #                 G, source=transformer_node, target=row.bus1, weight="length"
+    #             )
+    #
+    #             logger.debug(
+    #                 'Line "{}" is {:.5f}m long and will be removed.'.format(
+    #                     index, row.length * 1000
+    #                 )
+    #             )
+    #             logger.debug(
+    #                 "Bus0: {} - Distance0: {}".format(row.bus0, distance_bus_0)
+    #             )
+    #             logger.debug(
+    #                 "Bus1: {} - Distance1: {}".format(row.bus1, distance_bus_1)
+    #             )
+    #             # map bus farther away to bus closer to the station
+    #             # ToDo check if either node is already in the busmap
+    #             # ToDo make sure no virtual bus is dropped
+    #             if distance_bus_0 < distance_bus_1:
+    #                 busmap[row.bus1] = row.bus0
+    #                 if distance_bus_0 < 0.001:
+    #                     busmap[row.bus0] = transformer_node
+    #                     busmap[row.bus1] = transformer_node
+    #             elif distance_bus_0 > distance_bus_1:
+    #                 busmap[row.bus0] = row.bus1
+    #                 if distance_bus_1 < 0.001:
+    #                     busmap[row.bus0] = transformer_node
+    #                     busmap[row.bus1] = transformer_node
+    #             else:
+    #                 raise ValueError("ERROR")
+    #
+    #             unused_lines.append(index)
+    #
+    # logger.debug("Busmap: {}".format(busmap))
+    # # Apply the busmap on the components
+    # transformers_df = edisgo_obj.topology.transformers_df.copy()
+    # transformers_df = transformers_df.apply(apply_busmap_on_lines_df, axis="columns")
+    # edisgo_obj.topology.transformers_df = transformers_df
+    #
+    # lines_df = edisgo_obj.topology.lines_df.copy()
+    # lines_df = lines_df.drop(unused_lines)
+    # lines_df = lines_df.apply(apply_busmap_on_lines_df, axis="columns")
+    # edisgo_obj.topology.lines_df = lines_df
+    #
+    # buses_df = edisgo_obj.topology.buses_df.copy()
+    # buses_df.index.name = "bus"
+    # buses_df = buses_df.apply(apply_busmap_on_buses_df, axis="columns")
+    # buses_df = buses_df.groupby(
+    #     by=["new_bus"], dropna=False, as_index=False, sort=False
+    # ).first()
+    # buses_df = buses_df.set_index("new_bus")
+    # edisgo_obj.topology.buses_df = buses_df
+    #
+    # loads_df = edisgo_obj.topology.loads_df.copy()
+    # loads_df = loads_df.apply(apply_busmap, axis="columns")
+    # edisgo_obj.topology.loads_df = loads_df
+    #
+    # generators_df = edisgo_obj.topology.generators_df.copy()
+    # generators_df = generators_df.apply(apply_busmap, axis="columns")
+    # edisgo_obj.topology.generators_df = generators_df
+    #
+    # storage_units_df = edisgo_obj.topology.storage_units_df.copy()
+    # storage_units_df = storage_units_df.apply(apply_busmap, axis="columns")
+    # edisgo_obj.topology.storage_units_df = storage_units_df
+    #
+    # return edisgo_obj
+    raise NotImplementedError
 
 
-# endregion
-
-# region Complexity reduction
-def make_busmap_from_clustering(
-    edisgo_root: EDisGo,
-    grid: Union[None, str] = None,
-    mode: str = None,
+def make_busmap_grid(
+    edisgo_obj: EDisGo,
+    grid: None | str = None,
+    mode: str = "kmeansdijkstra",
     reduction_factor: float = 0.25,
     preserve_trafo_bus_coordinates: bool = True,
 ) -> DataFrame:
     """
-    See for more information the function
-    :func:`make_busmap<edisgo.tools.make_busmap>`.
-    Making busmap for the cluster area 'grid'. Every grid is clustered individually.
+    Making busmap for the cluster area 'grid'.
+
+    Every grid is clustered individually.
+
     Parameters
     ----------
-    edisgo_root: :obj:`EDisGo`
-        EDisGo object for which the busmap ist created.
-    grid: :obj:`str` or None
-        If None, busmap is created for all grids, else only for the selected Grid.
-    mode: :obj:`str`
-        "kmeans" or "kmeansdijkstra" as clustering method.
-    reduction_factor: :obj:`float`
-        Must bigger than 0 smaller than 1. Nodes are reduced with this factor.
-    preserve_trafo_bus_coordinates: :obj:`bool`
-        If true transformators have the same coordinates after the clustering, else
-        the transformer coordinates are get by the clustering.
+    edisgo_obj : :class:`~.EDisGo`
+        EDisGo object for which the busmap is created.
+    grid : str or None
+        If None, busmap is created for all grids, else only for the selected grid.
+        Default: None.
+    mode : str
+        "kmeans" or "kmeansdijkstra" as clustering method. See parameter `mode` in
+        function :attr:`~.EDisGo.spatial_complexity_reduction` for more information.
+        Default: "kmeansdijkstra".
+    reduction_factor : float
+        Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
+    preserve_trafo_bus_coordinates : True
+        If True, transformers have the same coordinates after the clustering, else
+        the transformer coordinates are changed by the clustering. Default: True.
+
     Returns
     -------
-    :obj:`pd.DataFrame`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Busmap which maps the old bus names to the new bus names with new coordinates.
+        See return value in function :func:`~make_busmap` for more information.
+
     References
     ----------
-    In parts based on PyPSA spatial complexity reduction
-    `https://pypsa.readthedocs.io/en/latest/examples/spatial-clustering.html`
+    In parts based on `PyPSA spatial complexity reduction <https://pypsa.readthedocs.io
+    /en/latest/examples/spatial-clustering.html>`_.
+
     """
 
     def calculate_weighting(series):
@@ -487,14 +474,12 @@ def make_busmap_from_clustering(
             logger.error("Grid is None")
         return series
 
-    start_time = time()
-    logger.info("Start - Make busmap from clustering, mode = {}".format(mode))
+    logger.debug("Start making busmap for grids.")
 
-    edisgo_obj = copy.deepcopy(edisgo_root)
-    grid_list = make_grid_list(edisgo_obj, grid=grid)
+    grid_list = _make_grid_list(edisgo_obj, grid=grid)
 
     busmap_df = pd.DataFrame()
-
+    # Cluster every grid
     for grid in grid_list:
         v_grid = grid.nominal_voltage
         logger.debug("Make busmap for grid: {}, v_nom={}".format(grid, v_grid))
@@ -505,12 +490,12 @@ def make_busmap_from_clustering(
 
         buses_df = buses_df.apply(transform_coordinates, axis="columns")
         buses_df = buses_df.apply(calculate_weighting, axis="columns")
-
+        # Calculate number of clusters
         number_of_distinct_nodes = buses_df.groupby(by=["x", "y"]).first().shape[0]
         logger.debug("Number_of_distinct_nodes = " + str(number_of_distinct_nodes))
         n_clusters = math.ceil(number_of_distinct_nodes * reduction_factor)
         logger.debug("n_clusters = {}".format(n_clusters))
-
+        # Cluster with kmeans
         kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
 
         kmeans.fit(buses_df.loc[:, ["x", "y"]], sample_weight=buses_df.loc[:, "weight"])
@@ -527,6 +512,7 @@ def make_busmap_from_clustering(
                 ] = kmeans.cluster_centers_[new_bus]
 
         elif mode == "kmeansdijkstra":
+            # Use dijkstra to select clusters
             dist_to_cluster_center = pd.DataFrame(
                 data=kmeans.transform(buses_df.loc[:, ["x", "y"]]), index=buses_df.index
             ).min(axis="columns")
@@ -570,7 +556,7 @@ def make_busmap_from_clustering(
             ),
             "new_bus",
         ] = transformer_bus
-
+        # Write trafo coordinates back, this helps to get better results
         if preserve_trafo_bus_coordinates:
             partial_busmap_df.loc[
                 partial_busmap_df.new_bus.isin(
@@ -596,42 +582,51 @@ def make_busmap_from_clustering(
 
         busmap_df = pd.concat([busmap_df, partial_busmap_df])
 
-    logger.info("Finished in {}s".format(time() - start_time))
     return busmap_df
 
 
-def make_busmap_from_feeders(
-    edisgo_root: EDisGo = None,
-    grid: Union[None, Grid] = None,
-    mode: str = None,
+def make_busmap_feeders(
+    edisgo_obj: EDisGo = None,
+    grid: None | Grid = None,
+    mode: str = "kmeansdijkstra",
     reduction_factor: float = 0.25,
-    reduction_factor_not_focused: Union[bool, float] = False,
+    reduction_factor_not_focused: bool | float = False,
 ) -> DataFrame:
     """
-    See for more information the function :func:`make_busmap<edisgo.tools.make_busmap>`.
-    Making busmap for the cluster area 'feeder'. Every feeder is clustered individually.
+    Making busmap for the cluster area 'feeder'.
+
+    Every feeder is clustered individually.
+
     Parameters
     ----------
-    edisgo_root: :obj:`EDisGo`
-        EDisGo object for which the busmap ist created.
-    grid: :obj:`str` or None
-        If None, busmap is created for all grids, else only for the selected Grid.
-    mode: :obj:`str`
-        "kmeans" or "kmeansdijkstra" as clustering method.
-    reduction_factor: :obj:`float`
-        Must bigger than 0 smaller than 1. Nodes are reduced with this factor.
-    reduction_factor_not_focused: :obj:`bool` or :obj:`floar`
-        If false the focus method is not used. If 0 or smaller than 1, this sets the
-        reduction factor for buses not of interest. When selecting 0 the nodes of the
-        clustering area are aggregated to the transformer bus.
+    edisgo_obj : :class:`~.EDisGo`
+        EDisGo object for which the busmap is created.
+    grid : str or None
+        If None, busmap is created for all grids, else only for the selected grid.
+        Default: None.
+    mode : str
+        "kmeans" or "kmeansdijkstra" as clustering method. See parameter `mode` in
+        function :attr:`~.EDisGo.spatial_complexity_reduction` for more information.
+        Default: "kmeansdijkstra".
+    reduction_factor : float
+        Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
+    reduction_factor_not_focused : bool or float
+        If False, the focus method is not used. If between 0 and 1, this sets the
+        reduction factor for buses not of interest. See parameter
+        `reduction_factor_not_focused` in function :func:`~make_busmap`
+        for more information. Default: False.
+
     Returns
     -------
-    :obj:`pd.DataFrame`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Busmap which maps the old bus names to the new bus names with new coordinates.
+        See return value in function :func:`~make_busmap` for more information.
+
     References
     ----------
-    In parts based on PyPSA spatial complexity reduction
-    `https://pypsa.readthedocs.io/en/latest/examples/spatial-clustering.html`
+    In parts based on `PyPSA spatial complexity reduction <https://pypsa.readthedocs.io
+    /en/latest/examples/spatial-clustering.html>`_.
+
     """
 
     def make_name(number_of_feeder_node):
@@ -695,15 +690,13 @@ def make_busmap_from_feeders(
         ser["new_y"] = y
         return ser
 
-    edisgo_obj = copy.deepcopy(edisgo_root)
-    start_time = time()
-    logger.info("Start - Make busmap from feeders, mode = {}".format(mode))
+    logger.debug("Start making busmap for feeders.")
 
     edisgo_obj.topology.buses_df = edisgo_obj.topology.buses_df.apply(
         transform_coordinates, axis="columns"
     )
 
-    grid_list = make_grid_list(edisgo_obj, grid=grid)
+    grid_list = _make_grid_list(edisgo_obj, grid=grid)
     busmap_df = pd.DataFrame()
     mvgd_id = edisgo_obj.topology.mv_grid.id
 
@@ -718,7 +711,7 @@ def make_busmap_from_feeders(
     for grid in grid_list:
         grid_id = grid.id
         v_grid = grid.nominal_voltage
-        logger.info("Make busmap for grid: {}, v_nom={}".format(grid, v_grid))
+        logger.debug("Make busmap for grid: {}, v_nom={}".format(grid, v_grid))
 
         graph_root = grid.graph
         transformer_node = grid.transformers_df.bus1.values[0]
@@ -730,9 +723,7 @@ def make_busmap_from_feeders(
         neighbors = list(nx.neighbors(graph_root, transformer_node))
         neighbors.sort()
         logger.debug(
-            "Transformer neighbors has {} neighbors: {}".format(
-                len(neighbors), neighbors
-            )
+            "Transformer has {} neighbors: {}".format(len(neighbors), neighbors)
         )
 
         graph_without_transformer = copy.deepcopy(graph_root)
@@ -820,7 +811,7 @@ def make_busmap_from_feeders(
                                 graph_root, bus, cutoff=None, weight="length"
                             )
                         )
-                        dijkstra_distances_df[bus] = path_series
+                        dijkstra_distances_df.loc[:, bus] = path_series
 
                     feeder_buses_df.loc[:, "medoid"] = dijkstra_distances_df.idxmin(
                         axis=1
@@ -846,45 +837,54 @@ def make_busmap_from_feeders(
 
     busmap_df = busmap_df.apply(transform_coordinates_back, axis="columns")
     busmap_df.sort_index(inplace=True)
-    logger.info("Finished in {}s".format(time() - start_time))
     return busmap_df
 
 
-def make_busmap_from_main_feeders(
-    edisgo_root: EDisGo = None,
-    grid: Union[None, Grid] = None,
-    mode: str = None,
+def make_busmap_main_feeders(
+    edisgo_obj: EDisGo = None,
+    grid: None | Grid = None,
+    mode: str = "kmeansdijkstra",
     reduction_factor: float = 0.25,
-    reduction_factor_not_focused: Union[bool, float] = False,
+    reduction_factor_not_focused: bool | float = False,
 ) -> DataFrame:
     """
-    See for more information the function :func:`make_busmap<edisgo.tools.make_busmap>`.
-    Making busmap for the cluster area 'main_feeder'. Every main feeder is clustered
-    individually. The main feeder is selected as the longest way in the feeder. All
-    nodes are aggregated to this main feeder and than the feeder is clustered.
+    Making busmap for the cluster area 'main_feeder'.
+
+    Every main feeder is clustered individually. The main feeder is selected as the
+    longest path in the feeder. All nodes are aggregated to this main feeder and
+    then the feeder is clustered.
+
     Parameters
     ----------
-    edisgo_root: :obj:`EDisGo`
-        EDisGo object for which the busmap ist created.
-    grid: :obj:`str` or None
-        If None, busmap is created for all grids, else only for the selected Grid.
-    mode: :obj:`str`
+    edisgo_obj : :class:`~.EDisGo`
+        EDisGo object for which the busmap is created.
+    grid : str or None
+        If None, busmap is created for all grids, else only for the selected grid.
+        Default: None.
+    mode : str
         "kmeans", "kmeansdijkstra", "aggregate_to_main_feeder" or
-        "equidistant_nodes" as clustering method.
-    reduction_factor: :obj:`float`
-        Must bigger than 0 smaller than 1. Nodes are reduced with this factor.
-    reduction_factor_not_focused: :obj:`bool` or :obj:`floar`
-        If false the focus method is not used. If 0 or smaller than 1, this sets the
-        reduction factor for buses not of interest. When selecting 0 the nodes of the
-        clustering area are aggregated to the transformer bus.
+        "equidistant_nodes" as clustering method. See parameter `mode` in
+        function :attr:`~.EDisGo.spatial_complexity_reduction` for more information.
+        Default: "kmeansdijkstra".
+    reduction_factor : float
+        Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
+    reduction_factor_not_focused : bool or float
+        If False, the focus method is not used. If between 0 and 1, this sets the
+        reduction factor for buses not of interest. See parameter
+        `reduction_factor_not_focused` in function :func:`~make_busmap`
+        for more information. Default: False.
+
     Returns
     -------
-    :obj:`pd.DataFrame`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Busmap which maps the old bus names to the new bus names with new coordinates.
+        See return value in function :func:`~make_busmap` for more information.
+
     References
     ----------
-    In parts based on PyPSA spatial complexity reduction
-    `https://pypsa.readthedocs.io/en/latest/examples/spatial-clustering.html`
+    In parts based on `PyPSA spatial complexity reduction <https://pypsa.readthedocs.io
+    /en/latest/examples/spatial-clustering.html>`_.
+
     """
 
     def make_name(number_of_feeder_node):
@@ -953,16 +953,14 @@ def make_busmap_from_main_feeders(
             if node in main_feeder_nodes:
                 return node
 
-    edisgo_obj = copy.deepcopy(edisgo_root)
-    start_time = time()
-    logger.info("Start - Make busmap from main feeders, mode = {}".format(mode))
+    logger.debug("Start making busmap for main feeders")
 
     if mode != "aggregate_to_main_feeder":
         edisgo_obj.topology.buses_df = edisgo_obj.topology.buses_df.apply(
             transform_coordinates, axis="columns"
         )
 
-    grid_list = make_grid_list(edisgo_obj, grid=grid)
+    grid_list = _make_grid_list(edisgo_obj, grid=grid)
     busmap_df = pd.DataFrame()
     mvgd_id = edisgo_obj.topology.mv_grid.id
 
@@ -989,9 +987,7 @@ def make_busmap_from_main_feeders(
         neighbors = list(nx.neighbors(graph_root, transformer_node))
         neighbors.sort()
         logger.debug(
-            "Transformer neighbors has {} neighbors: {}".format(
-                len(neighbors), neighbors
-            )
+            "Transformer has {} neighbors: {}".format(len(neighbors), neighbors)
         )
 
         graph_without_transformer = copy.deepcopy(graph_root)
@@ -1055,6 +1051,7 @@ def make_busmap_from_main_feeders(
         if mode == "equidistant_nodes":
 
             def short_coordinates(root_node, end_node, branch_length, node_number):
+                # Calculate coordinates for the feeder nodes
                 angle = math.degrees(
                     math.atan2(end_node[1] - root_node[1], end_node[0] - root_node[0])
                 )
@@ -1255,205 +1252,180 @@ def make_busmap_from_main_feeders(
     if mode != "aggregate_to_main_feeder":
         busmap_df = busmap_df.apply(transform_coordinates_back, axis="columns")
 
-    logger.info("Finished in {}s".format(time() - start_time))
     return busmap_df
 
 
 def make_busmap(
-    edisgo_root: EDisGo,
-    mode: str = None,
-    cluster_area: str = None,
+    edisgo_obj: EDisGo,
+    mode: str = "kmeansdijkstra",
+    cluster_area: str = "feeder",
     reduction_factor: float = 0.25,
-    reduction_factor_not_focused: Union[bool, float] = False,
-    grid: Union[None, Grid] = None,
+    reduction_factor_not_focused: bool | float = False,
+    grid: None | Grid = None,
 ) -> DataFrame:
     """
-    Wrapper around the different make_busmap methods for the different cluster areas.
-    From the EDisGo object a busmap is generated. The bus names are mapped to new bus
-    names with new coordinates. The busmap can be used with the function
-    :func:`reduce_edisgo <edisgo.tools.spatial_complexity_reduction.reduce_edisgo>` to
-    perform a spatial complexity reduction.
+    Determines which busses are clustered.
+
+    The information on which original busses are clustered to which new busses is
+    given in the so-called busmap dataframe. The busmap can be used with the function
+    :func:`~apply_busmap` to perform a spatial complexity reduction.
+
     Parameters
     ----------
-    edisgo_root: :obj:`EDisGo`
-        EDisGo object for which the busmap ist created.
-    mode: :obj:`str`
-        "kmeans", "kmeansdijkstra", "aggregate_to_main_feeder" or
-        "equidistant_nodes" as clustering method. "aggregate_to_main_feeder" or
-        "equidistant_nodes" only work with the cluster area "main_feeder".
-        - "kmeans":
-            Perform the k-means algorithm on the cluster area and map then the buses to
-            the cluster centers.
-        - "kmeansdijkstra":
-            Perform the k-mean algorithm but then map the nodes to the cluster centers
-            through the distance shortest distance in the graph. The distances are
-            calculated by the dijkstra algorithm.
-        - "aggregate_to_main_feeder":
-            Aggregate the nodes in the feeder to the longest path in the feeder, here
-            named main feeder.
-        - "equidistant_nodes":
-            Use the method aggregate to main feeder and then reduce the nodes again.
-            Through a reduction of the nodes by the reduction factor and then
-            distributing the remaining nodes on the graph.
-    cluster_area: :obj:`str`
-        Select: 'grid', 'feeder' or 'main_feeder' as the cluster area. The cluster area
-        is the area on which the different clustering methods are used on.
-    reduction_factor: :obj:`float`
-        Must bigger than 0 smaller than 1. Nodes are reduced with this factor.
-    reduction_factor_not_focused: :obj:`bool` or :obj:`float`
-        If false the focus method is not used. If 0 or smaller than 1, this sets the
-        reduction factor for buses not of interest. When selecting 0 the nodes of the
-        clustering area are aggregated to the transformer bus.
-    grid: :obj:`str` or None
-        If None, busmap is created for all grids, else only for the selected Grid.
+    edisgo_obj : :class:`~.EDisGo`
+        EDisGo object for which the busmap is created.
+    mode : str
+        Clustering method to use.
+        See parameter `mode` in function :attr:`~.EDisGo.spatial_complexity_reduction`
+        for more information.
+    cluster_area : str
+        The cluster area is the area the different clustering methods are applied to.
+        Possible options are 'grid', 'feeder' or 'main_feeder'. Default: "feeder".
+    reduction_factor : float
+        Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
+    reduction_factor_not_focused : bool or float
+        If False, uses the same reduction factor for all cluster areas. If between 0
+        and 1, this sets the reduction factor for buses not of interest (these are buses
+        without voltage or overloading issues, that are determined through a worst case
+        power flow analysis). When selecting 0, the nodes of the clustering area are
+        aggregated to the transformer bus. This parameter is only used when parameter
+        `cluster_area` is set to 'feeder' or 'main_feeder'.
+        Default: False.
+    grid : str or None
+        If None, busmap is created for all grids, else only for the selected grid.
+
     Returns
     -------
-    :obj:`pd.DataFrame`
+    :pandas:`pandas.DataFrame<DataFrame>`
         Busmap which maps the old bus names to the new bus names with new coordinates.
+        Columns are "new_bus" with new bus name, "new_x" with new x-coordinate and
+        "new_y" with new y-coordinate. Index of the dataframe holds bus names of
+        original buses as in buses_df.
+
     References
     ----------
-    In parts based on PyPSA spatial complexity reduction
-    `https://pypsa.readthedocs.io/en/latest/examples/spatial-clustering.html`
+    In parts based on `PyPSA spatial complexity reduction <https://pypsa.readthedocs.io
+    /en/latest/examples/spatial-clustering.html>`_.
+
     """
+
     # Check for false input.
     if mode == "aggregate_to_main_feeder":
         pass  # Aggregate to the main feeder
     elif not 0 < reduction_factor < 1.0:
-        raise ValueError("Reduction factor must bigger than 0 and smaller than 1")
+        raise ValueError("Reduction factor must be between 0 and 1.")
 
-    if mode not in [
+    modes = [
         "aggregate_to_main_feeder",
         "kmeans",
         "kmeansdijkstra",
         "equidistant_nodes",
-    ]:
-        raise ValueError(f"Selected false {mode=}")
+    ]
+    if mode not in modes:
+        raise ValueError(f"Invalid input for parameter 'mode'. Must be one of {modes}.")
     if (reduction_factor_not_focused is not False) and not (
         0 <= reduction_factor_not_focused < 1.0
     ):
         raise ValueError(
-            f"{reduction_factor_not_focused=}, should be 'False' "
-            f"or 0 or bigger than 0 but smaller than 1"
+            "Invalid input for parameter 'reduction_factor_not_focused'. Should be"
+            "'False' or between 0 and 1."
         )
 
     if cluster_area == "grid":
-        busmap_df = make_busmap_from_clustering(
-            edisgo_root,
+        busmap_df = make_busmap_grid(
+            edisgo_obj,
             mode=mode,
             grid=grid,
             reduction_factor=reduction_factor,
         )
     elif cluster_area == "feeder":
-        busmap_df = make_busmap_from_feeders(
-            edisgo_root,
+        busmap_df = make_busmap_feeders(
+            edisgo_obj,
             grid=grid,
             mode=mode,
             reduction_factor=reduction_factor,
             reduction_factor_not_focused=reduction_factor_not_focused,
         )
     elif cluster_area == "main_feeder":
-        busmap_df = make_busmap_from_main_feeders(
-            edisgo_root,
+        busmap_df = make_busmap_main_feeders(
+            edisgo_obj,
             grid=grid,
             mode=mode,
             reduction_factor=reduction_factor,
             reduction_factor_not_focused=reduction_factor_not_focused,
         )
     else:
-        raise ValueError(f"Selected false {cluster_area=}!")
+        raise ValueError(
+            "Invalid input for parameter 'cluster_area'. Must be one of 'grid', "
+            "'feeder' or 'main_feeder'."
+        )
 
     return busmap_df
 
 
-def make_remaining_busmap(busmap_df: DataFrame, edisgo_root: EDisGo) -> DataFrame:
-    """
-    Make the remaining busmap out of an existing busmap and the EDisGo object.
-    If only the busmap for one grid is generated than with this function the remaining
-    busmap can be generated. Cause the
-    :func:`reduce_edisgo <edisgo.tools.spatial_complexity_reduction.reduce_edisgo>`
-    needs a busmap with all nodes of a bus.
-    Parameters
-    ----------
-    busmap_df: :obj:`pd.DataFrame`
-        Busmap with missing nodes.
-    edisgo_root: :obj:`EDisGo`
-        EDisGo object for which the busmap is generated.
-    Returns
-    -------
-    :obj:`DataFrame`
-        Busmap for the full edisgo object.
-    """
-
-    start_time = time()
-    logger.info("Start - Make remaining busmap")
-
-    remaining_busmap_df = edisgo_root.topology.buses_df.loc[
-        ~edisgo_root.topology.buses_df.index.isin(busmap_df.index)
-    ].copy()
-    remaining_busmap_df.loc[
-        remaining_busmap_df.index, "new_bus"
-    ] = remaining_busmap_df.index
-    remaining_busmap_df.loc[remaining_busmap_df.index, "new_x"] = remaining_busmap_df.x
-    remaining_busmap_df.loc[remaining_busmap_df.index, "new_y"] = remaining_busmap_df.y
-    remaining_busmap_df = remaining_busmap_df.drop(
-        labels=["v_nom", "mv_grid_id", "lv_grid_id", "in_building", "x", "y"], axis=1
-    )
-    remaining_busmap_df.index.name = "old_bus"
-    busmap_df = pd.concat([busmap_df, remaining_busmap_df])
-
-    logger.info("Finished in {}s".format(time() - start_time))
-    return busmap_df
-
-
-def reduce_edisgo(
-    edisgo_root: EDisGo,
+def apply_busmap(
+    edisgo_obj: EDisGo,
     busmap_df: DataFrame,
     line_naming_convention: str = "standard_lines",
-    aggregation_mode: bool = True,
+    aggregation_mode: bool = False,
     load_aggregation_mode: str = "sector",
     generator_aggregation_mode: str = "type",
-) -> Tuple[EDisGo, DataFrame]:
+) -> DataFrame:
     """
     Function to reduce the EDisGo object with a previously generated busmap.
-    Warning: After reducing all attributes 'in_building' of the buses is set to False.
-    Also, the method only works for lines which length can be calculated with a detour
-    factor, which has to be set in the config. Else the line length is calculated
-    false which leads to false results. If the grid doesn't have coordinates or
-    matches the requirements use the :func:`make_pseudo_coordinates
-    <edisgo.tools.pseudo_coordinates.make_pseudo_coordinates>`.
+
+    Warning: After reduction, 'in_building' of all buses is set to False.
+    Also, the method only works if all buses have x and y coordinates. If this is not
+    the case, you can use the function
+    :func:`~.tools.pseudo_coordinates.make_pseudo_coordinates` to set coordinates for
+    all buses.
+
     Parameters
     ----------
-    edisgo_root: :obj:`EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
         EDisGo object to reduce.
-    busmap_df: :obj:`DataFrame`
-        Busmap, holds the information which nodes are merged together.
-    aggregation_mode: :obj:`str`
-        If True loads and generators and their timeseries are aggregated
-        according to their selected modes.
-    line_naming_convention: :obj:`str`
-        Select "standard_lines" or "combined_name". When the lines are aggregated it
-        can happen that two or more lines are merged. This leads to the problem of
-        new line types. If "standard_lines" is selected. In the case of a line merge
-        as line_tipe and kind the values of the standard type of the voltage level is
-        selected. If "combined_name" is selected the new type and kind is contains the
-        concated names of the merged lines.
-    load_aggregation_mode: :obj:`str`
-        Choose: "bus" or "sector" if bus is chosen all loads in the loads_df are
-        aggregated per bus. When sector is chosen its aggregated by bus and sector.
-    generator_aggregation_mode: :obj:`str`
-        Choose: "bus" or "type" if bus is chosen all generators in the generators_df
-        are aggregated per bus. When type is chosen its aggregated by bus and type.
+    busmap_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Busmap holding the information which nodes are merged together.
+    line_naming_convention : str
+        Determines how to set "type_info" and "kind" in case two or more lines are
+        aggregated. Possible options are "standard_lines" or "combined_name".
+        If "standard_lines" is selected, the values of the standard line of the
+        respective voltage level are used to set "type_info" and "kind".
+        If "combined_name" is selected, "type_info" and "kind" contain the
+        concatenated values of the merged lines. x and r of the lines are not influenced
+        by this as they are always determined from the x and r values of the aggregated
+        lines.
+        Default: "standard_lines".
+    aggregation_mode : bool
+        Specifies, whether to aggregate loads and generators at the same bus or not.
+        If True, loads and generators at the same bus are aggregated
+        according to their selected modes (see parameters `load_aggregation_mode` and
+        `generator_aggregation_mode`). Default: False.
+    load_aggregation_mode : str
+        Specifies, how to aggregate loads at the same bus, in case parameter
+        `aggregation_mode` is set to True. Possible options are "bus" or "sector".
+        If "bus" is chosen, loads are aggregated per bus. When "sector" is chosen,
+        loads are aggregated by bus, type and sector. Default: "sector".
+    generator_aggregation_mode : str
+        Specifies, how to aggregate generators at the same bus, in case parameter
+        `aggregation_mode` is set to True. Possible options are "bus" or "type".
+        If "bus" is chosen, generators are aggregated per bus. When "type" is chosen,
+        generators are aggregated by bus and type.
+
     Returns
     -------
-    :obj:`EDisGo`
-        Reduced EDisGo object.
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Linemap which maps the old line names (in the index of the dataframe) to the
+        new line names (in column "new_line_name").
+
     References
     ----------
-    In parts based on PyPSA spatial complexity reduction
-    `https://pypsa.readthedocs.io/en/latest/examples/spatial-clustering.html`
+    In parts based on `PyPSA spatial complexity reduction <https://pypsa.readthedocs.io
+    /en/latest/examples/spatial-clustering.html>`_.
+
     """
-    # region Define local functions
-    def apply_busmap_on_busmap_df(series):
+
+    def apply_busmap_on_buses_df(series):
         series.loc["bus"] = busmap_df.loc[series.name, "new_bus"]
         series.loc["x"] = busmap_df.loc[series.name, "new_x"]
         series.loc["y"] = busmap_df.loc[series.name, "new_y"]
@@ -1466,7 +1438,7 @@ def reduce_edisgo(
 
     def remove_lines_with_the_same_bus(series):
         if series.bus0 == series.bus1:
-            return  # Drop lines which connect to the same bus.
+            return  # Drop lines which connect the same bus.
         elif (
             series.bus0.split("_")[0] == "virtual"
             and series.bus0.lstrip("virtual_") == slack_bus
@@ -1516,10 +1488,14 @@ def reduce_edisgo(
         if length == 0:
             length = 0.001
             logger.warning(
-                f"Length of line between {bus0} and {bus1} can't be 0, set to 1m."
+                f"Length of line between {bus0} and {bus1} cannot be 0 m and is "
+                f"therefore set to 1 m."
             )
         if length < 0.001:
-            logger.warning(f"Length of line between {bus0} and {bus1} smaller than 1m.")
+            logger.debug(
+                f"Length of line between {bus0} and {bus1} is smaller than 1 m. To "
+                f"avoid stability issues in the power flow analysis it is set to 1 m."
+            )
 
         # Get type of the line to get the according standard line for the voltage_level
         if np.isnan(buses_df.loc[df.bus0, "lv_grid_id"])[0]:
@@ -1557,10 +1533,7 @@ def reduce_edisgo(
                 ]
             except KeyError:
                 x_line = line_data_df.loc[line_type, "L_per_km"]
-                logger.error(
-                    f"Line type doesn't matches voltage level"
-                    f"{line_type} not in voltage level {v_nom}."
-                )
+                logger.error(f"Line type {line_type} not in voltage level {v_nom} kV.")
             x_sum = x_sum + 1 / x_line
         x_sum = 1 / x_sum
         x = length * 2 * math.pi * 50 * x_sum / 1000
@@ -1573,10 +1546,7 @@ def reduce_edisgo(
                 ]
             except KeyError:
                 r_line = line_data_df.loc[line_type, "R_per_km"]
-                logger.error(
-                    f"Line type doesn't matches voltage level"
-                    f"{line_type} not in voltage level {v_nom}."
-                )
+                logger.error(f"Line type {line_type} not in voltage level {v_nom} kV.")
 
             r_sum = r_sum + 1 / r_line
         r_sum = 1 / r_sum
@@ -1600,13 +1570,15 @@ def reduce_edisgo(
         return series
 
     def aggregate_loads_df(df):
-        series = pd.Series(index=df.columns, dtype="object")  # l.values[0],
+        series = pd.Series(index=df.columns, dtype="object")
         series.loc["bus"] = df.loc[:, "bus"].values[0]
         series.loc["p_set"] = df.loc[:, "p_set"].sum()
         series.loc["annual_consumption"] = df.loc[:, "annual_consumption"].sum()
         if load_aggregation_mode == "sector":
+            series.loc["type"] = df.loc[:, "type"].values[0]
             series.loc["sector"] = df.loc[:, "sector"].values[0]
         elif load_aggregation_mode == "bus":
+            series.loc["type"] = "aggregated"
             series.loc["sector"] = "aggregated"
         series.loc["old_name"] = df.index.tolist()
         return series
@@ -1616,7 +1588,7 @@ def reduce_edisgo(
         series.loc["bus"] = df.loc[:, "bus"].values[0]
         series.loc["p_nom"] = df.loc[:, "p_nom"].sum()
         series.loc["control"] = df.loc[:, "control"].values[0]
-        series.loc["subtype"] = df.loc[:, "subtype"].values[0]
+        series.loc["subtype"] = "aggregated"
         series.loc["old_name"] = df.index.tolist()
         if generator_aggregation_mode == "bus":
             series.loc["type"] = "aggregated"
@@ -1635,7 +1607,7 @@ def reduce_edisgo(
 
     def aggregate_timeseries(
         df: DataFrame, edisgo_obj: EDisGo, timeseries_to_aggregate: list
-    ) -> None:
+    ):
         # comp = component
         # aggregate load timeseries
         name_map_df = df.loc[:, "old_name"].to_dict()
@@ -1662,39 +1634,29 @@ def reduce_edisgo(
 
             setattr(edisgo_obj.timeseries, timeseries_name, timeseries)
 
-        return edisgo_obj
-
     def apply_busmap_on_transformers_df(series):
         series.loc["bus0"] = busmap_df.loc[series.loc["bus0"], "new_bus"]
         series.loc["bus1"] = busmap_df.loc[series.loc["bus1"], "new_bus"]
         return series
 
-    # endregion
-
-    # region Reduce EDisGO object
-    start_time = time()
-    logger.info("Start - Reducing edisgo object")
-
-    edisgo_obj = copy.deepcopy(edisgo_root)  # Make deepcopy to preserve root object
-
-    logger.info("Copy dataframes from edisgo object")
+    # Copy dataframes from edisgo object
     buses_df = edisgo_obj.topology.buses_df.copy()
     lines_df = edisgo_obj.topology.lines_df.copy()
     loads_df = edisgo_obj.topology.loads_df.copy()
     generators_df = edisgo_obj.topology.generators_df.copy()
     storage_units_df = edisgo_obj.topology.storage_units_df.copy()
+    transformers_df = edisgo_obj.topology.transformers_df.copy()
     switches_df = edisgo_obj.topology.switches_df.copy()
 
     slack_bus = edisgo_obj.topology.transformers_hvmv_df.bus1[0]
 
-    logger.info("Manipulate buses_df")
-    buses_df = buses_df.apply(apply_busmap_on_busmap_df, axis="columns")
+    # Manipulate buses_df
+    buses_df = buses_df.apply(apply_busmap_on_buses_df, axis="columns")
     buses_df = buses_df.groupby(by=["bus"], dropna=False, as_index=False).first()
-
     buses_df.loc[:, "in_building"] = False
     buses_df = buses_df.set_index("bus")
 
-    logger.info("Manipulate lines_df")
+    # Manipulate lines_df
     if not lines_df.empty:
         # Get one dataframe with all data of the line types
         line_data_df = pd.concat(
@@ -1715,17 +1677,22 @@ def reduce_edisgo(
             "Line_" + lines_df.loc[:, "bus0"] + "_to_" + lines_df.loc[:, "bus1"]
         )
 
-    logger.info("Manipulate loads_df")
+    # Manipulate loads_df
     if not loads_df.empty:
         loads_df = loads_df.apply(apply_busmap_on_components, axis="columns")
 
         if aggregation_mode:
             if load_aggregation_mode == "sector":
-                loads_df = loads_df.groupby(by=["bus", "sector"]).apply(
+                loads_df = loads_df.groupby(by=["bus", "type", "sector"]).apply(
                     aggregate_loads_df
                 )
                 loads_df.index = (
-                    "Load_" + loads_df.loc[:, "bus"] + "_" + loads_df.loc[:, "sector"]
+                    "Load_"
+                    + loads_df.loc[:, "bus"]
+                    + "_"
+                    + loads_df.loc[:, "type"]
+                    + "_"
+                    + loads_df.loc[:, "sector"]
                 )
             elif load_aggregation_mode == "bus":
                 loads_df = loads_df.groupby(by=["bus"]).apply(aggregate_loads_df)
@@ -1737,7 +1704,7 @@ def reduce_edisgo(
                 loads_df, edisgo_obj, ["loads_active_power", "loads_reactive_power"]
             )
 
-    logger.info("Manipulate generators_df")
+    # Manipulate generators_df
     if not generators_df.empty:
         generators_df = generators_df.loc[
             generators_df.loc[:, "bus"].isin(busmap_df.index), :
@@ -1771,20 +1738,18 @@ def reduce_edisgo(
                 ["generators_active_power", "generators_reactive_power"],
             )
 
-    logger.info("Manipulate storage_units_df")
-
+    # Manipulate storage_units_df
     if not storage_units_df.empty:
         storage_units_df = storage_units_df.apply(
             apply_busmap_on_components, axis="columns"
         )
 
-    logger.info("Manipulate transformers_df")
-    transformers_df = edisgo_obj.topology.transformers_df
+    # Manipulate transformers_df
     transformers_df = transformers_df.apply(
         apply_busmap_on_transformers_df, axis="columns"
     )
 
-    logger.info("Manipulate switches_df")
+    # Manipulate switches_df
     if not switches_df.empty:
         # drop switches unused switches
         switches_to_drop = []
@@ -1838,119 +1803,158 @@ def reduce_edisgo(
     edisgo_obj.topology.transformers_df = transformers_df
     edisgo_obj.topology.switches_df = switches_df
 
-    logger.info("Make linemap_df")
+    # Make linemap_df
     linemap_df = pd.DataFrame()
     for new_line_name, old_line_names in zip(lines_df.index, lines_df.old_line_name):
         for old_line_name in old_line_names:
             linemap_df.loc[old_line_name, "new_line_name"] = new_line_name
 
-    logger.info("Finished in {}s".format(time() - start_time))
-    # endregion
-
-    return edisgo_obj, linemap_df
+    return linemap_df
 
 
 def spatial_complexity_reduction(
-    edisgo_root: EDisGo,
+    edisgo_obj: EDisGo,
     mode: str = "kmeansdijkstra",
     cluster_area: str = "feeder",
-    reduction_factor: float = 0.5,
-    reduction_factor_not_focused: Union[float, bool] = 0.2,
-) -> Tuple[EDisGo, DataFrame, DataFrame]:
+    reduction_factor: float = 0.25,
+    reduction_factor_not_focused: bool | float = False,
+    apply_pseudo_coordinates: bool = True,
+    **kwargs,
+) -> tuple[DataFrame, DataFrame]:
     """
-    Wrapper around the functions :func:`make_busmap<edisgo.tools.make_busmap>` and
-    :func:`reduce_edisgo <edisgo.tools.spatial_complexity_reduction.reduce_edisgo>`
-    look there for more information.
+    Reduces the number of busses and lines by applying a spatial clustering.
+
+    See function :attr:`~.EDisGo.spatial_complexity_reduction` for more information.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+        EDisGo object to apply spatial complexity reduction to.
+    mode : str
+        Clustering method to use.
+        See parameter `mode` in function :attr:`~.EDisGo.spatial_complexity_reduction`
+        for more information.
+    cluster_area : str
+        The cluster area is the area the different clustering methods are applied to.
+        See parameter `cluster_area` in function
+        :attr:`~.EDisGo.spatial_complexity_reduction` for more information.
+    reduction_factor : float
+        Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
+    reduction_factor_not_focused : bool or float
+        If False, uses the same reduction factor for all cluster areas. If between 0
+        and 1, this sets the reduction factor for buses not of interest. See parameter
+        `reduction_factor_not_focused` in function
+        :attr:`~.EDisGo.spatial_complexity_reduction` for more information.
+    apply_pseudo_coordinates : bool
+        If True pseudo coordinates are applied. The spatial complexity reduction method
+        is only tested with pseudo coordinates. Default: True.
+
+    Other Parameters
+    -----------------
+    line_naming_convention : str
+        Determines how to set "type_info" and "kind" in case two or more lines are
+        aggregated. See parameter `line_naming_convention` in function
+        :attr:`~.EDisGo.spatial_complexity_reduction` for more information.
+    aggregation_mode : bool
+        Specifies, whether to aggregate loads and generators at the same bus or not.
+        See parameter `aggregation_mode` in function
+        :attr:`~.EDisGo.spatial_complexity_reduction` for more information.
+    load_aggregation_mode : str
+        Specifies, how to aggregate loads at the same bus, in case parameter
+        `aggregation_mode` is set to True. See parameter `load_aggregation_mode` in
+        function :attr:`~.EDisGo.spatial_complexity_reduction` for more information.
+    generator_aggregation_mode : str
+        Specifies, how to aggregate generators at the same bus, in case parameter
+        `aggregation_mode` is set to True. See parameter `generator_aggregation_mode` in
+        function :attr:`~.EDisGo.spatial_complexity_reduction` for more information.
+    mv_pseudo_coordinates : bool, optional
+        If True pseudo coordinates are also generated for MV grid.
+        Default: False.
+
+    Returns
+    -------
+    tuple(:pandas:`pandas.DataFrame<DataFrame>`, :pandas:`pandas.DataFrame<DataFrame>`)
+        Returns busmap and linemap dataframes.
+        The busmap maps the original busses to the new busses with new coordinates.
+        Columns are "new_bus" with new bus name, "new_x" with new x-coordinate and
+        "new_y" with new y-coordinate. Index of the dataframe holds bus names of
+        original buses as in buses_df.
+        The linemap maps the original line names (in the index of the dataframe) to the
+        new line names (in column "new_line_name").
+
     """
-    edisgo_obj = copy.deepcopy(edisgo_root)
-    # edisgo_obj.results.equipment_changes = pd.DataFrame()
+
+    if apply_pseudo_coordinates:
+        make_pseudo_coordinates(
+            edisgo_obj, mv_coordinates=kwargs.pop("mv_pseudo_coordinates", False)
+        )
 
     busmap_df = make_busmap(
-        edisgo_root,
+        edisgo_obj,
         mode=mode,
         cluster_area=cluster_area,
         reduction_factor=reduction_factor,
         reduction_factor_not_focused=reduction_factor_not_focused,
     )
-    edisgo_reduced, linemap_df = reduce_edisgo(
-        edisgo_obj, busmap_df, aggregation_mode=False
-    )
+    linemap_df = apply_busmap(edisgo_obj, busmap_df, **kwargs)
 
-    return edisgo_reduced, busmap_df, linemap_df
+    return busmap_df, linemap_df
 
 
-# endregion
+def compare_voltage(
+    edisgo_unreduced: EDisGo,
+    edisgo_reduced: EDisGo,
+    busmap_df: DataFrame,
+    timestep: str | pd.Timestamp,
+) -> tuple[DataFrame, float]:
+    """
+    Compares the voltages per node between the unreduced and the reduced EDisGo object.
 
-# region Postprocessing/Evaluation (Currently not tested and probably not working.)
-def save_results_reduced_to_min_max(
-    edisgo_root: EDisGo, edisgo_object_name: str
-) -> EDisGo:
-    edisgo_obj = copy.deepcopy(edisgo_root)
+    The voltage difference for each node in p.u. as well as the root-mean-square error
+    is returned. For the mapping of nodes in the unreduced and reduced network the
+    busmap is used.
+    The calculation is performed for one timestep or the minimum or maximum values of
+    the node voltages.
 
-    def min_max(df):
-        min_df = df.min()
-        min_df.name = "min"
-        max_df = df.max()
-        max_df.name = "max"
+    Parameters
+    ----------
+    edisgo_unreduced : :class:`~.EDisGo`
+        Unreduced EDisGo object.
+    edisgo_reduced : :class:`~.EDisGo`
+        Reduced EDisGo object.
+    busmap_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Busmap for the mapping of nodes.
+    timestep : str or :pandas:`pandas.Timestamp<Timestamp>`
+        Timestep for which to compare the bus voltage. Can either be a certain time
+        step or 'min' or 'max'.
 
-        df = pd.concat([min_df, max_df], axis=1)
-        df = df.T
-        return df
+    Returns
+    -------
+    (:pandas:`pandas.DataFrame<DataFrame>`, rms)
+        Returns a tuple with the first entry being a DataFrame containing the node
+        voltages as well as voltage differences and the second entry being the
+        root-mean-square error.
+        Columns of the DataFrame are "v_unreduced" with voltage in p.u. in unreduced
+        EDisGo object, "v_reduced" with voltage in p.u. in reduced EDisGo object, and
+        "v_diff" with voltage difference in p.u. between voltages in unreduced and
+        reduced EDisGo object. Index of the DataFrame contains the bus names of buses in
+        the unreduced EDisGo object.
 
-    start_time = time()
-    logger.info("Start - Reduce results to min and max")
-
-    edisgo_obj.results.v_res = min_max(edisgo_obj.results.v_res)
-    edisgo_obj.results.i_res = min_max(edisgo_obj.results.i_res)
-    edisgo_obj.results.pfa_p = min_max(edisgo_obj.results.pfa_p)
-    edisgo_obj.results.pfa_q = min_max(edisgo_obj.results.pfa_q)
-
-    edisgo_obj.save(
-        edisgo_object_name, save_results=True, save_topology=True, save_timeseries=False
-    )
-
-    logger.info("Finished in {}s".format(time() - start_time))
-    return edisgo_obj
-
-
-# Analyze results
-def length_analysis(edisgo_obj: EDisGo) -> Tuple[float, float, float]:
-    start_time = time()
-    logger.info("Start - Length analysis")
-
-    length_total = edisgo_obj.topology.lines_df.length.sum()
-    mv_grid = edisgo_obj.topology.mv_grid
-    length_mv = mv_grid.lines_df.length.sum()
-    length_lv = length_total - length_mv
-
-    logger.info("Total length of lines: {:.2f}km".format(length_total))
-    logger.info("Total length of mv lines: {:.2f}km".format(length_mv))
-    logger.info("Total length of lv lines: {:.2f}km".format(length_lv))
-
-    logger.info("Finished in {}s".format(time() - start_time))
-    return length_total, length_mv, length_lv
-
-
-def voltage_mapping(
-    edisgo_root: EDisGo, edisgo_reduced: EDisGo, busmap_df: DataFrame, timestep: str
-) -> Tuple[DataFrame, float]:
-    start_time = time()
-    logger.info("Start - Voltage mapping")
-
+    """
     if timestep == "min":
-        logger.info("Voltage mapping for the minium values")
-        v_root = edisgo_root.results.v_res.min()
+        logger.debug("Voltage mapping for the minium values.")
+        v_root = edisgo_unreduced.results.v_res.min()
         v_reduced = edisgo_reduced.results.v_res.min()
     elif timestep == "max":
-        logger.info("Voltage mapping for the maximum values")
-        v_root = edisgo_root.results.v_res.max()
+        logger.debug("Voltage mapping for the maximum values.")
+        v_root = edisgo_unreduced.results.v_res.max()
         v_reduced = edisgo_reduced.results.v_res.max()
     else:
-        logger.info("Voltage mapping for timestep {}".format(timestep))
-        v_root = edisgo_root.results.v_res.loc[timestep]
+        logger.debug(f"Voltage mapping for timestep {timestep}.")
+        v_root = edisgo_unreduced.results.v_res.loc[timestep]
         v_reduced = edisgo_reduced.results.v_res.loc[timestep]
 
-    v_root.name = "v_root"
+    v_root.name = "v_unreduced"
     v_root = v_root.loc[busmap_df.index]
 
     voltages_df = v_root.to_frame()
@@ -1960,64 +1964,92 @@ def voltage_mapping(
             voltages_df.loc[index, "v_reduced"] = v_reduced.loc[
                 busmap_df.loc[index, "new_bus"]
             ]
-            voltages_df.loc[index, "new_bus_name"] = busmap_df.loc[index, "new_bus"]
         except KeyError:
             voltages_df.loc[index, "v_reduced"] = v_reduced.loc[
                 busmap_df.loc[index, "new_bus"].lstrip("virtual_")
             ]
-            voltages_df.loc[index, "new_bus_name"] = busmap_df.loc[
-                index, "new_bus"
-            ].lstrip("virtual_")
     voltages_df.loc[:, "v_diff"] = (
-        voltages_df.loc[:, "v_root"] - voltages_df.loc[:, "v_reduced"]
+        voltages_df.loc[:, "v_unreduced"] - voltages_df.loc[:, "v_reduced"]
     )
     rms = np.sqrt(
         mean_squared_error(
-            voltages_df.loc[:, "v_root"], voltages_df.loc[:, "v_reduced"]
+            voltages_df.loc[:, "v_unreduced"], voltages_df.loc[:, "v_reduced"]
         )
     )
-    logger.info(
-        "Root mean square value between edisgo_root "
-        "voltages and edisgo_reduced: v_rms = {:.2%}".format(rms)
+    logger.debug(
+        "Root-mean-square error between voltages in unreduced and reduced "
+        "EDisGo object is: rms = {:.2%}".format(rms)
     )
-
-    logger.info("Finished in {}s".format(time() - start_time))
     return voltages_df, rms
 
 
-def line_apparent_power_mapping(
-    edisgo_root: EDisGo, edisgo_reduced: EDisGo, linemap_df: DataFrame, timestep: str
-) -> Tuple[DataFrame, float]:
-    start_time = time()
-    logger.info("Start - Line apparent power mapping")
+def compare_apparent_power(
+    edisgo_unreduced: EDisGo,
+    edisgo_reduced: EDisGo,
+    linemap_df: DataFrame,
+    timestep: str,
+) -> tuple[DataFrame, float]:
+    """
+    Compares the apparent power over each line between the unreduced and the reduced
+    EDisGo object.
 
+    The difference of apparent power over each line in MVA as well as the
+    root-mean-square error is returned. For the mapping of lines in the unreduced and
+    reduced network the linemap is used.
+    The calculation is performed for one timestep or the minimum or maximum values of
+    the node voltages.
+
+    Parameters
+    ----------
+    edisgo_unreduced : :class:`~.EDisGo`
+        Unreduced EDisGo object.
+    edisgo_reduced : :class:`~.EDisGo`
+        Reduced EDisGo object.
+    linemap_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Linemap for the mapping.
+    timestep : str or :pandas:`pandas.Timestamp<Timestamp>`
+        Timestep for which to compare the apparent power. Can either be a certain time
+        step or 'min' or 'max'.
+
+    Returns
+    -------
+    (:pandas:`pandas.DataFrame<DataFrame>`, rms)
+        Returns a tuple with the first entry being a DataFrame containing the apparent
+        power as well as difference of apparent power for each line and the second entry
+        being the root-mean-square error.
+        Columns of the DataFrame are "s_unreduced" with apparent power in MVA in
+        unreduced EDisGo object, "s_reduced" with apparent power in MVA in reduced
+        EDisGo object, and "s_diff" with difference in apparent power in MVA between
+        apparent power over line in unreduced and reduced EDisGo object. Index of the
+        DataFrame contains the line names of lines in the unreduced EDisGo object.
+
+    """
     if timestep == "min":
-        logger.info("Apparent power mapping for the minium values")
-        s_root = edisgo_root.results.s_res.min()
+        logger.debug("Apparent power mapping for the minium values.")
+        s_root = edisgo_unreduced.results.s_res.min()
         s_reduced = edisgo_reduced.results.s_res.min()
     elif timestep == "max":
-        logger.info("Apparent power mapping for the maximum values")
-        s_root = edisgo_root.results.s_res.max()
+        logger.debug("Apparent power mapping for the maximum values.")
+        s_root = edisgo_unreduced.results.s_res.max()
         s_reduced = edisgo_reduced.results.s_res.max()
     else:
-        logger.info("Apparent power mapping for timestep {}".format(timestep))
-        s_root = edisgo_root.results.s_res.loc[timestep]
+        logger.debug("fApparent power mapping for timestep {timestep}.")
+        s_root = edisgo_unreduced.results.s_res.loc[timestep]
         s_reduced = edisgo_reduced.results.s_res.loc[timestep]
 
-    s_root.name = "s_root"
+    s_root.name = "s_unreduced"
     s_root = s_root.loc[linemap_df.index]
 
     s_df = s_root.to_frame()
 
     for index, row in s_df.iterrows():
         s_df.loc[index, "s_reduced"] = s_reduced.loc[linemap_df.loc[index][0]]
-        s_df.loc[index, "new_bus_name"] = linemap_df.loc[index][0]
-    s_df.loc[:, "s_diff"] = s_df.loc[:, "s_root"] - s_df.loc[:, "s_reduced"]
-    rms = np.sqrt(mean_squared_error(s_df.loc[:, "s_root"], s_df.loc[:, "s_reduced"]))
-    logger.info(
-        "Root mean square value between edisgo_root "
-        "s_res and edisgo_reduced: s_rms = {:.2}".format(rms)
+    s_df.loc[:, "s_diff"] = s_df.loc[:, "s_unreduced"] - s_df.loc[:, "s_reduced"]
+    rms = np.sqrt(
+        mean_squared_error(s_df.loc[:, "s_unreduced"], s_df.loc[:, "s_reduced"])
     )
-
-    logger.info("Finished in {}s".format(time() - start_time))
+    logger.debug(
+        "Root-mean-square error between apparent power in unreduced and reduced "
+        "EDisGo object is: rms = {:.2}".format(rms)
+    )
     return s_df, rms
