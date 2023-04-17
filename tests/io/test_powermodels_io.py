@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -13,6 +14,7 @@ class TestPowermodelsIO:
         self.edisgo.add_component(
             comp_type="load",
             type="heat_pump",
+            sector="individual_heating",
             ts_active_power=pd.Series(
                 index=self.edisgo.timeseries.timeindex,
                 data=[1.0 / 5, 2.0 / 6, 2.0 / 5, 1.0 / 6],
@@ -24,6 +26,7 @@ class TestPowermodelsIO:
         self.edisgo.add_component(
             comp_type="load",
             type="heat_pump",
+            sector="individual_heating",
             ts_active_power=pd.Series(
                 index=self.edisgo.timeseries.timeindex,
                 data=[2.0 / 7.0, 4.0 / 8.0, 3.0 / 7.0, 3.0 / 8.0],
@@ -32,28 +35,58 @@ class TestPowermodelsIO:
             bus=self.edisgo.topology.buses_df.index[30],
             p_set=3,
         )
+        self.edisgo.add_component(
+            comp_type="load",
+            type="heat_pump",
+            sector="district_heating",
+            district_heating_id="grid1",
+            ts_active_power=pd.Series(
+                index=self.edisgo.timeseries.timeindex,
+                data=[1.0 / 5, 2.0 / 6, 2.0 / 5, 1.0 / 6],
+            ),
+            ts_reactive_power="default",
+            bus=self.edisgo.topology.buses_df.index[27],
+            p_set=2,
+        )
+        self.edisgo.add_component(
+            comp_type="load",
+            type="heat_pump",
+            sector="district_heating",
+            district_heating_id="grid1",
+            ts_active_power=pd.Series(
+                index=self.edisgo.timeseries.timeindex,
+                data=[2.0 / 7.0, 4.0 / 8.0, 3.0 / 7.0, 3.0 / 8.0],
+            ),
+            ts_reactive_power="default",
+            bus=self.edisgo.topology.buses_df.index[31],
+            p_set=3,
+        )
 
         # add heat pump, electromobility, overlying grid dummy data
         self.edisgo.heat_pump.cop_df = pd.DataFrame(
             data={
-                "Heat_Pump_LVGrid_3_1": [5.0, 6.0, 5.0, 6.0],
-                "Heat_Pump_LVGrid_5_1": [7.0, 8.0, 7.0, 8.0],
+                "Heat_Pump_LVGrid_3_individual_heating_1": [5.0, 6.0, 5.0, 6.0],
+                "Heat_Pump_LVGrid_5_individual_heating_1": [7.0, 8.0, 7.0, 8.0],
+                "Heat_Pump_MVGrid_1_district_heating_1": [7.0, 8.0, 7.0, 8.0],
+                "Heat_Pump_MVGrid_1_district_heating_2": [7.0, 8.0, 7.0, 8.0],
             },
             index=self.edisgo.timeseries.timeindex,
         )
         self.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
             data={
-                "Heat_Pump_LVGrid_3_1": [1.0, 2.0, 2.0, 1.0],
-                "Heat_Pump_LVGrid_5_1": [2.0, 4.0, 3.0, 3.0],
+                "Heat_Pump_LVGrid_3_individual_heating_1": [1.0, 2.0, 2.0, 1.0],
+                "Heat_Pump_LVGrid_5_individual_heating_1": [2.0, 4.0, 3.0, 3.0],
+                "Heat_Pump_MVGrid_1_district_heating_1": [2.0, 4.0, 3.0, 3.0],
+                "Heat_Pump_MVGrid_1_district_heating_2": [2.0, 4.0, 3.0, 3.0],
             },
             index=self.edisgo.timeseries.timeindex,
         )
         self.edisgo.heat_pump.thermal_storage_units_df = pd.DataFrame(
             data={
-                "capacity": [4, 8],
-                "efficiency": [1, 1],
+                "capacity": [4, 8, 8],
+                "efficiency": [1, 1, 1],
             },
-            index=self.edisgo.heat_pump.heat_demand_df.columns,
+            index=self.edisgo.heat_pump.heat_demand_df.columns[:-1],
         )
 
         self.edisgo.add_component(
@@ -131,6 +164,47 @@ class TestPowermodelsIO:
             index=self.edisgo.timeseries.timeindex,
         )
 
+        # add overlying grid dummy data
+        for attr in [
+            "dsm_active_power",
+            "electromobility_active_power",
+            "heat_pump_decentral_active_power",
+            "renewables_curtailment",
+            "storage_units_active_power",
+            "feedin_district_heating",
+        ]:
+            if attr == "dsm_active_power":
+                data = [0.1, -0.1, -0.1, 0.1]
+            elif attr == "electromobility_active_power":
+                data = [0.4, 0.5, 0.5, 0.6]
+            elif attr == "heat_pump_decentral_active_power":
+                data = [0.5, 0.85, 0.85, 0.55]
+            elif attr == "storage_units_active_power":
+                data = [-0.35, -0.35, 0.35, 0.35]
+
+            if attr == "renewables_curtailment":
+                df = pd.DataFrame(
+                    index=self.edisgo.timeseries.timeindex,
+                    columns=["solar", "wind"],
+                    data=[[0, 0], [0, 0], [0.1, 0.1], [0.1, 0.1]],
+                )
+            elif attr == "feedin_district_heating":
+                df = pd.DataFrame(
+                    index=self.edisgo.timeseries.timeindex,
+                    columns=["grid1"],
+                    data=[1.0, 2.0, 1.0, 2.0],
+                )
+            else:
+                df = pd.Series(
+                    index=self.edisgo.timeseries.timeindex,
+                    data=data,
+                )
+            setattr(
+                self.edisgo.overlying_grid,
+                attr,
+                df,
+            )
+
     def test_to_powermodels(self):
         powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(self.edisgo)
 
@@ -139,18 +213,20 @@ class TestPowermodelsIO:
         assert len(powermodels_network["gen_nd"].keys()) == 27
         assert len(powermodels_network["bus"].keys()) == 142
         assert len(powermodels_network["branch"].keys()) == 141
-        assert len(powermodels_network["load"].keys()) == 50 + 1 + 3
+        assert len(powermodels_network["load"].keys()) == 50 + 1 + 3 + 2
         assert len(powermodels_network["storage"].keys()) == 0
         assert len(powermodels_network["electromobility"].keys()) == 0
         assert len(powermodels_network["heatpumps"].keys()) == 0
         assert len(powermodels_network["heat_storage"].keys()) == 0
         assert len(powermodels_network["dsm"].keys()) == 0
-
         powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(
             self.edisgo,
+            opf_version=4,
             flexible_cps=["Charging_Point_LVGrid_6_1"],
             flexible_hps=self.edisgo.heat_pump.cop_df.columns.values,
-            flexible_loads=self.edisgo.dsm.e_min.columns.values,
+            flexible_loads=np.array(
+                ["Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"]
+            ),
             flexible_storage_units=self.edisgo.topology.storage_units_df.index.values,
         )
         assert len(powermodels_network["gen"].keys()) == 1
@@ -161,11 +237,29 @@ class TestPowermodelsIO:
         assert len(powermodels_network["load"].keys()) == 50
         assert len(powermodels_network["storage"].keys()) == 1
         assert len(powermodels_network["electromobility"].keys()) == 1
-        assert len(powermodels_network["heatpumps"].keys()) == 2
-        assert len(powermodels_network["heat_storage"].keys()) == 2
-        assert len(powermodels_network["dsm"].keys()) == 2
-
-        # ToDo: test more options with test network including overlying grid
+        assert len(powermodels_network["heatpumps"].keys()) == 2 + 2
+        assert len(powermodels_network["heat_storage"].keys()) == 2 + 1
+        assert len(powermodels_network["dsm"].keys()) == 1
+        assert len(powermodels_network["HV_requirements"].keys()) == 5
+        assert powermodels_network["time_series"]["heatpumps"]["4"]["pd"] == [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ]
+        assert set(
+            powermodels_network["time_series"]["heatpumps"]["3"]["pd"]
+            == self.edisgo.heat_pump.heat_demand_df[
+                "Heat_Pump_MVGrid_1_district_heating_1"
+            ]
+            - self.edisgo.overlying_grid.feedin_district_heating.grid1
+        ) == {True}
+        assert len(powermodels_network["dsm"].keys()) == 1
+        assert set(
+            hv_flex_dict["dsm"]
+            == self.edisgo.overlying_grid.dsm_active_power
+            - self.edisgo.timeseries.loads_active_power.Load_industrial_LVGrid_5_1
+        ) == {True}
 
     def test__get_pf(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)

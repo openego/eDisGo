@@ -34,18 +34,18 @@ def pm_optimize(
     s_base : int
         Base value of apparent power for per unit system.
         Default: 1 MVA
-    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or list or None
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
         Array containing all charging points that allow for flexible charging.
         Default: None
-    flexible_hps: :numpy:`numpy.ndarray<ndarray>` or list or None
+    flexible_hps: :numpy:`numpy.ndarray<ndarray>` or None
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
         Default: None
-    flexible_loads: :numpy:`numpy.ndarray<ndarray>` or list or None
+    flexible_loads: :numpy:`numpy.ndarray<ndarray>` or None
         Array containing all flexible loads that allow for application of demand side
         management strategy.
         Default: None
-    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or list or None
+    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or None
         Array containing all flexible storage units. Non-flexible storage units operate
         to optimize self consumption.
         Default: None

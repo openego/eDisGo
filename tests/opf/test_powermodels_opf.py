@@ -40,15 +40,15 @@ class TestPowerModelsOPF:
         # add heat pump, electromobility, overlying grid dummy data
         self.edisgo.heat_pump.cop_df = pd.DataFrame(
             data={
-                "Heat_Pump_LVGrid_3_1": [5.0, 6.0, 5.0, 6.0],
-                "Heat_Pump_LVGrid_5_1": [7.0, 8.0, 7.0, 8.0],
+                "Heat_Pump_LVGrid_3_individual_heating_1": [5.0, 6.0, 5.0, 6.0],
+                "Heat_Pump_LVGrid_5_individual_heating_1": [7.0, 8.0, 7.0, 8.0],
             },
             index=self.edisgo.timeseries.timeindex,
         )
         self.edisgo.heat_pump.heat_demand_df = pd.DataFrame(
             data={
-                "Heat_Pump_LVGrid_3_1": [1.0, 2.0, 2.0, 1.0],
-                "Heat_Pump_LVGrid_5_1": [2.0, 4.0, 3.0, 3.0],
+                "Heat_Pump_LVGrid_3_individual_heating_1": [1.0, 2.0, 2.0, 1.0],
+                "Heat_Pump_LVGrid_5_individual_heating_1": [2.0, 4.0, 3.0, 3.0],
             },
             index=self.edisgo.timeseries.timeindex,
         )
@@ -143,9 +143,7 @@ class TestPowerModelsOPF:
             "heat_pump_decentral_active_power",
             "renewables_curtailment",
             "storage_units_active_power",
-            # ToDo: add dummy Data
-            # "solarthermal_energy_feedin_district_heating",
-            # "geothermal_energy_feedin_district_heating"
+            "feedin_district_heating",
         ]:
             if attr == "dsm_active_power":
                 data = [0.1, -0.1, -0.1, 0.1]
@@ -155,11 +153,18 @@ class TestPowerModelsOPF:
                 data = [0.5, 0.85, 0.85, 0.55]
             elif attr == "storage_units_active_power":
                 data = [-0.35, -0.35, 0.35, 0.35]
+
             if attr == "renewables_curtailment":
                 df = pd.DataFrame(
                     index=self.edisgo.timeseries.timeindex,
                     columns=["solar", "wind"],
                     data=[[0, 0], [0, 0], [0.1, 0.1], [0.1, 0.1]],
+                )
+            elif attr == "feedin_district_heating":
+                df = pd.DataFrame(
+                    index=self.edisgo.timeseries.timeindex,
+                    columns=["grid1"],
+                    data=[1.0, 2.0, 1.0, 2.0],
                 )
             else:
                 df = pd.Series(
@@ -179,7 +184,7 @@ class TestPowerModelsOPF:
             opf_version=2,
             silence_moi=True,
             method="nc",
-            flexible_cps=["Charging_Point_LVGrid_6_1"],
+            flexible_cps=np.array(["Charging_Point_LVGrid_6_1"]),
             flexible_hps=self.edisgo.heat_pump.cop_df.columns.values,
             flexible_loads=self.edisgo.dsm.e_min.columns.values,
             flexible_storage_units=self.edisgo.topology.storage_units_df.index.values,
@@ -192,7 +197,10 @@ class TestPowerModelsOPF:
         )
         assert np.isclose(
             np.round(
-                self.edisgo.opf_results.heat_storage_t.p.Heat_Pump_LVGrid_3_1[-1], 3
+                self.edisgo.opf_results.heat_storage_t.p[
+                    "Heat_Pump_LVGrid_3_individual_heating_1"
+                ][-1],
+                3,
             ),
             -0.666,
             atol=1e-3,
@@ -207,7 +215,10 @@ class TestPowerModelsOPF:
         )
         assert np.isclose(
             np.round(
-                self.edisgo.timeseries.loads_active_power.Heat_Pump_LVGrid_5_1[-1], 3
+                self.edisgo.timeseries.loads_active_power[
+                    "Heat_Pump_LVGrid_5_individual_heating_1"
+                ][-1],
+                3,
             ),
             0.525,
             atol=1e-3,
