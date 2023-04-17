@@ -913,7 +913,6 @@ def allowed_voltage_limits(edisgo_obj, buses=None, split_voltage_band=True):
         buses = edisgo_obj.results.v_res.columns
 
     if split_voltage_band:
-
         # MV limits
         mv_buses = edisgo_obj.topology.mv_grid.buses_df.index
         mv_upper, mv_lower = _mv_allowed_voltage_limits(edisgo_obj)
@@ -1041,17 +1040,18 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
     buses_in_pfa = edisgo_obj.results.v_res.columns
 
     if mode == "stations":
-
         config_string = "mv_lv_station"
 
         # get all primary and secondary sides
-        primary_sides = pd.Series()
-        secondary_sides = pd.Series()
+        dict_primary_sides = {}
+        dict_secondary_sides = {}
         for grid in lv_grids:
             primary_side = grid.transformers_df.iloc[0].bus0
             if primary_side in buses_in_pfa:
-                primary_sides[grid] = primary_side
-                secondary_sides[grid] = grid.station.index[0]
+                dict_primary_sides[grid] = primary_side
+                dict_secondary_sides[grid] = grid.station.index[0]
+        primary_sides = pd.Series(dict_primary_sides)
+        secondary_sides = pd.Series(dict_secondary_sides)
 
         voltage_base = edisgo_obj.results.v_res.loc[:, primary_sides.values]
 
@@ -1080,14 +1080,15 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
 
         # get all secondary sides and buses in grids
         buses_dict = {}
-        secondary_sides = pd.Series()
+        secondary_sides_dict = {}
         for grid in lv_grids:
             secondary_side = grid.station.index[0]
             if secondary_side in buses_in_pfa:
-                secondary_sides[grid] = secondary_side
+                secondary_sides_dict[grid] = secondary_side
                 buses_dict[grid.station.index[0]] = grid.buses_df.index.drop(
                     grid.station.index[0]
                 )
+        secondary_sides = pd.Series(secondary_sides_dict)
 
         voltage_base = edisgo_obj.results.v_res.loc[:, secondary_sides.values]
 
@@ -1105,14 +1106,14 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         )
 
         # rename columns to secondary side
-        for colname, values in upper_limits_df_tmp.iteritems():
+        for colname, values in upper_limits_df_tmp.items():
             tmp = pd.DataFrame(
                 data=np.tile(values, (len(buses_dict[colname]), 1)).T,
                 columns=buses_dict[colname],
                 index=values.index,
             )
             upper_limits_df = pd.concat([upper_limits_df, tmp], axis=1)
-        for colname, values in lower_limits_df_tmp.iteritems():
+        for colname, values in lower_limits_df_tmp.items():
             tmp = pd.DataFrame(
                 data=np.tile(values, (len(buses_dict[colname]), 1)).T,
                 columns=buses_dict[colname],
