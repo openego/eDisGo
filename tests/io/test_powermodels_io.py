@@ -76,8 +76,8 @@ class TestPowermodelsIO:
             data={
                 "Heat_Pump_LVGrid_3_individual_heating_1": [1.0, 2.0, 2.0, 1.0],
                 "Heat_Pump_LVGrid_5_individual_heating_1": [2.0, 4.0, 3.0, 3.0],
-                "Heat_Pump_MVGrid_1_district_heating_1": [2.0, 4.0, 3.0, 3.0],
                 "Heat_Pump_MVGrid_1_district_heating_2": [2.0, 4.0, 3.0, 3.0],
+                "Heat_Pump_MVGrid_1_district_heating_1": [2.0, 4.0, 3.0, 3.0],
             },
             index=self.edisgo.timeseries.timeindex,
         )
@@ -219,6 +219,8 @@ class TestPowermodelsIO:
         assert len(powermodels_network["heatpumps"].keys()) == 0
         assert len(powermodels_network["heat_storage"].keys()) == 0
         assert len(powermodels_network["dsm"].keys()) == 0
+        # ToDo: check, that storage power is added to gen/load
+        # ToDo: check gen, load dict and corresponding timeseries dict
         powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(
             self.edisgo,
             opf_version=4,
@@ -238,7 +240,7 @@ class TestPowermodelsIO:
         assert len(powermodels_network["storage"].keys()) == 1
         assert len(powermodels_network["electromobility"].keys()) == 1
         assert len(powermodels_network["heatpumps"].keys()) == 2 + 2
-        assert len(powermodels_network["heat_storage"].keys()) == 2 + 1
+        assert len(powermodels_network["heat_storage"].keys()) == 2 + 1 + 1
         assert len(powermodels_network["dsm"].keys()) == 1
         assert len(powermodels_network["HV_requirements"].keys()) == 5
         assert powermodels_network["time_series"]["heatpumps"]["4"]["pd"] == [

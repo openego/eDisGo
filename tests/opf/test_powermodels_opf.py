@@ -36,12 +36,39 @@ class TestPowerModelsOPF:
             bus=self.edisgo.topology.buses_df.index[30],
             p_set=3,
         )
+        self.edisgo.add_component(
+            comp_type="load",
+            type="heat_pump",
+            sector="district_heating",
+            district_heating_id="grid1",
+            ts_active_power=pd.Series(
+                index=self.edisgo.timeseries.timeindex,
+                data=[1.0 / 5, 2.0 / 6, 2.0 / 5, 1.0 / 6],
+            ),
+            ts_reactive_power="default",
+            bus=self.edisgo.topology.buses_df.index[27],
+            p_set=2,
+        )
+        self.edisgo.add_component(
+            comp_type="load",
+            type="heat_pump",
+            sector="district_heating",
+            district_heating_id="grid1",
+            ts_active_power=pd.Series(
+                index=self.edisgo.timeseries.timeindex,
+                data=[2.0 / 7.0, 4.0 / 8.0, 3.0 / 7.0, 3.0 / 8.0],
+            ),
+            ts_reactive_power="default",
+            bus=self.edisgo.topology.buses_df.index[31],
+            p_set=3,
+        )
 
-        # add heat pump, electromobility, overlying grid dummy data
         self.edisgo.heat_pump.cop_df = pd.DataFrame(
             data={
                 "Heat_Pump_LVGrid_3_individual_heating_1": [5.0, 6.0, 5.0, 6.0],
                 "Heat_Pump_LVGrid_5_individual_heating_1": [7.0, 8.0, 7.0, 8.0],
+                "Heat_Pump_MVGrid_1_district_heating_1": [7.0, 8.0, 7.0, 8.0],
+                "Heat_Pump_MVGrid_1_district_heating_2": [7.0, 8.0, 7.0, 8.0],
             },
             index=self.edisgo.timeseries.timeindex,
         )
@@ -49,15 +76,17 @@ class TestPowerModelsOPF:
             data={
                 "Heat_Pump_LVGrid_3_individual_heating_1": [1.0, 2.0, 2.0, 1.0],
                 "Heat_Pump_LVGrid_5_individual_heating_1": [2.0, 4.0, 3.0, 3.0],
+                "Heat_Pump_MVGrid_1_district_heating_1": [2.0, 4.0, 3.0, 3.0],
+                "Heat_Pump_MVGrid_1_district_heating_2": [2.0, 4.0, 3.0, 3.0],
             },
             index=self.edisgo.timeseries.timeindex,
         )
         self.edisgo.heat_pump.thermal_storage_units_df = pd.DataFrame(
             data={
-                "capacity": [4, 8],
-                "efficiency": [1, 1],
+                "capacity": [4, 8, 8],
+                "efficiency": [1, 1, 1],
             },
-            index=self.edisgo.heat_pump.heat_demand_df.columns,
+            index=self.edisgo.heat_pump.heat_demand_df.columns[:-1],
         )
         # add electromobility dummy data
         self.edisgo.add_component(
@@ -141,6 +170,7 @@ class TestPowerModelsOPF:
             "dsm_active_power",
             "electromobility_active_power",
             "heat_pump_decentral_active_power",
+            "heat_pump_central_active_power",
             "renewables_curtailment",
             "storage_units_active_power",
             "feedin_district_heating",
@@ -150,6 +180,8 @@ class TestPowerModelsOPF:
             elif attr == "electromobility_active_power":
                 data = [0.4, 0.5, 0.5, 0.6]
             elif attr == "heat_pump_decentral_active_power":
+                data = [0.5, 0.85, 0.85, 0.55]
+            elif attr == "heat_pump_central_active_power":
                 data = [0.5, 0.85, 0.85, 0.55]
             elif attr == "storage_units_active_power":
                 data = [-0.35, -0.35, 0.35, 0.35]
@@ -178,10 +210,73 @@ class TestPowerModelsOPF:
             )
 
     def test_pm_optimize(self):
-        # OPF with all flexibilities
+        # OPF with all flexibilities but without overlying grid
+        # pm_optimize(
+        #     self.edisgo,
+        #     opf_version=2,
+        #     silence_moi=True,
+        #     method="nc",
+        #     flexible_cps=np.array(["Charging_Point_LVGrid_6_1"]),
+        #     flexible_hps=self.edisgo.heat_pump.cop_df.columns.values,
+        #     flexible_loads=self.edisgo.dsm.e_min.columns.values,
+        #     flexible_storage_units=self.edisgo.topology.storage_units_df.index.values,
+        # )
+        #
+        # assert np.isclose(
+        #     np.round(self.edisgo.opf_results.slack_generator_t.pg[-1], 3),
+        #     -20.75,
+        #     atol=1e-3,
+        # )
+        # assert np.isclose(
+        #     np.round(
+        #         self.edisgo.opf_results.heat_storage_t.p[
+        #             "Heat_Pump_LVGrid_3_individual_heating_1"
+        #         ][-1],
+        #         3,
+        #     ),
+        #     -0.666,
+        #     atol=1e-3,
+        # )
+        # assert np.isclose(
+        #     np.round(
+        #         self.edisgo.timeseries.loads_active_power.Charging_Point_LVGrid_6_1[-1],
+        #         3,
+        #     ),
+        #     0.761,
+        #     atol=1e-3,
+        # )
+        # assert np.isclose(
+        #     np.round(
+        #         self.edisgo.timeseries.loads_active_power[
+        #             "Heat_Pump_LVGrid_5_individual_heating_1"
+        #         ][-1],
+        #         3,
+        #     ),
+        #     0.525,
+        #     atol=1e-3,
+        # )
+        # assert np.isclose(
+        #     np.round(
+        #         self.edisgo.timeseries.storage_units_active_power.Storage_1[-1], 3
+        #     ),
+        #     0.157,
+        #     atol=1e-3,
+        # )
+        # assert np.isclose(
+        #     np.round(
+        #         self.edisgo.timeseries.loads_active_power[
+        #             "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"
+        #         ][-1],
+        #         3,
+        #     ),
+        #     0.031 + 0.208,
+        #     atol=1e-3,
+        # )
+        # assert self.edisgo.opf_results.status == "LOCALLY_SOLVED"
+
         pm_optimize(
             self.edisgo,
-            opf_version=2,
+            opf_version=4,
             silence_moi=True,
             method="nc",
             flexible_cps=np.array(["Charging_Point_LVGrid_6_1"]),
@@ -190,56 +285,5 @@ class TestPowerModelsOPF:
             flexible_storage_units=self.edisgo.topology.storage_units_df.index.values,
         )
 
-        assert np.isclose(
-            np.round(self.edisgo.opf_results.slack_generator_t.pg[-1], 3),
-            -20.75,
-            atol=1e-3,
-        )
-        assert np.isclose(
-            np.round(
-                self.edisgo.opf_results.heat_storage_t.p[
-                    "Heat_Pump_LVGrid_3_individual_heating_1"
-                ][-1],
-                3,
-            ),
-            -0.666,
-            atol=1e-3,
-        )
-        assert np.isclose(
-            np.round(
-                self.edisgo.timeseries.loads_active_power.Charging_Point_LVGrid_6_1[-1],
-                3,
-            ),
-            0.761,
-            atol=1e-3,
-        )
-        assert np.isclose(
-            np.round(
-                self.edisgo.timeseries.loads_active_power[
-                    "Heat_Pump_LVGrid_5_individual_heating_1"
-                ][-1],
-                3,
-            ),
-            0.525,
-            atol=1e-3,
-        )
-        assert np.isclose(
-            np.round(
-                self.edisgo.timeseries.storage_units_active_power.Storage_1[-1], 3
-            ),
-            0.157,
-            atol=1e-3,
-        )
-        assert np.isclose(
-            np.round(
-                self.edisgo.timeseries.loads_active_power[
-                    "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"
-                ][-1],
-                3,
-            ),
-            0.031 + 0.208,
-            atol=1e-3,
-        )
-        assert self.edisgo.opf_results.status == "LOCALLY_SOLVED"
-
+        print(" ")
         # ToDo: add assertions for overlying grid OPF

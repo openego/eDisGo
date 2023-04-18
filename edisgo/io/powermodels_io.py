@@ -639,7 +639,7 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
                 "name": gen.index[gen_i],
                 "index": gen_i + 1,
             }
-
+    # add active power generation of inflexible storage units to gen dict
     inflexible_storage_units = [
         storage
         for storage in psa_net.storage_units.index
@@ -851,7 +851,26 @@ def _build_load(
             loads_df.bus[load_i],
             flexible_storage_units=flexible_storage_units,
         )
-        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
+        if (
+            edisgo_obj.topology.loads_df.loc[loads_df.index[load_i]].type
+            == "conventional_load"
+        ):
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
+        elif (
+            edisgo_obj.topology.loads_df.loc[loads_df.index[load_i]].type == "heat_pump"
+        ):
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
+        elif (
+            edisgo_obj.topology.loads_df.loc[loads_df.index[load_i]].type
+            == "charging_point"
+        ):
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "cp")
+        else:
+            logger.warning(
+                "No type specified for load {}. Power factor and sign will"
+                "be set for conventional load.".format(loads_df.index[load_i])
+            )
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
         q_d = psa_net.loads_t.q_set[loads_df.index[load_i]]
         pm["load"][str(load_i + 1)] = {
@@ -972,7 +991,7 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storage_units, s_ba
                 flexible_storage_units[stor_i]
             ].iloc[-1],
             "energy_rating": e_max / s_base,
-            "thermal_rating": 100,
+            "thermal_rating": 1000,
             "charge_rating": psa_net.storage_units.p_nom.loc[
                 flexible_storage_units[stor_i]
             ]
@@ -1156,11 +1175,18 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
     """
-    tes = edisgo_obj.heat_pump.thermal_storage_units_df.index
-    flexible_tes = np.intersect1d(tes, flexible_hps)
-    heat_storage_df = edisgo_obj.heat_pump.thermal_storage_units_df.loc[flexible_tes]
-    for stor_i in np.arange(len(heat_storage_df.index)):
-        idx_bus = _mapping(psa_net, edisgo_obj, psa_net.loads.bus[stor_i])
+    # add TES with 0 capacity for every flexible hp without TES
+    hp_no_tes = np.setdiff1d(
+        flexible_hps, edisgo_obj.heat_pump.thermal_storage_units_df.index
+    )
+    df = pd.DataFrame(index=hp_no_tes, columns=["efficiency", "capacity"], data=0)
+    heat_storage_df = pd.concat(
+        [edisgo_obj.heat_pump.thermal_storage_units_df, df]
+    ).loc[flexible_hps]
+    for stor_i in np.arange(len(flexible_hps)):
+        idx_bus = _mapping(
+            psa_net, edisgo_obj, psa_net.loads.loc[flexible_hps].bus[stor_i]
+        )
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
             "p_loss": 0.04,  # 4% of SOC per day
@@ -1516,11 +1542,12 @@ def _build_component_timeseries(
         (edisgo_obj.topology.generators_df.type != "wind")
         & (edisgo_obj.topology.generators_df.type != "solar")
     ]
-    inflexible_storage_units = [
-        storage
-        for storage in psa_net.storage_units.index
-        if storage not in flexible_storage_units
-    ]
+    if flexible_storage_units is not None:
+        inflexible_storage_units = [
+            storage
+            for storage in psa_net.storage_units.index
+            if storage not in flexible_storage_units
+        ]
     if kind == "gen":
         p_set2 = psa_net.generators_t.p_set[disp_gens] / s_base
         q_set2 = psa_net.generators_t.q_set[disp_gens] / s_base
@@ -1751,7 +1778,7 @@ def _mapping(
     flexible_cps=None,
     flexible_hps=None,
     flexible_loads=None,
-    flexible_storage_units=[],
+    flexible_storage_units=None,
 ):
     solar_gens = edisgo_obj.topology.generators_df.index[
         edisgo_obj.topology.generators_df.type == "solar"
@@ -1763,11 +1790,14 @@ def _mapping(
         (edisgo_obj.topology.generators_df.type != "wind")
         & (edisgo_obj.topology.generators_df.type != "solar")
     ]
-    inflexible_storage_units = [
-        storage
-        for storage in psa_net.storage_units.index
-        if storage not in flexible_storage_units
-    ]
+    if flexible_storage_units is not None:
+        inflexible_storage_units = [
+            storage
+            for storage in psa_net.storage_units.index
+            if storage not in flexible_storage_units
+        ]
+    else:
+        inflexible_storage_units = None
     if kind == "bus":
         df = psa_net.buses
     elif kind == "gen":
