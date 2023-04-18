@@ -1546,7 +1546,7 @@ def _build_component_timeseries(
         inflexible_storage_units = [
             storage
             for storage in psa_net.storage_units.index
-            if storage not in flexible_storage_units
+            if storage not in list(flexible_storage_units)
         ]
     if kind == "gen":
         p_set2 = psa_net.generators_t.p_set[disp_gens] / s_base
@@ -1794,7 +1794,7 @@ def _mapping(
         inflexible_storage_units = [
             storage
             for storage in psa_net.storage_units.index
-            if storage not in flexible_storage_units
+            if storage not in list(flexible_storage_units)
         ]
     else:
         inflexible_storage_units = None
