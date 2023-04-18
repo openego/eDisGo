@@ -865,7 +865,7 @@ class EDisGo:
         range_num: int = 10,
         scale_timeseries: float | None = None,
         **kwargs,
-    ):
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """
         Conducts a static, non-linear power flow analysis.
 
@@ -938,20 +938,28 @@ class EDisGo:
                 Power flow analysis is conducted by reducing all power values of
                 generators and loads to a fraction, e.g. 10%, solving the load flow and
                 using it as a seed for the power at 20%, iteratively up to 100%.
+                Using parameters `range_start` and `range_num` you can define at what
+                scaling factor the iteration should start and how many iterations
+                should be conducted.
 
         range_start : float, optional
             Specifies the minimum fraction that power values are set to when using
-            troubleshooting_mode 'iteration'. Must be between 0 and 1.
+            `troubleshooting_mode` 'iteration'. Must be between 0 and 1.
             Default: 0.1.
 
         range_num : int, optional
             Specifies the number of fraction samples to generate when using
-            troubleshooting_mode 'iteration'. Must be non-negative.
+            `troubleshooting_mode` 'iteration'. Must be non-negative.
             Default: 10.
 
         scale_timeseries : float or None, optional
-            Scales the timeseries in the pypsa object with the factor
-            'scaling_timeseries'.
+            If a value is given, the timeseries in the pypsa object are scaled with
+            this factor (values between 0 and 1 will scale down the time series and
+            values above 1 will scale the timeseries up). Downscaling of time series
+            can be used to check if power flow converges for smaller
+            grid loads. If None, timeseries are not scaled. In case of
+            `troubleshooting_mode` 'iteration' this parameter is ignored.
+            Default: None.
 
         Other Parameters
         -----------------
@@ -961,7 +969,8 @@ class EDisGo:
 
         Returns
         --------
-        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        tuple(:pandas:`pandas.DatetimeIndex<DatetimeIndex>`,\
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>`)
             Returns the time steps for which power flow analysis did not converge.
 
         References
@@ -996,8 +1005,9 @@ class EDisGo:
             return timesteps_converged, timesteps_not_converged
 
         def _scale_timeseries(pypsa_network_copy, fraction):
-            # Scales the timeseries in the pypsa object
-            # Reduce power values of generators, loads and storages to fraction of
+            # Scales the timeseries in the pypsa object, the pypsa_network_copy is
+            # the network with the original time series
+            # Reduce power values of generators, loads and storages to given fraction
             for obj1, obj2 in [
                 (pypsa_network.generators_t, pypsa_network_copy.generators_t),
                 (pypsa_network.loads_t, pypsa_network_copy.loads_t),
@@ -1016,7 +1026,7 @@ class EDisGo:
 
         pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps, **kwargs)
 
-        if scale_timeseries:
+        if scale_timeseries is not None and troubleshooting_mode != "iteration":
             pypsa_network = _scale_timeseries(pypsa_network, scale_timeseries)
 
         if troubleshooting_mode == "lpf":
@@ -1032,7 +1042,7 @@ class EDisGo:
                 pypsa_network = _scale_timeseries(pypsa_network_copy, fraction)
                 # run power flow analysis
                 pf_results = pypsa_network.pf(timesteps, use_seed=True)
-                logging.warning(
+                logging.info(
                     "Current fraction in iterative process: {}.".format(fraction)
                 )
                 # get converged and not converged time steps
