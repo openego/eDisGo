@@ -946,12 +946,10 @@ class EDisGo:
             Specifies the minimum fraction that power values are set to when using
             `troubleshooting_mode` 'iteration'. Must be between 0 and 1.
             Default: 0.1.
-
         range_num : int, optional
             Specifies the number of fraction samples to generate when using
             `troubleshooting_mode` 'iteration'. Must be non-negative.
             Default: 10.
-
         scale_timeseries : float or None, optional
             If a value is given, the timeseries in the pypsa object are scaled with
             this factor (values between 0 and 1 will scale down the time series and
@@ -1121,7 +1119,7 @@ class EDisGo:
                     timeindex_worst_cases.index.str.contains("lv")
                 ]
             )
-            # Run everytime the analyze-method at the end, to get a power flow for all
+            # Run the analyze-method at the end, to get a power flow for all
             # timesteps for reinforced components
             run_analyze_at_the_end = True
             if mode is None:
@@ -1148,29 +1146,20 @@ class EDisGo:
         for setting in setting_list:
             logger.info(f"Run the following reinforcement: {setting=}")
             if not catch_convergence_problems:
-                reinforce_grid(
-                    edisgo_obj,
-                    max_while_iterations=max_while_iterations,
-                    copy_grid=False,
-                    timesteps_pfa=setting["timesteps_pfa"],
-                    split_voltage_band=split_voltage_band,
-                    mode=setting["mode"],
-                    without_generator_import=without_generator_import,
-                    n_minus_one=n_minus_one,
-                    **kwargs,
-                )
+                func = reinforce_grid
             else:
-                catch_convergence_reinforce_grid(
-                    edisgo_obj,
-                    max_while_iterations=max_while_iterations,
-                    copy_grid=False,
-                    timesteps_pfa=setting["timesteps_pfa"],
-                    split_voltage_band=split_voltage_band,
-                    mode=setting["mode"],
-                    without_generator_import=without_generator_import,
-                    n_minus_one=n_minus_one,
-                    **kwargs,
-                )
+                func = catch_convergence_reinforce_grid
+            func(
+                edisgo_obj,
+                max_while_iterations=max_while_iterations,
+                copy_grid=False,
+                timesteps_pfa=setting["timesteps_pfa"],
+                split_voltage_band=split_voltage_band,
+                mode=setting["mode"],
+                without_generator_import=without_generator_import,
+                n_minus_one=n_minus_one,
+                **kwargs,
+            )
         if run_analyze_at_the_end:
             edisgo_obj.analyze()
 
