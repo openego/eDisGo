@@ -870,15 +870,23 @@ class TestTopology:
 
         shutil.rmtree(dir)
 
-    def test_aggregate_lv_grid_buses_on_station(self):
-        """Test method aggregate_lv_grid_buses_on_station"""
+    def test_aggregate_lv_grid_at_station(self, caplog):
+        """Test method aggregate_lv_grid_at_station"""
 
-        lv_grid_id = str(list(self.topology.mv_grid.lv_grids)[1])
+        lv_grid_id = 1
         topology_obj = copy.deepcopy(self.topology)
-        topology_obj.aggregate_lv_grid_buses_on_station(lv_grid_id=lv_grid_id)
+        lv_grid_orig = self.topology.get_lv_grid(lv_grid_id)
+        topology_obj.aggregate_lv_grid_at_station(lv_grid_id=lv_grid_id)
+        lv_grid = topology_obj.get_lv_grid(lv_grid_id)
 
-        assert list(self.topology.mv_grid.lv_grids)[1].buses_df.shape[0] == 15
-        assert list(topology_obj.mv_grid.lv_grids)[1].buses_df.shape[0] == 1
+        assert lv_grid_orig.buses_df.shape[0] == 15
+        assert lv_grid.buses_df.shape[0] == 1
+
+        with caplog.at_level(logging.WARNING):
+            topology_obj.check_integrity()
+        assert "which are not defined" not in caplog.text
+        assert "The following buses are isolated" not in caplog.text
+        assert "The network has isolated nodes or edges." not in caplog.text
 
 
 class TestTopologyWithEdisgoObject:

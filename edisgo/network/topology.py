@@ -3077,15 +3077,20 @@ class Topology:
                 f"optimisation."
             )
 
-    def aggregate_lv_grid_buses_on_station(self, lv_grid_id: int | str) -> None:
+    def aggregate_lv_grid_at_station(self, lv_grid_id: int | str) -> None:
         """
-        Aggregates all lv grid buses on secondary station side bus. Drop all lines of
-        lv grid and replaces bus names in "loads_df", "storages_df",
-        "charging_points_df" and "storages_df".
+        Aggregates all LV grid components to secondary side of the grid's station.
+
+        All lines of the LV grid are dropped, as well as all buses except the station's
+        secondary side bus. Buses, the loads, generators and storage units are connected
+        to are changed to the station's secondary side bus. The changes are directly
+        applied to the Topology object.
 
         Parameters
         ----------
         lv_grid_id : int or str
+            ID of the LV grid to aggregate.
+
         """
         lv_grid = self.get_lv_grid(name=lv_grid_id)
         lines_to_drop = lv_grid.lines_df.index.to_list()
@@ -3099,9 +3104,6 @@ class Topology:
         self.loads_df.loc[self.loads_df.bus.isin(buses_to_drop), "bus"] = station_bus
         self.generators_df.loc[
             self.generators_df.bus.isin(buses_to_drop), "bus"
-        ] = station_bus
-        self.charging_points_df.loc[
-            self.charging_points_df.bus.isin(buses_to_drop), "bus"
         ] = station_bus
         self.storage_units_df.loc[
             self.storage_units_df.bus.isin(buses_to_drop), "bus"
