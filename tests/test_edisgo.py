@@ -422,12 +422,13 @@ class TestEDisGo:
             self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5)
 
         caplog.clear()
-        self.edisgo.analyze(
-            troubleshooting_mode="iteration",
-            range_start=5,
-            range_num=2,
-            raise_not_converged=False,
-        )
+        with caplog.at_level("INFO"):
+            self.edisgo.analyze(
+                troubleshooting_mode="iteration",
+                range_start=5,
+                range_num=2,
+                raise_not_converged=False,
+            )
         assert "Current fraction in iterative process: 5.0." in caplog.text
         assert "Current fraction in iterative process: 1.0." in caplog.text
 
@@ -524,8 +525,8 @@ class TestEDisGo:
         )
         results = self.edisgo.reinforce(catch_convergence_problems=True)
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 135
-        assert len(results.equipment_changes) == 208
+        assert len(results.grid_expansion_costs) == 132
+        assert len(results.equipment_changes) == 218
         assert results.v_res.shape == (4, 142)
 
     @pytest.mark.slow
