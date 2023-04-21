@@ -492,29 +492,36 @@ class TestEDisGo:
         assert len(results.equipment_changes) == 1
 
     def test_reinforce_catch_convergence(self):
+
+        # ###################### test that wrong mode is raised ######################
+        msg = "Provided mode mvl is not a valid mode."
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo.reinforce(
+                catch_convergence_problems=True, is_worst_case=False, mode="mvl"
+            )
+
         # ###################### test with catch convergence ##########################
         self.setup_worst_case_time_series()
         self.edisgo.timeseries.scale_timeseries(
             p_scaling_factor=10, q_scaling_factor=10
         )
         results = self.edisgo.reinforce(
-            catch_convergence_problems=True, is_worst_case=False
+            catch_convergence_problems=True,
+            is_worst_case=False,
+            copy_grid=True,
         )
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 134
-        assert len(results.equipment_changes) == 231
+        assert len(results.equipment_changes) == 230
         assert results.v_res.shape == (4, 142)
 
-        # ############### test with catch convergence worst case false ################
+        # ############### test with catch convergence worst case true ################
         self.setup_worst_case_time_series()
         self.edisgo.timeseries.scale_timeseries(
             p_scaling_factor=10, q_scaling_factor=10
         )
         results = self.edisgo.reinforce(catch_convergence_problems=True)
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 134
-        assert len(results.equipment_changes) == 231
-        assert results.v_res.shape == (4, 142)
         assert len(results.grid_expansion_costs) == 135
         assert len(results.equipment_changes) == 208
         assert results.v_res.shape == (4, 142)

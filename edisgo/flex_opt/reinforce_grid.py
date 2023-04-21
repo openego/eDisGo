@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import datetime
 import logging
 
@@ -638,126 +637,151 @@ def catch_convergence_reinforce_grid(
     **kwargs,
 ) -> Results:
     """
-    Uses a reinforcement strategy to reinforce not converging grids. Reinforces
-    first with only converging timesteps. Reinforce again with at start not
-    converging timesteps. If still not converging, scale the timeseries iteratively.
+    Uses a reinforcement strategy to reinforce grids with non-converging time steps.
+
+    First, conducts a grid reinforcement with only converging time steps.
+    Afterwards, tries to run reinforcement with all time steps that did not converge
+    in the beginning. At last, if there are still time steps that do not converge,
+    the feed-in and load time series are iteratively scaled and the grid reinforced,
+    starting with a low grid load and scaling-up the time series until the original
+    values are reached.
 
     Parameters
     ----------
     edisgo : :class:`~.EDisGo`
-        The eDisGo object
+    kwargs : dict
+        See parameters of function
+        :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`.
 
-    kwargs: :obj:`dict`
-        See :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`
+    Returns
+    -------
+    :class:`~.network.results.Results`
+        Returns the Results object holding network expansion costs, equipment
+        changes, etc.
+
     """
 
     def reinforce():
         try:
-            results = reinforce_grid(
+            reinforce_grid(
                 edisgo,
                 timesteps_pfa=selected_timesteps,
                 scale_timeseries=set_scaling_factor,
                 **kwargs,
             )
             converged = True
-            logger.info(
-                f"Reinforcement succeeded for {set_scaling_factor=} at {iteration=}"
-            )
-        except ValueError:
-            results = edisgo.results
-            converged = False
-            logger.info(
-                f"Reinforcement failed for {set_scaling_factor=} at {iteration=}"
-            )
-        return converged, results
+        except ValueError as e:
+            if "Power flow analysis did not converge for the" in str(e):
+                converged = False
+            else:
+                raise
+        return converged
 
-    # Initial try
-    logger.info("Start catch convergence reinforcement")
-    logger.info("Initial reinforcement try.")
+    logger.debug("Start 'catch-convergence' reinforcement.")
 
     # Get the timesteps from kwargs and then remove it to set it later manually
     timesteps_pfa = kwargs.get("timesteps_pfa")
     kwargs.pop("timesteps_pfa")
     selected_timesteps = timesteps_pfa
 
+    # Initial try
+    logger.info("Run initial reinforcement.")
     set_scaling_factor = 1.0
     iteration = 0
-
-    converged, results = reinforce()
-
+    converged = reinforce()
     if converged is False:
-        logger.info("Initial reinforcement doesn't converge.")
-        fully_converged = False
+        logger.info("Initial reinforcement did not succeed.")
     else:
-        logger.info("Initial reinforcement converged.")
-        fully_converged = True
+        logger.info("Initial reinforcement succeeded.")
+        return edisgo.results
 
-    set_scaling_factor = 1.0
-    initial_timerseries = copy.deepcopy(edisgo.timeseries)
-    minimal_scaling_factor = 0.05
-    max_iterations = 10
-    iteration = 0
-    highest_converged_scaling_factor = 0
+    # Find non-converging time steps
+    if kwargs.get("mode", None) == "lv" and kwargs.get("lv_grid_id", None):
+        analyze_mode = "lv"
+    elif kwargs.get("mode", None) == "lv":
+        analyze_mode = None
+    else:
+        analyze_mode = kwargs.get("mode", None)
+    kwargs_analyze = kwargs
+    kwargs_analyze["mode"] = analyze_mode
+    converging_timesteps, non_converging_timesteps = edisgo.analyze(
+        timesteps=timesteps_pfa, raise_not_converged=False, **kwargs_analyze
+    )
+    logger.info(f"The following time steps converged: {converging_timesteps}.")
+    logger.info(
+        f"The following time steps did not converge: {non_converging_timesteps}."
+    )
 
-    if fully_converged is False:
-        # Find non converging timesteps
-        logger.info("Find converging and non converging timesteps.")
-        if kwargs.get("mode", None) == "lv" and kwargs.get("lv_grid_id", None):
-            analyze_mode = "lv"
-        elif kwargs.get("mode", None) == "lv":
-            analyze_mode = None
-        else:
-            analyze_mode = kwargs.get("mode", None)
-
-        kwargs_analyze = kwargs
-        kwargs["mode"] = analyze_mode
-        converging_timesteps, non_converging_timesteps = edisgo.analyze(
-            timesteps=timesteps_pfa, raise_not_converged=False, **kwargs_analyze
-        )
-        logger.info(f"Following timesteps {converging_timesteps} converged.")
+    # Run reinforcement for time steps that converged after initial reinforcement
+    if not converging_timesteps.empty:
         logger.info(
-            f"Following timesteps {non_converging_timesteps} doesnt't converged."
+            "Run reinforcement for time steps that converged after initial "
+            "reinforcement."
         )
+        selected_timesteps = converging_timesteps
+        reinforce()
 
-    if converged is False:
-        if not converging_timesteps.empty:
-            logger.info("Reinforce only converged timesteps")
-            selected_timesteps = converging_timesteps
-            _, _ = reinforce()
-
-        logger.info("Reinforce only non converged timesteps")
+    # Run reinforcement for time steps that did not converge after initial reinforcement
+    if not non_converging_timesteps.empty:
+        logger.info(
+            "Run reinforcement for time steps that did not converge after initial "
+            "reinforcement."
+        )
         selected_timesteps = non_converging_timesteps
-        converged, results = reinforce()
+        converged = reinforce()
 
-    while iteration < max_iterations:
-        iteration += 1
-        if converged:
-            if set_scaling_factor == 1:
-                # Initial iteration (0) worked
-                break
-            else:
-                highest_converged_scaling_factor = set_scaling_factor
-                set_scaling_factor = 1
-        else:
-            if set_scaling_factor == minimal_scaling_factor:
-                raise ValueError(f"Not reinforceable with {minimal_scaling_factor=}!")
-            elif iteration == 1:
-                set_scaling_factor = minimal_scaling_factor
-            else:
-                set_scaling_factor = (
-                    (set_scaling_factor - highest_converged_scaling_factor) * 0.25
-                ) + highest_converged_scaling_factor
+    if converged:
+        return edisgo.results
 
-        logger.info(f"Try reinforce with {set_scaling_factor=} at {iteration=}")
-        converged, results = reinforce()
-        if converged is False and iteration == max_iterations:
+    # Run iterative grid reinforcement
+    else:
+        max_iterations = 10
+        highest_converged_scaling_factor = 0
+        minimal_scaling_factor = 0.05
+        while iteration < max_iterations:
+            iteration += 1
+            if converged:
+                if set_scaling_factor == 1:
+                    # reinforcement for scaling factor of 1 worked - finished
+                    break
+                else:
+                    # if converged, try again with scaling factor of 1
+                    highest_converged_scaling_factor = set_scaling_factor
+                    set_scaling_factor = 1
+            else:
+                if set_scaling_factor == minimal_scaling_factor:
+                    raise ValueError(
+                        f"Not reinforceable with {minimal_scaling_factor=}!"
+                    )
+                elif iteration == 1:
+                    set_scaling_factor = minimal_scaling_factor
+                else:
+                    set_scaling_factor = (
+                        (set_scaling_factor - highest_converged_scaling_factor) * 0.25
+                    ) + highest_converged_scaling_factor
+
+            logger.info(f"Try reinforcement with {set_scaling_factor=} at {iteration=}")
+            converged = reinforce()
+            if converged:
+                logger.info(
+                    f"Reinforcement succeeded for {set_scaling_factor=} "
+                    f"at {iteration=}."
+                )
+            else:
+                logger.info(
+                    f"Reinforcement failed for {set_scaling_factor=} at {iteration=}."
+                )
+
+        if converged is False:
             raise ValueError(
-                f"Not reinforceable, max iterations ({max_iterations}) " f"reached!"
+                f"Not reinforceable, max iterations ({max_iterations}) reached!"
             )
 
-    edisgo.timeseries = initial_timerseries
-    selected_timesteps = timesteps_pfa
-    converged, results = reinforce()
+    # Final reinforcement
+    if set_scaling_factor != 1:
+        logger.info("Run final reinforcement.")
+        selected_timesteps = timesteps_pfa
+        reinforce()
 
     return edisgo.results
 
