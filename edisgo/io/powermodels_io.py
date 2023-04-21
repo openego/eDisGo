@@ -10,6 +10,8 @@ import json
 import logging
 import math
 
+from copy import deepcopy
+
 import numpy as np
 import pandas as pd
 import pypsa
@@ -338,8 +340,9 @@ def from_powermodels(
             edisgo_object.opf_results.hv_requirement_slacks_t = df
 
         # calculate relative error
-        for flex in df.columns:
-            df[flex] = abs(df[flex].values - hv_flex_dict[flex]) / hv_flex_dict[flex]
+        df2 = deepcopy(df)
+        for flex in df2.columns:
+            df2[flex] = abs(df2[flex].values - hv_flex_dict[flex]) / hv_flex_dict[flex]
         # write results to edisgo object
         edisgo_object.overlying_grid.opf_results = pd.DataFrame(
             columns=[
@@ -347,13 +350,13 @@ def from_powermodels(
                 "Mean relative error",
                 "Sum relative error",
             ],
-            index=df.columns,
+            index=df2.columns,
             data=np.asarray(
-                [df.max().values, (df.sum() / len(df)).values, df.sum().values]
+                [df2.max().values, (df2.sum() / len(df2)).values, df2.sum().values]
             ).transpose(),
         )
 
-        for flex in df.columns:
+        for flex in df2.columns:
             if (
                 edisgo_object.overlying_grid.opf_results["Highest relative error"][flex]
                 > 0.05

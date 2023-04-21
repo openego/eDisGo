@@ -40,7 +40,6 @@ class OPFResults:
         self.buses_t = BusVariables()
         self.lines_t = LineVariables()
         self.slack_generator_t = pd.DataFrame()
-        self.heat_pump_t = pd.DataFrame()
         self.heat_storage_t = HeatStorage()
         self.hv_requirement_slacks_t = pd.DataFrame()
         self.grid_slacks_t = GridSlacks()

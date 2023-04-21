@@ -274,6 +274,7 @@ class TestPowerModelsOPF:
         # )
         # assert self.edisgo.opf_results.status == "LOCALLY_SOLVED"
 
+        # OPF with all flexibilities and including overlying grid constraints
         pm_optimize(
             self.edisgo,
             opf_version=4,
@@ -284,6 +285,13 @@ class TestPowerModelsOPF:
             flexible_loads=self.edisgo.dsm.e_min.columns.values,
             flexible_storage_units=self.edisgo.topology.storage_units_df.index.values,
         )
-
-        print(" ")
-        # ToDo: add assertions for overlying grid OPF
+        # Todo: assert with np.isclose
+        assert (
+            self.edisgo.overlying_grid.electromobility_active_power.values
+            == self.edisgo.timeseries.loads_active_power[
+                "Charging_Point_LVGrid_6_1"
+            ].values
+            + self.edisgo.opf_results.hv_requirement_slacks_t.cp.values
+        )
+        # ToDo: check für sum hps and storage unit
+        assert self.edisgo.opf_results.status == "LOCALLY_SOLVED"
