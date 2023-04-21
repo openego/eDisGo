@@ -1040,7 +1040,7 @@ class EDisGo:
                 pypsa_network = _scale_timeseries(pypsa_network_copy, fraction)
                 # run power flow analysis
                 pf_results = pypsa_network.pf(timesteps, use_seed=True)
-                logging.info(
+                logger.info(
                     "Current fraction in iterative process: {}.".format(fraction)
                 )
                 # get converged and not converged time steps
@@ -1395,7 +1395,7 @@ class EDisGo:
                     )
                 elif ts_reactive_power == "default":
                     if ts_active_power is None:
-                        logging.warning(
+                        logger.warning(
                             f"Default reactive power time series of {comp_name} cannot "
                             "be set as active power time series was not provided."
                         )
@@ -2256,13 +2256,13 @@ class EDisGo:
         """
         try:
             if self.results.v_res is None:
-                logging.warning(
+                logger.warning(
                     "Voltages from power flow "
                     "analysis must be available to plot them."
                 )
                 return
         except AttributeError:
-            logging.warning(
+            logger.warning(
                 "Results must be available to plot voltages. "
                 "Please analyze grid first."
             )
@@ -2293,13 +2293,13 @@ class EDisGo:
         """
         try:
             if self.results.i_res is None:
-                logging.warning(
+                logger.warning(
                     "Currents `i_res` from power flow analysis "
                     "must be available to plot line loading."
                 )
                 return
         except AttributeError:
-            logging.warning(
+            logger.warning(
                 "Results must be available to plot line loading. "
                 "Please analyze grid first."
             )
@@ -2334,13 +2334,13 @@ class EDisGo:
         """
         try:
             if self.results.grid_expansion_costs is None:
-                logging.warning(
+                logger.warning(
                     "Grid expansion cost results needed to plot "
                     "them. Please do grid reinforcement."
                 )
                 return
         except AttributeError:
-            logging.warning(
+            logger.warning(
                 "Results of MV topology needed to  plot topology "
                 "expansion costs. Please reinforce first."
             )
@@ -2999,7 +2999,7 @@ class EDisGo:
                     f"DSM.{param_name}",
                 )
 
-        logging.info("Integrity check finished. Please pay attention to warnings.")
+        logger.info("Integrity check finished. Please pay attention to warnings.")
 
     def resample_timeseries(
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
@@ -3219,7 +3219,7 @@ def import_edisgo_from_files(
 
     if not from_zip_archive and str(edisgo_path).endswith(".zip"):
         from_zip_archive = True
-        logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
+        logger.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
 
     edisgo_obj = EDisGo()
     try:
@@ -3229,7 +3229,7 @@ def import_edisgo_from_files(
             "from_zip_archive": from_zip_archive,
         }
     except FileNotFoundError:
-        logging.info(
+        logger.info(
             "Configuration data could not be loaded from json wherefore "
             "the default configuration data is loaded."
         )
@@ -3248,7 +3248,7 @@ def import_edisgo_from_files(
         if os.path.exists(directory):
             edisgo_obj.topology.from_csv(directory, edisgo_obj, from_zip_archive)
         else:
-            logging.warning("No topology data found. Topology not imported.")
+            logger.warning("No topology data found. Topology not imported.")
 
     if import_timeseries:
         dtype = kwargs.get("dtype", None)
@@ -3263,7 +3263,7 @@ def import_edisgo_from_files(
                 directory, dtype=dtype, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning("No time series data found. Timeseries not imported.")
+            logger.warning("No time series data found. Timeseries not imported.")
 
     if import_results:
         parameters = kwargs.get("parameters", None)
@@ -3279,7 +3279,7 @@ def import_edisgo_from_files(
                 directory, parameters, dtype=dtype, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning("No results data found. Results not imported.")
+            logger.warning("No results data found. Results not imported.")
 
     if import_electromobility:
         if not from_zip_archive:
@@ -3293,7 +3293,7 @@ def import_edisgo_from_files(
                 directory, edisgo_obj, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning(
+            logger.warning(
                 "No electromobility data found. Electromobility not imported."
             )
 
@@ -3307,7 +3307,7 @@ def import_edisgo_from_files(
         if os.path.exists(directory):
             edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
-            logging.warning("No heat pump data found. Heat pump data not imported.")
+            logger.warning("No heat pump data found. Heat pump data not imported.")
 
     if import_dsm:
         if not from_zip_archive:
@@ -3319,7 +3319,7 @@ def import_edisgo_from_files(
         if os.path.exists(directory):
             edisgo_obj.dsm.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
-            logging.warning("No DSM data found. DSM data not imported.")
+            logger.warning("No DSM data found. DSM data not imported.")
 
     if import_overlying_grid:
         if not from_zip_archive:
@@ -3333,7 +3333,7 @@ def import_edisgo_from_files(
                 directory, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning(
+            logger.warning(
                 "No overlying grid data found. Overlying grid data not imported."
             )
 

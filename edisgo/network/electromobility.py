@@ -918,7 +918,7 @@ class Electromobility:
                     )
 
                 except Exception:
-                    logging.warning(
+                    logger.warning(
                         f"Potential charging parks could not be loaded with "
                         f"EPSG {epsg}. Trying with EPSG 4326 as fallback."
                     )

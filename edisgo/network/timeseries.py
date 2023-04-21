@@ -716,7 +716,7 @@ class TimeSeries:
                 set(df.index) - set(self.loads_active_power.columns)
             )
             if loads_without_ts:
-                logging.warning(
+                logger.warning(
                     "There are loads where information on type of load is missing. "
                     "Handled types are 'conventional_load', 'charging_point', and "
                     "'heat_pump'. Loads with missing type information are handled as "
@@ -2148,7 +2148,7 @@ class TimeSeries:
         comps_not_in_network = list(set(component_names) - set(comps_in_network))
 
         if comps_not_in_network:
-            logging.warning(
+            logger.warning(
                 f"Some of the provided {component_type} are not in the network. This "
                 f"concerns the following components: {comps_not_in_network}."
             )

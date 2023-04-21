@@ -745,7 +745,7 @@ class Topology:
         elif isinstance(name, str):
             return LVGrid(id=int(name.split("_")[-1]), edisgo_obj=edisgo_obj)
         else:
-            logging.warning("`name` must be integer or string.")
+            logger.warning("`name` must be integer or string.")
 
     @property
     def grid_district(self):
@@ -1379,7 +1379,7 @@ class Topology:
             (self.lines_df.bus1 == bus0) & (self.lines_df.bus0 == bus1)
         ]
         if not bus0_bus1.empty and bus1_bus0.empty:
-            logging.debug("Line between bus0 {} and bus1 {} already exists.")
+            logger.debug("Line between bus0 {} and bus1 {} already exists.")
             return pd.concat(
                 [
                     bus1_bus0,
@@ -1732,7 +1732,7 @@ class Topology:
                     self.lines_df.at[lines[0], "bus0"], "v_nom"
                 ]
                 if grid_voltage != data_new_line.U_n:
-                    logging.debug(
+                    logger.debug(
                         f"The line type of lines {lines} is changed to a type with a "
                         f"different nominal voltage (nominal voltage of new line type "
                         f"is {data_new_line.U_n} kV while nominal voltage of the medium"
