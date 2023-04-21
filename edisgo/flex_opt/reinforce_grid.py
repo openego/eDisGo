@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import datetime
 import logging
 
@@ -642,7 +643,7 @@ def catch_convergence_reinforce_grid(
     **kwargs,
 ) -> Results:
     """
-    Uses a reinforcement strategy to reinforce grids with non-converging time steps.
+    Reinforcement strategy to reinforce grids with non-converging time steps.
 
     First, conducts a grid reinforcement with only converging time steps.
     Afterwards, tries to run reinforcement with all time steps that did not converge
@@ -791,31 +792,51 @@ def catch_convergence_reinforce_grid(
     return edisgo.results
 
 
-def enhanced_reinforce_wrapper(
-    edisgo_obj: EDisGo, activate_cost_results_disturbing_mode: bool = False, **kwargs
+def enhanced_reinforce_grid(
+    edisgo_object: EDisGo, activate_cost_results_disturbing_mode: bool = False, **kwargs
 ) -> EDisGo:
     """
-    A Wrapper around the reinforce method, to catch exceptions and try to counter them
-    through reinforcing the grid in small portions:
-    Reinforcement mode mv, then mvlv mode, then lv powerflow per lv_grid.
+    Reinforcement strategy to reinforce grids voltage level by voltage level in case
+    grid reinforcement method
+    :func:`edisgo.flex_opt.reinforce_grid.catch_convergence_reinforce_grid` is not
+    sufficient.
+
+    After first grid reinforcement for all voltage levels at once fails, reinforcement
+    is first conducted for the MV level only, afterwards for the MV level including
+    MV/LV stations and at last each LV grid separately.
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.EDisGo`
-        The eDisGo object
-    activate_cost_results_disturbing_mode: :obj:`bool`
-        If this option is activated to methods are used to fix the problem. These
-        methods are currently not reinforcement costs increasing.
-        If the lv_reinforcement fails all branches of the lv_grid are replaced by the
-        standard type. Should this not work all lv nodes are aggregated to the station
-        node.
+    edisgo_object : :class:`~.EDisGo`
+    activate_cost_results_disturbing_mode : bool
+        If True, LV grids where normal grid reinforcement does not solve all issues,
+        two additional approaches are used to obtain a grid where power flow can be
+        conducted without non-convergence. These two approaches are currently not
+        included in the calculation of grid reinforcement costs, wherefore grid
+        reinforcement costs will be underestimated.
+        In the first approach, all lines in the LV grid are replaced by the
+        standard line type. Should this not be sufficient to solve non-convergence
+        issues, all components in the LV grid are aggregated to the MV/LV station.
+        Default: False.
+    kwargs : dict
+        Keyword arguments can be all parameters of function
+        :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`, except
+        `catch_convergence_problems` which will always be set to True, `mode` which
+        is set to None, and `skip_mv_reinforcement` which will be ignored.
 
     Returns
     -------
     :class:`~.EDisGo`
-        The reinforced eDisGo object
+        The reinforced eDisGo object.
 
     """
+    if kwargs.get("copy_grid", True):
+        edisgo_obj = copy.deepcopy(edisgo_object)
+    else:
+        edisgo_obj = edisgo_object
+    kwargs["copy_grid"] = False
+    kwargs.pop("skip_mv_reinforcement", False)
+
     try:
         logger.info("Try initial enhanced reinforcement.")
         edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
@@ -825,16 +846,16 @@ def enhanced_reinforce_wrapper(
         logger.info("Try mode 'mv' reinforcement.")
         try:
             edisgo_obj.reinforce(mode="mv", catch_convergence_problems=True, **kwargs)
-            logger.info("Mode 'mv' succeeded.")
+            logger.info("Mode 'mv' reinforcement succeeded.")
         except:  # noqa: E722
-            logger.info("Mode 'mv' failed.")
+            logger.info("Mode 'mv' reinforcement failed.")
 
         logger.info("Try mode 'mvlv' reinforcement.")
         try:
             edisgo_obj.reinforce(mode="mvlv", catch_convergence_problems=True, **kwargs)
-            logger.info("Mode 'mvlv' succeeded.")
+            logger.info("Mode 'mvlv' reinforcement succeeded.")
         except:  # noqa: E722
-            logger.info("Mode 'mvlv' failed.")
+            logger.info("Mode 'mvlv' reinforcement failed.")
 
         for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids):
             try:
@@ -845,15 +866,15 @@ def enhanced_reinforce_wrapper(
                     catch_convergence_problems=True,
                     **kwargs,
                 )
-                logger.info(f"Mode 'lv' for {lv_grid} successful.")
+                logger.info(f"Mode 'lv' reinforcement for {lv_grid} successful.")
             except:  # noqa: E722
-                logger.info(f"Mode 'lv' for {lv_grid} failed.")
+                logger.info(f"Mode 'lv' reinforcement for {lv_grid} failed.")
                 if activate_cost_results_disturbing_mode:
                     try:
                         logger.warning(
                             f"Change all lines to standard type in {lv_grid=}."
                         )
-                        lv_standard_line_type = edisgo_obj.config.from_cfg()[
+                        lv_standard_line_type = edisgo_obj.config[
                             "grid_expansion_standard_equipment"
                         ]["lv_line"]
                         edisgo_obj.topology.change_line_type(
