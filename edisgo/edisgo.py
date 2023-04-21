@@ -1074,27 +1074,93 @@ class EDisGo:
         Reinforces the network and calculates network expansion costs.
 
         If the :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case` is
-        True input for `timesteps_pfa` and `mode` are overwritten and therefore
-        ignored.
+        True input for `timesteps_pfa` is overwritten and therefore ignored.
 
-        See :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid` for more
-        information on input parameters and methodology.
+        See :ref:`features-in-detail` for more information on how network
+        reinforcement is conducted.
 
-        Other Parameters
-        -----------------
-        is_worst_case : bool
-            Is used to overwrite the return value from
-            :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case`. If True
-            reinforcement is calculated for worst-case MV and LV cases separately.
+        Parameters
+        -----------
+        timesteps_pfa : str or \
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+            :pandas:`pandas.Timestamp<Timestamp>`
+            timesteps_pfa specifies for which time steps power flow analysis is
+            conducted and therefore which time steps to consider when checking
+            for over-loading and over-voltage issues.
+            It defaults to None in which case all timesteps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex` are used.
+            Possible options are:
 
+            * None
+              Time steps in :attr:`~.network.timeseries.TimeSeries.timeindex` are used.
+            * 'snapshot_analysis'
+              Reinforcement is conducted for two worst-case snapshots. See
+              :meth:`edisgo.tools.tools.select_worstcase_snapshots()` for further
+              explanation on how worst-case snapshots are chosen.
+              Note: If you have large time series, choosing this option will save
+              calculation time since power flow analysis is only conducted for two
+              time steps. If your time series already represents the worst-case,
+              keep the default value of None because finding the worst-case
+              snapshots takes some time.
+            * :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+              :pandas:`pandas.Timestamp<Timestamp>`
+              Use this option to explicitly choose which time steps to consider.
+
+        copy_grid : bool
+            If True, reinforcement is conducted on a copied grid and discarded.
+            Default: False.
+        max_while_iterations : int
+            Maximum number of times each while loop is conducted. Default: 20.
+        split_voltage_band : bool
+            If True the allowed voltage band of +/-10 percent is allocated to the
+            different voltage levels MV, MV/LV and LV according to config values set
+            in section `grid_expansion_allowed_voltage_deviations`. If False, the same
+            voltage limits are used for all voltage levels. Be aware that this does
+            currently not work correctly. Default: True.
+        mode : str
+            Determines network levels reinforcement is conducted for. Specify
+
+            * None to reinforce MV and LV network levels. None is the default.
+            * 'mv' to reinforce MV level only, neglecting MV/LV stations,
+              and LV network topology. LV load and generation is aggregated per
+              LV network and directly connected to the primary side of the
+              respective MV/LV station.
+            * 'mvlv' to reinforce MV network level only, including MV/LV stations,
+              and neglecting LV network topology. LV load and generation is
+              aggregated per LV network and directly connected to the secondary
+              side of the respective MV/LV station.
+              This mode can currently not be chosen in case `is_worst_case` is True.
+            * 'lv' to reinforce LV networks including MV/LV stations.
+        without_generator_import : bool
+            If True, excludes lines that were added in the generator import to connect
+            new generators from calculation of network expansion costs. Default: False.
+        n_minus_one : bool
+            Determines whether n-1 security should be checked. Currently, n-1 security
+            cannot be handled correctly, wherefore the case where this parameter is set
+            to True will lead to an error being raised. Default: False.
         catch_convergence_problems : bool
             Uses reinforcement strategy to reinforce not converging grid.
             Reinforces first with only converging timesteps. Reinforce again with at
             start not converging timesteps. If still not converging, scale timeseries.
             Default: False
 
-        lv_grid_id : str or int
-            LV grid id to specify the grid to check, if mode is "lv".
+        Other Parameters
+        -----------------
+        is_worst_case : bool
+            Is used to overwrite the return value from
+            :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case`. If True,
+            reinforcement is calculated for worst-case MV and LV cases separately.
+        lv_grid_id : str or int or None
+            LV grid id to specify the grid to check, if mode is "lv". If no grid is
+            specified, all LV grids are checked. In that case, the power flow analysis
+            is conducted including the MV grid, in order to check loading and voltage
+            drop/rise of MV/LV stations.
+
+        Returns
+        --------
+        :class:`~.network.results.Results`
+            Returns the Results object holding network expansion costs, equipment
+            changes, etc.
 
         """
         if copy_grid:
@@ -1132,7 +1198,10 @@ class EDisGo:
                     {"mode": "mv", "timesteps_pfa": timesteps_mv},
                 ]
             elif mode == "mvlv":
-                setting_list = [{"mode": "mvlv", "timesteps_pfa": timesteps_mv}]
+                raise ValueError(
+                    "The mode 'mvlv' is currently not implemented when using "
+                    "worst cases. Choose None, 'mv' or 'lv' instead."
+                )
             elif mode == "lv":
                 setting_list = [{"mode": "lv", "timesteps_pfa": timesteps_lv}]
 

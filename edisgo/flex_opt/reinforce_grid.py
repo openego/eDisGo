@@ -44,34 +44,12 @@ def reinforce_grid(
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
         timesteps_pfa specifies for which time steps power flow analysis is
-        conducted and therefore which time steps to consider when checking
-        for over-loading and over-voltage issues.
-        It defaults to None in which case all timesteps in
-        timeseries.timeindex (see :class:`~.network.timeseries.TimeSeries`) are
-        used.
-        Possible options are:
-
-        * None
-          Time steps in timeseries.timeindex (see
-          :class:`~.network.timeseries.TimeSeries`) are used.
-        * 'snapshot_analysis'
-          Reinforcement is conducted for two worst-case snapshots. See
-          :meth:`edisgo.tools.tools.select_worstcase_snapshots()` for further
-          explanation on how worst-case snapshots are chosen.
-          Note: If you have large time series choosing this option will save
-          calculation time since power flow analysis is only conducted for two
-          time steps. If your time series already represents the worst-case
-          keep the default value of None because finding the worst-case
-          snapshots takes some time.
-        * :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
-          :pandas:`pandas.Timestamp<Timestamp>`
-          Use this option to explicitly choose which time steps to consider.
-
+        conducted. See parameter `timesteps_pfa` in function :attr:`~.EDisGo.reinforce`
+        for more information.
     copy_grid : bool
-        If True reinforcement is conducted on a copied grid and discarded.
-        Default: False.
+        If True, reinforcement is conducted on a copied grid. Default: False.
     max_while_iterations : int
-        Maximum number of times each while loop is conducted.
+        Maximum number of times each while loop is conducted. Default: 20.
     split_voltage_band : bool
         If True the allowed voltage band of +/-10 percent is allocated to the different
         voltage levels MV, MV/LV and LV according to config values set in section
@@ -80,31 +58,21 @@ def reinforce_grid(
         correctly.
         Default: True.
     mode : str
-        Determines network levels reinforcement is conducted for. Specify
-
-        * None to reinforce MV and LV network levels. None is the default.
-        * 'mv' to reinforce MV network level only, neglecting MV/LV stations,
-          and LV network topology. LV load and generation is aggregated per
-          LV network and directly connected to the primary side of the
-          respective MV/LV station.
-        * 'mvlv' to reinforce MV network level only, including MV/LV stations,
-          and neglecting LV network topology. LV load and generation is
-          aggregated per LV network and directly connected to the secondary
-          side of the respective MV/LV station.
-        * 'lv' to reinforce LV networks including MV/LV stations.
+        Determines network levels reinforcement is conducted for. See parameter
+        `mode` in function :attr:`~.EDisGo.reinforce` for more information.
     without_generator_import : bool
-        If True excludes lines that were added in the generator import to
-        connect new generators to the topology from calculation of topology expansion
-        costs. Default: False.
+        If True, excludes lines that were added in the generator import to connect
+        new generators from calculation of network expansion costs. Default: False.
     n_minus_one : bool
         Determines whether n-1 security should be checked. Currently, n-1 security
         cannot be handled correctly, wherefore the case where this parameter is set to
-        True will lead to an error being raised.
+        True will lead to an error being raised. Default: False.
 
     Other Parameters
     -----------------
-    lv_grid_id : str or int
-        LV grid id to specify the grid to check, if mode is "lv".
+    lv_grid_id : str or int or None
+        LV grid id to specify the grid to check, if mode is "lv". See parameter
+        `lv_grid_id` in function :attr:`~.EDisGo.reinforce` for more information.
 
     Returns
     -------
@@ -175,8 +143,6 @@ def reinforce_grid(
         edisgo_reinforce = copy.deepcopy(edisgo)
     else:
         edisgo_reinforce = edisgo
-
-    logger.info("Start reinforcement.")
 
     if timesteps_pfa is not None:
         if isinstance(timesteps_pfa, str) and timesteps_pfa == "snapshot_analysis":
@@ -679,13 +645,13 @@ def catch_convergence_reinforce_grid(
             )
             converged = True
             logger.info(
-                f"Reinforcement succeeded for {set_scaling_factor=} " f"at {iteration=}"
+                f"Reinforcement succeeded for {set_scaling_factor=} at {iteration=}"
             )
         except ValueError:
             results = edisgo.results
             converged = False
             logger.info(
-                f"Reinforcement failed for {set_scaling_factor=} " f"at {iteration=}"
+                f"Reinforcement failed for {set_scaling_factor=} at {iteration=}"
             )
         return converged, results
 
@@ -704,7 +670,7 @@ def catch_convergence_reinforce_grid(
     converged, results = reinforce()
 
     if converged is False:
-        logger.info("Initial reinforcement doesn't converged.")
+        logger.info("Initial reinforcement doesn't converge.")
         fully_converged = False
     else:
         logger.info("Initial reinforcement converged.")
