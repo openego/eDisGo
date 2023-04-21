@@ -17,6 +17,7 @@ from shapely.geometry import Point
 from edisgo import EDisGo
 from edisgo.edisgo import import_edisgo_from_files
 from edisgo.flex_opt.reinforce_grid import enhanced_reinforce_wrapper
+from edisgo.network.results import Results
 
 
 class TestEDisGo:
@@ -461,8 +462,6 @@ class TestEDisGo:
         assert self.edisgo.results.v_res.empty
 
         # ###################### test mode lv and copy grid ##########################
-        # self.setup_edisgo_object()
-        # self.setup_worst_case_time_series()
         results = self.edisgo.reinforce(mode="lv", copy_grid=True)
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 6
@@ -471,13 +470,26 @@ class TestEDisGo:
         assert self.edisgo.results.v_res.empty
 
         # ################# test mode mvlv and combined analysis ####################
-        # self.setup_edisgo_object()
-        # self.setup_worst_case_time_series()
-        results = self.edisgo.reinforce(mode="mvlv", combined_analysis=False)
+        results = self.edisgo.reinforce(
+            mode="mvlv", combined_analysis=False, is_worst_case=False
+        )
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 8
         assert len(results.equipment_changes) == 8
-        assert results.v_res.shape == (4, 142)
+        assert results.v_res.shape == (4, 41)
+
+        # ###################### test with only one lv grid ##########################
+        # test grid without issues
+        self.edisgo.results = Results(self.edisgo)
+        lv_grid_id = 1
+        results = self.edisgo.reinforce(mode="lv", lv_grid_id=lv_grid_id)
+        assert results.unresolved_issues.empty
+        assert results.equipment_changes.empty
+        # test grid with issues
+        lv_grid_id = 5
+        results = self.edisgo.reinforce(mode="lv", lv_grid_id=lv_grid_id)
+        assert len(results.grid_expansion_costs) == 1
+        assert len(results.equipment_changes) == 1
 
     def test_reinforce_catch_convergence(self):
         # ###################### test with catch convergence ##########################
@@ -503,18 +515,8 @@ class TestEDisGo:
         assert len(results.grid_expansion_costs) == 134
         assert len(results.equipment_changes) == 231
         assert results.v_res.shape == (4, 142)
-
-    def test_reinforce_one_lv_grid(self):
-        # ###################### test with only one lv grid ##########################
-        self.setup_worst_case_time_series()
-        lv_grid_id = list(self.edisgo.topology.mv_grid.lv_grids)[0].id
-        results = self.edisgo.reinforce(
-            mode="lv", copy_grid=True, lv_grid_id=lv_grid_id
-        )
-
-        assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 6
-        assert len(results.equipment_changes) == 6
+        assert len(results.grid_expansion_costs) == 135
+        assert len(results.equipment_changes) == 208
         assert results.v_res.shape == (4, 142)
 
     @pytest.mark.slow
