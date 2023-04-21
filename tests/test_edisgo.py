@@ -458,7 +458,7 @@ class TestEDisGo:
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 4
         assert len(results.equipment_changes) == 4
-        assert results.v_res.shape == (4, 142)
+        assert results.v_res.shape == (4, 31)
         assert self.edisgo.results.v_res.empty
 
         # ###################### test mode lv and copy grid ##########################
@@ -476,7 +476,7 @@ class TestEDisGo:
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 4
         assert len(results.equipment_changes) == 4
-        assert results.v_res.shape == (4, 142)
+        assert results.v_res.shape == (4, 41)
 
         # ###################### test with only one lv grid ##########################
         # test grid without issues
@@ -485,11 +485,13 @@ class TestEDisGo:
         results = self.edisgo.reinforce(mode="lv", lv_grid_id=lv_grid_id)
         assert results.unresolved_issues.empty
         assert results.equipment_changes.empty
+        assert results.v_res.shape == (4, 15)
         # test grid with issues
         lv_grid_id = 5
         results = self.edisgo.reinforce(mode="lv", lv_grid_id=lv_grid_id)
         assert len(results.grid_expansion_costs) == 1
         assert len(results.equipment_changes) == 1
+        assert results.v_res.shape == (4, 9)
 
     def test_reinforce_catch_convergence(self):
 

@@ -738,7 +738,7 @@ class EDisGo:
             Check integrity of edisgo object before translating to pypsa. This option is
             meant to help the identification of possible sources of errors if the power
             flow calculations fail. See :attr:`~.edisgo.EDisGo.check_integrity` for
-            more information.
+            more information. Default: False.
 
         Other Parameters
         -------------------
@@ -751,7 +751,7 @@ class EDisGo:
             Default: False.
         lv_grid_id : int or str
             ID (e.g. 1) or name (string representation, e.g. "LVGrid_1") of LV grid
-            to export in case mode is 'lv'.
+            to export in case mode is 'lv'. Default: None.
         aggregate_loads : str
             Mode for load aggregation in LV grids in case mode is 'mv' or 'mvlv'.
             Can be 'sectoral' aggregating the loads sector-wise, 'all' aggregating all
@@ -1251,7 +1251,16 @@ class EDisGo:
                 **setting,
             )
         if run_analyze_at_the_end:
-            edisgo_obj.analyze()
+            lv_grid_id = kwargs.get("lv_grid_id", None)
+            if mode == "lv" and lv_grid_id:
+                analyze_mode = "lv"
+            elif mode == "lv":
+                analyze_mode = None
+            else:
+                analyze_mode = mode
+            edisgo_obj.analyze(
+                mode=analyze_mode, lv_grid_id=lv_grid_id, timesteps=timesteps_pfa
+            )
 
         # add measure to Results object
         if not copy_grid:

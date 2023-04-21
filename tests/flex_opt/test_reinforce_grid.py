@@ -11,6 +11,11 @@ from edisgo.flex_opt.reinforce_grid import reinforce_grid
 
 
 class TestReinforceGrid:
+    """
+    Here, currently only reinforce_grid function is tested.
+    Other functions in reinforce_grid module are currently tested in test_edisgo module.
+    """
+
     @classmethod
     def setup_class(cls):
         cls.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
