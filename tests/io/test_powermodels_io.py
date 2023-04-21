@@ -219,8 +219,25 @@ class TestPowermodelsIO:
         assert len(powermodels_network["heatpumps"].keys()) == 0
         assert len(powermodels_network["heat_storage"].keys()) == 0
         assert len(powermodels_network["dsm"].keys()) == 0
-        # ToDo: check, that storage power is added to gen/load
-        # ToDo: check gen, load dict and corresponding timeseries dict
+        assert powermodels_network["load"]["56"]["pd"] == 0.4
+        assert powermodels_network["time_series"]["load"]["56"]["pd"] == [
+            0.4,
+            0.4,
+            0.0,
+            0.0,
+        ]
+        assert powermodels_network["time_series"]["gen"]["2"]["pg"] == [
+            0.0,
+            0.0,
+            0.4,
+            0.4,
+        ]
+        assert set(
+            powermodels_network["time_series"]["load"]["36"]["pd"]
+            == self.edisgo.timeseries.loads_active_power[
+                powermodels_network["load"]["36"]["name"]
+            ].values
+        ) == {True}
         powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(
             self.edisgo,
             opf_version=4,
