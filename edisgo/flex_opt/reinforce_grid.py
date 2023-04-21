@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 def reinforce_grid(
     edisgo: EDisGo,
     timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
-    copy_grid: bool = False,
     max_while_iterations: int = 20,
     split_voltage_band: bool = True,
     mode: str | None = None,
@@ -39,15 +38,13 @@ def reinforce_grid(
     Parameters
     ----------
     edisgo : :class:`~.EDisGo`
-        The eDisGo API object
+        The eDisGo object grid reinforcement is conducted on.
     timesteps_pfa : str or \
         :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
         :pandas:`pandas.Timestamp<Timestamp>`
         timesteps_pfa specifies for which time steps power flow analysis is
         conducted. See parameter `timesteps_pfa` in function :attr:`~.EDisGo.reinforce`
         for more information.
-    copy_grid : bool
-        If True, reinforcement is conducted on a copied grid. Default: False.
     max_while_iterations : int
         Maximum number of times each while loop is conducted. Default: 20.
     split_voltage_band : bool
@@ -73,6 +70,12 @@ def reinforce_grid(
     lv_grid_id : str or int or None
         LV grid id to specify the grid to check, if mode is "lv". See parameter
         `lv_grid_id` in function :attr:`~.EDisGo.reinforce` for more information.
+    scale_timeseries : float or None
+        If a value is given, the timeseries used in the power flow analysis are scaled
+        with this factor (values between 0 and 1 will scale down the time series and
+        values above 1 will scale the timeseries up). Downscaling of time series
+        can be used to gradually reinforce the grid. If None, timeseries are not scaled.
+        Default: None.
 
     Returns
     -------
@@ -88,14 +91,14 @@ def reinforce_grid(
     """
 
     def _add_lines_changes_to_equipment_changes():
-        edisgo_reinforce.results.equipment_changes = pd.concat(
+        edisgo.results.equipment_changes = pd.concat(
             [
-                edisgo_reinforce.results.equipment_changes,
+                edisgo.results.equipment_changes,
                 pd.DataFrame(
                     {
                         "iteration_step": [iteration_step] * len(lines_changes),
                         "change": ["changed"] * len(lines_changes),
-                        "equipment": edisgo_reinforce.topology.lines_df.loc[
+                        "equipment": edisgo.topology.lines_df.loc[
                             lines_changes.keys(), "type_info"
                         ].values,
                         "quantity": [_ for _ in lines_changes.values()],
@@ -106,7 +109,7 @@ def reinforce_grid(
         )
 
     def _add_transformer_changes_to_equipment_changes(mode: str | None):
-        df_list = [edisgo_reinforce.results.equipment_changes]
+        df_list = [edisgo.results.equipment_changes]
         df_list.extend(
             pd.DataFrame(
                 {
@@ -120,7 +123,7 @@ def reinforce_grid(
             for station, transformer_list in transformer_changes[mode].items()
         )
 
-        edisgo_reinforce.results.equipment_changes = pd.concat(df_list)
+        edisgo.results.equipment_changes = pd.concat(df_list)
 
     if n_minus_one is True:
         raise NotImplementedError("n-1 security can currently not be checked.")
@@ -137,16 +140,9 @@ def reinforce_grid(
             "grid reinforcement."
         )
 
-    # in case reinforcement needs to be conducted on a copied graph the
-    # edisgo object is deep copied
-    if copy_grid is True:
-        edisgo_reinforce = copy.deepcopy(edisgo)
-    else:
-        edisgo_reinforce = edisgo
-
     if timesteps_pfa is not None:
         if isinstance(timesteps_pfa, str) and timesteps_pfa == "snapshot_analysis":
-            snapshots = tools.select_worstcase_snapshots(edisgo_reinforce)
+            snapshots = tools.select_worstcase_snapshots(edisgo)
             # drop None values in case any of the two snapshots does not exist
             timesteps_pfa = pd.DatetimeIndex(
                 data=[
@@ -169,6 +165,7 @@ def reinforce_grid(
 
     iteration_step = 1
     lv_grid_id = kwargs.get("lv_grid_id", None)
+    scale_timeseries = kwargs.get("scale_timeseries", None)
     if mode == "lv" and lv_grid_id:
         analyze_mode = "lv"
     elif mode == "lv":
@@ -176,8 +173,11 @@ def reinforce_grid(
     else:
         analyze_mode = mode
 
-    edisgo_reinforce.analyze(
-        mode=analyze_mode, timesteps=timesteps_pfa, lv_grid_id=lv_grid_id
+    edisgo.analyze(
+        mode=analyze_mode,
+        timesteps=timesteps_pfa,
+        lv_grid_id=lv_grid_id,
+        scale_timeseries=scale_timeseries,
     )
 
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
@@ -185,26 +185,24 @@ def reinforce_grid(
     overloaded_mv_station = (
         pd.DataFrame(dtype=float)
         if mode == "lv"
-        else checks.hv_mv_station_max_overload(edisgo_reinforce)
+        else checks.hv_mv_station_max_overload(edisgo)
     )
     if lv_grid_id or (mode == "mv"):
         overloaded_lv_stations = pd.DataFrame(dtype=float)
     else:
-        overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo_reinforce)
+        overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
 
     logger.debug("==> Check line load.")
     crit_lines = (
         pd.DataFrame(dtype=float)
         if mode == "lv"
-        else checks.mv_line_max_relative_overload(edisgo_reinforce)
+        else checks.mv_line_max_relative_overload(edisgo)
     )
     if not mode or mode == "lv":
         crit_lines = pd.concat(
             [
                 crit_lines,
-                checks.lv_line_max_relative_overload(
-                    edisgo_reinforce, lv_grid_id=lv_grid_id
-                ),
+                checks.lv_line_max_relative_overload(edisgo, lv_grid_id=lv_grid_id),
             ]
         )
 
@@ -219,7 +217,7 @@ def reinforce_grid(
             # reinforce substations
             transformer_changes = (
                 reinforce_measures.reinforce_hv_mv_station_overloading(
-                    edisgo_reinforce, overloaded_mv_station
+                    edisgo, overloaded_mv_station
                 )
             )
             # write added and removed transformers to results.equipment_changes
@@ -230,7 +228,7 @@ def reinforce_grid(
             # reinforce distribution substations
             transformer_changes = (
                 reinforce_measures.reinforce_mv_lv_station_overloading(
-                    edisgo_reinforce, overloaded_lv_stations
+                    edisgo, overloaded_lv_stations
                 )
             )
             # write added and removed transformers to results.equipment_changes
@@ -240,7 +238,7 @@ def reinforce_grid(
         if not crit_lines.empty:
             # reinforce lines
             lines_changes = reinforce_measures.reinforce_lines_overloading(
-                edisgo_reinforce, crit_lines
+                edisgo, crit_lines
             )
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes()
@@ -248,32 +246,33 @@ def reinforce_grid(
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
         logger.debug("==> Run power flow analysis.")
-        edisgo_reinforce.analyze(
-            mode=analyze_mode, timesteps=timesteps_pfa, lv_grid_id=lv_grid_id
+        edisgo.analyze(
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            lv_grid_id=lv_grid_id,
+            scale_timeseries=scale_timeseries,
         )
 
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = (
             pd.DataFrame(dtype=float)
             if mode == "lv"
-            else checks.hv_mv_station_max_overload(edisgo_reinforce)
+            else checks.hv_mv_station_max_overload(edisgo)
         )
         if mode != "mv" and (not lv_grid_id):
-            overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo_reinforce)
+            overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
 
         logger.debug("==> Recheck line load.")
         crit_lines = (
             pd.DataFrame(dtype=float)
             if mode == "lv"
-            else checks.mv_line_max_relative_overload(edisgo_reinforce)
+            else checks.mv_line_max_relative_overload(edisgo)
         )
         if not mode or mode == "lv":
             crit_lines = pd.concat(
                 [
                     crit_lines,
-                    checks.lv_line_max_relative_overload(
-                        edisgo_reinforce, lv_grid_id=lv_grid_id
-                    ),
+                    checks.lv_line_max_relative_overload(edisgo, lv_grid_id=lv_grid_id),
                 ]
             )
 
@@ -287,9 +286,9 @@ def reinforce_grid(
         or not overloaded_mv_station.empty
         or not overloaded_lv_stations.empty
     ):
-        edisgo_reinforce.results.unresolved_issues = pd.concat(
+        edisgo.results.unresolved_issues = pd.concat(
             [
-                edisgo_reinforce.results.unresolved_issues,
+                edisgo.results.unresolved_issues,
                 crit_lines,
                 overloaded_lv_stations,
                 overloaded_mv_station,
@@ -314,7 +313,7 @@ def reinforce_grid(
         pd.DataFrame()
         if mode == "lv"
         else checks.voltage_issues(
-            edisgo_reinforce, voltage_level="mv", split_voltage_band=split_voltage_band
+            edisgo, voltage_level="mv", split_voltage_band=split_voltage_band
         )
     )
 
@@ -323,8 +322,8 @@ def reinforce_grid(
 
         # reinforce lines
         lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
-            edisgo_reinforce,
-            edisgo_reinforce.topology.mv_grid,
+            edisgo,
+            edisgo.topology.mv_grid,
             crit_nodes,
         )
         # write changed lines to results.equipment_changes
@@ -333,13 +332,16 @@ def reinforce_grid(
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-voltage problems were solved
         logger.debug("==> Run power flow analysis.")
-        edisgo_reinforce.analyze(
-            mode=analyze_mode, timesteps=timesteps_pfa, lv_grid_id=lv_grid_id
+        edisgo.analyze(
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            lv_grid_id=lv_grid_id,
+            scale_timeseries=scale_timeseries,
         )
 
         logger.debug("==> Recheck voltage in MV topology.")
         crit_nodes = checks.voltage_issues(
-            edisgo_reinforce, voltage_level="mv", split_voltage_band=split_voltage_band
+            edisgo, voltage_level="mv", split_voltage_band=split_voltage_band
         )
 
         iteration_step += 1
@@ -348,9 +350,9 @@ def reinforce_grid(
     # check if all voltage problems were solved after maximum number of
     # iterations allowed
     if while_counter == max_while_iterations and crit_nodes.empty:
-        edisgo_reinforce.results.unresolved_issues = pd.concat(
+        edisgo.results.unresolved_issues = pd.concat(
             [
-                edisgo_reinforce.results.unresolved_issues,
+                edisgo.results.unresolved_issues,
                 pd.concat([_ for _ in crit_nodes.values()]),
             ]
         )
@@ -369,10 +371,10 @@ def reinforce_grid(
         logger.debug("==> Check voltage at secondary side of LV stations.")
 
         if lv_grid_id:
-            crit_stations = {}
+            crit_stations = pd.DataFrame()
         else:
             crit_stations = checks.voltage_issues(
-                edisgo_reinforce,
+                edisgo,
                 voltage_level="mv_lv",
                 split_voltage_band=split_voltage_band,
             )
@@ -382,7 +384,7 @@ def reinforce_grid(
             # reinforce distribution substations
             transformer_changes = (
                 reinforce_measures.reinforce_mv_lv_station_voltage_issues(
-                    edisgo_reinforce, crit_stations
+                    edisgo, crit_stations
                 )
             )
             # write added transformers to results.equipment_changes
@@ -391,13 +393,16 @@ def reinforce_grid(
             # run power flow analysis again (after updating pypsa object) and
             # check if all over-voltage problems were solved
             logger.debug("==> Run power flow analysis.")
-            edisgo_reinforce.analyze(
-                mode=analyze_mode, timesteps=timesteps_pfa, lv_grid_id=lv_grid_id
+            edisgo.analyze(
+                mode=analyze_mode,
+                timesteps=timesteps_pfa,
+                lv_grid_id=lv_grid_id,
+                scale_timeseries=scale_timeseries,
             )
 
             logger.debug("==> Recheck voltage at secondary side of LV stations.")
             crit_stations = checks.voltage_issues(
-                edisgo_reinforce,
+                edisgo,
                 voltage_level="mv_lv",
                 split_voltage_band=split_voltage_band,
             )
@@ -408,9 +413,9 @@ def reinforce_grid(
         # check if all voltage problems were solved after maximum number of
         # iterations allowed
         if while_counter == max_while_iterations and crit_stations.empty:
-            edisgo_reinforce.results.unresolved_issues = pd.concat(
+            edisgo.results.unresolved_issues = pd.concat(
                 [
-                    edisgo_reinforce.results.unresolved_issues,
+                    edisgo.results.unresolved_issues,
                     pd.concat([_ for _ in crit_stations.values()]),
                 ]
             )
@@ -428,7 +433,7 @@ def reinforce_grid(
     if not mode or mode == "lv":
         logger.debug("==> Check voltage in LV grids.")
         crit_nodes = checks.voltage_issues(
-            edisgo_reinforce,
+            edisgo,
             voltage_level="lv",
             split_voltage_band=split_voltage_band,
             lv_grid_id=lv_grid_id,
@@ -440,8 +445,8 @@ def reinforce_grid(
             for grid_id in crit_nodes.lv_grid_id.unique():
                 # reinforce lines
                 lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
-                    edisgo_reinforce,
-                    edisgo_reinforce.topology.get_lv_grid(int(grid_id)),
+                    edisgo,
+                    edisgo.topology.get_lv_grid(int(grid_id)),
                     crit_nodes[crit_nodes.lv_grid_id == grid_id],
                 )
                 # write changed lines to results.equipment_changes
@@ -450,13 +455,16 @@ def reinforce_grid(
             # run power flow analysis again (after updating pypsa object)
             # and check if all over-voltage problems were solved
             logger.debug("==> Run power flow analysis.")
-            edisgo_reinforce.analyze(
-                mode=analyze_mode, timesteps=timesteps_pfa, lv_grid_id=lv_grid_id
+            edisgo.analyze(
+                mode=analyze_mode,
+                timesteps=timesteps_pfa,
+                lv_grid_id=lv_grid_id,
+                scale_timeseries=scale_timeseries,
             )
 
             logger.debug("==> Recheck voltage in LV grids.")
             crit_nodes = checks.voltage_issues(
-                edisgo_reinforce,
+                edisgo,
                 voltage_level="lv",
                 split_voltage_band=split_voltage_band,
                 lv_grid_id=lv_grid_id,
@@ -468,9 +476,9 @@ def reinforce_grid(
         # check if all voltage problems were solved after maximum number of
         # iterations allowed
         if while_counter == max_while_iterations and crit_nodes.empty:
-            edisgo_reinforce.results.unresolved_issues = pd.concat(
+            edisgo.results.unresolved_issues = pd.concat(
                 [
-                    edisgo_reinforce.results.unresolved_issues,
+                    edisgo.results.unresolved_issues,
                     pd.concat([_ for _ in crit_nodes.values()]),
                 ]
             )
@@ -489,26 +497,24 @@ def reinforce_grid(
     overloaded_mv_station = (
         pd.DataFrame(dtype=float)
         if mode == "lv"
-        else checks.hv_mv_station_max_overload(edisgo_reinforce)
+        else checks.hv_mv_station_max_overload(edisgo)
     )
     if (lv_grid_id) or (mode == "mv"):
         overloaded_lv_stations = pd.DataFrame(dtype=float)
     else:
-        overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo_reinforce)
+        overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
 
     logger.debug("==> Recheck line load.")
     crit_lines = (
         pd.DataFrame(dtype=float)
         if mode == "lv"
-        else checks.mv_line_max_relative_overload(edisgo_reinforce)
+        else checks.mv_line_max_relative_overload(edisgo)
     )
     if not mode or mode == "lv":
         crit_lines = pd.concat(
             [
                 crit_lines,
-                checks.lv_line_max_relative_overload(
-                    edisgo_reinforce, lv_grid_id=lv_grid_id
-                ),
+                checks.lv_line_max_relative_overload(edisgo, lv_grid_id=lv_grid_id),
             ]
         )
 
@@ -523,7 +529,7 @@ def reinforce_grid(
             # reinforce substations
             transformer_changes = (
                 reinforce_measures.reinforce_hv_mv_station_overloading(
-                    edisgo_reinforce, overloaded_mv_station
+                    edisgo, overloaded_mv_station
                 )
             )
             # write added and removed transformers to results.equipment_changes
@@ -534,7 +540,7 @@ def reinforce_grid(
             # reinforce substations
             transformer_changes = (
                 reinforce_measures.reinforce_mv_lv_station_overloading(
-                    edisgo_reinforce, overloaded_lv_stations
+                    edisgo, overloaded_lv_stations
                 )
             )
             # write added and removed transformers to results.equipment_changes
@@ -544,7 +550,7 @@ def reinforce_grid(
         if not crit_lines.empty:
             # reinforce lines
             lines_changes = reinforce_measures.reinforce_lines_overloading(
-                edisgo_reinforce, crit_lines
+                edisgo, crit_lines
             )
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes()
@@ -552,32 +558,33 @@ def reinforce_grid(
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
         logger.debug("==> Run power flow analysis.")
-        edisgo_reinforce.analyze(
-            mode=analyze_mode, timesteps=timesteps_pfa, lv_grid_id=lv_grid_id
+        edisgo.analyze(
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            lv_grid_id=lv_grid_id,
+            scale_timeseries=scale_timeseries,
         )
 
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = (
             pd.DataFrame(dtype=float)
             if mode == "lv"
-            else checks.hv_mv_station_max_overload(edisgo_reinforce)
+            else checks.hv_mv_station_max_overload(edisgo)
         )
         if mode != "mv" and (not lv_grid_id):
-            overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo_reinforce)
+            overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
 
         logger.debug("==> Recheck line load.")
         crit_lines = (
             pd.DataFrame(dtype=float)
             if mode == "lv"
-            else checks.mv_line_max_relative_overload(edisgo_reinforce)
+            else checks.mv_line_max_relative_overload(edisgo)
         )
         if not mode or mode == "lv":
             crit_lines = pd.concat(
                 [
                     crit_lines,
-                    checks.lv_line_max_relative_overload(
-                        edisgo_reinforce, lv_grid_id=lv_grid_id
-                    ),
+                    checks.lv_line_max_relative_overload(edisgo, lv_grid_id=lv_grid_id),
                 ]
             )
 
@@ -591,9 +598,9 @@ def reinforce_grid(
         or not overloaded_mv_station.empty
         or not overloaded_lv_stations.empty
     ):
-        edisgo_reinforce.results.unresolved_issues = pd.concat(
+        edisgo.results.unresolved_issues = pd.concat(
             [
-                edisgo_reinforce.results.unresolved_issues,
+                edisgo.results.unresolved_issues,
                 crit_lines,
                 overloaded_lv_stations,
                 overloaded_mv_station,
@@ -611,7 +618,7 @@ def reinforce_grid(
 
     # final check 10% criteria
     voltage_dev = checks.voltage_deviation_from_allowed_voltage_limits(
-        edisgo_reinforce, split_voltage_band=False
+        edisgo, split_voltage_band=False
     )
     voltage_dev = voltage_dev[voltage_dev != 0.0].dropna(how="all").dropna(how="all")
     if not voltage_dev.empty:
@@ -619,11 +626,11 @@ def reinforce_grid(
         raise ValueError(message)
 
     # calculate topology expansion costs
-    edisgo_reinforce.results.grid_expansion_costs = grid_expansion_costs(
-        edisgo_reinforce, without_generator_import=without_generator_import
+    edisgo.results.grid_expansion_costs = grid_expansion_costs(
+        edisgo, without_generator_import=without_generator_import
     )
 
-    return edisgo_reinforce.results
+    return edisgo.results
 
 
 def catch_convergence_reinforce_grid(

@@ -926,7 +926,7 @@ class EDisGo:
             Default: True.
 
         troubleshooting_mode : str or None
-            Two optional troubleshooting methods in case of nonconvergence of nonlinear
+            Two optional troubleshooting methods in case of non-convergence of nonlinear
             power flow (cf. [1])
 
             * None (default)
@@ -1130,7 +1130,9 @@ class EDisGo:
               aggregated per LV network and directly connected to the secondary
               side of the respective MV/LV station.
               This mode can currently not be chosen in case `is_worst_case` is True.
-            * 'lv' to reinforce LV networks including MV/LV stations.
+            * 'lv' to reinforce LV networks. In case an LV grid is specified through
+              parameter `lv_grid_id`, the grid's MV/LV station is not included. In case
+              no LV grid ID is given, all MV/LV stations are included.
         without_generator_import : bool
             If True, excludes lines that were added in the generator import to connect
             new generators from calculation of network expansion costs. Default: False.
@@ -1221,7 +1223,6 @@ class EDisGo:
             func(
                 edisgo_obj,
                 max_while_iterations=max_while_iterations,
-                copy_grid=False,
                 timesteps_pfa=setting["timesteps_pfa"],
                 split_voltage_band=split_voltage_band,
                 mode=setting["mode"],
