@@ -420,4 +420,6 @@ def cost_breakdown(edisgo_obj, lines_df):
             lambda x: x.costs_cable * lines_added.loc[x.name, "quantity"],
             axis=1,
         )
+    else:
+        costs_lines = pd.DataFrame()
     return costs_lines
