@@ -716,7 +716,7 @@ class TimeSeries:
                 set(df.index) - set(self.loads_active_power.columns)
             )
             if loads_without_ts:
-                logging.warning(
+                logger.warning(
                     "There are loads where information on type of load is missing. "
                     "Handled types are 'conventional_load', 'charging_point', and "
                     "'heat_pump'. Loads with missing type information are handled as "
@@ -2148,7 +2148,7 @@ class TimeSeries:
         comps_not_in_network = list(set(component_names) - set(comps_in_network))
 
         if comps_not_in_network:
-            logging.warning(
+            logger.warning(
                 f"Some of the provided {component_type} are not in the network. This "
                 f"concerns the following components: {comps_not_in_network}."
             )
@@ -2199,6 +2199,36 @@ class TimeSeries:
 
         # set new timeindex
         self._timeindex = index
+
+    def scale_timeseries(
+        self, p_scaling_factor: float = 1.0, q_scaling_factor: float = 1.0
+    ):
+        """
+        Scales component time series by given factors.
+
+        The changes are directly applied to the TimeSeries object.
+
+        Parameters
+        -----------
+        p_scaling_factor : float
+            Scaling factor to use for active power time series. Values between 0 and 1
+            will scale down the time series and values above 1 will scale the
+            timeseries up. Default: 1.
+        q_scaling_factor : float
+            Scaling factor to use for reactive power time series. Values between 0 and 1
+            will scale down the time series and values above 1 will scale the
+            timeseries up. Default: 1.
+
+        """
+        attributes_type = ["generators", "loads", "storage_units"]
+        power_types = {
+            "active_power": p_scaling_factor,
+            "reactive_power": q_scaling_factor,
+        }
+        for suffix, scaling_factor in power_types.items():
+            for type in attributes_type:
+                attribute = f"{type}_{suffix}"
+                setattr(self, attribute, getattr(self, attribute) * scaling_factor)
 
 
 class TimeSeriesRaw:
