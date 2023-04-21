@@ -232,12 +232,14 @@ class TestPowermodelsIO:
             0.4,
             0.4,
         ]
-        assert set(
-            powermodels_network["time_series"]["load"]["36"]["pd"]
-            == self.edisgo.timeseries.loads_active_power[
-                powermodels_network["load"]["36"]["name"]
-            ].values
-        ) == {True}
+        assert min(
+            np.unique(
+                powermodels_network["time_series"]["load"]["36"]["pd"]
+                == self.edisgo.timeseries.loads_active_power[
+                    powermodels_network["load"]["36"]["name"]
+                ].values
+            )
+        )
         powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(
             self.edisgo,
             opf_version=4,
@@ -266,19 +268,23 @@ class TestPowermodelsIO:
             0.0,
             0.0,
         ]
-        assert set(
-            powermodels_network["time_series"]["heatpumps"]["3"]["pd"]
-            == self.edisgo.heat_pump.heat_demand_df[
-                "Heat_Pump_MVGrid_1_district_heating_1"
-            ]
-            - self.edisgo.overlying_grid.feedin_district_heating.grid1
-        ) == {True}
+        assert min(
+            np.unique(
+                powermodels_network["time_series"]["heatpumps"]["3"]["pd"]
+                == self.edisgo.heat_pump.heat_demand_df[
+                    "Heat_Pump_MVGrid_1_district_heating_1"
+                ]
+                - self.edisgo.overlying_grid.feedin_district_heating.grid1
+            )
+        )
         assert len(powermodels_network["dsm"].keys()) == 1
-        assert set(
-            hv_flex_dict["dsm"]
-            == self.edisgo.overlying_grid.dsm_active_power
-            - self.edisgo.timeseries.loads_active_power.Load_industrial_LVGrid_5_1
-        ) == {True}
+        assert min(
+            np.unique(
+                hv_flex_dict["dsm"]
+                == self.edisgo.overlying_grid.dsm_active_power
+                - self.edisgo.timeseries.loads_active_power.Load_industrial_LVGrid_5_1
+            )
+        )
 
     def test__get_pf(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
