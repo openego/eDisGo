@@ -1024,9 +1024,9 @@ def split_feeder_at_half_length(edisgo_obj, grid, crit_lines, split_mode="back")
 
 def add_station_at_half_length(edisgo_obj, grid, crit_lines):
     """
-    If the number of overloaded feeders in the LV grid is more than 2, the feeders are
-    split at their half-length, and the disconnected points are connected to the
-    new MV/LV station.
+    If the number of overloaded feeders in the LV grid is more than 1(this can be
+    changed 2 or 3) , the feeders are split at their half-length, and the
+     disconnected points are connected to the new MV/LV station.
 
 
     1-The point at half the length of the feeders is found.
@@ -1038,7 +1038,8 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
     preceding node.
 
     Notes:
-    -If the number of overloaded lines in the LV grid is less than 3 and the node_1_2
+    -If the number of overloaded lines in the LV grid is less than 2 (this can be
+    changed 2 or 3) and the node_1_2
     is the first node after the main station, the method is not applied.
     -The name of the new grid will be the existing grid code
     (e.g. 40000) + 1001 = 400001001
@@ -1256,7 +1257,9 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
             lines_changes[line_added_lv] = 1
             # removed from exiting LV grid and converted to an MV line between new
             # and existing MV/LV station
-        if len(nodes_tb_relocated) > 2 and loop_counter == 0:
+
+        # if the number of overloaded lines is more than 1
+        if len(nodes_tb_relocated) > 1 and loop_counter == 0:
             logger.info(f"{grid}==>method:add_station_at_half_length is running ")
             # Create the bus-bar name of primary and secondary side of new MV/LV station
             lv_bus_new = create_bus_name(station_node, "lv")
@@ -1366,7 +1369,8 @@ def add_station_at_half_length(edisgo_obj, grid, crit_lines):
                 f"{grid} and located in new grid{repr(grid) + str(1001)} by method: "
                 f"add_station_at_half_length "
             )
-    if len(lines_changes) < 3:
+    # if the number of overloaded lines is more than 1
+    if len(lines_changes) < 2:
         lines_changes = {}
 
     return transformers_changes, lines_changes
@@ -1591,8 +1595,12 @@ def relocate_circuit_breaker(edisgo_obj, mode="loadgen"):
                 f"has not changed"
             )
 
-    cos_phi_load = edisgo_obj.config["reactive_power_factor"]["mv_load"]
-    cos_phi_feedin = edisgo_obj.config["reactive_power_factor"]["mv_gen"]
+    cos_phi_mv_load = edisgo_obj.config["reactive_power_factor"]["mv_load"]
+    cos_phi_mv_gen = edisgo_obj.config["reactive_power_factor"]["mv_gen"]
+    cos_phi_mv_cp = edisgo_obj.config["reactive_power_factor"]["mv_cp"]
+    cos_phi_lv_gen = edisgo_obj.config["reactive_power_factor"]["lv_gen"]
+    cos_phi_lv_load = edisgo_obj.config["reactive_power_factor"]["lv_load"]
+    cos_phi_lv_cp = edisgo_obj.config["reactive_power_factor"]["lv_cp"]
 
     grid = edisgo_obj.topology.mv_grid
     G = grid.graph
@@ -1605,21 +1613,36 @@ def relocate_circuit_breaker(edisgo_obj, mode="loadgen"):
     for node in G.nodes:
         # for Bus-bars
         if node in edisgo_obj.topology.transformers_df.bus0.values:
-            # the lv_side of node
-            bus_node_lv = edisgo_obj.topology.transformers_df[
-                edisgo_obj.topology.transformers_df.bus0 == node
-            ].bus1[0]
+            # for e.g. BranchTee_mvgd_1690_84
+            if node in edisgo_obj.topology.mv_grid.generators_df.bus.values:
+                node_peak_gen_dict[node] = (
+                    edisgo_obj.topology.mv_grid.generators_df[
+                        edisgo_obj.topology.mv_grid.generators_df.bus == node
+                    ].p_nom.sum()
+                    / cos_phi_mv_gen
+                )
+                node_peak_load_dict[node] = 0
+            else:
+                # the lv_side of node
+                bus_node_lv = edisgo_obj.topology.transformers_df[
+                    edisgo_obj.topology.transformers_df.bus0 == node
+                ].bus1[0]
 
-            grid_id = edisgo_obj.topology.buses_df[
-                edisgo_obj.topology.buses_df.index.values == bus_node_lv
-            ].lv_grid_id[0]
+                grid_id = edisgo_obj.topology.buses_df[
+                    edisgo_obj.topology.buses_df.index.values == bus_node_lv
+                ].lv_grid_id[0]
             # get lv_grid
             lv_grid = edisgo_obj.topology.get_lv_grid(int(grid_id))
-
             node_peak_gen_dict[node] = (
-                lv_grid.generators_df.p_nom.sum() / cos_phi_feedin
+                lv_grid.generators_df.p_nom.sum() / cos_phi_lv_gen
             )
-            node_peak_load_dict[node] = lv_grid.loads_df.p_set.sum() / cos_phi_load
+            loads_df_new = lv_grid.loads_df.apply(
+                lambda row: row.loc["p_set"] / cos_phi_lv_load
+                if row["type"] == "conventional_load"
+                else row.loc["p_set"] / cos_phi_lv_cp,
+                axis=1,
+            )
+            node_peak_load_dict[node] = loads_df_new.sum()
 
         elif node in edisgo_obj.topology.switches_df.bus_open.values:
 
@@ -1633,27 +1656,31 @@ def relocate_circuit_breaker(edisgo_obj, mode="loadgen"):
             grid_id = edisgo_obj.topology.buses_df[
                 edisgo_obj.topology.buses_df.index.values == bus_node_lv
             ].lv_grid_id[0]
-            # get lv_grid
-            lv_grid = edisgo_obj.topology.get_lv_grid(int(grid_id))
 
             node_peak_gen_dict[node] = 0
             node_peak_load_dict[node] = 0
             # Generators
         elif node in edisgo_obj.topology.generators_df.bus.values:
             node_peak_gen_dict[node] = (
-                edisgo_obj.topology.generators_df[
-                    edisgo_obj.topology.generators_df.bus == node
+                edisgo_obj.topology.mv_grid.generators_df[
+                    edisgo_obj.topology.mv_grid.generators_df.bus == node
                 ].p_nom.sum()
-                / cos_phi_feedin
+                / cos_phi_mv_gen
             )
             node_peak_load_dict[node] = 0
+
+        # Loads
         elif node in edisgo_obj.topology.loads_df.bus.values:
-            node_peak_load_dict[node] = (
-                edisgo_obj.topology.loads_df[
-                    edisgo_obj.topology.loads_df.bus == node
-                ].p_set.sum()
-                / cos_phi_feedin
+            loads_df = edisgo_obj.topology.loads_df[
+                edisgo_obj.topology.loads_df.voltage_level == "mv"
+            ]
+            loads_df_new = loads_df.apply(
+                lambda row: row.loc["p_set"] / cos_phi_mv_load
+                if row["type"] == "conventional_load"
+                else row.loc["p_set"] / cos_phi_mv_cp,
+                axis=1,
             )
+            node_peak_load_dict[node] = loads_df_new.sum()
             node_peak_gen_dict[node] = 0
 
         # branchTees do not have any load and generation
@@ -1946,7 +1973,8 @@ def split_feeder_at_2_3_length(edisgo_obj, grid, crit_nodes, split_mode="forward
             crit_line_name = G.get_edge_data(station_node, node_2_3)["branch_name"]
             crit_line = grid.lines_df[grid.lines_df.index.isin([crit_line_name])]
             # add same type of parallel line
-            lines_changes = add_same_type_of_parallel_line(edisgo_obj, crit_line)
+            line_added = add_same_type_of_parallel_line(edisgo_obj, crit_line)
+            lines_changes.update(line_added)
             logger.info(
                 f"{grid} ==> voltage issue of {crit_line_name} solved by "
                 f"adding same type of parallel line "
@@ -1999,9 +2027,10 @@ def split_feeder_at_2_3_length(edisgo_obj, grid, crit_nodes, split_mode="forward
 def add_station_at_2_3_length(edisgo_obj, grid, crit_nodes):
     """
     todo: docstring to be updated
-    If the number of overloaded feeders in the LV grid is more than 2, the feeders are
-    split at their 2/3-length, and the disconnected points are connected to the
-    new MV/LV station.
+
+    If the number of feeders with voltage issues in the LV grid is more than 1
+    (this can be changed 1 or 2), the feeders are split at their 2/3-length, and
+    the disconnected points are connected to the new MV/LV station.
 
 
     1-The point at 2/3 the length of the feeders is found.
@@ -2009,12 +2038,13 @@ def add_station_at_2_3_length(edisgo_obj, grid, crit_nodes):
     connection will be made. This node can only be a station.
     3-This node is disconnected from the previous node and connected to a new station.
     4-New MV/LV is connected to the existing MV/LV station with a line of which length
-    equals the line length between the node at the half-length (node_2_3) and its
+    equals the line length between the node at the 2_3 length (node_2_3) and its
     preceding node.
 
     Notes:
-    -If the number of overloaded lines in the LV grid is less than 3 and the node_2_3
-    is the first node after the main station, the method is not applied.
+    -If the number of  lines with voltage issues in the LV grid is less than 2
+    (this can be  changed 2 or 3) and the node_2_3 is the first node after the
+    main station, the method is not applied.
     -The name of the new grid will be the existing grid code
     (e.g. 40000) + 1001 = 400001001
     -The name of the lines in the new LV grid is the same as the grid where the nodes
@@ -2234,13 +2264,17 @@ def add_station_at_2_3_length(edisgo_obj, grid, crit_nodes):
                     ] = [n for n in sub_nodes]
             nodes_tb_relocated[node_2_3] = nodes_path[nodes_path.index(node_2_3) :]
         pred_node = path[path.index(node_2_3) - 1]  # predecessor node of node_2_3
-
-        line_removed = G.get_edge_data(node_2_3, pred_node)["branch_name"]  # the line
-        line_added_lv = line_removed
-        lines_changes[line_added_lv] = 1
+        if node_2_3 not in first_nodes_feeders.keys():
+            line_removed = G.get_edge_data(node_2_3, pred_node)[
+                "branch_name"
+            ]  # the line
+            line_added_lv = line_removed
+            lines_changes[line_added_lv] = 1
         # removed from exiting LV grid and converted to an MV line between new
         # and existing MV/LV station
-        if len(nodes_tb_relocated) > 2 and loop_counter == 0:
+
+        # if the number of lines with voltage issues is more than 1
+        if len(nodes_tb_relocated) > 1 and loop_counter == 0:
             # Create the bus-bar name of primary and secondary side of new MV/LV station
             lv_bus_new = create_bus_name(station_node, "lv")
             mv_bus_new = create_bus_name(station_node, "mv")
@@ -2347,7 +2381,9 @@ def add_station_at_2_3_length(edisgo_obj, grid, crit_nodes):
                 f"{grid} and located in new grid{repr(grid) + str(1001)} by method: "
                 f"add_station_at_2_3_length "
             )
-    if len(lines_changes) < 3:
+    # if the number of lines with voltage issues is not more than 1,  do not add
+    # the line changes to the dict
+    if len(lines_changes) < 2:
         lines_changes = {}
 
     return transformers_changes, lines_changes

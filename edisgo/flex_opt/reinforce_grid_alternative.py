@@ -282,15 +282,20 @@ def reinforce_line_overloading_alternative(
 
         if "split_feeder_at_half_length" in add_method or add_method is None:
             # method-2: split_feeder_at_half_length
-
-            lines_changes = reinforce_measures.split_feeder_at_half_length(
-                edisgo_reinforce,
-                edisgo_reinforce.topology.mv_grid,
-                crit_lines_mv,
-                split_mode=split_mode,
-            )
-            # write changed lines to results.equipment_changes
-            _add_lines_changes_to_equipment_changes()
+            if not crit_lines_mv.empty:
+                lines_changes = reinforce_measures.split_feeder_at_half_length(
+                    edisgo_reinforce,
+                    edisgo_reinforce.topology.mv_grid,
+                    crit_lines_mv,
+                    split_mode=split_mode,
+                )
+                # write changed lines to results.equipment_changes
+                _add_lines_changes_to_equipment_changes()
+            else:
+                logger.info(
+                    f"{edisgo_reinforce.topology.mv_grid}==> no overloaded lines for "
+                    f"the method:split_feeder_at_half_length "
+                )
 
             logger.debug("==> Run power flow analysis.")
             edisgo_reinforce.analyze(timesteps=timesteps_pfa)
