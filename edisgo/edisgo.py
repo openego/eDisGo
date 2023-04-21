@@ -1129,7 +1129,6 @@ class EDisGo:
               and neglecting LV network topology. LV load and generation is
               aggregated per LV network and directly connected to the secondary
               side of the respective MV/LV station.
-              This mode can currently not be chosen in case `is_worst_case` is True.
             * 'lv' to reinforce LV networks. In case an LV grid is specified through
               parameter `lv_grid_id`, the grid's MV/LV station is not included. In case
               no LV grid ID is given, all MV/LV stations are included.
@@ -1157,6 +1156,11 @@ class EDisGo:
             specified, all LV grids are checked. In that case, the power flow analysis
             is conducted including the MV grid, in order to check loading and voltage
             drop/rise of MV/LV stations.
+        skip_mv_reinforcement : bool
+            If True, MV is not reinforced, even if `mode` is "mv", "mvlv" or None.
+            This is used in case worst-case grid reinforcement is conducted in order to
+            reinforce MV/LV stations for LV worst-cases.
+            Default: False.
 
         Returns
         --------
@@ -1191,26 +1195,44 @@ class EDisGo:
             # timesteps for reinforced components
             run_analyze_at_the_end = True
             if mode is None:
+                kwargs_mv = kwargs.copy()
+                kwargs_mv.update({"mode": "mv", "timesteps_pfa": timesteps_mv})
+                kwargs_mvlv = kwargs.copy()
+                kwargs_mvlv.update(
+                    {
+                        "mode": "mvlv",
+                        "timesteps_pfa": timesteps_lv,
+                        "skip_mv_reinforcement": True,
+                    }
+                )
+                kwargs_lv = kwargs.copy()
+                kwargs_lv.update({"mode": "lv", "timesteps_pfa": timesteps_lv})
+                kwargs.update({"mode": "mv", "timesteps_pfa": timesteps_mv})
                 setting_list = [
-                    {"mode": "mv", "timesteps_pfa": timesteps_mv},
-                    {"mode": "lv", "timesteps_pfa": timesteps_lv},
+                    kwargs_mv,
+                    kwargs_mvlv,
+                    kwargs_lv,
                 ]
             elif mode == "mv":
-                setting_list = [
-                    {"mode": "mv", "timesteps_pfa": timesteps_mv},
-                ]
+                kwargs.update({"mode": "mv", "timesteps_pfa": timesteps_mv})
+                setting_list = [kwargs]
             elif mode == "mvlv":
-                raise ValueError(
-                    "The mode 'mvlv' is currently not implemented when using "
-                    "worst cases. Choose None, 'mv' or 'lv' instead."
+                kwargs.update(
+                    {
+                        "mode": "mvlv",
+                        "timesteps_pfa": timesteps_lv,
+                        "skip_mv_reinforcement": True,
+                    }
                 )
+                setting_list = [kwargs]
             elif mode == "lv":
-                setting_list = [{"mode": "lv", "timesteps_pfa": timesteps_lv}]
-
+                kwargs.update({"mode": "lv", "timesteps_pfa": timesteps_lv})
+                setting_list = [kwargs]
             else:
                 raise ValueError(f"Mode {mode} does not exist.")
         else:
-            setting_list = [{"mode": mode, "timesteps_pfa": timesteps_pfa}]
+            kwargs.update({"mode": mode, "timesteps_pfa": timesteps_pfa})
+            setting_list = [kwargs]
             run_analyze_at_the_end = False
 
         logger.info(f"Run the following reinforcements: {setting_list=}")
@@ -1223,12 +1245,10 @@ class EDisGo:
             func(
                 edisgo_obj,
                 max_while_iterations=max_while_iterations,
-                timesteps_pfa=setting["timesteps_pfa"],
                 split_voltage_band=split_voltage_band,
-                mode=setting["mode"],
                 without_generator_import=without_generator_import,
                 n_minus_one=n_minus_one,
-                **kwargs,
+                **setting,
             )
         if run_analyze_at_the_end:
             edisgo_obj.analyze()

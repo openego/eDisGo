@@ -75,6 +75,11 @@ def reinforce_grid(
         values above 1 will scale the timeseries up). Downscaling of time series
         can be used to gradually reinforce the grid. If None, timeseries are not scaled.
         Default: None.
+    skip_mv_reinforcement : bool
+        If True, MV is not reinforced, even if `mode` is "mv", "mvlv" or None.
+        This is used in case worst-case grid reinforcement is conducted in order to
+        reinforce MV/LV stations for LV worst-cases.
+        Default: False.
 
     Returns
     -------
@@ -183,7 +188,7 @@ def reinforce_grid(
     logger.debug("==> Check station load.")
     overloaded_mv_station = (
         pd.DataFrame(dtype=float)
-        if mode == "lv"
+        if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
         else checks.hv_mv_station_max_overload(edisgo)
     )
     if lv_grid_id or (mode == "mv"):
@@ -194,7 +199,7 @@ def reinforce_grid(
     logger.debug("==> Check line load.")
     crit_lines = (
         pd.DataFrame(dtype=float)
-        if mode == "lv"
+        if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
         else checks.mv_line_max_relative_overload(edisgo)
     )
     if not mode or mode == "lv":
@@ -255,7 +260,7 @@ def reinforce_grid(
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = (
             pd.DataFrame(dtype=float)
-            if mode == "lv"
+            if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
             else checks.hv_mv_station_max_overload(edisgo)
         )
         if mode != "mv" and (not lv_grid_id):
@@ -264,7 +269,7 @@ def reinforce_grid(
         logger.debug("==> Recheck line load.")
         crit_lines = (
             pd.DataFrame(dtype=float)
-            if mode == "lv"
+            if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
             else checks.mv_line_max_relative_overload(edisgo)
         )
         if not mode or mode == "lv":
@@ -310,7 +315,7 @@ def reinforce_grid(
 
     crit_nodes = (
         pd.DataFrame()
-        if mode == "lv"
+        if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
         else checks.voltage_issues(
             edisgo, voltage_level="mv", split_voltage_band=split_voltage_band
         )
@@ -495,7 +500,7 @@ def reinforce_grid(
     logger.debug("==> Recheck station load.")
     overloaded_mv_station = (
         pd.DataFrame(dtype=float)
-        if mode == "lv"
+        if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
         else checks.hv_mv_station_max_overload(edisgo)
     )
     if (lv_grid_id) or (mode == "mv"):
@@ -506,7 +511,7 @@ def reinforce_grid(
     logger.debug("==> Recheck line load.")
     crit_lines = (
         pd.DataFrame(dtype=float)
-        if mode == "lv"
+        if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
         else checks.mv_line_max_relative_overload(edisgo)
     )
     if not mode or mode == "lv":
@@ -567,7 +572,7 @@ def reinforce_grid(
         logger.debug("==> Recheck station load.")
         overloaded_mv_station = (
             pd.DataFrame(dtype=float)
-            if mode == "lv"
+            if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
             else checks.hv_mv_station_max_overload(edisgo)
         )
         if mode != "mv" and (not lv_grid_id):
@@ -576,7 +581,7 @@ def reinforce_grid(
         logger.debug("==> Recheck line load.")
         crit_lines = (
             pd.DataFrame(dtype=float)
-            if mode == "lv"
+            if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
             else checks.mv_line_max_relative_overload(edisgo)
         )
         if not mode or mode == "lv":

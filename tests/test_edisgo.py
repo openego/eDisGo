@@ -471,12 +471,12 @@ class TestEDisGo:
 
         # ################# test mode mvlv and combined analysis ####################
         results = self.edisgo.reinforce(
-            mode="mvlv", combined_analysis=False, is_worst_case=False
+            mode="mvlv", combined_analysis=False, is_worst_case=True
         )
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 8
-        assert len(results.equipment_changes) == 8
-        assert results.v_res.shape == (4, 41)
+        assert len(results.grid_expansion_costs) == 4
+        assert len(results.equipment_changes) == 4
+        assert results.v_res.shape == (4, 142)
 
         # ###################### test with only one lv grid ##########################
         # test grid without issues
