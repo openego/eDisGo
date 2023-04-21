@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import pytest
 
@@ -19,7 +21,7 @@ class TestReinforceGrid:
         modes = [None, "mv", "mvlv", "lv"]
 
         results_dict = {
-            mode: reinforce_grid(edisgo=self.edisgo, copy_grid=True, mode=mode)
+            mode: reinforce_grid(edisgo=copy.deepcopy(self.edisgo), mode=mode)
             for mode in modes
         }
 
