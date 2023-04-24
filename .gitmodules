@@ -1,3 +1,0 @@
-[submodule "edisgo/opf/PowerModels.jl"]
-	path = edisgo/opf/PowerModels.jl
-	url = git@github.com:maike93he/PowerModels.jl.git
