@@ -622,7 +622,7 @@ def mv_grid_topology(
         if kwargs.get("bus_colors", None):
             bus_colors = pd.Series(kwargs.get("bus_colors")).loc[pypsa_plot.buses]
         else:
-            logging.warning(
+            logger.warning(
                 "Choice for `node_color` is not valid. Default bus colors are "
                 "used instead."
             )
@@ -630,7 +630,7 @@ def mv_grid_topology(
         if kwargs.get("bus_sizes", None):
             bus_sizes = pd.Series(kwargs.get("bus_sizes")).loc[pypsa_plot.buses]
         else:
-            logging.warning(
+            logger.warning(
                 "Choice for `node_color` is not valid. Default bus sizes are "
                 "used instead."
             )
@@ -638,7 +638,7 @@ def mv_grid_topology(
         if kwargs.get("bus_cmap", None):
             bus_cmap = kwargs.get("bus_cmap", None)
         else:
-            logging.warning(
+            logger.warning(
                 "Choice for `node_color` is not valid. Default bus colormap "
                 "is used instead."
             )
@@ -673,7 +673,7 @@ def mv_grid_topology(
                 region = region.to_crs(epsg=projection)
             region.plot(ax=ax, color="white", alpha=0.2, edgecolor="red", linewidth=2)
         except Exception as e:
-            logging.warning(
+            logger.warning(
                 "Grid district geometry could not be plotted due "
                 "to the following error: {}".format(e)
             )
@@ -850,7 +850,7 @@ def mv_grid_topology(
         try:
             add_basemap(ax, zoom=12)
         except Exception as e:
-            logging.warning(
+            logger.warning(
                 "Background map could not be plotted due to the "
                 "following error: {}".format(e)
             )

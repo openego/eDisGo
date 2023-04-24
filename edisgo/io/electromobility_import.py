@@ -284,7 +284,7 @@ def read_simbev_config_df(
             return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
 
     except Exception:
-        logging.warning(
+        logger.warning(
             "SimBEV config file could not be imported. Charging point "
             "efficiency is set to 100%, the stepsize is set to 15 minutes "
             "and the simulated days are estimated from the charging "

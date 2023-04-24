@@ -58,7 +58,7 @@ def mv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
     return crit_lines
 
 
-def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
+def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False, lv_grid_id=None):
     """
     Returns time step and value of most severe overloading of lines in LV networks.
 
@@ -70,6 +70,9 @@ def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
         for more information). Currently, n-1 security cannot be handled correctly,
         wherefore the case where this parameter is set to True will lead to an error
         being raised.
+    lv_grid_id : str or int or None
+        If None, checks overloading for all LV lines. Otherwise, only lines in given
+        LV grid are checked. Default: None.
 
     Returns
     -------
@@ -93,7 +96,7 @@ def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
     """
 
     crit_lines = _line_max_relative_overload(
-        edisgo_obj, voltage_level="lv", n_minus_one=n_minus_one
+        edisgo_obj, voltage_level="lv", n_minus_one=n_minus_one, lv_grid_id=lv_grid_id
     )
 
     if not crit_lines.empty:
@@ -108,7 +111,9 @@ def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
     return crit_lines
 
 
-def _line_max_relative_overload(edisgo_obj, voltage_level, n_minus_one=False):
+def _line_max_relative_overload(
+    edisgo_obj, voltage_level, n_minus_one=False, lv_grid_id=None
+):
     """
     Returns time step and value of most severe overloading of lines.
 
@@ -116,11 +121,14 @@ def _line_max_relative_overload(edisgo_obj, voltage_level, n_minus_one=False):
     ----------
     edisgo_obj : :class:`~.EDisGo`
     voltage_level : str
-        Voltage level, over-loading is checked for. Possible options are
-        'mv' or 'lv'.
+        Voltage level, over-loading is checked for. Possible options are 'mv' or 'lv'.
     n_minus_one : bool
         Determines which allowed load factors to use. See :py:attr:`~lines_allowed_load`
         for more information.
+    lv_grid_id : str or int or None
+        This parameter is only used in case `voltage_level` is "lv".
+        If None, checks overloading for all LV lines. Otherwise, only lines in given
+        LV grid are checked. Default: None.
 
     Returns
     -------
@@ -145,9 +153,13 @@ def _line_max_relative_overload(edisgo_obj, voltage_level, n_minus_one=False):
     # get lines in voltage level
     mv_grid = edisgo_obj.topology.mv_grid
     if voltage_level == "lv":
-        lines = edisgo_obj.topology.lines_df[
-            ~edisgo_obj.topology.lines_df.index.isin(mv_grid.lines_df.index)
-        ].index
+        if lv_grid_id is None:
+            lines = edisgo_obj.topology.lines_df[
+                ~edisgo_obj.topology.lines_df.index.isin(mv_grid.lines_df.index)
+            ].index
+        else:
+            lv_grid = edisgo_obj.topology.get_lv_grid(lv_grid_id)
+            lines = lv_grid.lines_df.index
     elif voltage_level == "mv":
         lines = mv_grid.lines_df.index
     else:
@@ -401,13 +413,16 @@ def hv_mv_station_max_overload(edisgo_obj):
     return crit_stations
 
 
-def mv_lv_station_max_overload(edisgo_obj):
+def mv_lv_station_max_overload(edisgo_obj, lv_grid_id=None):
     """
     Checks for over-loading of MV/LV stations.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+    lv_grid_id : str or int or None
+        If None, checks overloading for all MV/LV stations. Otherwise, only station
+        in given LV grid is checked. Default: None.
 
     Returns
     -------
@@ -427,9 +442,13 @@ def mv_lv_station_max_overload(edisgo_obj):
     section 'grid_expansion_load_factors'.
 
     """
-
     crit_stations = pd.DataFrame(dtype=float)
-    for lv_grid in edisgo_obj.topology.lv_grids:
+
+    if lv_grid_id is not None:
+        lv_grids = [edisgo_obj.topology.get_lv_grid(lv_grid_id)]
+    else:
+        lv_grids = list(edisgo_obj.topology.lv_grids)
+    for lv_grid in lv_grids:
         crit_stations = pd.concat(
             [
                 crit_stations,
@@ -729,7 +748,7 @@ def components_relative_load(edisgo_obj, n_minus_one=False):
     return pd.concat([lines_rel_load, stations_rel_load], axis=1)
 
 
-def voltage_issues(edisgo_obj, voltage_level, split_voltage_band=True):
+def voltage_issues(edisgo_obj, voltage_level, split_voltage_band=True, lv_grid_id=None):
     """
     Gives buses with voltage issues and their maximum voltage deviation in p.u..
 
@@ -746,6 +765,10 @@ def voltage_issues(edisgo_obj, voltage_level, split_voltage_band=True):
         voltage levels MV, MV/LV and LV according to config values set in section
         `grid_expansion_allowed_voltage_deviations`. If False, the same voltage limits
         are used for all voltage levels. Default: True.
+    lv_grid_id : str or int or None
+        This parameter is only used in case `voltage_level` is "mv_lv" or "lv".
+        If None, checks voltage issues for all LV buses. Otherwise, only buses
+        in given LV grid are checked. Default: None.
 
     Returns
     -------
@@ -768,18 +791,30 @@ def voltage_issues(edisgo_obj, voltage_level, split_voltage_band=True):
     'grid_expansion_allowed_voltage_deviations'.
 
     """
-    station_buses = edisgo_obj.topology.transformers_df.bus1.unique()
+
     if voltage_level:
         if voltage_level == "mv_lv":
-            buses = station_buses
+            if lv_grid_id is None:
+                buses = edisgo_obj.topology.transformers_df.bus1.unique()
+            else:
+                lv_grid = edisgo_obj.topology.get_lv_grid(lv_grid_id)
+                buses = lv_grid.transformers_df.bus1.unique()
         elif voltage_level == "lv":
-            buses = edisgo_obj.topology.buses_df.index
-            # drop MV buses and buses of stations secondary sides
-            buses = buses.drop(
-                edisgo_obj.topology.mv_grid.buses_df.index.append(
-                    pd.Index(station_buses)
+            if lv_grid_id is None:
+                buses = edisgo_obj.topology.buses_df.index
+                # drop MV buses and buses of stations secondary sides
+                station_buses = edisgo_obj.topology.transformers_df.bus1.unique()
+                buses = buses.drop(
+                    edisgo_obj.topology.mv_grid.buses_df.index.append(
+                        pd.Index(station_buses)
+                    )
                 )
-            )
+            else:
+                lv_grid = edisgo_obj.topology.get_lv_grid(lv_grid_id)
+                buses = lv_grid.buses_df.index
+                # drop buses of station's secondary side
+                station_buses = lv_grid.transformers_df.bus1.unique()
+                buses = buses.drop(station_buses)
         elif voltage_level == "mv":
             buses = edisgo_obj.topology.mv_grid.buses_df.index
         else:
@@ -886,6 +921,7 @@ def _voltage_issues_helper(edisgo_obj, buses, split_voltage_band):
 
 def allowed_voltage_limits(edisgo_obj, buses=None, split_voltage_band=True):
     """
+    Calculates allowed upper and lower voltage limits.
 
     Parameters
     ----------

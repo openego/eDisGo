@@ -745,7 +745,7 @@ class Topology:
         elif isinstance(name, str):
             return LVGrid(id=int(name.split("_")[-1]), edisgo_obj=edisgo_obj)
         else:
-            logging.warning("`name` must be integer or string.")
+            logger.warning("`name` must be integer or string.")
 
     @property
     def grid_district(self):
@@ -1379,7 +1379,7 @@ class Topology:
             (self.lines_df.bus1 == bus0) & (self.lines_df.bus0 == bus1)
         ]
         if not bus0_bus1.empty and bus1_bus0.empty:
-            logging.debug("Line between bus0 {} and bus1 {} already exists.")
+            logger.debug("Line between bus0 {} and bus1 {} already exists.")
             return pd.concat(
                 [
                     bus1_bus0,
@@ -1732,7 +1732,7 @@ class Topology:
                     self.lines_df.at[lines[0], "bus0"], "v_nom"
                 ]
                 if grid_voltage != data_new_line.U_n:
-                    logging.debug(
+                    logger.debug(
                         f"The line type of lines {lines} is changed to a type with a "
                         f"different nominal voltage (nominal voltage of new line type "
                         f"is {data_new_line.U_n} kV while nominal voltage of the medium"
@@ -3077,15 +3077,20 @@ class Topology:
                 f"optimisation."
             )
 
-    def aggregate_lv_grid_buses_on_station(self, lv_grid_id: int | str) -> None:
+    def aggregate_lv_grid_at_station(self, lv_grid_id: int | str) -> None:
         """
-        Aggregates all lv grid buses on secondary station side bus. Drop all lines of
-        lv grid and replaces bus names in "loads_df", "storages_df",
-        "charging_points_df" and "storages_df".
+        Aggregates all LV grid components to secondary side of the grid's station.
+
+        All lines of the LV grid are dropped, as well as all buses except the station's
+        secondary side bus. Buses, the loads, generators and storage units are connected
+        to are changed to the station's secondary side bus. The changes are directly
+        applied to the Topology object.
 
         Parameters
         ----------
         lv_grid_id : int or str
+            ID of the LV grid to aggregate.
+
         """
         lv_grid = self.get_lv_grid(name=lv_grid_id)
         lines_to_drop = lv_grid.lines_df.index.to_list()
@@ -3099,9 +3104,6 @@ class Topology:
         self.loads_df.loc[self.loads_df.bus.isin(buses_to_drop), "bus"] = station_bus
         self.generators_df.loc[
             self.generators_df.bus.isin(buses_to_drop), "bus"
-        ] = station_bus
-        self.charging_points_df.loc[
-            self.charging_points_df.bus.isin(buses_to_drop), "bus"
         ] = station_bus
         self.storage_units_df.loc[
             self.storage_units_df.bus.isin(buses_to_drop), "bus"
