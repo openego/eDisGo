@@ -113,7 +113,6 @@ function constraint_max_line_loading(pm::AbstractSOCBFModelEdisgo, n::Int)
         f_idx = (i, f_bus, t_bus)
         if !(branch["storage"])
             JuMP.@constraint(pm.model, (p[f_idx]^2 + q[f_idx]^2)/s_nom[i]^2 <= ll[f_idx])
-            JuMP.@constraint(pm.model, 1 <= ll[f_idx])
         end
     end
 end

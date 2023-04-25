@@ -106,6 +106,7 @@ function variable_line_loading_max(pm::AbstractPowerModel; nw::Int=nw_id_default
     ll = PowerModels.var(pm, nw)[:ll] = JuMP.@variable(pm.model,
         [(l,i,j) in branches], base_name="$(nw)_ll",
         start = comp_start_value(PowerModels.ref(pm, nw, :branch, l), "ll_start"),
+        lower_bound = 1
     )
 
     report && eDisGo_OPF.sol_component_value_radial(pm, nw, :branch, :ll, branches, ll)
@@ -154,7 +155,7 @@ end
 
 
 "variables for modeling storage units, includes grid injection and internal variables"
-function variable_battery_storage_power(pm::AbstractPowerModel; kwargs...)
+function variable_battery_storage(pm::AbstractPowerModel; kwargs...)
     eDisGo_OPF.variable_battery_storage_power_real(pm; kwargs...)
     PowerModels.variable_storage_energy(pm; kwargs...)
 end
@@ -258,9 +259,7 @@ end
 
 "variables for modeling heat storage units, includes grid injection and internal variables"
 function variable_heat_storage(pm::AbstractPowerModel; kwargs...)
-    eDisGo_OPF.variable_heat_storage_power(pm; kwargs...)  # wird hier durch Kapazität des Speichers beschränkt (kein Schranke kann die
-    # Lösungsgeschwindigkeit verringern), indirekte Beschränkung durch min/max Speicherfüllstand ist jedoch restriktiver
-    # -> Bound wird nicht in MA aufgenommen
+    eDisGo_OPF.variable_heat_storage_power(pm; kwargs...)
     eDisGo_OPF.variable_heat_storage_energy(pm; kwargs...)
 end
 
