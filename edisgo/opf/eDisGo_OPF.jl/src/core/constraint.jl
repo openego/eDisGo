@@ -7,19 +7,19 @@ function constraint_store_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::In
         se_end = PowerModels.var(pm, length(PowerModels.nw_ids(pm)), :se, i)
         soc_initial = PowerModels.ref(pm, n, :storage)[i]["soc_initial"]
         soc_end = PowerModels.ref(pm, n, :storage)[i]["soc_end"]
-        JuMP.@constraint(pm.model, se - soc_initial == - time_elapsed * ps_1)
-        JuMP.@constraint(pm.model, se_end == soc_end)
+        JuMP.@constraint(pm.model, se - soc_initial == - time_elapsed * ps_1)  # Eq. (3.10) i.V.m. Eq. (3.9) für t = 1 bzw. = 0
+        JuMP.@constraint(pm.model, se_end == soc_end)  # Eq. (3.9) für t = tau
     elseif kind == "heat_storage"
         phs_1 = PowerModels.var(pm, n, :phs, i)
         hse = PowerModels.var(pm, n, :hse, i)
         hse_end = PowerModels.var(pm, length(PowerModels.nw_ids(pm)), :hse, i)
-        JuMP.@constraint(pm.model, hse - hse_end * (1 - p_loss)^(1/24) == - time_elapsed * phs_1)
+        JuMP.@constraint(pm.model, hse - hse_end * (1 - p_loss)^(1/24) == - time_elapsed * phs_1)  # Eq. (3.23) i.V.m. Eq. (3.22) (t=1)
     elseif kind == "dsm"
         dsme = PowerModels.var(pm, n, :dsme, i)
         dsme_end = PowerModels.var(pm, length(PowerModels.nw_ids(pm)), :dsme, i)
         pdsm_1 = PowerModels.var(pm, n, :pdsm, i)
-        JuMP.@constraint(pm.model, dsme - energy ==  + time_elapsed * pdsm_1)
-        JuMP.@constraint(pm.model, dsme_end == 0)
+        JuMP.@constraint(pm.model, dsme - energy ==  + time_elapsed * pdsm_1)  # Eq. (3.33) für t=1 (und Eq. (3.32) für t = 0, da energy=e(0) = 0)
+        JuMP.@constraint(pm.model, dsme_end == 0)  # Eq. (3.32) für t = tau
     end
 end
 
@@ -30,19 +30,19 @@ function constraint_store_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i
         se_2 = PowerModels.var(pm, n_2, :se, i)
         se_1 = PowerModels.var(pm, n_1, :se, i)
 
-        JuMP.@constraint(pm.model, se_2 - se_1 == - time_elapsed*ps_2)
+        JuMP.@constraint(pm.model, se_2 - se_1 == - time_elapsed*ps_2)  # Eq. (3.10)
     elseif kind == "heat_storage"
         phs_2 = PowerModels.var(pm, n_2, :phs, i)
         hse_2 = PowerModels.var(pm, n_2, :hse, i)
         hse_1 = PowerModels.var(pm, n_1, :hse, i)
 
-        JuMP.@constraint(pm.model, hse_2 - hse_1 * (1 - p_loss) == - time_elapsed*phs_2)
+        JuMP.@constraint(pm.model, hse_2 - hse_1 * (1 - p_loss) == - time_elapsed*phs_2)  # Eq. (3.23)
     elseif kind == "dsm"
         pdsm_2 = PowerModels.var(pm, n_2, :pdsm, i)
         dsme_2 = PowerModels.var(pm, n_2, :dsme, i)
         dsme_1 = PowerModels.var(pm, n_1, :dsme, i)
 
-        JuMP.@constraint(pm.model, dsme_2 - dsme_1 == time_elapsed*pdsm_2)
+        JuMP.@constraint(pm.model, dsme_2 - dsme_1 == time_elapsed*pdsm_2)  # Eq. (3.33)
     end
 end
 
@@ -59,7 +59,7 @@ function constraint_cp_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int, 
     cp = PowerModels.ref(pm, n, :electromobility, i)
     cpe = PowerModels.var(pm, n, :cpe, i)
     pcp_1 = PowerModels.var(pm, n, :pcp, i)
-    JuMP.@constraint(pm.model, cpe == 0.5*(cp["e_min"]+cp["e_max"]) + time_elapsed * eta * pcp_1)
+    JuMP.@constraint(pm.model, cpe == 0.5*(cp["e_min"]+cp["e_max"]) + time_elapsed * eta * pcp_1)  # Eq. (3.25)
 
 end
 
@@ -75,11 +75,11 @@ function constraint_cp_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i::I
     cpe_2 = PowerModels.var(pm, n_2, :cpe, i)
     cpe_1 = PowerModels.var(pm, n_1, :cpe, i)
 
-    JuMP.@constraint(pm.model, cpe_2 - cpe_1 == time_elapsed * eta * pcp_2)
+    JuMP.@constraint(pm.model, cpe_2 - cpe_1 == time_elapsed * eta * pcp_2)  # Eq. (3.26)
 
     if n_2 == length(collect(PowerModels.nw_ids(pm)))
         cp = PowerModels.ref(pm, length(collect(PowerModels.nw_ids(pm))), :electromobility, i)
-        JuMP.@constraint(pm.model, cpe_2 == 0.5*(cp["e_min"]+cp["e_max"]))
+        JuMP.@constraint(pm.model, cpe_2 == 0.5*(cp["e_min"]+cp["e_max"]))  # Eq. (3.25) für t=tau
     end
 end
 

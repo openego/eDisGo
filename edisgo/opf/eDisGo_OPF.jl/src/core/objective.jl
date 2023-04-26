@@ -54,8 +54,8 @@ function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
     parameters2 = [c[1][b] * l[1][b]  for b in keys(c[1])]
     parameters2 = parameters2[parameters2 .>0]
     #factor_ll = exp10(floor(log10(maximum(parameters)))+1)
-    exp_max_r = floor(log10(maximum(parameters)))
-    exp_max_ll = floor(log10(maximum(parameters2)))
+    #exp_max_r = floor(log10(maximum(parameters)))
+    #exp_max_ll = floor(log10(maximum(parameters2)))
     #factor_ll = exp10(exp_max_r-exp_max_ll)
     factor_ll = 1e3 * maximum(parameters)/maximum(parameters2)
     println(factor_ll)
