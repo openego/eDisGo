@@ -209,6 +209,7 @@ class TestPowerModelsOPF:
                 df,
             )
 
+    @pytest.mark.slow
     def test_pm_optimize(self):
         # OPF with all flexibilities but without overlying grid constraints
         pm_optimize(

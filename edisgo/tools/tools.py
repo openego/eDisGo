@@ -818,6 +818,87 @@ def add_line_susceptance(
     return edisgo_obj
 
 
+def aggregate_district_heating_components(edisgo_obj):
+    """
+    Aggregate components that feed into the same district heating grid.
+    Rated power of both components is added up and COP for combined
+    component is calculated from COP of all components weighed with their rated
+    power. Heat demand of district heating grid is then reduced by feedin from other
+    sources.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+    """
+    hp_district_heating = edisgo_obj.topology.loads_df.loc[
+        ~edisgo_obj.topology.loads_df.district_heating_id.isna()
+    ]
+    for district in hp_district_heating.district_heating_id.unique():
+        district_hp = hp_district_heating.loc[
+            edisgo_obj.topology.loads_df.district_heating_id == district
+        ]
+        # find name of TES component of district heating grid: will be name of new,
+        # aggregated district heating componnet
+        aggregated_component = np.intersect1d(
+            edisgo_obj.heat_pump.thermal_storage_units_df.index, district_hp.index
+        )
+        single_components = district_hp.index.drop(aggregated_component)
+        # calculate COP by weighted COP of single components
+        new_p_set = edisgo_obj.topology.loads_df.loc[district_hp.index].p_set.sum()
+        new_cop = (
+            (
+                edisgo_obj.heat_pump.cop_df[district_hp.index]
+                * edisgo_obj.topology.loads_df.loc[district_hp.index].p_set
+            )
+            / new_p_set
+        ).sum(axis=1)
+        # delete COP timeseries and heat demand timeseries of single components
+        for attr in ["cop_df", "heat_demand_df"]:
+            setattr(
+                edisgo_obj.heat_pump,
+                attr,
+                getattr(edisgo_obj.heat_pump, attr).drop(columns=single_components),
+            )
+        # delete single components in loads_df
+        setattr(
+            edisgo_obj.topology,
+            "loads_df",
+            getattr(edisgo_obj.topology, "loads_df").drop(single_components),
+        )
+        # add COP timeseries of aggregated component
+        getattr(edisgo_obj.heat_pump, "cop_df")[
+            aggregated_component[0]
+        ] = new_cop.values
+        # add aggregated component to loads_df
+        aggr_hp = getattr(edisgo_obj.topology, "loads_df").loc[aggregated_component[0]]
+        aggr_hp.p_set = new_p_set
+        getattr(edisgo_obj.topology, "loads_df").loc[aggregated_component[0]] = aggr_hp
+        # delete active and reactive power timeseries of single components
+        for attr in ["loads_active_power", "loads_reactive_power"]:
+            setattr(
+                edisgo_obj.timeseries,
+                attr,
+                getattr(edisgo_obj.timeseries, attr)[
+                    getattr(edisgo_obj.topology, "loads_df").index
+                ],
+            )
+        # reduce by feedin from other sources (e.g. solarthermal, geothermal)
+        feedin_district_heating = edisgo_obj.overlying_grid.feedin_district_heating
+        if not feedin_district_heating.empty:
+            # reduce heat demand of district heating by feedin
+            for district in feedin_district_heating.columns:
+                district_hps = edisgo_obj.topology.loads_df.loc[
+                    edisgo_obj.topology.loads_df.district_heating_id == district
+                ].index
+                edisgo_obj.heat_pump.heat_demand_df[district_hps[0]] = (
+                    edisgo_obj.heat_pump.heat_demand_df[district_hps[0]].values
+                    - feedin_district_heating[district].values
+                ).clip(min=0)
+        # calculate new power timeseries of aggregated components with reduced heat
+        # demand
+        edisgo_obj.apply_heat_pump_operating_strategy()
+
+
 def battery_storage_reference_operation(
     df,
     init_storage_charge,

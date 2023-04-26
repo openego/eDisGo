@@ -17,7 +17,10 @@ import pandas as pd
 import pypsa
 
 from edisgo.flex_opt.costs import line_expansion_costs
-from edisgo.tools.tools import calculate_impedance_for_parallel_components
+from edisgo.tools.tools import (
+    aggregate_district_heating_components,
+    calculate_impedance_for_parallel_components,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,8 @@ def to_powermodels(
             logger.info("{} will be optimized.".format(text))
             opf_flex.append(flex)
     hv_flex_dict = dict()
+    # aggregate components that feed into the same district heating grid
+    aggregate_district_heating_components(edisgo_object)
     # Sorts buses such that bus0 is always the upstream bus
     edisgo_object.topology.sort_buses()
     # Calculate line costs
@@ -134,12 +139,8 @@ def to_powermodels(
             flexible_cps,
         )
     if len(flexible_hps) > 0:
-        heat_demand_df = _build_heatpump(
-            psa_net, pm, edisgo_object, s_base, flexible_hps
-        )
+        _build_heatpump(psa_net, pm, edisgo_object, s_base, flexible_hps)
         _build_heat_storage(psa_net, pm, edisgo_object, s_base, flexible_hps)
-    else:
-        heat_demand_df = None
     if len(flexible_loads) > 0:
         flexible_loads = _build_dsm(edisgo_object, psa_net, pm, s_base, flexible_loads)
     if len(psa_net.loads) > 0:
@@ -201,7 +202,6 @@ def to_powermodels(
         flexible_storage_units,
         opf_flex,
         hv_flex_dict,
-        heat_demand_df,
     )
     return pm, hv_flex_dict
 
@@ -1106,11 +1106,6 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     flexible_hps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
-
-    Returns
-    -------
-    heat_df2: :pandas:`pandas.DataFrame<DataFrame>`
-        Contains heat demand of all heatpumps reduced by corresponding feedin.
     """
     heat_df = psa_net.loads.loc[flexible_hps]  # electric load
     heat_df2 = edisgo_obj.heat_pump.heat_demand_df[flexible_hps]  # thermal load
@@ -1125,20 +1120,6 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
                 comparison.index[comparison.values].values
             )
         )
-    feedin_district_heating = edisgo_obj.overlying_grid.feedin_district_heating
-    if not feedin_district_heating.empty:
-        # reduce heat demand of district heating by feedin
-        for district in feedin_district_heating.columns:
-            district_hps = edisgo_obj.topology.loads_df.loc[
-                edisgo_obj.topology.loads_df.district_heating_id == district
-            ].index
-            heat_df2[district_hps[0]] = (
-                heat_df2[district_hps[0]].values
-                - feedin_district_heating[district].values
-            ).clip(min=0)
-            if len(district_hps) > 1:
-                for i in range(1, len(district_hps)):
-                    heat_df2[district_hps[i]] = 0
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
@@ -1158,7 +1139,6 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
             "name": heat_df.index[hp_i],
             "index": hp_i + 1,
         }
-    return heat_df2
 
 
 def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
@@ -1423,7 +1403,6 @@ def _build_timeseries(
     flexible_storage_units,
     opf_flex,
     hv_flex_dict,
-    heat_demand_df,
 ):
     """
     Build timeseries dictionary in PowerModels network data format and add it to
@@ -1456,8 +1435,6 @@ def _build_timeseries(
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from overlying_grid component of edisgo object.
-    heat_demand_df: :pandas:`pandas.DataFrame<DataFrame>`
-        Contains heat demand of all heatpumps reduced by corresponding feedin.
     """
     for kind in [
         "gen",
@@ -1481,7 +1458,6 @@ def _build_timeseries(
             flexible_storage_units,
             opf_flex,
             hv_flex_dict,
-            heat_demand_df,
         )
     pm["time_series"]["num_steps"] = len(psa_net.snapshots)
 
@@ -1498,7 +1474,6 @@ def _build_component_timeseries(
     flexible_storage_units=None,
     opf_flex=None,
     hv_flex_dict=None,
-    heat_demand_df=None,
 ):
     """
     Build timeseries dictionary for given kind and add it to 'time_series'
@@ -1531,8 +1506,6 @@ def _build_component_timeseries(
     hv_flex_dict: dict
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from overlying grid component of edisgo object.
-    heat_demand_df: :pandas:`pandas.DataFrame<DataFrame>`
-        Contains heat demand of all heatpumps reduced by corresponding feedin.
     """
     pm_comp = dict()
     solar_gens = edisgo_obj.topology.generators_df.index[
@@ -1737,7 +1710,7 @@ def _build_component_timeseries(
                 }
     elif kind == "heatpumps":
         if len(flexible_hps) > 0:
-            p_set = heat_demand_df[flexible_hps] / s_base
+            p_set = edisgo_obj.heat_pump.heat_demand_df[flexible_hps] / s_base
             cop = edisgo_obj.heat_pump.cop_df[flexible_hps]
             for comp in flexible_hps:
                 comp_i = _mapping(
