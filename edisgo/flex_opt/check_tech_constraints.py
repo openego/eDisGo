@@ -1043,18 +1043,14 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
     if mode == "stations":
         config_string = "mv_lv_station"
 
-        # get all primary and secondary sides
-        dict_primary_sides = {}
-        dict_secondary_sides = {}
+        # get base voltage (voltage at primary side) for each station
+        voltage_base = pd.DataFrame()
         for grid in lv_grids:
-            primary_side = grid.transformers_df.iloc[0].bus0
+            transformers_df = grid.transformers_df
+            primary_side = transformers_df.iloc[0].bus0
+            secondary_side = transformers_df.iloc[0].bus1
             if primary_side in buses_in_pfa:
-                dict_primary_sides[grid] = primary_side
-                dict_secondary_sides[grid] = grid.station.index[0]
-        primary_sides = pd.Series(dict_primary_sides)
-        secondary_sides = pd.Series(dict_secondary_sides)
-
-        voltage_base = edisgo_obj.results.v_res.loc[:, primary_sides.values]
+                voltage_base[secondary_side] = voltages_pfa.loc[:, primary_side]
 
         upper_limits_df = (
             voltage_base

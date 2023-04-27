@@ -156,7 +156,6 @@ def rename_virtual_buses(
                     partial_busmap_df.loc[nodes_to_add_a_virtual, "new_bus"]
                     != transformer_node
                 ):
-
                     partial_busmap_df.loc[nodes_to_add_a_virtual, "new_bus"] = (
                         "virtual_"
                         + partial_busmap_df.loc[feeder_non_virtual, "new_bus"]
@@ -537,7 +536,9 @@ def make_busmap_grid(
                 )
                 dijkstra_distances_df.loc[:, bus] = path_series
 
-            buses_df.loc[:, "medoid"] = dijkstra_distances_df.idxmin(axis=1)
+            buses_df.loc[:, "medoid"] = dijkstra_distances_df.apply(
+                pd.to_numeric
+            ).idxmin(axis=1)
             partial_busmap_df = pd.DataFrame(index=buses_df.index)
 
             for index in buses_df.index:
@@ -813,9 +814,9 @@ def make_busmap_feeders(
                         )
                         dijkstra_distances_df.loc[:, bus] = path_series
 
-                    feeder_buses_df.loc[:, "medoid"] = dijkstra_distances_df.idxmin(
-                        axis=1
-                    )
+                    feeder_buses_df.loc[:, "medoid"] = dijkstra_distances_df.apply(
+                        pd.to_numeric
+                    ).idxmin(axis=1)
 
                     for index in feeder_buses_df.index.tolist():
                         partial_busmap_df.loc[index, "new_bus"] = make_name(
