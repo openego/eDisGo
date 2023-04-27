@@ -527,18 +527,16 @@ def make_busmap_grid(
                 ] = int(n)
 
             dijkstra_distances_df = pd.DataFrame(
-                index=buses_df.index, columns=medoid_bus_name
+                index=buses_df.index, columns=medoid_bus_name, dtype=float
             )
 
             for bus in medoid_bus_name:
                 path_series = pd.Series(
                     nx.single_source_dijkstra_path_length(graph, bus, weight="length")
                 )
-                dijkstra_distances_df.loc[:, bus] = path_series
+                dijkstra_distances_df[bus] = path_series
 
-            buses_df.loc[:, "medoid"] = dijkstra_distances_df.apply(
-                pd.to_numeric
-            ).idxmin(axis=1)
+            buses_df.loc[:, "medoid"] = dijkstra_distances_df.idxmin(axis=1)
             partial_busmap_df = pd.DataFrame(index=buses_df.index)
 
             for index in buses_df.index:

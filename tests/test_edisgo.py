@@ -16,6 +16,8 @@ from shapely.geometry import Point
 
 from edisgo import EDisGo
 from edisgo.edisgo import import_edisgo_from_files
+from edisgo.flex_opt.reinforce_grid import enhanced_reinforce_grid
+from edisgo.network.results import Results
 
 
 class TestEDisGo:
@@ -417,12 +419,13 @@ class TestEDisGo:
             self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5)
 
         caplog.clear()
-        self.edisgo.analyze(
-            troubleshooting_mode="iteration",
-            range_start=5,
-            range_num=2,
-            raise_not_converged=False,
-        )
+        with caplog.at_level("INFO"):
+            self.edisgo.analyze(
+                troubleshooting_mode="iteration",
+                range_start=5,
+                range_num=2,
+                raise_not_converged=False,
+            )
         assert "Current fraction in iterative process: 5.0." in caplog.text
         assert "Current fraction in iterative process: 1.0." in caplog.text
 
@@ -436,24 +439,109 @@ class TestEDisGo:
         assert results.v_res.shape == (4, 142)
         assert self.edisgo.results.v_res.shape == (4, 142)
 
-        # ###################### test mode lv and copy grid ##########################
+        # ###################### test without worst case settings ####################
+        self.setup_worst_case_time_series()
+        results = self.edisgo.reinforce(is_worst_case=False)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 10
+        assert len(results.equipment_changes) == 10
+        assert results.v_res.shape == (4, 142)
+        assert self.edisgo.results.v_res.shape == (4, 142)
+
+        # ###################### test mode mv and copy grid ##########################
         self.setup_edisgo_object()
         self.setup_worst_case_time_series()
+        results = self.edisgo.reinforce(mode="mv", copy_grid=True)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 4
+        assert len(results.equipment_changes) == 4
+        assert results.v_res.shape == (4, 31)
+        assert self.edisgo.results.v_res.empty
+
+        # ###################### test mode lv and copy grid ##########################
         results = self.edisgo.reinforce(mode="lv", copy_grid=True)
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 6
         assert len(results.equipment_changes) == 6
-        assert results.v_res.shape == (2, 142)
+        assert results.v_res.shape == (4, 142)
         assert self.edisgo.results.v_res.empty
 
         # ################# test mode mvlv and combined analysis ####################
-        # self.setup_edisgo_object()
-        # self.setup_worst_case_time_series()
-        results = self.edisgo.reinforce(mode="mvlv", combined_analysis=False)
+        results = self.edisgo.reinforce(
+            mode="mvlv", combined_analysis=False, is_worst_case=True
+        )
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 8
-        assert len(results.equipment_changes) == 8
+        assert len(results.grid_expansion_costs) == 4
+        assert len(results.equipment_changes) == 4
         assert results.v_res.shape == (4, 41)
+
+        # ###################### test with only one lv grid ##########################
+        # test grid without issues
+        self.edisgo.results = Results(self.edisgo)
+        lv_grid_id = 1
+        results = self.edisgo.reinforce(mode="lv", lv_grid_id=lv_grid_id)
+        assert results.unresolved_issues.empty
+        assert results.equipment_changes.empty
+        assert results.v_res.shape == (4, 15)
+        # test grid with issues
+        lv_grid_id = 5
+        results = self.edisgo.reinforce(mode="lv", lv_grid_id=lv_grid_id)
+        assert len(results.grid_expansion_costs) == 1
+        assert len(results.equipment_changes) == 1
+        assert results.v_res.shape == (4, 9)
+
+    def test_reinforce_catch_convergence(self):
+        # ###################### test that wrong mode is raised ######################
+        msg = "Provided mode mvl is not a valid mode."
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo.reinforce(
+                catch_convergence_problems=True, is_worst_case=False, mode="mvl"
+            )
+
+        # ###################### test with catch convergence ##########################
+        self.setup_worst_case_time_series()
+        self.edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=10, q_scaling_factor=10
+        )
+        results = self.edisgo.reinforce(
+            catch_convergence_problems=True,
+            is_worst_case=False,
+            copy_grid=True,
+        )
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 134
+        assert len(results.equipment_changes) == 230
+        assert results.v_res.shape == (4, 142)
+
+        # ############### test with catch convergence worst case true ################
+        self.setup_worst_case_time_series()
+        self.edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=10, q_scaling_factor=10
+        )
+        results = self.edisgo.reinforce(catch_convergence_problems=True)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 132
+        assert len(results.equipment_changes) == 218
+        assert results.v_res.shape == (4, 142)
+
+    @pytest.mark.slow
+    def test_enhanced_reinforce_grid(self):
+        self.setup_edisgo_object()
+        self.setup_worst_case_time_series()
+        self.edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=100, q_scaling_factor=100
+        )
+        edisgo_obj = copy.deepcopy(self.edisgo)
+        edisgo_obj = enhanced_reinforce_grid(
+            edisgo_obj, activate_cost_results_disturbing_mode=True
+        )
+
+        results = edisgo_obj.results
+
+        assert len(results.grid_expansion_costs) == 835
+        assert len(results.equipment_changes) == 1764
+        assert results.v_res.shape == (4, 142)
+        assert "Enhanced reinforcement: No exchange of lines" in results.measures[2]
 
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()

@@ -51,6 +51,22 @@ class TestCheckTechConstraints:
         )
         assert df.at["Line_50000002", "time_index"] == self.timesteps[0]
 
+        # test for single LV grid
+        lv_grid_id = 5
+        self.edisgo.analyze(mode="lv", lv_grid_id=lv_grid_id)
+        df = check_tech_constraints.lv_line_max_relative_overload(
+            self.edisgo, lv_grid_id=lv_grid_id
+        )
+        # check shape of dataframe
+        assert (1, 3) == df.shape
+        # check relative overload of line
+        assert np.isclose(
+            df.at["Line_50000002", "max_rel_overload"],
+            self.edisgo.results.s_res.at[self.timesteps[0], "Line_50000002"]
+            / 0.08521689973238901,
+        )
+        assert df.at["Line_50000002", "time_index"] == self.timesteps[0]
+
     def test_lines_allowed_load(self):
         # check with default value (all lines)
         df = check_tech_constraints.lines_allowed_load(self.edisgo)
@@ -172,6 +188,14 @@ class TestCheckTechConstraints:
             self.edisgo.results.s_res.at[self.timesteps[1], "LVStation_1_transformer_1"]
             - 0.16,
         )
+        assert df.at["LVGrid_1_station", "time_index"] == self.timesteps[0]
+
+        # test for single LV grid
+        lv_grid_id = 1
+        df = check_tech_constraints.mv_lv_station_max_overload(
+            self.edisgo, lv_grid_id=lv_grid_id
+        )
+        assert (1, 3) == df.shape
         assert df.at["LVGrid_1_station", "time_index"] == self.timesteps[0]
 
     def test__station_load(self):
@@ -458,8 +482,18 @@ class TestCheckTechConstraints:
             0.08,
         )
 
-        # ########################## check mv_lv mode ###############################
+        # ################ check with single LV grid
+        lv_grid_id = 1
+        # uses same voltage issues as created above
+        voltage_issues = check_tech_constraints.voltage_issues(
+            self.edisgo,
+            voltage_level="lv",
+            split_voltage_band=False,
+            lv_grid_id=lv_grid_id,
+        )
+        assert len(voltage_issues) == 0
 
+        # ########################## check mv_lv mode ###############################
         # ############## check that voltage issue in station of LVGrid_6 is detected
         # uses same voltage issues as created above
         voltage_issues = check_tech_constraints.voltage_issues(
@@ -482,7 +516,18 @@ class TestCheckTechConstraints:
             0.04,
         )
 
-        # ########################## check mv_lv mode ###############################
+        # ################ check with single LV grid
+        lv_grid_id = 1
+        # uses same voltage issues as created above
+        voltage_issues = check_tech_constraints.voltage_issues(
+            self.edisgo,
+            voltage_level="mv_lv",
+            split_voltage_band=False,
+            lv_grid_id=lv_grid_id,
+        )
+        assert len(voltage_issues) == 0
+
+        # ########################## check mode None ###############################
 
         # ################ check with voltage issues and default values
         voltage_issues = check_tech_constraints.voltage_issues(
