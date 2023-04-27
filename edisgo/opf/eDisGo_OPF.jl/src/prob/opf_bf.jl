@@ -7,7 +7,7 @@ end
 "Build multinetwork branch flow OPF with multiple flexibilities"
 function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
     if PowerModels.ref(pm, 1, :opf_version) in(1, 3)
-        eDisGo_OPF.variable_max_line_loading(pm, nw=1) # Eq. (3.40) (nur für Version 1 und 3)
+        eDisGo_OPF.variable_max_line_loading(pm, nw=1) # Eq. (3.41) (nur für Version 1 und 3)
     end
     for (n, network) in PowerModels.nws(pm)
         # VARIABLES
@@ -16,7 +16,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             if PowerModels.ref(pm, 1, :opf_version) in(1, 3) # nur für Version 1 und 3 (ohne Netzrestriktionen)
                 eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false) # keine Eq. (3.7)!
                 eDisGo_OPF.variable_bus_voltage(pm, nw=n, bounded=false) # keine Eq. (3.8)!
-                eDisGo_OPF.constraint_max_line_loading(pm, n)  # Eq. (3.39)
+                eDisGo_OPF.constraint_max_line_loading(pm, n)  # Eq. (3.40)
             else # nur für Version 2 und 4 (mit Netzrestriktionen)
                 eDisGo_OPF.variable_branch_current(pm, nw=n)  # Eq. (3.7) und (3.7i)
                 eDisGo_OPF.variable_gen_power_curt(pm, nw=n)  # Eq. (3.44) für non-dispatchable Generators

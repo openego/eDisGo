@@ -38,11 +38,11 @@ class TestPowermodelsIO:
         self.edisgo.add_component(
             comp_type="load",
             type="heat_pump",
-            sector="district_heating",
+            sector="district_heating_resistive_heater",
             district_heating_id="grid1",
             ts_active_power=pd.Series(
                 index=self.edisgo.timeseries.timeindex,
-                data=[1.0 / 5, 2.0 / 6, 2.0 / 5, 1.0 / 6],
+                data=[2.0, 8.0, 3.0, 3.0],
             ),
             ts_reactive_power="default",
             bus=self.edisgo.topology.buses_df.index[27],
@@ -55,10 +55,10 @@ class TestPowermodelsIO:
             district_heating_id="grid1",
             ts_active_power=pd.Series(
                 index=self.edisgo.timeseries.timeindex,
-                data=[2.0 / 7.0, 4.0 / 8.0, 3.0 / 7.0, 3.0 / 8.0],
+                data=[2.0 / 7.0, 8.0 / 2.0, 3.0 / 7.0, 3.0 / 8.0],
             ),
             ts_reactive_power="default",
-            bus=self.edisgo.topology.buses_df.index[31],
+            bus=self.edisgo.topology.buses_df.index[27],
             p_set=3,
         )
 
@@ -67,8 +67,13 @@ class TestPowermodelsIO:
             data={
                 "Heat_Pump_LVGrid_3_individual_heating_1": [5.0, 6.0, 5.0, 6.0],
                 "Heat_Pump_LVGrid_5_individual_heating_1": [7.0, 8.0, 7.0, 8.0],
-                "Heat_Pump_MVGrid_1_district_heating_1": [7.0, 8.0, 7.0, 8.0],
-                "Heat_Pump_MVGrid_1_district_heating_2": [7.0, 8.0, 7.0, 8.0],
+                "Heat_Pump_MVGrid_1_district_heating_resistive_heater_1": [
+                    1.0,
+                    1.0,
+                    1.0,
+                    1.0,
+                ],
+                "Heat_Pump_MVGrid_1_district_heating_2": [7.0, 2.0, 7.0, 8.0],
             },
             index=self.edisgo.timeseries.timeindex,
         )
@@ -76,8 +81,13 @@ class TestPowermodelsIO:
             data={
                 "Heat_Pump_LVGrid_3_individual_heating_1": [1.0, 2.0, 2.0, 1.0],
                 "Heat_Pump_LVGrid_5_individual_heating_1": [2.0, 4.0, 3.0, 3.0],
-                "Heat_Pump_MVGrid_1_district_heating_2": [2.0, 4.0, 3.0, 3.0],
-                "Heat_Pump_MVGrid_1_district_heating_1": [2.0, 4.0, 3.0, 3.0],
+                "Heat_Pump_MVGrid_1_district_heating_2": [2.0, 8.0, 3.0, 3.0],
+                "Heat_Pump_MVGrid_1_district_heating_resistive_heater_1": [
+                    2.0,
+                    8.0,
+                    3.0,
+                    3.0,
+                ],
             },
             index=self.edisgo.timeseries.timeindex,
         )
@@ -210,45 +220,45 @@ class TestPowermodelsIO:
             )
 
     def test_to_powermodels(self):
-        # powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(self.edisgo)
-        #
-        # assert len(powermodels_network["gen"].keys()) == 1 + 1
-        # assert len(powermodels_network["gen_slack"].keys()) == 1
-        # assert len(powermodels_network["gen_nd"].keys()) == 27
-        # assert len(powermodels_network["bus"].keys()) == 142
-        # assert len(powermodels_network["branch"].keys()) == 141
-        # assert len(powermodels_network["load"].keys()) == 50 + 1 + 3 + 2
-        # assert len(powermodels_network["storage"].keys()) == 0
-        # assert len(powermodels_network["electromobility"].keys()) == 0
-        # assert len(powermodels_network["heatpumps"].keys()) == 0
-        # assert len(powermodels_network["heat_storage"].keys()) == 0
-        # assert len(powermodels_network["dsm"].keys()) == 0
-        # assert powermodels_network["load"]["56"]["pd"] == 0.4
-        # assert powermodels_network["time_series"]["load"]["56"]["pd"] == [
-        #     0.4,
-        #     0.4,
-        #     0.0,
-        #     0.0,
-        # ]
-        # assert powermodels_network["time_series"]["gen"]["2"]["pg"] == [
-        #     0.0,
-        #     0.0,
-        #     0.4,
-        #     0.4,
-        # ]
-        # assert min(
-        #     np.unique(
-        #         powermodels_network["time_series"]["load"]["36"]["pd"]
-        #         == self.edisgo.timeseries.loads_active_power[
-        #             powermodels_network["load"]["36"]["name"]
-        #         ].values
-        #     )
-        # )
+        powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(self.edisgo)
+
+        assert len(powermodels_network["gen"].keys()) == 1 + 1
+        assert len(powermodels_network["gen_slack"].keys()) == 1
+        assert len(powermodels_network["gen_nd"].keys()) == 27
+        assert len(powermodels_network["bus"].keys()) == 142
+        assert len(powermodels_network["branch"].keys()) == 141
+        assert len(powermodels_network["load"].keys()) == 50 + 1 + 3 + 1
+        assert len(powermodels_network["storage"].keys()) == 0
+        assert len(powermodels_network["electromobility"].keys()) == 0
+        assert len(powermodels_network["heatpumps"].keys()) == 0
+        assert len(powermodels_network["heat_storage"].keys()) == 0
+        assert len(powermodels_network["dsm"].keys()) == 0
+        assert powermodels_network["load"]["55"]["pd"] == 0.4
+        assert powermodels_network["time_series"]["load"]["55"]["pd"] == [
+            0.4,
+            0.4,
+            0.0,
+            0.0,
+        ]
+        assert powermodels_network["time_series"]["gen"]["2"]["pg"] == [
+            0.0,
+            0.0,
+            0.4,
+            0.4,
+        ]
+        assert min(
+            np.unique(
+                powermodels_network["time_series"]["load"]["36"]["pd"]
+                == self.edisgo.timeseries.loads_active_power[
+                    powermodels_network["load"]["36"]["name"]
+                ].values
+            )
+        )
         powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(
             self.edisgo,
             opf_version=4,
             flexible_cps=["Charging_Point_LVGrid_6_1"],
-            flexible_hps=self.edisgo.heat_pump.cop_df.columns.values[1::2],
+            flexible_hps=self.edisgo.heat_pump.thermal_storage_units_df.index.values,
             flexible_loads=np.array(
                 ["Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"]
             ),
@@ -262,23 +272,16 @@ class TestPowermodelsIO:
         assert len(powermodels_network["load"].keys()) == 50
         assert len(powermodels_network["storage"].keys()) == 1
         assert len(powermodels_network["electromobility"].keys()) == 1
-        assert len(powermodels_network["heatpumps"].keys()) == 2 + 2
-        assert len(powermodels_network["heat_storage"].keys()) == 2 + 1 + 1
+        assert len(powermodels_network["heatpumps"].keys()) == 2 + 1
+        assert len(powermodels_network["heat_storage"].keys()) == 2 + 1
         assert len(powermodels_network["dsm"].keys()) == 1
         assert len(powermodels_network["HV_requirements"].keys()) == 5
-        assert powermodels_network["time_series"]["heatpumps"]["4"]["pd"] == [
-            0.0,
-            0.0,
-            0.0,
-            0.0,
-        ]
         assert min(
             np.unique(
                 powermodels_network["time_series"]["heatpumps"]["3"]["pd"]
                 == self.edisgo.heat_pump.heat_demand_df[
-                    "Heat_Pump_MVGrid_1_district_heating_1"
+                    "Heat_Pump_MVGrid_1_district_heating_2"
                 ]
-                - self.edisgo.overlying_grid.feedin_district_heating.grid1
             )
         )
         assert len(powermodels_network["dsm"].keys()) == 1

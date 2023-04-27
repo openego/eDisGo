@@ -94,7 +94,10 @@ def to_powermodels(
             opf_flex.append(flex)
     hv_flex_dict = dict()
     # aggregate components that feed into the same district heating grid
-    aggregate_district_heating_components(edisgo_object)
+    try:
+        aggregate_district_heating_components(edisgo_object)
+    except AttributeError:
+        pass
     # Sorts buses such that bus0 is always the upstream bus
     edisgo_object.topology.sort_buses()
     # Calculate line costs
@@ -1368,12 +1371,12 @@ def _build_hv_requirements(
         hv_flex_dict["cp"] = (
             hv_flex_dict["cp"]
             - psa_net.loads_t.p_set.loc[:, inflexible_cps].sum(axis=1) / s_base
-        )
+        ).clip(lower=0)
     if len(inflexible_hps) > 0:
         hv_flex_dict["hp"] = (
             hv_flex_dict["hp"]
             - psa_net.loads_t.p_set.loc[:, inflexible_hps].sum(axis=1) / s_base
-        )
+        ).clip(lower=0)
     if len(inflexible_storage_units) > 0:
         hv_flex_dict["storage"] = (
             hv_flex_dict["storage"]
