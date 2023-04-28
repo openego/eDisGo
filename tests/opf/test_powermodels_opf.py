@@ -245,7 +245,7 @@ class TestPowerModelsOPF:
                 ][-1],
                 3,
             ),
-            -0.665,
+            -0.663,
             atol=1e-3,
         )
         assert np.isclose(
@@ -263,7 +263,7 @@ class TestPowerModelsOPF:
                 ][-1],
                 3,
             ),
-            0.525,
+            0.564,
             atol=1e-3,
         )
         assert np.isclose(
@@ -280,7 +280,7 @@ class TestPowerModelsOPF:
                 ][-1],
                 3,
             ),
-            0.031 + 0.208,
+            0.031 + 0.207,
             atol=1e-3,
         )
         assert self.edisgo.opf_results.status == "LOCALLY_SOLVED"

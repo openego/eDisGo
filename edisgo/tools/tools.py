@@ -877,16 +877,16 @@ def aggregate_district_heating_components(edisgo_obj):
                     attr,
                     getattr(edisgo_obj.heat_pump, attr).drop(columns=district_rh),
                 )
-            try:
-                setattr(
-                    edisgo_obj.heat_pump,
-                    "thermal_storage_units_df",
-                    getattr(edisgo_obj.heat_pump, "thermal_storage_units_df").drop(
-                        district_rh
-                    ),
-                )
-            except KeyError:
-                pass
+            # try:
+            #     setattr(
+            #         edisgo_obj.heat_pump,
+            #         "thermal_storage_units_df",
+            #         getattr(edisgo_obj.heat_pump, "thermal_storage_units_df").drop(
+            #             district_rh
+            #         ),
+            #     )
+            # except KeyError:
+            #     pass
             # delete single components in loads_df
             setattr(
                 edisgo_obj.topology,
@@ -913,10 +913,13 @@ def aggregate_district_heating_components(edisgo_obj):
         # reduce by feedin from other sources (e.g. solarthermal, geothermal)
         if not feedin_district_heating.empty:
             # reduce heat demand of district heating by feedin
-            edisgo_obj.heat_pump.heat_demand_df[district_hp[0]] = (
-                edisgo_obj.heat_pump.heat_demand_df[district_hp[0]].values
-                - feedin_district_heating[district].values
-            ).clip(min=0)
+            try:
+                edisgo_obj.heat_pump.heat_demand_df[district_hp[0]] = (
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp[0]].values
+                    - feedin_district_heating[district].values
+                ).clip(min=0)
+            except KeyError:
+                pass
         # calculate new power timeseries of aggregated components with reduced heat
         # demand
         edisgo_obj.apply_heat_pump_operating_strategy()
