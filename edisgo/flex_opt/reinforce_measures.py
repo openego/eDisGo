@@ -48,7 +48,7 @@ def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
         }
 
     """
-    transformers_changes = _station_overloading(
+    transformers_changes = _reinforce_station_overloading(
         edisgo_obj, critical_stations, voltage_level="lv"
     )
 
@@ -95,7 +95,7 @@ def reinforce_hv_mv_station_overloading(edisgo_obj, critical_stations):
         }
 
     """
-    transformers_changes = _station_overloading(
+    transformers_changes = _reinforce_station_overloading(
         edisgo_obj, critical_stations, voltage_level="mv"
     )
 
@@ -105,7 +105,7 @@ def reinforce_hv_mv_station_overloading(edisgo_obj, critical_stations):
     return transformers_changes
 
 
-def _station_overloading(edisgo_obj, critical_stations, voltage_level):
+def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level):
     """
     Reinforce stations due to overloading issues.
 
@@ -399,7 +399,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         # because voltage issues should have been solved during extension of
         # distribution substations due to overvoltage issues.
         if len(path) == 1:
-            logging.error(
+            logger.error(
                 "Voltage issues at busbar in LV network {} should have "
                 "been solved in previous steps.".format(grid)
             )

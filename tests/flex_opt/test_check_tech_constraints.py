@@ -23,10 +23,10 @@ class TestCheckTechConstraints:
         """
         self.edisgo.analyze()
 
-    def test_mv_line_overload(self):
+    def test_mv_line_max_relative_overload(self):
         # implicitly checks function _line_overload
 
-        df = check_tech_constraints.mv_line_overload(self.edisgo)
+        df = check_tech_constraints.mv_line_max_relative_overload(self.edisgo)
         # check shape of dataframe
         assert (4, 3) == df.shape
         # check relative overload of one line
@@ -37,13 +37,29 @@ class TestCheckTechConstraints:
         )
         assert df.at["Line_10005", "time_index"] == self.timesteps[3]
 
-    def test_lv_line_overload(self):
+    def test_lv_line_max_relative_overload(self):
         # implicitly checks function _line_overload
 
-        df = check_tech_constraints.lv_line_overload(self.edisgo)
+        df = check_tech_constraints.lv_line_max_relative_overload(self.edisgo)
         # check shape of dataframe
         assert (2, 3) == df.shape
         # check relative overload of one line
+        assert np.isclose(
+            df.at["Line_50000002", "max_rel_overload"],
+            self.edisgo.results.s_res.at[self.timesteps[0], "Line_50000002"]
+            / 0.08521689973238901,
+        )
+        assert df.at["Line_50000002", "time_index"] == self.timesteps[0]
+
+        # test for single LV grid
+        lv_grid_id = 5
+        self.edisgo.analyze(mode="lv", lv_grid_id=lv_grid_id)
+        df = check_tech_constraints.lv_line_max_relative_overload(
+            self.edisgo, lv_grid_id=lv_grid_id
+        )
+        # check shape of dataframe
+        assert (1, 3) == df.shape
+        # check relative overload of line
         assert np.isclose(
             df.at["Line_50000002", "max_rel_overload"],
             self.edisgo.results.s_res.at[self.timesteps[0], "Line_50000002"]
@@ -69,7 +85,7 @@ class TestCheckTechConstraints:
         # check values (load case)
         assert np.isclose(
             df.at[self.timesteps[0], "Line_10005"],
-            7.274613391789284 * 0.5,
+            7.274613391789284,
         )
         assert np.isclose(
             df.at[self.timesteps[0], "Line_50000002"],
@@ -94,10 +110,10 @@ class TestCheckTechConstraints:
             df.at[self.timesteps[2], "Line_10005"],
             7.27461339178928,
         )
-        # check in load case (line in cycle as well as stub)
+        # check in load case
         assert np.isclose(
             df.at[self.timesteps[0], "Line_10005"],
-            7.274613391789284 * 0.5,
+            7.274613391789284,
         )
         assert np.isclose(
             df.at[self.timesteps[0], "Line_10024"],
@@ -134,7 +150,7 @@ class TestCheckTechConstraints:
         )
         # check values (load case)
         assert np.isclose(
-            df.at[self.timesteps[0], "Line_10005"], 0.00142 / (7.27461 * 0.5), atol=1e-5
+            df.at[self.timesteps[0], "Line_10005"], 0.00142 / 7.27461, atol=1e-5
         )
 
         # check with specifying lines
@@ -144,7 +160,7 @@ class TestCheckTechConstraints:
         # check shape of dataframe
         assert (4, 2) == df.shape
 
-    def test_hv_mv_station_overload(self):
+    def test_hv_mv_station_max_overload(self):
         # implicitly checks function _station_overload
 
         # create over-load problem with highest over-load in first time step (as it is
@@ -153,20 +169,20 @@ class TestCheckTechConstraints:
             data={"p": [30, 25, 30, 20], "q": [30, 25, 30, 20]}, index=self.timesteps
         )
 
-        df = check_tech_constraints.hv_mv_station_overload(self.edisgo)
+        df = check_tech_constraints.hv_mv_station_max_overload(self.edisgo)
         # check shape of dataframe
         assert (1, 3) == df.shape
         # check missing transformer capacity
         assert np.isclose(
             df.at["MVGrid_1_station", "s_missing"],
-            (np.hypot(30, 30) - 20) / 0.5,
+            (np.hypot(30, 30) - 40),
         )
         assert df.at["MVGrid_1_station", "time_index"] == self.timesteps[0]
 
-    def test_mv_lv_station_overload(self):
+    def test_mv_lv_station_max_overload(self):
         # implicitly checks function _station_overload
 
-        df = check_tech_constraints.mv_lv_station_overload(self.edisgo)
+        df = check_tech_constraints.mv_lv_station_max_overload(self.edisgo)
         # check shape of dataframe
         assert (4, 3) == df.shape
         # check missing transformer capacity of one grid
@@ -175,6 +191,14 @@ class TestCheckTechConstraints:
             self.edisgo.results.s_res.at[self.timesteps[1], "LVStation_1_transformer_1"]
             - 0.16,
         )
+        assert df.at["LVGrid_1_station", "time_index"] == self.timesteps[0]
+
+        # test for single LV grid
+        lv_grid_id = 1
+        df = check_tech_constraints.mv_lv_station_max_overload(
+            self.edisgo, lv_grid_id=lv_grid_id
+        )
+        assert (1, 3) == df.shape
         assert df.at["LVGrid_1_station", "time_index"] == self.timesteps[0]
 
     def test__station_load(self):
@@ -232,7 +256,7 @@ class TestCheckTechConstraints:
         load_cases = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
         ]
-        assert np.isclose(20.0, df.loc[load_cases.values].values).all()
+        assert np.isclose(40.0, df.loc[load_cases.values].values).all()
         feed_in_cases = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
         ]
@@ -254,7 +278,7 @@ class TestCheckTechConstraints:
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
         ]
         assert np.isclose(
-            20.0, df.loc[load_cases.values, "MVGrid_1_station"].values
+            40.0, df.loc[load_cases.values, "MVGrid_1_station"].values
         ).all()
 
         # check with specifying grids
@@ -269,7 +293,7 @@ class TestCheckTechConstraints:
         )
         assert_frame_equal(df.loc[:, ["LVGrid_1_station"]], exp)
         assert np.isclose(
-            20.0, df.loc[load_cases.values, "MVGrid_1_station"].values
+            40.0, df.loc[load_cases.values, "MVGrid_1_station"].values
         ).all()
         feed_in_cases = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
@@ -312,7 +336,7 @@ class TestCheckTechConstraints:
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
         ]
         assert np.isclose(
-            0.06753, df.loc[load_cases.values, "MVGrid_1_station"].values, atol=1e-5
+            0.033765, df.loc[load_cases.values, "MVGrid_1_station"].values, atol=1e-5
         ).all()
 
     def test_components_relative_load(self):
@@ -329,7 +353,7 @@ class TestCheckTechConstraints:
             0.02853, df.loc[load_cases.values, "LVGrid_4_station"].values, atol=1e-5
         ).all()
         assert np.isclose(
-            df.at[self.timesteps[0], "Line_10005"], 0.00142 / (7.27461 * 0.5), atol=1e-5
+            df.at[self.timesteps[0], "Line_10005"], 0.00142 / 7.27461, atol=1e-5
         )
 
         # check with power flow results not available for all components
@@ -352,7 +376,7 @@ class TestCheckTechConstraints:
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
         ]
         assert np.isclose(
-            0.06753, df.loc[load_cases.values, "MVGrid_1_station"].values, atol=1e-5
+            0.033765, df.loc[load_cases.values, "MVGrid_1_station"].values, atol=1e-5
         ).all()
 
         # check single LV grid
@@ -466,8 +490,18 @@ class TestCheckTechConstraints:
             0.08,
         )
 
-        # ########################## check mv_lv mode ###############################
+        # ################ check with single LV grid
+        lv_grid_id = 1
+        # uses same voltage issues as created above
+        voltage_issues = check_tech_constraints.voltage_issues(
+            self.edisgo,
+            voltage_level="lv",
+            split_voltage_band=False,
+            lv_grid_id=lv_grid_id,
+        )
+        assert len(voltage_issues) == 0
 
+        # ########################## check mv_lv mode ###############################
         # ############## check that voltage issue in station of LVGrid_6 is detected
         # uses same voltage issues as created above
         voltage_issues = check_tech_constraints.voltage_issues(
@@ -490,7 +524,18 @@ class TestCheckTechConstraints:
             0.04,
         )
 
-        # ########################## check mv_lv mode ###############################
+        # ################ check with single LV grid
+        lv_grid_id = 1
+        # uses same voltage issues as created above
+        voltage_issues = check_tech_constraints.voltage_issues(
+            self.edisgo,
+            voltage_level="mv_lv",
+            split_voltage_band=False,
+            lv_grid_id=lv_grid_id,
+        )
+        assert len(voltage_issues) == 0
+
+        # ########################## check mode None ###############################
 
         # ################ check with voltage issues and default values
         voltage_issues = check_tech_constraints.voltage_issues(

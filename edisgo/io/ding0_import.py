@@ -4,7 +4,6 @@ import pandas as pd
 
 from pypsa import Network as PyPSANetwork
 
-from edisgo.network.components import Switch
 from edisgo.network.grids import MVGrid
 
 if "READTHEDOCS" not in os.environ:
@@ -93,8 +92,10 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
         # set up columns that are added in new ding0 version
         grid.loads["building_id"] = None
         grid.loads["number_households"] = None
+        grid.generators["source_id"] = None
     else:
         edisgo_obj.topology.buses_df["in_building"] = False
+        grid.generators = grid.generators.rename(columns={"gens_id": "source_id"})
     edisgo_obj.topology.loads_df = grid.loads[edisgo_obj.topology.loads_df.columns]
     # drop slack generator from generators
     slack = grid.generators.loc[grid.generators.control == "Slack"].index
@@ -131,89 +132,3 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
 
     # check data integrity
     edisgo_obj.topology.check_integrity()
-
-
-def remove_1m_end_lines(edisgo):
-    """
-    Method to remove 1m end lines to reduce size of edisgo object.
-
-    Short lines inside houses are removed in this function, including the end node.
-    Components that were originally connected to the end node are reconnected to the
-    upstream node.
-
-    This function will become obsolete once it is changed in the ding0 export.
-
-    Parameters
-    ----------
-    edisgo : :class:`~.EDisGo`
-
-    Returns
-    --------
-    edisgo : :class:`~.EDisGo`
-        EDisGo object where 1m end lines are removed from topology.
-
-    """
-
-    def remove_1m_end_line(edisgo, line):
-        """
-        Method that removes end lines and moves components of end bus to neighboring
-        bus. If the line is not an end line, the method will skip this line.
-
-        Returns
-        -------
-        int
-            Number of removed lines. Either 0, if no line was removed, or 1, if line
-            was removed.
-
-        """
-        # check for end buses
-        if len(edisgo.topology.get_connected_lines_from_bus(line.bus1)) == 1:
-            end_bus = "bus1"
-            neighbor_bus = "bus0"
-        elif len(edisgo.topology.get_connected_lines_from_bus(line.bus0)) == 1:
-            end_bus = "bus0"
-            neighbor_bus = "bus1"
-        else:
-            return 0
-
-        # move connected elements of end bus to the other bus
-        connected_elements = edisgo.topology.get_connected_components_from_bus(
-            line[end_bus]
-        )
-        rename_dict = {line[end_bus]: line[neighbor_bus]}
-        for comp_type, components in connected_elements.items():
-            if not components.empty and comp_type != "lines":
-                setattr(
-                    edisgo.topology,
-                    comp_type.lower() + "_df",
-                    getattr(edisgo.topology, comp_type.lower() + "_df").replace(
-                        rename_dict
-                    ),
-                )
-
-        # remove line
-        edisgo.topology.remove_line(line.name)
-        return 1
-
-    # close switches such that lines with connected switches are not removed
-    switches = [
-        Switch(id=_, topology=edisgo.topology)
-        for _ in edisgo.topology.switches_df.index
-    ]
-    switch_status = {}
-    for switch in switches:
-        switch_status[switch] = switch.state
-        switch.close()
-
-    # get all lines with length of one meter and remove the ones that are end lines
-    number_of_lines_removed = 0
-    lines = edisgo.topology.lines_df.loc[edisgo.topology.lines_df.length == 0.001]
-    for name, line in lines.iterrows():
-        number_of_lines_removed += remove_1m_end_line(edisgo, line)
-    logger.debug(f"Removed {number_of_lines_removed} 1 m end lines.")
-
-    # set switches back to original state
-    for switch in switches:
-        if switch_status[switch] == "open":
-            switch.open()
-    return edisgo

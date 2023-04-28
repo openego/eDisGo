@@ -128,7 +128,7 @@ def charging_strategy(
             f"to the original frequency of the edisgo time series data."
         )
 
-        edisgo_obj.resample_timeseries(freq=simbev_timedelta)
+        edisgo_obj.timeseries.resample(freq=simbev_timedelta)
 
     if strategy == "dumb":
         # "dumb" charging
@@ -309,7 +309,7 @@ def charging_strategy(
         raise ValueError(f"Strategy {strategy} has not yet been implemented.")
 
     if resample:
-        edisgo_obj.resample_timeseries(freq=edisgo_timedelta)
+        edisgo_obj.timeseries.resample(freq=edisgo_timedelta)
 
     # set reactive power time series to 0 Mvar
     # fmt: off
@@ -324,7 +324,7 @@ def charging_strategy(
     )
     # fmt: on
 
-    logging.info(f"Charging strategy {strategy} completed.")
+    logger.info(f"Charging strategy {strategy} completed.")
 
 
 def harmonize_charging_processes_df(
