@@ -881,7 +881,9 @@ def aggregate_district_heating_components(edisgo_obj):
                 setattr(
                     edisgo_obj.heat_pump,
                     "thermal_storage_units_df",
-                    getattr(edisgo_obj.heat_pump, attr).drop(district_rh),
+                    getattr(edisgo_obj.heat_pump, "thermal_storage_units_df").drop(
+                        district_rh
+                    ),
                 )
             except KeyError:
                 pass
