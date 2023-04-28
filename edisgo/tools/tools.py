@@ -877,6 +877,14 @@ def aggregate_district_heating_components(edisgo_obj):
                     attr,
                     getattr(edisgo_obj.heat_pump, attr).drop(columns=district_rh),
                 )
+            try:
+                setattr(
+                    edisgo_obj.heat_pump,
+                    "thermal_storage_units_df",
+                    getattr(edisgo_obj.heat_pump, attr).drop(district_rh),
+                )
+            except KeyError:
+                pass
             # delete single components in loads_df
             setattr(
                 edisgo_obj.topology,
