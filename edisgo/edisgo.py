@@ -1102,6 +1102,10 @@ class EDisGo:
               time steps. If your time series already represents the worst-case,
               keep the default value of None because finding the worst-case
               snapshots takes some time.
+            * 'reduced_analysis'
+              Reinforcement is conducted for all time steps at which at least one
+              branch shows its highest overloading or one bus shows its highest voltage
+              violation.
             * :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
               :pandas:`pandas.Timestamp<Timestamp>`
               Use this option to explicitly choose which time steps to consider.
