@@ -1,4 +1,8 @@
+from __future__ import annotations
+
 import logging
+
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -7,6 +11,9 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
 from edisgo.flex_opt import check_tech_constraints
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +37,9 @@ def _scored_critical_loading(edisgo_obj):
     return crit_lines_score.sort_values(ascending=False)
 
 
-def _scored_most_critical_loading(edisgo_obj):
+def _scored_most_critical_loading(edisgo_obj: EDisGo) -> pd.Series:
     """
-    Method to get time steps where at least one component
+    Method to get time steps where at least one branch shows its highest overloading
     """
 
     # Get current relative to allowed current
@@ -67,7 +74,11 @@ def _scored_critical_overvoltage(edisgo_obj):
     return voltage_dev_ov.sort_values(ascending=False)
 
 
-def _scored_most_critical_voltage_issues(edisgo_obj):
+def _scored_most_critical_voltage_issues(edisgo_obj: EDisGo) -> pd.Series:
+    """
+    Method to get time steps where at least one bus shows its highest deviation from
+    allowed voltage boundaries
+    """
     voltage_diff = check_tech_constraints.voltage_deviation_from_allowed_voltage_limits(
         edisgo_obj
     )
@@ -88,20 +99,24 @@ def _scored_most_critical_voltage_issues(edisgo_obj):
 
 
 def get_steps_reinforcement(
-    edisgo_obj, num_steps_loading=None, num_steps_voltage=None, percentage=1.0
-):
+    edisgo_obj: EDisGo,
+    num_steps_loading: int = 0,
+    num_steps_voltage: int = 0,
+    percentage: float = 1.0,
+) -> pd.DatetimeIndex:
     """
-    Get the time steps with the most critical violations for curtailment
-    optimization.
+    Get the time steps with the most critical violations for reduced reinforcement.
+
     Parameters
     -----------
     edisgo_obj : :class:`~.EDisGo`
         The eDisGo API object
     num_steps_loading: int
-        The number of most critical overloading events to select, if None percentage
+        The number of most critical overloading events to select, if set to 0 percentage
         is used
     num_steps_voltage: int
-        The number of most critical voltage issues to select, if None percentage is used
+        The number of most critical voltage issues to select, if set to 0 percentage is
+        used
     percentage : float
         The percentage of most critical time steps to select
     Returns
@@ -116,7 +131,7 @@ def get_steps_reinforcement(
 
     # Select most critical steps based on current violations
     loading_scores = _scored_most_critical_loading(edisgo_obj)
-    if num_steps_loading is None:
+    if num_steps_loading == 0:
         num_steps_loading = int(len(loading_scores) * percentage)
     else:
         if num_steps_loading > len(loading_scores):
@@ -131,7 +146,7 @@ def get_steps_reinforcement(
 
     # Select most critical steps based on voltage violations
     voltage_scores = _scored_most_critical_voltage_issues(edisgo_obj)
-    if num_steps_voltage is None:
+    if num_steps_voltage == 0:
         num_steps_voltage = int(len(voltage_scores) * percentage)
     else:
         if num_steps_voltage > len(voltage_scores):
