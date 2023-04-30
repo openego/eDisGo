@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
+from copy import deepcopy
 from hashlib import md5
 from math import pi, sqrt
 from typing import TYPE_CHECKING
@@ -830,98 +831,99 @@ def aggregate_district_heating_components(edisgo_obj):
     -----------
     edisgo_obj : :class:`~.EDisGo`
     """
-    hp_district_heating = edisgo_obj.topology.loads_df.loc[
-        ~edisgo_obj.topology.loads_df.district_heating_id.isna()
-    ]
-    feedin_district_heating = edisgo_obj.overlying_grid.feedin_district_heating
-    for district in hp_district_heating.district_heating_id.unique():
-        district_hps = hp_district_heating.loc[
-            edisgo_obj.topology.loads_df.district_heating_id == district
+    try:
+        hp_district_heating = edisgo_obj.topology.loads_df.loc[
+            ~edisgo_obj.topology.loads_df.district_heating_id.isna()
         ]
-        if len(district_hps) > 1:
-            # district heat pump component
-            district_hp = np.intersect1d(
-                edisgo_obj.heat_pump.thermal_storage_units_df.index, district_hps.index
-            )
-            # district resistive heater component
-            district_rh = district_hps.index.drop(district_hp)
-            # calculate rated power of aggregated component
-            new_p_set = edisgo_obj.topology.loads_df.loc[district_hps.index].p_set.sum()
-            el_demand = (
-                edisgo_obj.heat_pump.heat_demand_df[district_hp[0]]
-                / edisgo_obj.heat_pump.cop_df[district_hp[0]]
-            )
-            if (
-                el_demand > edisgo_obj.topology.loads_df.loc[district_hp[0]].p_set
-            ).any():
-                # calculate COP by weighted COP of single components
-                # (weighted by their contribution to cover heat demand)
-                # determine percentage of contribution per component
-                df = pd.DataFrame(
-                    index=[district_hp[0], district_rh[0]],
-                    columns=el_demand.index,
-                    data=[
-                        el_demand.clip(upper=3) / el_demand,
-                        (el_demand - el_demand.clip(upper=3)) / el_demand,
-                    ],
-                ).transpose()
-                new_cop = (edisgo_obj.heat_pump.cop_df[district_hps.index] * df).sum(
-                    axis=1
+        feedin_district_heating = edisgo_obj.overlying_grid.feedin_district_heating
+        for district in hp_district_heating.district_heating_id.unique():
+            district_hps = hp_district_heating.loc[
+                edisgo_obj.topology.loads_df.district_heating_id == district
+            ]
+            if len(district_hps) > 1:
+                # district heat pump component
+                district_hp = np.intersect1d(
+                    edisgo_obj.heat_pump.thermal_storage_units_df.index,
+                    district_hps.index,
                 )
+                # district resistive heater component
+                district_rh = district_hps.index.drop(district_hp)
+                # calculate rated power of aggregated component
+                new_p_set = edisgo_obj.topology.loads_df.loc[
+                    district_hps.index
+                ].p_set.sum()
+                el_demand = (
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp[0]]
+                    / edisgo_obj.heat_pump.cop_df[district_hp[0]]
+                )
+                if (
+                    el_demand > edisgo_obj.topology.loads_df.loc[district_hp[0]].p_set
+                ).any():
+                    # calculate COP by weighted COP of single components
+                    # (weighted by their contribution to cover heat demand)
+                    # determine percentage of contribution per component
+                    df = pd.DataFrame(
+                        index=[district_hp[0], district_rh[0]],
+                        columns=el_demand.index,
+                        data=[
+                            el_demand.clip(upper=3) / el_demand,
+                            (el_demand - el_demand.clip(upper=3)) / el_demand,
+                        ],
+                    ).transpose()
+                    new_cop = (
+                        edisgo_obj.heat_pump.cop_df[district_hps.index] * df
+                    ).sum(axis=1)
+                else:
+                    new_cop = edisgo_obj.heat_pump.cop_df[district_hp[0]]
+                # delete COP timeseries and heat demand timeseries of single components
+                for attr in ["cop_df", "heat_demand_df"]:
+                    setattr(
+                        edisgo_obj.heat_pump,
+                        attr,
+                        getattr(edisgo_obj.heat_pump, attr).drop(columns=district_rh),
+                    )
+
+                # delete resistive heater components in loads_df
+                setattr(
+                    edisgo_obj.topology,
+                    "loads_df",
+                    getattr(edisgo_obj.topology, "loads_df").drop(district_rh),
+                )
+                # add COP timeseries of aggregated component
+                getattr(edisgo_obj.heat_pump, "cop_df")[district_hp[0]] = new_cop.values
+                # add aggregated component to loads_df
+                aggr_hp = deepcopy(
+                    getattr(edisgo_obj.topology, "loads_df").loc[district_hp[0]]
+                )
+                aggr_hp.p_set = new_p_set
+                getattr(edisgo_obj.topology, "loads_df").loc[district_hp[0]] = aggr_hp
+                # delete active and reactive power timeseries of resistive heaters
+                for attr in ["loads_active_power", "loads_reactive_power"]:
+                    try:
+                        setattr(
+                            edisgo_obj.timeseries,
+                            attr,
+                            getattr(edisgo_obj.timeseries, attr)[
+                                getattr(edisgo_obj.topology, "loads_df").index
+                            ],
+                        )
+                    except KeyError:
+                        pass
             else:
-                new_cop = edisgo_obj.heat_pump.cop_df[district_hp[0]]
-            # delete COP timeseries and heat demand timeseries of single components
-            for attr in ["cop_df", "heat_demand_df"]:
-                setattr(
-                    edisgo_obj.heat_pump,
-                    attr,
-                    getattr(edisgo_obj.heat_pump, attr).drop(columns=district_rh),
-                )
-            # try:
-            #     setattr(
-            #         edisgo_obj.heat_pump,
-            #         "thermal_storage_units_df",
-            #         getattr(edisgo_obj.heat_pump, "thermal_storage_units_df").drop(
-            #             district_rh
-            #         ),
-            #     )
-            # except KeyError:
-            #     pass
-            # delete single components in loads_df
-            setattr(
-                edisgo_obj.topology,
-                "loads_df",
-                getattr(edisgo_obj.topology, "loads_df").drop(district_rh),
-            )
-            # add COP timeseries of aggregated component
-            getattr(edisgo_obj.heat_pump, "cop_df")[district_hp[0]] = new_cop.values
-            # add aggregated component to loads_df
-            aggr_hp = getattr(edisgo_obj.topology, "loads_df").loc[district_hp[0]]
-            aggr_hp.p_set = new_p_set
-            getattr(edisgo_obj.topology, "loads_df").loc[district_hp[0]] = aggr_hp
-            # delete active and reactive power timeseries of single components
-            for attr in ["loads_active_power", "loads_reactive_power"]:
-                setattr(
-                    edisgo_obj.timeseries,
-                    attr,
-                    getattr(edisgo_obj.timeseries, attr)[
-                        getattr(edisgo_obj.topology, "loads_df").index
-                    ],
-                )
-        else:
-            district_hp = district_hps.index
-        # reduce by feedin from other sources (e.g. solarthermal, geothermal)
-        if not feedin_district_heating.empty:
-            # reduce heat demand of district heating by feedin
-            try:
-                edisgo_obj.heat_pump.heat_demand_df[district_hp[0]] = (
-                    edisgo_obj.heat_pump.heat_demand_df[district_hp[0]].values
-                    - feedin_district_heating[district].values
-                ).clip(min=0)
-            except KeyError:
-                pass
-        # calculate new power timeseries of aggregated components with reduced heat
-        # demand
+                district_hp = district_hps.index
+            # reduce demand by feedin from other sources (e.g. solarthermal, geothermal)
+            if not feedin_district_heating.empty:
+                try:
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp[0]] = (
+                        edisgo_obj.heat_pump.heat_demand_df[district_hp[0]].values
+                        - feedin_district_heating[district].values
+                    ).clip(min=0)
+                except KeyError:
+                    pass
+            # calculate power timeseries of aggregated components with reduced heat
+            # demand
+            edisgo_obj.apply_heat_pump_operating_strategy()
+    except AttributeError:
         edisgo_obj.apply_heat_pump_operating_strategy()
 
 

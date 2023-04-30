@@ -17,10 +17,7 @@ import pandas as pd
 import pypsa
 
 from edisgo.flex_opt.costs import line_expansion_costs
-from edisgo.tools.tools import (
-    aggregate_district_heating_components,
-    calculate_impedance_for_parallel_components,
-)
+from edisgo.tools.tools import calculate_impedance_for_parallel_components
 
 logger = logging.getLogger(__name__)
 
@@ -94,10 +91,10 @@ def to_powermodels(
             opf_flex.append(flex)
     hv_flex_dict = dict()
     # aggregate components that feed into the same district heating grid
-    try:
-        aggregate_district_heating_components(edisgo_object)
-    except AttributeError:
-        pass
+    # try:
+    #     aggregate_district_heating_components(edisgo_object)
+    # except AttributeError:
+    #     pass
     # Sorts buses such that bus0 is always the upstream bus
     edisgo_object.topology.sort_buses()
     # Calculate line costs
@@ -159,9 +156,10 @@ def to_powermodels(
     else:
         logger.warning("No loads found in network.")
     if (opf_version == 3) | (opf_version == 4):
+        if edisgo_object.overlying_grid.heat_pump_central_active_power.isna()[0]:
+            edisgo_object.overlying_grid.heat_pump_central_active_power[:] = 0
         hv_flex_dict = {
-            "curt": edisgo_object.overlying_grid.renewables_curtailment.sum(axis=1)
-            / s_base,
+            "curt": edisgo_object.overlying_grid.renewables_curtailment / s_base,
             "storage": edisgo_object.overlying_grid.storage_units_active_power / s_base,
             "cp": edisgo_object.overlying_grid.electromobility_active_power / s_base,
             "hp": (
@@ -727,7 +725,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
     ]:
         min_value = min(val.loc[val > val.quantile(quant)])
         if math.floor(math.log10(val.min())) <= -4:
-            # only modify r, x and l values if min/max value differences are too big
+            # only modify r, x and l values if min value is too small
             branches[par] = val.clip(lower=min_value)
             logger.warning(
                 "Min value of {} is too small. Lowest {}% of {} values will be set "
