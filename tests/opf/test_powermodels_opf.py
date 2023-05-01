@@ -196,14 +196,10 @@ class TestPowerModelsOPF:
                 data = [0.5, 0.85, 0.85, 0.55]
             elif attr == "storage_units_active_power":
                 data = [-0.35, -0.35, 0.35, 0.35]
+            elif attr == "renewables_curtailment":
+                data = [0, 0, 0.1, 0.1]
 
-            if attr == "renewables_curtailment":
-                df = pd.DataFrame(
-                    index=self.edisgo.timeseries.timeindex,
-                    columns=["solar", "wind"],
-                    data=[[0, 0], [0, 0], [0.1, 0.1], [0.1, 0.1]],
-                )
-            elif attr == "feedin_district_heating":
+            if attr == "feedin_district_heating":
                 df = pd.DataFrame(
                     index=self.edisgo.timeseries.timeindex,
                     columns=["grid1"],
