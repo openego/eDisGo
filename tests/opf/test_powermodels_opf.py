@@ -4,6 +4,7 @@ import pytest
 
 from edisgo import EDisGo
 from edisgo.opf.powermodels_opf import pm_optimize
+from edisgo.tools.tools import aggregate_district_heating_components
 
 
 class TestPowerModelsOPF:
@@ -98,7 +99,7 @@ class TestPowerModelsOPF:
             },
             index=self.edisgo.heat_pump.heat_demand_df.columns[:-1],
         )
-
+        aggregate_district_heating_components(self.edisgo)
         self.edisgo.add_component(
             comp_type="load",
             type="charging_point",

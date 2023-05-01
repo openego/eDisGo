@@ -4,6 +4,7 @@ import pytest
 
 from edisgo import EDisGo
 from edisgo.io import powermodels_io
+from edisgo.tools.tools import aggregate_district_heating_components
 
 
 class TestPowermodelsIO:
@@ -98,6 +99,7 @@ class TestPowermodelsIO:
             },
             index=self.edisgo.heat_pump.heat_demand_df.columns[:-1],
         )
+        aggregate_district_heating_components(self.edisgo)
 
         self.edisgo.add_component(
             comp_type="load",
