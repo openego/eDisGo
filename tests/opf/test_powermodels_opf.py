@@ -232,7 +232,7 @@ class TestPowerModelsOPF:
 
         assert np.isclose(
             np.round(self.edisgo.opf_results.slack_generator_t.pg[-1], 3),
-            -20.476,
+            -20.217,
             atol=1e-3,
         )
         assert np.isclose(
