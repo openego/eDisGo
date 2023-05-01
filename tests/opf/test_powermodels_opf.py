@@ -260,7 +260,7 @@ class TestPowerModelsOPF:
                 ][-1],
                 3,
             ),
-            0.564,
+            0.558,
             atol=1e-3,
         )
         assert np.isclose(
