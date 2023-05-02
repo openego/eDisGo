@@ -161,17 +161,13 @@ class TestTimeseriesReduction:
                 data = [0.5, 0.85, 0.85, 0.55]
             elif attr == "storage_units_active_power":
                 data = [-0.35, -0.35, 0.35, 0.35]
-            if attr == "renewables_curtailment":
-                df = pd.DataFrame(
-                    index=self.timesteps,
-                    columns=["solar", "wind"],
-                    data=0.1,
-                )
-            else:
-                df = pd.Series(
-                    index=self.timesteps,
-                    data=data,
-                )
+            elif attr == "renewables_curtailment":
+                data = [0, 0, 0.1, 0.1]
+
+            df = pd.Series(
+                index=self.timesteps,
+                data=data,
+            )
             setattr(
                 self.edisgo.overlying_grid,
                 attr,
@@ -180,6 +176,26 @@ class TestTimeseriesReduction:
 
         # Resample timeseries and reindex to hourly timedelta
         self.edisgo.resample_timeseries(freq="1min")
+
+        for attr in ["p_min", "p_max", "e_min", "e_max"]:
+            new_dates = pd.DatetimeIndex(
+                [getattr(self.edisgo.dsm, attr).index[-1] + pd.Timedelta("1h")]
+            )
+            setattr(
+                self.edisgo.dsm,
+                attr,
+                getattr(self.edisgo.dsm, attr)
+                .reindex(
+                    getattr(self.edisgo.dsm, attr)
+                    .index.union(new_dates)
+                    .unique()
+                    .sort_values()
+                )
+                .ffill()
+                .resample("1min")
+                .ffill()
+                .iloc[:-1],
+            )
         self.timesteps = pd.date_range(start="01/01/2018", periods=240, freq="h")
         attributes = self.edisgo.timeseries._attributes
         for attr in attributes:
@@ -235,17 +251,10 @@ class TestTimeseriesReduction:
             "storage_units_active_power",
         ]:
             if not getattr(self.edisgo.overlying_grid, attr).empty:
-                if attr == "renewables_curtailment":
-                    df = pd.DataFrame(
-                        index=self.timesteps,
-                        columns=getattr(self.edisgo.overlying_grid, attr).columns,
-                        data=getattr(self.edisgo.overlying_grid, attr).values,
-                    )
-                else:
-                    df = pd.Series(
-                        index=self.timesteps,
-                        data=getattr(self.edisgo.overlying_grid, attr).values,
-                    )
+                df = pd.Series(
+                    index=self.timesteps,
+                    data=getattr(self.edisgo.overlying_grid, attr).values,
+                )
                 setattr(
                     self.edisgo.overlying_grid,
                     attr,
@@ -360,9 +369,7 @@ class TestTimeseriesReduction:
             np.isclose(
                 edisgo_copy.timeseries.generators_active_power[res].sum(axis=1)[i],
                 self.edisgo.timeseries.generators_active_power[res].sum(axis=1)[i]
-                - self.edisgo.overlying_grid.renewables_curtailment.sum(axis=1).values[
-                    i
-                ],
+                - self.edisgo.overlying_grid.renewables_curtailment.values[i],
                 atol=1e-5,
             )
             for i in range(int(0.5 * len(self.timesteps)), len(self.timesteps))

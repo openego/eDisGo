@@ -2762,7 +2762,6 @@ class EDisGo:
         self.timeseries.resample(method=method, freq=freq)
         self.electromobility.resample(freq=freq)
         self.heat_pump.resample_timeseries(method=method, freq=freq)
-        self.dsm.resample(method=method, freq=freq)
         self.overlying_grid.resample(method=method, freq=freq)
 
 

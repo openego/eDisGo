@@ -7,8 +7,6 @@ from zipfile import ZipFile
 
 import pandas as pd
 
-from edisgo.tools.tools import resample
-
 logger = logging.getLogger(__name__)
 
 
@@ -264,36 +262,3 @@ class DSM:
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
             zip.close()
-
-    def resample(self, method: str = "ffill", freq: str | pd.Timedelta = "15min"):
-        """
-        Resamples all time series to a desired resolution.
-
-        See :attr:`~.EDisGo.resample_timeseries` for more information.
-
-        Parameters
-        ----------
-        method : str, optional
-            See :attr:`~.EDisGo.resample_timeseries` for more information.
-
-        freq : str, optional
-            See :attr:`~.EDisGo.resample_timeseries` for more information.
-
-        """
-        # get frequency of time series data
-        timeindex = []
-        for attr_str in self._attributes:
-            attr = getattr(self, attr_str)
-            if not attr.empty:
-                if len(attr) >= 2:
-                    timeindex = attr.index
-                    break
-
-        if len(timeindex) < 2:
-            logger.warning(
-                "Data cannot be resampled as it only contains one time step."
-            )
-            return
-
-        freq_orig = timeindex[1] - timeindex[0]
-        resample(self, freq_orig, method, freq)

@@ -752,31 +752,29 @@ def distribute_overlying_grid_timeseries(edisgo_obj):
                 " overlying grid can not be distributed."
             )
     if not edisgo_copy.overlying_grid.renewables_curtailment.empty:
-        for res in ["solar", "wind"]:
-            gens = edisgo_obj.topology.generators_df.index[
-                edisgo_obj.topology.generators_df.type == res
-            ]
-            gen_per_ts = edisgo_obj.timeseries.generators_active_power.loc[:, gens].sum(
-                axis=1
+        gens = edisgo_obj.topology.generators_df[
+            (edisgo_obj.topology.generators_df.type == "solar")
+            | (edisgo_obj.topology.generators_df.type == "wind")
+        ].index
+        gen_per_ts = edisgo_obj.timeseries.generators_active_power.loc[:, gens].sum(
+            axis=1
+        )
+        scaling_factor = (
+            (
+                edisgo_obj.timeseries.generators_active_power.loc[:, gens].transpose()
+                * 1
+                / gen_per_ts
             )
-            scaling_factor = (
-                (
-                    edisgo_obj.timeseries.generators_active_power.loc[
-                        :, gens
-                    ].transpose()
-                    * 1
-                    / gen_per_ts
-                )
-                .transpose()
-                .fillna(0)
-            )
-            curtailment = (
-                scaling_factor.transpose()
-                * edisgo_obj.overlying_grid.renewables_curtailment[res]
-            ).transpose()
-            edisgo_copy.timeseries._generators_active_power.loc[:, gens] = (
-                edisgo_obj.timeseries.generators_active_power.loc[:, gens] - curtailment
-            )
+            .transpose()
+            .fillna(0)
+        )
+        curtailment = (
+            scaling_factor.transpose()
+            * edisgo_obj.overlying_grid.renewables_curtailment
+        ).transpose()
+        edisgo_copy.timeseries._generators_active_power.loc[:, gens] = (
+            edisgo_obj.timeseries.generators_active_power.loc[:, gens] - curtailment
+        )
 
     edisgo_copy.set_time_series_reactive_power_control()
     return edisgo_copy
