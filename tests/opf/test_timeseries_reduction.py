@@ -305,11 +305,31 @@ class TestTimeseriesReduction:
         self.setup_class()
         self.setup_flexibility_data()
         self.edisgo.analyze()
-        ts_crit = _scored_most_critical_loading_time_interval(self.edisgo, 1)
 
+        # test with default values
+        ts_crit = _scored_most_critical_loading_time_interval(self.edisgo, 24)
         assert len(ts_crit) == 9
-        for ts in ts_crit.OL_t1:
-            assert ts in self.timesteps
+        assert (
+            ts_crit.loc[0, "time_steps"]
+            == pd.date_range("1/5/2018", periods=24, freq="H")
+        ).all()
+        assert np.isclose(
+            ts_crit.loc[0, "percentage_max_overloaded_components"], 0.96479
+        )
+        assert np.isclose(
+            ts_crit.loc[1, "percentage_max_overloaded_components"], 0.035211
+        )
+
+        # test with non-default values
+        ts_crit = _scored_most_critical_loading_time_interval(
+            self.edisgo, 24, time_step_day_start=4, overloading_factor=0.9
+        )
+        assert len(ts_crit) == 9
+        assert (
+            ts_crit.loc[0, "time_steps"]
+            == pd.date_range("1/5/2018 4:00", periods=24, freq="H")
+        ).all()
+        assert ts_crit.loc[0, "percentage_max_overloaded_components"] == 1
 
     def test__scored_most_critical_voltage_issues_time_interval(self):
         self.setup_class()
