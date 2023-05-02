@@ -58,25 +58,57 @@ def _scored_most_critical_loading(edisgo_obj):
     return crit_lines_score.sort_values(ascending=False)
 
 
-def _scored_most_critical_loading_time_interval(edisgo_obj, window_days):
+def _scored_most_critical_loading_time_interval(
+    edisgo_obj,
+    time_steps_per_time_interval=168,
+    time_steps_per_day=24,
+    time_step_day_start=0,
+    overloading_factor=0.95,
+):
     """
-    Get the time steps with the most critical overloadings for flexibility
-    optimization.
+    Get time intervals sorted by severity of overloadings.
+
+    The overloading is weighed by the expansion costs of each respective line and
+    transformer.
+    The length of the time intervals and hour of day at which the time intervals should
+    begin can be set through the parameters `time_steps_per_time_interval` and
+    `time_step_day_start`.
+
+    This function currently only works for an hourly resolution!
 
     Parameters
     -----------
     edisgo_obj : :class:`~.EDisGo`
         The eDisGo API object
-    window_days : int
-        Amount of continuous days that violation is determined for. Default: 7
+    time_steps_per_time_interval : int
+        Amount of continuous time steps in an interval that violation is determined for.
+        Default: 168.
+    time_steps_per_day : int
+        Number of time steps in one day. In case of an hourly resolution this is 24.
+        Default: 24.
+    time_step_day_start : int
+        Time step of the day at which each interval should start. If you want it to
+        start at midnight, this should be set to 0. Default: 0.
+    overloading_factor : float
+        Factor at which an overloading of a component is considered to be close enough
+        to the highest overloading of that component. This is used to determine the
+        number of components that reach their highest overloading in each time interval.
+        Per default, it is set to 0.95, which means that if the highest overloading of
+        a component is 2, it will be considered maximally overloaded at an overloading
+        of higher or equal to 2*0.95.
+        Default: 0.95.
 
     Returns
     --------
-    `pandas.DataFrame`
-        Contains time intervals and first time step of these intervals with worst
-        overloadings for given timeframe. Also contains information of how many
-        lines and transformers have had their worst overloading within the considered
-        timeframes.
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Contains time intervals in which grid expansion needs due to overloading of
+        lines and transformers are detected. The time intervals are sorted descending
+        by the expected cumulated grid expansion costs, so that the time interval with
+        the highest expected costs corresponds to index 0. The time steps in the
+        respective time interval are given in column "time_steps" and the share
+        of components for which the maximum overloading is reached during the time
+        interval is given in column "percentage_max_overloaded_components".
+
     """
 
     # Get current relative to allowed current
@@ -84,7 +116,7 @@ def _scored_most_critical_loading_time_interval(edisgo_obj, window_days):
 
     # Get lines that have violations and replace nan values with 0
     crit_lines_score = relative_i_res[relative_i_res > 1].fillna(0)
-    max_per_line = crit_lines_score.max()
+
     # weight line violations with expansion costs
     costs_lines = (
         line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
@@ -94,55 +126,74 @@ def _scored_most_critical_loading_time_interval(edisgo_obj, window_days):
             str(lv_grid) + "_station"
             for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids)
         ],
-        data=edisgo_obj.config._data["costs_transformers"]["lv"],
+        data=edisgo_obj.config["costs_transformers"]["lv"],
     )
     costs_trafos_mv = pd.Series(
         index=["MVGrid_" + str(edisgo_obj.topology.id) + "_station"],
-        data=edisgo_obj.config._data["costs_transformers"]["mv"],
+        data=edisgo_obj.config["costs_transformers"]["mv"],
     )
     costs = pd.concat([costs_lines, costs_trafos_lv, costs_trafos_mv])
-
     crit_lines_cost = crit_lines_score * costs
-    # Get most "expensive" time intervall over all components
+
+    # Get highest overloading in each window for each component and sum it up
     crit_timesteps = (
-        crit_lines_cost.rolling(window=int(window_days * 24), closed="right")
+        crit_lines_cost.rolling(
+            window=int(time_steps_per_time_interval), closed="right"
+        )
         .max()
         .sum(axis=1)
     )
-    # time intervall starts at 4am on every considered day
+    # select each nth time window to only consider windows starting at a certain time
+    # of day and sort time intervals in descending order
+    # ToDo: To make function work for frequencies other than hourly, the following
+    #  needs to be adapted to index based on time index instead of iloc
     crit_timesteps = (
-        crit_timesteps.iloc[int(window_days * 24) - 1 :]
-        .iloc[5::24]
+        crit_timesteps.iloc[int(time_steps_per_time_interval) - 1 :]
+        .iloc[time_step_day_start + 1 :: time_steps_per_day]
         .sort_values(ascending=False)
     )
-    timesteps = crit_timesteps.index - pd.DateOffset(hours=int(window_days * 24))
+    # move time index as rolling gives the end of the time interval, but we want the
+    # beginning
+    timesteps = crit_timesteps.index - pd.DateOffset(
+        hours=int(time_steps_per_time_interval)
+    )
     time_intervals = [
-        pd.date_range(start=timestep, periods=int(window_days * 24) + 1, freq="h")
+        pd.date_range(
+            start=timestep, periods=int(time_steps_per_time_interval), freq="h"
+        )
         for timestep in timesteps
     ]
+
+    # make dataframe with time steps in each time interval and the percentage of
+    # components that reach their maximum overloading
     time_intervals_df = pd.DataFrame(
-        index=range(len(time_intervals)), columns=["OL_ts", "OL_t1", "OL_max"]
+        index=range(len(time_intervals)),
+        columns=["time_steps", "percentage_max_overloaded_components"],
     )
-    time_intervals_df["OL_t1"] = timesteps
-    for i in range(len(time_intervals)):
-        time_intervals_df["OL_ts"][i] = time_intervals[i]
+    time_intervals_df["time_steps"] = time_intervals
     lines_no_max = crit_lines_score.columns.values
     total_lines = len(lines_no_max)
-    # check if worst overloading of every line is included in worst three time intervals
+    max_per_line = crit_lines_score.max()
     for i in range(len(time_intervals)):
-        max_per_lin_ti = crit_lines_score.loc[time_intervals[i]].max()
-        time_intervals_df["OL_max"][i] = (
+        # check if worst overloading of every line is included in time interval
+        max_per_line_ti = crit_lines_score.loc[time_intervals[i]].max()
+        time_intervals_df["percentage_max_overloaded_components"][i] = (
             len(
                 np.intersect1d(
                     lines_no_max,
-                    max_per_lin_ti[max_per_lin_ti >= max_per_line * 0.95].index.values,
+                    max_per_line_ti[
+                        max_per_line_ti >= max_per_line * overloading_factor
+                    ].index.values,
                 )
             )
             / total_lines
         )
+        # drop lines whose maximum overloading was not yet included in any time interval
         lines_no_max = np.intersect1d(
             lines_no_max,
-            max_per_lin_ti[max_per_lin_ti < max_per_line * 0.95].index.values,
+            max_per_line_ti[
+                max_per_line_ti < max_per_line * overloading_factor
+            ].index.values,
         )
 
         if i == 2:
