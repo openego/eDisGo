@@ -202,37 +202,73 @@ def _scored_critical_overvoltage(edisgo_obj):
     return voltage_dev_ov.sort_values(ascending=False)
 
 
-def _scored_most_critical_voltage_issues_time_interval(edisgo_obj, window_days):
+def _scored_most_critical_voltage_issues_time_interval(
+    edisgo_obj,
+    time_steps_per_time_interval=168,
+    time_steps_per_day=24,
+    time_step_day_start=0,
+    voltage_deviation_factor=0.95,
+):
     """
-    Get the time steps with the most critical voltage violations for flexibilities
-    optimization.
+    Get time intervals sorted by severity of voltage issues.
+
+    The voltage issues are weighed by the estimated expansion costs in each respective
+    feeder.
+    The length of the time intervals and hour of day at which the time intervals should
+    begin can be set through the parameters `time_steps_per_time_interval` and
+    `time_step_day_start`.
+
+    This function currently only works for an hourly resolution!
 
     Parameters
     -----------
     edisgo_obj : :class:`~.EDisGo`
         The eDisGo API object
-    window_days : int
-        Amount of continuous days that violation is determined for. Default: 7
+    time_steps_per_time_interval : int
+        Amount of continuous time steps in an interval that violation is determined for.
+        Currently, these can only be multiples of 24.
+        Default: 168.
+    time_steps_per_day : int
+        Number of time steps in one day. In case of an hourly resolution this is 24.
+        As currently only an hourly resolution is possible, this value should always be
+        24.
+        Default: 24.
+    time_step_day_start : int
+        Time step of the day at which each interval should start. If you want it to
+        start at midnight, this should be set to 0. Default: 0.
+    voltage_deviation_factor : float
+        Factor at which a voltage deviation at a bus is considered to be close enough
+        to the highest voltage deviation at that bus. This is used to determine the
+        number of buses that reach their highest voltage deviation in each time
+        interval. Per default, it is set to 0.95. This means that if the highest voltage
+        deviation at a bus is 0.2, it will be included in the determination of number
+        of buses that reach their maximum voltage deviation in a certain time interval
+        at a voltage deviation of higher or equal to 0.2*0.95.
+        Default: 0.95.
 
     Returns
     --------
-    `pandas.DataFrame`
-        Contains time intervals and first time step of these intervals with worst
-        voltage violations for given timeframe. Also contains information of how many
-        lines and transformers have had their worst voltage violation within the
-        considered timeframes.
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Contains time intervals in which grid expansion needs due to voltage issues
+        are detected. The time intervals are sorted descending
+        by the expected cumulated grid expansion costs, so that the time interval with
+        the highest expected costs corresponds to index 0. The time steps in the
+        respective time interval are given in column "time_steps" and the share
+        of buses for which the maximum voltage deviation is reached during the time
+        interval is given in column "percentage_max_overloaded_components". Each bus
+        is only considered once. That means if its maximum voltage deviation was
+        already considered in an earlier time interval, it is not considered again.
+
     """
+
+    # Get voltage deviation from allowed voltage limits
     voltage_diff = check_tech_constraints.voltage_deviation_from_allowed_voltage_limits(
         edisgo_obj
-    ).fillna(0)
-
-    # Get score for nodes that are over or under the allowed deviations
+    )
     voltage_diff = voltage_diff.abs()[voltage_diff.abs() > 0]
-    max_per_bus = voltage_diff.max().fillna(0)
-
-    assign_feeder(edisgo_obj, mode="mv_feeder")
 
     # determine costs per feeder
+    # ToDo use LV feeder
     costs_lines = (
         line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
     )
@@ -242,12 +278,9 @@ def _scored_most_critical_voltage_issues_time_interval(edisgo_obj, window_days):
         ],
         data=edisgo_obj.config._data["costs_transformers"]["lv"],
     )
-    costs_trafos_mv = pd.Series(
-        index=[edisgo_obj.topology.mv_grid.station.index[0]],
-        data=edisgo_obj.config._data["costs_transformers"]["mv"],
-    )
-    costs = pd.concat([costs_lines, costs_trafos_lv, costs_trafos_mv])
+    costs = pd.concat([costs_lines, costs_trafos_lv])
 
+    assign_feeder(edisgo_obj, mode="mv_feeder")
     feeder_lines = edisgo_obj.topology.lines_df.mv_feeder
     feeder_trafos_lv = pd.Series(
         index=[
@@ -258,24 +291,17 @@ def _scored_most_critical_voltage_issues_time_interval(edisgo_obj, window_days):
             for lv_grid in edisgo_obj.topology.mv_grid.lv_grids
         ],
     )
-    feeder_trafos_mv = pd.Series(
-        index=[edisgo_obj.topology.mv_grid.station.index[0]],
-        data=[edisgo_obj.topology.mv_grid.station.mv_feeder[0]],
-    )
-    feeder = pd.concat([feeder_lines, feeder_trafos_lv, feeder_trafos_mv])
+    feeder = pd.concat([feeder_lines, feeder_trafos_lv])
     costs_per_feeder = (
         pd.concat([costs.rename("costs"), feeder.rename("feeder")], axis=1)
         .groupby(by="feeder")[["costs"]]
         .sum()
     )
 
-    # check vor every feeder if any of the buses within violate the allowed voltage
-    # deviation
+    # check for every feeder if any of the buses within violate the allowed voltage
+    # deviation, by grouping voltage_diff per MV feeder
     feeder_buses = edisgo_obj.topology.buses_df.mv_feeder
-    columns = [
-        feeder_buses.loc[voltage_diff.columns[i]]
-        for i in range(len(voltage_diff.columns))
-    ]
+    columns = [feeder_buses.loc[col] for col in voltage_diff.columns]
     voltage_diff_copy = deepcopy(voltage_diff).fillna(0)
     voltage_diff.columns = columns
     voltage_diff_feeder = (
@@ -283,52 +309,66 @@ def _scored_most_critical_voltage_issues_time_interval(edisgo_obj, window_days):
     )
     voltage_diff_feeder[voltage_diff_feeder != 0] = 1
 
-    # weigth feeder voltage violation with costs per feeder
+    # weigh feeder voltage violation with costs per feeder
     voltage_diff_feeder = voltage_diff_feeder * costs_per_feeder.squeeze()
-    # Todo: should there be different ones for over and undervoltage?
-    # Get most "expensive" time intervall over all feeders
+
+    # Get the highest voltage issues in each window for each feeder and sum it up
     crit_timesteps = (
-        voltage_diff_feeder.rolling(window=int(window_days * 24), closed="right")
+        voltage_diff_feeder.rolling(
+            window=int(time_steps_per_time_interval), closed="right"
+        )
         .max()
         .sum(axis=1)
     )
-    # time intervall starts at 4am on every considered day
+    # select each nth time window to only consider windows starting at a certain time
+    # of day and sort time intervals in descending order
+    # ToDo: To make function work for frequencies other than hourly, the following
+    #  needs to be adapted to index based on time index instead of iloc
     crit_timesteps = (
-        crit_timesteps.iloc[int(window_days * 24) - 1 :]
-        .iloc[5::24]
+        crit_timesteps.iloc[int(time_steps_per_time_interval) - 1 :]
+        .iloc[time_step_day_start + 1 :: time_steps_per_day]
         .sort_values(ascending=False)
     )
-    timesteps = crit_timesteps.index - pd.DateOffset(hours=int(window_days * 24))
+    timesteps = crit_timesteps.index - pd.DateOffset(
+        hours=int(time_steps_per_time_interval)
+    )
     time_intervals = [
-        pd.date_range(start=timestep, periods=int(window_days * 24) + 1, freq="h")
+        pd.date_range(
+            start=timestep, periods=int(time_steps_per_time_interval), freq="h"
+        )
         for timestep in timesteps
     ]
-    time_intervals_df = pd.DataFrame(
-        index=range(len(time_intervals)), columns=["V_ts", "V_t1", "V_max"]
-    )
-    time_intervals_df["V_t1"] = timesteps
-    for i in range(len(time_intervals)):
-        time_intervals_df["V_ts"][i] = time_intervals[i]
 
+    # make dataframe with time steps in each time interval and the percentage of
+    # buses that reach their maximum voltage deviation
+    time_intervals_df = pd.DataFrame(
+        index=range(len(time_intervals)),
+        columns=["time_steps", "percentage_buses_max_voltage_deviation"],
+    )
+    time_intervals_df["time_steps"] = time_intervals
+
+    max_per_bus = voltage_diff_copy.max().fillna(0)
     buses_no_max = max_per_bus.index.values
     total_buses = len(buses_no_max)
-
-    # check if worst voltage deviation of every bus is included in worst three time
-    # intervals
     for i in range(len(time_intervals)):
+        # check if worst voltage deviation of every bus is included in time interval
         max_per_bus_ti = voltage_diff_copy.loc[time_intervals[i]].max()
-        time_intervals_df["V_max"][i] = (
+        time_intervals_df["percentage_buses_max_voltage_deviation"][i] = (
             len(
                 np.intersect1d(
                     buses_no_max,
-                    max_per_bus_ti[max_per_bus_ti >= max_per_bus * 0.95].index.values,
+                    max_per_bus_ti[
+                        max_per_bus_ti >= max_per_bus * voltage_deviation_factor
+                    ].index.values,
                 )
             )
             / total_buses
         )
         buses_no_max = np.intersect1d(
             buses_no_max,
-            max_per_bus_ti[max_per_bus_ti < max_per_bus * 0.95].index.values,
+            max_per_bus_ti[
+                max_per_bus_ti < max_per_bus * voltage_deviation_factor
+            ].index.values,
         )
         if i == 2:
             if len(buses_no_max) > 0:
