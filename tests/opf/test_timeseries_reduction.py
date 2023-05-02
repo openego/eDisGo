@@ -3,15 +3,7 @@ import pandas as pd
 import pytest
 
 from edisgo import EDisGo
-from edisgo.opf.timeseries_reduction import (
-    _scored_most_critical_loading,
-    _scored_most_critical_loading_time_interval,
-    _scored_most_critical_voltage_issues,
-    _scored_most_critical_voltage_issues_time_interval,
-    distribute_overlying_grid_timeseries,
-    get_steps_flex_opf,
-    get_steps_reinforcement,
-)
+from edisgo.opf import timeseries_reduction
 
 
 class TestTimeseriesReduction:
@@ -269,45 +261,15 @@ class TestTimeseriesReduction:
         """
         self.edisgo.analyze()
 
-    def test__scored_most_critical_loading(self):
-
-        ts_crit = _scored_most_critical_loading(self.edisgo)
-
-        assert len(ts_crit) == 3
-
-        assert (ts_crit.index == self.timesteps[[0, 1, 3]]).all()
-
-        assert (
-            np.isclose(ts_crit[self.timesteps[[0, 1, 3]]], [1.45613, 1.45613, 1.14647])
-        ).all()
-
-    def test__scored_most_critical_voltage_issues(self):
-
-        ts_crit = _scored_most_critical_voltage_issues(self.edisgo)
-
-        assert len(ts_crit) == 2
-
-        assert (ts_crit.index == self.timesteps[[0, 1]]).all()
-
-        assert (
-            np.isclose(ts_crit[self.timesteps[[0, 1]]], [0.01062258, 0.01062258])
-        ).all()
-
-    def test_get_steps_reinforcement(self):
-
-        ts_crit = get_steps_reinforcement(self.edisgo)
-
-        assert len(ts_crit) == 3
-
-        assert (ts_crit == self.timesteps[[0, 1, 3]]).all()
-
     def test__scored_most_critical_loading_time_interval(self):
         self.setup_class()
         self.setup_flexibility_data()
         self.edisgo.analyze()
 
         # test with default values
-        ts_crit = _scored_most_critical_loading_time_interval(self.edisgo, 24)
+        ts_crit = timeseries_reduction._scored_most_critical_loading_time_interval(
+            self.edisgo, 24
+        )
         assert len(ts_crit) == 9
         assert (
             ts_crit.loc[0, "time_steps"]
@@ -321,7 +283,7 @@ class TestTimeseriesReduction:
         )
 
         # test with non-default values
-        ts_crit = _scored_most_critical_loading_time_interval(
+        ts_crit = timeseries_reduction._scored_most_critical_loading_time_interval(
             self.edisgo, 24, time_step_day_start=4, overloading_factor=0.9
         )
         assert len(ts_crit) == 9
@@ -335,7 +297,11 @@ class TestTimeseriesReduction:
         self.setup_class()
         self.setup_flexibility_data()
         self.edisgo.analyze()
-        ts_crit = _scored_most_critical_voltage_issues_time_interval(self.edisgo, 1)
+        ts_crit = (
+            timeseries_reduction._scored_most_critical_voltage_issues_time_interval(
+                self.edisgo, 24, time_step_day_start=4
+            )
+        )
 
         assert len(ts_crit) == 9
         for ts in ts_crit.V_t1:
@@ -345,7 +311,9 @@ class TestTimeseriesReduction:
         self.setup_class()
         self.setup_flexibility_data()
         self.edisgo.analyze()
-        steps = get_steps_flex_opf(self.edisgo, num_ti=6, window_days=1)
+        steps = timeseries_reduction.get_steps_flex_opf(
+            self.edisgo, num_ti=6, window_days=1
+        )
 
         assert len(steps) == 6
         assert len(steps.columns) == 6
@@ -353,7 +321,9 @@ class TestTimeseriesReduction:
     def test_distribute_overlying_grid_timeseries(self):
         self.setup_class()
         self.setup_flexibility_data()
-        edisgo_copy = distribute_overlying_grid_timeseries(self.edisgo)
+        edisgo_copy = timeseries_reduction.distribute_overlying_grid_timeseries(
+            self.edisgo
+        )
         dsm = self.edisgo.dsm.e_max.columns.values
         hps = self.edisgo.heat_pump.cop_df.columns.values
         res = self.edisgo.topology.generators_df.loc[
