@@ -650,7 +650,7 @@ def stations_allowed_load(edisgo_obj, grids=None):
 def stations_relative_load(edisgo_obj, grids=None):
     """
     Returns relative loading of specified grids stations to the overlying voltage level
-    per time step in p.u.
+    per time step in p.u..
 
     Stations relative loading is determined by dividing the stations loading (from
     power flow analysis) by the allowed loading (considering allowed load factors in
