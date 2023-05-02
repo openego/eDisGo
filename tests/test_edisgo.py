@@ -546,6 +546,7 @@ class TestEDisGo:
         assert len(results.grid_expansion_costs) == 835
         assert len(results.equipment_changes) == 1764
         assert results.v_res.shape == (4, 142)
+        assert "Enhanced reinforcement: No exchange of lines" in results.measures[2]
 
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()

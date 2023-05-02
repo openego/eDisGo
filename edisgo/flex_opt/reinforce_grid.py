@@ -837,6 +837,9 @@ def enhanced_reinforce_grid(
     kwargs["copy_grid"] = False
     kwargs.pop("skip_mv_reinforcement", False)
 
+    num_lv_grids_standard_lines = 0
+    num_lv_grids_aggregated = 0
+
     try:
         logger.info("Try initial enhanced reinforcement.")
         edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
@@ -874,6 +877,7 @@ def enhanced_reinforce_grid(
                         logger.warning(
                             f"Change all lines to standard type in {lv_grid=}."
                         )
+                        num_lv_grids_standard_lines += 1
                         lv_standard_line_type = edisgo_obj.config[
                             "grid_expansion_standard_equipment"
                         ]["lv_line"]
@@ -894,6 +898,7 @@ def enhanced_reinforce_grid(
                         logger.warning(
                             f"Aggregate all nodes to station bus in {lv_grid=}."
                         )
+                        num_lv_grids_aggregated += 1
                         try:
                             edisgo_obj.topology.aggregate_lv_grid_at_station(
                                 lv_grid_id=lv_grid.id
@@ -910,5 +915,28 @@ def enhanced_reinforce_grid(
         except Exception as e:  # noqa: E722
             logger.info("Enhanced reinforcement failed.")
             raise e
+
+    if activate_cost_results_disturbing_mode is True:
+        if num_lv_grids_standard_lines > 0:
+            msg = (
+                f"In {num_lv_grids_standard_lines} LV grid(s) all lines were "
+                f"exchanged by standard lines."
+            )
+            logger.warning(msg)
+            edisgo_obj.results.measures = msg
+        else:
+            msg = (
+                "Enhanced reinforcement: No exchange of lines with standard lines or "
+                "aggregation at MV/LV station needed."
+            )
+            logger.info(msg)
+            edisgo_obj.results.measures = msg
+        if num_lv_grids_aggregated > 0:
+            msg = (
+                f"Enhanced reinforcement: In {num_lv_grids_aggregated} LV grid(s) all "
+                f"components were aggregated at the MV/LV station."
+            )
+            logger.warning(msg)
+            edisgo_obj.results.measures = msg
 
     return edisgo_obj
