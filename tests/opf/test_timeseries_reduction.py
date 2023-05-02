@@ -329,16 +329,16 @@ class TestTimeseriesReduction:
             ts_crit.loc[0, "percentage_buses_max_voltage_deviation"], 0.99296
         )
 
-    def test_get_steps_flex_opf(self):
+    def test_get_most_critical_time_intervals(self):
         self.setup_class()
         self.setup_flexibility_data()
         self.edisgo.analyze()
-        steps = timeseries_reduction.get_steps_flex_opf(
-            self.edisgo, num_ti=6, window_days=1
+        steps = timeseries_reduction.get_most_critical_time_intervals(
+            self.edisgo,
         )
 
-        assert len(steps) == 6
-        assert len(steps.columns) == 6
+        assert len(steps) == 3
+        assert len(steps.columns) == 4
 
     def test_distribute_overlying_grid_timeseries(self):
         self.setup_class()
