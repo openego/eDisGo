@@ -45,8 +45,8 @@ def _scored_most_critical_loading_time_interval(
     """
     Get time intervals sorted by severity of overloadings.
 
-    The overloading is weighed by the expansion costs of each respective line and
-    transformer.
+    The overloading is weighed by the estimated expansion costs of each respective line
+    and transformer.
     The length of the time intervals and hour of day at which the time intervals should
     begin can be set through the parameters `time_steps_per_time_interval` and
     `time_step_day_start`.
@@ -59,9 +59,12 @@ def _scored_most_critical_loading_time_interval(
         The eDisGo API object
     time_steps_per_time_interval : int
         Amount of continuous time steps in an interval that violation is determined for.
+        Currently, these can only be multiples of 24.
         Default: 168.
     time_steps_per_day : int
         Number of time steps in one day. In case of an hourly resolution this is 24.
+        As currently only an hourly resolution is possible, this value should always be
+        24.
         Default: 24.
     time_step_day_start : int
         Time step of the day at which each interval should start. If you want it to
@@ -84,7 +87,9 @@ def _scored_most_critical_loading_time_interval(
         the highest expected costs corresponds to index 0. The time steps in the
         respective time interval are given in column "time_steps" and the share
         of components for which the maximum overloading is reached during the time
-        interval is given in column "percentage_max_overloaded_components".
+        interval is given in column "percentage_max_overloaded_components". Each
+        component is only considered once. That means if its maximum voltage deviation
+        was already considered in an earlier time interval, it is not considered again.
 
     """
 
