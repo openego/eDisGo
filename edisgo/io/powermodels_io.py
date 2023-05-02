@@ -90,11 +90,6 @@ def to_powermodels(
             logger.info("{} will be optimized.".format(text))
             opf_flex.append(flex)
     hv_flex_dict = dict()
-    # aggregate components that feed into the same district heating grid
-    # try:
-    #     aggregate_district_heating_components(edisgo_object)
-    # except AttributeError:
-    #     pass
     # Sorts buses such that bus0 is always the upstream bus
     edisgo_object.topology.sort_buses()
     # Calculate line costs
@@ -932,6 +927,7 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storage_units, s_ba
         Base value of apparent power for per unit system.
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
+
     if edisgo_obj.timeseries.storage_units_state_of_charge.empty:
         edisgo_obj.timeseries.storage_units_state_of_charge = pd.DataFrame(
             columns=flexible_storage_units,
