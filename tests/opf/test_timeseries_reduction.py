@@ -297,15 +297,37 @@ class TestTimeseriesReduction:
         self.setup_class()
         self.setup_flexibility_data()
         self.edisgo.analyze()
+
+        # test with default values
         ts_crit = (
             timeseries_reduction._scored_most_critical_voltage_issues_time_interval(
-                self.edisgo, 24, time_step_day_start=4
+                self.edisgo, 24
             )
         )
-
         assert len(ts_crit) == 9
-        for ts in ts_crit.V_t1:
-            assert ts in self.timesteps
+        assert (
+            ts_crit.loc[0, "time_steps"]
+            == pd.date_range("1/1/2018", periods=24, freq="H")
+        ).all()
+        assert np.isclose(
+            ts_crit.loc[0, "percentage_buses_max_voltage_deviation"], 0.98592
+        )
+        assert np.isclose(ts_crit.loc[1, "percentage_buses_max_voltage_deviation"], 0.0)
+
+        # test with non-default values
+        ts_crit = (
+            timeseries_reduction._scored_most_critical_voltage_issues_time_interval(
+                self.edisgo, 24, time_step_day_start=4, voltage_deviation_factor=0.5
+            )
+        )
+        assert len(ts_crit) == 9
+        assert (
+            ts_crit.loc[0, "time_steps"]
+            == pd.date_range("1/1/2018 4:00", periods=24, freq="H")
+        ).all()
+        assert np.isclose(
+            ts_crit.loc[0, "percentage_buses_max_voltage_deviation"], 0.99296
+        )
 
     def test_get_steps_flex_opf(self):
         self.setup_class()
