@@ -1211,7 +1211,7 @@ def get_sample_using_time(
                 )
     # Demand Side Management timeseries
     if dsm:
-        for attr in ["e_min", "e_max", "p_min", "p_max"]:
+        for attr in edisgo_obj.dsm._attributes:
             if not getattr(edisgo_obj.dsm, attr).empty:
                 setattr(
                     edisgo_obj.dsm,
@@ -1220,21 +1220,33 @@ def get_sample_using_time(
                 )
 
     if og:
-        for attr in [
-            "dsm_active_power",
-            "electromobility_active_power",
-            "heat_pump_central_active_power",
-            "heat_pump_decentral_active_power",
-            "renewables_curtailment",
-            "feedin_district_heating",
-            "storage_units_active_power",
-        ]:
+        for attr in edisgo_obj.overlying_grid._attributes:
             if not getattr(edisgo_obj.overlying_grid, attr).empty:
-                setattr(
-                    edisgo_obj.overlying_grid,
-                    attr,
-                    getattr(edisgo_obj.overlying_grid, attr).loc[timeframe],
-                )
+                if attr in [
+                    "thermal_storage_units_central_soc",
+                    "thermal_storage_units_decentral_soc",
+                    "storage_units_soc",
+                ]:
+                    try:
+                        setattr(
+                            edisgo_obj.overlying_grid,
+                            attr,
+                            getattr(edisgo_obj.overlying_grid, attr).loc[
+                                timeframe.union([timeframe[-1] + timeframe.freq])
+                            ],
+                        )
+                    except KeyError:
+                        setattr(
+                            edisgo_obj.overlying_grid,
+                            attr,
+                            getattr(edisgo_obj.overlying_grid, attr).loc[timeframe],
+                        )
+                else:
+                    setattr(
+                        edisgo_obj.overlying_grid,
+                        attr,
+                        getattr(edisgo_obj.overlying_grid, attr).loc[timeframe],
+                    )
 
 
 def resample(

@@ -123,7 +123,7 @@ def to_powermodels(
     _build_branch(edisgo_object, psa_net, pm, flexible_storage_units, s_base)
     if len(flexible_storage_units) > 0:
         _build_battery_storage(
-            edisgo_object, psa_net, pm, flexible_storage_units, s_base
+            edisgo_object, psa_net, pm, flexible_storage_units, s_base, opf_version
         )
     if len(flexible_cps) > 0:
         flexible_cps = _build_electromobility(
@@ -135,7 +135,9 @@ def to_powermodels(
         )
     if len(flexible_hps) > 0:
         _build_heatpump(psa_net, pm, edisgo_object, s_base, flexible_hps)
-        _build_heat_storage(psa_net, pm, edisgo_object, s_base, flexible_hps)
+        _build_heat_storage(
+            psa_net, pm, edisgo_object, s_base, flexible_hps, opf_version
+        )
     if len(flexible_loads) > 0:
         flexible_loads = _build_dsm(edisgo_object, psa_net, pm, s_base, flexible_loads)
     if len(psa_net.loads) > 0:
@@ -909,7 +911,9 @@ def _build_load(
             }
 
 
-def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
+def _build_battery_storage(
+    edisgo_obj, psa_net, pm, flexible_storage_units, s_base, opf_version
+):
     """
     Build battery storage dictionary in PowerModels network data format and add
     it to PowerModels dictionary 'pm'.
@@ -925,21 +929,37 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storage_units, s_ba
         Array containing all flexible storage units.
     s_base : int
         Base value of apparent power for per unit system.
+    opf_version: Int
+        Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+        For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
+    if opf_version in [1, 2]:
+        edisgo_obj.overlying_grid.storage_units_soc = pd.DataFrame(
+            columns=flexible_storage_units,
+            data=0,
+            index=edisgo_obj.timeseries.timeindex,
+        )
+    else:
+        edisgo_obj.overlying_grid.storage_units_soc = (
+            pd.DataFrame(
+                columns=flexible_storage_units,
+                data=pd.concat(
+                    [edisgo_obj.overlying_grid.storage_units_soc]
+                    * len(edisgo_obj.topology.storage_units_df),
+                    axis=1,
+                ).values,
+                index=edisgo_obj.timeseries.timeindex.union(
+                    [
+                        edisgo_obj.timeseries.timeindex[-1]
+                        + edisgo_obj.timeseries.timeindex.freq
+                    ]
+                ),
+            )
+            * edisgo_obj.topology.storage_units_df.p_nom
+            * edisgo_obj.topology.storage_units_df.max_hours
+        )
 
-    if edisgo_obj.timeseries.storage_units_state_of_charge.empty:
-        edisgo_obj.timeseries.storage_units_state_of_charge = pd.DataFrame(
-            columns=flexible_storage_units,
-            data=0,
-            index=edisgo_obj.timeseries.timeindex,
-        )
-    if edisgo_obj.timeseries.storage_units_active_power.empty:
-        edisgo_obj.timeseries.storage_units_active_power = pd.DataFrame(
-            columns=flexible_storage_units,
-            data=0,
-            index=edisgo_obj.timeseries.timeindex,
-        )
     for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
             psa_net,
@@ -979,15 +999,11 @@ def _build_battery_storage(edisgo_obj, psa_net, pm, flexible_storage_units, s_ba
             * e_max
             / s_base,
             "soc_initial": (
-                edisgo_obj.timeseries.storage_units_state_of_charge[
+                edisgo_obj.overlying_grid.storage_units_soc[
                     flexible_storage_units[stor_i]
                 ].iloc[0]
-                + edisgo_obj.timeseries.storage_units_active_power[
-                    flexible_storage_units[stor_i]
-                ].iloc[0]
-                * 0.9
             ),
-            "soc_end": edisgo_obj.timeseries.storage_units_state_of_charge[
+            "soc_end": edisgo_obj.overlying_grid.storage_units_soc[
                 flexible_storage_units[stor_i]
             ].iloc[-1],
             "energy_rating": e_max / s_base,
@@ -1138,7 +1154,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         }
 
 
-def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
+def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_version):
     """
     Build heat storage dictionary and add it to PowerModels dictionary 'pm'.
 
@@ -1154,6 +1170,9 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     flexible_hps : :numpy:`numpy.ndarray<ndarray>` or list
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
+    opf_version: Int
+        Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+        For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
     """
     # add TES with 0 capacity for every flexible hp without TES
     hp_no_tes = np.setdiff1d(
@@ -1163,6 +1182,34 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     heat_storage_df = pd.concat(
         [edisgo_obj.heat_pump.thermal_storage_units_df, df]
     ).loc[flexible_hps]
+
+    if opf_version in [1, 2]:
+        edisgo_obj.overlying_grid.heat_storage_units_soc = pd.DataFrame(
+            columns=heat_storage_df.index,
+            data=0,
+            index=edisgo_obj.timeseries.timeindex,
+        )
+    else:
+        edisgo_obj.overlying_grid.heat_storage_units_soc = (
+            pd.DataFrame(
+                columns=heat_storage_df.index,
+                # ToDo: data from both OG timeseries (central/decentral)
+                data=pd.concat(
+                    [edisgo_obj.overlying_grid.storage_units_soc]
+                    * len(edisgo_obj.topology.storage_units_df),
+                    axis=1,
+                ).values,
+                #
+                index=edisgo_obj.timeseries.timeindex.union(
+                    [
+                        edisgo_obj.timeseries.timeindex[-1]
+                        + edisgo_obj.timeseries.timeindex.freq
+                    ]
+                ),
+            )
+            * heat_storage_df.capacity
+        )
+
     for stor_i in np.arange(len(flexible_hps)):
         idx_bus = _mapping(
             psa_net, edisgo_obj, psa_net.loads.loc[flexible_hps].bus[stor_i]
@@ -1176,6 +1223,14 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
             "discharge_efficiency": heat_storage_df.efficiency[stor_i],
             "storage_bus": idx_bus,
             "name": heat_storage_df.index[stor_i],
+            "soc_initial": (
+                edisgo_obj.overlying_grid.heat_storage_units_soc[
+                    heat_storage_df.index[stor_i]
+                ].iloc[0]
+            ),
+            "soc_end": edisgo_obj.overlying_grid.heat_storage_units_soc[
+                heat_storage_df.index[stor_i]
+            ].iloc[-1],
             "status": True,
             "index": stor_i + 1,
         }
