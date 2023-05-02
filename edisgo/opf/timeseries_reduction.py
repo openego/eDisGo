@@ -494,6 +494,7 @@ def get_most_critical_time_intervals(
     time_step_day_start=0,
     save_steps=False,
     path="",
+    use_troubleshooting_mode=True,
     overloading_factor=0.95,
     voltage_deviation_factor=0.95,
 ):
@@ -531,6 +532,13 @@ def get_most_critical_time_intervals(
     path : str
         Directory the csv file is saved to. Per default, it takes the current
         working directory.
+    use_troubleshooting_mode : bool
+        If set to True, non-convergence issues in power flow are tried to be handled
+        by reducing load and feed-in in steps of 10% down to 20% of the original load
+        and feed-in until the power flow converges. The most critical time intervals
+        are then determined based on the power flow results with the reduced load and
+        feed-in. If False, an error will be raised in case time steps do not converge.
+        Default: True.
     overloading_factor : float
         Factor at which an overloading of a component is considered to be close enough
         to the highest overloading of that component. This is used to determine the
@@ -580,10 +588,50 @@ def get_most_critical_time_intervals(
             "applied to time series data in an hourly resolution."
         )
 
-    # Run power flow if not available
-    if edisgo_obj.results.i_res is None or edisgo_obj.results.i_res.empty:
-        logger.debug("Running initial power flow")
-        edisgo_obj.analyze(raise_not_converged=False)  # Todo: raise warning?
+    # Run power flow
+    if use_troubleshooting_mode:
+        try:
+            logger.debug(
+                "Running initial power flow for temporal complexity reduction."
+            )
+            edisgo_obj.analyze()
+        except ValueError:
+            # if power flow did not converge for all time steps, run again with smaller
+            # loading - loading is decreased, until all time steps converge
+            logger.warning(
+                "When running power flow to determine most critical time intervals, "
+                "not all time steps converged. Power flow is run again with reduced "
+                "network load."
+            )
+            for fraction in np.linspace(0.9, 0.2, 8):
+                try:
+                    edisgo_obj.analyze(
+                        troubleshooting_mode="iteration",
+                        range_start=fraction,
+                        range_num=1,
+                    )
+                    logger.info(
+                        f"Power flow fully converged for a reduction factor "
+                        f"of {fraction}."
+                    )
+                    break
+                except ValueError:
+                    if fraction == 0.2:
+                        raise ValueError(
+                            f"Power flow did not converge for smallest reduction "
+                            f"factor of {fraction}. Most critical time intervals "
+                            f"can therefore not be determined."
+                        )
+                    else:
+                        logger.info(
+                            f"Power flow did not fully converge for a reduction factor "
+                            f"of {fraction}."
+                        )
+        except Exception:
+            raise Exception
+    else:
+        logger.debug("Running initial power flow for temporal complexity reduction.")
+        edisgo_obj.analyze()
 
     # Select most critical time intervals based on current violations
     loading_scores = _scored_most_critical_loading_time_interval(
