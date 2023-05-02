@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import pytest
 
@@ -9,6 +11,11 @@ from edisgo.flex_opt.reinforce_grid import reinforce_grid
 
 
 class TestReinforceGrid:
+    """
+    Here, currently only reinforce_grid function is tested.
+    Other functions in reinforce_grid module are currently tested in test_edisgo module.
+    """
+
     @classmethod
     def setup_class(cls):
         cls.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
@@ -19,7 +26,7 @@ class TestReinforceGrid:
         modes = [None, "mv", "mvlv", "lv"]
 
         results_dict = {
-            mode: reinforce_grid(edisgo=self.edisgo, copy_grid=True, mode=mode)
+            mode: reinforce_grid(edisgo=copy.deepcopy(self.edisgo), mode=mode)
             for mode in modes
         }
 

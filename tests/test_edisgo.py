@@ -16,6 +16,8 @@ from shapely.geometry import Point
 
 from edisgo import EDisGo
 from edisgo.edisgo import import_edisgo_from_files
+from edisgo.flex_opt.reinforce_grid import enhanced_reinforce_grid
+from edisgo.network.results import Results
 
 
 class TestEDisGo:
@@ -420,12 +422,13 @@ class TestEDisGo:
             self.edisgo.analyze(troubleshooting_mode="iteration", range_start=5)
 
         caplog.clear()
-        self.edisgo.analyze(
-            troubleshooting_mode="iteration",
-            range_start=5,
-            range_num=2,
-            raise_not_converged=False,
-        )
+        with caplog.at_level("INFO"):
+            self.edisgo.analyze(
+                troubleshooting_mode="iteration",
+                range_start=5,
+                range_num=2,
+                raise_not_converged=False,
+            )
         assert "Current fraction in iterative process: 5.0." in caplog.text
         assert "Current fraction in iterative process: 1.0." in caplog.text
 
@@ -440,24 +443,110 @@ class TestEDisGo:
         assert results.v_res.shape == (4, 142)
         assert self.edisgo.results.v_res.shape == (4, 142)
 
-        # ###################### test mode lv and copy grid ##########################
+        # ###################### test without worst case settings ####################
+        self.setup_worst_case_time_series()
+        results = self.edisgo.reinforce(is_worst_case=False)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 10
+        assert len(results.equipment_changes) == 10
+        assert results.v_res.shape == (4, 142)
+        assert self.edisgo.results.v_res.shape == (4, 142)
+
+        # ###################### test mode mv and copy grid ##########################
         self.setup_edisgo_object()
         self.setup_worst_case_time_series()
+        results = self.edisgo.reinforce(mode="mv", copy_grid=True)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 4
+        assert len(results.equipment_changes) == 4
+        assert results.v_res.shape == (4, 31)
+        assert self.edisgo.results.v_res.empty
+
+        # ###################### test mode lv and copy grid ##########################
         results = self.edisgo.reinforce(mode="lv", copy_grid=True)
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 6
         assert len(results.equipment_changes) == 6
-        assert results.v_res.shape == (2, 142)
+        assert results.v_res.shape == (4, 142)
         assert self.edisgo.results.v_res.empty
 
         # ################# test mode mvlv and combined analysis ####################
-        # self.setup_edisgo_object()
-        # self.setup_worst_case_time_series()
-        results = self.edisgo.reinforce(mode="mvlv", combined_analysis=False)
+        results = self.edisgo.reinforce(
+            mode="mvlv", combined_analysis=False, is_worst_case=True
+        )
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 8
-        assert len(results.equipment_changes) == 8
+        assert len(results.grid_expansion_costs) == 4
+        assert len(results.equipment_changes) == 4
         assert results.v_res.shape == (4, 41)
+
+        # ###################### test with only one lv grid ##########################
+        # test grid without issues
+        self.edisgo.results = Results(self.edisgo)
+        lv_grid_id = 1
+        results = self.edisgo.reinforce(mode="lv", lv_grid_id=lv_grid_id)
+        assert results.unresolved_issues.empty
+        assert results.equipment_changes.empty
+        assert results.v_res.shape == (4, 15)
+        # test grid with issues
+        lv_grid_id = 5
+        results = self.edisgo.reinforce(mode="lv", lv_grid_id=lv_grid_id)
+        assert len(results.grid_expansion_costs) == 1
+        assert len(results.equipment_changes) == 1
+        assert results.v_res.shape == (4, 9)
+
+    def test_reinforce_catch_convergence(self):
+
+        # ###################### test that wrong mode is raised ######################
+        msg = "Provided mode mvl is not a valid mode."
+        with pytest.raises(ValueError, match=msg):
+            self.edisgo.reinforce(
+                catch_convergence_problems=True, is_worst_case=False, mode="mvl"
+            )
+
+        # ###################### test with catch convergence ##########################
+        self.setup_worst_case_time_series()
+        self.edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=10, q_scaling_factor=10
+        )
+        results = self.edisgo.reinforce(
+            catch_convergence_problems=True,
+            is_worst_case=False,
+            copy_grid=True,
+        )
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 134
+        assert len(results.equipment_changes) == 230
+        assert results.v_res.shape == (4, 142)
+
+        # ############### test with catch convergence worst case true ################
+        self.setup_worst_case_time_series()
+        self.edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=10, q_scaling_factor=10
+        )
+        results = self.edisgo.reinforce(catch_convergence_problems=True)
+        assert results.unresolved_issues.empty
+        assert len(results.grid_expansion_costs) == 132
+        assert len(results.equipment_changes) == 218
+        assert results.v_res.shape == (4, 142)
+
+    @pytest.mark.slow
+    def test_enhanced_reinforce_grid(self):
+        self.setup_edisgo_object()
+        self.setup_worst_case_time_series()
+        self.edisgo.timeseries.scale_timeseries(
+            p_scaling_factor=100, q_scaling_factor=100
+        )
+        edisgo_obj = copy.deepcopy(self.edisgo)
+        edisgo_obj = enhanced_reinforce_grid(
+            edisgo_obj, activate_cost_results_disturbing_mode=True
+        )
+
+        results = edisgo_obj.results
+
+        assert len(results.grid_expansion_costs) == 835
+        assert len(results.equipment_changes) == 1764
+        assert results.v_res.shape == (4, 142)
+        assert "Enhanced reinforcement: No exchange of lines" in results.measures[2]
 
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()
@@ -1273,6 +1362,7 @@ class TestEDisGo:
             scenario="eGon2035",
             engine=pytest.engine,
             timeindex=pd.date_range("1/1/2020", periods=2, freq="H"),
+            import_types=["individual_heat_pumps", "central_heat_pumps"],
         )
 
         loads_df = edisgo_object.topology.loads_df
@@ -1407,11 +1497,9 @@ class TestEDisGo:
         self.edisgo.overlying_grid.dsm_active_power = pd.Series(
             data=[2.4], index=[self.edisgo.timeseries.timeindex[0]]
         )
-        self.edisgo.overlying_grid.solarthermal_energy_feedin_district_heating = (
-            pd.DataFrame(
-                {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]},
-                index=self.edisgo.timeseries.timeindex[0:2],
-            )
+        self.edisgo.overlying_grid.feedin_district_heating = pd.DataFrame(
+            {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]},
+            index=self.edisgo.timeseries.timeindex[0:2],
         )
         self.edisgo.dsm.p_max = pd.DataFrame(
             data={
@@ -1479,7 +1567,7 @@ class TestEDisGo:
         og.dsm_active_power = pd.Series(
             data=[2.4], index=[self.edisgo.timeseries.timeindex[0]]
         )
-        og.solarthermal_energy_feedin_district_heating = pd.DataFrame(
+        og.feedin_district_heating = pd.DataFrame(
             {"dh1": [1.4, 2.3], "dh2": [2.4, 1.3]},
             index=self.edisgo.timeseries.timeindex[0:2],
         )
@@ -1492,9 +1580,7 @@ class TestEDisGo:
         mem_hp_before = self.edisgo.heat_pump.heat_demand_df.memory_usage(
             deep=True
         ).sum()
-        mem_og_before = og.solarthermal_energy_feedin_district_heating.memory_usage(
-            deep=True
-        ).sum()
+        mem_og_before = og.feedin_district_heating.memory_usage(deep=True).sum()
 
         # check with default value
         self.edisgo.reduce_memory()
@@ -1506,9 +1592,7 @@ class TestEDisGo:
         mem_hp_with_default = self.edisgo.heat_pump.heat_demand_df.memory_usage(
             deep=True
         ).sum()
-        mem_og_with_default = (
-            og.solarthermal_energy_feedin_district_heating.memory_usage(deep=True).sum()
-        )
+        mem_og_with_default = og.feedin_district_heating.memory_usage(deep=True).sum()
 
         assert mem_ts_before > mem_ts_with_default
         assert mem_res_before > mem_res_with_default
@@ -1526,9 +1610,7 @@ class TestEDisGo:
             to_type="float16",
             results_attr_to_reduce=["pfa_p"],
             timeseries_attr_to_reduce=["generators_active_power"],
-            overlying_grid_attr_to_reduce=[
-                "solarthermal_energy_feedin_district_heating"
-            ],
+            overlying_grid_attr_to_reduce=["feedin_district_heating"],
         )
 
         assert (
@@ -1543,9 +1625,7 @@ class TestEDisGo:
         )
         assert (
             mem_og_with_default
-            > og.solarthermal_energy_feedin_district_heating.memory_usage(
-                deep=True
-            ).sum()
+            > og.feedin_district_heating.memory_usage(deep=True).sum()
         )
         # check that i_res, loads_active_power and dsm_active_power were not reduced
         assert np.isclose(
@@ -1560,6 +1640,47 @@ class TestEDisGo:
             mem_og_with_default_2,
             og.dsm_active_power.memory_usage(deep=True),
         )
+
+    def test_spatial_complexity_reduction(self):
+        # test with copying edisgo object
+        (edisgo_obj, busmap_df, linemap_df,) = self.edisgo.spatial_complexity_reduction(
+            copy_edisgo=True,
+            mode="kmeans",
+            cluster_area="grid",
+            reduction_factor=0.2,
+            reduction_factor_not_focused=False,
+        )
+        # check for deterministic behaviour
+        assert len(self.edisgo.topology.buses_df) != len(edisgo_obj.topology.buses_df)
+        assert len(self.edisgo.topology.loads_df) == len(edisgo_obj.topology.loads_df)
+        assert len(self.edisgo.topology.generators_df) == len(
+            edisgo_obj.topology.generators_df
+        )
+        assert len(set(busmap_df["new_bus"].to_list())) == 32
+        assert len(edisgo_obj.topology.buses_df) == 32
+        assert len(set(linemap_df["new_line_name"].to_list())) == 23
+        assert len(edisgo_obj.topology.lines_df) == 23
+
+        # test without copying edisgo object
+        edisgo_orig = copy.deepcopy(self.edisgo)
+        (_, busmap_df, linemap_df,) = self.edisgo.spatial_complexity_reduction(
+            mode="kmeans",
+            cluster_area="grid",
+            reduction_factor=0.2,
+            reduction_factor_not_focused=False,
+            aggregation_mode=True,
+            mv_pseudo_coordinates=True,
+        )
+        # Check for deterministic behaviour
+        assert len(self.edisgo.topology.buses_df) == len(edisgo_obj.topology.buses_df)
+        assert len(edisgo_orig.topology.loads_df) != len(self.edisgo.topology.loads_df)
+        assert len(edisgo_orig.topology.generators_df) != len(
+            self.edisgo.topology.generators_df
+        )
+        assert len(self.edisgo.topology.loads_df) == 28
+        assert len(self.edisgo.topology.generators_df) == 17
+        assert len(set(busmap_df["new_bus"].to_list())) == 32
+        assert len(set(linemap_df["new_line_name"].to_list())) == 21
 
     def test_check_integrity(self, caplog):
         self.edisgo.check_integrity()

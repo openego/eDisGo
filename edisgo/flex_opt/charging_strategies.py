@@ -324,7 +324,7 @@ def charging_strategy(
     )
     # fmt: on
 
-    logging.info(f"Charging strategy {strategy} completed.")
+    logger.info(f"Charging strategy {strategy} completed.")
 
 
 def harmonize_charging_processes_df(

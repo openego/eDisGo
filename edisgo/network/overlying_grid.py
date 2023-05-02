@@ -24,19 +24,23 @@ class OverlyingGrid:
         Curtailment of fluctuating renewables per time step in MW.
     storage_units_active_power : :pandas:`pandas.Series<Series>`
         Aggregated dispatch of storage units per time step in MW.
+    storage_units_soc : :pandas:`pandas.Series<Series>`
+        State of charge of storage units per time step in p.u..
     dsm_active_power : :pandas:`pandas.Series<Series>`
         Aggregated demand side management utilisation per time step in MW.
     electromobility_active_power : :pandas:`pandas.Series<Series>`
-        Aggregated charging demand at flexible charging sites per time step in MW.
+        Aggregated charging demand at all charging sites in grid per time step in MW.
     heat_pump_decentral_active_power : :pandas:`pandas.Series<Series>`
         Aggregated demand of flexible decentral heat pumps per time step in MW.
+    thermal_storage_units_decentral_soc : :pandas:`pandas.Series<Series>`
+        State of charge of decentral thermal storage units in p.u..
     heat_pump_central_active_power : :pandas:`pandas.Series<Series>`
         Aggregated demand of flexible central heat pumps per time step in MW.
-    geothermal_energy_feedin_district_heating : :pandas:`pandas.DataFrame<DataFrame>`
-        Geothermal feed-in into district heating per district heating area (in columns)
-        and time step (in index) in MW.
-    solarthermal_energy_feedin_district_heating : :pandas:`pandas.DataFrame<DataFrame>`
-        Solarthermal feed-in into district heating per district heating area (in
+    thermal_storage_units_central_soc : :pandas:`pandas.DataFrame<DataFrame>`
+        State of charge of central thermal storage units per district heating area (in
+        columns) and time step (in index) in p.u..
+    feedin_district_heating : :pandas:`pandas.DataFrame<DataFrame>`
+        Other thermal feed-in into district heating per district heating area (in
         columns) and time step (in index) in MW.
 
     """
@@ -45,9 +49,11 @@ class OverlyingGrid:
         self.renewables_curtailment = kwargs.get(
             "renewables_curtailment", pd.Series(dtype="float64")
         )
-
         self.storage_units_active_power = kwargs.get(
             "storage_units_active_power", pd.Series(dtype="float64")
+        )
+        self.storage_units_soc = kwargs.get(
+            "storage_units_soc", pd.Series(dtype="float64")
         )
         self.dsm_active_power = kwargs.get(
             "dsm_active_power", pd.Series(dtype="float64")
@@ -58,15 +64,17 @@ class OverlyingGrid:
         self.heat_pump_decentral_active_power = kwargs.get(
             "heat_pump_decentral_active_power", pd.Series(dtype="float64")
         )
+        self.thermal_storage_units_decentral_soc = kwargs.get(
+            "thermal_storage_units_decentral_soc", pd.Series(dtype="float64")
+        )
         self.heat_pump_central_active_power = kwargs.get(
             "heat_pump_central_active_power", pd.Series(dtype="float64")
         )
-
-        self.geothermal_energy_feedin_district_heating = kwargs.get(
-            "geothermal_energy_feedin_district_heating", pd.DataFrame(dtype="float64")
+        self.thermal_storage_units_central_soc = kwargs.get(
+            "thermal_storage_units_central_soc", pd.DataFrame(dtype="float64")
         )
-        self.solarthermal_energy_feedin_district_heating = kwargs.get(
-            "solarthermal_energy_feedin_district_heating", pd.DataFrame(dtype="float64")
+        self.feedin_district_heating = kwargs.get(
+            "feedin_district_heating", pd.DataFrame(dtype="float64")
         )
 
     @property
@@ -74,12 +82,14 @@ class OverlyingGrid:
         return [
             "renewables_curtailment",
             "storage_units_active_power",
+            "storage_units_soc",
             "dsm_active_power",
             "electromobility_active_power",
             "heat_pump_decentral_active_power",
+            "thermal_storage_units_decentral_soc",
             "heat_pump_central_active_power",
-            "geothermal_energy_feedin_district_heating",
-            "solarthermal_energy_feedin_district_heating",
+            "thermal_storage_units_central_soc",
+            "feedin_district_heating",
         ]
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):

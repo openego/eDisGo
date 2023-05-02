@@ -107,7 +107,7 @@ class Electromobility:
 
                 grid_charging_capacity_kW : float
                     Grid-sided charging capacity including charging infrastructure
-                    losses in kW.
+                    losses (nominal_charging_capacity_kW / eta_cp) in kW.
 
                 chargingdemand_kWh : float
                     Charging demand in kWh.
@@ -918,7 +918,7 @@ class Electromobility:
                     )
 
                 except Exception:
-                    logging.warning(
+                    logger.warning(
                         f"Potential charging parks could not be loaded with "
                         f"EPSG {epsg}. Trying with EPSG 4326 as fallback."
                     )

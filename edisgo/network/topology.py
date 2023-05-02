@@ -217,7 +217,9 @@ class Topology:
                 Peak load or nominal capacity in MW.
 
             type : str
-                Type of load, e.g. 'conventional_load', 'charging_point' or 'heat_pump'.
+                Type of load, e.g. 'conventional_load', 'charging_point' or 'heat_pump'
+                (resistive heaters are as well treated as heat pumps with a COP smaller
+                than 1).
                 This information is for example currently necessary when setting up a
                 worst case analysis, as different types of loads are treated
                 differently.
@@ -248,8 +250,12 @@ class Topology:
                 In case of heat pumps it is used when heat pumps are integrated into
                 the grid, as e.g. heat pumps for individual heating are allocated to an
                 existing load (see
-                function :attr:`~.network.topology.Topology.connect_to_lv`). The sector
-                needs to either be 'individual_heating' or 'district_heating'.
+                function :attr:`~.network.topology.Topology.connect_to_lv`). It is
+                further used to specify, if component is a resistive heater, as
+                resistive heaters are treated as heat pumps. The sector
+                needs to either be 'individual_heating', 'district_heating',
+                'individual_heating_resistive_heater' or
+                'district_heating_resistive_heater'.
 
             building_id : int
                 ID of the building the load is associated with. This is e.g. used to
@@ -739,7 +745,7 @@ class Topology:
         elif isinstance(name, str):
             return LVGrid(id=int(name.split("_")[-1]), edisgo_obj=edisgo_obj)
         else:
-            logging.warning("`name` must be integer or string.")
+            logger.warning("`name` must be integer or string.")
 
     @property
     def grid_district(self):
@@ -1373,7 +1379,7 @@ class Topology:
             (self.lines_df.bus1 == bus0) & (self.lines_df.bus0 == bus1)
         ]
         if not bus0_bus1.empty and bus1_bus0.empty:
-            logging.debug("Line between bus0 {} and bus1 {} already exists.")
+            logger.debug("Line between bus0 {} and bus1 {} already exists.")
             return pd.concat(
                 [
                     bus1_bus0,
@@ -1726,7 +1732,7 @@ class Topology:
                     self.lines_df.at[lines[0], "bus0"], "v_nom"
                 ]
                 if grid_voltage != data_new_line.U_n:
-                    logging.debug(
+                    logger.debug(
                         f"The line type of lines {lines} is changed to a type with a "
                         f"different nominal voltage (nominal voltage of new line type "
                         f"is {data_new_line.U_n} kV while nominal voltage of the medium"
@@ -1875,6 +1881,7 @@ class Topology:
         )
 
         # add component to newly created bus
+        comp_data.pop("geom")
         if comp_type == "generator":
             comp_name = self.add_generator(bus=bus, **comp_data)
         elif comp_type == "charging_point":
@@ -2016,9 +2023,10 @@ class Topology:
                   (fallback)
 
             * Heat pumps with specified voltage level 7
-                * with sector 'individual_heating' to LV loads
-                * with sector 'individual_heating' to some bus in the grid that
-                  is not a house connection
+                * with sector 'individual_heating' or
+                  'individual_heating_resistive_heater' to LV loads
+                * with sector 'district_heating' or 'district_heating_resistive_heater'
+                  to some bus in the grid that is not a house connection
                 * to random bus in the LV grid that if no appropriate load is available
                   (fallback)
 
@@ -2200,9 +2208,15 @@ class Topology:
                         ~lv_grid.buses_df.in_building.astype(bool)
                     ].index
             else:
-                if comp_data["sector"] == "individual_heating":
+                if comp_data["sector"] in [
+                    "individual_heating",
+                    "individual_heating_resistive_heater",
+                ]:
                     target_buses = lv_loads.bus.values
-                elif comp_data["sector"] == "district_heating":
+                elif comp_data["sector"] in [
+                    "district_heating",
+                    "district_heating_resistive_heater",
+                ]:
                     target_buses = lv_grid.buses_df[
                         ~lv_grid.buses_df.in_building.astype(bool)
                     ].index
@@ -3062,6 +3076,38 @@ class Topology:
                 f"{min_length} km). This might cause problems in the power flow or "
                 f"optimisation."
             )
+
+    def aggregate_lv_grid_at_station(self, lv_grid_id: int | str) -> None:
+        """
+        Aggregates all LV grid components to secondary side of the grid's station.
+
+        All lines of the LV grid are dropped, as well as all buses except the station's
+        secondary side bus. Buses, the loads, generators and storage units are connected
+        to are changed to the station's secondary side bus. The changes are directly
+        applied to the Topology object.
+
+        Parameters
+        ----------
+        lv_grid_id : int or str
+            ID of the LV grid to aggregate.
+
+        """
+        lv_grid = self.get_lv_grid(name=lv_grid_id)
+        lines_to_drop = lv_grid.lines_df.index.to_list()
+        station_bus = lv_grid.station.index[0]
+        buses_to_drop = lv_grid.buses_df.loc[
+            lv_grid.buses_df.index != station_bus
+        ].index.to_list()
+
+        self.buses_df = self.buses_df[~self.buses_df.index.isin(buses_to_drop)]
+        self.lines_df = self.lines_df[~self.lines_df.index.isin(lines_to_drop)]
+        self.loads_df.loc[self.loads_df.bus.isin(buses_to_drop), "bus"] = station_bus
+        self.generators_df.loc[
+            self.generators_df.bus.isin(buses_to_drop), "bus"
+        ] = station_bus
+        self.storage_units_df.loc[
+            self.storage_units_df.bus.isin(buses_to_drop), "bus"
+        ] = station_bus
 
     def __repr__(self):
         return f"Network topology {self.id}"

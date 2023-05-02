@@ -768,6 +768,7 @@ def oedb(
     edisgo_object: EDisGo,
     scenario: str,
     engine: Engine,
+    max_capacity=20,
 ):
     """
     Gets generator park for specified scenario from oedb and integrates generators into
@@ -816,6 +817,12 @@ def oedb(
         are "eGon2035" and "eGon100RE".
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
+    max_capacity : float
+        Maximum capacity in MW of power plants to retrieve from database. In general,
+        the generators that are retrieved from the database are selected based on the
+        voltage level they are in. In some cases, the voltage level is not correct as
+        it was wrongly set in the MaStR dataset. To avoid having unrealistically large
+        generators in the grids, an upper limit is also set. Per default this is 20 MW.
 
     Notes
     ------
@@ -837,13 +844,13 @@ def oedb(
                     egon_power_plants.source_id,
                     egon_power_plants.carrier.label("type"),
                     egon_power_plants.el_capacity.label("p_nom"),
-                    egon_power_plants.voltage_level,
                     egon_power_plants.weather_cell_id,
                     egon_power_plants.geom,
                 )
                 .filter(
                     egon_power_plants.scenario == scenario,
                     egon_power_plants.voltage_level >= 4,
+                    egon_power_plants.el_capacity <= max_capacity,
                     egon_power_plants.bus_id == edisgo_object.topology.id,
                 )
                 .order_by(egon_power_plants.id)
@@ -887,13 +894,13 @@ def oedb(
                     egon_power_plants_pv_roof_building.building_id,
                     egon_power_plants_pv_roof_building.gens_id.label("source_id"),
                     egon_power_plants_pv_roof_building.capacity.label("p_nom"),
-                    egon_power_plants_pv_roof_building.voltage_level,
                     egon_power_plants_pv_roof_building.weather_cell_id,
                 )
                 .filter(
                     egon_power_plants_pv_roof_building.scenario == scenario,
                     egon_power_plants_pv_roof_building.building_id.in_(building_ids),
                     egon_power_plants_pv_roof_building.voltage_level >= 4,
+                    egon_power_plants_pv_roof_building.capacity <= max_capacity,
                 )
                 .order_by(egon_power_plants_pv_roof_building.index)
             )
@@ -918,11 +925,11 @@ def oedb(
                     egon_chp_plants.el_capacity.label("p_nom"),
                     egon_chp_plants.th_capacity.label("p_nom_th"),
                     egon_chp_plants.geom,
-                    egon_chp_plants.voltage_level,
                 )
                 .filter(
                     egon_chp_plants.scenario == scenario,
                     egon_chp_plants.voltage_level >= 4,
+                    egon_chp_plants.el_capacity <= max_capacity,
                     egon_chp_plants.electrical_bus_id == edisgo_object.topology.id,
                 )
                 .order_by(egon_chp_plants.id)
@@ -944,33 +951,6 @@ def oedb(
     pv_rooftop_df = _get_egon_pv_rooftop()
     power_plants_gdf = _get_egon_power_plants()
     chp_gdf = _get_egon_chp_plants()
-
-    # sanity check - kick out generators that are too large
-    p_nom_upper = edisgo_object.config["grid_connection"]["upper_limit_voltage_level_4"]
-    drop_ind = pv_rooftop_df[pv_rooftop_df.p_nom > p_nom_upper].index
-    if len(drop_ind) > 0:
-        logger.warning(
-            f"There are {len(drop_ind)} PV rooftop plants with a nominal capacity "
-            f"larger {p_nom_upper} MW. Connecting them to the MV is not valid, "
-            f"wherefore they are dropped."
-        )
-        pv_rooftop_df.drop(index=drop_ind, inplace=True)
-    drop_ind = power_plants_gdf[power_plants_gdf.p_nom > p_nom_upper].index
-    if len(drop_ind) > 0:
-        logger.warning(
-            f"There are {len(drop_ind)} power plants with a nominal capacity "
-            f"larger {p_nom_upper} MW. Connecting them to the MV is not valid, "
-            f"wherefore they are dropped."
-        )
-        power_plants_gdf.drop(index=drop_ind, inplace=True)
-    drop_ind = chp_gdf[chp_gdf.p_nom > p_nom_upper].index
-    if len(drop_ind) > 0:
-        logger.warning(
-            f"There are {len(drop_ind)} CHP plants with a nominal capacity "
-            f"larger {p_nom_upper} MW. Connecting them to the MV is not valid, "
-            f"wherefore they are dropped."
-        )
-        chp_gdf.drop(index=drop_ind, inplace=True)
 
     # determine number of generators and installed capacity in future scenario
     # for validation of grid integration
@@ -1027,8 +1007,6 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
             * weather_cell_id : int
                 Weather cell the PV plant is in used to obtain the potential feed-in
                 time series.
-            * voltage_level : int
-                Voltage level the PV plant is connected to.
             * source_id : int
                 MaStR ID of the PV plant.
 
@@ -1201,6 +1179,14 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
     )
     pv_rooftop_df.set_index("index", drop=True, inplace=True)
 
+    # add voltage level
+    for gen in pv_rooftop_df.index:
+        pv_rooftop_df.at[
+            gen, "voltage_level"
+        ] = determine_grid_integration_voltage_level(
+            edisgo_object, pv_rooftop_df.at[gen, "p_nom"]
+        )
+
     # check for duplicated generator names and choose random name for duplicates
     tmp = pv_rooftop_df.index.append(edisgo_object.topology.storage_units_df.index)
     duplicated_indices = tmp[tmp.duplicated()]
@@ -1210,7 +1196,7 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
         new_name = duplicate
         while new_name in tmp:
             new_name = f"{duplicate}_{random.randint(10 ** 1, 10 ** 2)}"
-        # change name in batteries_df
+        # change name in pv_rooftop_df
         pv_rooftop_df.rename(index={duplicate: new_name}, inplace=True)
 
     # filter PV plants that are too large to be integrated into LV
@@ -1306,8 +1292,6 @@ def _integrate_power_and_chp_plants(edisgo_object, power_plants_gdf, chp_gdf):
             * weather_cell_id : int
                 Weather cell the power plant is in used to obtain the potential feed-in
                 time series. Only given for solar and wind generators.
-            * voltage_level : int
-                Voltage level the power plant is connected to.
             * source_id : int
                 MaStR ID of the power plant.
             * geom : geometry
@@ -1326,8 +1310,6 @@ def _integrate_power_and_chp_plants(edisgo_object, power_plants_gdf, chp_gdf):
                 Generator type, e.g. "gas".
             * district_heating_id : int
                 ID of district heating network the CHP plant is in.
-            * voltage_level : int
-                Voltage level the PV plant is connected to.
             * geom : geometry
                 Geolocation of power plant.
 
@@ -1338,7 +1320,6 @@ def _integrate_power_and_chp_plants(edisgo_object, power_plants_gdf, chp_gdf):
             comp_type="generator",
             generator_id=comp_data.at["generator_id"],
             geolocation=comp_data.at["geom"],
-            voltage_level=comp_data.at["voltage_level"],
             add_ts=False,
             p_nom=comp_data.at["p_nom"],
             p_nom_th=comp_data.at["p_nom_th"],
@@ -1351,7 +1332,6 @@ def _integrate_power_and_chp_plants(edisgo_object, power_plants_gdf, chp_gdf):
             comp_type="generator",
             generator_id=comp_data.at["generator_id"],
             geolocation=comp_data.at["geom"],
-            voltage_level=comp_data.at["voltage_level"],
             add_ts=False,
             p_nom=comp_data.at["p_nom"],
             generator_type=comp_data.at["type"],

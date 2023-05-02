@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import shutil
@@ -868,6 +869,24 @@ class TestTopology:
         assert "generators.csv" in saved_files
 
         shutil.rmtree(dir)
+
+    def test_aggregate_lv_grid_at_station(self, caplog):
+        """Test method aggregate_lv_grid_at_station"""
+
+        lv_grid_id = 1
+        topology_obj = copy.deepcopy(self.topology)
+        lv_grid_orig = self.topology.get_lv_grid(lv_grid_id)
+        topology_obj.aggregate_lv_grid_at_station(lv_grid_id=lv_grid_id)
+        lv_grid = topology_obj.get_lv_grid(lv_grid_id)
+
+        assert lv_grid_orig.buses_df.shape[0] == 15
+        assert lv_grid.buses_df.shape[0] == 1
+
+        with caplog.at_level(logging.WARNING):
+            topology_obj.check_integrity()
+        assert "which are not defined" not in caplog.text
+        assert "The following buses are isolated" not in caplog.text
+        assert "The network has isolated nodes or edges." not in caplog.text
 
 
 class TestTopologyWithEdisgoObject:
