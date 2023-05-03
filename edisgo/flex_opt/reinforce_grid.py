@@ -82,6 +82,24 @@ def reinforce_grid(
         This is used in case worst-case grid reinforcement is conducted in order to
         reinforce MV/LV stations for LV worst-cases.
         Default: False.
+    num_steps_loading : int
+        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        to specify the number of most critical overloading events to consider.
+        If None, `percentage` is used. Default: None.
+    num_steps_voltage : int
+        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        to specify the number of most critical voltage issues to select. If None,
+        `percentage` is used. Default: None.
+    percentage : float
+        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        to specify the percentage of most critical time steps to select. The default
+        is 1.0, in which case all most critical time steps are selected.
+        Default: 1.0.
+    use_troubleshooting_mode : bool
+        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        to specify how to handle non-convergence issues in the power flow analysis.
+        See parameter `use_troubleshooting_mode` in function :attr:`~.EDisGo.reinforce`
+        for more information. Default: True.
 
     Returns
     -------
@@ -157,7 +175,13 @@ def reinforce_grid(
                 ]
             ).dropna()
         elif isinstance(timesteps_pfa, str) and timesteps_pfa == "reduced_analysis":
-            timesteps_pfa = get_most_critical_time_steps(edisgo)
+            timesteps_pfa = get_most_critical_time_steps(
+                edisgo,
+                num_steps_loading=kwargs.get("num_steps_loading", None),
+                num_steps_voltage=kwargs.get("num_steps_voltage", None),
+                percentage=kwargs.get("percentage", 1.0),
+                use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
+            )
         # if timesteps_pfa is not of type datetime or does not contain
         # datetimes throw an error
         elif not isinstance(timesteps_pfa, datetime.datetime):

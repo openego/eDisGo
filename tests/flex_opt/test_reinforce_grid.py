@@ -54,9 +54,11 @@ class TestReinforceGrid:
                             result.equipment_changes,
                             comparison_result.equipment_changes,
                         )
-        # test new mode
+        # test reduced analysis
         res_reduced = reinforce_grid(
-            edisgo=copy.deepcopy(self.edisgo), timesteps_pfa="reduced_analysis"
+            edisgo=copy.deepcopy(self.edisgo),
+            timesteps_pfa="reduced_analysis",
+            num_steps_loading=4,
         )
         assert_frame_equal(
             res_reduced.equipment_changes, results_dict[None].equipment_changes
