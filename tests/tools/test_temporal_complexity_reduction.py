@@ -45,7 +45,7 @@ class TestTemporalComplexityReduction:
             ts_crit.loc[0, "percentage_max_overloaded_components"], 0.96479
         )
         assert np.isclose(
-            ts_crit.loc[1, "percentage_max_overloaded_components"], 0.035211
+            ts_crit.loc[1, "percentage_max_overloaded_components"], 0.96479
         )
 
         # test with non-default values
@@ -73,7 +73,7 @@ class TestTemporalComplexityReduction:
             == pd.date_range("1/1/2018", periods=24, freq="H")
         ).all()
         assert np.isclose(ts_crit.loc[0, "percentage_buses_max_voltage_deviation"], 1.0)
-        assert np.isclose(ts_crit.loc[1, "percentage_buses_max_voltage_deviation"], 0.0)
+        assert np.isclose(ts_crit.loc[1, "percentage_buses_max_voltage_deviation"], 1.0)
 
         # test with non-default values
         ts_crit = temp_red._scored_most_critical_voltage_issues_time_interval(

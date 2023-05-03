@@ -65,9 +65,7 @@ def _scored_most_critical_loading_time_interval(
         the highest expected costs corresponds to index 0. The time steps in the
         respective time interval are given in column "time_steps" and the share
         of components for which the maximum overloading is reached during the time
-        interval is given in column "percentage_max_overloaded_components". Each
-        component is only considered once. That means if its maximum voltage deviation
-        was already considered in an earlier time interval, it is not considered again.
+        interval is given in column "percentage_max_overloaded_components".
 
     """
 
@@ -138,30 +136,9 @@ def _scored_most_critical_loading_time_interval(
         # check if worst overloading of every line is included in time interval
         max_per_line_ti = crit_lines_score.loc[time_intervals[i]].max()
         time_intervals_df["percentage_max_overloaded_components"][i] = (
-            len(
-                np.intersect1d(
-                    lines_no_max,
-                    max_per_line_ti[
-                        max_per_line_ti >= max_per_line * overloading_factor
-                    ].index.values,
-                )
-            )
+            len(max_per_line_ti[max_per_line_ti >= max_per_line * overloading_factor])
             / total_lines
         )
-        # drop lines whose maximum overloading was not yet included in any time interval
-        lines_no_max = np.intersect1d(
-            lines_no_max,
-            max_per_line_ti[
-                max_per_line_ti < max_per_line * overloading_factor
-            ].index.values,
-        )
-
-        if i == 2:
-            if len(lines_no_max) > 0:
-                logger.warning(
-                    "Highest overloading of following lines does not lie within the "
-                    "overall worst three time intervals: " + str(lines_no_max)
-                )
 
     return time_intervals_df
 
@@ -332,28 +309,10 @@ def _scored_most_critical_voltage_issues_time_interval(
         max_per_bus_ti = voltage_diff_copy.loc[time_intervals[i]].max()
         time_intervals_df["percentage_buses_max_voltage_deviation"][i] = (
             len(
-                np.intersect1d(
-                    buses_no_max,
-                    max_per_bus_ti[
-                        max_per_bus_ti >= max_per_bus * voltage_deviation_factor
-                    ].index.values,
-                )
+                max_per_bus_ti[max_per_bus_ti >= max_per_bus * voltage_deviation_factor]
             )
             / total_buses
         )
-        # ToDo do not drop
-        buses_no_max = np.intersect1d(
-            buses_no_max,
-            max_per_bus_ti[
-                max_per_bus_ti < max_per_bus * voltage_deviation_factor
-            ].index.values,
-        )
-        if i == 2:
-            if len(buses_no_max) > 0:
-                logger.warning(
-                    "Highest voltage deviation of following buses does not lie within "
-                    "the overall worst three time intervals: " + str(buses_no_max)
-                )
 
     return time_intervals_df
 
@@ -445,10 +404,6 @@ def get_most_critical_time_intervals(
         in column "time_steps_voltage_issues" and the share of  buses for which the
         maximum voltage deviation is reached during the time interval is given in column
         "percentage_max_overloaded_components".
-        For the calculation of the percentage, each component respectively bus
-        is only considered once. That means if its maximum overloading or voltage
-        deviation was already considered in an earlier time interval, it is not
-        considered again.
 
     """
     # check frequency of time series data
