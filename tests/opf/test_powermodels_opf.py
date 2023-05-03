@@ -232,7 +232,7 @@ class TestPowerModelsOPF:
 
         assert np.isclose(
             np.round(self.edisgo.opf_results.slack_generator_t.pg[-1], 3),
-            -20.217,
+            -20.755,
             atol=1e-3,
         )
         assert np.isclose(
@@ -242,7 +242,7 @@ class TestPowerModelsOPF:
                 ][-1],
                 3,
             ),
-            -0.663,
+            0,
             atol=1e-3,
         )
         assert np.isclose(
@@ -260,14 +260,14 @@ class TestPowerModelsOPF:
                 ][-1],
                 3,
             ),
-            0.558,
+            0.375,
             atol=1e-3,
         )
         assert np.isclose(
             np.round(
                 self.edisgo.timeseries.storage_units_active_power.Storage_1[-1], 3
             ),
-            0.157,
+            0.16,
             atol=1e-3,
         )
         assert np.isclose(
