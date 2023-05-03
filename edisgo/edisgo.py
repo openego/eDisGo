@@ -1102,6 +1102,10 @@ class EDisGo:
               time steps. If your time series already represents the worst-case,
               keep the default value of None because finding the worst-case
               snapshots takes some time.
+            * 'reduced_analysis'
+              Reinforcement is conducted for all time steps at which at least one
+              branch shows its highest overloading or one bus shows its highest voltage
+              violation.
             * :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
               :pandas:`pandas.Timestamp<Timestamp>`
               Use this option to explicitly choose which time steps to consider.
@@ -1161,6 +1165,27 @@ class EDisGo:
             This is used in case worst-case grid reinforcement is conducted in order to
             reinforce MV/LV stations for LV worst-cases.
             Default: False.
+        num_steps_loading : int
+            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            used to specify the number of most critical overloading events to consider.
+            If None, `percentage` is used. Default: None.
+        num_steps_voltage : int
+            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            used to specify the number of most critical voltage issues to select. If
+            None, `percentage` is used. Default: None.
+        percentage : float
+            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            used to specify the percentage of most critical time steps to select. The
+            default is 1.0, in which case all most critical time steps are selected.
+            Default: 1.0.
+        use_troubleshooting_mode : bool
+            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            used to specify how to handle non-convergence issues in the power flow
+            analysis. If set to True, non-convergence issues are tried to be
+            circumvented by reducing load and feed-in until the power flow converges.
+            The most critical time steps are then determined based on the power flow
+            results with the reduced load and feed-in. If False, an error will be
+            raised in case time steps do not converge. Default: True.
 
         Returns
         --------
