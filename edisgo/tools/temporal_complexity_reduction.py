@@ -317,6 +317,55 @@ def _scored_most_critical_voltage_issues_time_interval(
     return time_intervals_df
 
 
+def _troubleshooting_mode(edisgo_obj):
+    """
+    Handles non-convergence issues in power flow by iteratively reducing load and
+    feed-in until the power flow converges.
+
+    Load and feed-in is reduced in steps of 10% down to 20% of the original load
+    and feed-in. The most critical time intervals / time steps can then be determined
+    based on the power flow results with the reduced load and feed-in.
+    """
+    try:
+        logger.debug("Running initial power flow for temporal complexity reduction.")
+        edisgo_obj.analyze()
+    except ValueError or RuntimeError:
+        # if power flow did not converge for all time steps, run again with smaller
+        # loading - loading is decreased, until all time steps converge
+        logger.warning(
+            "When running power flow to determine most critical time intervals, "
+            "not all time steps converged. Power flow is run again with reduced "
+            "network load."
+        )
+        for fraction in np.linspace(0.9, 0.2, 8):
+            try:
+                edisgo_obj.analyze(
+                    troubleshooting_mode="iteration",
+                    range_start=fraction,
+                    range_num=1,
+                )
+                logger.info(
+                    f"Power flow fully converged for a reduction factor "
+                    f"of {fraction}."
+                )
+                break
+            except ValueError or RuntimeError:
+                if fraction == 0.2:
+                    raise ValueError(
+                        f"Power flow did not converge for smallest reduction "
+                        f"factor of {fraction}. Most critical time intervals "
+                        f"can therefore not be determined."
+                    )
+                else:
+                    logger.info(
+                        f"Power flow did not fully converge for a reduction factor "
+                        f"of {fraction}."
+                    )
+    except Exception:
+        raise Exception
+    return edisgo_obj
+
+
 def get_most_critical_time_intervals(
     edisgo_obj,
     num_time_intervals=None,
@@ -417,45 +466,7 @@ def get_most_critical_time_intervals(
 
     # Run power flow
     if use_troubleshooting_mode:
-        try:
-            logger.debug(
-                "Running initial power flow for temporal complexity reduction."
-            )
-            edisgo_obj.analyze()
-        except ValueError:
-            # if power flow did not converge for all time steps, run again with smaller
-            # loading - loading is decreased, until all time steps converge
-            logger.warning(
-                "When running power flow to determine most critical time intervals, "
-                "not all time steps converged. Power flow is run again with reduced "
-                "network load."
-            )
-            for fraction in np.linspace(0.9, 0.2, 8):
-                try:
-                    edisgo_obj.analyze(
-                        troubleshooting_mode="iteration",
-                        range_start=fraction,
-                        range_num=1,
-                    )
-                    logger.info(
-                        f"Power flow fully converged for a reduction factor "
-                        f"of {fraction}."
-                    )
-                    break
-                except ValueError:
-                    if fraction == 0.2:
-                        raise ValueError(
-                            f"Power flow did not converge for smallest reduction "
-                            f"factor of {fraction}. Most critical time intervals "
-                            f"can therefore not be determined."
-                        )
-                    else:
-                        logger.info(
-                            f"Power flow did not fully converge for a reduction factor "
-                            f"of {fraction}."
-                        )
-        except Exception:
-            raise Exception
+        edisgo_obj = _troubleshooting_mode(edisgo_obj)
     else:
         logger.debug("Running initial power flow for temporal complexity reduction.")
         edisgo_obj.analyze()
