@@ -24,3 +24,6 @@ eDisGo.egg-info/
 # exclude .json files in opf
 /edisgo/opf/edisgo_scenario_data/*.json
 /edisgo/opf/opf_solutions/*.json
+
+# exclude virtualenv dir
+venv/
