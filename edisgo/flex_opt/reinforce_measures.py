@@ -1,5 +1,9 @@
+from __future__ import annotations
+
 import logging
 import math
+
+from typing import TYPE_CHECKING, Any
 
 import networkx as nx
 import numpy as np
@@ -10,6 +14,9 @@ from networkx.algorithms.shortest_paths.weighted import (
 )
 
 from edisgo.network.grids import LVGrid, MVGrid
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -725,3 +732,378 @@ def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_
             _replace_by_parallel_standard_lines(relevant_lines.index)
 
     return lines_changes
+
+
+# TODO: check docstrings
+def separate_lv_grid(
+    edisgo_obj: EDisGo, grid: LVGrid
+) -> tuple[dict[Any, Any], dict[str, int]]:
+    """
+    Split LV grid by adding a new substation and connect half of each feeder.
+
+    If the number of overloaded feeders in the LV grid is more than 1 (this can be
+    changed 2 or 3), the feeders are split at their half-length, and the disconnected
+    points are connected to the new MV/LV station.
+
+    1. The point at half the length of the feeders is found.
+    2. The first node following this point is chosen as the point where the new
+       connection will be made. This node can only be a station.
+    3. This node is disconnected from the previous node and connected to a new station.
+    4. New MV/LV is connected to the existing MV/LV station with a line of which length
+       equals the line length between the node at the half-length (node_1_2) and its
+       preceding node.
+
+    Notes:
+    - If the number of overloaded lines in the LV grid is less than 2 (this can be
+      changed 2 or 3) and the node_1_2 is the first node after the main station, the
+      method is not applied.
+    - The name of the new grid will be the existing grid code
+      (e.g. 40000) + 1001 = 400001001
+    - The name of the lines in the new LV grid is the same as the grid where the nodes
+      are removed
+    - Except line names, all the data frames are named based on the new grid name
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    grid: class : :class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
+
+    Returns
+    -------
+    line_changes=    dict
+        Dictionary with name of lines as keys and the corresponding number of
+        lines added as values.
+    transformer_changes=    dict
+        Dictionary with added and removed transformers in the form::
+        {'added': {'Grid_1': ['transformer_reinforced_1',
+                              ...,
+                              'transformer_reinforced_x'],
+                   'Grid_10': ['transformer_reinforced_10']
+                   }
+        }
+    """
+
+    def get_weight(u, v, data: dict) -> float:
+        return data["length"]
+
+    def create_bus_name(bus: str, voltage_level: str) -> str:
+        """
+        Create an LV and MV bus-bar name with the same grid_id but added '1001' that
+        implies the separation
+
+        Parameters
+        ----------
+        bus : str
+            Bus name. E.g. 'BusBar_mvgd_460_lvgd_131573_LV'
+        voltage_level : str
+            'mv' or 'lv'
+
+        Returns
+        ----------
+        bus: str New bus-bar name
+        """
+        if bus in edisgo_obj.topology.buses_df.index:
+            bus = bus.split("_")
+            grid_id_ind = bus.index(str(grid.id))
+            bus[grid_id_ind] = f"{grid.id}1001"
+
+            if voltage_level == "lv":
+                bus = "_".join([str(_) for _ in bus])
+            elif voltage_level == "mv":
+                bus[-1] = "MV"
+                bus = "_".join([str(_) for _ in bus])
+            else:
+                logger.error(
+                    f"Voltage level can only be 'mv' or 'lv'. Voltage level used: "
+                    f"{voltage_level}."
+                )
+        else:
+            raise IndexError(f"Station bus {bus} is not within the buses DataFrame.")
+
+        return bus
+
+    def add_standard_transformer(
+        edisgo_obj: EDisGo, grid: LVGrid, bus_lv: str, bus_mv: str
+    ) -> dict:
+        """
+        Adds standard transformer to topology.
+
+        Parameters
+        ----------
+        edisgo_obj: class:`~.EDisGo`
+        grid: `~.network.grids.LVGrid`
+        bus_lv: Identifier of lv bus
+        bus_mv: Identifier of mv bus
+
+        Returns
+        ----------
+        transformer_changes=    dict
+        """
+        if bus_lv not in edisgo_obj.topology.buses_df.index:
+            raise ValueError(
+                f"Specified bus {bus_lv} is not valid as it is not defined in "
+                "buses_df."
+            )
+        if bus_mv not in edisgo_obj.topology.buses_df.index:
+            raise ValueError(
+                f"Specified bus {bus_mv} is not valid as it is not defined in "
+                "buses_df."
+            )
+
+        try:
+            standard_transformer = edisgo_obj.topology.equipment_data[
+                "lv_transformers"
+            ].loc[
+                edisgo_obj.config["grid_expansion_standard_equipment"][
+                    "mv_lv_transformer"
+                ]
+            ]
+        except KeyError:
+            raise KeyError("Standard MV/LV transformer is not in the equipment list.")
+
+        transformers_changes = {"added": {}}
+
+        transformer_s = grid.transformers_df.iloc[0]
+        new_transformer_name = transformer_s.name.split("_")
+        grid_id_ind = new_transformer_name.index(str(grid.id))
+        new_transformer_name[grid_id_ind] = f"{str(grid.id)}1001"
+
+        transformer_s.s_nom = standard_transformer.S_nom
+        transformer_s.type_info = None
+        transformer_s.r_pu = standard_transformer.r_pu
+        transformer_s.x_pu = standard_transformer.x_pu
+        transformer_s.name = "_".join([str(_) for _ in new_transformer_name])
+        transformer_s.bus0 = bus_mv
+        transformer_s.bus1 = bus_lv
+
+        new_transformer_df = transformer_s.to_frame().T
+
+        edisgo_obj.topology.transformers_df = pd.concat(
+            [edisgo_obj.topology.transformers_df, new_transformer_df]
+        )
+        transformers_changes["added"][
+            f"LVGrid_{str(grid.id)}1001"
+        ] = new_transformer_df.index.tolist()
+
+        return transformers_changes
+
+    G = grid.graph
+    station_node = list(G.nodes)[0]  # main station
+
+    relevant_lines = grid.lines_df.loc[
+        (grid.lines_df.bus0 == station_node) | (grid.lines_df.bus1 == station_node)
+    ]
+
+    logger.debug(f"{grid} has {len(relevant_lines)} feeder.")
+
+    paths = {}
+    first_nodes_feeders = {}
+
+    for node in G.nodes:
+        path = nx.shortest_path(G, station_node, node)
+
+        for first_node in relevant_lines.bus1.values:
+            if first_node in path:
+                paths[node] = path
+                first_nodes_feeders.setdefault(path[1], []).append(
+                    node  # first nodes and paths
+                )
+
+    lines_changes = {}
+    transformers_changes = {}
+    nodes_tb_relocated = {}  # nodes to be moved into the new grid
+
+    # note: The number of critical lines in the Lv grid can be more than 2. However,
+    # if the node_1_2 of the first feeder in the for loop is not the first node of the
+    # feeder, it will add data frames even though the following feeders only 1 node
+    # (node_1_2=first node of feeder). In this type of case,the number of critical lines
+    # should be evaluated for the feeders whose node_1_2 s are not the first node of the
+    # feeder. The first check should be done on the feeders that have fewer nodes.
+
+    first_nodes_feeders = dict(
+        sorted(
+            first_nodes_feeders.items(), key=lambda item: len(item[1]), reverse=False
+        )
+    )
+
+    count_inept = 0
+
+    for first_node, nodes_feeder in first_nodes_feeders.items():
+        # first line of the feeder
+        first_line = relevant_lines[relevant_lines.bus1 == first_node].index[0]
+
+        # the last node of the feeder
+        last_node = nodes_feeder[-1]
+
+        # the length of each line (the shortest path)
+        path_length_dict_tmp = dijkstra_shortest_path_length(
+            G, station_node, get_weight, target=last_node
+        )
+
+        # path does not include the nodes branching from the node on the main path
+        path = paths[last_node]
+
+        node_1_2 = next(
+            j
+            for j in path
+            if path_length_dict_tmp[j] >= path_length_dict_tmp[last_node] * 1 / 2
+        )
+
+        # if LVGrid: check if node_1_2 is outside a house
+        # and if not find next BranchTee outside the house
+        while (
+            ~np.isnan(grid.buses_df.loc[node_1_2].in_building)
+            and grid.buses_df.loc[node_1_2].in_building
+        ):
+            node_1_2 = path[path.index(node_1_2) - 1]
+            # break if node is station
+            if node_1_2 is path[0]:
+                raise NotImplementedError(
+                    f" {grid}==>{first_line} and following lines could not be "
+                    f"reinforced due to insufficient number of node in the feeder. "
+                    f"A method to handle such cases is not yet implemented."
+                )
+
+        # NOTE: If node_1_2 is a representative (meaning it is already directly
+        #  connected to the station) feeder cannot be split. Instead, every second
+        #  inept feeder is assigned to the new grid
+        if node_1_2 not in first_nodes_feeders or count_inept % 2 == 1:
+            nodes_tb_relocated[node_1_2] = nodes_feeder[nodes_feeder.index(node_1_2) :]
+
+            if node_1_2 in first_nodes_feeders:
+                count_inept += 1
+        else:
+            count_inept += 1
+
+    if nodes_tb_relocated:
+        logger.info(f"{grid}==>method:add_station_at_half_length is running ")
+        # Create the bus-bar name of primary and secondary side of new MV/LV station
+        lv_bus_new = create_bus_name(station_node, "lv")
+        mv_bus_new = create_bus_name(station_node, "mv")
+
+        # ADD MV and LV bus
+        v_nom_lv = edisgo_obj.topology.buses_df.at[
+            grid.transformers_df.bus1[0],
+            "v_nom",
+        ]
+        v_nom_mv = edisgo_obj.topology.buses_df.at[
+            grid.transformers_df.bus0[0],
+            "v_nom",
+        ]
+
+        x_bus = grid.buses_df.at[station_node, "x"]
+        y_bus = grid.buses_df.at[station_node, "y"]
+
+        # the new lv grid id: e.g. 496021001
+        lv_grid_id_new = int(f"{str(grid.id)}1001")
+        building_bus = grid.buses_df.at[station_node, "in_building"]
+
+        dist = 0.001
+
+        length_mv = np.sqrt(dist**2 + dist**2)
+
+        # add lv busbar
+        edisgo_obj.topology.add_bus(
+            lv_bus_new,
+            v_nom_lv,
+            x=x_bus + dist,
+            y=y_bus + dist,
+            lv_grid_id=lv_grid_id_new,
+            in_building=building_bus,
+        )
+        # add  mv busbar
+        edisgo_obj.topology.add_bus(
+            mv_bus_new,
+            v_nom_mv,
+            x=x_bus + dist,
+            y=y_bus + dist,
+            in_building=building_bus,
+        )
+
+        # ADD TRANSFORMER
+        transformer_changes = add_standard_transformer(
+            edisgo_obj, grid, lv_bus_new, mv_bus_new
+        )
+        transformers_changes.update(transformer_changes)
+
+        logger.debug(
+            f"{edisgo_obj.topology.mv_grid}==>A new grid {lv_grid_id_new} "
+            f"added into topology"
+        )
+
+        # ADD the MV LINE between existing and new MV station
+        standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
+            f"mv_line_{int(edisgo_obj.topology.mv_grid.nominal_voltage)}kv"
+        ]
+
+        line_added_mv = edisgo_obj.add_component(
+            comp_type="line",
+            bus0=grid.transformers_df.bus0[0],
+            bus1=mv_bus_new,
+            length=length_mv,
+            type_info=standard_line,
+            kind="cable",
+        )
+
+        lines_changes[line_added_mv] = 1
+
+        lv_standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
+            "lv_line"
+        ]
+
+        # changes on relocated lines to the new LV grid
+        # grid_ids
+        for node_1_2, nodes in nodes_tb_relocated.items():
+            # the last node of the feeder
+            last_node = nodes[-1]
+
+            # path does not include the nodes branching from the node on the main path
+            path = paths[last_node]
+
+            nodes.append(node_1_2)
+
+            edisgo_obj.topology.buses_df.loc[nodes, "lv_grid_id"] = lv_grid_id_new
+
+            dist = dijkstra_shortest_path_length(
+                G, station_node, get_weight, target=node_1_2
+            )[node_1_2]
+
+            line_added_lv = edisgo_obj.add_component(
+                comp_type="line",
+                bus0=lv_bus_new,
+                bus1=node_1_2,
+                length=dist,
+                type_info=lv_standard_line,
+            )
+
+            lines_changes[line_added_lv] = 1
+
+            # predecessor node of node_1_2
+            pred_node = path[path.index(node_1_2) - 1]
+
+            # the line
+            line_removed = G.get_edge_data(node_1_2, pred_node)["branch_name"]
+
+            edisgo_obj.remove_component(
+                comp_type="line",
+                comp_name=line_removed,
+            )
+
+            logger.debug(
+                f"the node {node_1_2} is split from the line and connected to "
+                f"{lv_grid_id_new} "
+            )
+
+        logger.info(
+            f"{len(nodes_tb_relocated.keys())} feeders are removed from the grid "
+            f"{grid} and located in new grid{repr(grid) + str(1001)} by method: "
+            f"add_station_at_half_length "
+        )
+
+    else:
+        logger.warning(
+            f"{grid} was not reinforced because it has to few suitable feeders."
+        )
+
+    # TODO: check if changes are tracked correctly
+    return transformers_changes, lines_changes
