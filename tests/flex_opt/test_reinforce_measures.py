@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from edisgo import EDisGo
-from edisgo.flex_opt import reinforce_measures
+from edisgo.flex_opt import check_tech_constraints, reinforce_measures
 
 
 class TestReinforceMeasures:
@@ -453,3 +453,61 @@ class TestReinforceMeasures:
         assert np.isclose(line.x, 0.256 * 2 * np.pi * 50 / 1e3 * line.length)
         assert np.isclose(line.s_nom, 0.275 * 0.4 * np.sqrt(3))
         assert line.num_parallel == 1
+
+    def test_separate_lv_grid(self):
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+
+        crit_lines_lv = check_tech_constraints.lv_line_max_relative_overload(
+            self.edisgo
+        )
+
+        lv_grid_ids = (
+            self.edisgo.topology.buses_df.loc[
+                self.edisgo.topology.lines_df.loc[crit_lines_lv.index].bus0
+            ]
+            .lv_grid_id.unique()
+            .astype(int)
+        )
+
+        lv_grids = [
+            lv_grid
+            for lv_grid in self.edisgo.topology.mv_grid.lv_grids
+            if lv_grid.id in lv_grid_ids
+        ]
+
+        for lv_grid in lv_grids:
+            orig_g = copy.deepcopy(lv_grid)
+            grid_id = orig_g.id
+
+            reinforce_measures.separate_lv_grid(self.edisgo, lv_grid)
+
+            new_g_0 = [
+                g for g in self.edisgo.topology.mv_grid.lv_grids if g.id == grid_id
+            ][0]
+
+            try:
+                new_g_1 = [
+                    g
+                    for g in self.edisgo.topology.mv_grid.lv_grids
+                    if g.id == int(str(grid_id) + "1001")
+                ][0]
+            except IndexError:
+                continue
+
+            assert np.isclose(
+                orig_g.charging_points_df.p_set.sum(),
+                new_g_0.charging_points_df.p_set.sum()
+                + new_g_1.charging_points_df.p_set.sum(),
+            )
+
+            assert np.isclose(
+                orig_g.generators_df.p_nom.sum(),
+                new_g_0.generators_df.p_nom.sum() + new_g_1.generators_df.p_nom.sum(),
+            )
+
+            assert np.isclose(
+                orig_g.loads_df.p_set.sum(),
+                new_g_0.loads_df.p_set.sum() + new_g_1.loads_df.p_set.sum(),
+            )
+
+            assert len(orig_g.lines_df) == len(new_g_0.lines_df) + len(new_g_1.lines_df)

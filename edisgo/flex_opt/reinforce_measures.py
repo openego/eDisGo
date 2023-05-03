@@ -805,6 +805,7 @@ def separate_lv_grid(
         if bus in edisgo_obj.topology.buses_df.index:
             bus = bus.split("_")
             grid_id_ind = bus.index(str(grid.id))
+            # TODO: how to name new grids?
             bus[grid_id_ind] = f"{grid.id}1001"
 
             if voltage_level == "lv":
