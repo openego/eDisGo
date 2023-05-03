@@ -196,7 +196,7 @@ def _scored_most_critical_voltage_issues_time_interval(
         the highest expected costs corresponds to index 0. The time steps in the
         respective time interval are given in column "time_steps" and the share
         of buses for which the maximum voltage deviation is reached during the time
-        interval is given in column "percentage_max_overloaded_components". Each bus
+        interval is given in column "percentage_buses_max_voltage_deviation". Each bus
         is only considered once. That means if its maximum voltage deviation was
         already considered in an earlier time interval, it is not considered again.
 
@@ -397,7 +397,9 @@ def get_most_critical_time_intervals(
         The number of time intervals of most critical line loading and voltage issues
         to select. If None, `percentage` is used. Default: None.
     percentage : float
-        The percentage of most critical time intervals to select. Default: 1.0.
+        The percentage of most critical time intervals to select. The default is 1.0, in
+        which case all most critical time steps are selected.
+        Default: 1.0.
     time_steps_per_time_interval : int
         Amount of continuous time steps in an interval that violation is determined for.
         Currently, these can only be multiples of 24.
@@ -452,7 +454,7 @@ def get_most_critical_time_intervals(
         For voltage issues, the time steps in the respective time interval are given
         in column "time_steps_voltage_issues" and the share of  buses for which the
         maximum voltage deviation is reached during the time interval is given in column
-        "percentage_max_overloaded_components".
+        "percentage_buses_max_voltage_deviation".
 
     """
     # check frequency of time series data
