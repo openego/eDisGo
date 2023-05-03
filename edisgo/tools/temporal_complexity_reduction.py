@@ -640,7 +640,7 @@ def get_most_critical_time_steps(
     use_troubleshooting_mode : bool
         If set to True, non-convergence issues in power flow are tried to be handled
         by reducing load and feed-in in steps of 10% down to 20% of the original load
-        and feed-in until the power flow converges. The most critical time intervals
+        and feed-in until the power flow converges. The most critical time steps
         are then determined based on the power flow results with the reduced load and
         feed-in. If False, an error will be raised in case time steps do not converge.
         Default: True.
