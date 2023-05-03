@@ -408,7 +408,9 @@ def _troubleshooting_mode(edisgo_obj):
     try:
         logger.debug("Running initial power flow for temporal complexity reduction.")
         edisgo_obj.analyze()
-    except ValueError or RuntimeError:
+    # Exception is used, as non-convergence can also lead to RuntimeError, not only
+    # ValueError
+    except Exception:
         # if power flow did not converge for all time steps, run again with smaller
         # loading - loading is decreased, until all time steps converge
         logger.warning(
@@ -428,7 +430,7 @@ def _troubleshooting_mode(edisgo_obj):
                     f"of {fraction}."
                 )
                 break
-            except ValueError or RuntimeError:
+            except Exception:
                 if fraction == 0.2:
                     raise ValueError(
                         f"Power flow did not converge for smallest reduction "
@@ -440,8 +442,6 @@ def _troubleshooting_mode(edisgo_obj):
                         f"Power flow did not fully converge for a reduction factor "
                         f"of {fraction}."
                     )
-    except Exception:
-        raise Exception
     return edisgo_obj
 
 
