@@ -11,8 +11,8 @@ import pandas as pd
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import exceptions, reinforce_measures
 from edisgo.flex_opt.costs import grid_expansion_costs
-from edisgo.opf.timeseries_reduction import get_steps_reinforcement
 from edisgo.tools import tools
+from edisgo.tools.temporal_complexity_reduction import get_most_critical_time_steps
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -157,7 +157,7 @@ def reinforce_grid(
                 ]
             ).dropna()
         elif isinstance(timesteps_pfa, str) and timesteps_pfa == "reduced_analysis":
-            timesteps_pfa = get_steps_reinforcement(edisgo)
+            timesteps_pfa = get_most_critical_time_steps(edisgo)
         # if timesteps_pfa is not of type datetime or does not contain
         # datetimes throw an error
         elif not isinstance(timesteps_pfa, datetime.datetime):

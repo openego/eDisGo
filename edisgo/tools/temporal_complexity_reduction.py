@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import logging
 import os
 
 from copy import deepcopy
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -10,7 +13,83 @@ from edisgo.flex_opt import check_tech_constraints
 from edisgo.flex_opt.costs import line_expansion_costs
 from edisgo.tools.tools import assign_feeder
 
+if TYPE_CHECKING:
+    from edisgo import EDisGo
+
 logger = logging.getLogger(__name__)
+
+
+def _scored_most_critical_loading(edisgo_obj: EDisGo) -> pd.Series:
+    """
+    Method to get time steps where at least one component shows its highest overloading.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+
+    Returns
+    --------
+    :pandas:`pandas.Series<Series>`
+        Series with time index and corresponding sum of maximum relative overloadings
+        of lines and transformers. The series only contains time steps, where at least
+        one component is maximally overloaded, and is sorted descending by the
+        sum of maximum relative overloadings.
+
+    """
+
+    # Get current relative to allowed current
+    relative_i_res = check_tech_constraints.components_relative_load(edisgo_obj)
+
+    # Get lines that have violations
+    crit_lines_score = relative_i_res[relative_i_res > 1]
+
+    # Get most critical timesteps per component
+    crit_lines_score = (
+        (crit_lines_score[crit_lines_score == crit_lines_score.max()])
+        .dropna(how="all")
+        .dropna(how="all", axis=1)
+    )
+
+    # Sort according to highest cumulated relative overloading
+    crit_lines_score = (crit_lines_score - 1).sum(axis=1)
+    return crit_lines_score.sort_values(ascending=False)
+
+
+def _scored_most_critical_voltage_issues(edisgo_obj: EDisGo) -> pd.Series:
+    """
+    Method to get time steps where at least one bus shows its highest deviation from
+    allowed voltage boundaries.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+
+    Returns
+    --------
+    :pandas:`pandas.Series<Series>`
+        Series with time index and corresponding sum of maximum voltage deviations.
+        The series only contains time steps, where at least one bus has its highest
+        deviation from the allowed voltage limits, and is sorted descending by the
+        sum of maximum voltage deviations.
+
+    """
+    voltage_diff = check_tech_constraints.voltage_deviation_from_allowed_voltage_limits(
+        edisgo_obj
+    )
+
+    # Get score for nodes that are over or under the allowed deviations
+    voltage_diff = voltage_diff.abs()[voltage_diff.abs() > 0]
+    # get only most critical events for component
+    # Todo: should there be different ones for over and undervoltage?
+    voltage_diff = (
+        (voltage_diff[voltage_diff.abs() == voltage_diff.abs().max()])
+        .dropna(how="all")
+        .dropna(how="all", axis=1)
+    )
+
+    voltage_diff = voltage_diff.sum(axis=1)
+
+    return voltage_diff.sort_values(ascending=False)
 
 
 def _scored_most_critical_loading_time_interval(
@@ -532,3 +611,85 @@ def get_most_critical_time_intervals(
             )
         )
     return steps
+
+
+def get_most_critical_time_steps(
+    edisgo_obj: EDisGo,
+    num_steps_loading=None,
+    num_steps_voltage=None,
+    percentage: float = 1.0,
+    use_troubleshooting_mode=True,
+) -> pd.DatetimeIndex:
+    """
+    Get the time steps with the most critical overloading and voltage issues.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object
+    num_steps_loading : int
+        The number of most critical overloading events to select. If None, `percentage`
+        is used. Default: None.
+    num_steps_voltage : int
+        The number of most critical voltage issues to select. If None, `percentage`
+        is used. Default: None.
+    percentage : float
+        The percentage of most critical time steps to select. The default is 1.0, in
+        which case all most critical time steps are selected.
+        Default: 1.0.
+    use_troubleshooting_mode : bool
+        If set to True, non-convergence issues in power flow are tried to be handled
+        by reducing load and feed-in in steps of 10% down to 20% of the original load
+        and feed-in until the power flow converges. The most critical time intervals
+        are then determined based on the power flow results with the reduced load and
+        feed-in. If False, an error will be raised in case time steps do not converge.
+        Default: True.
+
+    Returns
+    --------
+    :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time index with unique time steps where maximum overloading or maximum
+        voltage deviation is reached for at least one component respectively bus.
+
+    """
+    # Run power flow
+    if use_troubleshooting_mode:
+        edisgo_obj = _troubleshooting_mode(edisgo_obj)
+    else:
+        logger.debug("Running initial power flow for temporal complexity reduction.")
+        edisgo_obj.analyze()
+
+    # Select most critical steps based on current violations
+    loading_scores = _scored_most_critical_loading(edisgo_obj)
+    if num_steps_loading is None:
+        num_steps_loading = int(len(loading_scores) * percentage)
+    else:
+        if num_steps_loading > len(loading_scores):
+            logger.info(
+                f"The number of time steps with highest overloading "
+                f"({len(loading_scores)}) is lower than the defined number of "
+                f"loading time steps ({num_steps_loading}). Therefore, only "
+                f"{len(loading_scores)} time steps are exported."
+            )
+            num_steps_loading = len(loading_scores)
+    steps = loading_scores[:num_steps_loading].index
+
+    # Select most critical steps based on voltage violations
+    voltage_scores = _scored_most_critical_voltage_issues(edisgo_obj)
+    if num_steps_voltage is None:
+        num_steps_voltage = int(len(voltage_scores) * percentage)
+    else:
+        if num_steps_voltage > len(voltage_scores):
+            logger.info(
+                f"The number of time steps with highest voltage issues "
+                f"({len(voltage_scores)}) is lower than the defined number of "
+                f"voltage time steps ({num_steps_voltage}). Therefore, only "
+                f"{len(voltage_scores)} time steps are exported."
+            )
+            num_steps_voltage = len(voltage_scores)
+    steps = steps.append(voltage_scores[:num_steps_voltage].index)
+
+    if len(steps) == 0:
+        logger.warning("No critical steps detected. No network expansion required.")
+
+    return pd.DatetimeIndex(steps.unique())

@@ -1,8 +1,4 @@
-from __future__ import annotations
-
 import logging
-
-from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -11,9 +7,6 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
 from edisgo.flex_opt import check_tech_constraints
-
-if TYPE_CHECKING:
-    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -37,29 +30,6 @@ def _scored_critical_loading(edisgo_obj):
     return crit_lines_score.sort_values(ascending=False)
 
 
-def _scored_most_critical_loading(edisgo_obj: EDisGo) -> pd.Series:
-    """
-    Method to get time steps where at least one branch shows its highest overloading
-    """
-
-    # Get current relative to allowed current
-    relative_i_res = check_tech_constraints.components_relative_load(edisgo_obj)
-
-    # Get lines that have violations
-    crit_lines_score = relative_i_res[relative_i_res > 1]
-
-    # Get most critical timesteps per component
-    crit_lines_score = (
-        (crit_lines_score[crit_lines_score == crit_lines_score.max()])
-        .dropna(how="all")
-        .dropna(how="all", axis=1)
-    )
-
-    # Sort according to highest cumulated relative overloading
-    crit_lines_score = (crit_lines_score - 1).sum(axis=1)
-    return crit_lines_score.sort_values(ascending=False)
-
-
 def _scored_critical_overvoltage(edisgo_obj):
 
     voltage_dev = check_tech_constraints.voltage_deviation_from_allowed_voltage_limits(
@@ -72,99 +42,6 @@ def _scored_critical_overvoltage(edisgo_obj):
         voltage_dev[voltage_dev > 0.0].dropna(axis=1, how="all").sum(axis=1)
     )
     return voltage_dev_ov.sort_values(ascending=False)
-
-
-def _scored_most_critical_voltage_issues(edisgo_obj: EDisGo) -> pd.Series:
-    """
-    Method to get time steps where at least one bus shows its highest deviation from
-    allowed voltage boundaries
-    """
-    voltage_diff = check_tech_constraints.voltage_deviation_from_allowed_voltage_limits(
-        edisgo_obj
-    )
-
-    # Get score for nodes that are over or under the allowed deviations
-    voltage_diff = voltage_diff.abs()[voltage_diff.abs() > 0]
-    # get only most critical events for component
-    # Todo: should there be different ones for over and undervoltage?
-    voltage_diff = (
-        (voltage_diff[voltage_diff.abs() == voltage_diff.abs().max()])
-        .dropna(how="all")
-        .dropna(how="all", axis=1)
-    )
-
-    voltage_diff = voltage_diff.sum(axis=1)
-
-    return voltage_diff.sort_values(ascending=False)
-
-
-def get_steps_reinforcement(
-    edisgo_obj: EDisGo,
-    num_steps_loading: int = 0,
-    num_steps_voltage: int = 0,
-    percentage: float = 1.0,
-) -> pd.DatetimeIndex:
-    """
-    Get the time steps with the most critical violations for reduced reinforcement.
-
-    Parameters
-    -----------
-    edisgo_obj : :class:`~.EDisGo`
-        The eDisGo API object
-    num_steps_loading: int
-        The number of most critical overloading events to select, if set to 0 percentage
-        is used
-    num_steps_voltage: int
-        The number of most critical voltage issues to select, if set to 0 percentage is
-        used
-    percentage : float
-        The percentage of most critical time steps to select
-    Returns
-    --------
-    `pandas.DatetimeIndex`
-        the reduced time index for modeling curtailment
-    """
-    # Run power flow if not available
-    if edisgo_obj.results.i_res is None or edisgo_obj.results.i_res.empty:
-        logger.debug("Running initial power flow")
-        edisgo_obj.analyze(raise_not_converged=False)  # Todo: raise warning?
-
-    # Select most critical steps based on current violations
-    loading_scores = _scored_most_critical_loading(edisgo_obj)
-    if num_steps_loading == 0:
-        num_steps_loading = int(len(loading_scores) * percentage)
-    else:
-        if num_steps_loading > len(loading_scores):
-            logger.info(
-                f"The number of time steps with highest overloading "
-                f"({len(loading_scores)}) is lower than the defined number of "
-                f"loading time steps ({num_steps_loading}). Therefore, only "
-                f"{len(loading_scores)} time steps are exported."
-            )
-            num_steps_loading = len(loading_scores)
-    steps = loading_scores[:num_steps_loading].index
-
-    # Select most critical steps based on voltage violations
-    voltage_scores = _scored_most_critical_voltage_issues(edisgo_obj)
-    if num_steps_voltage == 0:
-        num_steps_voltage = int(len(voltage_scores) * percentage)
-    else:
-        if num_steps_voltage > len(voltage_scores):
-            logger.info(
-                f"The number of time steps with highest voltage issues "
-                f"({len(voltage_scores)}) is lower than the defined number of "
-                f"voltage time steps ({num_steps_voltage}). Therefore, only "
-                f"{len(voltage_scores)} time steps are exported."
-            )
-            num_steps_voltage = len(voltage_scores)
-    steps = steps.append(
-        voltage_scores[:num_steps_voltage].index
-    )  # Todo: Can this cause duplicated?
-
-    if len(steps) == 0:
-        logger.warning("No critical steps detected. No network expansion required.")
-
-    return pd.DatetimeIndex(steps.unique())
 
 
 def get_steps_curtailment(edisgo_obj, percentage=0.5):
