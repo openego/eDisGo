@@ -6,6 +6,8 @@ import sys
 
 import numpy as np
 
+from edisgo.flex_opt import exceptions
+
 logger = logging.getLogger(__name__)
 
 
@@ -141,7 +143,7 @@ def pm_optimize(
             if julia_process.poll() == 0:
                 logger.info("Julia process was successful.")
             else:
-                logger.warning("Julia process failed!")
+                exceptions.InfeasibleModelError("Julia process failed!")
             break
         if out.rstrip().startswith('{"name"'):
             pm_opf = json.loads(out)
