@@ -1062,9 +1062,21 @@ def determine_observation_periods(edisgo_obj, window_days, idx="min", absolute=F
     elif idx == "max":
         timestep = residual_load.idxmax()
     elif idx == "load_max":
-        timestep = edisgo_obj.timeseries.loads_active_power.sum(axis=1).idxmax()
+        load = (
+            edisgo_obj.timeseries.loads_active_power.sum(axis=1)
+            .rolling(window=window_days * 24, closed="both")
+            .mean()
+        )
+        load = load.loc[::24]
+        timestep = load.idxmax()
     elif idx == "gen_max":
-        timestep = edisgo_obj.timeseries.generators_active_power.sum(axis=1).idxmax()
+        gen = (
+            edisgo_obj.timeseries.generators_active_power.sum(axis=1)
+            .rolling(window=window_days * 24, closed="both")
+            .mean()
+        )
+        gen = gen.loc[::24]
+        timestep = gen.idxmax()
     else:
         raise NotImplementedError
 
