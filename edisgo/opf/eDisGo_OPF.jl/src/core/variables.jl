@@ -491,9 +491,8 @@ end
 function variable_slack_HV_requirements_real(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     phvs = PowerModels.var(pm, nw)[:phvs] = JuMP.@variable(pm.model,
         [i in PowerModels.ids(pm, nw, :HV_requirements)], base_name="$(nw)_phvs",
-        lower_bound = -0.01,
-        upper_bound = 0.01
-        # ToDo: unterscheiden ob dsm oder nicht. bei dsm größere Toleranz erlauben
+        lower_bound = -10,
+        upper_bound = 10
     )
 
     report && PowerModels.sol_component_value(pm, nw, :HV_requirements, :phvs, PowerModels.ids(pm, nw, :HV_requirements), phvs)

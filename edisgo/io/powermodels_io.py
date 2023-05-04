@@ -339,9 +339,20 @@ def from_powermodels(
                 + results[names].values
             )
         elif flex == "storage":
-            edisgo_object.timeseries._storage_units_active_power.loc[
-                :, names
-            ] = results[names].values
+            try:
+                edisgo_object.timeseries._storage_units_active_power.loc[
+                    :, names
+                ] = results[names].values
+            except AttributeError:
+                setattr(
+                    edisgo_object.timeseries,
+                    "storage_units_active_power",
+                    pd.DataFrame(
+                        index=edisgo_object.timeseries.timeindex,
+                        columns=names,
+                        data=results[names].values,
+                    ),
+                )
 
     # calculate corresponding reactive power values
     edisgo_object.set_time_series_reactive_power_control()

@@ -41,13 +41,14 @@ function optimize_edisgo()
     # Solve SOC model
     println("Starting convex SOC AC-OPF with Gurobi.")
     result_soc, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, SOCBFPowerModelEdisgo, gurobi)
-    println(result_soc["termination_status"])
     if result_soc["termination_status"] != MOI.OPTIMAL
+      println("Termination status: "*result_soc["termination_status"])
       JuMP.compute_conflict!(pm.model)
       if MOI.get(pm.model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
         iis_model, _ = copy_conflict(pm.model)
         print(iis_model)
       end
+      PowerModels.update_data!(data_edisgo_mn, result_soc["solution"])
     elseif result_soc["termination_status"] == MOI.OPTIMAL
       # Check if SOC constraint is tight
       soc_tight, soc_dict = eDisGo_OPF.check_SOC_equality(result_soc, data_edisgo)
@@ -71,8 +72,6 @@ function optimize_edisgo()
         data_edisgo_mn["status"] = result_nc_ws["termination_status"]
         data_edisgo_mn["solver"] = "Ipopt"
       end
-    else
-      println("Termination status: "*result_soc["termination_status"])
     end
   elseif method == "nc" # Non-Convex
     # Solve NC model

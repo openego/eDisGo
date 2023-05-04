@@ -14,11 +14,20 @@ class LineVariables:
         self.q = pd.DataFrame()
         self.ccm = pd.DataFrame()
 
+    def _attributes(self):
+        return ["p", "q", "ccm"]
+
 
 class HeatStorage:
     def __init__(self):
         self.p = pd.DataFrame()
         self.e = pd.DataFrame()
+
+    def _attributes(self):
+        return [
+            "p",
+            "e",
+        ]
 
 
 class GridSlacks:
@@ -28,6 +37,15 @@ class GridSlacks:
         self.load_shedding = pd.DataFrame()
         self.cp_load_shedding = pd.DataFrame()
         self.hp_load_shedding = pd.DataFrame()
+
+    def _attributes(self):
+        return [
+            "gen_d_crt",
+            "gen_nd_crt",
+            "load_shedding",
+            "cp_load_shedding",
+            "hp_load_shedding",
+        ]
 
 
 class OPFResults:
@@ -82,9 +100,9 @@ class OPFResults:
             df = getattr(self, attr)
             if attr in ["lines_t", "heat_storage_t", "grid_slacks_t"]:
                 for variable in file.keys():
-                    if variable in df.keys() and not df[variable].empty:
+                    if variable in df._attributes() and not getattr(df, variable).empty:
                         path = os.path.join(directory, file[variable])
-                        df[variable].to_csv(path)
+                        getattr(df, variable).to_csv(path)
             else:
                 if not df.empty:
                     path = os.path.join(directory, file)
