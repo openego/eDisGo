@@ -118,14 +118,21 @@ def to_powermodels(
     pm["baseMVA"] = s_base
     pm["source_version"] = 2
     pm["flexibilities"] = opf_flex
+    logger.info("Transforming busses into PowerModels dictionary format.")
     _build_bus(psa_net, edisgo_object, pm, flexible_storage_units)
+    logger.info("Transforming generators into PowerModels dictionary format.")
     _build_gen(edisgo_object, psa_net, pm, flexible_storage_units, s_base)
+    logger.info(
+        "Transforming lines and transformers into PowerModels dictionary format."
+    )
     _build_branch(edisgo_object, psa_net, pm, flexible_storage_units, s_base)
     if len(flexible_storage_units) > 0:
+        logger.info("Transforming storage units into PowerModels dictionary format.")
         _build_battery_storage(
             edisgo_object, psa_net, pm, flexible_storage_units, s_base, opf_version
         )
     if len(flexible_cps) > 0:
+        logger.info("Transforming charging points into PowerModels dictionary format.")
         flexible_cps = _build_electromobility(
             edisgo_object,
             psa_net,
@@ -134,13 +141,19 @@ def to_powermodels(
             flexible_cps,
         )
     if len(flexible_hps) > 0:
+        logger.info("Transforming heatpumps into PowerModels dictionary format.")
         _build_heatpump(psa_net, pm, edisgo_object, s_base, flexible_hps)
+        logger.info(
+            "Transforming heat storage units into PowerModels dictionary format."
+        )
         _build_heat_storage(
             psa_net, pm, edisgo_object, s_base, flexible_hps, opf_version
         )
     if len(flexible_loads) > 0:
+        logger.info("Transforming DSM loads into PowerModels dictionary format.")
         flexible_loads = _build_dsm(edisgo_object, psa_net, pm, s_base, flexible_loads)
     if len(psa_net.loads) > 0:
+        logger.info("Transforming loads into PowerModels dictionary format.")
         _build_load(
             edisgo_object,
             psa_net,
@@ -167,6 +180,10 @@ def to_powermodels(
             "dsm": edisgo_object.overlying_grid.dsm_active_power / s_base,
         }
         try:
+            logger.info(
+                "Transforming overlying grid requirements into PowerModels dictionary "
+                "format."
+            )
             _build_hv_requirements(
                 psa_net,
                 edisgo_object,
@@ -188,7 +205,9 @@ def to_powermodels(
             opf_version = 2
 
     pm["opf_version"] = opf_version
-
+    logger.info(
+        "Transforming components timeseries into PowerModels dictionary format."
+    )
     _build_timeseries(
         psa_net,
         pm,
@@ -270,7 +289,7 @@ def from_powermodels(
     }
 
     timesteps = pd.Series([int(k) for k in pm["nw"].keys()]).sort_values().values
-
+    logger.info("Writing OPF results to eDisGo object.")
     # write active power OPF results to edisgo object
     for flexibility in pm_results["nw"]["1"]["flexibilities"]:
         flex, variable = flex_dicts[flexibility]
@@ -1180,7 +1199,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
     """
     # add TES with 0 capacity for every flexible hp without TES
     hp_no_tes = np.setdiff1d(
-        flexible_hps, edisgo_obj.heat_pump.thermal_storage_units_df.index
+        flexible_hps, edisgo_obj.heat_pump.thermal_storage_units_df.index.values
     )
     df = pd.DataFrame(index=hp_no_tes, columns=["efficiency", "capacity"], data=0)
     heat_storage_df = pd.concat([edisgo_obj.heat_pump.thermal_storage_units_df, df])
@@ -1213,7 +1232,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
                     ]
                 ),
             )
-            * heat_storage_df.loc[decentral_hps].capacity
+            * heat_storage_df.loc[decentral_hps.values].capacity
         )
         central_hps = edisgo_obj.topology.loads_df.loc[
             (edisgo_obj.topology.loads_df.type == "heat_pump")
