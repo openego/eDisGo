@@ -29,10 +29,32 @@ class TestTemporalComplexityReduction:
                     df,
                 )
         self.edisgo.timeseries.timeindex = self.timesteps
+        self.edisgo.analyze()
+
+    def test__scored_most_critical_loading(self):
+
+        ts_crit = temp_red._scored_most_critical_loading(self.edisgo)
+
+        assert len(ts_crit) == 180
+        assert np.isclose(ts_crit.iloc[0], 1.45613)
+        assert np.isclose(ts_crit.iloc[-1], 1.14647)
+
+    def test__scored_most_critical_voltage_issues(self):
+
+        ts_crit = temp_red._scored_most_critical_voltage_issues(self.edisgo)
+
+        assert len(ts_crit) == 120
+        assert np.isclose(ts_crit.iloc[0], 0.01062258)
+        assert np.isclose(ts_crit.iloc[-1], 0.01062258)
+
+    def test_get_most_critical_time_steps(self):
+
+        ts_crit = temp_red.get_most_critical_time_steps(
+            self.edisgo, num_steps_loading=2, num_steps_voltage=2
+        )
+        assert len(ts_crit) == 3
 
     def test__scored_most_critical_loading_time_interval(self):
-
-        self.edisgo.analyze()
 
         # test with default values
         ts_crit = temp_red._scored_most_critical_loading_time_interval(self.edisgo, 24)
@@ -60,8 +82,6 @@ class TestTemporalComplexityReduction:
         assert ts_crit.loc[0, "percentage_max_overloaded_components"] == 1
 
     def test__scored_most_critical_voltage_issues_time_interval(self):
-
-        self.edisgo.analyze()
 
         # test with default values
         ts_crit = temp_red._scored_most_critical_voltage_issues_time_interval(

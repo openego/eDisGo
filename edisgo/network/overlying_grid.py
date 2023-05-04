@@ -338,8 +338,7 @@ def distribute_overlying_grid_requirements(edisgo_obj):
             ).values,
         )
         edisgo_copy.timeseries._loads_active_power.loc[:, hp_district.index] = (
-            scaling_df
-            * edisgo_obj.overlying_grid.heat_pump_central_active_power.sum(axis=1)[0]
+            scaling_df * edisgo_obj.overlying_grid.heat_pump_central_active_power
         ).transpose()
 
     # decentral PtH - distribute dispatch time series from overlying grid
