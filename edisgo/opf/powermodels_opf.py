@@ -143,7 +143,7 @@ def pm_optimize(
             if julia_process.poll() == 0:
                 logger.info("Julia process was successful.")
             else:
-                exceptions.InfeasibleModelError("Julia process failed!")
+                raise exceptions.InfeasibleModelError("Julia process failed!")
             break
         if out.rstrip().startswith('{"name"'):
             pm_opf = json.loads(out)

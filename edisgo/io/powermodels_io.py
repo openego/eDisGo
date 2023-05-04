@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 import pypsa
 
+from edisgo.flex_opt import exceptions
 from edisgo.flex_opt.costs import line_expansion_costs
 from edisgo.tools.tools import calculate_impedance_for_parallel_components
 
@@ -277,7 +278,10 @@ def from_powermodels(
         raise ValueError(
             "Parameter 'pm_results' must be either dictionary or path to json file."
         )
-    edisgo_object.opf_results.solution_time = pm["solve_time"]
+    try:
+        edisgo_object.opf_results.solution_time = pm["solve_time"]
+    except KeyError:
+        raise exceptions.InfeasibleModelError("Julia process failed!")
     edisgo_object.opf_results.status = pm["status"]
     edisgo_object.opf_results.solver = pm["solver"]
     flex_dicts = {
