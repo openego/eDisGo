@@ -455,16 +455,6 @@ def from_powermodels(
             edisgo_object.opf_results.lines_t.q = df
         elif variable == "ccm":
             edisgo_object.opf_results.lines_t.ccm = df
-    # Save bus voltages to edisgo object
-    # df = _result_df(
-    #     pm,
-    #     "bus",
-    #     "w",
-    #     timesteps,
-    #     edisgo_object.timeseries.timeindex,
-    #     1,
-    # )
-    # edisgo_object.opf_results.buses_t.w = df
 
 
 def _init_pm():
