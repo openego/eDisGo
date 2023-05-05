@@ -1,7 +1,0 @@
-,bus,p_set,annual_consumption,sector,type,voltage_level,add_ts
-Load2,Bus2,0.1,112.246362535784,residential,conventional_load,mv,
-Charging_Point_MVGrid_1_home_1,Bus2,0.11,,home,charging_point,mv,True
-Heat_Pump_MVGrid_1_flexible_1,Bus5,0.11,,flexible,heat_pump,mv,False
-Charging_Point_MVGrid_1_public_1,Bus2,0.11,,public,charging_point,mv,True
-dsm_load_99,Bus4,0.4,,industrial,conventional_load,mv,
-Load3,Bus3,0.1,,retail,conventional_load,lv,

@@ -1,3 +1,0 @@
-name,bus0,bus1,s_nom,r,x,type,type_info
-Transformer_mv_grid_2095_1,Busbar_mvgd_2095_HV,Busbar_mvgd_2095_MV,25.0,,,25 MVA 110/10 kV,25 MVA 110/10 kV
-Transformer_mv_grid_2095_2,Busbar_mvgd_2095_HV,Busbar_mvgd_2095_MV,25.0,,,25 MVA 110/10 kV,25 MVA 110/10 kV

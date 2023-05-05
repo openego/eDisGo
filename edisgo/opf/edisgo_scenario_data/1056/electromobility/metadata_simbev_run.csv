@@ -1,2 +1,0 @@
-,eta_cp,stepsize,start_date,end_date,soc_min,grid_timeseries,grid_timeseries_by_usecase,days
-0,1.0,15,2018-01-01,2018-12-31,0.2,True,True,365
