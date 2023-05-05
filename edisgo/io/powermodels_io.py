@@ -170,15 +170,18 @@ def to_powermodels(
         if edisgo_object.overlying_grid.heat_pump_central_active_power.isna()[0]:
             edisgo_object.overlying_grid.heat_pump_central_active_power[:] = 0
         hv_flex_dict = {
-            "curt": edisgo_object.overlying_grid.renewables_curtailment / s_base,
-            "storage": edisgo_object.overlying_grid.storage_units_active_power / s_base,
-            "cp": edisgo_object.overlying_grid.electromobility_active_power / s_base,
+            "curt": edisgo_object.overlying_grid.renewables_curtailment.round(6)
+            / s_base,
+            "storage": edisgo_object.overlying_grid.storage_units_active_power.round(6)
+            / s_base,
+            "cp": edisgo_object.overlying_grid.electromobility_active_power.round(6)
+            / s_base,
             "hp": (
-                edisgo_object.overlying_grid.heat_pump_decentral_active_power
-                + edisgo_object.overlying_grid.heat_pump_central_active_power
+                edisgo_object.overlying_grid.heat_pump_decentral_active_power.round(6)
+                + edisgo_object.overlying_grid.heat_pump_central_active_power.round(6)
             )
             / s_base,
-            "dsm": edisgo_object.overlying_grid.dsm_active_power / s_base,
+            "dsm": edisgo_object.overlying_grid.dsm_active_power.round(6) / s_base,
         }
         try:
             logger.info(
