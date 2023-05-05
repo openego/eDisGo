@@ -702,6 +702,7 @@ def get_files_recursive(path, files=None):
 def calculate_impedance_for_parallel_components(parallel_components, pu=False):
     """
     Method to calculate parallel impedance and power of parallel elements.
+
     """
     if pu:
         raise NotImplementedError(
@@ -830,6 +831,7 @@ def aggregate_district_heating_components(edisgo_obj):
     Parameters
     -----------
     edisgo_obj : :class:`~.EDisGo`
+
     """
     try:
         hp_district_heating = edisgo_obj.topology.loads_df.loc[
@@ -939,9 +941,10 @@ def battery_storage_reference_operation(
     """
     Reference operation of storage system where it directly charges
     Todo: Find original source
+
     Parameters
     -----------
-    df : pandas.DataFrame
+    df : :pandas:`pandas.DataFrame<DataFrame>`
         Timeseries of house demand - PV generation
     init_storage_charge : float
         Initial state of energy of storage device
@@ -955,10 +958,12 @@ def battery_storage_reference_operation(
         Efficiency of storage system in case of charging
     efficiency_discharge: float
         Efficiency of storage system in case of discharging
+
     Returns
     ---------
-    pandas.DataFrame
+    :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with storage operation timeseries
+
     """
     # Battery model handles generation positive, demand negative
     lst_storage_power = []
@@ -1041,14 +1046,15 @@ def determine_observation_periods(edisgo_obj, window_days, idx="min", absolute=F
     idx : str
         Specification on how to choose time interval. Either depending on residual load,
         generation or load timeseries. Has to be one of ["min", "max", "gen_max",
-        "load_max"]. Default: "min"
+        "load_max"]. Default: "min".
     absolute : bool
         Determines whether to use absolute values of residual load for time interval
-        determination. Default: False
+        determination. Default: False.
 
     Returns
     ---------
-    :pandas: `pandas.DatetimeIndex < DatetimeIndex > `
+    :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+
     """
     if absolute:
         residual_load = edisgo_obj.timeseries.residual_load.abs()
@@ -1114,28 +1120,29 @@ def get_sample_using_time(
         Amount of periods of date range. Default: None
     freq : str, optional
         Frequency of date range. Default: '1h'.
-    res_load:
+    res_load :
         If not None, time interval is determined using
         :func:`edisgo.tools.tools.determine_observation_periods`. Has to be one of
         [None, "balanced", "min", "max", "gen_max", "load_max"]. Default: None.
-    ts: bool
+    ts : bool
         Determines whether loads, generators and storage units timeseries are reduced to
         sample using time. Default: True.
-    bev: bool
+    bev : bool
         Determines whether electormobility timeseries is reduced to sample using time.
         Default: True.
-    save_ev_soc_initial: bool
+    save_ev_soc_initial : bool
         Determines whether to save initial ev soc from timestep before first timestep of
         sample using time for OPF. Default: True.
-    hp: bool
+    hp : bool
         Determines whether heat pump and heat storage timeseries are reduced to sample
         using time. Default: True.
-    dsm: bool
+    dsm : bool
         Determines whether DSM timeseries are reduced to sample using time.
         Default: True.
-    og: bool
+    og : bool
         Determines whetheroverlying grid timeseries are reduced to sample using time.
         Default: True.
+
     """
     if periods is None:
         raise TypeError(
