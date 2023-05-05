@@ -65,6 +65,7 @@ class OPFResults:
         Exports OPF results data to csv files.
 
         The following attributes can be exported:
+
         * 'lines_t' : The results of the three variables in attribute
           :py:attr:`~lines_t` are saved to `lines_t_p.csv`, `lines_t_p.csv`, and
           `lines_t_ccm.csv`.

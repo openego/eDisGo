@@ -73,7 +73,7 @@ autoapi_options = [
 autoapi_ignore = [
     "*/flex_opt/curtailment.py",
     "*/flex_opt/storage_positioning.py",
-    "*/opf/*",
+    "*/opf/timeseries_reduction.py",
 ]
 
 
@@ -120,7 +120,7 @@ extlinks = {
     ),
     "numpy": (
         "https://numpy.org/doc/stable/reference/generated/numpy.%s.html",
-        "numpy.",
+        "numpy.%s",
     ),
     "shapely": (
         "https://shapely.readthedocs.io/en/latest/manual.html#%s",
