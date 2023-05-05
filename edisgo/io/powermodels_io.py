@@ -1874,7 +1874,7 @@ def _build_component_timeseries(
     if (kind == "HV_requirements") & (pm["opf_version"] in [3, 4]):
         for i in np.arange(len(opf_flex)):
             pm_comp[(str(i + 1))] = {
-                "P": hv_flex_dict[opf_flex[i]].tolist(),
+                "P": hv_flex_dict[opf_flex[i]].round(6).tolist(),
             }
 
     pm["time_series"][kind] = pm_comp
