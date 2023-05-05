@@ -1,3 +1,0 @@
-name,bus0,bus1,s_nom,r,x,type,type_info
-Transformer_mv_grid_1056_1,Busbar_mvgd_1056_HV,Busbar_mvgd_1056_MV,63.0,,,63 MVA 110/10 kV,63 MVA 110/10 kV
-Transformer_mv_grid_1056_2,Busbar_mvgd_1056_HV,Busbar_mvgd_1056_MV,63.0,,,63 MVA 110/10 kV,63 MVA 110/10 kV
