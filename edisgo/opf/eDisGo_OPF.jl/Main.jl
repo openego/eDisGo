@@ -42,7 +42,7 @@ function optimize_edisgo()
     println("Starting convex SOC AC-OPF with Gurobi.")
     result_soc, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, SOCBFPowerModelEdisgo, gurobi)
     if result_soc["termination_status"] != MOI.OPTIMAL
-      println("Termination status: "*result_soc["termination_status"])
+      #println("Termination status: "*result_soc["termination_status"])
       JuMP.compute_conflict!(pm.model)
       if MOI.get(pm.model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
         iis_model, _ = copy_conflict(pm.model)
