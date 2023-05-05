@@ -154,19 +154,22 @@ class OPFResults:
 
         for attr, file in attrs_to_read.items():
             if attr in ["lines_t", "heat_storage_t", "grid_slacks_t"]:
-                df = {}
                 for variable, file_name in file.items():
                     if file_name in files:
                         if from_zip_archive:
                             # open zip file to make it readable for pandas
                             with zip.open(file_name) as f:
-                                df[variable] = pd.read_csv(
-                                    f, index_col=0, parse_dates=True
+                                setattr(
+                                    getattr(self, attr),
+                                    variable,
+                                    pd.read_csv(f, index_col=0, parse_dates=True),
                                 )
                         else:
                             path = os.path.join(data_path, file_name)
-                            df[variable] = pd.read_csv(
-                                path, index_col=0, parse_dates=True
+                            setattr(
+                                getattr(self, attr),
+                                variable,
+                                pd.read_csv(path, index_col=0, parse_dates=True),
                             )
             else:
                 if from_zip_archive:
@@ -177,7 +180,7 @@ class OPFResults:
                     path = os.path.join(data_path, file)
                     df = pd.read_csv(path, index_col=0)
 
-            setattr(self, attr, df)
+                setattr(self, attr, df)
 
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
