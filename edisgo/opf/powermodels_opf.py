@@ -56,6 +56,7 @@ def pm_optimize(
         flow model (BFM). Optimization versions differ in lifted or additional
         constraints and the objective function.
         Implemented version are:
+
         * 1
             * Lifted constraints: grid restrictions
             * Objective: minimize line losses and max line loading
