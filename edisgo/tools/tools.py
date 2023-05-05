@@ -400,7 +400,7 @@ def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
     -------
     list(str)
         List of buses (as in index of :attr:`~.network.topology.Topology.buses_df`)
-        downstream of the given component.
+        downstream of the given component incl. the initial bus.
 
     """
     graph = edisgo_obj.topology.to_graph()

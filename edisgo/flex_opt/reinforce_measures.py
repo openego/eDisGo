@@ -1078,10 +1078,7 @@ def separate_lv_grid(
         )
         transformers_changes.update(transformer_changes)
 
-        logger.debug(
-            f"{edisgo_obj.topology.mv_grid} ==> A new grid {lv_grid_id_new} "
-            f"added into topology"
-        )
+        logger.debug(f"New grid {lv_grid_id_new} added into topology.")
 
         lv_standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
             "lv_line"
