@@ -14,6 +14,7 @@ from networkx.algorithms.shortest_paths.weighted import (
 )
 
 from edisgo.network.grids import LVGrid, MVGrid
+from edisgo.tools.tools import get_downstream_buses
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -951,6 +952,8 @@ def separate_lv_grid(
                     node  # first nodes and paths
                 )
 
+    # TODO: make sure nodes are sorted correctly?
+
     lines_changes = {}
     transformers_changes = {}
     nodes_tb_relocated = {}  # nodes to be moved into the new grid
@@ -1016,7 +1019,7 @@ def separate_lv_grid(
         #  connected to the station) feeder cannot be split. Instead, every second
         #  inept feeder is assigned to the new grid
         if node_1_2 not in first_nodes_feeders or count_inept % 2 == 1:
-            nodes_tb_relocated[node_1_2] = nodes_feeder[nodes_feeder.index(node_1_2) :]
+            nodes_tb_relocated[node_1_2] = get_downstream_buses(edisgo_obj, node_1_2)
 
             if node_1_2 in first_nodes_feeders:
                 count_inept += 1
