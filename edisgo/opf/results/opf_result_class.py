@@ -58,6 +58,7 @@ class OPFResults:
         self.heat_storage_t = HeatStorage()
         self.hv_requirement_slacks_t = pd.DataFrame()
         self.grid_slacks_t = GridSlacks()
+        self.overlying_grid = pd.DataFrame()
 
     def to_csv(self, directory, attributes=None):
         """
@@ -78,6 +79,8 @@ class OPFResults:
         :py:attr:`~grid_slacks_t` are saved to `dispatchable_gen_crt.csv`,
         `non_dispatchable_gen_crt.csv`, `load_shedding.csv`, `cp_load_shedding.csv` and
         `hp_load_shedding.csv`.
+         * 'overlying_grid' : Attribute :py:attr:`~overlying_grid` is saved to
+          `overlying_grid.csv`.
 
         Parameters
         ----------
@@ -206,14 +209,15 @@ def _get_matching_dict_of_attributes_and_file_names():
     opf_results_dict = {
         "slack_generator_t": "slack_generator_t.csv",
         "hv_requirement_slacks_t": "hv_requirement_slacks_t.csv",
+        "overlying_grid": "overlying_grid.csv",
         "lines_t": {
             "p": "lines_t_p.csv",
             "q": "lines_t_q.csv",
             "ccm": "lines_t_ccm.csv",
         },
         "heat_storage_t": {
-            "p": "lines_t_p.csv",
-            "e": "lines_t_e.csv",
+            "p": "heat_storage_t_p.csv",
+            "e": "heat_storage_t_e.csv",
         },
         "grid_slacks_t": {
             "gen_d_crt": "dispatchable_gen_crt.csv",

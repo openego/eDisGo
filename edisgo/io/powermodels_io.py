@@ -376,7 +376,7 @@ def from_powermodels(
         for flex in df2.columns:
             df2[flex] = abs(df2[flex].values - hv_flex_dict[flex]) / hv_flex_dict[flex]
         # write results to edisgo object
-        edisgo_object.overlying_grid.opf_results = pd.DataFrame(
+        edisgo_object.opf_results.overlying_grid = pd.DataFrame(
             columns=[
                 "Highest relative error",
                 "Mean relative error",
@@ -390,7 +390,7 @@ def from_powermodels(
 
         for flex in df2.columns:
             if (
-                edisgo_object.overlying_grid.opf_results["Highest relative error"][flex]
+                edisgo_object.opf_results.overlying_grid["Highest relative error"][flex]
                 > 0.05
             ).any():
                 logger.warning(
