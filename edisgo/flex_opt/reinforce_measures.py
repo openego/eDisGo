@@ -1032,7 +1032,9 @@ def separate_lv_grid(
 
         max_iterations = 10**4
 
-        while lv_grid_id_new in [g.id for g in edisgo_obj.topology.mv_grid.lv_grids]:
+        g_ids = [g.id for g in edisgo_obj.topology.mv_grid.lv_grids]
+
+        while lv_grid_id_new in g_ids:
             n += 1
             lv_grid_id_new = int(f"{grid.id}{n}")
 
@@ -1044,15 +1046,11 @@ def separate_lv_grid(
 
         # Create the bus-bar name of primary and secondary side of new MV/LV station
         lv_bus_new = create_bus_name(station_node, lv_grid_id_new, "lv")
-        mv_bus_new = create_bus_name(station_node, lv_grid_id_new, "mv")
+        mv_bus = grid.transformers_df.bus0.iat[0]
 
         # ADD MV and LV bus
         v_nom_lv = edisgo_obj.topology.buses_df.at[
             grid.transformers_df.bus1[0],
-            "v_nom",
-        ]
-        v_nom_mv = edisgo_obj.topology.buses_df.at[
-            grid.transformers_df.bus0[0],
             "v_nom",
         ]
 
@@ -1061,55 +1059,26 @@ def separate_lv_grid(
 
         building_bus = grid.buses_df.at[station_node, "in_building"]
 
-        dist = 0.001
-
-        length_mv = np.sqrt(dist**2 + dist**2)
-
         # add lv busbar
         edisgo_obj.topology.add_bus(
             lv_bus_new,
             v_nom_lv,
-            x=x_bus + dist,
-            y=y_bus + dist,
+            x=x_bus,
+            y=y_bus,
             lv_grid_id=lv_grid_id_new,
-            in_building=building_bus,
-        )
-
-        # add  mv busbar
-        edisgo_obj.topology.add_bus(
-            mv_bus_new,
-            v_nom_mv,
-            x=x_bus + dist,
-            y=y_bus + dist,
             in_building=building_bus,
         )
 
         # ADD TRANSFORMER
         transformer_changes = add_standard_transformer(
-            edisgo_obj, grid, lv_bus_new, mv_bus_new, lv_grid_id_new
+            edisgo_obj, grid, lv_bus_new, mv_bus, lv_grid_id_new
         )
         transformers_changes.update(transformer_changes)
 
         logger.debug(
-            f"{edisgo_obj.topology.mv_grid}==>A new grid {lv_grid_id_new} "
+            f"{edisgo_obj.topology.mv_grid} ==> A new grid {lv_grid_id_new} "
             f"added into topology"
         )
-
-        # ADD the MV LINE between existing and new MV station
-        standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
-            f"mv_line_{int(edisgo_obj.topology.mv_grid.nominal_voltage)}kv"
-        ]
-
-        line_added_mv = edisgo_obj.add_component(
-            comp_type="line",
-            bus0=grid.transformers_df.bus0[0],
-            bus1=mv_bus_new,
-            length=length_mv,
-            type_info=standard_line,
-            kind="cable",
-        )
-
-        lines_changes[line_added_mv] = 1
 
         lv_standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
             "lv_line"
