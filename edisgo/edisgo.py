@@ -3405,6 +3405,7 @@ def import_edisgo_from_files(
     import_timeseries: bool = False,
     import_results: bool = False,
     import_electromobility: bool = False,
+    import_opf_results: bool = False,
     import_heat_pump: bool = False,
     import_dsm: bool = False,
     import_overlying_grid: bool = False,
@@ -3455,6 +3456,13 @@ def import_edisgo_from_files(
         'electromobility'. A different directory can be specified through keyword
         argument `electromobility_directory`.
         Default: False.
+    import_opf_results : bool
+        Indicates whether to import :class:`~.opf.results.opf_result_class.OPFResults`
+        object. Per default, it is set to False, in which case opf results data is not
+        imported. The default directory results data is imported from is the
+        sub-directory 'opf_results'. A different directory can be specified through
+        keyword argument `opf_results_directory`.
+        Default: False.
     import_heat_pump : bool
         Indicates whether to import :class:`~.network.heat.HeatPump` object.
         Per default, it is set to False, in which case heat pump data containing
@@ -3501,6 +3509,10 @@ def import_edisgo_from_files(
         Indicates directory :class:`~.network.electromobility.Electromobility` object is
         imported from. Per default, electromobility data is imported from `edisgo_path`
         sub-directory 'electromobility'.
+    opf_results_directory : str
+        Indicates directory :class:`~.opf.results.opf_result_class.OPFResults` object is
+        imported from. Per default, results data is imported from `edisgo_path`
+        sub-directory 'opf_results'.
     heat_pump_directory : str
         Indicates directory :class:`~.network.heat.HeatPump` object is
         imported from. Per default, heat pump data is imported from `edisgo_path`
@@ -3611,6 +3623,20 @@ def import_edisgo_from_files(
             logger.warning(
                 "No electromobility data found. Electromobility not imported."
             )
+
+    if import_opf_results:
+
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "opf_results_directory", os.path.join(edisgo_path, "opf_results")
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.opf_results.from_csv(
+                directory, from_zip_archive=from_zip_archive
+            )
+        else:
+            logger.warning("No opf results data found. OPF results not imported.")
 
     if import_heat_pump:
         if not from_zip_archive:

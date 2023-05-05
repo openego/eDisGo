@@ -58,6 +58,7 @@ class OPFResults:
         self.heat_storage_t = HeatStorage()
         self.hv_requirement_slacks_t = pd.DataFrame()
         self.grid_slacks_t = GridSlacks()
+        self.overlying_grid = pd.DataFrame()
 
     def to_csv(self, directory, attributes=None):
         """
@@ -78,6 +79,8 @@ class OPFResults:
         :py:attr:`~grid_slacks_t` are saved to `dispatchable_gen_crt.csv`,
         `non_dispatchable_gen_crt.csv`, `load_shedding.csv`, `cp_load_shedding.csv` and
         `hp_load_shedding.csv`.
+         * 'overlying_grid' : Attribute :py:attr:`~overlying_grid` is saved to
+          `overlying_grid.csv`.
 
         Parameters
         ----------
@@ -154,19 +157,22 @@ class OPFResults:
 
         for attr, file in attrs_to_read.items():
             if attr in ["lines_t", "heat_storage_t", "grid_slacks_t"]:
-                df = {}
                 for variable, file_name in file.items():
                     if file_name in files:
                         if from_zip_archive:
                             # open zip file to make it readable for pandas
                             with zip.open(file_name) as f:
-                                df[variable] = pd.read_csv(
-                                    f, index_col=0, parse_dates=True
+                                setattr(
+                                    getattr(self, attr),
+                                    variable,
+                                    pd.read_csv(f, index_col=0, parse_dates=True),
                                 )
                         else:
                             path = os.path.join(data_path, file_name)
-                            df[variable] = pd.read_csv(
-                                path, index_col=0, parse_dates=True
+                            setattr(
+                                getattr(self, attr),
+                                variable,
+                                pd.read_csv(path, index_col=0, parse_dates=True),
                             )
             else:
                 if from_zip_archive:
@@ -177,7 +183,7 @@ class OPFResults:
                     path = os.path.join(data_path, file)
                     df = pd.read_csv(path, index_col=0)
 
-            setattr(self, attr, df)
+                setattr(self, attr, df)
 
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
@@ -203,14 +209,15 @@ def _get_matching_dict_of_attributes_and_file_names():
     opf_results_dict = {
         "slack_generator_t": "slack_generator_t.csv",
         "hv_requirement_slacks_t": "hv_requirement_slacks_t.csv",
+        "overlying_grid": "overlying_grid.csv",
         "lines_t": {
             "p": "lines_t_p.csv",
             "q": "lines_t_q.csv",
             "ccm": "lines_t_ccm.csv",
         },
         "heat_storage_t": {
-            "p": "lines_t_p.csv",
-            "e": "lines_t_e.csv",
+            "p": "heat_storage_t_p.csv",
+            "e": "heat_storage_t_e.csv",
         },
         "grid_slacks_t": {
             "gen_d_crt": "dispatchable_gen_crt.csv",

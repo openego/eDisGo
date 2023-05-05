@@ -376,7 +376,7 @@ def from_powermodels(
         for flex in df2.columns:
             df2[flex] = abs(df2[flex].values - hv_flex_dict[flex]) / hv_flex_dict[flex]
         # write results to edisgo object
-        edisgo_object.overlying_grid.opf_results = pd.DataFrame(
+        edisgo_object.opf_results.overlying_grid = pd.DataFrame(
             columns=[
                 "Highest relative error",
                 "Mean relative error",
@@ -390,7 +390,7 @@ def from_powermodels(
 
         for flex in df2.columns:
             if (
-                edisgo_object.overlying_grid.opf_results["Highest relative error"][flex]
+                edisgo_object.opf_results.overlying_grid["Highest relative error"][flex]
                 > 0.05
             ).any():
                 logger.warning(
@@ -1636,15 +1636,15 @@ def _build_component_timeseries(
             if storage not in list(flexible_storage_units)
         ]
     if kind == "gen":
-        p_set2 = psa_net.generators_t.p_set[disp_gens] / s_base
-        q_set2 = psa_net.generators_t.q_set[disp_gens] / s_base
+        p_set2 = (psa_net.generators_t.p_set[disp_gens]).round(6)
+        q_set2 = (psa_net.generators_t.q_set[disp_gens]).round(6)
         p_set = (
             pd.concat(
                 [
                     p_set2,
-                    psa_net.storage_units_t.p_set[inflexible_storage_units].clip(
-                        lower=0
-                    ),
+                    psa_net.storage_units_t.p_set[inflexible_storage_units]
+                    .clip(lower=0)
+                    .round(6),
                 ],
                 axis=1,
             )
@@ -1654,9 +1654,9 @@ def _build_component_timeseries(
             pd.concat(
                 [
                     q_set2,
-                    psa_net.storage_units_t.q_set[inflexible_storage_units].clip(
-                        upper=0
-                    ),
+                    psa_net.storage_units_t.q_set[inflexible_storage_units]
+                    .clip(upper=0)
+                    .round(6),
                 ],
                 axis=1,
             )
@@ -1682,8 +1682,8 @@ def _build_component_timeseries(
                 np.concatenate((solar_gens.values, wind_gens.values))
             ]
             / s_base
-        )
-        q_set = psa_net.generators_t.q_set[p_set.columns] / s_base
+        ).round(6)
+        q_set = (psa_net.generators_t.q_set[p_set.columns] / s_base).round(6)
         for comp in p_set.columns:
             comp_i = _mapping(
                 psa_net,
@@ -1732,7 +1732,7 @@ def _build_component_timeseries(
                     axis=1,
                 )
                 / s_base
-            )
+            ).round(6)
             q_set = (
                 pd.concat(
                     [
@@ -1745,7 +1745,7 @@ def _build_component_timeseries(
                     axis=1,
                 )
                 / s_base
-            )
+            ).round(6)
         else:
             p_set = (
                 pd.concat(
@@ -1759,7 +1759,7 @@ def _build_component_timeseries(
                     axis=1,
                 )
                 / s_base
-            )
+            ).round(6)
             q_set = (
                 pd.concat(
                     [
@@ -1772,7 +1772,7 @@ def _build_component_timeseries(
                     axis=1,
                 )
                 / s_base
-            )
+            ).round(6)
         for comp in p_set.columns:
             comp_i = _mapping(
                 psa_net,
@@ -1797,19 +1797,19 @@ def _build_component_timeseries(
                     flexible_cps
                 ]
                 / s_base
-            )
+            ).round(6)
             e_min = (
                 edisgo_obj.electromobility.flexibility_bands["lower_energy"][
                     flexible_cps
                 ]
                 / s_base
-            )
+            ).round(6)
             e_max = (
                 edisgo_obj.electromobility.flexibility_bands["upper_energy"][
                     flexible_cps
                 ]
                 / s_base
-            )
+            ).round(6)
             for comp in flexible_cps:
                 comp_i = _mapping(
                     psa_net, edisgo_obj, comp, kind, flexible_cps=flexible_cps
@@ -1821,7 +1821,9 @@ def _build_component_timeseries(
                 }
     elif kind == "heatpumps":
         if len(flexible_hps) > 0:
-            p_set = edisgo_obj.heat_pump.heat_demand_df[flexible_hps] / s_base
+            p_set = (edisgo_obj.heat_pump.heat_demand_df[flexible_hps] / s_base).round(
+                6
+            )
             cop = edisgo_obj.heat_pump.cop_df[flexible_hps]
             for comp in flexible_hps:
                 comp_i = _mapping(
@@ -1833,10 +1835,10 @@ def _build_component_timeseries(
                 }
     elif kind == "dsm":
         if len(flexible_loads) > 0:
-            p_set = edisgo_obj.dsm.p_max[flexible_loads] / s_base
-            p_min = edisgo_obj.dsm.p_min[flexible_loads] / s_base
-            e_min = edisgo_obj.dsm.e_min[flexible_loads] / s_base
-            e_max = edisgo_obj.dsm.e_max[flexible_loads] / s_base
+            p_set = (edisgo_obj.dsm.p_max[flexible_loads] / s_base).round(6)
+            p_min = (edisgo_obj.dsm.p_min[flexible_loads] / s_base).round(6)
+            e_min = (edisgo_obj.dsm.e_min[flexible_loads] / s_base).round(6)
+            e_max = (edisgo_obj.dsm.e_max[flexible_loads] / s_base).round(6)
             for comp in flexible_loads:
                 comp_i = _mapping(
                     psa_net, edisgo_obj, comp, kind, flexible_loads=flexible_loads
