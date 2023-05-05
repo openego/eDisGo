@@ -1077,14 +1077,12 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
             edisgo_obj.electromobility.charging_processes_df.at[
                 idx, "charging_point_id"
             ] = charging_point_id
-            try:
-                available_charging_points_df.loc[
-                    charging_point_id
-                ] = edisgo_obj.electromobility.charging_processes_df.loc[
-                    idx, available_charging_points_df.columns
-                ].tolist()
-            except Exception:
-                print("break")
+
+            available_charging_points_df.loc[
+                charging_point_id
+            ] = edisgo_obj.electromobility.charging_processes_df.loc[
+                idx, available_charging_points_df.columns
+            ].tolist()
 
             designated_charging_point_capacity_df.at[
                 charging_park_id, "designated_charging_point_capacity"

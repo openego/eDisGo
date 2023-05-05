@@ -786,7 +786,7 @@ def separate_lv_grid(
     def get_weight(u, v, data: dict) -> float:
         return data["length"]
 
-    def create_bus_name(bus: str, voltage_level: str) -> str:
+    def create_bus_name(bus: str, lv_grid_id_new: int, voltage_level: str) -> str:
         """
         Create an LV and MV bus-bar name with the same grid_id but added '1001' that
         implies the separation
@@ -804,9 +804,8 @@ def separate_lv_grid(
         """
         if bus in edisgo_obj.topology.buses_df.index:
             bus = bus.split("_")
-            grid_id_ind = bus.index(str(grid.id))
-            # TODO: how to name new grids?
-            bus[grid_id_ind] = f"{grid.id}1001"
+
+            bus[-2] = lv_grid_id_new
 
             if voltage_level == "lv":
                 bus = "_".join([str(_) for _ in bus])
@@ -823,8 +822,9 @@ def separate_lv_grid(
 
         return bus
 
+    # TODO: adapt docstring to describe multiple new transformers
     def add_standard_transformer(
-        edisgo_obj: EDisGo, grid: LVGrid, bus_lv: str, bus_mv: str
+        edisgo_obj: EDisGo, grid: LVGrid, bus_lv: str, bus_mv: str, lv_grid_id_new: int
     ) -> dict:
         """
         Adds standard transformer to topology.
@@ -867,7 +867,7 @@ def separate_lv_grid(
         transformer_s = grid.transformers_df.iloc[0]
         new_transformer_name = transformer_s.name.split("_")
         grid_id_ind = new_transformer_name.index(str(grid.id))
-        new_transformer_name[grid_id_ind] = f"{str(grid.id)}1001"
+        new_transformer_name[grid_id_ind] = lv_grid_id_new
 
         transformer_s.s_nom = standard_transformer.S_nom
         transformer_s.type_info = None
@@ -879,21 +879,58 @@ def separate_lv_grid(
 
         new_transformer_df = transformer_s.to_frame().T
 
+        old_s_nom = 5  # grid.transformers_df.s_nom.sum()
+
+        max_iterations = 10
+        n = 0
+
+        while old_s_nom > new_transformer_df.s_nom.sum() and n < max_iterations:
+            n += 1
+
+            another_new_transformer = new_transformer_df.iloc[-1:, :]
+
+            old_name = another_new_transformer.index[0]
+
+            name = old_name.split("_")
+
+            try:
+                name[-1] = str(int(name[-1]) + 1)
+            except ValueError:
+                name.append("_1")
+
+            name = "_".join(name)
+
+            another_new_transformer.rename(index={old_name: name}, inplace=True)
+
+            new_transformer_df = pd.concat(
+                [new_transformer_df, another_new_transformer]
+            )
+
         edisgo_obj.topology.transformers_df = pd.concat(
             [edisgo_obj.topology.transformers_df, new_transformer_df]
         )
         transformers_changes["added"][
-            f"LVGrid_{str(grid.id)}1001"
+            f"LVGrid_{lv_grid_id_new}"
         ] = new_transformer_df.index.tolist()
 
         return transformers_changes
 
     G = grid.graph
-    station_node = list(G.nodes)[0]  # main station
+
+    # main station
+    station_node = list(G.nodes)[0]
 
     relevant_lines = grid.lines_df.loc[
         (grid.lines_df.bus0 == station_node) | (grid.lines_df.bus1 == station_node)
     ]
+
+    if len(relevant_lines) <= 1:
+        logger.warning(
+            f"{grid} has only {len(relevant_lines)} feeder and is therefore not "
+            f"separated."
+        )
+
+        return {}, {}
 
     logger.debug(f"{grid} has {len(relevant_lines)} feeder.")
 
@@ -901,11 +938,15 @@ def separate_lv_grid(
     first_nodes_feeders = {}
 
     for node in G.nodes:
+        if node == station_node:
+            continue
+
         path = nx.shortest_path(G, station_node, node)
 
         for first_node in relevant_lines.bus1.values:
             if first_node in path:
                 paths[node] = path
+
                 first_nodes_feeders.setdefault(path[1], []).append(
                     node  # first nodes and paths
                 )
@@ -931,7 +972,9 @@ def separate_lv_grid(
 
     for first_node, nodes_feeder in first_nodes_feeders.items():
         # first line of the feeder
-        first_line = relevant_lines[relevant_lines.bus1 == first_node].index[0]
+        first_line = relevant_lines[
+            (relevant_lines.bus1 == first_node) | (relevant_lines.bus0 == first_node)
+        ].index[0]
 
         # the last node of the feeder
         last_node = nodes_feeder[-1]
@@ -959,11 +1002,15 @@ def separate_lv_grid(
             node_1_2 = path[path.index(node_1_2) - 1]
             # break if node is station
             if node_1_2 is path[0]:
-                raise NotImplementedError(
-                    f" {grid}==>{first_line} and following lines could not be "
+                logger.warning(
+                    f"{grid} ==> {first_line} and following lines could not be "
                     f"reinforced due to insufficient number of node in the feeder. "
                     f"A method to handle such cases is not yet implemented."
                 )
+
+                node_1_2 = path[path.index(node_1_2) + 1]
+
+                break
 
         # NOTE: If node_1_2 is a representative (meaning it is already directly
         #  connected to the station) feeder cannot be split. Instead, every second
@@ -978,9 +1025,26 @@ def separate_lv_grid(
 
     if nodes_tb_relocated:
         logger.info(f"{grid}==>method:add_station_at_half_length is running ")
+
+        # the new lv grid id: e.g. 49602X
+        n = 0
+        lv_grid_id_new = int(f"{grid.id}{n}")
+
+        max_iterations = 10**4
+
+        while lv_grid_id_new in [g.id for g in edisgo_obj.topology.mv_grid.lv_grids]:
+            n += 1
+            lv_grid_id_new = int(f"{grid.id}{n}")
+
+            if n >= max_iterations:
+                raise ValueError(
+                    f"No suitable name for the new LV grid originating from {grid} was "
+                    f"found in {max_iterations=}."
+                )
+
         # Create the bus-bar name of primary and secondary side of new MV/LV station
-        lv_bus_new = create_bus_name(station_node, "lv")
-        mv_bus_new = create_bus_name(station_node, "mv")
+        lv_bus_new = create_bus_name(station_node, lv_grid_id_new, "lv")
+        mv_bus_new = create_bus_name(station_node, lv_grid_id_new, "mv")
 
         # ADD MV and LV bus
         v_nom_lv = edisgo_obj.topology.buses_df.at[
@@ -995,8 +1059,6 @@ def separate_lv_grid(
         x_bus = grid.buses_df.at[station_node, "x"]
         y_bus = grid.buses_df.at[station_node, "y"]
 
-        # the new lv grid id: e.g. 496021001
-        lv_grid_id_new = int(f"{str(grid.id)}1001")
         building_bus = grid.buses_df.at[station_node, "in_building"]
 
         dist = 0.001
@@ -1012,6 +1074,7 @@ def separate_lv_grid(
             lv_grid_id=lv_grid_id_new,
             in_building=building_bus,
         )
+
         # add  mv busbar
         edisgo_obj.topology.add_bus(
             mv_bus_new,
@@ -1023,7 +1086,7 @@ def separate_lv_grid(
 
         # ADD TRANSFORMER
         transformer_changes = add_standard_transformer(
-            edisgo_obj, grid, lv_bus_new, mv_bus_new
+            edisgo_obj, grid, lv_bus_new, mv_bus_new, lv_grid_id_new
         )
         transformers_changes.update(transformer_changes)
 
@@ -1097,9 +1160,25 @@ def separate_lv_grid(
 
         logger.info(
             f"{len(nodes_tb_relocated.keys())} feeders are removed from the grid "
-            f"{grid} and located in new grid{repr(grid) + str(1001)} by method: "
+            f"{grid} and located in new grid {lv_grid_id_new} by method: "
             f"add_station_at_half_length "
         )
+
+        # check if new grids have isolated notes
+        grids = [
+            g
+            for g in edisgo_obj.topology.mv_grid.lv_grids
+            if g.id in [grid.id, lv_grid_id_new]
+        ]
+
+        for g in grids:
+            n = nx.number_of_isolates(g.graph)
+
+            if n > 0 and len(g.buses_df) > 1:
+                raise ValueError(
+                    f"There are isolated nodes in {g}. The following nodes are "
+                    f"isolated: {list(nx.isolates(g.graph))}"
+                )
 
     else:
         logger.warning(
