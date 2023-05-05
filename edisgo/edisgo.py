@@ -807,26 +807,27 @@ class EDisGo:
             Default: 1 MVA
         flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
             Array containing all charging points that allow for flexible charging.
-        flexible_hps: :numpy:`numpy.ndarray<ndarray>` or None
+        flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
             Array containing all heat pumps that allow for flexible operation due to an
             attached heat storage.
-        flexible_loads: :numpy:`numpy.ndarray<ndarray>` or None
+        flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
             Array containing all flexible loads that allow for application of demand
             side management strategy.
-        flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or None
+        flexible_storage_units : :numpy:`numpy.ndarray<ndarray>` or None
             Array containing all flexible storages. Non-flexible storages operate to
             optimize self consumption.
-            Default: None
-        opf_version: Int
+            Default: None.
+        opf_version : int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
-            Default: 1
+            Default: 1.
 
         Returns
         -------
-        pm: dict
+        dict
             Dictionary that contains all network data in PowerModels network data
             format.
+
         """
         return powermodels_io.to_powermodels(
             self,
@@ -854,29 +855,26 @@ class EDisGo:
 
         Parameters
         ----------
-        pm_results: dict or str
+        pm_results : dict or str
             Dictionary or path to JSON file that contains all network data in
             PowerModels network data format.
-        hv_flex_dict: dict
+        hv_flex_dict : dict
             Dictionary containing time series of HV requirement for each flexibility
             retrieved from etrago component of edisgo object.
         s_base : int
-            Base value of apparent power for per unit system.
-            Default: 1 MVA
-        save_heat_storage: bool
+            Base value of apparent power for per unit system. Default: 1 MVA.
+        save_heat_storage : bool
             Indicates whether to save results of heat storage variables from the
-            optimization to eDisGo object.
-                Default: True
-        save_slack_gen: bool
+            optimization to eDisGo object. Default: True.
+        save_slack_gen : bool
             Indicates whether to save results of slack generator variables from the
-            optimization to eDisGo object.
-            Default: True
+            optimization to eDisGo object. Default: True.
         save_slacks: bool
             Indicates whether to save results of slack variables from the OPF run to
             eDisGo object. Depending on the chosen opf_version, different slacks are
             created and saved For more information see
-             :func:`edisgo.io.powermodels_io.from_powermodels`
-            Default: True
+            :func:`edisgo.io.powermodels_io.from_powermodels`. Default: True.
+
         """
         return powermodels_io.from_powermodels(
             self,
@@ -912,57 +910,57 @@ class EDisGo:
         ----------
         s_base : int
             Base value of apparent power for per unit system.
-            Default: 1 MVA
+            Default: 1 MVA.
         flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
             Array containing all charging points that allow for flexible charging.
-            Default: None
-        flexible_hps: :numpy:`numpy.ndarray<ndarray>` or None
+            Default: None.
+        flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
             Array containing all heat pumps that allow for flexible operation due to an
             attached heat storage.
-            Default: None
-        flexible_loads: :numpy:`numpy.ndarray<ndarray>` or None
+            Default: None.
+        flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
             Array containing all flexible loads that allow for application of demand
             side management strategy.
-            Default: None
+            Default: None.
         flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or None
             Array containing all flexible storages. Non-flexible storages operate to
             optimize self consumption.
-            Default: None
-        opf_version: Int
+            Default: None.
+        opf_version : int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
-            Default: 1
-        method: str
+            Default: 1.
+        method : str
             Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
             (Non Convex). For more information see
             :func:`edisgo.opf.powermodels_opf.pm_optimize`.
-            Default: "soc"
-        warm_start: bool
+            Default: "soc".
+        warm_start : bool
             If set to True and if method is set to "soc", non-convex IPOPT OPF will be
             run additionally and will be warm started with Gurobi SOC solution.
             Warm-start will only be run if results for Gurobi's SOC relaxation is exact.
-            Default: False
-        silence_moi: bool
+            Default: False.
+        silence_moi : bool
             If set to True, MathOptInterface's optimizer attribute "MOI.Silent" is set
             to True in julia subprocess. This attribute is for silencing the output of
             an optimizer. When set to True, it requires the solver to produce no output,
             hence there will be no logging coming from julia subprocess in python
             process.
-            Default: False
-        save_heat_storage: bool
+            Default: False.
+        save_heat_storage : bool
             Indicates whether to save results of heat storage variables from the
-            optimization to eDisGo object.
-                Default: True
-        save_slack_gen: bool
+            optimization to eDisGo object. Default: True.
+        save_slack_gen : bool
             Indicates whether to save results of slack generator variables from the
             optimization to eDisGo object.
-            Default: True
-        save_slacks: bool
+            Default: True.
+        save_slacks : bool
             Indicates whether to save results of slack variables from the OPF run to
             eDisGo object. Depending on the chosen opf_version, different slacks are
             created and saved For more information see
-             :func:`edisgo.io.powermodels_io.from_powermodels`
-            Default: True
+            :func:`edisgo.io.powermodels_io.from_powermodels`
+            Default: True.
+
         """
         return powermodels_opf.pm_optimize(
             self,

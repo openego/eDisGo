@@ -66,20 +66,20 @@ class OPFResults:
 
         The following attributes can be exported:
         * 'lines_t' : The results of the three variables in attribute
-        :py:attr:`~lines_t` are saved to `lines_t_p.csv`, `lines_t_p.csv`, and
-        `lines_t_ccm.csv`.
+          :py:attr:`~lines_t` are saved to `lines_t_p.csv`, `lines_t_p.csv`, and
+          `lines_t_ccm.csv`.
         * 'slack_generator_t' : Attribute :py:attr:`~slack_generator_t` is saved to
           `slack_generator_t.csv`.
         * 'heat_storage_t' : The results of the two variables in attribute
-         :py:attr:`~heat_storage_t` are saved to `heat_storage_t_p.csv` and
-         `heat_storage_t_e.csv`.
+          :py:attr:`~heat_storage_t` are saved to `heat_storage_t_p.csv` and
+          `heat_storage_t_e.csv`.
         * 'hv_requirement_slacks_t' : Attribute :py:attr:`~hv_requirement_slacks_t` is
           saved to `hv_requirement_slacks_t.csv`.
         * 'grid_slacks_t' : The results of the five variables in attribute
-        :py:attr:`~grid_slacks_t` are saved to `dispatchable_gen_crt.csv`,
-        `non_dispatchable_gen_crt.csv`, `load_shedding.csv`, `cp_load_shedding.csv` and
-        `hp_load_shedding.csv`.
-         * 'overlying_grid' : Attribute :py:attr:`~overlying_grid` is saved to
+          :py:attr:`~grid_slacks_t` are saved to `dispatchable_gen_crt.csv`,
+          `non_dispatchable_gen_crt.csv`, `load_shedding.csv`, `cp_load_shedding.csv`
+          and `hp_load_shedding.csv`.
+        * 'overlying_grid' : Attribute :py:attr:`~overlying_grid` is saved to
           `overlying_grid.csv`.
 
         Parameters
@@ -120,7 +120,7 @@ class OPFResults:
         data_path : str
             Path to OPF results csv files.
         from_zip_archive : bool, optional
-            Set True if data is archived in a zip archive. Default: False
+            Set True if data is archived in a zip archive. Default: False.
 
         """
         attrs = _get_matching_dict_of_attributes_and_file_names()
