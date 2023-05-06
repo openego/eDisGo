@@ -488,9 +488,10 @@ def _init_pm():
 
     Returns
     -------
-    pm: dict
+    dict
         Dictionary that contains all network data in PowerModels network data
         format.
+
     """
     pm = {
         "gen": dict(),
@@ -604,8 +605,7 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
         (PowerModels) dictionary.
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 100 MVA
-    flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or None
+    flexible_storage_units : :numpy:`numpy.ndarray<ndarray>` or None
         Array containing all flexible storage units.
 
     """
@@ -745,7 +745,6 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
         Array containing all flexible storage units.
     s_base : int
         Base value of apparent power for per unit system.
-        Default: 1 MVA.
 
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])

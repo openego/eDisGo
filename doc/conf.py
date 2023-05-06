@@ -74,6 +74,7 @@ autoapi_ignore = [
     "*/flex_opt/curtailment.py",
     "*/flex_opt/storage_positioning.py",
     "*/opf/timeseries_reduction.py",
+    "*/opf/opf_solutions/*",
 ]
 
 

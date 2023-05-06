@@ -218,6 +218,8 @@ class TestPowermodelsIO:
             )
 
     def test_to_powermodels(self):
+
+        # test without flexibilities
         powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(self.edisgo)
 
         assert len(powermodels_network["gen"].keys()) == 1 + 1

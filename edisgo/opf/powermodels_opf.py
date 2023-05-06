@@ -55,17 +55,17 @@ def pm_optimize(
         Version of optimization models to choose from. The grid model is a radial branch
         flow model (BFM). Optimization versions differ in lifted or additional
         constraints and the objective function.
-        Implemented version are:
+        Implemented versions are:
 
         * 1
             * Lifted constraints: grid restrictions
-            * Objective: minimize line losses and max line loading
+            * Objective: minimize line losses and maximal line loading
         * 2
             * Objective: minimize line losses and grid related slacks
         * 3
             * Additional constraints: high voltage requirements
             * Lifted constraints: grid restrictions
-            * Objective: minimize line losses, max line loading and HV slacks
+            * Objective: minimize line losses, maximal line loading and HV slacks
         * 4
             * Additional constraints: high voltage requirements
             * Objective: minimize line losses, HV slacks and grid related slacks

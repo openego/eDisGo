@@ -902,9 +902,9 @@ class EDisGo:
         save_slacks=True,
     ):
         """
-        Run OPF for edisgo object in julia subprocess and write results of OPF to
-        edisgo object. Results of OPF are time series of operation schedules of
-        flexibilities.
+        Run OPF in julia subprocess and write results of OPF back to edisgo object.
+
+        Results of OPF are time series of operation schedules of flexibilities.
 
         Parameters
         ----------
@@ -2755,9 +2755,9 @@ class EDisGo:
             information.
         save_opf_results : bool, optional
             Indicates whether to save
-            :class:`~.opf.results.opf_results_class.OPFResults` object. Per default, it
+            :class:`~.opf.results.opf_result_class.OPFResults` object. Per default, it
             is not saved. If set to True, it is saved to subdirectory 'opf_results'.
-            See :attr:`~.opf.results.opf_results_class.OPFResults.to_csv` for more
+            See :attr:`~.opf.results.opf_result_class.OPFResults.to_csv` for more
             information.
         save_heatpump : bool, optional
             Indicates whether to save
@@ -2930,17 +2930,17 @@ class EDisGo:
             Filename the json file is saved under. If None, filename is
             'ding0_{grid_id}_t_{#timesteps}.json'.
         path : str
-            Directory the json file is saved to. Per default it takes the current
+            Directory the json file is saved to. Per default, it takes the current
             working directory.
         s_base : int
             Base value of apparent power for per unit system.
             Default: 1 MVA
         flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
             Array containing all charging points that allow for flexible charging.
-        flexible_hps: :numpy:`numpy.ndarray<ndarray>` or None
+        flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
             Array containing all heat pumps that allow for flexible operation due to an
             attached heat storage.
-        flexible_loads: :numpy:`numpy.ndarray<ndarray>` or None
+        flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
             Array containing all flexible loads that allow for application of demand
             side management strategy.
         flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or None
@@ -2950,12 +2950,14 @@ class EDisGo:
         opf_version: Int
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
-            Default: 1
+            Default: 1.
+
         Returns
         -------
-        pm: dict
+        dict
             Dictionary that contains all network data in PowerModels network data
             format.
+
         """
         abs_path = os.path.abspath(path)
         pm, hv_flex_dict = self.to_powermodels(
