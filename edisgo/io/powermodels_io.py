@@ -353,9 +353,16 @@ def from_powermodels(
             )
         elif flex == "storage":
             try:
-                edisgo_object.timeseries._storage_units_active_power.loc[
-                    :, names
-                ] = results[names].values
+                if edisgo_object.timeseries.storage_units_active_power.empty:
+                    edisgo_object.timeseries.storage_units_active_power = pd.DataFrame(
+                        index=edisgo_object.timeseries.timeindex,
+                        columns=names,
+                        data=results[names].values,
+                    )
+                else:
+                    edisgo_object.timeseries._storage_units_active_power.loc[
+                        :, names
+                    ] = results[names].values
             except AttributeError:
                 setattr(
                     edisgo_object.timeseries,
