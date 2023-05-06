@@ -33,7 +33,7 @@ warm_start = ARGS[5].=="True"
 const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>1e-6)
 function optimize_edisgo()
   # read in data and create multinetwork
-  gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "FeasibilityTol"=>1e-4, "BarQCPConvTol"=>1e-4)
+  gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "FeasibilityTol"=>1e-4, "BarQCPConvTol"=>1e-4, "BarConvTol"=>1e-4, "BarHomogeneous"=>1)
   data_edisgo = eDisGo_OPF.parse_json(json_str)
   data_edisgo_mn = PowerModels.make_multinetwork(data_edisgo)
 
@@ -54,7 +54,7 @@ function optimize_edisgo()
       soc_tight, soc_dict = eDisGo_OPF.check_SOC_equality(result_soc, data_edisgo)
       # Save SOC violations if SOC is not tight
       if !soc_tight
-        open(joinpath(results_path, "OPF_grids", ding0_grid*"_"*join(data_edisgo["flexibilities"])*".json"), "w") do f
+        open(joinpath(results_path, ding0_grid*"_"*join(data_edisgo["flexibilities"])*".json"), "w") do f
             write(f, JSON.json(soc_dict))
         end
         println("SOC solution is not tight!")

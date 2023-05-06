@@ -170,15 +170,18 @@ def to_powermodels(
         if edisgo_object.overlying_grid.heat_pump_central_active_power.isna()[0]:
             edisgo_object.overlying_grid.heat_pump_central_active_power[:] = 0
         hv_flex_dict = {
-            "curt": edisgo_object.overlying_grid.renewables_curtailment / s_base,
-            "storage": edisgo_object.overlying_grid.storage_units_active_power / s_base,
-            "cp": edisgo_object.overlying_grid.electromobility_active_power / s_base,
+            "curt": edisgo_object.overlying_grid.renewables_curtailment.round(20)
+            / s_base,
+            "storage": edisgo_object.overlying_grid.storage_units_active_power.round(20)
+            / s_base,
+            "cp": edisgo_object.overlying_grid.electromobility_active_power.round(20)
+            / s_base,
             "hp": (
-                edisgo_object.overlying_grid.heat_pump_decentral_active_power
-                + edisgo_object.overlying_grid.heat_pump_central_active_power
+                edisgo_object.overlying_grid.heat_pump_decentral_active_power.round(20)
+                + edisgo_object.overlying_grid.heat_pump_central_active_power.round(20)
             )
             / s_base,
-            "dsm": edisgo_object.overlying_grid.dsm_active_power / s_base,
+            "dsm": edisgo_object.overlying_grid.dsm_active_power.round(20) / s_base,
         }
         try:
             logger.info(
@@ -660,10 +663,10 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             pm[text][str(gen_i + 1)] = {
                 "pg": psa_net.generators_t.p_set[gen.index[gen_i]][0] / s_base,
                 "qg": psa_net.generators_t.q_set[gen.index[gen_i]][0] / s_base,
-                "pmax": gen.p_nom[gen_i] / s_base,
-                "pmin": gen.p_nom_min[gen_i] / s_base,
-                "qmax": max(q) / s_base,
-                "qmin": min(q) / s_base,
+                "pmax": gen.p_nom[gen_i].round(20) / s_base,
+                "pmin": gen.p_nom_min[gen_i].round(20) / s_base,
+                "qmax": max(q).round(20) / s_base,
+                "qmin": min(q).round(20) / s_base,
                 "P": 0,
                 "Q": 0,
                 "vg": 1,
@@ -697,21 +700,25 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
                 [psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0], 0]
             )
             pm["gen"][str(stor_i + len(gen_disp.index) + 1)] = {
-                "pg": p_g / s_base,
-                "qg": q_g / s_base,
+                "pg": p_g.round(20) / s_base,
+                "qg": q_g.round(20) / s_base,
                 "pmax": psa_net.storage_units.p_nom.loc[
                     inflexible_storage_units[stor_i]
-                ]
+                ].round(20)
                 / s_base,
                 "pmin": -psa_net.storage_units.p_nom.loc[
                     inflexible_storage_units[stor_i]
-                ]
+                ].round(20)
                 / s_base,
                 "qmax": np.tan(np.arccos(pf))
-                * psa_net.storage_units.p_nom.loc[inflexible_storage_units[stor_i]]
+                * psa_net.storage_units.p_nom.loc[
+                    inflexible_storage_units[stor_i]
+                ].round(20)
                 / s_base,
                 "qmin": -np.tan(np.arccos(pf))
-                * psa_net.storage_units.p_nom.loc[inflexible_storage_units[stor_i]]
+                * psa_net.storage_units.p_nom.loc[
+                    inflexible_storage_units[stor_i]
+                ].round(20)
                 / s_base,
                 "P": 0,
                 "Q": 0,
@@ -720,7 +727,7 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
                 "sign": sign,
                 "mbase": psa_net.storage_units.p_nom.loc[
                     inflexible_storage_units[stor_i]
-                ]
+                ].round(20)
                 / s_base,
                 "gen_bus": idx_bus,
                 "gen_status": 1,
@@ -798,10 +805,8 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             "transformer": bool(transformer[branch_i]),
             "storage": False,
             "tap": tap[branch_i],
-            "length": branches.length.fillna(1)[branch_i],
-            "cost": branches.capital_cost[branch_i],
-            "cost_inverse": 1
-            / (branches.length.fillna(1)[branch_i] * branches.capital_cost[branch_i]),
+            "length": branches.length.fillna(1)[branch_i].round(20),
+            "cost": branches.capital_cost[branch_i].round(20),
             "storage_pf": 0,
             "index": branch_i + 1,
         }
@@ -818,7 +823,9 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
 
         pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
-            "br_r": 0.017 * s_base / (psa_net.buses.v_nom[idx_bus - 1] ** 2),
+            "br_r": (0.017 * s_base / (psa_net.buses.v_nom[idx_bus - 1] ** 2)).round(
+                10
+            ),
             "r": 0.017,
             "br_x": 0,
             "f_bus": idx_bus,
@@ -829,7 +836,9 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             "b_fr": 0,
             "shift": 0,
             "br_status": 1.0,
-            "rate_a": psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
+            "rate_a": psa_net.storage_units.p_nom.loc[
+                flexible_storage_units[stor_i]
+            ].round(20)
             / s_base,
             "rate_b": 250 / s_base,
             "rate_c": 250 / s_base,
@@ -911,8 +920,8 @@ def _build_load(
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
         q_d = psa_net.loads_t.q_set[loads_df.index[load_i]]
         pm["load"][str(load_i + 1)] = {
-            "pd": p_d[0] / s_base,
-            "qd": q_d[0] / s_base,
+            "pd": p_d[0].round(20) / s_base,
+            "qd": q_d[0].round(20) / s_base,
             "load_bus": idx_bus,
             "status": True,
             "pf": pf,
@@ -936,8 +945,8 @@ def _build_load(
                 [psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0], 0]
             )
             pm["load"][str(stor_i + len(loads_df.index) + 1)] = {
-                "pd": p_d / s_base,
-                "qd": q_d / s_base,
+                "pd": p_d.round(20) / s_base,
+                "qd": q_d.round(20) / s_base,
                 "load_bus": idx_bus,
                 "status": True,
                 "pf": pf,
@@ -1022,40 +1031,52 @@ def _build_battery_storage(
             "pf": pf,
             "sign": sign,
             "virtual_branch": str(stor_i + len(branches.index) + 1),
-            "ps": psa_net.storage_units.p_set[flexible_storage_units[stor_i]] / s_base,
-            "qs": psa_net.storage_units.q_set[flexible_storage_units[stor_i]] / s_base,
-            "pmax": psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
+            "ps": psa_net.storage_units.p_set[flexible_storage_units[stor_i]].round(20)
             / s_base,
-            "pmin": -psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
+            "qs": psa_net.storage_units.q_set[flexible_storage_units[stor_i]].round(20)
+            / s_base,
+            "pmax": psa_net.storage_units.p_nom.loc[
+                flexible_storage_units[stor_i]
+            ].round(20)
+            / s_base,
+            "pmin": -psa_net.storage_units.p_nom.loc[
+                flexible_storage_units[stor_i]
+            ].round(20)
             / s_base,
             "qmax": np.tan(np.arccos(pf))
-            * psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
+            * psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]].round(20)
             / s_base,
             "qmin": -np.tan(np.arccos(pf))
-            * psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
+            * psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]].round(20)
             / s_base,
-            "energy": psa_net.storage_units.state_of_charge_initial.loc[
-                flexible_storage_units[stor_i]
-            ]
-            * e_max
+            "energy": (
+                psa_net.storage_units.state_of_charge_initial.loc[
+                    flexible_storage_units[stor_i]
+                ]
+                * e_max
+            ).round(20)
             / s_base,
             "soc_initial": (
                 edisgo_obj.overlying_grid.storage_units_soc[
                     flexible_storage_units[stor_i]
-                ].iloc[0]
+                ]
+                .iloc[0]
+                .round(20)
             ),
             "soc_end": edisgo_obj.overlying_grid.storage_units_soc[
                 flexible_storage_units[stor_i]
-            ].iloc[-1],
-            "energy_rating": e_max / s_base,
+            ]
+            .iloc[-1]
+            .round(20),
+            "energy_rating": e_max.round(20) / s_base,
             "thermal_rating": 1000,
             "charge_rating": psa_net.storage_units.p_nom.loc[
                 flexible_storage_units[stor_i]
-            ]
+            ].round(20)
             / s_base,
             "discharge_rating": psa_net.storage_units.p_nom.loc[
                 flexible_storage_units[stor_i]
-            ]
+            ].round(20)
             / s_base,
             "charge_efficiency": 0.9,
             "discharge_efficiency": 0.9,
@@ -1131,12 +1152,12 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
             "pf": pf,
             "sign": sign,
             "p_min": 0,
-            "p_max": p_max[0] / s_base,
-            "q_min": min(q, 0) / s_base,
-            "q_max": max(q, 0) / s_base,
-            "e_min": e_min[0] / s_base,
-            "e_max": e_max[0] / s_base,
-            "energy": soc_initial,
+            "p_max": p_max[0].round(20) / s_base,
+            "q_min": min(q, 0).round(20) / s_base,
+            "q_max": max(q, 0).round(20) / s_base,
+            "e_min": e_min[0].round(20) / s_base,
+            "e_max": e_max[0].round(20) / s_base,
+            "energy": soc_initial.round(20),
             "eta": eta,
             "cp_bus": idx_bus,
             "name": emob_df.index[cp_i],
@@ -1183,14 +1204,14 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
         p_d = heat_df2[heat_df.index[hp_i]]
         pm["heatpumps"][str(hp_i + 1)] = {
-            "pd": p_d[0] / s_base,  # heat demand
+            "pd": p_d[0].round(20) / s_base,  # heat demand
             "pf": pf,
             "sign": sign,
             "p_min": 0,
-            "p_max": heat_df.p_set[hp_i] / s_base,
-            "q_min": min(q, 0) / s_base,
-            "q_max": max(q, 0) / s_base,
-            "cop": hp_cop[heat_df.index[hp_i]][0],
+            "p_max": heat_df.p_set[hp_i].round(20) / s_base,
+            "q_min": min(q, 0).round(20) / s_base,
+            "q_max": max(q, 0).round(20) / s_base,
+            "cop": hp_cop[heat_df.index[hp_i]][0].round(20),
             "hp_bus": idx_bus,
             "name": heat_df.index[hp_i],
             "index": hp_i + 1,
@@ -1293,19 +1314,23 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
             "ps": 0,
             "p_loss": 0.04,  # 4% of SOC per day
             "energy": 0,
-            "capacity": heat_storage_df.capacity[stor_i] / s_base,
-            "charge_efficiency": heat_storage_df.efficiency[stor_i],
-            "discharge_efficiency": heat_storage_df.efficiency[stor_i],
+            "capacity": heat_storage_df.capacity[stor_i].round(20) / s_base,
+            "charge_efficiency": heat_storage_df.efficiency[stor_i].round(20),
+            "discharge_efficiency": heat_storage_df.efficiency[stor_i].round(20),
             "storage_bus": idx_bus,
             "name": heat_storage_df.index[stor_i],
             "soc_initial": (
                 edisgo_obj.overlying_grid.heat_storage_units_soc[
                     heat_storage_df.index[stor_i]
-                ].iloc[0]
+                ]
+                .iloc[0]
+                .round(20)
             ),
             "soc_end": edisgo_obj.overlying_grid.heat_storage_units_soc[
                 heat_storage_df.index[stor_i]
-            ].iloc[-1],
+            ]
+            .iloc[-1]
+            .round(20),
             "status": True,
             "index": stor_i + 1,
         }
@@ -1412,12 +1437,12 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
             "pf": pf,
             "sign": sign,
             "energy": 0 / s_base,
-            "p_min": p_min[0] / s_base,
-            "p_max": p_max[0] / s_base,
-            "q_max": max(q) / s_base,
-            "q_min": min(q) / s_base,
-            "e_min": e_min[0] / s_base,
-            "e_max": e_max[0] / s_base,
+            "p_min": p_min[0].round(20) / s_base,
+            "p_max": p_max[0].round(20) / s_base,
+            "q_max": max(q).round(20) / s_base,
+            "q_min": min(q).round(20) / s_base,
+            "e_min": e_min[0].round(20) / s_base,
+            "e_max": e_max[0].round(20) / s_base,
             "charge_efficiency": 1,
             "discharge_efficiency": 1,
             "dsm_bus": idx_bus,
@@ -1495,25 +1520,33 @@ def _build_hv_requirements(
     ]
     if len(inflexible_cps) > 0:
         hv_flex_dict["cp"] = (
-            hv_flex_dict["cp"]
-            - psa_net.loads_t.p_set.loc[:, inflexible_cps].sum(axis=1) / s_base
-        ).clip(lower=0)
+            (
+                hv_flex_dict["cp"]
+                - psa_net.loads_t.p_set.loc[:, inflexible_cps].sum(axis=1) / s_base
+            )
+            .round(20)
+            .clip(lower=0)
+        )
     if len(inflexible_hps) > 0:
         hv_flex_dict["hp"] = (
-            hv_flex_dict["hp"]
-            - psa_net.loads_t.p_set.loc[:, inflexible_hps].sum(axis=1) / s_base
-        ).clip(lower=0)
+            (
+                hv_flex_dict["hp"]
+                - psa_net.loads_t.p_set.loc[:, inflexible_hps].sum(axis=1) / s_base
+            )
+            .round(20)
+            .clip(lower=0)
+        )
     if len(inflexible_storage_units) > 0:
         hv_flex_dict["storage"] = (
             hv_flex_dict["storage"]
             - psa_net.storage_units_t.p_set.loc[:, inflexible_storage_units].sum(axis=1)
             / s_base
-        )
+        ).round(20)
     if len(inflexible_loads) > 0:
         hv_flex_dict["dsm"] = (
             hv_flex_dict["dsm"]
             - psa_net.loads_t.p_set.loc[:, inflexible_loads].sum(axis=1) / s_base
-        )
+        ).round(20)
     for i in np.arange(len(opf_flex)):
         pm["HV_requirements"][str(i + 1)] = {
             "P": hv_flex_dict[opf_flex[i]][0],
@@ -1656,15 +1689,15 @@ def _build_component_timeseries(
             if storage not in list(flexible_storage_units)
         ]
     if kind == "gen":
-        p_set2 = (psa_net.generators_t.p_set[disp_gens]).round(6)
-        q_set2 = (psa_net.generators_t.q_set[disp_gens]).round(6)
+        p_set2 = (psa_net.generators_t.p_set[disp_gens]).round(20)
+        q_set2 = (psa_net.generators_t.q_set[disp_gens]).round(20)
         p_set = (
             pd.concat(
                 [
                     p_set2,
                     psa_net.storage_units_t.p_set[inflexible_storage_units]
                     .clip(lower=0)
-                    .round(6),
+                    .round(20),
                 ],
                 axis=1,
             )
@@ -1676,7 +1709,7 @@ def _build_component_timeseries(
                     q_set2,
                     psa_net.storage_units_t.q_set[inflexible_storage_units]
                     .clip(upper=0)
-                    .round(6),
+                    .round(20),
                 ],
                 axis=1,
             )
@@ -1702,8 +1735,8 @@ def _build_component_timeseries(
                 np.concatenate((solar_gens.values, wind_gens.values))
             ]
             / s_base
-        ).round(6)
-        q_set = (psa_net.generators_t.q_set[p_set.columns] / s_base).round(6)
+        ).round(20)
+        q_set = (psa_net.generators_t.q_set[p_set.columns] / s_base).round(20)
         for comp in p_set.columns:
             comp_i = _mapping(
                 psa_net,
@@ -1752,7 +1785,7 @@ def _build_component_timeseries(
                     axis=1,
                 )
                 / s_base
-            ).round(6)
+            ).round(20)
             q_set = (
                 pd.concat(
                     [
@@ -1765,7 +1798,7 @@ def _build_component_timeseries(
                     axis=1,
                 )
                 / s_base
-            ).round(6)
+            ).round(20)
         else:
             p_set = (
                 pd.concat(
@@ -1779,7 +1812,7 @@ def _build_component_timeseries(
                     axis=1,
                 )
                 / s_base
-            ).round(6)
+            ).round(20)
             q_set = (
                 pd.concat(
                     [
@@ -1792,7 +1825,7 @@ def _build_component_timeseries(
                     axis=1,
                 )
                 / s_base
-            ).round(6)
+            ).round(20)
         for comp in p_set.columns:
             comp_i = _mapping(
                 psa_net,
@@ -1817,19 +1850,19 @@ def _build_component_timeseries(
                     flexible_cps
                 ]
                 / s_base
-            ).round(6)
+            ).round(20)
             e_min = (
                 edisgo_obj.electromobility.flexibility_bands["lower_energy"][
                     flexible_cps
                 ]
                 / s_base
-            ).round(6)
+            ).round(20)
             e_max = (
                 edisgo_obj.electromobility.flexibility_bands["upper_energy"][
                     flexible_cps
                 ]
                 / s_base
-            ).round(6)
+            ).round(20)
             for comp in flexible_cps:
                 comp_i = _mapping(
                     psa_net, edisgo_obj, comp, kind, flexible_cps=flexible_cps
@@ -1855,10 +1888,10 @@ def _build_component_timeseries(
                 }
     elif kind == "dsm":
         if len(flexible_loads) > 0:
-            p_set = (edisgo_obj.dsm.p_max[flexible_loads] / s_base).round(6)
-            p_min = (edisgo_obj.dsm.p_min[flexible_loads] / s_base).round(6)
-            e_min = (edisgo_obj.dsm.e_min[flexible_loads] / s_base).round(6)
-            e_max = (edisgo_obj.dsm.e_max[flexible_loads] / s_base).round(6)
+            p_set = (edisgo_obj.dsm.p_max[flexible_loads] / s_base).round(20)
+            p_min = (edisgo_obj.dsm.p_min[flexible_loads] / s_base).round(20)
+            e_min = (edisgo_obj.dsm.e_min[flexible_loads] / s_base).round(20)
+            e_max = (edisgo_obj.dsm.e_max[flexible_loads] / s_base).round(20)
             for comp in flexible_loads:
                 comp_i = _mapping(
                     psa_net, edisgo_obj, comp, kind, flexible_loads=flexible_loads
@@ -1873,7 +1906,7 @@ def _build_component_timeseries(
     if (kind == "HV_requirements") & (pm["opf_version"] in [3, 4]):
         for i in np.arange(len(opf_flex)):
             pm_comp[(str(i + 1))] = {
-                "P": hv_flex_dict[opf_flex[i]].round(6).tolist(),
+                "P": hv_flex_dict[opf_flex[i]].round(20).tolist(),
             }
 
     pm["time_series"][kind] = pm_comp
