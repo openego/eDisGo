@@ -1870,7 +1870,6 @@ class TimeSeries:
             "generators_reactive_power",
             "storage_units_active_power",
             "storage_units_reactive_power",
-            "storage_units_state_of_charge",
         ]
 
     def reduce_memory(
