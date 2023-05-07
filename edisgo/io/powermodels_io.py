@@ -1317,9 +1317,16 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         idx_bus = _mapping(
             psa_net, edisgo_obj, psa_net.loads.loc[flexible_hps].bus[stor_i]
         )
+        if (
+            edisgo_obj.topology.loads_df.loc[heat_storage_df.index[stor_i]].sector
+            != "individual_heating"
+        ):
+            p_loss = 0
+        else:
+            p_loss = 0.04
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
-            "p_loss": 0.04,  # 4% of SOC per day
+            "p_loss": p_loss,  # 4% of SOC per day
             "energy": 0,
             "capacity": heat_storage_df.capacity[stor_i].round(20) / s_base,
             "charge_efficiency": heat_storage_df.efficiency[stor_i].round(20),
