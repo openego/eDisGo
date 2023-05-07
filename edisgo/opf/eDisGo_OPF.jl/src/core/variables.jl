@@ -403,6 +403,20 @@ function variable_slack_grid_restrictions(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_ev_slack(pm; kwargs...)
 end
 
+function variable_slack_heat_storage(pm::AbstractBFModelEdisgo; kwargs...)
+    eDisGo_OPF.variable_hs_slack(pm; kwargs...)
+end
+
+"heat storage slack variable"
+function variable_hs_slack(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    phss = PowerModels.var(pm, nw)[:phss] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :heatpumps)], base_name="$(nw)_phss",
+        lower_bound = 0.0
+    )
+
+    report && PowerModels.sol_component_value(pm, nw, :heatpumps, :phss, PowerModels.ids(pm, nw, :heatpumps), phss)
+end
+
 "heat pump slack variable"
 function variable_hp_slack(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     phps = PowerModels.var(pm, nw)[:phps] = JuMP.@variable(pm.model,
@@ -411,7 +425,11 @@ function variable_hp_slack(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bou
     )
     if bounded
         for (i, hp) in PowerModels.ref(pm, nw, :heatpumps)
-            JuMP.set_upper_bound(phps[i], hp["pd"]/hp["cop"])
+            if  hp["pd"]/hp["cop"] > 0
+                JuMP.set_upper_bound(phps[i], hp["pd"]/hp["cop"])
+            else
+                JuMP.set_upper_bound(phps[i], 0)
+            end
         end
     end
 
