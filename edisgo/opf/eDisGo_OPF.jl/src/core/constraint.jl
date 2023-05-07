@@ -39,7 +39,7 @@ function constraint_store_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i
         hse_2 = PowerModels.var(pm, n_2, :hse, i)
         hse_1 = PowerModels.var(pm, n_1, :hse, i)
 
-        JuMP.@constraint(pm.model, hse_2 - hse_1 * (1 - p_loss) == - time_elapsed*phs_2)  # Eq. (3.23)
+        JuMP.@constraint(pm.model, hse_2 - hse_1 * (1 - p_loss)^(1/24) == - time_elapsed*phs_2)  # Eq. (3.23)
     elseif kind == "dsm"
         pdsm_2 = PowerModels.var(pm, n_2, :pdsm, i)
         dsme_2 = PowerModels.var(pm, n_2, :dsme, i)

@@ -425,11 +425,7 @@ function variable_hp_slack(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bou
     )
     if bounded
         for (i, hp) in PowerModels.ref(pm, nw, :heatpumps)
-            if  hp["pd"]/hp["cop"] > 0
-                JuMP.set_upper_bound(phps[i], hp["pd"]/hp["cop"])
-            else
-                JuMP.set_upper_bound(phps[i], 0)
-            end
+            JuMP.set_upper_bound(phps[i], max(hp["pd"]/hp["cop"], 0))
         end
     end
 
