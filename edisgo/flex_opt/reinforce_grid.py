@@ -806,7 +806,6 @@ def catch_convergence_reinforce_grid(
     return edisgo.results
 
 
-# TODO: adapt docstring
 def enhanced_reinforce_grid(
     edisgo_object: EDisGo,
     activate_cost_results_disturbing_mode: bool = False,
@@ -822,7 +821,9 @@ def enhanced_reinforce_grid(
 
     After first grid reinforcement for all voltage levels at once fails, reinforcement
     is first conducted for the MV level only, afterwards for the MV level including
-    MV/LV stations and at last each LV grid separately.
+    MV/LV stations and at last each LV grid separately. Beforehand the separation of
+    highly overloaded LV grids can be done by setting 'separate_lv_grids' to True. See
+    :func:`~.flex_opt.reinforce_grid.run_separate_lv_grids` for more information.
 
     Parameters
     ----------
@@ -842,6 +843,12 @@ def enhanced_reinforce_grid(
         :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`, except
         `catch_convergence_problems` which will always be set to True, `mode` which
         is set to None, and `skip_mv_reinforcement` which will be ignored.
+    separate_lv_grids : bool
+        If True, all highly overloaded LV grids are separated in a first step.
+    separation_threshold : int or float
+        Overloading threshold for LV grid separation. If the overloading is higher than
+        the threshold times the total nominal apparent power of the MV/LV transformer(s)
+        the grid is separated.
 
     Returns
     -------
@@ -971,8 +978,30 @@ def enhanced_reinforce_grid(
     return edisgo_obj
 
 
-# TODO: docstring
 def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> None:
+    """
+    Separate all highly overloaded LV grids within the MV grid.
+
+    The loading is approximated by aggregation of all load and generator time series
+    and comparison with the total nominal apparent power of the MV/LV transformer(s).
+    This approach is chosen because this method is aims at resolving highly overloaded
+    grid situations in which cases the power flow often does not converge. This method
+    ignores grid losses and voltage deviations. Originating and new LV grids can be
+    separated multiple times if the overloading is very high.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    threshold : int or float
+        Overloading threshold. If the overloading is higher than the threshold times
+        the total nominal apparent power of the MV/LV transformer(s) the grid is
+        separated.
+
+    Returns
+    -------
+    :class:`~.EDisGo`
+        The reinforced eDisGo object.
+    """
     lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
     n_grids_init = len(lv_grids)
 

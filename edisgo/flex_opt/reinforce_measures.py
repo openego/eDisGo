@@ -512,7 +512,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             ] = path_length_dict[node_2_3]
             edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
             lines_changes[crit_line_name] = 1
-            # ToDo: Include switch disconnector
+            # TODO: Include switch disconnector
 
     if not lines_changes:
         logger.debug(
@@ -735,46 +735,43 @@ def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_
     return lines_changes
 
 
-# TODO: check docstrings
 def separate_lv_grid(
     edisgo_obj: EDisGo, grid: LVGrid
 ) -> tuple[dict[Any, Any], dict[str, int]]:
     """
-    Split LV grid by adding a new substation and connect half of each feeder.
+    Separate LV grid by adding a new substation and connect half of each feeder.
 
-    If the number of overloaded feeders in the LV grid is more than 1 (this can be
-    changed 2 or 3), the feeders are split at their half-length, and the disconnected
-    points are connected to the new MV/LV station.
+    Separate LV grid by adding a new substation and connect half of each feeder. If a
+    feeder cannot be split because it has to few nodes or too few nodes outside a
+    building each second inept feeder is connected to the new LV grid. The new LV grids
+    equipped with standard transformers until the nominal apparent power is at least the
+    same as from the originating LV grid. The new substation is at the same location as
+    the originating substation. The workflow is as following:
 
-    1. The point at half the length of the feeders is found.
-    2. The first node following this point is chosen as the point where the new
-       connection will be made. This node can only be a station.
-    3. This node is disconnected from the previous node and connected to a new station.
-    4. New MV/LV is connected to the existing MV/LV station with a line of which length
-       equals the line length between the node at the half-length (node_1_2) and its
-       preceding node.
+    * New MV/LV station is connected to the existing MV/LV station.
+    * The point at half the length of the feeders is determined.
+    * The first node following this point is chosen as the point where the new
+      connection will be made.
+    * This node is disconnected from the previous node and connected to a new station.
 
     Notes:
-    - If the number of overloaded lines in the LV grid is less than 2 (this can be
-      changed 2 or 3) and the node_1_2 is the first node after the main station, the
-      method is not applied.
-    - The name of the new grid will be the existing grid code
-      (e.g. 40000) + 1001 = 400001001
-    - The name of the lines in the new LV grid is the same as the grid where the nodes
+    * The name of the new LV grid will be a combination of the originating existing grid
+      ID. E.g. 40000 + X = 40000X
+    * The name of the lines in the new LV grid is the same as the grid where the nodes
       are removed
-    - Except line names, all the data frames are named based on the new grid name
+    * Except line names, all the data frames are named based on the new grid name
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    grid: class : :class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
+    grid: class : :class:`~.network.grids.LVGrid`
 
     Returns
     -------
-    line_changes=    dict
+    dict
         Dictionary with name of lines as keys and the corresponding number of
         lines added as values.
-    transformer_changes=    dict
+    dict
         Dictionary with added and removed transformers in the form::
         {'added': {'Grid_1': ['transformer_reinforced_1',
                               ...,
@@ -823,7 +820,6 @@ def separate_lv_grid(
 
         return bus
 
-    # TODO: adapt docstring to describe multiple new transformers
     def add_standard_transformer(
         edisgo_obj: EDisGo, grid: LVGrid, bus_lv: str, bus_mv: str, lv_grid_id_new: int
     ) -> dict:
@@ -999,7 +995,7 @@ def separate_lv_grid(
         path = paths[last_node]
 
         # TODO: replace this to be weighted by the connected load per bus incl.
-        #  branched1 of feeders
+        #  branched of feeders
         node_1_2 = next(
             j
             for j in path
