@@ -156,7 +156,6 @@ class TestElectromobility:
             "Charging_Point_LVGrid_362451_public_1",
             "Charging_Point_LVGrid_136124_work_1",
         ]:
-
             charging_park_id = integrated_charging_parks.loc[
                 integrated_charging_parks.edisgo_id == cp
             ].index

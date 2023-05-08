@@ -36,7 +36,6 @@ class TestEDisGo:
         self.edisgo.set_time_series_worst_case_analysis()
 
     def test_config_setter(self):
-
         save_dir = os.path.join(os.getcwd(), "config_dir")
 
         # test default
@@ -71,7 +70,6 @@ class TestEDisGo:
         shutil.rmtree(save_dir)
 
     def test_set_time_series_manual(self, caplog):
-
         timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
         gens_ts = pd.DataFrame(
             data={
@@ -261,7 +259,6 @@ class TestEDisGo:
 
     @pytest.mark.local
     def test_set_time_series_active_power_predefined_oedb(self):
-
         # test conventional_loads_ts="oedb" for all loads in grid
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -433,7 +430,6 @@ class TestEDisGo:
         assert "Current fraction in iterative process: 1.0." in caplog.text
 
     def test_reinforce(self):
-
         # ###################### test with default settings ##########################
         self.setup_worst_case_time_series()
         results = self.edisgo.reinforce()
@@ -495,7 +491,6 @@ class TestEDisGo:
         assert results.v_res.shape == (4, 9)
 
     def test_reinforce_catch_convergence(self):
-
         # ###################### test that wrong mode is raised ######################
         msg = "Provided mode mvl is not a valid mode."
         with pytest.raises(ValueError, match=msg):
@@ -1349,7 +1344,6 @@ class TestEDisGo:
 
     @pytest.mark.local
     def test_import_heat_pumps(self):
-
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -1647,7 +1641,11 @@ class TestEDisGo:
 
     def test_spatial_complexity_reduction(self):
         # test with copying edisgo object
-        (edisgo_obj, busmap_df, linemap_df,) = self.edisgo.spatial_complexity_reduction(
+        (
+            edisgo_obj,
+            busmap_df,
+            linemap_df,
+        ) = self.edisgo.spatial_complexity_reduction(
             copy_edisgo=True,
             mode="kmeans",
             cluster_area="grid",
@@ -1667,7 +1665,11 @@ class TestEDisGo:
 
         # test without copying edisgo object
         edisgo_orig = copy.deepcopy(self.edisgo)
-        (_, busmap_df, linemap_df,) = self.edisgo.spatial_complexity_reduction(
+        (
+            _,
+            busmap_df,
+            linemap_df,
+        ) = self.edisgo.spatial_complexity_reduction(
             mode="kmeans",
             cluster_area="grid",
             reduction_factor=0.2,

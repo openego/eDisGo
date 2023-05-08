@@ -32,7 +32,6 @@ if TYPE_CHECKING:
     from edisgo.network.grids import Grid
 
 if "READTHEDOCS" not in os.environ:
-
     import geopandas as gpd
 
     from egoio.db_tables.grid import EgoDpMvGriddistrict
@@ -189,7 +188,6 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
     with session_scope() as session:
         # get polygon from versioned schema
         if config["data_source"]["oedb_data_source"] == "versioned":
-
             version = config["versioned"]["version"]
             query = session.query(
                 EgoDpMvGriddistrict.subst_id, EgoDpMvGriddistrict.geom
@@ -1155,7 +1153,6 @@ def plot_plotly(
         return [middle_node_scatter]
 
     def plot_lines():
-
         showscale = True
 
         if line_color == "loading":
@@ -1181,7 +1178,6 @@ def plot_plotly(
 
         data_line_plot = []
         for edge in G.edges(data=True):
-
             x0, y0, x1, y1 = get_coordinates_for_edge(edge)
             edge_x = [x0 - x_root, x1 - x_root, None]
             edge_y = [y0 - y_root, y1 - y_root, None]
@@ -1207,7 +1203,6 @@ def plot_plotly(
                     .isin([branch_name])
                     .any()
                 ):
-
                     color = "red"
                 else:
                     color = "black"
