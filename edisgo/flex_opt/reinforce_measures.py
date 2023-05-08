@@ -741,12 +741,11 @@ def separate_lv_grid(
     """
     Separate LV grid by adding a new substation and connect half of each feeder.
 
-    Separate LV grid by adding a new substation and connect half of each feeder. If a
-    feeder cannot be split because it has to few nodes or too few nodes outside a
-    building each second inept feeder is connected to the new LV grid. The new LV grids
-    equipped with standard transformers until the nominal apparent power is at least the
-    same as from the originating LV grid. The new substation is at the same location as
-    the originating substation. The workflow is as following:
+    If a feeder cannot be split because it has too few nodes or too few nodes outside a
+    building, each second inept feeder is connected to the new LV grid. The new LV grid
+    is equipped with standard transformers until the nominal apparent power is at least
+    the same as in the original LV grid. The new substation is at the same location as
+    the originating substation. The workflow is as follows:
 
     * The point at half the length of the feeders is determined.
     * The first node following this point is chosen as the point where the new
@@ -759,14 +758,14 @@ def separate_lv_grid(
 
     * The name of the new LV grid will be a combination of the originating existing grid
       ID. E.g. 40000 + X = 40000X
-    * The name of the lines in the new LV grid is the same as the grid where the nodes
-      are removed
+    * The name of the lines in the new LV grid are the same as in the grid where the
+      nodes were removed
     * Except line names, all the data frames are named based on the new grid name
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    grid: class : :class:`~.network.grids.LVGrid`
+    grid : :class:`~.network.grids.LVGrid`
 
     Returns
     -------
@@ -782,6 +781,7 @@ def separate_lv_grid(
                        'Grid_10': ['transformer_reinforced_10']
                        }
             }
+
     """
 
     def get_weight(u, v, data: dict) -> float:
@@ -789,8 +789,8 @@ def separate_lv_grid(
 
     def create_bus_name(bus: str, lv_grid_id_new: int, voltage_level: str) -> str:
         """
-        Create an LV and MV bus-bar name with the same grid_id but added '1001' that
-        implies the separation
+        Create an LV and MV bus-bar name with the same grid_id but added '1001' which
+        implies the separation.
 
         Parameters
         ----------
@@ -801,7 +801,9 @@ def separate_lv_grid(
 
         Returns
         ----------
-        bus: str New bus-bar name
+        str
+            New bus-bar name.
+
         """
         if bus in edisgo_obj.topology.buses_df.index:
             bus = bus.split("_")
@@ -831,14 +833,17 @@ def separate_lv_grid(
 
         Parameters
         ----------
-        edisgo_obj: class:`~.EDisGo`
-        grid: `~.network.grids.LVGrid`
-        bus_lv: Identifier of lv bus
-        bus_mv: Identifier of mv bus
+        edisgo_obj : class:`~.EDisGo`
+        grid : `~.network.grids.LVGrid`
+        bus_lv : str
+            Identifier of LV bus.
+        bus_mv : str
+            Identifier of MV bus.
 
         Returns
         ----------
-        transformer_changes=    dict
+        dict
+
         """
         if bus_lv not in edisgo_obj.topology.buses_df.index:
             raise ValueError(
@@ -1036,9 +1041,8 @@ def separate_lv_grid(
             count_inept += 1
 
     if nodes_tb_relocated:
-        logger.info(f"{grid}==>method:add_station_at_half_length is running ")
 
-        # the new lv grid id: e.g. 49602X
+        # generate new lv grid id
         n = 0
         lv_grid_id_new = int(f"{grid.id}{n}")
 
@@ -1060,7 +1064,7 @@ def separate_lv_grid(
         lv_bus_new = create_bus_name(station_node, lv_grid_id_new, "lv")
         mv_bus = grid.transformers_df.bus0.iat[0]
 
-        # ADD MV and LV bus
+        # Add MV and LV bus
         v_nom_lv = edisgo_obj.topology.buses_df.at[
             grid.transformers_df.bus1[0],
             "v_nom",
@@ -1087,7 +1091,7 @@ def separate_lv_grid(
         )
         transformers_changes.update(transformer_changes)
 
-        logger.debug(f"New grid {lv_grid_id_new} added into topology.")
+        logger.info(f"New LV grid {lv_grid_id_new} added to topology.")
 
         lv_standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
             "lv_line"
@@ -1131,18 +1135,13 @@ def separate_lv_grid(
                 comp_name=line_removed,
             )
 
-            logger.debug(
-                f"the node {node_1_2} is split from the line and connected to "
-                f"{lv_grid_id_new} "
-            )
-
         logger.info(
             f"{len(nodes_tb_relocated.keys())} feeders are removed from the grid "
             f"{grid} and located in new grid {lv_grid_id_new} by method: "
             f"add_station_at_half_length "
         )
 
-        # check if new grids have isolated notes
+        # check if new grids have isolated nodes
         grids = [
             g
             for g in edisgo_obj.topology.mv_grid.lv_grids
@@ -1160,7 +1159,7 @@ def separate_lv_grid(
 
     else:
         logger.warning(
-            f"{grid} was not reinforced because it has to few suitable feeders."
+            f"{grid} was not split because it has too few suitable feeders."
         )
 
     return transformers_changes, lines_changes

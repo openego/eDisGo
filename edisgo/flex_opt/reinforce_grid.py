@@ -987,9 +987,9 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
 
     The loading is approximated by aggregation of all load and generator time series
     and comparison with the total nominal apparent power of the MV/LV transformer(s).
-    This approach is chosen because this method is aims at resolving highly overloaded
+    This approach is chosen because this method aims at resolving highly overloaded
     grid situations in which cases the power flow often does not converge. This method
-    ignores grid losses and voltage deviations. Originating and new LV grids can be
+    ignores grid losses and voltage deviations. Original and new LV grids can be
     separated multiple times if the overloading is very high.
 
     Parameters
@@ -997,13 +997,14 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
     edisgo_obj : :class:`~.EDisGo`
     threshold : int or float
         Overloading threshold. If the overloading is higher than the threshold times
-        the total nominal apparent power of the MV/LV transformer(s) the grid is
+        the total nominal apparent power of the MV/LV transformer(s), the grid is
         separated.
 
     Returns
     -------
     :class:`~.EDisGo`
         The reinforced eDisGo object.
+
     """
     lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
     n_grids_init = len(lv_grids)
@@ -1099,9 +1100,9 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
                     )
 
             else:
-                logger.info(
+                logger.debug(
                     f"The overloading in {lv_grid} does not surpass the set threshold "
-                    f"of {threshold} and is therefore not separated."
+                    f"of {threshold}. The grid is therefore not separated."
                 )
 
 
