@@ -984,9 +984,11 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
     techs = ["generators", "loads", "storage_units"]
 
     n = 0
+    max_iterations = 100
 
-    while n_grids_init != len(list(edisgo_obj.topology.mv_grid.lv_grids)) or first_run:
-        print(n)
+    while (
+        n_grids_init != len(list(edisgo_obj.topology.mv_grid.lv_grids)) or first_run
+    ) and n < max_iterations:
         n += 1
         first_run = False
 
@@ -1051,7 +1053,6 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
 
             if worst_case > threshold * transformers_s_nom:
                 logger.info(f"Trying to separate {lv_grid}...")
-                # TODO: Save changes in results
                 transformers_changes, lines_changes = separate_lv_grid(
                     edisgo_obj, lv_grid
                 )

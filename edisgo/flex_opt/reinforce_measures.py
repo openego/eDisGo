@@ -1164,5 +1164,4 @@ def separate_lv_grid(
             f"{grid} was not reinforced because it has to few suitable feeders."
         )
 
-    # TODO: check if changes are tracked correctly
     return transformers_changes, lines_changes
