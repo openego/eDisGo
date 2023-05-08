@@ -863,7 +863,7 @@ def separate_lv_grid(
         except KeyError:
             raise KeyError("Standard MV/LV transformer is not in the equipment list.")
 
-        transformers_changes = {"added": {}}
+        transformer_changes = {"added": {}}
 
         transformer_s = grid.transformers_df.iloc[0]
         new_transformer_name = transformer_s.name.split("_")
@@ -880,7 +880,7 @@ def separate_lv_grid(
 
         new_transformer_df = transformer_s.to_frame().T
 
-        old_s_nom = 5  # grid.transformers_df.s_nom.sum()
+        old_s_nom = grid.transformers_df.s_nom.sum()
 
         max_iterations = 10
         n = 0
@@ -897,7 +897,7 @@ def separate_lv_grid(
             try:
                 name[-1] = str(int(name[-1]) + 1)
             except ValueError:
-                name.append("_1")
+                name.append("1")
 
             name = "_".join(name)
 
@@ -910,11 +910,11 @@ def separate_lv_grid(
         edisgo_obj.topology.transformers_df = pd.concat(
             [edisgo_obj.topology.transformers_df, new_transformer_df]
         )
-        transformers_changes["added"][
+        transformer_changes["added"][
             f"LVGrid_{lv_grid_id_new}"
         ] = new_transformer_df.index.tolist()
 
-        return transformers_changes
+        return transformer_changes
 
     G = grid.graph
 

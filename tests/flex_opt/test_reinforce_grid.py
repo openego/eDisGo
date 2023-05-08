@@ -7,6 +7,7 @@ from numpy.testing import assert_array_equal
 from pandas.testing import assert_frame_equal
 
 from edisgo import EDisGo
+from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid, run_separate_lv_grids
 
 
@@ -73,6 +74,7 @@ class TestReinforceGrid:
 
         run_separate_lv_grids(edisgo)
 
+        edisgo.results.grid_expansion_costs = grid_expansion_costs(edisgo)
         lv_grids_new = list(edisgo.topology.mv_grid.lv_grids)
 
         # check that no new lv grid only consist of the station
@@ -81,6 +83,7 @@ class TestReinforceGrid:
                 assert len(g.buses_df) > 1
 
         assert len(lv_grids_new) == 26
+        assert np.isclose(edisgo.results.grid_expansion_costs.total_costs.sum(), 280.06)
 
         # check if all generators are still present
         assert np.isclose(
@@ -99,3 +102,7 @@ class TestReinforceGrid:
             sum(g.storage_units_df.p_nom.sum() for g in lv_grids),
             sum(g.storage_units_df.p_nom.sum() for g in lv_grids_new),
         )
+
+        # test if power flow works
+        edisgo.set_time_series_worst_case_analysis()
+        edisgo.analyze()

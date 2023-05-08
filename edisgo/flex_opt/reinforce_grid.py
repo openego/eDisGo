@@ -4,7 +4,6 @@ import copy
 import datetime
 import logging
 
-from numbers import Number
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -116,42 +115,6 @@ def reinforce_grid(
     reinforcement is conducted.
 
     """
-
-    def _add_lines_changes_to_equipment_changes():
-        edisgo.results.equipment_changes = pd.concat(
-            [
-                edisgo.results.equipment_changes,
-                pd.DataFrame(
-                    {
-                        "iteration_step": [iteration_step] * len(lines_changes),
-                        "change": ["changed"] * len(lines_changes),
-                        "equipment": edisgo.topology.lines_df.loc[
-                            lines_changes.keys(), "type_info"
-                        ].values,
-                        "quantity": [_ for _ in lines_changes.values()],
-                    },
-                    index=lines_changes.keys(),
-                ),
-            ],
-        )
-
-    def _add_transformer_changes_to_equipment_changes(mode: str | None):
-        df_list = [edisgo.results.equipment_changes]
-        df_list.extend(
-            pd.DataFrame(
-                {
-                    "iteration_step": [iteration_step] * len(transformer_list),
-                    "change": [mode] * len(transformer_list),
-                    "equipment": transformer_list,
-                    "quantity": [1] * len(transformer_list),
-                },
-                index=[station] * len(transformer_list),
-            )
-            for station, transformer_list in transformer_changes[mode].items()
-        )
-
-        edisgo.results.equipment_changes = pd.concat(df_list)
-
     if n_minus_one is True:
         raise NotImplementedError("n-1 security can currently not be checked.")
 
@@ -255,8 +218,12 @@ def reinforce_grid(
                 )
             )
             # write added and removed transformers to results.equipment_changes
-            _add_transformer_changes_to_equipment_changes("added")
-            _add_transformer_changes_to_equipment_changes("removed")
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "removed"
+            )
 
         if not overloaded_lv_stations.empty:
             # reinforce distribution substations
@@ -266,8 +233,12 @@ def reinforce_grid(
                 )
             )
             # write added and removed transformers to results.equipment_changes
-            _add_transformer_changes_to_equipment_changes("added")
-            _add_transformer_changes_to_equipment_changes("removed")
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "removed"
+            )
 
         if not crit_lines.empty:
             # reinforce lines
@@ -275,7 +246,9 @@ def reinforce_grid(
                 edisgo, crit_lines
             )
             # write changed lines to results.equipment_changes
-            _add_lines_changes_to_equipment_changes()
+            _add_lines_changes_to_equipment_changes(
+                edisgo, lines_changes, iteration_step
+            )
 
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
@@ -360,7 +333,7 @@ def reinforce_grid(
             crit_nodes,
         )
         # write changed lines to results.equipment_changes
-        _add_lines_changes_to_equipment_changes()
+        _add_lines_changes_to_equipment_changes(edisgo, lines_changes, iteration_step)
 
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-voltage problems were solved
@@ -421,7 +394,9 @@ def reinforce_grid(
                 )
             )
             # write added transformers to results.equipment_changes
-            _add_transformer_changes_to_equipment_changes("added")
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
 
             # run power flow analysis again (after updating pypsa object) and
             # check if all over-voltage problems were solved
@@ -483,7 +458,9 @@ def reinforce_grid(
                     crit_nodes[crit_nodes.lv_grid_id == grid_id],
                 )
                 # write changed lines to results.equipment_changes
-                _add_lines_changes_to_equipment_changes()
+                _add_lines_changes_to_equipment_changes(
+                    edisgo, lines_changes, iteration_step
+                )
 
             # run power flow analysis again (after updating pypsa object)
             # and check if all over-voltage problems were solved
@@ -565,8 +542,12 @@ def reinforce_grid(
                 )
             )
             # write added and removed transformers to results.equipment_changes
-            _add_transformer_changes_to_equipment_changes("added")
-            _add_transformer_changes_to_equipment_changes("removed")
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "removed"
+            )
 
         if not overloaded_lv_stations.empty:
             # reinforce substations
@@ -576,8 +557,12 @@ def reinforce_grid(
                 )
             )
             # write added and removed transformers to results.equipment_changes
-            _add_transformer_changes_to_equipment_changes("added")
-            _add_transformer_changes_to_equipment_changes("removed")
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "removed"
+            )
 
         if not crit_lines.empty:
             # reinforce lines
@@ -585,7 +570,9 @@ def reinforce_grid(
                 edisgo, crit_lines
             )
             # write changed lines to results.equipment_changes
-            _add_lines_changes_to_equipment_changes()
+            _add_lines_changes_to_equipment_changes(
+                edisgo, lines_changes, iteration_step
+            )
 
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
@@ -824,7 +811,7 @@ def enhanced_reinforce_grid(
     edisgo_object: EDisGo,
     activate_cost_results_disturbing_mode: bool = False,
     separate_lv_grids: bool = True,
-    separation_threshold: Number = 2,
+    separation_threshold: int | float = 2,
     **kwargs,
 ) -> EDisGo:
     """
@@ -984,7 +971,8 @@ def enhanced_reinforce_grid(
     return edisgo_obj
 
 
-def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: Number = 2) -> None:
+# TODO: docstring
+def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> None:
     lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
     n_grids_init = len(lv_grids)
 
@@ -1064,9 +1052,62 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: Number = 2) -> None:
             if worst_case > threshold * transformers_s_nom:
                 logger.info(f"Trying to separate {lv_grid}...")
                 # TODO: Save changes in results
-                _ = separate_lv_grid(edisgo_obj, lv_grid)
+                transformers_changes, lines_changes = separate_lv_grid(
+                    edisgo_obj, lv_grid
+                )
+                if len(lines_changes) > 0:
+                    _add_lines_changes_to_equipment_changes(
+                        edisgo_obj, lines_changes, 1
+                    )
+
+                if len(transformers_changes) > 0:
+                    _add_transformer_changes_to_equipment_changes(
+                        edisgo_obj, transformers_changes, 1, "added"
+                    )
+
             else:
                 logger.info(
                     f"The overloading in {lv_grid} does not surpass the set threshold "
                     f"of {threshold} and is therefore not separated."
                 )
+
+
+def _add_lines_changes_to_equipment_changes(
+    edisgo: EDisGo, lines_changes: dict, iteration_step: int
+) -> None:
+    edisgo.results.equipment_changes = pd.concat(
+        [
+            edisgo.results.equipment_changes,
+            pd.DataFrame(
+                {
+                    "iteration_step": [iteration_step] * len(lines_changes),
+                    "change": ["changed"] * len(lines_changes),
+                    "equipment": edisgo.topology.lines_df.loc[
+                        lines_changes.keys(), "type_info"
+                    ].values,
+                    "quantity": [_ for _ in lines_changes.values()],
+                },
+                index=list(lines_changes.keys()),
+            ),
+        ],
+    )
+
+
+def _add_transformer_changes_to_equipment_changes(
+    edisgo: EDisGo, transformer_changes: dict, iteration_step: int, mode: str | None
+) -> None:
+    df_list = [edisgo.results.equipment_changes]
+    df_list.extend(
+        pd.DataFrame(
+            {
+                "iteration_step": [iteration_step] * len(transformer_list),
+                "change": [mode] * len(transformer_list),
+                "equipment": transformer_list,
+                "quantity": [1] * len(transformer_list),
+            },
+            index=[station] * len(transformer_list),
+        )
+        for station, transformer_list in transformer_changes[mode].items()
+    )
+
+    edisgo.results.equipment_changes = pd.concat(df_list)
