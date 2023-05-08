@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 
+from copy import deepcopy
 from hashlib import md5
 from math import pi, sqrt
 from typing import TYPE_CHECKING
@@ -1037,6 +1038,48 @@ def battery_storage_reference_operation(
     df["storage_charge"] = lst_storage_charge
 
     return df.round(6)
+
+
+def create_storage_data(edisgo_obj):
+    storage_units = edisgo_obj.topology.storage_units_df
+    soc_df = pd.DataFrame(index=edisgo_obj.timeseries.timeindex)
+    # one storage per roof mounted solar generator
+    for row in storage_units.iterrows():
+        building_id = row[1]["building_id"]
+        pv_gen = edisgo_obj.topology.generators_df.loc[
+            edisgo_obj.topology.generators_df.building_id == building_id
+        ].index[0]
+        pv_feedin = edisgo_obj.timeseries.generators_active_power[pv_gen]
+        loads = edisgo_obj.topology.loads_df.loc[
+            edisgo_obj.topology.loads_df.building_id == building_id
+        ].index
+        if len(loads) == 0:
+            pass
+        else:
+            house_demand = deepcopy(
+                edisgo_obj.timeseries.loads_active_power[loads].sum(axis=1)
+            )
+            storage_ts = battery_storage_reference_operation(
+                pd.DataFrame(columns=["house_demand"], data=pv_feedin - house_demand),
+                0,
+                row[1].p_nom,
+                row[1].p_nom,
+                1,
+            )
+            # Add storage ts to storage_units_active_power dataframe
+            edisgo_obj.set_time_series_manual(
+                storage_units_p=pd.DataFrame(
+                    columns=[row[0]],
+                    index=storage_ts.index,
+                    data=storage_ts.storage_power.values,
+                )
+            )
+
+            soc_df = pd.concat([soc_df, storage_ts.storage_charge], axis=1)
+
+    soc_df.columns = edisgo_obj.topology.storage_units_df.index
+    edisgo_obj.timeseries.storage_units_state_of_charge = soc_df
+    edisgo_obj.set_time_series_reactive_power_control()
 
 
 def determine_observation_periods(edisgo_obj, window_days, idx="min", absolute=False):
