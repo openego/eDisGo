@@ -952,12 +952,6 @@ def separate_lv_grid(
                     node  # first nodes and paths
                 )
 
-    # TODO: make sure nodes are sorted correctly?
-
-    lines_changes = {}
-    transformers_changes = {}
-    nodes_tb_relocated = {}  # nodes to be moved into the new grid
-
     # note: The number of critical lines in the Lv grid can be more than 2. However,
     # if the node_1_2 of the first feeder in the for loop is not the first node of the
     # feeder, it will add data frames even though the following feeders only 1 node
@@ -970,6 +964,20 @@ def separate_lv_grid(
             first_nodes_feeders.items(), key=lambda item: len(item[1]), reverse=False
         )
     )
+
+    # make sure nodes are sorted correctly and node_1_2 is part of the main feeder
+    for first_node, nodes_feeder in first_nodes_feeders.items():
+        paths_first_node = {
+            node: path for node, path in paths.items() if path[1] == first_node
+        }
+
+        first_nodes_feeders[first_node] = paths_first_node[
+            max(paths_first_node, key=lambda x: len(paths_first_node[x]))
+        ]
+
+    lines_changes = {}
+    transformers_changes = {}
+    nodes_tb_relocated = {}  # nodes to be moved into the new grid
 
     count_inept = 0
 
@@ -990,6 +998,8 @@ def separate_lv_grid(
         # path does not include the nodes branching from the node on the main path
         path = paths[last_node]
 
+        # TODO: replace this to be weighted by the connected load per bus incl.
+        #  branched1 of feeders
         node_1_2 = next(
             j
             for j in path
