@@ -577,7 +577,7 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
             "base_kv": psa_net.buses.v_nom[bus_i],
             "grid_level": grid_level[psa_net.buses.v_nom[bus_i]],
         }
-
+    # add virtual busses for storage units
     for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
             psa_net,
@@ -817,7 +817,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             "storage_pf": 0,
             "index": branch_i + 1,
         }
-
+    # add virtual branch for storage units
     for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
             psa_net,
@@ -1002,6 +1002,7 @@ def _build_battery_storage(
             ).values
         else:
             data = 0
+        # ToDo: find better place to save soc data to
         edisgo_obj.overlying_grid.storage_units_soc = (
             pd.DataFrame(
                 columns=flexible_storage_units,
@@ -1561,19 +1562,19 @@ def _build_hv_requirements(
             hv_flex_dict["dsm"]
             - psa_net.loads_t.p_set.loc[:, inflexible_loads].sum(axis=1) / s_base
         ).round(20)
-    count = {
-        "dsm": len(flexible_loads),
-        "storage": len(flexible_storage_units),
-        "hp": len(flexible_hps),
-        "cp": len(flexible_cps),
-        "curt": len(pm["gen_nd"].keys()),
-    }
+    count = (
+        len(flexible_loads)
+        + len(flexible_storage_units)
+        + len(flexible_hps)
+        + len(flexible_cps)
+        + len(pm["gen_nd"].keys())
+    )
 
     for i in np.arange(len(opf_flex)):
         pm["HV_requirements"][str(i + 1)] = {
             "P": hv_flex_dict[opf_flex[i]][0],
             "name": opf_flex[i],
-            "count": count[opf_flex[i]],
+            "count": count,
         }
 
 

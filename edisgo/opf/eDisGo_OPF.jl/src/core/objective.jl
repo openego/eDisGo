@@ -69,7 +69,7 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
     parameters = [r[1][i] for i in keys(r[1])]
     parameters = parameters[parameters .>0]
     #factor_hv_slacks = length(nws) * exp10(floor(log10(maximum(parameters)))+2)
-    factor_hv_slacks = exp10(floor(log10(maximum(parameters)))+3)
+    factor_hv_slacks = exp10(floor(log10(maximum(parameters)))+1)
     println(factor_hv_slacks)
     factor_slacks = 0.6
     return JuMP.@objective(pm.model, Min,
