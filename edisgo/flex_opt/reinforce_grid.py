@@ -878,14 +878,14 @@ def enhanced_reinforce_grid(
         logger.info("Try initial enhanced reinforcement.")
         edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
         logger.info("Initial enhanced reinforcement succeeded.")
-    except ValueError:
+    except (ValueError, RuntimeError):
         logger.info("Initial enhanced reinforcement failed.")
         logger.info("Try mode 'mv' reinforcement.")
 
         try:
             edisgo_obj.reinforce(mode="mv", catch_convergence_problems=True, **kwargs)
             logger.info("Mode 'mv' reinforcement succeeded.")
-        except ValueError:
+        except (ValueError, RuntimeError):
             logger.info("Mode 'mv' reinforcement failed.")
 
         logger.info("Try mode 'mvlv' reinforcement.")
@@ -893,7 +893,7 @@ def enhanced_reinforce_grid(
         try:
             edisgo_obj.reinforce(mode="mvlv", catch_convergence_problems=True, **kwargs)
             logger.info("Mode 'mvlv' reinforcement succeeded.")
-        except ValueError:
+        except (ValueError, RuntimeError):
             logger.info("Mode 'mvlv' reinforcement failed.")
 
         for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids):
@@ -906,7 +906,7 @@ def enhanced_reinforce_grid(
                     **kwargs,
                 )
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} successful.")
-            except:  # noqa: E722
+            except (ValueError, RuntimeError):
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} failed.")
                 if activate_cost_results_disturbing_mode:
                     try:
@@ -929,7 +929,7 @@ def enhanced_reinforce_grid(
                         logger.info(
                             f"Changed lines mode 'lv' for {lv_grid} successful."
                         )
-                    except:  # noqa: E722
+                    except (ValueError, RuntimeError):
                         logger.info(f"Changed lines mode 'lv' for {lv_grid} failed.")
                         logger.warning(
                             f"Aggregate all nodes to station bus in {lv_grid=}."
@@ -942,13 +942,16 @@ def enhanced_reinforce_grid(
                             logger.info(
                                 f"Aggregate to station for {lv_grid} successful."
                             )
-                        except:  # noqa: E722
-                            logger.info(f"Aggregate to station for {lv_grid} failed.")
+                        except Exception as e:
+                            logger.info(
+                                f"Aggregate to station for {lv_grid} failed with "
+                                f"exception:\n{e}"
+                            )
 
         try:
             edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
             logger.info("Enhanced reinforcement succeeded.")
-        except Exception as e:  # noqa: E722
+        except Exception as e:
             logger.info("Enhanced reinforcement failed.")
             raise e
 
