@@ -1561,10 +1561,19 @@ def _build_hv_requirements(
             hv_flex_dict["dsm"]
             - psa_net.loads_t.p_set.loc[:, inflexible_loads].sum(axis=1) / s_base
         ).round(20)
+    count = {
+        "dsm": len(flexible_loads),
+        "storage": len(flexible_storage_units),
+        "hp": len(flexible_hps),
+        "cp": len(flexible_cps),
+        "curt": len(pm["gen_nd"].keys()),
+    }
+
     for i in np.arange(len(opf_flex)):
         pm["HV_requirements"][str(i + 1)] = {
             "P": hv_flex_dict[opf_flex[i]][0],
             "name": opf_flex[i],
+            "count": count[opf_flex[i]],
         }
 
 

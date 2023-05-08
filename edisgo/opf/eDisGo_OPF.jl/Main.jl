@@ -41,7 +41,7 @@ function optimize_edisgo()
     # Solve SOC model
     println("Starting convex SOC AC-OPF with Gurobi.")
     result_soc, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, SOCBFPowerModelEdisgo, gurobi)
-    println("Termination status: "*result_soc["termination_status"])
+    #println("Termination status: "*result_soc["termination_status"])
     if result_soc["termination_status"] != MOI.OPTIMAL
       if result_soc["termination_status"] == MOI.SUBOPTIMAL_TERMINATION
         PowerModels.update_data!(data_edisgo_mn, result_soc["solution"])
