@@ -93,8 +93,10 @@ function constraint_hp_operation(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_i
     php = PowerModels.var(pm, nw, :php, i)
     phs = PowerModels.var(pm, nw, :phs, i)
     phss = PowerModels.var(pm, nw, :phss, i)
+    phps2 = PowerModels.var(pm, nw, :phps2, i)
 
-    JuMP.@constraint(pm.model, hp["cop"] * php == hp["pd"] + phss - phs)
+
+    JuMP.@constraint(pm.model, hp["cop"] * (php+phps2) == hp["pd"] + phss - phs)
 
 end
 
