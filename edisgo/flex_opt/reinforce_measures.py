@@ -748,13 +748,15 @@ def separate_lv_grid(
     same as from the originating LV grid. The new substation is at the same location as
     the originating substation. The workflow is as following:
 
-    * New MV/LV station is connected to the existing MV/LV station.
     * The point at half the length of the feeders is determined.
     * The first node following this point is chosen as the point where the new
       connection will be made.
-    * This node is disconnected from the previous node and connected to a new station.
+    * New MV/LV station is connected to the existing MV/LV station.
+    * The determined nodes are disconnected from the previous nodes and connected to the
+      new MV/LV station.
 
     Notes:
+
     * The name of the new LV grid will be a combination of the originating existing grid
       ID. E.g. 40000 + X = 40000X
     * The name of the lines in the new LV grid is the same as the grid where the nodes
@@ -772,13 +774,14 @@ def separate_lv_grid(
         Dictionary with name of lines as keys and the corresponding number of
         lines added as values.
     dict
-        Dictionary with added and removed transformers in the form::
-        {'added': {'Grid_1': ['transformer_reinforced_1',
-                              ...,
-                              'transformer_reinforced_x'],
-                   'Grid_10': ['transformer_reinforced_10']
-                   }
-        }
+        Dictionary with added transformers in the form::
+
+            {'added': {'Grid_1': ['transformer_reinforced_1',
+                                  ...,
+                                  'transformer_reinforced_x'],
+                       'Grid_10': ['transformer_reinforced_10']
+                       }
+            }
     """
 
     def get_weight(u, v, data: dict) -> float:
