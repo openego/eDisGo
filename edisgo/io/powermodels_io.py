@@ -1915,6 +1915,35 @@ def _mapping(
     flexible_loads=None,
     flexible_storage_units=None,
 ):
+    """
+    Map edisgo component to either bus ID or component ID that is used in PowerModels
+    dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    edisgo_obj : :class:`~.EDisGo`
+    name: str
+        Component name that is used in eDisGo object.
+    kind : str
+        If "bus", then bus ID that is used in PowerModels dictionary 'pm' and that
+        the component is connected to is returned. Else, component ID of the considered
+        component that is used in PowerModels dictionary 'pm' is returned.
+        Must be one of ["bus", "gen", "gen_nd", "gen_slack", "load", "storage",
+        "electromobility", "heatpumps", "heat_storage", "dsm"].
+        Default: "bus".
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
+        Array containing all charging points that allow for flexible charging.
+    flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
+        Array containing all heat pumps that allow for flexible operation due to an
+        attached heat storage.
+    flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
+        Array containing all flexible loads that allow for application of demand side
+        management strategy.
+    flexible_storage_units : :numpy:`numpy.ndarray<ndarray>` or None
+        Array containing all flexible storage units.
+    """
     solar_gens = edisgo_obj.topology.generators_df.index[
         edisgo_obj.topology.generators_df.type == "solar"
     ]

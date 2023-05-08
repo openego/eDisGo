@@ -900,20 +900,6 @@ class EDisGo:
             hence there will be no logging coming from julia subprocess in python
             process.
             Default: False.
-        save_heat_storage : bool
-            Indicates whether to save results of heat storage variables from the
-            optimization to eDisGo object. Default: True.
-        save_slack_gen : bool
-            Indicates whether to save results of slack generator variables from the
-            optimization to eDisGo object.
-            Default: True.
-        save_slacks : bool
-            Indicates whether to save results of slack variables from the OPF run to
-            eDisGo object. Depending on the chosen opf_version, different slacks are
-            created and saved For more information see
-            :func:`edisgo.io.powermodels_io.from_powermodels`
-            Default: True.
-
         """
         return powermodels_opf.pm_optimize(
             self,
@@ -926,9 +912,6 @@ class EDisGo:
             method=method,
             warm_start=warm_start,
             silence_moi=silence_moi,
-            save_heat_storage=save_heat_storage,
-            save_slack_gen=save_slack_gen,
-            save_slacks=save_slacks,
         )
 
     def to_graph(self):
