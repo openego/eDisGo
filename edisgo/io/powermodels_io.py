@@ -232,9 +232,6 @@ def from_powermodels(
     pm_results,
     hv_flex_dict,
     s_base=1,
-    save_heat_storage=True,
-    save_slack_gen=True,
-    save_slacks=True,
 ):
     """
     Convert results from optimization in PowerModels network data format to eDisGo data
@@ -252,36 +249,7 @@ def from_powermodels(
     s_base : int
         Base value of apparent power for per unit system.
         Default: 1 MVA.
-    save_heat_storage : bool
-        Indicates whether to save results of heat storage variables from the
-        optimization to eDisGo object.
-        Default: True.
-    save_slack_gen : bool
-        Indicates whether to save results of slack generator variables from the
-        optimization to eDisGo object.
-        Default: True.
-    save_slacks : bool
-        Indicates whether to save results of slack variables from the OPF run to eDisGo
-        object. Depending on the chosen opf_version, different slacks are created and
-        saved:
-
-        * 1
-            -
-
-        * 2
-            grid related slacks (load shedding, dispatchable and non-dispatchable
-            generator curtailment, heat pump slack)
-
-        * 3
-            high voltage requirement slacks
-
-        * 4
-            high voltage requirements slacks and grid related slacks cf. version 2
-
-        Default: True
-
     """
-
     if type(pm_results) == str:
         with open(pm_results) as f:
             pm = json.loads(json.load(f))
@@ -388,8 +356,7 @@ def from_powermodels(
             s_base,
         )
         # save HV slack results to edisgo object
-        if save_slacks:
-            edisgo_object.opf_results.hv_requirement_slacks_t = df
+        edisgo_object.opf_results.hv_requirement_slacks_t = df
 
         # calculate relative error
         df2 = deepcopy(df)
@@ -422,40 +389,38 @@ def from_powermodels(
                     "Highest relative error of {} variable exceeds 5%.".format(flex)
                 )
 
-    if save_slack_gen:  # save slack generator variable to edisgo object
-        df = pd.DataFrame(
-            index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"]
-        )
-        for gen in list(pm["nw"]["1"]["gen_slack"].keys()):
-            df["pg"] = [
-                pm["nw"][str(t)]["gen_slack"][gen]["pgs"] * s_base for t in timesteps
-            ]
-            df["qg"] = [
-                pm["nw"][str(t)]["gen_slack"][gen]["qgs"] * s_base for t in timesteps
-            ]
-        edisgo_object.opf_results.slack_generator_t = df
+    # save slack generator variable to edisgo object
+    df = pd.DataFrame(index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"])
+    for gen in list(pm["nw"]["1"]["gen_slack"].keys()):
+        df["pg"] = [
+            pm["nw"][str(t)]["gen_slack"][gen]["pgs"] * s_base for t in timesteps
+        ]
+        df["qg"] = [
+            pm["nw"][str(t)]["gen_slack"][gen]["qgs"] * s_base for t in timesteps
+        ]
+    edisgo_object.opf_results.slack_generator_t = df
 
-    if save_heat_storage:  # save heat storage variables to edisgo object
-        df = _result_df(
-            pm,
-            "heat_storage",
-            "phs",
-            timesteps,
-            edisgo_object.timeseries.timeindex,
-            s_base,
-        )
-        edisgo_object.opf_results.heat_storage_t.p = df
-        df = _result_df(
-            pm,
-            "heat_storage",
-            "hse",
-            timesteps,
-            edisgo_object.timeseries.timeindex,
-            s_base,
-        )
-        edisgo_object.opf_results.heat_storage_t.e = df
+    # save heat storage variables to edisgo object
+    df = _result_df(
+        pm,
+        "heat_storage",
+        "phs",
+        timesteps,
+        edisgo_object.timeseries.timeindex,
+        s_base,
+    )
+    edisgo_object.opf_results.heat_storage_t.p = df
+    df = _result_df(
+        pm,
+        "heat_storage",
+        "hse",
+        timesteps,
+        edisgo_object.timeseries.timeindex,
+        s_base,
+    )
+    edisgo_object.opf_results.heat_storage_t.e = df
 
-    if (pm["nw"]["1"]["opf_version"] in [2, 4]) & save_slacks:
+    if pm["nw"]["1"]["opf_version"] in [2, 4]:
         slacks = [
             ("gen", "pgens"),
             ("gen_nd", "pgc"),
@@ -1698,7 +1663,6 @@ def _build_component_timeseries(
     hv_flex_dict : dict
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from overlying grid component of edisgo object.
-
     """
     pm_comp = dict()
     solar_gens = edisgo_obj.topology.generators_df.index[
