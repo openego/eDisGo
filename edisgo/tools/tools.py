@@ -295,7 +295,6 @@ def assign_feeder(edisgo_obj, mode="mv_feeder"):
             # `neighbor`
             subgraph_neighbor = nx.dfs_tree(subgraph, source=neighbor)
             for node in subgraph_neighbor.nodes():
-
                 edisgo_obj.topology.buses_df.at[node, mode] = neighbor
 
                 # in case of an LV station, assign feeder to all nodes in that
@@ -991,7 +990,6 @@ def battery_storage_reference_operation(
         # If the house would feed electricity into the grid, charge the storage first.
         # No electricity exchange with grid as long as charger power is not exceeded
         if (d.house_demand > 0) & (storage_charge < storage_max):
-
             # Check if energy produced exceeds charger power
             if d.house_demand < charger_power:
                 storage_charge = storage_charge + (
@@ -1017,7 +1015,6 @@ def battery_storage_reference_operation(
         # No electricity exchange with grid as long as demand does not exceed charger
         # power
         elif (d.house_demand < 0) & (storage_charge > 0):
-
             # Check if energy demand exceeds charger power
             if d.house_demand / efficiency_discharge < (charger_power * -1):
                 storage_charge = storage_charge - (charger_power * time_base)
@@ -1088,7 +1085,7 @@ def create_storage_data(edisgo_obj):
             soc_df = pd.concat([soc_df, storage_ts.storage_charge], axis=1)
 
     soc_df.columns = edisgo_obj.topology.storage_units_df.index
-    edisgo_obj.timeseries.storage_units_state_of_charge = soc_df
+    edisgo_obj.overlying_grid.storage_units_soc = soc_df
     edisgo_obj.set_time_series_reactive_power_control()
 
 
