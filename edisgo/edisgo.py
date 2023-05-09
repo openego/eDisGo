@@ -969,7 +969,9 @@ class EDisGo:
         --------
         tuple(:pandas:`pandas.DatetimeIndex<DatetimeIndex>`,\
             :pandas:`pandas.DatetimeIndex<DatetimeIndex>`)
-            Returns the time steps for which power flow analysis did not converge.
+            First index contains time steps for which power flow analysis did converge.
+            Second index contains time steps for which power flow analysis did not
+            converge.
 
         References
         --------
