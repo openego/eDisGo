@@ -527,13 +527,17 @@ class TestEDisGo:
     @pytest.mark.slow
     def test_enhanced_reinforce_grid(self):
         self.setup_edisgo_object()
+
         self.setup_worst_case_time_series()
         self.edisgo.timeseries.scale_timeseries(
             p_scaling_factor=100, q_scaling_factor=100
         )
+
         edisgo_obj = copy.deepcopy(self.edisgo)
         edisgo_obj = enhanced_reinforce_grid(
-            edisgo_obj, activate_cost_results_disturbing_mode=True
+            edisgo_obj,
+            activate_cost_results_disturbing_mode=True,
+            separate_lv_grids=False,
         )
 
         results = edisgo_obj.results

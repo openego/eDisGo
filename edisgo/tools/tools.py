@@ -400,7 +400,7 @@ def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
     -------
     list(str)
         List of buses (as in index of :attr:`~.network.topology.Topology.buses_df`)
-        downstream of the given component.
+        downstream of the given component incl. the initial bus.
 
     """
     graph = edisgo_obj.topology.to_graph()
@@ -420,17 +420,22 @@ def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
         bus = bus0 if len(path_to_station_bus0) > len(path_to_station_bus1) else bus1
         bus_upstream = bus0 if bus == bus1 else bus1
     else:
-        return None
+        raise ValueError(
+            f"Component type needs to be either 'bus' or 'line'. Given {comp_type=} is "
+            f"not valid."
+        )
 
     # remove edge between bus and next bus upstream
     graph.remove_edge(bus, bus_upstream)
 
     # get subgraph containing relevant bus
-    subgraphs = list(graph.subgraph(c) for c in nx.connected_components(graph))
+    subgraphs = [graph.subgraph(c) for c in nx.connected_components(graph)]
+
     for subgraph in subgraphs:
         if bus in subgraph.nodes():
             return list(subgraph.nodes())
-    return None
+
+    return [bus]
 
 
 def assign_voltage_level_to_component(df, buses_df):

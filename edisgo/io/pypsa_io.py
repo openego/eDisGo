@@ -90,7 +90,6 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
 
     # define buses_df, slack_df and components for each use case
     if mode is None:
-
         pypsa_network.mode = "mv"
 
         buses_df = edisgo_object.topology.buses_df.loc[:, ["v_nom"]]
@@ -114,7 +113,6 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         }
 
     elif "mv" in mode:
-
         pypsa_network.mode = "mv"
 
         grid_object = edisgo_object.topology.mv_grid
@@ -191,13 +189,12 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
                 )
 
     elif mode == "lv":
-
         pypsa_network.mode = "lv"
 
         lv_grid_id = kwargs.get("lv_grid_id", None)
-        if not lv_grid_id:
+        if lv_grid_id is None:
             raise ValueError(
-                "For exporting LV grids, ID or name of LV grid has to be provided"
+                "For exporting LV grids, ID or name of LV grid has to be provided "
                 "using parameter `lv_grid_id`."
             )
         grid_object = edisgo_object.topology.get_lv_grid(lv_grid_id)
