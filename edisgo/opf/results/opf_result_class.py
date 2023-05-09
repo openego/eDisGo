@@ -219,6 +219,7 @@ def _get_matching_dict_of_attributes_and_file_names():
         "heat_storage_t": {
             "p": "heat_storage_t_p.csv",
             "e": "heat_storage_t_e.csv",
+            "p_slack": "heat_storage_t_p_slack.csv",
         },
         "grid_slacks_t": {
             "gen_d_crt": "dispatchable_gen_crt.csv",
@@ -226,6 +227,7 @@ def _get_matching_dict_of_attributes_and_file_names():
             "load_shedding": "load_shedding.csv",
             "cp_load_shedding": "cp_load_shedding.csv",
             "hp_load_shedding": "hp_load_shedding.csv",
+            "hp_operation_slack": "hp_operation_slack.csv",
         },
     }
 

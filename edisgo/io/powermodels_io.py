@@ -363,7 +363,9 @@ def from_powermodels(
         for flex in df2.columns:
             abs_error = abs(df2[flex].values - hv_flex_dict[flex])
             rel_error = [
-                abs_error[i] / hv_flex_dict[flex][i] if (abs_error > 0.01)[i] else 0
+                abs_error[i] / hv_flex_dict[flex][i]
+                if ((abs_error > 0.01)[i] & hv_flex_dict[flex][i] != 0)
+                else 0
                 for i in range(len(abs_error))
             ]
             df2[flex] = rel_error
@@ -419,6 +421,15 @@ def from_powermodels(
         s_base,
     )
     edisgo_object.opf_results.heat_storage_t.e = df
+    df = _result_df(
+        pm,
+        "heat_storage",
+        "phss",
+        timesteps,
+        edisgo_object.timeseries.timeindex,
+        s_base,
+    )
+    edisgo_object.opf_results.heat_storage_t.p_slack = df
 
     if pm["nw"]["1"]["opf_version"] in [2, 4]:
         slacks = [
@@ -427,6 +438,7 @@ def from_powermodels(
             ("load", "pds"),
             ("electromobility", "pcps"),
             ("heatpumps", "phps"),
+            ("heatpumps", "phps2"),
         ]
         for comp, var in slacks:
             # save slacks to edisgo object
@@ -442,7 +454,10 @@ def from_powermodels(
             elif comp == "electromobility":
                 edisgo_object.opf_results.grid_slacks_t.cp_load_shedding = df
             elif comp == "heatpumps":
-                edisgo_object.opf_results.grid_slacks_t.hp_load_shedding = df
+                if var == "phps":
+                    edisgo_object.opf_results.grid_slacks_t.hp_load_shedding = df
+                elif var == "phps2":
+                    edisgo_object.opf_results.grid_slacks_t.hp_operation_slack = df
 
     # save line flows and currents to edisgo object
     for variable in ["pf", "qf", "ccm"]:
