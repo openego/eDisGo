@@ -928,6 +928,10 @@ def separate_lv_grid(
         (grid.lines_df.bus0 == station_node) | (grid.lines_df.bus1 == station_node)
     ]
 
+    first_nodes = set(relevant_lines.bus0).union(set(relevant_lines.bus1)) - {
+        station_node,
+    }
+
     if len(relevant_lines) <= 1:
         logger.warning(
             f"{grid} has only {len(relevant_lines)} feeder and is therefore not "
@@ -941,17 +945,19 @@ def separate_lv_grid(
     paths = {}
     first_nodes_feeders = {}
 
+    # determine ordered shortest path between each node and the station node and each
+    # node per feeder
     for node in G.nodes:
         if node == station_node:
             continue
 
         path = nx.shortest_path(G, station_node, node)
 
-        for first_node in relevant_lines.bus1.values:
+        for first_node in first_nodes:
             if first_node in path:
                 paths[node] = path
 
-                first_nodes_feeders.setdefault(path[1], []).append(
+                first_nodes_feeders.setdefault(first_node, []).append(
                     node  # first nodes and paths
                 )
 
@@ -974,6 +980,7 @@ def separate_lv_grid(
             node: path for node, path in paths.items() if path[1] == first_node
         }
 
+        # identify main feeder by maximum number of nodes in path
         first_nodes_feeders[first_node] = paths_first_node[
             max(paths_first_node, key=lambda x: len(paths_first_node[x]))
         ]
