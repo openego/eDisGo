@@ -415,7 +415,6 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
 
     lines_changes = {}
     for repr_node in nodes_feeder.keys():
-
         # find node farthest away
         get_weight = lambda u, v, data: data["length"]  # noqa: E731
         path_length = 0
@@ -923,7 +922,7 @@ def separate_lv_grid(
     G = grid.graph
 
     # main station
-    station_node = list(G.nodes)[0]
+    station_node = grid.transformers_df.bus1.iat[0]
 
     relevant_lines = grid.lines_df.loc[
         (grid.lines_df.bus0 == station_node) | (grid.lines_df.bus1 == station_node)
@@ -1041,7 +1040,6 @@ def separate_lv_grid(
             count_inept += 1
 
     if nodes_tb_relocated:
-
         # generate new lv grid id
         n = 0
         lv_grid_id_new = int(f"{grid.id}{n}")
@@ -1158,8 +1156,6 @@ def separate_lv_grid(
                 )
 
     else:
-        logger.warning(
-            f"{grid} was not split because it has too few suitable feeders."
-        )
+        logger.warning(f"{grid} was not split because it has too few suitable feeders.")
 
     return transformers_changes, lines_changes
