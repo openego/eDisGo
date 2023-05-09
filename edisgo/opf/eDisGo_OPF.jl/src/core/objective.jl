@@ -63,11 +63,13 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
     pds = Dict(n => PowerModels.var(pm, n, :pds) for n in nws)
     pcps = Dict(n => PowerModels.var(pm, n, :pcps) for n in nws)
     phps = Dict(n => PowerModels.var(pm, n, :phps) for n in nws)
+    phps2 = Dict(n => PowerModels.var(pm, n, :phps2) for n in nws)
     phss = Dict(n => PowerModels.var(pm, n, :phss) for n in nws)
     phvs = Dict(n => PowerModels.var(pm, n, :phvs) for n in nws)
     parameters = [r[1][i] for i in keys(r[1])]
     parameters = parameters[parameters .>0]
-    factor_hv_slacks = length(nws) * exp10(floor(log10(maximum(parameters)))+2)
+    #factor_hv_slacks = length(nws) * exp10(floor(log10(maximum(parameters)))+2)
+    factor_hv_slacks = exp10(floor(log10(maximum(parameters)))+1)
     println(factor_hv_slacks)
     factor_slacks = 0.6
     return JuMP.@objective(pm.model, Min,
@@ -77,9 +79,9 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
         + factor_slacks  * sum(sum(pds[n][i] for i in keys(PowerModels.ref(pm,1 , :load))) for n in nws) # minimize load shedding
         + factor_slacks  * sum(sum(pcps[n][i] for i in keys(PowerModels.ref(pm,1 , :electromobility))) for n in nws) # minimize cp load shedding
         + factor_slacks * sum(sum(phps[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws) # minimize hp load shedding
-        + factor_hv_slacks * sum(sum(phvs[n][i]^2 for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]!= "dsm") for n in nws)  #
-        + factor_hv_slacks * 1e-1 * sum(sum(phvs[n][i]^2 for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]== "dsm") for n in nws) #
-        + sum(sum(phss[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws)
+        + factor_hv_slacks * sum(sum(phvs[n][i]^2 * flex["count"] for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]!= "dsm") for n in nws)  #
+        + factor_hv_slacks * 1e-1 * sum(sum(phvs[n][i]^2 * flex["count"] for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]== "dsm") for n in nws) #
+        + 1e4 * sum(sum(phss[n][i] + phps2[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws)
     )
 end
 

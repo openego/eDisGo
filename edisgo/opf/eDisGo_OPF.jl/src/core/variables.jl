@@ -403,8 +403,9 @@ function variable_slack_grid_restrictions(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_ev_slack(pm; kwargs...)
 end
 
-function variable_slack_heat_storage(pm::AbstractBFModelEdisgo; kwargs...)
+function variable_slack_heat_pump_storage(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_hs_slack(pm; kwargs...)
+    eDisGo_OPF.variable_hp2_slack(pm; kwargs...)
 end
 
 "heat storage slack variable"
@@ -415,6 +416,16 @@ function variable_hs_slack(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bou
     )
 
     report && PowerModels.sol_component_value(pm, nw, :heatpumps, :phss, PowerModels.ids(pm, nw, :heatpumps), phss)
+end
+
+"heat pump operation slack variable"
+function variable_hp2_slack(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    phps2 = PowerModels.var(pm, nw)[:phps2] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :heatpumps)], base_name="$(nw)_phps2",
+        lower_bound = 0.0
+    )
+
+    report && PowerModels.sol_component_value(pm, nw, :heatpumps, :phps2, PowerModels.ids(pm, nw, :heatpumps), phps2)
 end
 
 "heat pump slack variable"

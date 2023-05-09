@@ -232,9 +232,6 @@ def from_powermodels(
     pm_results,
     hv_flex_dict,
     s_base=1,
-    save_heat_storage=True,
-    save_slack_gen=True,
-    save_slacks=True,
 ):
     """
     Convert results from optimization in PowerModels network data format to eDisGo data
@@ -252,36 +249,7 @@ def from_powermodels(
     s_base : int
         Base value of apparent power for per unit system.
         Default: 1 MVA.
-    save_heat_storage : bool
-        Indicates whether to save results of heat storage variables from the
-        optimization to eDisGo object.
-        Default: True.
-    save_slack_gen : bool
-        Indicates whether to save results of slack generator variables from the
-        optimization to eDisGo object.
-        Default: True.
-    save_slacks : bool
-        Indicates whether to save results of slack variables from the OPF run to eDisGo
-        object. Depending on the chosen opf_version, different slacks are created and
-        saved:
-
-        * 1
-            -
-
-        * 2
-            grid related slacks (load shedding, dispatchable and non-dispatchable
-            generator curtailment, heat pump slack)
-
-        * 3
-            high voltage requirement slacks
-
-        * 4
-            high voltage requirements slacks and grid related slacks cf. version 2
-
-        Default: True
-
     """
-
     if type(pm_results) == str:
         with open(pm_results) as f:
             pm = json.loads(json.load(f))
@@ -388,13 +356,17 @@ def from_powermodels(
             s_base,
         )
         # save HV slack results to edisgo object
-        if save_slacks:
-            edisgo_object.opf_results.hv_requirement_slacks_t = df
+        edisgo_object.opf_results.hv_requirement_slacks_t = df
 
         # calculate relative error
         df2 = deepcopy(df)
         for flex in df2.columns:
-            df2[flex] = abs(df2[flex].values - hv_flex_dict[flex]) / hv_flex_dict[flex]
+            abs_error = abs(df2[flex].values - hv_flex_dict[flex])
+            rel_error = [
+                abs_error[i] / hv_flex_dict[flex][i] if (abs_error > 0.01)[i] else 0
+                for i in range(len(abs_error))
+            ]
+            df2[flex] = rel_error
         # write results to edisgo object
         edisgo_object.opf_results.overlying_grid = pd.DataFrame(
             columns=[
@@ -417,40 +389,38 @@ def from_powermodels(
                     "Highest relative error of {} variable exceeds 5%.".format(flex)
                 )
 
-    if save_slack_gen:  # save slack generator variable to edisgo object
-        df = pd.DataFrame(
-            index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"]
-        )
-        for gen in list(pm["nw"]["1"]["gen_slack"].keys()):
-            df["pg"] = [
-                pm["nw"][str(t)]["gen_slack"][gen]["pgs"] * s_base for t in timesteps
-            ]
-            df["qg"] = [
-                pm["nw"][str(t)]["gen_slack"][gen]["qgs"] * s_base for t in timesteps
-            ]
-        edisgo_object.opf_results.slack_generator_t = df
+    # save slack generator variable to edisgo object
+    df = pd.DataFrame(index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"])
+    for gen in list(pm["nw"]["1"]["gen_slack"].keys()):
+        df["pg"] = [
+            pm["nw"][str(t)]["gen_slack"][gen]["pgs"] * s_base for t in timesteps
+        ]
+        df["qg"] = [
+            pm["nw"][str(t)]["gen_slack"][gen]["qgs"] * s_base for t in timesteps
+        ]
+    edisgo_object.opf_results.slack_generator_t = df
 
-    if save_heat_storage:  # save heat storage variables to edisgo object
-        df = _result_df(
-            pm,
-            "heat_storage",
-            "phs",
-            timesteps,
-            edisgo_object.timeseries.timeindex,
-            s_base,
-        )
-        edisgo_object.opf_results.heat_storage_t.p = df
-        df = _result_df(
-            pm,
-            "heat_storage",
-            "hse",
-            timesteps,
-            edisgo_object.timeseries.timeindex,
-            s_base,
-        )
-        edisgo_object.opf_results.heat_storage_t.e = df
+    # save heat storage variables to edisgo object
+    df = _result_df(
+        pm,
+        "heat_storage",
+        "phs",
+        timesteps,
+        edisgo_object.timeseries.timeindex,
+        s_base,
+    )
+    edisgo_object.opf_results.heat_storage_t.p = df
+    df = _result_df(
+        pm,
+        "heat_storage",
+        "hse",
+        timesteps,
+        edisgo_object.timeseries.timeindex,
+        s_base,
+    )
+    edisgo_object.opf_results.heat_storage_t.e = df
 
-    if (pm["nw"]["1"]["opf_version"] in [2, 4]) & save_slacks:
+    if pm["nw"]["1"]["opf_version"] in [2, 4]:
         slacks = [
             ("gen", "pgens"),
             ("gen_nd", "pgc"),
@@ -577,7 +547,7 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
             "base_kv": psa_net.buses.v_nom[bus_i],
             "grid_level": grid_level[psa_net.buses.v_nom[bus_i]],
         }
-
+    # add virtual busses for storage units
     for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
             psa_net,
@@ -817,7 +787,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             "storage_pf": 0,
             "index": branch_i + 1,
         }
-
+    # add virtual branch for storage units
     for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
             psa_net,
@@ -1002,6 +972,7 @@ def _build_battery_storage(
             ).values
         else:
             data = 0
+        # ToDo: find better place to save soc data to
         edisgo_obj.overlying_grid.storage_units_soc = (
             pd.DataFrame(
                 columns=flexible_storage_units,
@@ -1317,9 +1288,16 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         idx_bus = _mapping(
             psa_net, edisgo_obj, psa_net.loads.loc[flexible_hps].bus[stor_i]
         )
+        if (
+            edisgo_obj.topology.loads_df.loc[heat_storage_df.index[stor_i]].sector
+            != "individual_heating"
+        ):
+            p_loss = 0
+        else:
+            p_loss = 0.04
         pm["heat_storage"][str(stor_i + 1)] = {
             "ps": 0,
-            "p_loss": 0.04,  # 4% of SOC per day
+            "p_loss": p_loss,  # 4% of SOC per day
             "energy": 0,
             "capacity": heat_storage_df.capacity[stor_i].round(20) / s_base,
             "charge_efficiency": heat_storage_df.efficiency[stor_i].round(20),
@@ -1554,10 +1532,19 @@ def _build_hv_requirements(
             hv_flex_dict["dsm"]
             - psa_net.loads_t.p_set.loc[:, inflexible_loads].sum(axis=1) / s_base
         ).round(20)
+    count = (
+        len(flexible_loads)
+        + len(flexible_storage_units)
+        + len(flexible_hps)
+        + len(flexible_cps)
+        + len(pm["gen_nd"].keys())
+    )
+
     for i in np.arange(len(opf_flex)):
         pm["HV_requirements"][str(i + 1)] = {
             "P": hv_flex_dict[opf_flex[i]][0],
             "name": opf_flex[i],
+            "count": count,
         }
 
 
@@ -1676,7 +1663,6 @@ def _build_component_timeseries(
     hv_flex_dict : dict
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from overlying grid component of edisgo object.
-
     """
     pm_comp = dict()
     solar_gens = edisgo_obj.topology.generators_df.index[
@@ -1929,6 +1915,35 @@ def _mapping(
     flexible_loads=None,
     flexible_storage_units=None,
 ):
+    """
+    Map edisgo component to either bus ID or component ID that is used in PowerModels
+    dictionary 'pm'.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    edisgo_obj : :class:`~.EDisGo`
+    name: str
+        Component name that is used in eDisGo object.
+    kind : str
+        If "bus", then bus ID that is used in PowerModels dictionary 'pm' and that
+        the component is connected to is returned. Else, component ID of the considered
+        component that is used in PowerModels dictionary 'pm' is returned.
+        Must be one of ["bus", "gen", "gen_nd", "gen_slack", "load", "storage",
+        "electromobility", "heatpumps", "heat_storage", "dsm"].
+        Default: "bus".
+    flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
+        Array containing all charging points that allow for flexible charging.
+    flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
+        Array containing all heat pumps that allow for flexible operation due to an
+        attached heat storage.
+    flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
+        Array containing all flexible loads that allow for application of demand side
+        management strategy.
+    flexible_storage_units : :numpy:`numpy.ndarray<ndarray>` or None
+        Array containing all flexible storage units.
+    """
     solar_gens = edisgo_obj.topology.generators_df.index[
         edisgo_obj.topology.generators_df.type == "solar"
     ]

@@ -7,6 +7,7 @@ import sys
 import numpy as np
 
 from edisgo.flex_opt import exceptions
+from edisgo.io.powermodels_io import from_powermodels
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +23,6 @@ def pm_optimize(
     method="soc",
     warm_start=False,
     silence_moi=False,
-    save_heat_storage=True,
-    save_slack_gen=True,
-    save_slacks=True,
 ):
     """
     Run OPF for edisgo object in julia subprocess and write results of OPF to edisgo
@@ -155,13 +153,11 @@ def pm_optimize(
         if out.rstrip().startswith('{"name"'):
             pm_opf = json.loads(out)
             # write results to edisgo object
-            edisgo_obj.from_powermodels(
+            from_powermodels(
+                edisgo_obj,
                 pm_results=pm_opf,
                 hv_flex_dict=hv_flex_dict,
                 s_base=s_base,
-                save_heat_storage=save_heat_storage,
-                save_slack_gen=save_slack_gen,
-                save_slacks=save_slacks,
             )
         elif out.rstrip().startswith("Set parameter") or out.rstrip().startswith(
             "Academic"

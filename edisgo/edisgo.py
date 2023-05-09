@@ -839,53 +839,6 @@ class EDisGo:
             opf_version=opf_version,
         )
 
-    def from_powermodels(
-        self,
-        pm_results,
-        hv_flex_dict,
-        s_base=1,
-        save_heat_storage=True,
-        save_slack_gen=True,
-        save_slacks=True,
-    ):
-        """
-        Convert results from optimization in PowerModels network data format to eDisGo
-        representation of the network topology and timeseries and update values on
-        eDisGo object.
-
-        Parameters
-        ----------
-        pm_results : dict or str
-            Dictionary or path to JSON file that contains all network data in
-            PowerModels network data format.
-        hv_flex_dict : dict
-            Dictionary containing time series of HV requirement for each flexibility
-            retrieved from etrago component of edisgo object.
-        s_base : int
-            Base value of apparent power for per unit system. Default: 1 MVA.
-        save_heat_storage : bool
-            Indicates whether to save results of heat storage variables from the
-            optimization to eDisGo object. Default: True.
-        save_slack_gen : bool
-            Indicates whether to save results of slack generator variables from the
-            optimization to eDisGo object. Default: True.
-        save_slacks: bool
-            Indicates whether to save results of slack variables from the OPF run to
-            eDisGo object. Depending on the chosen opf_version, different slacks are
-            created and saved For more information see
-            :func:`edisgo.io.powermodels_io.from_powermodels`. Default: True.
-
-        """
-        return powermodels_io.from_powermodels(
-            self,
-            pm_results=pm_results,
-            hv_flex_dict=hv_flex_dict,
-            s_base=s_base,
-            save_heat_storage=save_heat_storage,
-            save_slack_gen=save_slack_gen,
-            save_slacks=save_slacks,
-        )
-
     def pm_optimize(
         self,
         s_base=1,
@@ -947,20 +900,6 @@ class EDisGo:
             hence there will be no logging coming from julia subprocess in python
             process.
             Default: False.
-        save_heat_storage : bool
-            Indicates whether to save results of heat storage variables from the
-            optimization to eDisGo object. Default: True.
-        save_slack_gen : bool
-            Indicates whether to save results of slack generator variables from the
-            optimization to eDisGo object.
-            Default: True.
-        save_slacks : bool
-            Indicates whether to save results of slack variables from the OPF run to
-            eDisGo object. Depending on the chosen opf_version, different slacks are
-            created and saved For more information see
-            :func:`edisgo.io.powermodels_io.from_powermodels`
-            Default: True.
-
         """
         return powermodels_opf.pm_optimize(
             self,
@@ -973,9 +912,6 @@ class EDisGo:
             method=method,
             warm_start=warm_start,
             silence_moi=silence_moi,
-            save_heat_storage=save_heat_storage,
-            save_slack_gen=save_slack_gen,
-            save_slacks=save_slacks,
         )
 
     def to_graph(self):

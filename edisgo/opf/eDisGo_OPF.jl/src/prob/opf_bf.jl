@@ -23,7 +23,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
                 eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.44)-(3.47)
                 eDisGo_OPF.variable_bus_voltage(pm, nw=n)  # Eq. (3.8)
             end
-            eDisGo_OPF.variable_slack_heat_storage(pm, nw=n) # Eq. (3.44)-(3.47)
+            eDisGo_OPF.variable_slack_heat_pump_storage(pm, nw=n) # Eq. (3.44)-(3.47)
             eDisGo_OPF.variable_battery_storage(pm, nw=n)  # Eq. (3.11) und (3.12)
             eDisGo_OPF.variable_heat_storage(pm, nw=n)  # Eq. (3.24)
             eDisGo_OPF.variable_heat_pump_power(pm, nw=n)  # Eq. (3.20)
