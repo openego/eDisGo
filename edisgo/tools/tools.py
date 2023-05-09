@@ -819,7 +819,7 @@ def add_line_susceptance(
     return edisgo_obj
 
 
-def aggregate_district_heating_components(edisgo_obj, feedin_district_heating):
+def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=None):
     """
     Aggregate PtH components that feed into the same district heating network.
 
@@ -841,6 +841,9 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating):
         columns) and time step (in index) in MW.
 
     """
+    if feedin_district_heating is None:
+        feedin_district_heating = pd.DataFrame()
+
     if "district_heating_id" in edisgo_obj.topology.loads_df.columns:
         for (
             district
@@ -941,7 +944,7 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating):
             # from other components
             if district_hp in edisgo_obj.timeseries.loads_active_power.columns:
                 edisgo_obj.apply_heat_pump_operating_strategy(
-                    heat_pump_names=district_hp
+                    heat_pump_names=[district_hp]
                 )
 
 
