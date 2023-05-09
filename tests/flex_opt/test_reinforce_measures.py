@@ -461,6 +461,10 @@ class TestReinforceMeasures:
             self.edisgo
         )
 
+        all_lv_grid_ids = [
+            lv_grid.id for lv_grid in self.edisgo.topology.mv_grid.lv_grids
+        ]
+
         lv_grid_ids = (
             self.edisgo.topology.buses_df.loc[
                 self.edisgo.topology.lines_df.loc[crit_lines_lv.index].bus0
@@ -489,8 +493,10 @@ class TestReinforceMeasures:
                 new_g_1 = [
                     g
                     for g in self.edisgo.topology.mv_grid.lv_grids
-                    if g.id == int(str(grid_id) + "1001")
+                    if g.id not in all_lv_grid_ids
                 ][0]
+
+                all_lv_grid_ids.append(new_g_1.id)
             except IndexError:
                 continue
 
