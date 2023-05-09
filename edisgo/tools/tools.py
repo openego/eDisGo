@@ -819,21 +819,29 @@ def add_line_susceptance(
     return edisgo_obj
 
 
-def aggregate_district_heating_components(edisgo_obj):
+def aggregate_district_heating_components(edisgo_obj, feedin_district_heating):
     """
-    Aggregate components that feed into the same district heating grid.
-    Rated power of both components is added up and COP for combined
-    component is calculated from COP of all components weighed with their rated
-    power. Heat demand of district heating grid is then reduced by feedin from other
-    sources.
+    Aggregate PtH components that feed into the same district heating network.
+
+    Besides aggregating PtH components, feed-in from other heat supply sources can
+    be specified, which is subtracted from the heat demand in the district heating
+    network in order to determine the heat demand that needs to be covered by the PtH
+    units.
+
+    Concerning the aggregated components, rated power of the single components is added
+    up and COP for combined component is calculated from COP of all components weighed
+    with their rated power. If active and reactive power time series were previously
+    set for the PtH units they are overwritten.
 
     Parameters
     -----------
     edisgo_obj : :class:`~.EDisGo`
+    feedin_district_heating : :pandas:`pandas.DataFrame<DataFrame>`
+        Other thermal feed-in into district heating per district heating area (in
+        columns) and time step (in index) in MW.
 
     """
     if "district_heating_id" in edisgo_obj.topology.loads_df.columns:
-        feedin_district_heating = edisgo_obj.overlying_grid.feedin_district_heating
         for (
             district
         ) in edisgo_obj.topology.loads_df.district_heating_id.dropna().unique():
@@ -857,7 +865,7 @@ def aggregate_district_heating_components(edisgo_obj):
                     edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
                         edisgo_obj.heat_pump.heat_demand_df[district_hp]
                         - feedin_district_heating[str(district)]
-                    )  # .clip(min=0)
+                    )
                 else:
                     logger.info(
                         f"There are no other heat supply sources in district heating "
@@ -928,11 +936,13 @@ def aggregate_district_heating_components(edisgo_obj):
                         index={district_rh: district_hp}, inplace=True
                     )
 
-        # calculate power timeseries of aggregated components with reduced heat
-        # demand
-        edisgo_obj.apply_heat_pump_operating_strategy()
-    else:
-        edisgo_obj.apply_heat_pump_operating_strategy()
+            # if time series was previously set, overwrite time series in case
+            # components were aggregated components or heat demand reduced by feed-in
+            # from other components
+            if district_hp in edisgo_obj.timeseries.loads_active_power.columns:
+                edisgo_obj.apply_heat_pump_operating_strategy(
+                    heat_pump_names=district_hp
+                )
 
 
 def battery_storage_reference_operation(
