@@ -46,7 +46,7 @@ requirements = [
     "matplotlib >= 3.3.0",
     "multiprocess",
     "networkx >= 2.5.0",
-    "pandas >= 1.2.0, < 2.0.0",
+    "pandas >= 1.4.0",
     "plotly",
     "pydot",
     "pygeos",

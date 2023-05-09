@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from pandas.util.testing import assert_frame_equal
+from pandas.testing import assert_frame_equal
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints
@@ -68,7 +68,6 @@ class TestCheckTechConstraints:
         assert df.at["Line_50000002", "time_index"] == self.timesteps[0]
 
     def test_lines_allowed_load(self):
-
         # check with default value (all lines)
         df = check_tech_constraints.lines_allowed_load(self.edisgo)
         # check shape of dataframe
@@ -100,7 +99,6 @@ class TestCheckTechConstraints:
         assert (4, 2) == df.shape
 
     def test__lines_allowed_load_voltage_level(self):
-
         # check for MV
         df = check_tech_constraints._lines_allowed_load_voltage_level(self.edisgo, "mv")
         # check shape of dataframe
@@ -136,7 +134,6 @@ class TestCheckTechConstraints:
         )
 
     def test_lines_relative_load(self):
-
         # check with default value (all lines)
         df = check_tech_constraints.lines_relative_load(self.edisgo)
         # check shape of dataframe
@@ -234,7 +231,6 @@ class TestCheckTechConstraints:
             check_tech_constraints._station_load(self.edisgo, grid)
 
     def test__station_allowed_load(self):
-
         # check LV grid
         grid = self.edisgo.topology.get_lv_grid(4)
         df = check_tech_constraints._station_allowed_load(self.edisgo, grid)
@@ -263,7 +259,6 @@ class TestCheckTechConstraints:
         assert np.isclose(40.0, df.loc[feed_in_cases.values].values).all()
 
     def test_stations_allowed_load(self):
-
         # check without specifying a grid
         df = check_tech_constraints.stations_allowed_load(self.edisgo)
         # check shape of dataframe
@@ -303,7 +298,6 @@ class TestCheckTechConstraints:
         ).all()
 
     def test_stations_relative_load(self):
-
         # check without specifying grids
         df = check_tech_constraints.stations_relative_load(self.edisgo)
         # check shape of dataframe
@@ -340,7 +334,6 @@ class TestCheckTechConstraints:
         ).all()
 
     def test_components_relative_load(self):
-
         # check with power flow results available for all components
         df = check_tech_constraints.components_relative_load(self.edisgo)
         # check shape of dataframe
@@ -404,7 +397,6 @@ class TestCheckTechConstraints:
         self.edisgo.results._v_res.loc[self.timesteps[0], bus2] = 0.895
 
     def test_voltage_issues(self):
-
         # ########################## check mv mode #################################
 
         # ################### check with no voltage issues
@@ -545,7 +537,6 @@ class TestCheckTechConstraints:
         assert (6, 3) == voltage_issues.shape
 
     def test__voltage_issues_helper(self):
-
         # create voltage issues
         self.mv_voltage_issues()
 
@@ -705,7 +696,6 @@ class TestCheckTechConstraints:
         assert upper.shape == (4, 41)
 
     def test__mv_allowed_voltage_limits(self):
-
         (
             v_limits_upper,
             v_limits_lower,
@@ -715,7 +705,6 @@ class TestCheckTechConstraints:
         assert 0.985 == v_limits_lower
 
     def test__lv_allowed_voltage_limits(self):
-
         lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
         lv_grid_3 = self.edisgo.topology.get_lv_grid(3)
 
@@ -819,7 +808,6 @@ class TestCheckTechConstraints:
         )
 
     def test_voltage_deviation_from_allowed_voltage_limits(self):
-
         # create MV voltage issues
         self.mv_voltage_issues()
 
