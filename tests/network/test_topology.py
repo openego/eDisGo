@@ -536,7 +536,6 @@ class TestTopology:
         assert return_value
 
     def test_check_line_for_removal(self, caplog):
-
         # test warning if line does not exist
         msg = "Line of name TestLine not in Topology. Cannot be removed."
         with caplog.at_level(logging.WARNING):
@@ -750,7 +749,6 @@ class TestTopology:
         assert bus_name not in self.topology.buses_df.index
 
     def test_update_number_of_parallel_lines(self):
-
         line_1 = "Line_10026"
         line_2 = "Line_90000010"
         # manipulate number of parallel lines of line_2
@@ -790,7 +788,6 @@ class TestTopology:
         )
 
     def test_change_line_type(self):
-
         # test line type not in equipment data
         line_1 = "Line_10027"
         msg = (
@@ -840,7 +837,6 @@ class TestTopology:
         ).all()
 
     def test_sort_buses(self):
-
         lines_df_before = self.topology.lines_df.copy()
 
         self.topology.sort_buses()
@@ -1219,7 +1215,6 @@ class TestTopologyWithEdisgoObject:
         assert "Storage" in self.edisgo.topology.storage_units_df.at[comp_name, "bus"]
 
     def test_connect_to_lv(self):
-
         # ######### Generator #############
 
         # test substation ID that does not exist in the grid
@@ -1752,7 +1747,11 @@ class TestTopologyWithEdisgoObject:
         for comp, name in comps_dict.items():
             new_comp = getattr(self.edisgo.topology, "_{}_df".format(comp)).loc[name]
             comps = getattr(self.edisgo.topology, "_{}_df".format(comp))
-            setattr(self.edisgo.topology, "_{}_df".format(comp), comps.append(new_comp))
+            setattr(
+                self.edisgo.topology,
+                "_{}_df".format(comp),
+                pd.concat([comps, new_comp.to_frame().T]),
+            )  # comps.append(new_comp))
             self.edisgo.topology.check_integrity()
             assert (
                 f"{name} have duplicate entry in one of the following components' "
@@ -1773,7 +1772,7 @@ class TestTopologyWithEdisgoObject:
             setattr(
                 self.edisgo.topology,
                 "_{}_df".format(nodal_component),
-                comps.append(new_comp),
+                pd.concat([comps, new_comp.to_frame().T]),
             )
             self.edisgo.topology.check_integrity()
             assert (
@@ -1801,7 +1800,7 @@ class TestTopologyWithEdisgoObject:
             setattr(
                 self.edisgo.topology,
                 "_{}_df".format(branch_component),
-                comps.append(new_comp),
+                pd.concat([comps, new_comp.to_frame().T]),
             )
             self.edisgo.topology.check_integrity()
             assert (
@@ -1821,7 +1820,7 @@ class TestTopologyWithEdisgoObject:
         for attr in ["bus_open", "bus_closed"]:
             new_comp = comps.loc[comps_dict["switches"]]
             new_comp.name = "new_switch"
-            new_comps = comps.append(new_comp)
+            new_comps = pd.concat([comps, new_comp.to_frame().T])
             new_comps.at[new_comp.name, attr] = "Non_existent_" + attr
             self.edisgo.topology.switches_df = new_comps
             self.edisgo.topology.check_integrity()
@@ -1838,7 +1837,9 @@ class TestTopologyWithEdisgoObject:
         # check isolated node
         bus = self.edisgo.topology.buses_df.loc[comps_dict["buses"]]
         bus.name = "New_bus"
-        self.edisgo.topology.buses_df = self.edisgo.topology.buses_df.append(bus)
+        self.edisgo.topology.buses_df = pd.concat(
+            [self.edisgo.topology.buses_df, bus.to_frame().T]
+        )
         self.edisgo.topology.check_integrity()
         assert "The following buses are isolated: {}.".format(bus.name) in caplog.text
         assert "The network has isolated nodes or edges." in caplog.text

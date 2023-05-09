@@ -949,7 +949,6 @@ def allowed_voltage_limits(edisgo_obj, buses=None, split_voltage_band=True):
         buses = edisgo_obj.results.v_res.columns
 
     if split_voltage_band:
-
         # MV limits
         mv_buses = edisgo_obj.topology.mv_grid.buses_df.index
         mv_upper, mv_lower = _mv_allowed_voltage_limits(edisgo_obj)
@@ -1078,7 +1077,6 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
     buses_in_pfa = voltages_pfa.columns
 
     if mode == "stations":
-
         config_string = "mv_lv_station"
 
         # get base voltage (voltage at primary side) for each station
@@ -1107,14 +1105,15 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
 
         # get all secondary sides and buses in grids
         buses_dict = {}
-        secondary_sides = pd.Series(dtype="float64")
+        secondary_sides_dict = {}
         for grid in lv_grids:
             secondary_side = grid.station.index[0]
             if secondary_side in buses_in_pfa:
-                secondary_sides[grid] = secondary_side
+                secondary_sides_dict[grid] = secondary_side
                 buses_dict[grid.station.index[0]] = grid.buses_df.index.drop(
                     grid.station.index[0]
                 )
+        secondary_sides = pd.Series(secondary_sides_dict)
 
         voltage_base = voltages_pfa.loc[:, secondary_sides.values]
 
