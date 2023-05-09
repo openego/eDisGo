@@ -1029,58 +1029,44 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
         n_grids_init = len(lv_grids)
 
         for lv_grid in lv_grids:
-            tech_dict = {}
+            active_power_dict = {}
+            reactive_power_dict = {}
 
             for tech in techs:
                 units = getattr(lv_grid, tech_str.format(tech)).index
-                active_power = (
+                active_power_dict[tech] = (
                     getattr(
                         edisgo_obj.timeseries,
                         active_str.format(tech),
                     )
                     .loc[:, units]
                     .astype(float)
+                    .sum(axis=1)
                 )
 
-                reactive_power = (
+                reactive_power_dict[tech] = (
                     getattr(
                         edisgo_obj.timeseries,
                         reactive_str.format(tech),
                     )
                     .loc[:, units]
                     .astype(float)
+                    .sum(axis=1)
                 )
 
-                if tech == "storage_units":
-                    tech_dict[tech + "_loads"] = np.hypot(
-                        active_power.clip(upper=0.0),
-                        reactive_power.clip(upper=0.0),
-                    )
+            active_power = (
+                active_power_dict["loads"]
+                - active_power_dict["generators"]
+                - active_power_dict["storage_units"]
+            )
 
-                    tech_dict[tech + "_generators"] = np.hypot(
-                        active_power.clip(lower=0.0),
-                        reactive_power.clip(lower=0.0),
-                    )
-                else:
-                    tech_dict[tech] = np.hypot(active_power, reactive_power)
+            reactive_power = (
+                reactive_power_dict["loads"]
+                - reactive_power_dict["generators"]
+                - reactive_power_dict["storage_units"]
+            )
 
-            load = pd.concat(
-                [
-                    tech_dict["loads"],
-                    tech_dict["storage_units_loads"],
-                ],
-                axis=1,
-            ).sum(axis=1)
-
-            gen = pd.concat(
-                [
-                    tech_dict["generators"],
-                    tech_dict["storage_units_generators"],
-                ],
-                axis=1,
-            ).sum(axis=1)
-
-            worst_case = (gen - load).abs().max()
+            worst_case = np.hypot(active_power, reactive_power).max()
 
             transformers_s_nom = lv_grid.transformers_df.s_nom.sum()
 
