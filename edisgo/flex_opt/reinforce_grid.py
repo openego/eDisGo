@@ -819,11 +819,18 @@ def enhanced_reinforce_grid(
     :func:`edisgo.flex_opt.reinforce_grid.catch_convergence_reinforce_grid` is not
     sufficient.
 
-    After first grid reinforcement for all voltage levels at once fails, reinforcement
-    is first conducted for the MV level only, afterwards for the MV level including
-    MV/LV stations and at last each LV grid separately. Beforehand the separation of
-    highly overloaded LV grids can be done by setting 'separate_lv_grids' to True. See
+    In a first step, if `separate_lv_grids` is set to True, LV grids with a large load,
+    specified through parameter `separation_threshold`, are split, so that part of the
+    load is served by a separate MV/LV station. See
     :func:`~.flex_opt.reinforce_grid.run_separate_lv_grids` for more information.
+    Afterwards it is tried to run the grid reinforcement for all voltage levels at once.
+    If this fails, reinforcement is first conducted for the MV level only, afterwards
+    for the MV level including MV/LV stations and at last for each LV grid separately.
+    For each LV grid is it checked, if all time steps converge in the power flow
+    analysis. If this is not the case, the grid is split. Afterwards it is tried to
+    be reinforced. If this fails and `activate_cost_results_disturbing_mode`
+    parameter is set to True, further measures are taken. See parameter documentation
+    for more information.
 
     Parameters
     ----------
@@ -897,6 +904,25 @@ def enhanced_reinforce_grid(
             logger.info("Mode 'mvlv' reinforcement failed.")
 
         for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids):
+            logger.info(f"Check convergence for {lv_grid=}.")
+            _, ts_not_converged = edisgo_obj.analyze(
+                mode="lv", raise_not_converged=False, lv_grid_id=lv_grid.id
+            )
+            if len(ts_not_converged) > 0:
+                logger.info(
+                    f"Not all time steps converged in power flow analysis for "
+                    f"{lv_grid=}. It is therefore tried to be split.")
+                transformers_changes, lines_changes = separate_lv_grid(
+                    edisgo_obj, lv_grid
+                )
+                if len(lines_changes) > 0:
+                    _add_lines_changes_to_equipment_changes(
+                        edisgo_obj, lines_changes, 1
+                    )
+                if len(transformers_changes) > 0:
+                    _add_transformer_changes_to_equipment_changes(
+                        edisgo_obj, transformers_changes, 1, "added"
+                    )
             try:
                 logger.info(f"Try mode 'lv' reinforcement for {lv_grid=}.")
                 edisgo_obj.reinforce(
