@@ -6,11 +6,13 @@ import logging
 
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import exceptions, reinforce_measures
 from edisgo.flex_opt.costs import grid_expansion_costs
+from edisgo.flex_opt.reinforce_measures import separate_lv_grid
 from edisgo.tools import tools
 from edisgo.tools.temporal_complexity_reduction import get_most_critical_time_steps
 
@@ -113,42 +115,6 @@ def reinforce_grid(
     reinforcement is conducted.
 
     """
-
-    def _add_lines_changes_to_equipment_changes():
-        edisgo.results.equipment_changes = pd.concat(
-            [
-                edisgo.results.equipment_changes,
-                pd.DataFrame(
-                    {
-                        "iteration_step": [iteration_step] * len(lines_changes),
-                        "change": ["changed"] * len(lines_changes),
-                        "equipment": edisgo.topology.lines_df.loc[
-                            lines_changes.keys(), "type_info"
-                        ].values,
-                        "quantity": [_ for _ in lines_changes.values()],
-                    },
-                    index=lines_changes.keys(),
-                ),
-            ],
-        )
-
-    def _add_transformer_changes_to_equipment_changes(mode: str | None):
-        df_list = [edisgo.results.equipment_changes]
-        df_list.extend(
-            pd.DataFrame(
-                {
-                    "iteration_step": [iteration_step] * len(transformer_list),
-                    "change": [mode] * len(transformer_list),
-                    "equipment": transformer_list,
-                    "quantity": [1] * len(transformer_list),
-                },
-                index=[station] * len(transformer_list),
-            )
-            for station, transformer_list in transformer_changes[mode].items()
-        )
-
-        edisgo.results.equipment_changes = pd.concat(df_list)
-
     if n_minus_one is True:
         raise NotImplementedError("n-1 security can currently not be checked.")
 
@@ -244,7 +210,6 @@ def reinforce_grid(
         or not overloaded_lv_stations.empty
         or not crit_lines.empty
     ) and while_counter < max_while_iterations:
-
         if not overloaded_mv_station.empty:
             # reinforce substations
             transformer_changes = (
@@ -253,8 +218,12 @@ def reinforce_grid(
                 )
             )
             # write added and removed transformers to results.equipment_changes
-            _add_transformer_changes_to_equipment_changes("added")
-            _add_transformer_changes_to_equipment_changes("removed")
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "removed"
+            )
 
         if not overloaded_lv_stations.empty:
             # reinforce distribution substations
@@ -264,8 +233,12 @@ def reinforce_grid(
                 )
             )
             # write added and removed transformers to results.equipment_changes
-            _add_transformer_changes_to_equipment_changes("added")
-            _add_transformer_changes_to_equipment_changes("removed")
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "removed"
+            )
 
         if not crit_lines.empty:
             # reinforce lines
@@ -273,7 +246,9 @@ def reinforce_grid(
                 edisgo, crit_lines
             )
             # write changed lines to results.equipment_changes
-            _add_lines_changes_to_equipment_changes()
+            _add_lines_changes_to_equipment_changes(
+                edisgo, lines_changes, iteration_step
+            )
 
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
@@ -351,7 +326,6 @@ def reinforce_grid(
 
     while_counter = 0
     while not crit_nodes.empty and while_counter < max_while_iterations:
-
         # reinforce lines
         lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
             edisgo,
@@ -359,7 +333,7 @@ def reinforce_grid(
             crit_nodes,
         )
         # write changed lines to results.equipment_changes
-        _add_lines_changes_to_equipment_changes()
+        _add_lines_changes_to_equipment_changes(edisgo, lines_changes, iteration_step)
 
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-voltage problems were solved
@@ -420,7 +394,9 @@ def reinforce_grid(
                 )
             )
             # write added transformers to results.equipment_changes
-            _add_transformer_changes_to_equipment_changes("added")
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
 
             # run power flow analysis again (after updating pypsa object) and
             # check if all over-voltage problems were solved
@@ -482,7 +458,9 @@ def reinforce_grid(
                     crit_nodes[crit_nodes.lv_grid_id == grid_id],
                 )
                 # write changed lines to results.equipment_changes
-                _add_lines_changes_to_equipment_changes()
+                _add_lines_changes_to_equipment_changes(
+                    edisgo, lines_changes, iteration_step
+                )
 
             # run power flow analysis again (after updating pypsa object)
             # and check if all over-voltage problems were solved
@@ -556,7 +534,6 @@ def reinforce_grid(
         or not overloaded_lv_stations.empty
         or not crit_lines.empty
     ) and while_counter < max_while_iterations:
-
         if not overloaded_mv_station.empty:
             # reinforce substations
             transformer_changes = (
@@ -565,8 +542,12 @@ def reinforce_grid(
                 )
             )
             # write added and removed transformers to results.equipment_changes
-            _add_transformer_changes_to_equipment_changes("added")
-            _add_transformer_changes_to_equipment_changes("removed")
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "removed"
+            )
 
         if not overloaded_lv_stations.empty:
             # reinforce substations
@@ -576,8 +557,12 @@ def reinforce_grid(
                 )
             )
             # write added and removed transformers to results.equipment_changes
-            _add_transformer_changes_to_equipment_changes("added")
-            _add_transformer_changes_to_equipment_changes("removed")
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "removed"
+            )
 
         if not crit_lines.empty:
             # reinforce lines
@@ -585,7 +570,9 @@ def reinforce_grid(
                 edisgo, crit_lines
             )
             # write changed lines to results.equipment_changes
-            _add_lines_changes_to_equipment_changes()
+            _add_lines_changes_to_equipment_changes(
+                edisgo, lines_changes, iteration_step
+            )
 
         # run power flow analysis again (after updating pypsa object) and check
         # if all over-loading problems were solved
@@ -820,7 +807,11 @@ def catch_convergence_reinforce_grid(
 
 
 def enhanced_reinforce_grid(
-    edisgo_object: EDisGo, activate_cost_results_disturbing_mode: bool = False, **kwargs
+    edisgo_object: EDisGo,
+    activate_cost_results_disturbing_mode: bool = False,
+    separate_lv_grids: bool = True,
+    separation_threshold: int | float = 2,
+    **kwargs,
 ) -> EDisGo:
     """
     Reinforcement strategy to reinforce grids voltage level by voltage level in case
@@ -828,9 +819,18 @@ def enhanced_reinforce_grid(
     :func:`edisgo.flex_opt.reinforce_grid.catch_convergence_reinforce_grid` is not
     sufficient.
 
-    After first grid reinforcement for all voltage levels at once fails, reinforcement
-    is first conducted for the MV level only, afterwards for the MV level including
-    MV/LV stations and at last each LV grid separately.
+    In a first step, if `separate_lv_grids` is set to True, LV grids with a large load,
+    specified through parameter `separation_threshold`, are split, so that part of the
+    load is served by a separate MV/LV station. See
+    :func:`~.flex_opt.reinforce_grid.run_separate_lv_grids` for more information.
+    Afterwards it is tried to run the grid reinforcement for all voltage levels at once.
+    If this fails, reinforcement is first conducted for the MV level only, afterwards
+    for the MV level including MV/LV stations and at last for each LV grid separately.
+    For each LV grid is it checked, if all time steps converge in the power flow
+    analysis. If this is not the case, the grid is split. Afterwards it is tried to
+    be reinforced. If this fails and `activate_cost_results_disturbing_mode`
+    parameter is set to True, further measures are taken. See parameter documentation
+    for more information.
 
     Parameters
     ----------
@@ -845,6 +845,12 @@ def enhanced_reinforce_grid(
         standard line type. Should this not be sufficient to solve non-convergence
         issues, all components in the LV grid are aggregated to the MV/LV station.
         Default: False.
+    separate_lv_grids : bool
+        If True, all highly overloaded LV grids are separated in a first step.
+    separation_threshold : int or float
+        Overloading threshold for LV grid separation. If the overloading is higher than
+        the threshold times the total nominal apparent power of the MV/LV transformer(s)
+        the grid is separated.
     kwargs : dict
         Keyword arguments can be all parameters of function
         :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`, except
@@ -861,33 +867,62 @@ def enhanced_reinforce_grid(
         edisgo_obj = copy.deepcopy(edisgo_object)
     else:
         edisgo_obj = edisgo_object
+
     kwargs["copy_grid"] = False
     kwargs.pop("skip_mv_reinforcement", False)
 
     num_lv_grids_standard_lines = 0
     num_lv_grids_aggregated = 0
 
+    if separate_lv_grids:
+        logger.info(
+            "Separating lv grids. Set the parameter 'separate_lv_grids' to False if "
+            "this is not desired."
+        )
+        run_separate_lv_grids(edisgo_obj, threshold=separation_threshold)
+
     try:
         logger.info("Try initial enhanced reinforcement.")
         edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
         logger.info("Initial enhanced reinforcement succeeded.")
-    except:  # noqa: E722
+    except (ValueError, RuntimeError):
         logger.info("Initial enhanced reinforcement failed.")
         logger.info("Try mode 'mv' reinforcement.")
+
         try:
             edisgo_obj.reinforce(mode="mv", catch_convergence_problems=True, **kwargs)
             logger.info("Mode 'mv' reinforcement succeeded.")
-        except:  # noqa: E722
+        except (ValueError, RuntimeError):
             logger.info("Mode 'mv' reinforcement failed.")
 
         logger.info("Try mode 'mvlv' reinforcement.")
+
         try:
             edisgo_obj.reinforce(mode="mvlv", catch_convergence_problems=True, **kwargs)
             logger.info("Mode 'mvlv' reinforcement succeeded.")
-        except:  # noqa: E722
+        except (ValueError, RuntimeError):
             logger.info("Mode 'mvlv' reinforcement failed.")
 
         for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids):
+            logger.info(f"Check convergence for {lv_grid=}.")
+            _, ts_not_converged = edisgo_obj.analyze(
+                mode="lv", raise_not_converged=False, lv_grid_id=lv_grid.id
+            )
+            if len(ts_not_converged) > 0:
+                logger.info(
+                    f"Not all time steps converged in power flow analysis for "
+                    f"{lv_grid=}. It is therefore tried to be split.")
+                transformers_changes, lines_changes = separate_lv_grid(
+                    edisgo_obj, lv_grid
+                )
+                if len(lines_changes) > 0:
+                    _add_lines_changes_to_equipment_changes(
+                        edisgo_obj, lines_changes, 1
+                    )
+                if len(transformers_changes) > 0:
+                    _add_transformer_changes_to_equipment_changes(
+                        edisgo_obj, transformers_changes, 1, "added"
+                    )
             try:
                 logger.info(f"Try mode 'lv' reinforcement for {lv_grid=}.")
                 edisgo_obj.reinforce(
@@ -897,7 +932,7 @@ def enhanced_reinforce_grid(
                     **kwargs,
                 )
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} successful.")
-            except:  # noqa: E722
+            except (ValueError, RuntimeError):
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} failed.")
                 if activate_cost_results_disturbing_mode:
                     try:
@@ -920,7 +955,7 @@ def enhanced_reinforce_grid(
                         logger.info(
                             f"Changed lines mode 'lv' for {lv_grid} successful."
                         )
-                    except:  # noqa: E722
+                    except (ValueError, RuntimeError):
                         logger.info(f"Changed lines mode 'lv' for {lv_grid} failed.")
                         logger.warning(
                             f"Aggregate all nodes to station bus in {lv_grid=}."
@@ -933,13 +968,16 @@ def enhanced_reinforce_grid(
                             logger.info(
                                 f"Aggregate to station for {lv_grid} successful."
                             )
-                        except:  # noqa: E722
-                            logger.info(f"Aggregate to station for {lv_grid} failed.")
+                        except Exception as e:
+                            logger.info(
+                                f"Aggregate to station for {lv_grid} failed with "
+                                f"exception:\n{e}"
+                            )
 
         try:
             edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
             logger.info("Enhanced reinforcement succeeded.")
-        except Exception as e:  # noqa: E722
+        except Exception as e:
             logger.info("Enhanced reinforcement failed.")
             raise e
 
@@ -967,3 +1005,155 @@ def enhanced_reinforce_grid(
             edisgo_obj.results.measures = msg
 
     return edisgo_obj
+
+
+def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> None:
+    """
+    Separate all highly overloaded LV grids within the MV grid.
+
+    The loading is approximated by aggregation of all load and generator time series
+    and comparison with the total nominal apparent power of the MV/LV transformer(s).
+    This approach is chosen because this method aims at resolving highly overloaded
+    grid situations in which cases the power flow often does not converge. This method
+    ignores grid losses and voltage deviations. Original and new LV grids can be
+    separated multiple times if the overloading is very high.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    threshold : int or float
+        Overloading threshold. If the overloading is higher than the threshold times
+        the total nominal apparent power of the MV/LV transformer(s), the grid is
+        separated.
+
+    Returns
+    -------
+    :class:`~.EDisGo`
+        The reinforced eDisGo object.
+
+    """
+    lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
+    n_grids_init = len(lv_grids)
+
+    first_run = True
+
+    active_str = "{}_active_power"
+    reactive_str = "{}_reactive_power"
+    tech_str = "{}_df"
+    techs = ["generators", "loads", "storage_units"]
+
+    n = 0
+    max_iterations = 100
+
+    while (
+        n_grids_init != len(list(edisgo_obj.topology.mv_grid.lv_grids)) or first_run
+    ) and n < max_iterations:
+        n += 1
+        first_run = False
+
+        lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
+        n_grids_init = len(lv_grids)
+
+        for lv_grid in lv_grids:
+            active_power_dict = {}
+            reactive_power_dict = {}
+
+            for tech in techs:
+                units = getattr(lv_grid, tech_str.format(tech)).index
+                active_power_dict[tech] = (
+                    getattr(
+                        edisgo_obj.timeseries,
+                        active_str.format(tech),
+                    )
+                    .loc[:, units]
+                    .astype(float)
+                    .sum(axis=1)
+                )
+
+                reactive_power_dict[tech] = (
+                    getattr(
+                        edisgo_obj.timeseries,
+                        reactive_str.format(tech),
+                    )
+                    .loc[:, units]
+                    .astype(float)
+                    .sum(axis=1)
+                )
+
+            active_power = (
+                active_power_dict["loads"]
+                - active_power_dict["generators"]
+                - active_power_dict["storage_units"]
+            )
+
+            reactive_power = (
+                reactive_power_dict["loads"]
+                - reactive_power_dict["generators"]
+                - reactive_power_dict["storage_units"]
+            )
+
+            worst_case = np.hypot(active_power, reactive_power).max()
+
+            transformers_s_nom = lv_grid.transformers_df.s_nom.sum()
+
+            if worst_case > threshold * transformers_s_nom:
+                logger.info(f"Trying to separate {lv_grid}...")
+                transformers_changes, lines_changes = separate_lv_grid(
+                    edisgo_obj, lv_grid
+                )
+                if len(lines_changes) > 0:
+                    _add_lines_changes_to_equipment_changes(
+                        edisgo_obj, lines_changes, 1
+                    )
+
+                if len(transformers_changes) > 0:
+                    _add_transformer_changes_to_equipment_changes(
+                        edisgo_obj, transformers_changes, 1, "added"
+                    )
+
+            else:
+                logger.debug(
+                    f"The overloading in {lv_grid} does not surpass the set threshold "
+                    f"of {threshold}. The grid is therefore not separated."
+                )
+
+
+def _add_lines_changes_to_equipment_changes(
+    edisgo: EDisGo, lines_changes: dict, iteration_step: int
+) -> None:
+    edisgo.results.equipment_changes = pd.concat(
+        [
+            edisgo.results.equipment_changes,
+            pd.DataFrame(
+                {
+                    "iteration_step": [iteration_step] * len(lines_changes),
+                    "change": ["changed"] * len(lines_changes),
+                    "equipment": edisgo.topology.lines_df.loc[
+                        lines_changes.keys(), "type_info"
+                    ].values,
+                    "quantity": [_ for _ in lines_changes.values()],
+                },
+                index=list(lines_changes.keys()),
+            ),
+        ],
+    )
+
+
+def _add_transformer_changes_to_equipment_changes(
+    edisgo: EDisGo, transformer_changes: dict, iteration_step: int, mode: str | None
+) -> None:
+    df_list = [edisgo.results.equipment_changes]
+    df_list.extend(
+        pd.DataFrame(
+            {
+                "iteration_step": [iteration_step] * len(transformer_list),
+                "change": [mode] * len(transformer_list),
+                "equipment": transformer_list,
+                "quantity": [1] * len(transformer_list),
+            },
+            index=[station] * len(transformer_list),
+        )
+        for station, transformer_list in transformer_changes[mode].items()
+    )
+
+    edisgo.results.equipment_changes = pd.concat(df_list)

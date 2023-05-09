@@ -969,7 +969,9 @@ class EDisGo:
         --------
         tuple(:pandas:`pandas.DatetimeIndex<DatetimeIndex>`,\
             :pandas:`pandas.DatetimeIndex<DatetimeIndex>`)
-            Returns the time steps for which power flow analysis did not converge.
+            First index contains time steps for which power flow analysis did converge.
+            Second index contains time steps for which power flow analysis did not
+            converge.
 
         References
         --------
@@ -1261,12 +1263,15 @@ class EDisGo:
             run_analyze_at_the_end = False
 
         logger.info(f"Run the following reinforcements: {setting_list=}")
+
         for setting in setting_list:
             logger.info(f"Run the following reinforcement: {setting=}")
-            if not catch_convergence_problems:
-                func = reinforce_grid
-            else:
-                func = catch_convergence_reinforce_grid
+            func = (
+                catch_convergence_reinforce_grid
+                if catch_convergence_problems
+                else reinforce_grid
+            )
+
             func(
                 edisgo_obj,
                 max_while_iterations=max_while_iterations,
@@ -1275,14 +1280,17 @@ class EDisGo:
                 n_minus_one=n_minus_one,
                 **setting,
             )
+
         if run_analyze_at_the_end:
             lv_grid_id = kwargs.get("lv_grid_id", None)
+
             if mode == "lv" and lv_grid_id:
                 analyze_mode = "lv"
             elif mode == "lv":
                 analyze_mode = None
             else:
                 analyze_mode = mode
+
             edisgo_obj.analyze(
                 mode=analyze_mode, lv_grid_id=lv_grid_id, timesteps=timesteps_pfa
             )
