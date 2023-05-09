@@ -3295,6 +3295,8 @@ class EDisGo:
         if len(self.heat_pump.cop_df.columns) > len(
             self.heat_pump.heat_demand_df.columns
         ):
+            # If there are heat pumps with heat demand but no COP time series, or the
+            # other way around, a warning is raised in HeatPump.check_integrity
             pass
         else:
             hp_cop = self.heat_pump.cop_df
