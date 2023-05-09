@@ -868,20 +868,18 @@ def separate_lv_grid(
 
         transformer_changes = {"added": {}}
 
-        transformer_s = grid.transformers_df.iloc[0]
-        new_transformer_name = transformer_s.name.split("_")
+        new_transformer_df = grid.transformers_df.iloc[[0]]
+        new_transformer_name = new_transformer_df.index[0].split("_")
         grid_id_ind = new_transformer_name.index(str(grid.id))
         new_transformer_name[grid_id_ind] = lv_grid_id_new
 
-        transformer_s.s_nom = standard_transformer.S_nom
-        transformer_s.type_info = None
-        transformer_s.r_pu = standard_transformer.r_pu
-        transformer_s.x_pu = standard_transformer.x_pu
-        transformer_s.name = "_".join([str(_) for _ in new_transformer_name])
-        transformer_s.bus0 = bus_mv
-        transformer_s.bus1 = bus_lv
-
-        new_transformer_df = transformer_s.to_frame().T
+        new_transformer_df.s_nom = standard_transformer.S_nom
+        new_transformer_df.type_info = None
+        new_transformer_df.r_pu = standard_transformer.r_pu
+        new_transformer_df.x_pu = standard_transformer.x_pu
+        new_transformer_df.index = ["_".join([str(_) for _ in new_transformer_name])]
+        new_transformer_df.bus0 = bus_mv
+        new_transformer_df.bus1 = bus_lv
 
         old_s_nom = grid.transformers_df.s_nom.sum()
 
