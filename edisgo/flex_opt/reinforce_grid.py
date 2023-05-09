@@ -838,17 +838,17 @@ def enhanced_reinforce_grid(
         standard line type. Should this not be sufficient to solve non-convergence
         issues, all components in the LV grid are aggregated to the MV/LV station.
         Default: False.
-    kwargs : dict
-        Keyword arguments can be all parameters of function
-        :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`, except
-        `catch_convergence_problems` which will always be set to True, `mode` which
-        is set to None, and `skip_mv_reinforcement` which will be ignored.
     separate_lv_grids : bool
         If True, all highly overloaded LV grids are separated in a first step.
     separation_threshold : int or float
         Overloading threshold for LV grid separation. If the overloading is higher than
         the threshold times the total nominal apparent power of the MV/LV transformer(s)
         the grid is separated.
+    kwargs : dict
+        Keyword arguments can be all parameters of function
+        :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`, except
+        `catch_convergence_problems` which will always be set to True, `mode` which
+        is set to None, and `skip_mv_reinforcement` which will be ignored.
 
     Returns
     -------
