@@ -197,7 +197,7 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         lv_grid_id = kwargs.get("lv_grid_id", None)
         if lv_grid_id is None:
             raise ValueError(
-                "For exporting LV grids, ID or name of LV grid has to be provided"
+                "For exporting LV grids, ID or name of LV grid has to be provided "
                 "using parameter `lv_grid_id`."
             )
         grid_object = edisgo_object.topology.get_lv_grid(lv_grid_id)
