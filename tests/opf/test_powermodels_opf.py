@@ -100,6 +100,7 @@ class TestPowerModelsOPF:
             index=self.edisgo.heat_pump.heat_demand_df.columns[:-1],
         )
         aggregate_district_heating_components(self.edisgo)
+        self.edisgo.apply_heat_pump_operating_strategy()
         self.edisgo.add_component(
             comp_type="load",
             type="charging_point",
