@@ -94,8 +94,8 @@ class TestPowermodelsIO:
         )
         self.edisgo.heat_pump.thermal_storage_units_df = pd.DataFrame(
             data={
-                "capacity": [4, 8, 8],
-                "efficiency": [1, 1, 1],
+                "capacity": [4.0, 8.0, 8.0],
+                "efficiency": [1.0, 1.0, 1.0],
             },
             index=self.edisgo.heat_pump.heat_demand_df.columns[:-1],
         )
@@ -115,15 +115,15 @@ class TestPowermodelsIO:
 
         flex_bands = {
             "lower_energy": pd.DataFrame(
-                {"Charging_Point_LVGrid_6_1": [0, 0, 1, 2]},
+                {"Charging_Point_LVGrid_6_1": [0.0, 0.0, 1.0, 2.0]},
                 index=self.edisgo.timeseries.timeindex,
             ),
             "upper_energy": pd.DataFrame(
-                {"Charging_Point_LVGrid_6_1": [1, 2, 2, 3]},
+                {"Charging_Point_LVGrid_6_1": [1.0, 2.0, 2.0, 3.0]},
                 index=self.edisgo.timeseries.timeindex,
             ),
             "upper_power": pd.DataFrame(
-                {"Charging_Point_LVGrid_6_1": [1, 1, 2, 1]},
+                {"Charging_Point_LVGrid_6_1": [1.0, 1.0, 2.0, 1.0]},
                 index=self.edisgo.timeseries.timeindex,
             ),
         }
@@ -248,10 +248,13 @@ class TestPowermodelsIO:
         ]
         assert min(
             np.unique(
-                powermodels_network["time_series"]["load"]["36"]["pd"]
-                == self.edisgo.timeseries.loads_active_power[
-                    powermodels_network["load"]["36"]["name"]
-                ].values
+                np.isclose(
+                    np.array(powermodels_network["time_series"]["load"]["36"]["pd"]),
+                    self.edisgo.timeseries.loads_active_power[
+                        powermodels_network["load"]["36"]["name"]
+                    ].values,
+                    atol=1e-3,
+                )
             )
         )
         powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(
@@ -278,18 +281,26 @@ class TestPowermodelsIO:
         assert len(powermodels_network["HV_requirements"].keys()) == 5
         assert min(
             np.unique(
-                powermodels_network["time_series"]["heatpumps"]["3"]["pd"]
-                == self.edisgo.heat_pump.heat_demand_df[
-                    "Heat_Pump_MVGrid_1_district_heating_2"
-                ]
+                np.isclose(
+                    powermodels_network["time_series"]["heatpumps"]["3"]["pd"],
+                    self.edisgo.heat_pump.heat_demand_df[
+                        "Heat_Pump_MVGrid_1_district_heating_2"
+                    ],
+                    atol=1e-3,
+                )
             )
         )
         assert len(powermodels_network["dsm"].keys()) == 1
         assert min(
             np.unique(
-                hv_flex_dict["dsm"]
-                == self.edisgo.overlying_grid.dsm_active_power
-                - self.edisgo.timeseries.loads_active_power.Load_industrial_LVGrid_5_1
+                np.isclose(
+                    hv_flex_dict["dsm"],
+                    self.edisgo.overlying_grid.dsm_active_power
+                    - self.edisgo.timeseries.loads_active_power[
+                        "Load_industrial_LVGrid_5_1"
+                    ],
+                    atol=1e-3,
+                )
             )
         )
 

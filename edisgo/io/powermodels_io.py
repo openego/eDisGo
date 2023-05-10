@@ -686,14 +686,20 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             )
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
             p_g = max(
-                [psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0], 0]
+                [
+                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0],
+                    0.0,
+                ]
             )
             q_g = min(
-                [psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0], 0]
+                [
+                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0],
+                    0.0,
+                ]
             )
             pm["gen"][str(stor_i + len(gen_disp.index) + 1)] = {
-                "pg": p_g.round(20) / s_base,
-                "qg": q_g.round(20) / s_base,
+                "pg": p_g / s_base,
+                "qg": q_g / s_base,
                 "pmax": psa_net.storage_units.p_nom.loc[
                     inflexible_storage_units[stor_i]
                 ].round(20)
