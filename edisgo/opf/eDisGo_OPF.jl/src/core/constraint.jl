@@ -111,6 +111,12 @@ function constraint_HV_requirements(pm::AbstractBFModelEdisgo, i::Int, nw::Int=n
     elseif hv_req["name"] == "curt"
         pflex = PowerModels.var(pm, nw, :pgc)
     elseif hv_req["name"] == "storage"  # ToDo: virtual branch p variable instead of ps
+        # branch = PowerModels.ref(pm, nw, :branch)
+        # for (i, b) in branch
+        #     if b["storage"]
+        #         Hier die pf Variablen (negativ!) aufsummieren
+        #     end
+        # end
         pflex = PowerModels.var(pm, nw, :ps)
     elseif hv_req["name"] == "hp"
         pflex = PowerModels.var(pm, nw, :php)

@@ -28,6 +28,15 @@ class HeatStorage:
         return ["p", "e", "p_slack"]
 
 
+class BatteryStorage:
+    def __init__(self):
+        self.p = pd.DataFrame()
+        self.e = pd.DataFrame()
+
+    def _attributes(self):
+        return ["p", "e"]
+
+
 class GridSlacks:
     def __init__(self):
         self.gen_d_crt = pd.DataFrame()
@@ -58,7 +67,7 @@ class OPFResults:
         self.hv_requirement_slacks_t = pd.DataFrame()
         self.grid_slacks_t = GridSlacks()
         self.overlying_grid = pd.DataFrame()
-        self.battery_storage_t = pd.DataFrame()
+        self.battery_storage_t = BatteryStorage()
 
     def to_csv(self, directory, attributes=None):
         """
@@ -102,7 +111,12 @@ class OPFResults:
         for attr in attributes:
             file = attrs_file_names[attr]
             df = getattr(self, attr)
-            if attr in ["lines_t", "heat_storage_t", "grid_slacks_t"]:
+            if attr in [
+                "lines_t",
+                "heat_storage_t",
+                "grid_slacks_t",
+                "battery_storage_t",
+            ]:
                 for variable in file.keys():
                     if variable in df._attributes() and not getattr(df, variable).empty:
                         path = os.path.join(directory, file[variable])
@@ -157,7 +171,12 @@ class OPFResults:
         }
 
         for attr, file in attrs_to_read.items():
-            if attr in ["lines_t", "heat_storage_t", "grid_slacks_t"]:
+            if attr in [
+                "lines_t",
+                "heat_storage_t",
+                "grid_slacks_t",
+                "battery_storage_t",
+            ]:
                 for variable, file_name in file.items():
                     if file_name in files:
                         if from_zip_archive:
@@ -208,7 +227,6 @@ def _get_matching_dict_of_attributes_and_file_names():
 
     """
     opf_results_dict = {
-        "battery_storage_t": "battery_storage_t.csv",
         "slack_generator_t": "slack_generator_t.csv",
         "hv_requirement_slacks_t": "hv_requirement_slacks_t.csv",
         "overlying_grid": "overlying_grid.csv",
@@ -221,6 +239,10 @@ def _get_matching_dict_of_attributes_and_file_names():
             "p": "heat_storage_t_p.csv",
             "e": "heat_storage_t_e.csv",
             "p_slack": "heat_storage_t_p_slack.csv",
+        },
+        "battery_storage_t": {
+            "p": "battery_storage_t_p.csv",
+            "e": "battery_storage_t_e.csv",
         },
         "grid_slacks_t": {
             "gen_d_crt": "dispatchable_gen_crt.csv",
