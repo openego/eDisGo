@@ -1262,12 +1262,12 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
     hp_no_tes = np.setdiff1d(
         flexible_hps, edisgo_obj.heat_pump.thermal_storage_units_df.index.values
     )
-    df = pd.DataFrame(index=hp_no_tes, columns=["efficiency", "capacity"], data=0)
+    df = pd.DataFrame(index=hp_no_tes, columns=["efficiency", "capacity"], data=0.0)
     heat_storage_df = pd.concat([edisgo_obj.heat_pump.thermal_storage_units_df, df])
     if opf_version in [1, 2]:
         edisgo_obj.overlying_grid.heat_storage_units_soc = pd.DataFrame(
             columns=heat_storage_df.index,
-            data=0,
+            data=0.0,
             index=edisgo_obj.timeseries.timeindex,
         )
     else:
@@ -1281,7 +1281,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
                 axis=1,
             ).values
         else:
-            data = 0
+            data = 0.0
         df_decentral = (
             pd.DataFrame(
                 columns=decentral_hps,
@@ -1306,7 +1306,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
                 ].district_heating_id.astype(str)
             ].values
         else:
-            data = 0
+            data = 0.0
         df_central = (
             pd.DataFrame(
                 columns=central_hps,
