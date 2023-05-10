@@ -411,7 +411,17 @@ def from_powermodels(
         edisgo_object.timeseries.timeindex,
         s_base,
     )
-    edisgo_object.opf_results.battery_storage_t = df
+    edisgo_object.opf_results.battery_storage_t.p = df
+
+    df = _result_df(
+        pm,
+        "storage",
+        "se",
+        timesteps,
+        edisgo_object.timeseries.timeindex,
+        s_base,
+    )
+    edisgo_object.opf_results.battery_storage_t.e = df
     # save heat storage variables to edisgo object
     df = _result_df(
         pm,
