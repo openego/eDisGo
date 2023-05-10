@@ -302,8 +302,8 @@ def reinforce_grid(
             ]
         )
         raise exceptions.MaximumIterationError(
-            "Overloading issues could not be solved after maximum allowed "
-            "iterations."
+            f"The following overloading issues could not be solved after maximum "
+            f"allowed iterations: {edisgo.results.unresolved_issues}"
         )
     else:
         logger.info(
@@ -626,8 +626,8 @@ def reinforce_grid(
             ]
         )
         raise exceptions.MaximumIterationError(
-            "Overloading issues (after solving over-voltage issues) for the"
-            f"following lines could not be solved: {crit_lines}"
+            f"The following overloading issues could not be solved after maximum "
+            f"allowed iterations: {edisgo.results.unresolved_issues}"
         )
     else:
         logger.info(
