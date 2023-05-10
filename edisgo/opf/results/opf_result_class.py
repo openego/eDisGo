@@ -44,6 +44,7 @@ class GridSlacks:
         self.load_shedding = pd.DataFrame()
         self.cp_load_shedding = pd.DataFrame()
         self.hp_load_shedding = pd.DataFrame()
+        self.hp_operation_slack = pd.DataFrame()
 
     def _attributes(self):
         return [
