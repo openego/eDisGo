@@ -233,7 +233,7 @@ class TestPowerModelsOPF:
 
         assert np.isclose(
             np.round(self.edisgo.opf_results.slack_generator_t.pg[-1], 3),
-            -20.755,
+            -20.683,
             atol=1e-3,
         )
         assert np.isclose(
@@ -278,7 +278,7 @@ class TestPowerModelsOPF:
                 ][-1],
                 3,
             ),
-            0.031 + 0.207,
+            0.031 + 0.193,
             atol=1e-3,
         )
         assert self.edisgo.opf_results.status == "LOCALLY_SOLVED"
