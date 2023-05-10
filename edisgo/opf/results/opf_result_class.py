@@ -24,10 +24,7 @@ class HeatStorage:
         self.e = pd.DataFrame()
 
     def _attributes(self):
-        return [
-            "p",
-            "e",
-        ]
+        return ["p", "e", "p_slack"]
 
 
 class GridSlacks:
@@ -45,6 +42,7 @@ class GridSlacks:
             "load_shedding",
             "cp_load_shedding",
             "hp_load_shedding",
+            "hp_operation_slack",
         ]
 
 

@@ -411,11 +411,11 @@ end
 "heat storage slack variable"
 function variable_hs_slack(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     phss = PowerModels.var(pm, nw)[:phss] = JuMP.@variable(pm.model,
-        [i in PowerModels.ids(pm, nw, :heatpumps)], base_name="$(nw)_phss",
+        [i in PowerModels.ids(pm, nw, :heat_storage)], base_name="$(nw)_phss",
         lower_bound = 0.0
     )
 
-    report && PowerModels.sol_component_value(pm, nw, :heatpumps, :phss, PowerModels.ids(pm, nw, :heatpumps), phss)
+    report && PowerModels.sol_component_value(pm, nw, :heat_storage, :phss, PowerModels.ids(pm, nw, :heat_storage), phss)
 end
 
 "heat pump operation slack variable"

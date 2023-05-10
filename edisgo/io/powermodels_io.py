@@ -81,7 +81,7 @@ def to_powermodels(
     if flexible_storage_units is None:
         flexible_storage_units = np.array([])
     # Append names of flexibilities for OPF
-    for (flex, loads, text) in [
+    for flex, loads, text in [
         ("cp", flexible_cps, "Flexible charging parks"),
         ("hp", flexible_hps, "Flexible heatpumps"),
         ("dsm", flexible_loads, "Flexible loads"),
@@ -364,7 +364,7 @@ def from_powermodels(
             abs_error = abs(df2[flex].values - hv_flex_dict[flex])
             rel_error = [
                 abs_error[i] / hv_flex_dict[flex][i]
-                if ((abs_error > 0.01)[i] & hv_flex_dict[flex][i] != 0)
+                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex][i] != 0))
                 else 0
                 for i in range(len(abs_error))
             ]
