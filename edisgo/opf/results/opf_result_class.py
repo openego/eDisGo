@@ -22,6 +22,7 @@ class HeatStorage:
     def __init__(self):
         self.p = pd.DataFrame()
         self.e = pd.DataFrame()
+        self.p_slack = pd.DataFrame()
 
     def _attributes(self):
         return ["p", "e", "p_slack"]
@@ -57,6 +58,7 @@ class OPFResults:
         self.hv_requirement_slacks_t = pd.DataFrame()
         self.grid_slacks_t = GridSlacks()
         self.overlying_grid = pd.DataFrame()
+        self.battery_storage_t = pd.DataFrame()
 
     def to_csv(self, directory, attributes=None):
         """
@@ -206,6 +208,7 @@ def _get_matching_dict_of_attributes_and_file_names():
 
     """
     opf_results_dict = {
+        "battery_storage_t": "battery_storage_t.csv",
         "slack_generator_t": "slack_generator_t.csv",
         "hv_requirement_slacks_t": "hv_requirement_slacks_t.csv",
         "overlying_grid": "overlying_grid.csv",

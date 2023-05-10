@@ -402,6 +402,16 @@ def from_powermodels(
         ]
     edisgo_object.opf_results.slack_generator_t = df
 
+    # save internal battery storage variable to edisgo object
+    df = _result_df(
+        pm,
+        "storage",
+        "ps",
+        timesteps,
+        edisgo_object.timeseries.timeindex,
+        s_base,
+    )
+    edisgo_object.opf_results.battery_storage_t = df
     # save heat storage variables to edisgo object
     df = _result_df(
         pm,
