@@ -885,14 +885,14 @@ def enhanced_reinforce_grid(
         logger.info("Try initial enhanced reinforcement.")
         edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
         logger.info("Initial enhanced reinforcement succeeded.")
-    except (ValueError, RuntimeError):
+    except (ValueError, RuntimeError, exceptions.MaximumIterationError):
         logger.info("Initial enhanced reinforcement failed.")
         logger.info("Try mode 'mv' reinforcement.")
 
         try:
             edisgo_obj.reinforce(mode="mv", catch_convergence_problems=True, **kwargs)
             logger.info("Mode 'mv' reinforcement succeeded.")
-        except (ValueError, RuntimeError):
+        except (ValueError, RuntimeError, exceptions.MaximumIterationError):
             logger.info("Mode 'mv' reinforcement failed.")
 
         logger.info("Try mode 'mvlv' reinforcement.")
@@ -900,7 +900,7 @@ def enhanced_reinforce_grid(
         try:
             edisgo_obj.reinforce(mode="mvlv", catch_convergence_problems=True, **kwargs)
             logger.info("Mode 'mvlv' reinforcement succeeded.")
-        except (ValueError, RuntimeError):
+        except (ValueError, RuntimeError, exceptions.MaximumIterationError):
             logger.info("Mode 'mvlv' reinforcement failed.")
 
         for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids):
@@ -933,7 +933,7 @@ def enhanced_reinforce_grid(
                     **kwargs,
                 )
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} successful.")
-            except (ValueError, RuntimeError):
+            except (ValueError, RuntimeError, exceptions.MaximumIterationError):
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} failed.")
                 if activate_cost_results_disturbing_mode:
                     try:
@@ -956,7 +956,7 @@ def enhanced_reinforce_grid(
                         logger.info(
                             f"Changed lines mode 'lv' for {lv_grid} successful."
                         )
-                    except (ValueError, RuntimeError):
+                    except (ValueError, RuntimeError, exceptions.MaximumIterationError):
                         logger.info(f"Changed lines mode 'lv' for {lv_grid} failed.")
                         logger.warning(
                             f"Aggregate all nodes to station bus in {lv_grid=}."
@@ -974,6 +974,7 @@ def enhanced_reinforce_grid(
                                 f"Aggregate to station for {lv_grid} failed with "
                                 f"exception:\n{e}"
                             )
+                            raise e
 
         try:
             edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
