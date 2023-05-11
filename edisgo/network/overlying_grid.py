@@ -42,11 +42,13 @@ class OverlyingGrid:
         Aggregated demand of flexible central heat pumps per time step in MW.
     thermal_storage_units_central_soc : :pandas:`pandas.DataFrame<DataFrame>`
         State of charge of central thermal storage units per district heating area (in
-        columns) and time step (in index) in p.u.. The state of charge at time
-        step t here constitutes the state of charge at the beginning of time step t.
+        columns as string of integer, i.e. "130" instead of "130.0") and time step
+        (in index) in p.u.. The state of charge at time step t here constitutes the
+        state of charge at the beginning of time step t.
     feedin_district_heating : :pandas:`pandas.DataFrame<DataFrame>`
         Other thermal feed-in into district heating per district heating area (in
-        columns) and time step (in index) in MW.
+        columns as string of integer, i.e. "130" instead of "130.0") and time step
+        (in index) in MW.
 
     """
 

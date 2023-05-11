@@ -1307,9 +1307,9 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         )
         if not edisgo_obj.overlying_grid.thermal_storage_units_central_soc.empty:
             data = edisgo_obj.overlying_grid.thermal_storage_units_central_soc[
-                edisgo_obj.topology.loads_df.loc[
-                    central_hps
-                ].district_heating_id.astype(str)
+                edisgo_obj.topology.loads_df.loc[central_hps]
+                .district_heating_id.astype(int)
+                .astype(str)
             ].values
         else:
             data = 0.0
