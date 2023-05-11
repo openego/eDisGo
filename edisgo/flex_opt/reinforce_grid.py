@@ -302,8 +302,8 @@ def reinforce_grid(
             ]
         )
         raise exceptions.MaximumIterationError(
-            "Overloading issues could not be solved after maximum allowed "
-            "iterations."
+            f"The following overloading issues could not be solved after maximum "
+            f"allowed iterations: {edisgo.results.unresolved_issues}"
         )
     else:
         logger.info(
@@ -355,11 +355,11 @@ def reinforce_grid(
 
     # check if all voltage problems were solved after maximum number of
     # iterations allowed
-    if while_counter == max_while_iterations and crit_nodes.empty:
+    if while_counter == max_while_iterations and not crit_nodes.empty:
         edisgo.results.unresolved_issues = pd.concat(
             [
                 edisgo.results.unresolved_issues,
-                pd.concat([_ for _ in crit_nodes.values()]),
+                crit_nodes,
             ]
         )
         raise exceptions.MaximumIterationError(
@@ -420,11 +420,11 @@ def reinforce_grid(
 
         # check if all voltage problems were solved after maximum number of
         # iterations allowed
-        if while_counter == max_while_iterations and crit_stations.empty:
+        if while_counter == max_while_iterations and not crit_stations.empty:
             edisgo.results.unresolved_issues = pd.concat(
                 [
                     edisgo.results.unresolved_issues,
-                    pd.concat([_ for _ in crit_stations.values()]),
+                    crit_stations,
                 ]
             )
             raise exceptions.MaximumIterationError(
@@ -485,11 +485,11 @@ def reinforce_grid(
 
         # check if all voltage problems were solved after maximum number of
         # iterations allowed
-        if while_counter == max_while_iterations and crit_nodes.empty:
+        if while_counter == max_while_iterations and not crit_nodes.empty:
             edisgo.results.unresolved_issues = pd.concat(
                 [
                     edisgo.results.unresolved_issues,
-                    pd.concat([_ for _ in crit_nodes.values()]),
+                    crit_nodes,
                 ]
             )
             raise exceptions.MaximumIterationError(
@@ -626,8 +626,8 @@ def reinforce_grid(
             ]
         )
         raise exceptions.MaximumIterationError(
-            "Overloading issues (after solving over-voltage issues) for the"
-            f"following lines could not be solved: {crit_lines}"
+            f"The following overloading issues could not be solved after maximum "
+            f"allowed iterations: {edisgo.results.unresolved_issues}"
         )
     else:
         logger.info(
@@ -911,7 +911,8 @@ def enhanced_reinforce_grid(
             if len(ts_not_converged) > 0:
                 logger.info(
                     f"Not all time steps converged in power flow analysis for "
-                    f"{lv_grid=}. It is therefore tried to be split.")
+                    f"{lv_grid=}. It is therefore tried to be split."
+                )
                 transformers_changes, lines_changes = separate_lv_grid(
                     edisgo_obj, lv_grid
                 )
