@@ -882,36 +882,66 @@ def enhanced_reinforce_grid(
         )
         run_separate_lv_grids(edisgo_obj, threshold=separation_threshold)
 
-    if reinforce_lv_feeders_large_voltage_issues:
-        ts_conv, ts_not_conv = edisgo_obj.analyze(raise_not_converged=False)
-        tools.assign_feeder(edisgo_obj, mode="lv_feeder")
-        # for time steps that converged, check if voltage drop or rise is
-        # unrealistically high (+/- 40%)
-        busses = edisgo_obj.results.v_res.columns[
-            (edisgo_obj.results.v_res.loc[ts_conv, :] - 1).abs().max() >= 0.4
-        ]
-        # get feeder of those buses
-        feeder = edisgo_obj.topology.buses_df.loc[busses, "lv_feeder"].unique()
-        if len(feeder) == 0:
+    logger.info("Run initial grid reinforcement for single LV grids.")
+    for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids):
+        logger.info(f"Check initial convergence for {lv_grid=}.")
+        _, ts_not_converged = edisgo_obj.analyze(
+            mode="lv", raise_not_converged=False, lv_grid_id=lv_grid.id
+        )
+        if len(ts_not_converged) > 0:
             logger.info(
-                "No feeders need to be reinforced due to very large voltage issues."
+                f"Not all time steps converged in initial power flow analysis for "
+                f"{lv_grid=}. It is therefore tried to be split."
             )
-        else:
-            # exchange lines in that feeder with parallel standard lines
-            lines = edisgo_obj.topology.lines_df[
-                edisgo_obj.topology.lines_df.lv_feeder.isin(feeder)
-            ].index
-            lv_standard_line_type = edisgo_obj.config[
-                "grid_expansion_standard_equipment"
-            ]["lv_line"]
-            edisgo_obj.topology.change_line_type(lines, lv_standard_line_type)
-            edisgo_obj.topology.update_number_of_parallel_lines(
-                pd.Series(index=lines, data=2)
+            transformers_changes, lines_changes = separate_lv_grid(edisgo_obj, lv_grid)
+            if len(lines_changes) > 0:
+                _add_lines_changes_to_equipment_changes(edisgo_obj, lines_changes, 1)
+            if len(transformers_changes) > 0:
+                _add_transformer_changes_to_equipment_changes(
+                    edisgo_obj, transformers_changes, 1, "added"
+                )
+        try:
+            logger.info(f"Try initial mode 'lv' reinforcement for {lv_grid=}.")
+            edisgo_obj.reinforce(
+                mode="lv",
+                lv_grid_id=lv_grid.id,
+                catch_convergence_problems=True,
+                **kwargs,
             )
-            logger.warning(
-                f"The following lines in {len(feeder)} feeder(s) were reinforced due "
-                f"to very large voltage issues: {lines}."
-            )
+            logger.info(f"Initial mode 'lv' reinforcement for {lv_grid} successful.")
+        except (ValueError, RuntimeError, exceptions.MaximumIterationError):
+            logger.warning(f"Initial mode 'lv' reinforcement for {lv_grid} failed.")
+
+    # if reinforce_lv_feeders_large_voltage_issues:
+    #     ts_conv, ts_not_conv = edisgo_obj.analyze(raise_not_converged=False)
+    #     tools.assign_feeder(edisgo_obj, mode="lv_feeder")
+    #     # for time steps that converged, check if voltage drop or rise is
+    #     # unrealistically high (+/- 40%)
+    #     busses = edisgo_obj.results.v_res.columns[
+    #         (edisgo_obj.results.v_res.loc[ts_conv, :] - 1).abs().max() >= 0.4
+    #     ]
+    #     # get feeder of those buses
+    #     feeder = edisgo_obj.topology.buses_df.loc[busses, "lv_feeder"].unique()
+    #     if len(feeder) == 0:
+    #         logger.info(
+    #             "No feeders need to be reinforced due to very large voltage issues."
+    #         )
+    #     else:
+    #         # exchange lines in that feeder with parallel standard lines
+    #         lines = edisgo_obj.topology.lines_df[
+    #             edisgo_obj.topology.lines_df.lv_feeder.isin(feeder)
+    #         ].index
+    #         lv_standard_line_type = edisgo_obj.config[
+    #             "grid_expansion_standard_equipment"
+    #         ]["lv_line"]
+    #         edisgo_obj.topology.change_line_type(lines, lv_standard_line_type)
+    #         edisgo_obj.topology.update_number_of_parallel_lines(
+    #             pd.Series(index=lines, data=2)
+    #         )
+    #         logger.warning(
+    #             f"The following lines in {len(feeder)} feeder(s) were reinforced due "
+    #             f"to very large voltage issues: {lines}."
+    #         )
 
     try:
         logger.info("Try initial enhanced reinforcement.")
