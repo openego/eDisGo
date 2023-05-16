@@ -1002,12 +1002,18 @@ def enhanced_reinforce_grid(
                         logger.warning(
                             f"Change all lines to standard type in {lv_grid=}."
                         )
+                        edisgo_obj.results.measures = f"Standard lines in {lv_grid=}."
                         num_lv_grids_standard_lines += 1
                         lv_standard_line_type = edisgo_obj.config[
                             "grid_expansion_standard_equipment"
                         ]["lv_line"]
+                        lines = lv_grid.lines_df.index
                         edisgo_obj.topology.change_line_type(
-                            lv_grid.lines_df.index.to_list(), lv_standard_line_type
+                            lines, lv_standard_line_type
+                        )
+                        lines_changes = {_: 1 for _ in lines}
+                        _add_lines_changes_to_equipment_changes(
+                            edisgo_obj, lines_changes, 1
                         )
                         edisgo_obj.reinforce(
                             mode="lv",
@@ -1023,6 +1029,7 @@ def enhanced_reinforce_grid(
                         logger.warning(
                             f"Aggregate all nodes to station bus in {lv_grid=}."
                         )
+                        edisgo_obj.results.measures = f"Aggregation of {lv_grid=}."
                         num_lv_grids_aggregated += 1
                         try:
                             edisgo_obj.topology.aggregate_lv_grid_at_station(
