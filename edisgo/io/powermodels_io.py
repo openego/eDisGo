@@ -998,36 +998,29 @@ def _build_battery_storage(
 
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
-    if opf_version in [1, 2]:
-        edisgo_obj.overlying_grid.storage_units_soc = pd.DataFrame(
-            columns=flexible_storage_units,
-            data=0,
-            index=edisgo_obj.timeseries.timeindex,
-        )
+    if not edisgo_obj.overlying_grid.storage_units_soc.empty:
+        data = pd.concat(
+            [edisgo_obj.overlying_grid.storage_units_soc]
+            * len(edisgo_obj.topology.storage_units_df),
+            axis=1,
+        ).values
     else:
-        if not edisgo_obj.overlying_grid.storage_units_soc.empty:
-            data = pd.concat(
-                [edisgo_obj.overlying_grid.storage_units_soc]
-                * len(edisgo_obj.topology.storage_units_df),
-                axis=1,
-            ).values
-        else:
-            data = 0
-        # ToDo: find better place to save soc data to
-        edisgo_obj.overlying_grid.storage_units_soc = (
-            pd.DataFrame(
-                columns=flexible_storage_units,
-                data=data,
-                index=edisgo_obj.timeseries.timeindex.union(
-                    [
-                        edisgo_obj.timeseries.timeindex[-1]
-                        + edisgo_obj.timeseries.timeindex.freq
-                    ]
-                ),
-            )
-            * edisgo_obj.topology.storage_units_df.p_nom
-            * edisgo_obj.topology.storage_units_df.max_hours
+        data = 0
+    # ToDo: find better place to save soc data to
+    edisgo_obj.overlying_grid.storage_units_soc = (
+        pd.DataFrame(
+            columns=flexible_storage_units,
+            data=data,
+            index=edisgo_obj.timeseries.timeindex.union(
+                [
+                    edisgo_obj.timeseries.timeindex[-1]
+                    + edisgo_obj.timeseries.timeindex.freq
+                ]
+            ),
         )
+        * edisgo_obj.topology.storage_units_df.p_nom
+        * edisgo_obj.topology.storage_units_df.max_hours
+    )
 
     for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
