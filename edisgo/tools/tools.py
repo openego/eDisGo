@@ -869,10 +869,10 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
 
             # reduce demand by feedin from other sources (e.g. solarthermal, geothermal)
             if not feedin_district_heating.empty:
-                if str(district) in feedin_district_heating.columns:
+                if str(int(district)) in feedin_district_heating.columns:
                     edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
                         edisgo_obj.heat_pump.heat_demand_df[district_hp]
-                        - feedin_district_heating[str(district)]
+                        - feedin_district_heating[str(int(district))]
                     )
                 else:
                     logger.info(
