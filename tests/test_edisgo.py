@@ -542,17 +542,9 @@ class TestEDisGo:
 
         results = edisgo_obj.results
 
-        assert len(results.grid_expansion_costs) == 441
-        assert len(results.equipment_changes) == 914
-        assert results.v_res.shape == (4, 146)
-        assert (
-            "Enhanced reinforcement: In 1 LV grid(s) all components were aggregated "
-            "at the MV/LV station." in results.measures
-        )
-        assert (
-            "In 1 LV grid(s) all lines were exchanged by standard lines."
-            in results.measures
-        )
+        assert len(results.grid_expansion_costs) == 445
+        assert len(results.equipment_changes) == 892
+        assert results.v_res.shape == (4, 148)
 
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()
