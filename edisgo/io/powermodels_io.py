@@ -1257,71 +1257,64 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
     )
     df = pd.DataFrame(index=hp_no_tes, columns=["efficiency", "capacity"], data=0.0)
     heat_storage_df = pd.concat([edisgo_obj.heat_pump.thermal_storage_units_df, df])
-    if opf_version in [1, 2]:
-        edisgo_obj.overlying_grid.heat_storage_units_soc = pd.DataFrame(
-            columns=heat_storage_df.index,
-            data=0.0,
-            index=edisgo_obj.timeseries.timeindex,
-        )
+    decentral_hps = np.intersect1d(
+        edisgo_obj.topology.loads_df.loc[
+            edisgo_obj.topology.loads_df.sector == "individual_heating"
+        ].index,
+        flexible_hps,
+    )
+    if not edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc.empty:
+        data = pd.concat(
+            [edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc]
+            * len(decentral_hps),
+            axis=1,
+        ).values
     else:
-        decentral_hps = np.intersect1d(
-            edisgo_obj.topology.loads_df.loc[
-                edisgo_obj.topology.loads_df.sector == "individual_heating"
-            ].index,
-            flexible_hps,
+        data = 0.0
+    df_decentral = (
+        pd.DataFrame(
+            columns=decentral_hps,
+            data=data,
+            index=edisgo_obj.timeseries.timeindex.union(
+                [
+                    edisgo_obj.timeseries.timeindex[-1]
+                    + edisgo_obj.timeseries.timeindex.freq
+                ]
+            ),
         )
-        if not edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc.empty:
-            data = pd.concat(
-                [edisgo_obj.overlying_grid.thermal_storage_units_decentral_soc]
-                * len(decentral_hps),
-                axis=1,
-            ).values
-        else:
-            data = 0.0
-        df_decentral = (
-            pd.DataFrame(
-                columns=decentral_hps,
-                data=data,
-                index=edisgo_obj.timeseries.timeindex.union(
-                    [
-                        edisgo_obj.timeseries.timeindex[-1]
-                        + edisgo_obj.timeseries.timeindex.freq
-                    ]
-                ),
-            )
-            * heat_storage_df.loc[decentral_hps].capacity
+        * heat_storage_df.loc[decentral_hps].capacity
+    )
+    central_hps = np.intersect1d(
+        edisgo_obj.topology.loads_df.loc[
+            (edisgo_obj.topology.loads_df.type == "heat_pump")
+            & (edisgo_obj.topology.loads_df.sector != "individual_heating")
+        ].index,
+        flexible_hps,
+    )
+    if not edisgo_obj.overlying_grid.thermal_storage_units_central_soc.empty:
+        data = edisgo_obj.overlying_grid.thermal_storage_units_central_soc[
+            edisgo_obj.topology.loads_df.loc[central_hps]
+            .district_heating_id.astype(int)
+            .astype(str)
+        ].values
+    else:
+        data = 0.0
+    df_central = (
+        pd.DataFrame(
+            columns=central_hps,
+            data=data,
+            index=edisgo_obj.timeseries.timeindex.union(
+                [
+                    edisgo_obj.timeseries.timeindex[-1]
+                    + edisgo_obj.timeseries.timeindex.freq
+                ]
+            ),
         )
-        central_hps = np.intersect1d(
-            edisgo_obj.topology.loads_df.loc[
-                (edisgo_obj.topology.loads_df.type == "heat_pump")
-                & (edisgo_obj.topology.loads_df.sector != "individual_heating")
-            ].index,
-            flexible_hps,
-        )
-        if not edisgo_obj.overlying_grid.thermal_storage_units_central_soc.empty:
-            data = edisgo_obj.overlying_grid.thermal_storage_units_central_soc[
-                edisgo_obj.topology.loads_df.loc[central_hps]
-                .district_heating_id.astype(int)
-                .astype(str)
-            ].values
-        else:
-            data = 0.0
-        df_central = (
-            pd.DataFrame(
-                columns=central_hps,
-                data=data,
-                index=edisgo_obj.timeseries.timeindex.union(
-                    [
-                        edisgo_obj.timeseries.timeindex[-1]
-                        + edisgo_obj.timeseries.timeindex.freq
-                    ]
-                ),
-            )
-            * heat_storage_df.loc[central_hps].capacity
-        )
-        edisgo_obj.overlying_grid.heat_storage_units_soc = pd.concat(
-            [df_decentral, df_central], axis=1
-        )
+        * heat_storage_df.loc[central_hps].capacity
+    )
+    edisgo_obj.overlying_grid.heat_storage_units_soc = pd.concat(
+        [df_decentral, df_central], axis=1
+    )
 
     heat_storage_df = heat_storage_df.loc[flexible_hps]
     for stor_i in np.arange(len(flexible_hps)):
