@@ -952,160 +952,61 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
                 )
 
 
-def determine_observation_periods(edisgo_obj, window_days, idx="min", absolute=False):
-    """
-    Determine observation period for OPF depending on residual load, generation or
-    load timeseries.
-
-    Parameters
-    -----------
-    edisgo_obj : :class:`~.EDisGo`
-    window_days : int
-        Length of time interval in days.
-    idx : str
-        Specification on how to choose time interval. Either depending on residual load,
-        generation or load timeseries. Has to be one of ["min", "max", "gen_max",
-        "load_max"]. Default: "min".
-    absolute : bool
-        Determines whether to use absolute values of residual load for time interval
-        determination. Default: False.
-
-    Returns
-    ---------
-    :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-
-    """
-    if absolute:
-        residual_load = edisgo_obj.timeseries.residual_load.abs()
-    else:
-        residual_load = edisgo_obj.timeseries.residual_load
-    residual_load = residual_load.rolling(window=window_days * 24, closed="both").mean()
-    residual_load = residual_load.loc[::24]
-
-    if idx == "min":
-        timestep = residual_load.idxmin()
-    elif idx == "max":
-        timestep = residual_load.idxmax()
-    elif idx == "load_max":
-        load = (
-            edisgo_obj.timeseries.loads_active_power.sum(axis=1)
-            .rolling(window=window_days * 24, closed="both")
-            .mean()
-        )
-        load = load.loc[::24]
-        timestep = load.idxmax()
-    elif idx == "gen_max":
-        gen = (
-            edisgo_obj.timeseries.generators_active_power.sum(axis=1)
-            .rolling(window=window_days * 24, closed="both")
-            .mean()
-        )
-        gen = gen.loc[::24]
-        timestep = gen.idxmax()
-    else:
-        raise NotImplementedError
-
-    timestep = timestep - pd.DateOffset(days=window_days)
-
-    timeframe = pd.date_range(start=timestep, periods=window_days * 24, freq="h")
-
-    return timeframe
-
-
-def get_sample_using_time(
+def reduce_timeseries_data_to_given_timeindex(
     edisgo_obj,
-    start_date=None,
-    periods=None,
-    freq="1h",
-    res_load=None,
-    ts=True,
-    bev=True,
+    timeindex,
+    timeseries=True,
+    electromobility=True,
     save_ev_soc_initial=True,
-    hp=True,
+    heat_pump=True,
     dsm=True,
-    og=True,
+    overlying_grid=True,
 ):
     """
-    Reduces timeseries in eDisGo object to sample using time. Time interval can either
-    be specified directly or determined via
-    :func:`edisgo.tools.tools.determine_observation_periods`.
+    Reduces timeseries data in EDisGo object to given time index.
 
     Parameters
     -----------
     edisgo_obj : :class:`~.EDisGo`
-    start_date : int
-        First timestep of date range. Default: None
-    periods : str
-        Amount of periods of date range. Default: None
-    freq : str, optional
-        Frequency of date range. Default: '1h'.
-    res_load :
-        If not None, time interval is determined using
-        :func:`edisgo.tools.tools.determine_observation_periods`. Has to be one of
-        [None, "balanced", "min", "max", "gen_max", "load_max"]. Default: None.
-    ts : bool
-        Determines whether loads, generators and storage units timeseries are reduced to
-        sample using time. Default: True.
-    bev : bool
-        Determines whether electormobility timeseries is reduced to sample using time.
-        Default: True.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time index to set.
+    timeseries : bool
+        Indicates whether timeseries in :class:`~.network.timeseries.TimeSeries`
+        are reduced to given time index. Default: True.
+    electromobility : bool
+        Indicates whether timeseries in
+        :class:`~.network.electromobility.Electromobility` are reduced to given time
+        index. Default: True.
     save_ev_soc_initial : bool
-        Determines whether to save initial ev soc from timestep before first timestep of
-        sample using time for OPF. Default: True.
-    hp : bool
-        Determines whether heat pump and heat storage timeseries are reduced to sample
-        using time. Default: True.
+        Indicates whether to save initial EV SOC from timestep before first timestep of
+        given time index. Default: True.
+    heat_pump : bool
+        Indicates whether timeseries in :class:`~.network.heat.HeatPump`
+        are reduced to given time index. Default: True.
     dsm : bool
-        Determines whether DSM timeseries are reduced to sample using time.
-        Default: True.
-    og : bool
-        Determines whetheroverlying grid timeseries are reduced to sample using time.
-        Default: True.
+        Indicates whether timeseries in :class:`~.network.dsm.DSM`
+        are reduced to given time index. Default: True.
+    overlying_grid : bool
+        Indicates whether timeseries in :class:`~.network.overlying_grid.OverlyingGrid`
+        are reduced to given time index. Default: True.
 
     """
-    if periods is None:
-        raise TypeError(
-            "get_sample_using_time() missing required argument: " "'periods'"
-        )
-    if (res_load is None) & (start_date is None):
-        raise TypeError(
-            "get_sample_using_time() missing required argument:"
-            "'start_date' or "
-            "'res_load'"
-        )
-    elif start_date is not None:
-        timeframe = pd.date_range(start=start_date, periods=periods, freq=freq)
-    elif res_load is not None:
-        if res_load == "balanced":
-            timeframe = determine_observation_periods(
-                edisgo_obj, int(periods / 24), idx="min", absolute=True
-            )
-        elif res_load in ["min", "max", "load_max", "gen_max"]:
-            timeframe = determine_observation_periods(
-                edisgo_obj, int(np.ceil(periods / 24)), idx=res_load
-            )
-        else:
-            raise ValueError(
-                "argument 'res_load' must be one of: 'min', 'max', 'load_max', "
-                "'gen_max' or 'balanced'"
-            )
-
     # generators, loads and storage units timeseries
-    if ts:
+    if timeseries:
         attributes = edisgo_obj.timeseries._attributes
-        edisgo_obj.timeseries.timeindex = timeframe
+        edisgo_obj.timeseries.timeindex = timeindex
         for attr in attributes:
             if not getattr(edisgo_obj.timeseries, attr).empty:
                 setattr(
                     edisgo_obj.timeseries,
                     attr,
-                    getattr(edisgo_obj.timeseries, attr).loc[timeframe],
+                    getattr(edisgo_obj.timeseries, attr).loc[timeindex],
                 )
     # Battery electric vehicle timeseries
-    if bev:
+    if electromobility:
         if save_ev_soc_initial:
             # timestep EV SOC from timestep before if possible
-            ts_before = pd.to_datetime(timeframe[0]) - pd.Timedelta(hours=1)
+            ts_before = timeindex[0] - timeindex.freq
             if not edisgo_obj.electromobility.flexibility_bands["upper_energy"].empty:
                 try:
                     initial_soc_cp = (
@@ -1127,25 +1028,25 @@ def get_sample_using_time(
                         * (
                             edisgo_obj.electromobility.flexibility_bands[
                                 "upper_energy"
-                            ].loc[timeframe[0]]
+                            ].loc[timeindex[0]]
                             + edisgo_obj.electromobility.flexibility_bands[
                                 "lower_energy"
-                            ].loc[timeframe[0]]
+                            ].loc[timeindex[0]]
                         )
                     )
                 edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
         for key, df in edisgo_obj.electromobility.flexibility_bands.items():
             if not df.empty:
-                df = df.loc[timeframe]
+                df = df.loc[timeindex]
                 edisgo_obj.electromobility.flexibility_bands.update({key: df})
     # Heat pumps timeseries
-    if hp:
+    if heat_pump:
         for attr in ["cop_df", "heat_demand_df"]:
             if not getattr(edisgo_obj.heat_pump, attr).empty:
                 setattr(
                     edisgo_obj.heat_pump,
                     attr,
-                    getattr(edisgo_obj.heat_pump, attr).loc[timeframe],
+                    getattr(edisgo_obj.heat_pump, attr).loc[timeindex],
                 )
     # Demand Side Management timeseries
     if dsm:
@@ -1154,10 +1055,10 @@ def get_sample_using_time(
                 setattr(
                     edisgo_obj.dsm,
                     attr,
-                    getattr(edisgo_obj.dsm, attr).loc[timeframe],
+                    getattr(edisgo_obj.dsm, attr).loc[timeindex],
                 )
-
-    if og:
+    # Overlying grid timeseries
+    if overlying_grid:
         for attr in edisgo_obj.overlying_grid._attributes:
             if not getattr(edisgo_obj.overlying_grid, attr).empty:
                 if attr in [
@@ -1170,20 +1071,22 @@ def get_sample_using_time(
                             edisgo_obj.overlying_grid,
                             attr,
                             getattr(edisgo_obj.overlying_grid, attr).loc[
-                                timeframe.union([timeframe[-1] + timeframe.freq])
+                                pd.Index(timeindex).append(
+                                    pd.Index([timeindex[-1] + timeindex.freq])
+                                )
                             ],
                         )
                     except KeyError:
                         setattr(
                             edisgo_obj.overlying_grid,
                             attr,
-                            getattr(edisgo_obj.overlying_grid, attr).loc[timeframe],
+                            getattr(edisgo_obj.overlying_grid, attr).loc[timeindex],
                         )
                 else:
                     setattr(
                         edisgo_obj.overlying_grid,
                         attr,
-                        getattr(edisgo_obj.overlying_grid, attr).loc[timeframe],
+                        getattr(edisgo_obj.overlying_grid, attr).loc[timeindex],
                     )
 
 
