@@ -46,6 +46,12 @@ def pytest_addoption(parser):
         "--runslow", action="store_true", default=False, help="run slow tests"
     )
     parser.addoption(
+        "--runonlinux",
+        action="store_true",
+        default=False,
+        help="run tests that only work on linux",
+    )
+    parser.addoption(
         "--runlocal",
         action="store_true",
         default=False,
@@ -64,3 +70,8 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "local" in item.keywords:
                 item.add_marker(skip_local)
+    if not config.getoption("--runonlinux"):
+        skip_windows = pytest.mark.skip(reason="need --runonlinux option to run")
+        for item in items:
+            if "runonlinux" in item.keywords:
+                item.add_marker(skip_windows)
