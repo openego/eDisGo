@@ -1238,7 +1238,7 @@ def plot_plotly(
                     opacity=0.8,
                     showlegend=False,
                     line=dict(
-                        width=2,
+                        width=3.5,
                         color=color,
                     ),
                 )

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import os
 import pickle
@@ -23,7 +24,13 @@ from edisgo.flex_opt.reinforce_grid import (
     catch_convergence_reinforce_grid,
     reinforce_grid,
 )
-from edisgo.io import dsm_import, generators_import, pypsa_io, timeseries_import
+from edisgo.io import (
+    dsm_import,
+    generators_import,
+    powermodels_io,
+    pypsa_io,
+    timeseries_import,
+)
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
@@ -40,8 +47,8 @@ from edisgo.network.heat import HeatPump
 from edisgo.network.overlying_grid import OverlyingGrid
 from edisgo.network.results import Results
 from edisgo.network.topology import Topology
+from edisgo.opf import powermodels_opf
 from edisgo.opf.results.opf_result_class import OPFResults
-from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
@@ -150,7 +157,6 @@ class EDisGo:
     """
 
     def __init__(self, **kwargs):
-
         # load configuration
         self._config = Config(**kwargs)
 
@@ -780,6 +786,133 @@ class EDisGo:
             self.check_integrity()
         return pypsa_io.to_pypsa(self, mode, timesteps, **kwargs)
 
+    def to_powermodels(
+        self,
+        s_base=1,
+        flexible_cps=None,
+        flexible_hps=None,
+        flexible_loads=None,
+        flexible_storage_units=None,
+        opf_version=1,
+    ):
+        """
+        Convert eDisGo representation of the network topology and timeseries to
+        PowerModels network data format.
+
+        Parameters
+        ----------
+        s_base : int
+            Base value of apparent power for per unit system.
+            Default: 1 MVA
+        flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all charging points that allow for flexible charging.
+        flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all heat pumps that allow for flexible operation due to an
+            attached heat storage.
+        flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible loads that allow for application of demand
+            side management strategy.
+        flexible_storage_units : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible storages. Non-flexible storages operate to
+            optimize self consumption.
+            Default: None.
+        opf_version : int
+            Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+            For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: 1.
+
+        Returns
+        -------
+        dict
+            Dictionary that contains all network data in PowerModels network data
+            format.
+
+        """
+        return powermodels_io.to_powermodels(
+            self,
+            s_base=s_base,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            flexible_storage_units=flexible_storage_units,
+            opf_version=opf_version,
+        )
+
+    def pm_optimize(
+        self,
+        s_base=1,
+        flexible_cps=None,
+        flexible_hps=None,
+        flexible_loads=None,
+        flexible_storage_units=None,
+        opf_version=1,
+        method="soc",
+        warm_start=False,
+        silence_moi=False,
+        save_heat_storage=True,
+        save_slack_gen=True,
+        save_slacks=True,
+    ):
+        """
+        Run OPF in julia subprocess and write results of OPF back to edisgo object.
+
+        Results of OPF are time series of operation schedules of flexibilities.
+
+        Parameters
+        ----------
+        s_base : int
+            Base value of apparent power for per unit system.
+            Default: 1 MVA.
+        flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all charging points that allow for flexible charging.
+            Default: None.
+        flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all heat pumps that allow for flexible operation due to an
+            attached heat storage.
+            Default: None.
+        flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible loads that allow for application of demand
+            side management strategy.
+            Default: None.
+        flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible storages. Non-flexible storages operate to
+            optimize self consumption.
+            Default: None.
+        opf_version : int
+            Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+            For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: 1.
+        method : str
+            Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
+            (Non Convex). For more information see
+            :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: "soc".
+        warm_start : bool
+            If set to True and if method is set to "soc", non-convex IPOPT OPF will be
+            run additionally and will be warm started with Gurobi SOC solution.
+            Warm-start will only be run if results for Gurobi's SOC relaxation is exact.
+            Default: False.
+        silence_moi : bool
+            If set to True, MathOptInterface's optimizer attribute "MOI.Silent" is set
+            to True in julia subprocess. This attribute is for silencing the output of
+            an optimizer. When set to True, it requires the solver to produce no output,
+            hence there will be no logging coming from julia subprocess in python
+            process.
+            Default: False.
+        """
+        return powermodels_opf.pm_optimize(
+            self,
+            s_base=s_base,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            flexible_storage_units=flexible_storage_units,
+            opf_version=opf_version,
+            method=method,
+            warm_start=warm_start,
+            silence_moi=silence_moi,
+        )
+
     def to_graph(self):
         """
         Returns networkx graph representation of the grid.
@@ -1301,28 +1434,6 @@ class EDisGo:
 
         return edisgo_obj.results
 
-    def perform_mp_opf(self, timesteps, storage_series=None, **kwargs):
-        """
-        Run optimal power flow with julia.
-
-        Parameters
-        -----------
-        timesteps : list
-            List of timesteps to perform OPF for.
-        kwargs :
-            See :func:`~.opf.run_mp_opf.run_mp_opf` for further
-            information.
-
-        Returns
-        --------
-        str
-            Status of optimization.
-
-        """
-        if storage_series is None:
-            storage_series = []
-        return run_mp_opf(self, timesteps, storage_series=storage_series, **kwargs)
-
     def add_component(
         self,
         comp_type,
@@ -1736,7 +1847,6 @@ class EDisGo:
             len(aggregate_generators_by_cols) > 0
             and not self.topology.generators_df.empty
         ):
-
             gens_groupby = self.topology.generators_df.groupby(
                 aggregate_generators_by_cols
             )
@@ -1765,7 +1875,6 @@ class EDisGo:
 
         # aggregate loads
         if len(aggregate_loads_by_cols) > 0 and not self.topology.loads_df.empty:
-
             loads_groupby = self.topology.loads_df.groupby(aggregate_loads_by_cols)
             naming = "Loads_{}"
 
@@ -2540,6 +2649,7 @@ class EDisGo:
         save_timeseries=True,
         save_results=True,
         save_electromobility=False,
+        save_opf_results=False,
         save_heatpump=False,
         save_overlying_grid=False,
         save_dsm=False,
@@ -2583,6 +2693,12 @@ class EDisGo:
             :class:`~.network.electromobility.Electromobility` object. Per default, it
             is not saved. If set to True, it is saved to subdirectory 'electromobility'.
             See :attr:`~.network.electromobility.Electromobility.to_csv` for more
+            information.
+        save_opf_results : bool, optional
+            Indicates whether to save
+            :class:`~.opf.results.opf_result_class.OPFResults` object. Per default, it
+            is not saved. If set to True, it is saved to subdirectory 'opf_results'.
+            See :attr:`~.opf.results.opf_result_class.OPFResults.to_csv` for more
             information.
         save_heatpump : bool, optional
             Indicates whether to save
@@ -2666,6 +2782,12 @@ class EDisGo:
                 attributes=kwargs.get("electromobility_attributes", None),
             )
 
+        if save_opf_results:
+            self.opf_results.to_csv(
+                os.path.join(directory, "opf_results"),
+                attributes=kwargs.get("opf_results_attributes", None),
+            )
+
         # save configs
         self.config.to_json(directory)
 
@@ -2728,6 +2850,84 @@ class EDisGo:
         if filename is None:
             filename = f"edisgo_object_{self.topology.mv_grid.id}.pkl"
         pickle.dump(self, open(os.path.join(abs_path, filename), "wb"))
+
+    def save_edisgo_to_json(
+        self,
+        filename=None,
+        path="",
+        s_base=1,
+        flexible_cps=None,
+        flexible_hps=None,
+        flexible_loads=None,
+        flexible_storage_units=None,
+        opf_version=1,
+    ):
+        """
+        Saves EDisGo object in PowerModels network data format to json file.
+
+        Parameters
+        -----------
+        filename : str or None
+            Filename the json file is saved under. If None, filename is
+            'ding0_{grid_id}_t_{#timesteps}.json'.
+        path : str
+            Directory the json file is saved to. Per default, it takes the current
+            working directory.
+        s_base : int
+            Base value of apparent power for per unit system.
+            Default: 1 MVA
+        flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all charging points that allow for flexible charging.
+        flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all heat pumps that allow for flexible operation due to an
+            attached heat storage.
+        flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible loads that allow for application of demand
+            side management strategy.
+        flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible storages. Non-flexible storages operate to
+            optimize self consumption.
+            Default: None
+        opf_version: Int
+            Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+            For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: 1.
+
+        Returns
+        -------
+        dict
+            Dictionary that contains all network data in PowerModels network data
+            format.
+
+        """
+        abs_path = os.path.abspath(path)
+        pm, hv_flex_dict = self.to_powermodels(
+            s_base=s_base,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            flexible_storage_units=flexible_storage_units,
+            opf_version=opf_version,
+        )
+
+        def _convert(o):
+            """
+            Helper function for json dump, as int64 cannot be dumped.
+
+            """
+            if isinstance(o, np.int64):
+                return int(o)
+            raise TypeError
+
+        if filename is None:
+            filename = "{}.json".format(pm["name"])
+
+        with open(
+            os.path.join(abs_path, filename),
+            "w",
+        ) as outfile:
+            json.dump(pm, outfile, default=_convert)
+        return pm
 
     def reduce_memory(self, **kwargs):
         """
@@ -3032,7 +3232,32 @@ class EDisGo:
                     f"DSM.{param_name}",
                 )
 
-        logger.info("Integrity check finished. Please pay attention to warnings.")
+        # check if heat demand can be met by corresponding heatpump at all times.
+        if len(self.heat_pump.cop_df.columns) > len(
+            self.heat_pump.heat_demand_df.columns
+        ):
+            # If there are heat pumps with heat demand but no COP time series, or the
+            # other way around, a warning is raised in HeatPump.check_integrity
+            pass
+        else:
+            hp_cop = self.heat_pump.cop_df
+            hp_p_nom = self.topology.loads_df.loc[
+                self.heat_pump.heat_demand_df.columns.values
+            ][["p_set"]]
+            heat_demand = self.heat_pump.heat_demand_df
+            comparison = (
+                heat_demand[hp_p_nom.index] > hp_cop * hp_p_nom.squeeze()
+            ).any()
+            if comparison.any():
+                logger.warning(
+                    "Heat demand is higher than rated heatpump power"
+                    " of heatpumps: {}. Demand can not be covered if no sufficient"
+                    " heat storage capacities are available.".format(
+                        comparison.index[comparison.values].values
+                    )
+                )
+
+        logging.info("Integrity check finished. Please pay attention to warnings.")
 
     def resample_timeseries(
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
@@ -3123,6 +3348,7 @@ def import_edisgo_from_files(
     import_timeseries: bool = False,
     import_results: bool = False,
     import_electromobility: bool = False,
+    import_opf_results: bool = False,
     import_heat_pump: bool = False,
     import_dsm: bool = False,
     import_overlying_grid: bool = False,
@@ -3173,6 +3399,13 @@ def import_edisgo_from_files(
         'electromobility'. A different directory can be specified through keyword
         argument `electromobility_directory`.
         Default: False.
+    import_opf_results : bool
+        Indicates whether to import :class:`~.opf.results.opf_result_class.OPFResults`
+        object. Per default, it is set to False, in which case opf results data is not
+        imported. The default directory results data is imported from is the
+        sub-directory 'opf_results'. A different directory can be specified through
+        keyword argument `opf_results_directory`.
+        Default: False.
     import_heat_pump : bool
         Indicates whether to import :class:`~.network.heat.HeatPump` object.
         Per default, it is set to False, in which case heat pump data containing
@@ -3219,6 +3452,10 @@ def import_edisgo_from_files(
         Indicates directory :class:`~.network.electromobility.Electromobility` object is
         imported from. Per default, electromobility data is imported from `edisgo_path`
         sub-directory 'electromobility'.
+    opf_results_directory : str
+        Indicates directory :class:`~.opf.results.opf_result_class.OPFResults` object is
+        imported from. Per default, results data is imported from `edisgo_path`
+        sub-directory 'opf_results'.
     heat_pump_directory : str
         Indicates directory :class:`~.network.heat.HeatPump` object is
         imported from. Per default, heat pump data is imported from `edisgo_path`
@@ -3329,6 +3566,19 @@ def import_edisgo_from_files(
             logger.warning(
                 "No electromobility data found. Electromobility not imported."
             )
+
+    if import_opf_results:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "opf_results_directory", os.path.join(edisgo_path, "opf_results")
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.opf_results.from_csv(
+                directory, from_zip_archive=from_zip_archive
+            )
+        else:
+            logger.warning("No opf results data found. OPF results not imported.")
 
     if import_heat_pump:
         if not from_zip_archive:

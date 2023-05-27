@@ -88,7 +88,6 @@ class Topology:
     """
 
     def __init__(self, **kwargs):
-
         # load technical data of equipment
         self._equipment_data = self._load_equipment_data(kwargs.get("config", None))
 
@@ -1776,9 +1775,9 @@ class Topology:
 
     def sort_buses(self):
         """
-        Sorts buses in :py:attr:`~buses_df` such that bus0 is always the upstream bus.
+        Sorts buses in :py:attr:`~lines_df` such that bus0 is always the upstream bus.
 
-        The changes are directly written to :py:attr:`~buses_df` dataframe.
+        The changes are directly written to :py:attr:`~lines_df` dataframe.
 
         """
         # create BFS tree to get successor node of each node
@@ -1893,7 +1892,6 @@ class Topology:
 
         # ===== voltage level 4: component is connected to MV station =====
         if voltage_level == 4:
-
             # add line
             line_length = geo.calc_geo_dist_vincenty(
                 grid_topology=self,
@@ -1923,7 +1921,6 @@ class Topology:
             )
 
         elif voltage_level == 5:
-
             # get branches within the predefined `connection_buffer_radius`
             lines = geo.calc_geo_lines_in_buffer(
                 grid_topology=self,
@@ -2123,13 +2120,11 @@ class Topology:
             logger.error(f"Component type {comp_type} is not a valid option.")
 
         if mvlv_subst_id is not None and not np.isnan(mvlv_subst_id):
-
             # if substation ID (= LV grid ID) is given and it matches an
             # existing LV grid ID (i.e. it is no aggregated LV grid), set grid
             # to connect component to specified grid (in case the component
             # has no geometry it is connected to the grid's station)
             if int(mvlv_subst_id) in self._lv_grid_ids:
-
                 # get LV grid
                 lv_grid = self.get_lv_grid(int(mvlv_subst_id))
 
@@ -2182,7 +2177,6 @@ class Topology:
 
         # v_level 7 -> connect in LV grid
         elif voltage_level == 7:
-
             # get valid buses to connect new component to
             lv_loads = lv_grid.loads_df
             if comp_type == "generator" or comp_type == "storage_unit":
@@ -2270,7 +2264,6 @@ class Topology:
             lv_conn_target = None
 
             while len(lv_buses_rnd) > 0 and lv_conn_target is None:
-
                 lv_bus = lv_buses_rnd.pop()
 
                 # determine number of components of the same type at LV bus
@@ -2479,7 +2472,6 @@ class Topology:
         # MV line is nearest connection point => split old line into 2 segments
         # (delete old line and create 2 new ones)
         if isinstance(target_obj["shp"], LineString):
-
             line_data = self.lines_df.loc[target_obj["repr"], :]
 
             # if line that is split is connected to switch, the line name needs
@@ -2606,9 +2598,8 @@ class Topology:
 
             return branch_tee_repr
 
-        # bus ist nearest connection point
+        # bus is the nearest connection point
         else:
-
             # add new branch for satellite (station to station)
             line_length = geo.calc_geo_dist_vincenty(
                 grid_topology=self,

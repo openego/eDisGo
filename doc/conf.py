@@ -73,7 +73,8 @@ autoapi_options = [
 autoapi_ignore = [
     "*/flex_opt/curtailment.py",
     "*/flex_opt/storage_positioning.py",
-    "*/opf/*",
+    "*/opf/timeseries_reduction.py",
+    "*/opf/opf_solutions/*",
 ]
 
 
@@ -117,6 +118,10 @@ extlinks = {
     "sqlalchemy": (
         "http://docs.sqlalchemy.org/en/latest/core/connections.html#%s",
         "sqlalchemy.%s",
+    ),
+    "numpy": (
+        "https://numpy.org/doc/stable/reference/generated/numpy.%s.html",
+        "numpy.%s",
     ),
     "shapely": (
         "https://shapely.readthedocs.io/en/latest/manual.html#%s",
