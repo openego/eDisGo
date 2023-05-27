@@ -199,10 +199,10 @@ class OPFResults:
                 if from_zip_archive:
                     # open zip file to make it readable for pandas
                     with zip.open(file) as f:
-                        df = pd.read_csv(f, index_col=0)
+                        df = pd.read_csv(f, index_col=0, parse_dates=True)
                 else:
                     path = os.path.join(data_path, file)
-                    df = pd.read_csv(path, index_col=0)
+                    df = pd.read_csv(path, index_col=0, parse_dates=True)
 
                 setattr(self, attr, df)
 
