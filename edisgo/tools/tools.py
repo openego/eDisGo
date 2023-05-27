@@ -955,6 +955,7 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
 def reduce_timeseries_data_to_given_timeindex(
     edisgo_obj,
     timeindex,
+    freq="1H",
     timeseries=True,
     electromobility=True,
     save_ev_soc_initial=True,
@@ -970,6 +971,13 @@ def reduce_timeseries_data_to_given_timeindex(
     edisgo_obj : :class:`~.EDisGo`
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
         Time index to set.
+    freq : str or :pandas:`pandas.Timedelta<Timedelta>`, optional
+        Frequency of time series data. This is only needed if it cannot be inferred from
+        the given `timeindex` and if electromobility data and/or overlying grid data is
+        reduced, as the initial SoC is tried to be set using the time step before the
+        first time step in the given `timeindex`. Offset aliases can be found here:
+        https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases.
+        Default: '1H'.
     timeseries : bool
         Indicates whether timeseries in :class:`~.network.timeseries.TimeSeries`
         are reduced to given time index. Default: True.
@@ -991,6 +999,14 @@ def reduce_timeseries_data_to_given_timeindex(
         are reduced to given time index. Default: True.
 
     """
+    # get frequency from time index data or default frequency
+    try:
+        frequency = timeindex[1] - timeindex[0]
+    except KeyError:
+        frequency = freq
+    if not isinstance(frequency, pd.Timedelta):
+        frequency = pd.Timedelta(frequency)
+
     # generators, loads and storage units timeseries
     if timeseries:
         attributes = edisgo_obj.timeseries._attributes
@@ -1006,7 +1022,7 @@ def reduce_timeseries_data_to_given_timeindex(
     if electromobility:
         if save_ev_soc_initial:
             # timestep EV SOC from timestep before if possible
-            ts_before = timeindex[0] - timeindex.freq
+            ts_before = timeindex[0] - frequency
             if not edisgo_obj.electromobility.flexibility_bands["upper_energy"].empty:
                 try:
                     initial_soc_cp = (
@@ -1072,7 +1088,7 @@ def reduce_timeseries_data_to_given_timeindex(
                             attr,
                             getattr(edisgo_obj.overlying_grid, attr).loc[
                                 pd.Index(timeindex).append(
-                                    pd.Index([timeindex[-1] + timeindex.freq])
+                                    pd.Index([timeindex[-1] + frequency])
                                 )
                             ],
                         )
