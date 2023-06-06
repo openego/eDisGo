@@ -14,8 +14,8 @@ function check_SOC_equality(result, data_edisgo)
     soc_eq_dict = Dict()
     soc_tight = true
     for t in timesteps
-        eq_res = Dict(b => (result["solution"]["nw"][t]["branch"][b]["pf"]^2
-        + result["solution"]["nw"][t]["branch"][b]["qf"]^2
+        eq_res = Dict(b => (result["solution"]["nw"][t]["branch"][b]["p"]^2
+        + result["solution"]["nw"][t]["branch"][b]["q"]^2
         -result["solution"]["nw"][t]["branch"][b]["ccm"]*result["solution"]["nw"][t]["bus"][branch_f_bus[b]]["w"]) for b in branches_wo_storage)
         soc_eq_dict[t]= filter(((k,v),) ->  v <-1e-1, eq_res)
          if length(keys(soc_eq_dict[t])) > 0

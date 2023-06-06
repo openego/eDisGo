@@ -269,7 +269,7 @@ def from_powermodels(
         "curt": ["gen_nd", "pgc"],
         "hp": ["heatpumps", "php"],
         "cp": ["electromobility", "pcp"],
-        "storage": ["storage", "pf"],
+        "storage": ["storage", "p"],
         "dsm": ["dsm", "pdsm"],
     }
 
@@ -480,7 +480,7 @@ def from_powermodels(
                     edisgo_object.opf_results.grid_slacks_t.hp_operation_slack = df
 
     # save line flows and currents to edisgo object
-    for variable in ["pf", "qf", "ccm"]:
+    for variable in ["p", "q", "ccm"]:
         df = _result_df(
             pm,
             "branch",

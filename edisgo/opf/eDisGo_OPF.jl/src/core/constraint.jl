@@ -110,19 +110,21 @@ function constraint_HV_requirements(pm::AbstractBFModelEdisgo, i::Int, nw::Int=n
         pflex = PowerModels.var(pm, nw, :pdsm)
     elseif hv_req["name"] == "curt"
         pflex = PowerModels.var(pm, nw, :pgc)
-    elseif hv_req["name"] == "storage"  # ToDo: virtual branch p variable instead of ps
-        # branch = PowerModels.ref(pm, nw, :branch)
-        # for (i, b) in branch
-        #     if b["storage"]
-        #         Hier die pf Variablen (negativ!) aufsummieren
-        #     end
-        # end
-        pflex = PowerModels.var(pm, nw, :ps)
+    elseif hv_req["name"] == "storage"
+        #branches = [PowerModels.ref(pm, nw, :storage, j)["virtual_branch"] for j in PowerModels.ids(pm, nw, :storage)]
+        #println(branches)
+        p = PowerModels.var(pm, nw, :p)
+        storage = Dict(i => get(branch, "storage", 1.0) for (i,branch) in PowerModels.ref(pm, 1, :branch))
+        println(sum(-p[(b,i,j)] for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 1))
     elseif hv_req["name"] == "hp"
         pflex = PowerModels.var(pm, nw, :php)
     elseif hv_req["name"] == "cp"
         pflex = PowerModels.var(pm, nw, :pcp)
     end
-    JuMP.@constraint(pm.model, sum(pflex) + phvs == hv_req["P"])
+    if hv_req["name"] == "storage"
+        JuMP.@constraint(pm.model, sum(-p[(b,i,j)] for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 1) + phvs == hv_req["P"])
+    else
+        JuMP.@constraint(pm.model, sum(pflex) + phvs == hv_req["P"])
+    end
 
 end

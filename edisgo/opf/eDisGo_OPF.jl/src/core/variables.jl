@@ -37,7 +37,7 @@ function variable_branch_power_real_radial(pm::AbstractPowerModel; nw::Int=nw_id
         end
     end
 
-    report && eDisGo_OPF.sol_component_value_radial(pm, nw, :branch, :pf, PowerModels.ref(pm, nw, :arcs_from), p)
+    report && eDisGo_OPF.sol_component_value_radial(pm, nw, :branch, :p, PowerModels.ref(pm, nw, :arcs_from), p)
 end
 
 "variable: `q[l,i,j]` for `(l,i,j)` in `arcs`"
@@ -72,7 +72,7 @@ function variable_branch_power_imaginary_radial(pm::AbstractPowerModel; nw::Int=
         end
     end
 
-    report && eDisGo_OPF.sol_component_value_radial(pm, nw, :branch, :qf, PowerModels.ref(pm, nw, :arcs_from), q)
+    report && eDisGo_OPF.sol_component_value_radial(pm, nw, :branch, :q, PowerModels.ref(pm, nw, :arcs_from), q)
 end
 
 function variable_bus_voltage_magnitude_sqr(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
