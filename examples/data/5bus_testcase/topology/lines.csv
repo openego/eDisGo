@@ -1,0 +1,4 @@
+Line,bus0,bus1,length,r,x,b,g,s_nom,num_parallel,kind,type_info
+Line12,Bus1,Bus2,0.05,0.01,0.004,0,0,0.2,1,cable,NA2XS2Y 3x1x240
+Line14,Bus1,Bus4,0.05,0.005,0.002,0,0,0.4,2,cable,NA2XS2Y 3x1x240
+Line45,Bus4,Bus5,0.05,0.01,0.004,0,0,0.1,1,cable,NA2XS2Y 3x1x185 RM/25
