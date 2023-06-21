@@ -2688,6 +2688,7 @@ class EDisGo:
         save_heatpump=False,
         save_overlying_grid=False,
         save_dsm=False,
+        save_opf_results=False,
         **kwargs,
     ):
         """
@@ -2728,6 +2729,12 @@ class EDisGo:
             :class:`~.network.electromobility.Electromobility` object. Per default, it
             is not saved. If set to True, it is saved to subdirectory 'electromobility'.
             See :attr:`~.network.electromobility.Electromobility.to_csv` for more
+            information.
+        save_opf_results : bool, optional
+            Indicates whether to save
+            :class:`~.opf.results.opf_result_class.OPFResults` object. Per default, it
+            is not saved. If set to True, it is saved to subdirectory 'opf_results'.
+            See :attr:`~.opf.results.opf_result_class.OPFResults.to_csv` for more
             information.
         save_heatpump : bool, optional
             Indicates whether to save
@@ -2809,6 +2816,12 @@ class EDisGo:
             self.electromobility.to_csv(
                 os.path.join(directory, "electromobility"),
                 attributes=kwargs.get("electromobility_attributes", None),
+            )
+
+        if save_opf_results:
+            self.opf_results.to_csv(
+                os.path.join(directory, "opf_results"),
+                attributes=kwargs.get("opf_results_attributes", None),
             )
 
         # save configs
