@@ -864,12 +864,6 @@ def enhanced_reinforce_grid(
         The reinforced eDisGo object.
 
     """
-    if kwargs.get("copy_grid", True):
-        edisgo_obj = copy.deepcopy(edisgo_object)
-    else:
-        edisgo_obj = edisgo_object
-
-    kwargs["copy_grid"] = False
     kwargs.pop("skip_mv_reinforcement", False)
 
     num_lv_grids_standard_lines = 0
