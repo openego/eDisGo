@@ -1372,7 +1372,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
         management strategy.
 
     Returns
-     ----------
+    ----------
     :numpy:`numpy.ndarray<ndarray>` or list
         Updated array containing all flexible loads that allow for application of demand
         side management strategy.
