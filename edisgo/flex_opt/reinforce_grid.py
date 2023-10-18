@@ -699,8 +699,7 @@ def catch_convergence_reinforce_grid(
     logger.debug("Start 'catch-convergence' reinforcement.")
 
     # Get the timesteps from kwargs and then remove it to set it later manually
-    timesteps_pfa = kwargs.get("timesteps_pfa")
-    kwargs.pop("timesteps_pfa")
+    timesteps_pfa = kwargs.pop("timesteps_pfa", None)
     selected_timesteps = timesteps_pfa
 
     # Initial try
