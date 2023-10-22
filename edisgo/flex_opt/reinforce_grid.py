@@ -905,7 +905,6 @@ def enhanced_reinforce_grid(
             logger.info(f"Initial mode 'lv' reinforcement for {lv_grid} successful.")
         except (ValueError, RuntimeError, exceptions.MaximumIterationError):
             logger.warning(f"Initial mode 'lv' reinforcement for {lv_grid} failed.")
-            # ToDo catch convergence reinforcement versuchen
 
     try:
         logger.info("Try initial enhanced reinforcement.")
