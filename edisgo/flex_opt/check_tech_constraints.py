@@ -709,7 +709,7 @@ def stations_relative_load(edisgo_obj, grids=None):
         except Exception:
             pass
 
-    return loading / allowed_loading.loc[:, loading.columns]
+    return loading / allowed_loading.loc[loading.index, loading.columns]
 
 
 def components_relative_load(edisgo_obj, n_minus_one=False):
