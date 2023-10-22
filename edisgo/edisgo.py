@@ -1303,20 +1303,20 @@ class EDisGo:
             reinforce MV/LV stations for LV worst-cases.
             Default: False.
         num_steps_loading : int
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            In case `reduced_analysis` is set to True, this parameter can be
             used to specify the number of most critical overloading events to consider.
             If None, `percentage` is used. Default: None.
         num_steps_voltage : int
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            In case `reduced_analysis` is set to True, this parameter can be
             used to specify the number of most critical voltage issues to select. If
             None, `percentage` is used. Default: None.
         percentage : float
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            In case `reduced_analysis` is set to True, this parameter can be
             used to specify the percentage of most critical time steps to select. The
             default is 1.0, in which case all most critical time steps are selected.
             Default: 1.0.
         use_troubleshooting_mode : bool
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            In case `reduced_analysis` is set to True, this parameter can be
             used to specify how to handle non-convergence issues in the power flow
             analysis. If set to True, non-convergence issues are tried to be
             circumvented by reducing load and feed-in until the power flow converges.
@@ -1409,6 +1409,7 @@ class EDisGo:
 
             func(
                 edisgo_obj,
+                reduced_analysis=reduced_analysis,
                 max_while_iterations=max_while_iterations,
                 split_voltage_band=split_voltage_band,
                 without_generator_import=without_generator_import,

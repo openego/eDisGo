@@ -89,20 +89,20 @@ def reinforce_grid(
         reinforce MV/LV stations for LV worst-cases.
         Default: False.
     num_steps_loading : int
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify the number of most critical overloading events to consider.
         If None, `percentage` is used. Default: None.
     num_steps_voltage : int
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify the number of most critical voltage issues to select. If None,
         `percentage` is used. Default: None.
     percentage : float
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify the percentage of most critical time steps to select. The default
         is 1.0, in which case all most critical time steps are selected.
         Default: 1.0.
     use_troubleshooting_mode : bool
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify how to handle non-convergence issues in the power flow analysis.
         See parameter `use_troubleshooting_mode` in function :attr:`~.EDisGo.reinforce`
         for more information. Default: True.
