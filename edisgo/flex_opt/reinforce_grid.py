@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 def reinforce_grid(
     edisgo: EDisGo,
     timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
+    reduced_analysis: bool = False,
     max_while_iterations: int = 20,
     split_voltage_band: bool = True,
     mode: str | None = None,
@@ -47,6 +48,10 @@ def reinforce_grid(
         timesteps_pfa specifies for which time steps power flow analysis is
         conducted. See parameter `timesteps_pfa` in function :attr:`~.EDisGo.reinforce`
         for more information.
+    reduced_analysis : bool
+        Specifies, whether to run reinforcement on a subset of time steps that are most
+        critical. See parameter `reduced_analysis` in function
+        :attr:`~.EDisGo.reinforce` for more information.
     max_while_iterations : int
         Maximum number of times each while loop is conducted. Default: 20.
     split_voltage_band : bool
@@ -139,14 +144,6 @@ def reinforce_grid(
                     snapshots["min_residual_load"],
                 ]
             ).dropna()
-        elif isinstance(timesteps_pfa, str) and timesteps_pfa == "reduced_analysis":
-            timesteps_pfa = get_most_critical_time_steps(
-                edisgo,
-                num_steps_loading=kwargs.get("num_steps_loading", None),
-                num_steps_voltage=kwargs.get("num_steps_voltage", None),
-                percentage=kwargs.get("percentage", 1.0),
-                use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
-            )
         # if timesteps_pfa is not of type datetime or does not contain
         # datetimes throw an error
         elif not isinstance(timesteps_pfa, datetime.datetime):
@@ -160,6 +157,15 @@ def reinforce_grid(
                     f"Input {timesteps_pfa} for timesteps_pfa is not valid."
                 )
 
+    if reduced_analysis:
+        timesteps_pfa = get_most_critical_time_steps(
+            edisgo,
+            timesteps=timesteps_pfa,
+            num_steps_loading=kwargs.get("num_steps_loading", None),
+            num_steps_voltage=kwargs.get("num_steps_voltage", None),
+            percentage=kwargs.get("percentage", 1.0),
+            use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
+        )
     iteration_step = 1
     lv_grid_id = kwargs.get("lv_grid_id", None)
     scale_timeseries = kwargs.get("scale_timeseries", None)

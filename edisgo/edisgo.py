@@ -1196,6 +1196,7 @@ class EDisGo:
     def reinforce(
         self,
         timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
+        reduced_analysis: bool = False,
         copy_grid: bool = False,
         max_while_iterations: int = 20,
         split_voltage_band: bool = True,
@@ -1237,14 +1238,15 @@ class EDisGo:
               time steps. If your time series already represents the worst-case,
               keep the default value of None because finding the worst-case
               snapshots takes some time.
-            * 'reduced_analysis'
-              Reinforcement is conducted for all time steps at which at least one
-              branch shows its highest overloading or one bus shows its highest voltage
-              violation.
             * :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
               :pandas:`pandas.Timestamp<Timestamp>`
               Use this option to explicitly choose which time steps to consider.
-
+        reduced_analysis : bool
+              If True, reinforcement is conducted for all time steps at which at least
+              one branch shows its highest overloading or one bus shows its highest
+              voltage violation. Time steps to consider are specified through parameter
+              `timesteps_pfa`. If False, all time steps in parameter `timesteps_pfa`
+              are used. Default: False.
         copy_grid : bool
             If True, reinforcement is conducted on a copied grid and discarded.
             Default: False.
