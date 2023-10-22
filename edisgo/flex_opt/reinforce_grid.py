@@ -106,6 +106,11 @@ def reinforce_grid(
         to specify how to handle non-convergence issues in the power flow analysis.
         See parameter `use_troubleshooting_mode` in function :attr:`~.EDisGo.reinforce`
         for more information. Default: True.
+    run_initial_analyze : bool
+        In case `reduced_analysis` is set to True, this parameter can be
+        used to specify whether to run an initial analyze to determine most
+        critical time steps or to use existing results. If set to False,
+        `use_troubleshooting_mode` is ignored. Default: True.
 
     Returns
     -------
@@ -178,6 +183,7 @@ def reinforce_grid(
             num_steps_voltage=kwargs.get("num_steps_voltage", None),
             percentage=kwargs.get("percentage", 1.0),
             use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
+            run_initial_analyze=kwargs.get("run_initial_analyze", True),
         )
 
     edisgo.analyze(
@@ -929,6 +935,7 @@ def enhanced_reinforce_grid(
                     mode="lv",
                     lv_grid_id=lv_grid.id,
                     catch_convergence_problems=False,
+                    run_initial_analyze=False,
                     **kwargs,
                 )
             logger.info(f"Initial mode 'lv' reinforcement for {lv_grid} successful.")
@@ -1008,6 +1015,7 @@ def enhanced_reinforce_grid(
                         mode="lv",
                         lv_grid_id=lv_grid.id,
                         catch_convergence_problems=False,
+                        run_initial_analyze=False,
                         **kwargs,
                     )
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} successful.")

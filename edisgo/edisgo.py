@@ -1323,6 +1323,11 @@ class EDisGo:
             The most critical time steps are then determined based on the power flow
             results with the reduced load and feed-in. If False, an error will be
             raised in case time steps do not converge. Default: True.
+        run_initial_analyze : bool
+            In case `reduced_analysis` is set to True, this parameter can be
+            used to specify whether to run an initial analyze to determine most
+            critical time steps or to use existing results. If set to False,
+            `use_troubleshooting_mode` is ignored. Default: True.
 
         Returns
         --------

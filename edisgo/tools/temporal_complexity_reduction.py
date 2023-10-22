@@ -660,6 +660,7 @@ def get_most_critical_time_steps(
     num_steps_voltage=None,
     percentage: float = 1.0,
     use_troubleshooting_mode=True,
+    run_initial_analyze=True,
 ) -> pd.DatetimeIndex:
     """
     Get the time steps with the most critical overloading and voltage issues.
@@ -700,6 +701,10 @@ def get_most_critical_time_steps(
         are then determined based on the power flow results with the reduced load and
         feed-in. If False, an error will be raised in case time steps do not converge.
         Default: True.
+    run_initial_analyze : bool
+        This parameter can be used to specify whether to run an initial analyze to
+        determine most critical time steps or to use existing results. If set to False,
+        `use_troubleshooting_mode` is ignored. Default: True.
 
     Returns
     --------
@@ -709,16 +714,19 @@ def get_most_critical_time_steps(
 
     """
     # Run power flow
-    if use_troubleshooting_mode:
-        edisgo_obj = _troubleshooting_mode(edisgo_obj, timesteps=timesteps)
-    else:
-        logger.debug("Running initial power flow for temporal complexity reduction.")
-        edisgo_obj.analyze(
-            mode=mode,
-            timesteps=timesteps,
-            lv_grid_id=lv_grid_id,
-            scale_timeseries=scale_timeseries,
-        )
+    if run_initial_analyze:
+        if use_troubleshooting_mode:
+            edisgo_obj = _troubleshooting_mode(edisgo_obj, timesteps=timesteps)
+        else:
+            logger.debug(
+                "Running initial power flow for temporal complexity reduction."
+            )
+            edisgo_obj.analyze(
+                mode=mode,
+                timesteps=timesteps,
+                lv_grid_id=lv_grid_id,
+                scale_timeseries=scale_timeseries,
+            )
 
     # Select most critical steps based on current violations
     loading_scores = _scored_most_critical_loading(edisgo_obj)
