@@ -32,7 +32,6 @@ class TestTemporalComplexityReduction:
         self.edisgo.analyze()
 
     def test__scored_most_critical_loading(self):
-
         ts_crit = temp_red._scored_most_critical_loading(self.edisgo)
 
         assert len(ts_crit) == 180
@@ -40,7 +39,6 @@ class TestTemporalComplexityReduction:
         assert np.isclose(ts_crit.iloc[-1], 1.14647)
 
     def test__scored_most_critical_voltage_issues(self):
-
         ts_crit = temp_red._scored_most_critical_voltage_issues(self.edisgo)
 
         assert len(ts_crit) == 120
@@ -48,14 +46,20 @@ class TestTemporalComplexityReduction:
         assert np.isclose(ts_crit.iloc[-1], 0.01062258)
 
     def test_get_most_critical_time_steps(self):
-
         ts_crit = temp_red.get_most_critical_time_steps(
             self.edisgo, num_steps_loading=2, num_steps_voltage=2
         )
         assert len(ts_crit) == 3
 
-    def test__scored_most_critical_loading_time_interval(self):
+        ts_crit = temp_red.get_most_critical_time_steps(
+            self.edisgo,
+            num_steps_loading=2,
+            num_steps_voltage=2,
+            timesteps=self.edisgo.timeseries.timeindex[:24],
+        )
+        assert len(ts_crit) == 2
 
+    def test__scored_most_critical_loading_time_interval(self):
         # test with default values
         ts_crit = temp_red._scored_most_critical_loading_time_interval(self.edisgo, 24)
         assert len(ts_crit) == 9
@@ -82,7 +86,6 @@ class TestTemporalComplexityReduction:
         assert ts_crit.loc[0, "percentage_max_overloaded_components"] == 1
 
     def test__scored_most_critical_voltage_issues_time_interval(self):
-
         # test with default values
         ts_crit = temp_red._scored_most_critical_voltage_issues_time_interval(
             self.edisgo, 24
@@ -107,7 +110,6 @@ class TestTemporalComplexityReduction:
         assert np.isclose(ts_crit.loc[0, "percentage_buses_max_voltage_deviation"], 1.0)
 
     def test_get_most_critical_time_intervals(self):
-
         self.edisgo.timeseries.timeindex = self.edisgo.timeseries.timeindex[:25]
         self.edisgo.timeseries.scale_timeseries(p_scaling_factor=5, q_scaling_factor=5)
         steps = temp_red.get_most_critical_time_intervals(

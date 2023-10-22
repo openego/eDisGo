@@ -396,7 +396,7 @@ def _scored_most_critical_voltage_issues_time_interval(
     return time_intervals_df
 
 
-def _troubleshooting_mode(edisgo_obj):
+def _troubleshooting_mode(edisgo_obj, timesteps=None):
     """
     Handles non-convergence issues in power flow by iteratively reducing load and
     feed-in until the power flow converges.
@@ -404,10 +404,21 @@ def _troubleshooting_mode(edisgo_obj):
     Load and feed-in is reduced in steps of 10% down to 20% of the original load
     and feed-in. The most critical time intervals / time steps can then be determined
     based on the power flow results with the reduced load and feed-in.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object
+    timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+        :pandas:`pandas.Timestamp<Timestamp>`
+        Timesteps specifies from which time steps to select most critical ones. It
+        defaults to None in which case all time steps in
+        :attr:`~.network.timeseries.TimeSeries.timeindex` are used.
+
     """
     try:
         logger.debug("Running initial power flow for temporal complexity reduction.")
-        edisgo_obj.analyze()
+        edisgo_obj.analyze(timesteps=timesteps)
     # Exception is used, as non-convergence can also lead to RuntimeError, not only
     # ValueError
     except Exception:
@@ -421,6 +432,7 @@ def _troubleshooting_mode(edisgo_obj):
         for fraction in np.arange(0.8, 0.0, step=-0.1):
             try:
                 edisgo_obj.analyze(
+                    timesteps=timesteps,
                     troubleshooting_mode="iteration",
                     range_start=fraction,
                     range_num=1,
@@ -615,6 +627,7 @@ def get_most_critical_time_intervals(
 
 def get_most_critical_time_steps(
     edisgo_obj: EDisGo,
+    timesteps=None,
     num_steps_loading=None,
     num_steps_voltage=None,
     percentage: float = 1.0,
@@ -627,6 +640,11 @@ def get_most_critical_time_steps(
     -----------
     edisgo_obj : :class:`~.EDisGo`
         The eDisGo API object
+    timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+        :pandas:`pandas.Timestamp<Timestamp>`
+        Timesteps specifies from which time steps to select most critical ones. It
+        defaults to None in which case all time steps in
+        :attr:`~.network.timeseries.TimeSeries.timeindex` are used.
     num_steps_loading : int
         The number of most critical overloading events to select. If None, `percentage`
         is used. Default: None.
@@ -654,10 +672,10 @@ def get_most_critical_time_steps(
     """
     # Run power flow
     if use_troubleshooting_mode:
-        edisgo_obj = _troubleshooting_mode(edisgo_obj)
+        edisgo_obj = _troubleshooting_mode(edisgo_obj, timesteps=timesteps)
     else:
         logger.debug("Running initial power flow for temporal complexity reduction.")
-        edisgo_obj.analyze()
+        edisgo_obj.analyze(timesteps=timesteps)
 
     # Select most critical steps based on current violations
     loading_scores = _scored_most_critical_loading(edisgo_obj)
