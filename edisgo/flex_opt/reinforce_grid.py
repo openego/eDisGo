@@ -157,15 +157,6 @@ def reinforce_grid(
                     f"Input {timesteps_pfa} for timesteps_pfa is not valid."
                 )
 
-    if reduced_analysis:
-        timesteps_pfa = get_most_critical_time_steps(
-            edisgo,
-            timesteps=timesteps_pfa,
-            num_steps_loading=kwargs.get("num_steps_loading", None),
-            num_steps_voltage=kwargs.get("num_steps_voltage", None),
-            percentage=kwargs.get("percentage", 1.0),
-            use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
-        )
     iteration_step = 1
     lv_grid_id = kwargs.get("lv_grid_id", None)
     scale_timeseries = kwargs.get("scale_timeseries", None)
@@ -175,6 +166,19 @@ def reinforce_grid(
         analyze_mode = None
     else:
         analyze_mode = mode
+
+    if reduced_analysis:
+        timesteps_pfa = get_most_critical_time_steps(
+            edisgo,
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            lv_grid_id=lv_grid_id,
+            scale_timeseries=scale_timeseries,
+            num_steps_loading=kwargs.get("num_steps_loading", None),
+            num_steps_voltage=kwargs.get("num_steps_voltage", None),
+            percentage=kwargs.get("percentage", 1.0),
+            use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
+        )
 
     edisgo.analyze(
         mode=analyze_mode,
