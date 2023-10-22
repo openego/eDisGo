@@ -998,7 +998,7 @@ class EDisGo:
         range_num: int = 10,
         scale_timeseries: float | None = None,
         **kwargs,
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> tuple[pd.DatetimeIndex, pd.DatetimeIndex]:
         """
         Conducts a static, non-linear power flow analysis.
 
