@@ -716,7 +716,13 @@ def get_most_critical_time_steps(
     # Run power flow
     if run_initial_analyze:
         if use_troubleshooting_mode:
-            edisgo_obj = _troubleshooting_mode(edisgo_obj, timesteps=timesteps)
+            edisgo_obj = _troubleshooting_mode(
+                edisgo_obj,
+                mode=mode,
+                timesteps=timesteps,
+                lv_grid_id=lv_grid_id,
+                scale_timeseries=scale_timeseries,
+            )
         else:
             logger.debug(
                 "Running initial power flow for temporal complexity reduction."
