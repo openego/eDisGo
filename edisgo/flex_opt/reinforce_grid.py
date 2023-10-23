@@ -705,6 +705,7 @@ def catch_convergence_reinforce_grid(
                 edisgo,
                 timesteps_pfa=selected_timesteps,
                 scale_timeseries=set_scaling_factor,
+                use_troubleshooting_mode=troubleshooting_mode,
                 **kwargs,
             )
             converged = True
@@ -720,11 +721,13 @@ def catch_convergence_reinforce_grid(
     # Get the timesteps from kwargs and then remove it to set it later manually
     timesteps_pfa = kwargs.pop("timesteps_pfa", None)
     selected_timesteps = timesteps_pfa
+    troubleshooting_mode_set = kwargs.pop("troubleshooting_mode", True)
 
     # Initial try
     logger.info("Run initial reinforcement.")
     set_scaling_factor = 1.0
     iteration = 0
+    troubleshooting_mode = False
     converged = reinforce()
     if converged is False:
         logger.info("Initial reinforcement did not succeed.")
@@ -756,6 +759,7 @@ def catch_convergence_reinforce_grid(
             "reinforcement."
         )
         selected_timesteps = converging_timesteps
+        troubleshooting_mode = troubleshooting_mode_set
         reinforce()
 
     # Run reinforcement for time steps that did not converge after initial reinforcement
@@ -765,6 +769,7 @@ def catch_convergence_reinforce_grid(
             "reinforcement."
         )
         selected_timesteps = non_converging_timesteps
+        troubleshooting_mode = False
         converged = reinforce()
 
     if converged:
@@ -798,6 +803,7 @@ def catch_convergence_reinforce_grid(
                     ) + highest_converged_scaling_factor
 
             logger.info(f"Try reinforcement with {set_scaling_factor=} at {iteration=}")
+            troubleshooting_mode = False
             converged = reinforce()
             if converged:
                 logger.info(
@@ -818,6 +824,7 @@ def catch_convergence_reinforce_grid(
     if set_scaling_factor != 1:
         logger.info("Run final reinforcement.")
         selected_timesteps = timesteps_pfa
+        troubleshooting_mode = False
         reinforce()
 
     return edisgo.results
