@@ -185,6 +185,9 @@ def reinforce_grid(
             use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
             run_initial_analyze=kwargs.get("run_initial_analyze", True),
         )
+    if len(timesteps_pfa) == 0:
+        logger.debug("Zero time steps for grid reinforcement.")
+        return edisgo.results
 
     edisgo.analyze(
         mode=analyze_mode,
