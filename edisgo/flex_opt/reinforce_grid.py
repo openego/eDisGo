@@ -935,7 +935,7 @@ def enhanced_reinforce_grid(
                     mode="lv",
                     lv_grid_id=lv_grid.id,
                     catch_convergence_problems=False,
-                    run_initial_analyze=False,
+                    run_initial_analyze=True,
                     **kwargs,
                 )
             logger.info(f"Initial mode 'lv' reinforcement for {lv_grid} successful.")
@@ -1015,7 +1015,7 @@ def enhanced_reinforce_grid(
                         mode="lv",
                         lv_grid_id=lv_grid.id,
                         catch_convergence_problems=False,
-                        run_initial_analyze=False,
+                        run_initial_analyze=True,
                         **kwargs,
                     )
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} successful.")
