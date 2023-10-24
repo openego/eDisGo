@@ -350,6 +350,97 @@ class Grid(ABC):
         """
         return self.loads_df.groupby(["sector"]).sum()["p_set"]
 
+    def assign_length_to_grid_station(self):
+        """
+        Assign length in km from each bus in the grid to the grid's station.
+        The length is written to column 'length_to_grid_station' in
+        :attr:`~.network.topology.Topology.buses_df`.
+        """
+        buses_df = self._edisgo_obj.topology.buses_df
+        graph = self.graph
+        station = self.station.index[0]
+
+        for bus in self.buses_df.index:
+            buses_df.at[bus, "length_to_grid_station"] = nx.shortest_path_length(
+                graph, source=station, target=bus, weight="length"
+            )
+
+    def assign_grid_feeder(self, mode: str = "grid_feeder"):
+        """
+        Assigns MV or LV feeder to each bus and line, depending on the `mode`.
+        The feeder name is written to a new column `mv_feeder` or `grid_feeder`,
+        depending on the `mode`, in :class:`~.network.topology.Topology`'s
+        :attr:`~.network.topology.Topology.buses_df` and
+        :attr:`~.network.topology.Topology.lines_df`.
+        The MV feeder name corresponds to the name of the neighboring node of the
+        HV/MV station. The grid feeder name corresponds to the name of the neighboring
+        node of the respective grid's station. The feeder name of the source node, i.e.
+        the station, is set to "station_node".
+        Parameters
+        ----------
+        mode : str
+            Specifies whether to assign MV or grid feeder.
+            If mode is "mv_feeder" the MV feeder the busses and lines are in are
+            determined. If mode is "grid_feeder" LV busses and lines are assigned the
+            LV feeder they are in and MV busses and lines are assigned the MV feeder
+            they are in. Default: "grid_feeder".
+        """
+        buses_df = self._edisgo_obj.topology.buses_df
+        lines_df = self._edisgo_obj.topology.lines_df
+
+        if mode == "grid_feeder":
+            graph = self.graph
+            station = self.station.index[0]
+            column_name = "grid_feeder"
+        elif mode == "mv_feeder":
+            graph = self._edisgo_obj.topology.to_graph()
+            station = self._edisgo_obj.topology.transformers_hvmv_df["bus1"][0]
+            column_name = "mv_feeder"
+        else:
+            raise ValueError("Choose an existing mode.")
+
+        # get all buses in network and remove station to get separate subgraphs
+        graph_nodes = list(graph.nodes())
+        graph_nodes.remove(station)
+        subgraph = graph.subgraph(graph_nodes)
+
+        buses_df.at[station, column_name] = "station_node"
+        for neighbor in graph.neighbors(station):
+            # get all nodes in that feeder by doing a DFS in the disconnected
+            # subgraph starting from the node adjacent to the station `neighbor`
+            feeder_graph = nx.dfs_tree(subgraph, source=neighbor)
+            feeder_lines = set()
+            for node in feeder_graph.nodes():
+                buses_df.at[node, column_name] = neighbor
+                feeder_lines.update(
+                    {edge[2]["branch_name"] for edge in graph.edges(node, data=True)}
+                )
+            lines_df.loc[lines_df.index.isin(feeder_lines), column_name] = neighbor
+
+    def get_feeder_stats(self) -> pd.DataFrame:
+        """
+        Generate statistics of the grid's feeders.
+        So far, only the feeder length is determined.
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with feeder name in index and column 'length' containing the
+            respective feeder length in km.
+        """
+        self.assign_grid_feeder()
+        self.assign_length_to_grid_station()
+        buses_df = self.buses_df
+        feeders = (
+            buses_df.loc[
+                buses_df["grid_feeder"] != "station_node",
+                ["grid_feeder", "length_to_grid_station"],
+            ]
+            .groupby("grid_feeder")
+            .max()
+            .rename(columns={"length_to_grid_station": "length"})
+        )
+        return feeders
+
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self.id)])
 
