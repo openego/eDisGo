@@ -342,6 +342,42 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
     return transformers_changes
 
 
+def get_standard_line(edisgo_obj, grid=None, nominal_voltage=None):
+    """
+    Get standard line type for given voltage level from config.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+    grid : :class:`~.network.grids.MVGrid` or :class:`~.network.grids.LVGrid`
+    nominal_voltage : float
+        Nominal voltage of grid level to obtain standard line type for. Can be
+        0.4, 10 or 20 kV.
+
+    Returns
+    ---------
+    str
+        Name of standard line, e.g. "NAYY 4x1x150".
+
+    """
+    if grid is not None:
+        if isinstance(grid, LVGrid):
+            nominal_voltage = 0.4
+        elif isinstance(grid, MVGrid):
+            nominal_voltage = grid.buses_df.v_nom.values[0]
+        else:
+            raise ValueError("Inserted grid is invalid.")
+    if nominal_voltage == 0.4:
+        standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
+            "lv_line"
+        ]
+    else:
+        standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
+            f"mv_line_{int(nominal_voltage)}kv"
+        ]
+    return standard_line_type
+
+
 def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     """
     Reinforce lines in MV and LV topology due to voltage issues.
@@ -383,21 +419,8 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     don't need to be n-1 safe.
 
     """
-
-    # load standard line data and set reinforce measure to exchange small cables by
-    # standard cables to True in case of LV grids
-    if isinstance(grid, LVGrid):
-        standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
-            "lv_line"
-        ]
-        check_standard_cable = True
-    elif isinstance(grid, MVGrid):
-        standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
-            f"mv_line_{int(grid.nominal_voltage)}kv"
-        ]
-        check_standard_cable = False
-    else:
-        raise ValueError("Inserted grid is invalid.")
+    # load standard line data
+    standard_line = get_standard_line(edisgo_obj, grid=grid)
 
     # find path to each node in order to find node with voltage issues farthest
     # away from station in each feeder
@@ -422,12 +445,12 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     # per default, measure to disconnect at two-thirds is set to True and only if cables
     # in grid are exchanged by standard lines it is set to False, to recheck voltage
     disconnect_2_3 = True
-    if check_standard_cable is True:
+    if isinstance(grid, LVGrid):
         # get all cables in feeder (moved here to only run it once, not for every
         # feeder)
         grid.assign_grid_feeder()
     for repr_node in nodes_feeder.keys():
-        if check_standard_cable is True:
+        if isinstance(grid, LVGrid):
             lines_in_feeder = grid.lines_df[grid.lines_df.grid_feeder == repr_node]
             # check if line type is any of the following
             small_cables = ["NAYY 4x1x120", "NAYY 4x1x95", "NAYY 4x1x50", "NAYY 4x1x35"]
@@ -779,14 +802,9 @@ def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_
         nominal_voltage = edisgo_obj.topology.buses_df.loc[
             edisgo_obj.topology.lines_df.loc[relevant_lines.index[0], "bus0"], "v_nom"
         ]
-        if nominal_voltage == 0.4:
-            standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
-                "lv_line"
-            ]
-        else:
-            standard_line_type = edisgo_obj.config["grid_expansion_standard_equipment"][
-                f"mv_line_{int(nominal_voltage)}kv"
-            ]
+        standard_line_type = get_standard_line(
+            edisgo_obj, nominal_voltage=nominal_voltage
+        )
 
         # handling of standard lines
         lines_standard = relevant_lines.loc[
@@ -1182,9 +1200,7 @@ def separate_lv_grid(
 
         logger.info(f"New LV grid {lv_grid_id_new} added to topology.")
 
-        lv_standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
-            "lv_line"
-        ]
+        lv_standard_line = get_standard_line(edisgo_obj, nominal_voltage=0.4)
 
         # changes on relocated lines to the new LV grid
         # grid_ids
