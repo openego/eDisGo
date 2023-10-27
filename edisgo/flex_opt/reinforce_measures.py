@@ -888,7 +888,7 @@ def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_
 def separate_lv_grid(
     edisgo_obj: EDisGo,
     grid: LVGrid,
-    use_standard_line: bool = True,
+    use_standard_line_type: bool = True,
 ) -> tuple[dict[Any, Any], dict[str, int]]:
     """
     Separate LV grid by adding a new substation and connect half of each feeder.
@@ -918,7 +918,7 @@ def separate_lv_grid(
     ----------
     edisgo_obj : :class:`~.EDisGo`
     grid : :class:`~.network.grids.LVGrid`
-    use_standard_line : bool
+    use_standard_line_type : bool
         If True, standard line type is used to connect bus, where feeder is split, to
         the station. If False, the same line type and number of parallel lines as
         the original line is used. Default: True.
@@ -1276,7 +1276,7 @@ def separate_lv_grid(
             pred_node = path[path.index(node_1_2) - 1]
             # the line
             line_removed = G.get_edge_data(node_1_2, pred_node)["branch_name"]
-            if use_standard_line is True:
+            if use_standard_line_type is True:
                 line_type = lv_standard_line
                 num_parallel = 1
             else:

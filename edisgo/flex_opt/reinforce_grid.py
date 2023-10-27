@@ -835,6 +835,7 @@ def enhanced_reinforce_grid(
     activate_cost_results_disturbing_mode: bool = False,
     separate_lv_grids: bool = True,
     separation_threshold: int | float = 2,
+    use_standard_line_type: bool = True,
     **kwargs,
 ) -> EDisGo:
     """
@@ -889,6 +890,7 @@ def enhanced_reinforce_grid(
 
     """
     kwargs.pop("skip_mv_reinforcement", False)
+    # ToDo kwargs timesteps_pfa is currently ignored, should that be changed?
 
     num_lv_grids_standard_lines = 0
     num_lv_grids_aggregated = 0
