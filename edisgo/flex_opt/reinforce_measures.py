@@ -886,7 +886,9 @@ def _reinforce_lines_overloading_per_grid_level(edisgo_obj, voltage_level, crit_
 
 
 def separate_lv_grid(
-    edisgo_obj: EDisGo, grid: LVGrid
+    edisgo_obj: EDisGo,
+    grid: LVGrid,
+    use_standard_line: bool = True,
 ) -> tuple[dict[Any, Any], dict[str, int]]:
     """
     Separate LV grid by adding a new substation and connect half of each feeder.
@@ -916,6 +918,10 @@ def separate_lv_grid(
     ----------
     edisgo_obj : :class:`~.EDisGo`
     grid : :class:`~.network.grids.LVGrid`
+    use_standard_line : bool
+        If True, standard line type is used to connect bus, where feeder is split, to
+        the station. If False, the same line type and number of parallel lines as
+        the original line is used. Default: True.
 
     Returns
     -------
@@ -1266,21 +1272,29 @@ def separate_lv_grid(
                 G, station_node, get_weight, target=node_1_2
             )[node_1_2]
 
+            # predecessor node of node_1_2
+            pred_node = path[path.index(node_1_2) - 1]
+            # the line
+            line_removed = G.get_edge_data(node_1_2, pred_node)["branch_name"]
+            if use_standard_line is True:
+                line_type = lv_standard_line
+                num_parallel = 1
+            else:
+                type_info = edisgo_obj.topology.lines_df.at[line_removed, "type_info"]
+                line_type = type_info if type_info is not None else lv_standard_line
+                num_parallel = edisgo_obj.topology.lines_df.at[
+                    line_removed, "num_parallel"
+                ]
             line_added_lv = edisgo_obj.add_component(
                 comp_type="line",
                 bus0=lv_bus_new,
                 bus1=node_1_2,
                 length=dist,
-                type_info=lv_standard_line,
+                type_info=line_type,
+                num_parallel=num_parallel,
             )
 
-            lines_changes[line_added_lv] = 1
-
-            # predecessor node of node_1_2
-            pred_node = path[path.index(node_1_2) - 1]
-
-            # the line
-            line_removed = G.get_edge_data(node_1_2, pred_node)["branch_name"]
+            lines_changes[line_added_lv] = num_parallel
 
             edisgo_obj.remove_component(
                 comp_type="line",
