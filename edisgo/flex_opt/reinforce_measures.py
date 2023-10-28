@@ -1013,13 +1013,12 @@ def separate_lv_grid(
             )
 
         try:
+            standard_transformer_name = edisgo_obj.config[
+                "grid_expansion_standard_equipment"
+            ]["mv_lv_transformer"]
             standard_transformer = edisgo_obj.topology.equipment_data[
                 "lv_transformers"
-            ].loc[
-                edisgo_obj.config["grid_expansion_standard_equipment"][
-                    "mv_lv_transformer"
-                ]
-            ]
+            ].loc[standard_transformer_name]
         except KeyError:
             raise KeyError("Standard MV/LV transformer is not in the equipment list.")
 
@@ -1031,7 +1030,7 @@ def separate_lv_grid(
         new_transformer_name[grid_id_ind] = lv_grid_id_new
 
         new_transformer_df.s_nom = standard_transformer.S_nom
-        new_transformer_df.type_info = None
+        new_transformer_df.type_info = standard_transformer_name
         new_transformer_df.r_pu = standard_transformer.r_pu
         new_transformer_df.x_pu = standard_transformer.x_pu
         new_transformer_df.index = ["_".join([str(_) for _ in new_transformer_name])]
