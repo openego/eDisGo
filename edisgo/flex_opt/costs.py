@@ -161,6 +161,19 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
             .sum()
             .loc[lines_added_unique, ["quantity"]]
         )
+        # use the minimum of quantity and num_parallel, as sometimes lines are added
+        # and in a next reinforcement step removed again, e.g. when feeder is split
+        # at 2/3 and a new single standard line is added
+        lines_added = pd.merge(
+            lines_added,
+            edisgo_obj.topology.lines_df.loc[:, ["num_parallel"]],
+            how="left",
+            left_index=True,
+            right_index=True,
+        )
+        lines_added["quantity_added"] = lines_added.loc[
+            :, ["quantity", "num_parallel"]
+        ].min(axis=1)
         lines_added["length"] = edisgo_obj.topology.lines_df.loc[
             lines_added.index, "length"
         ]
@@ -176,9 +189,9 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
                             ].values,
                             "total_costs": line_costs.costs.values,
                             "length": (
-                                lines_added.quantity * lines_added.length
+                                lines_added.quantity_added * lines_added.length
                             ).values,
-                            "quantity": lines_added.quantity.values,
+                            "quantity": lines_added.quantity_added.values,
                             "voltage_level": line_costs.voltage_level.values,
                         },
                         index=lines_added.index,
