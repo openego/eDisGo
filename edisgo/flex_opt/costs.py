@@ -107,9 +107,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     # costs for transformers
     if not equipment_changes.empty:
         transformers = equipment_changes[
-            equipment_changes.index.isin(
-                [f"{_}_station" for _ in edisgo_obj.topology._grids_repr]
-            )
+            equipment_changes.equipment.str.contains("Transformer")
         ]
         added_transformers = transformers[transformers["change"] == "added"]
         removed_transformers = transformers[transformers["change"] == "removed"]
@@ -129,6 +127,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         )
         trafos = all_trafos.loc[added_transformers["equipment"]]
         # calculate costs for each transformer
+        # ToDo voltage level should be hv/mv for HV/MV transformers
         costs = pd.concat(
             [
                 costs,
