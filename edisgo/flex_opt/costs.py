@@ -288,3 +288,69 @@ def line_expansion_costs(edisgo_obj, lines_names=None):
         ]
     )
     return costs_lines.loc[lines_df.index]
+
+
+def transformer_expansion_costs(edisgo_obj, transformer_names=None):
+    """
+    Returns costs per transformer in kEUR as well as voltage level they are in.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        eDisGo object
+    transformer_names: None or list(str)
+        List of names of transformers to return cost information for. If None, it is
+        returned for all transformers in
+        :attr:`~.network.topology.Topology.transformers_df` and
+        :attr:`~.network.topology.Topology.transformers_hvmv_df`.
+
+    Returns
+    -------
+    costs: :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with names of transformers in index and columns 'costs' with
+        costs per transformer in kEUR and 'voltage_level' with information on voltage
+        level the transformer is in.
+
+    """
+    transformers_df = pd.concat(
+        [
+            edisgo_obj.topology.transformers_df.copy(),
+            edisgo_obj.topology.transformers_hvmv_df.copy(),
+        ]
+    )
+    if transformer_names is not None:
+        transformers_df = transformers_df.loc[transformer_names, ["type_info"]]
+
+    if len(transformers_df) == 0:
+        return pd.DataFrame(columns=["costs", "voltage_level"])
+
+    hvmv_transformers = transformers_df[
+        transformers_df.index.isin(edisgo_obj.topology.transformers_hvmv_df.index)
+    ].index
+    mvlv_transformers = transformers_df[
+        transformers_df.index.isin(edisgo_obj.topology.transformers_df.index)
+    ].index
+
+    costs_hvmv = float(edisgo_obj.config["costs_transformers"]["mv"])
+    costs_mvlv = float(edisgo_obj.config["costs_transformers"]["lv"])
+
+    costs_df = pd.DataFrame(
+        {
+            "costs": costs_hvmv,
+            "voltage_level": "hv/mv",
+        },
+        index=hvmv_transformers,
+    )
+    costs_df = pd.concat(
+        [
+            costs_df,
+            pd.DataFrame(
+                {
+                    "costs": costs_mvlv,
+                    "voltage_level": "mv/lv",
+                },
+                index=mvlv_transformers,
+            ),
+        ]
+    )
+    return costs_df
