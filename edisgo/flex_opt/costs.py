@@ -108,6 +108,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     if not equipment_changes.empty:
         transformers = equipment_changes[
             equipment_changes.equipment.str.contains("Transformer")
+            | equipment_changes.equipment.str.contains("transformer")
         ]
         added_transformers = transformers[transformers["change"] == "added"]
         removed_transformers = transformers[transformers["change"] == "removed"]
