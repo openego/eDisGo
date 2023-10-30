@@ -31,7 +31,6 @@ def read(fname):
 
 
 requirements = [
-    "beautifulsoup4",
     "contextily",
     "dash < 2.9.0",
     "demandlib",
