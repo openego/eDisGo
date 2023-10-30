@@ -55,7 +55,7 @@ requirements = [
     "pypsa >= 0.17.0, <= 0.20.1",
     "pyyaml",
     "saio",
-    "scikit-learn",
+    "scikit-learn <= 1.1.1",
     "shapely >= 1.7.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel",
