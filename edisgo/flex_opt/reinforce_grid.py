@@ -1127,7 +1127,11 @@ def enhanced_reinforce_grid(
     return edisgo_object
 
 
-def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> None:
+def run_separate_lv_grids(
+    edisgo_obj: EDisGo,
+    threshold: int | float = 2,
+    use_standard_line_type: bool = True,
+) -> None:
     """
     Separate all highly overloaded LV grids within the MV grid.
 
@@ -1145,6 +1149,10 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
         Overloading threshold. If the overloading is higher than the threshold times
         the total nominal apparent power of the MV/LV transformer(s), the grid is
         separated.
+    use_standard_line_type : bool
+        If use_standard_line_type is True, standard line type is used to connect bus
+        where feeder is split to the station. If False, the same line type and number
+        of parallel lines as the original line is used. Default: True.
 
     Returns
     -------
@@ -1219,7 +1227,7 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
             if worst_case > threshold * transformers_s_nom:
                 logger.info(f"Trying to separate {lv_grid}...")
                 transformers_changes, lines_changes = separate_lv_grid(
-                    edisgo_obj, lv_grid
+                    edisgo_obj, lv_grid, use_standard_line_type
                 )
                 if len(lines_changes) > 0:
                     _add_lines_changes_to_equipment_changes(
