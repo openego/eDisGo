@@ -1,4 +1,3 @@
-from copy import deepcopy
 import logging
 
 import pandas as pd
@@ -56,16 +55,14 @@ def reference_operation(
     for i, d in df.iterrows():
         # If the house would feed electricity into the grid, charge the storage first.
         # No electricity exchange with grid as long as charger power is not exceeded.
-        if (d.feedin_minus_demand > 0) & (storage_soe < soe_max):
+        if (d.feedin_minus_demand > 0.0) & (storage_soe < soe_max):
             # Check if energy produced exceeds charger power
             if d.feedin_minus_demand < storage_p_nom:
                 storage_power = -d.feedin_minus_demand
             # If it does, feed the rest to the grid
             else:
                 storage_power = -storage_p_nom
-            storage_soe = storage_soe + (
-                    -storage_power * efficiency_charge * freq
-            )
+            storage_soe = storage_soe + (-storage_power * efficiency_charge * freq)
             # If the storage is overcharged, feed the 'rest' to the grid
             if storage_soe > soe_max:
                 storage_power = storage_power + (storage_soe - soe_max) / (
@@ -77,28 +74,28 @@ def reference_operation(
         # In this case d.feedin_minus_demand is negative!
         # No electricity exchange with grid as long as demand does not exceed charging
         # power
-        elif (d.feedin_minus_demand < 0) & (storage_soe > 0):
+        elif (d.feedin_minus_demand < 0.0) & (storage_soe > 0.0):
             # Check if energy demand exceeds charger power
             if d.feedin_minus_demand / efficiency_discharge < (storage_p_nom * -1):
                 storage_soe = storage_soe - (storage_p_nom * freq)
                 storage_power = storage_p_nom * efficiency_discharge
             else:
-                storage_charge = storage_soe + (
+                storage_soe = storage_soe + (
                     d.feedin_minus_demand / efficiency_discharge * freq
                 )
                 storage_power = -d.feedin_minus_demand
             # If the storage is undercharged, take the 'rest' from the grid
-            if storage_soe < 0:
-                # since storage_charge is negative in this case it can be taken as
+            if storage_soe < 0.0:
+                # since storage_soe is negative in this case it can be taken as
                 # demand
                 storage_power = (
                     storage_power + storage_soe * efficiency_discharge / freq
                 )
-                storage_charge = 0
+                storage_soe = 0.0
 
         # If the storage is full or empty, the demand is not affected
         else:
-            storage_power = 0
+            storage_power = 0.0
         lst_storage_power.append(storage_power)
         lst_storage_soe.append(storage_soe)
 
@@ -112,7 +109,8 @@ def create_storage_data(edisgo_obj, soe_init=0.0, freq=1):
     """
     Matches storage units to PV plants and building electricity demand using the
     building ID and applies reference storage operation.
-    The storage units active power time series are written to timeseries.loads_active_power.
+    The storage units active power time series are written to
+    timeseries.loads_active_power.
     Reactive power is as well set with default values.
     State of energy time series is returned.
 
@@ -160,13 +158,15 @@ def create_storage_data(edisgo_obj, soe_init=0.0, freq=1):
                 storage_units_p=pd.DataFrame(
                     columns=[idx],
                     index=soc_df.index,
-                    data=0,
+                    data=0.0,
                 )
             )
         else:
             house_demand = edisgo_obj.timeseries.loads_active_power[loads].sum(axis=1)
             storage_ts = reference_operation(
-                df=pd.DataFrame(columns=["feedin_minus_demand"], data=pv_feedin - house_demand),
+                df=pd.DataFrame(
+                    columns=["feedin_minus_demand"], data=pv_feedin - house_demand
+                ),
                 soe_init=soe_init,
                 soe_max=row.p_nom * row.max_hours,
                 storage_p_nom=row.p_nom,
@@ -190,28 +190,3 @@ def create_storage_data(edisgo_obj, soe_init=0.0, freq=1):
     soc_df.columns = edisgo_obj.topology.storage_units_df.index
     edisgo_obj.set_time_series_reactive_power_control()
     return soc_df
-
-
-if __name__ == "__main__":
-    import os
-    from edisgo.edisgo import import_edisgo_from_files
-
-    mv_grid = 33128
-    results_dir_base = "/home/birgit/virtualenvs/wp_flex/git_repos/394_wp_flex/results"
-    results_dir = os.path.join(results_dir_base, str(mv_grid))
-
-    zip_name = f"grid_data_wp_flex_No-flex.zip"
-    grid_path = os.path.join(results_dir, zip_name)
-    edisgo_grid = import_edisgo_from_files(
-        edisgo_path=grid_path,
-        import_topology=True,
-        import_timeseries=True,
-        import_results=False,
-        import_electromobility=False,
-        import_heat_pump=False,
-        import_dsm=False,
-        import_overlying_grid=False,
-        from_zip_archive=True,
-    )
-    edisgo_grid.legacy_grids = False
-    create_storage_data(edisgo_obj=edisgo_grid)
