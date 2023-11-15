@@ -119,7 +119,7 @@ def setup_logger(
 
     def create_dir(dir_path):
         if not os.path.isdir(dir_path):
-            os.mkdir(dir_path)
+            os.makedirs(dir_path)
 
     def get_default_root_dir():
         dir_path = str(cfg_edisgo.get("user_dirs", "root_dir"))
