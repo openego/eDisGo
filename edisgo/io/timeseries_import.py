@@ -1052,7 +1052,10 @@ def get_cts_profiles_per_grid(
             db_table = egon_cts_heat_demand_building_share
 
         with session_scope_egon_data(engine) as session:
-            query = session.query(db_table.building_id, db_table.profile_share,).filter(
+            query = session.query(
+                db_table.building_id,
+                db_table.profile_share,
+            ).filter(
                 db_table.scenario == scenario,
                 db_table.bus_id == bus_id,
             )
@@ -1080,7 +1083,10 @@ def get_cts_profiles_per_grid(
             db_table = egon_etrago_heat_cts
 
         with session_scope_egon_data(engine) as session:
-            query = session.query(db_table.bus_id, db_table.p_set,).filter(
+            query = session.query(
+                db_table.bus_id,
+                db_table.p_set,
+            ).filter(
                 db_table.scn_name == scenario,
                 db_table.bus_id == bus_id,
             )
@@ -1126,7 +1132,6 @@ def get_cts_profiles_per_grid(
     saio.register_schema("demand", engine)
 
     if sector == "electricity":
-
         from saio.demand import (
             egon_cts_electricity_demand_building_share,
             egon_etrago_electricity_cts,
@@ -1138,7 +1143,6 @@ def get_cts_profiles_per_grid(
         df_demand_share = _get_demand_share()
 
     elif sector == "heat":
-
         from saio.demand import (
             egon_cts_heat_demand_building_share,
             egon_etrago_heat_cts,
@@ -1187,7 +1191,7 @@ def get_residential_electricity_profiles_per_building(building_ids, scenario, en
         List of building IDs to retrieve electricity demand profiles for.
     scenario : str
         Scenario for which to retrieve demand data. Possible options
-        are 'eGon2035' and 'eGon100RE'.
+        are 'eGon2021', 'eGon2035' and 'eGon100RE'.
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
 
@@ -1216,30 +1220,21 @@ def get_residential_electricity_profiles_per_building(building_ids, scenario, en
             column factor.
 
         """
-        with session_scope_egon_data(engine) as session:
-            if scenario == "eGon2035":
-                query = session.query(
-                    egon_household_electricity_profile_in_census_cell.cell_id,
-                    egon_household_electricity_profile_in_census_cell.factor_2035.label(
-                        "factor"
-                    ),
-                ).filter(
-                    egon_household_electricity_profile_in_census_cell.cell_id.in_(
-                        zensus_ids
-                    )
-                )
-            else:
-                query = session.query(
-                    egon_household_electricity_profile_in_census_cell.cell_id,
-                    egon_household_electricity_profile_in_census_cell.factor_2050.label(
-                        "factor"
-                    ),
-                ).filter(
-                    egon_household_electricity_profile_in_census_cell.cell_id.in_(
-                        zensus_ids
-                    )
-                )
-        return pd.read_sql(query.statement, engine, index_col="cell_id")
+        if scenario == "eGon2021":
+            return pd.DataFrame(index=zensus_ids, data={"factor": 1.0})
+        else:
+            with session_scope_egon_data(engine) as session:
+                if scenario == "eGon2035":
+                    query = session.query(
+                        hh_profile.cell_id,
+                        hh_profile.factor_2035.label("factor"),
+                    ).filter(hh_profile.cell_id.in_(zensus_ids))
+                else:
+                    query = session.query(
+                        hh_profile.cell_id,
+                        hh_profile.factor_2050.label("factor"),
+                    ).filter(hh_profile.cell_id.in_(zensus_ids))
+            return pd.read_sql(query.statement, engine, index_col="cell_id")
 
     def _get_profile_ids_of_buildings(building_ids):
         """
@@ -1298,7 +1293,9 @@ def get_residential_electricity_profiles_per_building(building_ids, scenario, en
 
     saio.register_schema("demand", engine)
     from saio.demand import (
-        egon_household_electricity_profile_in_census_cell,
+        egon_household_electricity_profile_in_census_cell as hh_profile,
+    )
+    from saio.demand import (
         egon_household_electricity_profile_of_buildings,
         iee_household_load_profiles,
     )
@@ -1346,7 +1343,7 @@ def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
         List of industrial site and OSM IDs to retrieve electricity demand profiles for.
     scenario : str
         Scenario for which to retrieve demand data. Possible options
-        are 'eGon2035' and 'eGon100RE'.
+        are 'eGon2021', 'eGon2035' and 'eGon100RE'.
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
 
