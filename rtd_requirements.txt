@@ -1,6 +1,5 @@
 dash < 2.9.0
 demandlib
-docutils == 0.16.0
 egoio >= 0.4.7
 geopy >= 2.0.0
 jupyter_dash
@@ -19,7 +18,7 @@ scikit-learn
 sphinx
 sphinx_rtd_theme >=0.5.2
 sphinx-autodoc-typehints
-sphinx-autoapi == 3.0.0
+sphinx-autoapi
 sshtunnel
 urllib3 < 2.0.0
 workalendar

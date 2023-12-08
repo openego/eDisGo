@@ -74,7 +74,7 @@ dev_requirements = [
     "sphinx",
     "sphinx_rtd_theme >=0.5.2",
     "sphinx-autodoc-typehints",
-    "sphinx-autoapi == 3.0.0",
+    "sphinx-autoapi",
 ]
 
 extras = {"dev": dev_requirements}
