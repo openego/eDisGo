@@ -319,6 +319,11 @@ def assign_feeder(edisgo_obj, mode="mv_feeder"):
             lambda _: edisgo_obj.topology.buses_df.at[_.bus1, mode], axis=1
         )
 
+    # assign np.nan values to new columns, so that missing values can be found through
+    # isna()
+    edisgo_obj.topology.lines_df[mode] = np.nan
+    edisgo_obj.topology.buses_df[mode] = np.nan
+
     if mode == "mv_feeder":
         graph = edisgo_obj.topology.mv_grid.graph
         station = edisgo_obj.topology.mv_grid.station.index[0]
