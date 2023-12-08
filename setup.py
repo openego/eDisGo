@@ -71,10 +71,10 @@ dev_requirements = [
     "pytest",
     "pytest-notebook",
     "pyupgrade",
-    "sphinx >= 4.3.0, < 5.1.0",
+    "sphinx",
     "sphinx_rtd_theme >=0.5.2",
     "sphinx-autodoc-typehints",
-    "sphinx-autoapi >= 3.0.0",
+    "sphinx-autoapi",
 ]
 
 extras = {"dev": dev_requirements}
