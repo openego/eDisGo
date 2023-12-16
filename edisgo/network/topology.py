@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import random
+import warnings
 
 from zipfile import ZipFile
 
@@ -24,6 +25,7 @@ from edisgo.tools.tools import (
 )
 
 if "READTHEDOCS" not in os.environ:
+    from shapely.errors import ShapelyDeprecationWarning
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
@@ -47,8 +49,16 @@ COLUMNS = {
         "control",
         "weather_cell_id",
         "subtype",
+        "source_id",
     ],
-    "storage_units_df": ["bus", "control", "p_nom", "max_hours"],
+    "storage_units_df": [
+        "bus",
+        "control",
+        "p_nom",
+        "max_hours",
+        "efficiency_store",
+        "efficiency_dispatch",
+    ],
     "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
     "lines_df": [
         "bus0",
@@ -85,7 +95,6 @@ class Topology:
     """
 
     def __init__(self, **kwargs):
-
         # load technical data of equipment
         self._equipment_data = self._load_equipment_data(kwargs.get("config", None))
 
@@ -214,7 +223,9 @@ class Topology:
                 Peak load or nominal capacity in MW.
 
             type : str
-                Type of load, e.g. 'conventional_load', 'charging_point' or 'heat_pump'.
+                Type of load, e.g. 'conventional_load', 'charging_point' or 'heat_pump'
+                (resistive heaters are as well treated as heat pumps with a COP smaller
+                than 1).
                 This information is for example currently necessary when setting up a
                 worst case analysis, as different types of loads are treated
                 differently.
@@ -226,11 +237,11 @@ class Topology:
                 used to generate sector-specific time series (see function
                 :attr:`~.network.timeseries.TimeSeries.
                 predefined_conventional_loads_by_sector`). It is further used when new
-                generators are integrated into the grid, as e.g. smaller PV rooftop
-                generators are most likely to be located in a household (see function
+                generators are integrated into the grid in case the LV is not
+                geo-referenced, as e.g. smaller PV rooftop generators are most likely
+                to be located in a household (see function
                 :attr:`~.network.topology.Topology.connect_to_lv`). The sector
-                needs to either be 'agricultural', 'industrial', 'residential' or
-                'retail'.
+                needs to either be 'industrial', 'residential' or 'cts'.
 
                 In case of charging points this attribute is used to define the charging
                 point use case ('home', 'work', 'public' or 'hpc') to determine whether
@@ -245,8 +256,12 @@ class Topology:
                 In case of heat pumps it is used when heat pumps are integrated into
                 the grid, as e.g. heat pumps for individual heating are allocated to an
                 existing load (see
-                function :attr:`~.network.topology.Topology.connect_to_lv`). The sector
-                needs to either be 'individual_heating' or 'district_heating'.
+                function :attr:`~.network.topology.Topology.connect_to_lv`). It is
+                further used to specify, if component is a resistive heater, as
+                resistive heaters are treated as heat pumps. The sector
+                needs to either be 'individual_heating', 'district_heating',
+                'individual_heating_resistive_heater' or
+                'district_heating_resistive_heater'.
 
             building_id : int
                 ID of the building the load is associated with. This is e.g. used to
@@ -314,7 +329,7 @@ class Topology:
 
             subtype : str
                 Further specification of type, e.g. 'solar_roof_mounted'.
-                Currently not required for any functionality.
+                Currently, not required for any functionality.
 
         Returns
         --------
@@ -358,6 +373,14 @@ class Topology:
             max_hours : float
                 Maximum state of charge capacity in terms of hours at full output
                 capacity p_nom.
+
+            efficiency_store : float
+                Efficiency of storage system in case of charging. So far only used in
+                :func:`~.edisgo.flex_opt.battery_storage_operation.apply_reference_operation.`
+
+            efficiency_dispatch : float
+                Efficiency of storage system in case of discharging. So far only used in
+                :func:`~.edisgo.flex_opt.battery_storage_operation.apply_reference_operation.`
 
         Returns
         --------
@@ -745,7 +768,7 @@ class Topology:
         elif isinstance(name, str):
             return LVGrid(id=int(name.split("_")[-1]), edisgo_obj=edisgo_obj)
         else:
-            logging.warning("`name` must be integer or string.")
+            logger.warning("`name` must be integer or string.")
 
     @property
     def grid_district(self):
@@ -1188,11 +1211,15 @@ class Topology:
             grid = self.get_lv_grid(int(bus_s.lv_grid_id))
         else:
             grid = self.mv_grid
+
         tmp = f"{str(grid)}_{generator_type}"
         generator_id = kwargs.pop("generator_id", None)
+
         if generator_id is not None:
             tmp = f"{tmp}_{generator_id}"
+
         generator_name = f"Generator_{tmp}"
+
         while generator_name in self.generators_df.index:
             random.seed(a=generator_name)
             generator_name = f"Generator_{tmp}_{random.randint(10**8, 10**9)}"
@@ -1205,14 +1232,18 @@ class Topology:
             "control": control,
         }
         data.update(kwargs)
-        new_df = (
-            pd.Series(
-                data,
-                name=generator_name,
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=ShapelyDeprecationWarning)
+
+            new_df = (
+                pd.Series(
+                    data,
+                    name=generator_name,
+                )
+                .to_frame()
+                .T
             )
-            .to_frame()
-            .T
-        )
 
         # FIXME: casting non-numeric values with numeric values into one series changes
         #  the data type to 'Object'. Change the data type to numeric if possible
@@ -1371,7 +1402,7 @@ class Topology:
             (self.lines_df.bus1 == bus0) & (self.lines_df.bus0 == bus1)
         ]
         if not bus0_bus1.empty and bus1_bus0.empty:
-            logging.debug("Line between bus0 {} and bus1 {} already exists.")
+            logger.debug("Line between bus0 {} and bus1 {} already exists.")
             return pd.concat(
                 [
                     bus1_bus0,
@@ -1724,7 +1755,7 @@ class Topology:
                     self.lines_df.at[lines[0], "bus0"], "v_nom"
                 ]
                 if grid_voltage != data_new_line.U_n:
-                    logging.debug(
+                    logger.debug(
                         f"The line type of lines {lines} is changed to a type with a "
                         f"different nominal voltage (nominal voltage of new line type "
                         f"is {data_new_line.U_n} kV while nominal voltage of the medium"
@@ -1787,7 +1818,10 @@ class Topology:
 
     def connect_to_mv(self, edisgo_object, comp_data, comp_type="generator"):
         """
-        Add and connect new generator, charging point or heat pump to MV grid topology.
+        Add and connect new component.
+
+        Currently, components can be generators, charging points, heat pumps and
+        storage units.
 
         This function creates a new bus the new component is connected to. The
         new bus is then connected to the grid depending on the specified
@@ -1805,7 +1839,8 @@ class Topology:
         comp_data : dict
             Dictionary with all information on component.
             The dictionary must contain all required arguments
-            of method :attr:`~.network.topology.Topology.add_generator`
+            of method :attr:`~.network.topology.Topology.add_generator`,
+            :attr:`~.network.topology.Topology.add_storage_unit`
             respectively
             :attr:`~.network.topology.Topology.add_load`, except the
             `bus` that is assigned in this function, and may contain all other
@@ -1818,8 +1853,8 @@ class Topology:
             geolocation must be provided as
             :shapely:`Shapely Point object<points>`.
         comp_type : str
-            Type of added component. Can be 'generator', 'charging_point' or
-            'heat_pump'.
+            Type of added component. Can be 'generator', 'charging_point', 'heat_pump'
+            or 'storage_unit'.
             Default: 'generator'.
 
         Returns
@@ -1853,10 +1888,12 @@ class Topology:
             bus = f"Bus_ChargingPoint_{len(self.charging_points_df)}"
         elif comp_type == "heat_pump":
             bus = f"Bus_HeatPump_{len(self.loads_df)}"
+        elif comp_type == "storage_unit":
+            bus = f"Bus_Storage_{len(self.storage_units_df)}"
         else:
             raise ValueError(
                 f"Provided component type {comp_type} is not valid. Must either be"
-                f"'generator', 'charging_point' or 'heat_pump'."
+                f"'generator', 'charging_point', 'heat_pump' or 'storage_unit'."
             )
 
         self.add_bus(
@@ -1867,16 +1904,18 @@ class Topology:
         )
 
         # add component to newly created bus
+        comp_data.pop("geom")
         if comp_type == "generator":
             comp_name = self.add_generator(bus=bus, **comp_data)
         elif comp_type == "charging_point":
             comp_name = self.add_load(bus=bus, type="charging_point", **comp_data)
-        else:
+        elif comp_type == "heat_pump":
             comp_name = self.add_load(bus=bus, type="heat_pump", **comp_data)
+        else:
+            comp_name = self.add_storage_unit(bus=bus, **comp_data)
 
         # ===== voltage level 4: component is connected to MV station =====
         if voltage_level == 4:
-
             # add line
             line_length = geo.calc_geo_dist_vincenty(
                 grid_topology=self,
@@ -1906,7 +1945,6 @@ class Topology:
             )
 
         elif voltage_level == 5:
-
             # get branches within the predefined `connection_buffer_radius`
             lines = geo.calc_geo_lines_in_buffer(
                 grid_topology=self,
@@ -1967,7 +2005,14 @@ class Topology:
         allowed_number_of_comp_per_bus=2,
     ):
         """
-        Add and connect new generator, charging point or heat pump to LV grid topology.
+        Add and connect new component to LV grid topology.
+
+        This function is used in case the LV grids are not geo-referenced. In case
+        LV grids are geo-referenced function
+        :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation` is used.
+
+        Currently, components can be generators, charging points, heat pumps and
+        storage units.
 
         This function connects the new component depending on the voltage
         level, and information on the MV/LV substation ID, geometry and sector, all
@@ -1980,18 +2025,18 @@ class Topology:
                   which case the new component is connected directly to the
                   substation)
 
-            * Generators with specified voltage level 7
+            * Generators and storage units with specified voltage level 7
                 * with a nominal capacity of <=30 kW to LV loads of sector
                   residential, if available
                 * with a nominal capacity of >30 kW to LV loads of sector
-                  retail, industrial or agricultural, if available
+                  cts, industrial or agricultural, if available
                 * to random bus in the LV grid as fallback if no
                   appropriate load is available
 
             * Charging points with specified voltage level 7
                 * with sector 'home' to LV loads of sector residential, if available
                 * with sector 'work' to LV loads of sector
-                  retail, industrial or agricultural, if available, otherwise
+                  cts, industrial or agricultural, if available, otherwise
                 * with sector 'public' or 'hpc' to some bus in the grid that
                   is not a house connection
                 * to random bus in the LV grid that
@@ -1999,9 +2044,10 @@ class Topology:
                   (fallback)
 
             * Heat pumps with specified voltage level 7
-                * with sector 'individual_heating' to LV loads
-                * with sector 'individual_heating' to some bus in the grid that
-                  is not a house connection
+                * with sector 'individual_heating' or
+                  'individual_heating_resistive_heater' to LV loads
+                * with sector 'district_heating' or 'district_heating_resistive_heater'
+                  to some bus in the grid that is not a house connection
                 * to random bus in the LV grid that if no appropriate load is available
                   (fallback)
 
@@ -2072,12 +2118,14 @@ class Topology:
 
         def _choose_random_substation_id():
             """
-            Returns a random LV grid to connect component in in case no
+            Returns a random LV grid to connect component in, in case no
             substation ID is provided or it does not exist.
 
             """
             if comp_type == "generator":
                 random.seed(a=comp_data["generator_id"])
+            elif comp_type == "storage_unit":
+                random.seed(a=len(self.storage_units_df))
             else:
                 # ToDo: Seed shouldn't depend on number of loads, but
                 #  there is currently no better solution
@@ -2090,17 +2138,17 @@ class Topology:
         elif comp_type == "charging_point" or comp_type == "heat_pump":
             add_func = self.add_load
             comp_data["type"] = comp_type
+        elif comp_type == "storage_unit":
+            add_func = self.add_storage_unit
         else:
             logger.error(f"Component type {comp_type} is not a valid option.")
 
         if mvlv_subst_id is not None and not np.isnan(mvlv_subst_id):
-
             # if substation ID (= LV grid ID) is given and it matches an
             # existing LV grid ID (i.e. it is no aggregated LV grid), set grid
             # to connect component to specified grid (in case the component
             # has no geometry it is connected to the grid's station)
             if int(mvlv_subst_id) in self._lv_grid_ids:
-
                 # get LV grid
                 lv_grid = self.get_lv_grid(int(mvlv_subst_id))
 
@@ -2153,16 +2201,15 @@ class Topology:
 
         # v_level 7 -> connect in LV grid
         elif voltage_level == 7:
-
             # get valid buses to connect new component to
             lv_loads = lv_grid.loads_df
-            if comp_type == "generator":
+            if comp_type == "generator" or comp_type == "storage_unit":
                 if power <= 0.030:
                     tmp = lv_loads[lv_loads.sector == "residential"]
                     target_buses = tmp.bus.values
                 else:
                     tmp = lv_loads[
-                        lv_loads.sector.isin(["industrial", "agricultural", "retail"])
+                        lv_loads.sector.isin(["industrial", "agricultural", "cts"])
                     ]
                     target_buses = tmp.bus.values
             elif comp_type == "charging_point":
@@ -2171,7 +2218,7 @@ class Topology:
                     target_buses = tmp.bus.values
                 elif comp_data["sector"] == "work":
                     tmp = lv_loads[
-                        lv_loads.sector.isin(["industrial", "agricultural", "retail"])
+                        lv_loads.sector.isin(["industrial", "agricultural", "cts"])
                     ]
                     target_buses = tmp.bus.values
                 else:
@@ -2179,9 +2226,15 @@ class Topology:
                         ~lv_grid.buses_df.in_building.astype(bool)
                     ].index
             else:
-                if comp_data["sector"] == "individual_heating":
+                if comp_data["sector"] in [
+                    "individual_heating",
+                    "individual_heating_resistive_heater",
+                ]:
                     target_buses = lv_loads.bus.values
-                elif comp_data["sector"] == "district_heating":
+                elif comp_data["sector"] in [
+                    "district_heating",
+                    "district_heating_resistive_heater",
+                ]:
                     target_buses = lv_grid.buses_df[
                         ~lv_grid.buses_df.in_building.astype(bool)
                     ].index
@@ -2191,7 +2244,18 @@ class Topology:
             # generate random list (unique elements) of possible target buses
             # to connect components to
             if comp_type == "generator":
-                random.seed(a=comp_data["generator_id"])
+                try:
+                    random.seed(a=int(comp_data["generator_id"]))
+                except Exception:
+                    generator_id = int(comp_data["generator_id"].split("_")[-1])
+                    random.seed(a=generator_id)
+            elif comp_type == "storage_unit":
+                random.seed(
+                    a="{}_{}".format(
+                        power,
+                        len(lv_grid.storage_units_df),
+                    )
+                )
             else:
                 random.seed(
                     a="{}_{}_{}".format(
@@ -2224,7 +2288,6 @@ class Topology:
             lv_conn_target = None
 
             while len(lv_buses_rnd) > 0 and lv_conn_target is None:
-
                 lv_bus = lv_buses_rnd.pop()
 
                 # determine number of components of the same type at LV bus
@@ -2234,9 +2297,13 @@ class Topology:
                     comps_at_bus = self.charging_points_df[
                         self.charging_points_df.bus == lv_bus
                     ]
-                else:
+                elif comp_type == "heat_pump":
                     hp_df = self.loads_df[self.loads_df.type == "heat_pump"]
                     comps_at_bus = hp_df[hp_df.bus == lv_bus]
+                else:
+                    comps_at_bus = self.storage_units_df[
+                        self.storage_units_df.bus == lv_bus
+                    ]
 
                 # ToDo: Increase number of generators/charging points
                 #  allowed at one load in case all loads already have one
@@ -2271,6 +2338,13 @@ class Topology:
         """
         Add and connect new component to LV grid topology based on its geolocation.
 
+        This function is used in case the LV grids are geo-referenced. In case
+        LV grids are not geo-referenced function
+        :attr:`~.network.topology.Topology.connect_to_lv` is used.
+
+        Currently, components can be generators, charging points, heat pumps and
+        storage units.
+
         In case the component is integrated in voltage level 6 it is connected to the
         closest MV/LV substation; in case it is integrated in voltage level 7 it is
         connected to the closest LV bus. In contrast to the connection of components
@@ -2287,7 +2361,8 @@ class Topology:
         comp_data : dict
             Dictionary with all information on component.
             The dictionary must contain all required arguments of method
-            :attr:`~.network.topology.Topology.add_generator` respectively
+            :attr:`~.network.topology.Topology.add_generator`,
+            :attr:`~.network.topology.Topology.add_storage_unit` respectively
             :attr:`~.network.topology.Topology.add_load`, except the
             `bus` that is assigned in this function, and may contain all other
             parameters of those methods.
@@ -2299,7 +2374,8 @@ class Topology:
             LV grid). The geolocation must be provided as
             :shapely:`Shapely Point object<points>`.
         comp_type : str
-            Type of new component. Can be 'generator', 'charging_point' or 'heat_pump'.
+            Type of new component. Can be 'generator', 'charging_point', 'heat_pump'
+            or 'storage_unit'.
         max_distance_from_target_bus : int
             Specifies the maximum distance of the component to the target bus in km
             before a new bus is created. If the new component is closer to the target
@@ -2310,8 +2386,9 @@ class Topology:
         -------
         str
             The identifier of the newly connected component as in index of
-            :attr:`~.network.topology.Topology.generators_df` or
-            :attr:`~.network.topology.Topology.loads_df`, depending on component
+            :attr:`~.network.topology.Topology.generators_df`,
+            :attr:`~.network.topology.Topology.loads_df` or
+            :attr:`~.network.topology.Topology.storage_units_df`, depending on component
             type.
 
         """
@@ -2336,6 +2413,8 @@ class Topology:
         elif comp_type == "charging_point" or comp_type == "heat_pump":
             add_func = self.add_load
             comp_data["type"] = comp_type
+        elif comp_type == "storage_unit":
+            add_func = self.add_storage_unit
         else:
             logger.error(f"Component type {comp_type} is not a valid option.")
             return
@@ -2396,7 +2475,7 @@ class Topology:
                 * repr : str
                     Name of line or bus to connect to.
                 * shp : :shapely:`Shapely Point object<points>` or \
-                :shapely:`Shapely Line object<lines>`
+                :shapely:`Shapely Line object<linestrings>`
                     Geometry of line or bus to connect to.
 
         line_type : str
@@ -2417,7 +2496,6 @@ class Topology:
         # MV line is nearest connection point => split old line into 2 segments
         # (delete old line and create 2 new ones)
         if isinstance(target_obj["shp"], LineString):
-
             line_data = self.lines_df.loc[target_obj["repr"], :]
 
             # if line that is split is connected to switch, the line name needs
@@ -2546,7 +2624,6 @@ class Topology:
 
         # bus ist nearest connection point
         else:
-
             # add new branch for satellite (station to station)
             line_length = geo.calc_geo_dist_vincenty(
                 grid_topology=self,
@@ -2591,7 +2668,8 @@ class Topology:
             Name of bus as in index of :attr:`~.network.topology.Topology.buses_df`
             to connect new component to.
         comp_type : str
-            Type of new component. Can be 'generator', 'charging_point' or 'heat_pump'.
+            Type of new component. Can be 'generator', 'charging_point', 'heat_pump'
+            or 'storage_unit'.
         comp_data : dict
             Dictionary with all information on new component. See parameter `comp_data`
             in :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
@@ -2612,8 +2690,10 @@ class Topology:
                 b = f"Bus_Generator_{len(self.generators_df)}"
         elif comp_type == "charging_point":
             b = f"Bus_ChargingPoint_{len(self.charging_points_df)}"
-        else:
+        elif comp_type == "heat_pump":
             b = f"Bus_HeatPump_{len(self.loads_df)}"
+        else:
+            b = f"Bus_Storage_{len(self.storage_units_df)}"
 
         if not isinstance(comp_data["geom"], Point):
             geom = wkt_loads(comp_data["geom"])
@@ -3027,6 +3107,38 @@ class Topology:
             self.grids[0].assign_grid_feeder(mode="mv_feeder")
         else:
             raise ValueError(f"Invalid mode '{mode}'!")
+
+    def aggregate_lv_grid_at_station(self, lv_grid_id: int | str) -> None:
+        """
+        Aggregates all LV grid components to secondary side of the grid's station.
+
+        All lines of the LV grid are dropped, as well as all buses except the station's
+        secondary side bus. Buses, the loads, generators and storage units are connected
+        to are changed to the station's secondary side bus. The changes are directly
+        applied to the Topology object.
+
+        Parameters
+        ----------
+        lv_grid_id : int or str
+            ID of the LV grid to aggregate.
+
+        """
+        lv_grid = self.get_lv_grid(name=lv_grid_id)
+        lines_to_drop = lv_grid.lines_df.index.to_list()
+        station_bus = lv_grid.station.index[0]
+        buses_to_drop = lv_grid.buses_df.loc[
+            lv_grid.buses_df.index != station_bus
+        ].index.to_list()
+
+        self.buses_df = self.buses_df[~self.buses_df.index.isin(buses_to_drop)]
+        self.lines_df = self.lines_df[~self.lines_df.index.isin(lines_to_drop)]
+        self.loads_df.loc[self.loads_df.bus.isin(buses_to_drop), "bus"] = station_bus
+        self.generators_df.loc[
+            self.generators_df.bus.isin(buses_to_drop), "bus"
+        ] = station_bus
+        self.storage_units_df.loc[
+            self.storage_units_df.bus.isin(buses_to_drop), "bus"
+        ] = station_bus
 
     def __repr__(self):
         return f"Network topology {self.id}"

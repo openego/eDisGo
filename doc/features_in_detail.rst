@@ -62,8 +62,8 @@ Identification of overloading and voltage issues is conducted in
 Voltage issues are determined based on allowed voltage deviations set in the config file
 :ref:`config_grid_expansion` in section `grid_expansion_allowed_voltage_deviations`. It is possible
 to set one allowed voltage deviation that is used for MV and LV or define separate allowed voltage deviations.
-Which allowed voltage deviation is used is defined through the parameter *combined_analysis* of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid`.
-By default *combined_analysis* is set to false, resulting in separate voltage limits for MV and LV, as a combined limit
+Which allowed voltage deviation is used is defined through the parameter *split_voltage_band* of :py:func:`~edisgo.flex_opt.reinforce_grid.reinforce_grid`.
+By default *split_voltage_band* is set to True, resulting in separate voltage limits for MV and LV, as a combined limits
 may currently lead to problems if voltage deviation in MV grid is already close to the allowed limit, in which case the remaining allowed voltage deviation in the LV grids is close to zero.
 
 Overloading is determined based on allowed load factors that are also defined in the config file
@@ -92,8 +92,8 @@ details and implementation.
 Check line load
 """"""""""""""""""
 
-    Exceedance of allowed line load of MV and LV lines is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_line_load` and
-    :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_line_load`, respectively.
+    Exceedance of allowed line load of MV and LV lines is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_line_overload` and
+    :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_line_oveload`, respectively.
     The functions use the given load factor and the maximum allowed current given by the manufacturer (see *I_max_th* in tables :ref:`lv_cables_table`,
     :ref:`mv_cables_table` and :ref:`mv_lines_table`) to calculate the allowed
     line load of each LV and MV line. If the line load calculated in the power flow analysis exceeds the allowed line
@@ -103,8 +103,8 @@ Check line load
 Check station load
 """"""""""""""""""""
 
-    Exceedance of allowed station load of HV/MV and MV/LV stations is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.hv_mv_station_load` and
-    :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_lv_station_load`, respectively.
+    Exceedance of allowed station load of HV/MV and MV/LV stations is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.hv_mv_station_overload` and
+    :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_lv_station_overload`, respectively.
     The functions use the given load factor and the maximum allowed apparent power given by the manufacturer (see *S_nom* in tables :ref:`lv_transformers_table`,
     and :ref:`mv_transformers_table`) to calculate the allowed
     apparent power of the stations. If the apparent power calculated in the power flow analysis exceeds the allowed apparent power the station is reinforced
@@ -113,8 +113,8 @@ Check station load
 Check line and station voltage deviation
 """"""""""""""""""""""""""""""""""""""""""
 
-  Compliance with allowed voltage deviation limits in MV and LV grids is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_voltage_deviation` and
-  :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_voltage_deviation`, respectively.
+  Compliance with allowed voltage deviation limits in MV and LV grids is checked in :py:func:`~edisgo.flex_opt.check_tech_constraints.mv_voltage_issue` and
+  :py:func:`~edisgo.flex_opt.check_tech_constraints.lv_voltage_issue`, respectively.
   The functions check if the voltage deviation at a node calculated in the power flow analysis exceeds the allowed voltage deviation. If it does,
   the line is reinforced (see :ref:`grid-expansion-measure-lv-station-voltage-label` or
   :ref:`grid-expansion-measure-line-voltage-label`).
@@ -343,8 +343,91 @@ over from the given storage operation.
 
 A more thorough documentation will follow soon.
 
+Spatial complexity reduction
+----------------------------
+eDisGo offers several methods for spatial complexity reduction. The methods reduce the number of nodes in the grid
+through a spatial clustering. For all methods it is a two-step procedure. At first, a busmap is determined,
+mapping each bus in the original grid to a new bus in the clustered grid. Then, according to
+the busmap, the eDisGo object is reduced. Some parts of the methods are based on the spatial clustering of [PyPSA]_.
+
+You can apply the complexity reduction by calling the function
+:py:attr:`~EDisGo.spatial_complexity_reduction`.
+
+Important is that all grid buses have coordinates and the line length can be calculated through the Euclidean distance
+and a detour factor. If the grids do not match these conditions, the complexity reduction might not work as expected.
+If your grid does not have coordinates, you can calculate new coordinates by setting the parameter
+'apply_pseudo_coordinates' to True (which is the default).
+Then coordinates for the grids are calculated based on the tree/radial topology of the grid graph.
+
+The methods are selected through the 'mode' parameter. There are four methods implemented: 'kmeans', 'kmeansdijkstra',
+'aggregate_to_main_feeder' and 'equidistant_nodes'. Every node of the grid is assigned to a new node with new
+coordinates.
+
+    *   'kmeans' - Assignment to cluster centers of the K-Means clustering.
+    *   'kmeansdijkstra' - Assignment to the nearest nodes of the cluster center through the distance in the graph.
+        For distance calculation, the Dijkstra algorithm is used.
+    *   'aggregate_to_main_feeder' - Assignment to the nearest node of the main feeder.
+    *   'equidistant_nodes' - Distribute nodes equidistant on the main feeder and then assign main feeder nodes
+        to the new nodes.
+
+Different cluster areas can be selected through the parameter 'cluster_area'.
+The cluster area is the area on which the clustering method is applied.
+You can choose between: 'grid', 'feeder' and 'main_feeder'. The main feeder is defined as the longest path in
+the feeder and is calculated with the method 'aggregate_to_main_feeder'.
+
+The reduction factor describes how great the reduction of nodes is and can be set through the
+parameter 'reduction_factor'. A small reduction factor leads to a big reduction
+of the number of nodes and vice versa.
+
+.. math::
+    n_\mathrm{buses} = k_\mathrm{reduction} \cdot n_\mathrm{buses cluster area}
+
+Also, there is the possibility to reduce the number of nodes to a larger degree in areas with no predicted reinforcement
+through the parameter 'reduction_factor_not_focused'.
+The areas which are not focused, are
+the areas that do not have components with voltage and overloading problems in the worst case power flow.
+
+For the reduction of the grid graph, the function :py:func:`~edisgo.tools.spatial_complexity_reduction.apply_busmap` is used.
+With this method, every line and all their
+parameters are recalculated and sometimes lines are combined to a new line. This is the part where the magic of
+reducing the grid object happens. For more information, read: [HoerschBrown]_ and [SCR]_.
+
+If you want more flexibility in using the complexity reduction, you can also run the functions manually:
+
+.. code-block:: python
+
+    from edisgo.tools.spatial_complexity_reduction import make_busmap, apply_busmap
+    from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates
+
+    # create pseudo coordinates
+    edisgo_obj = make_pseudo_coordinates(edisgo_obj)
+
+    # determine busmap
+    busmap_df = make_busmap(
+        edisgo_obj,
+        mode=mode,  # 'kmeans', 'kmeansdijkstra', 'aggregate_to_main_feeder' or 'equidistant_nodes'
+        cluster_area=cluster_area,  # 'grid' or 'feeder' or 'main_feeder'
+        reduction_factor=k_rf,  # 0 < k_rf < 1
+        reduction_factor_not_focused=k_rf_not_focused',  # 0 <= k_rf_not_focused < 1
+    )
+    # reduce EDisGo object
+    edisgo_reduced, linemap_df = apply_busmap(edisgo_obj, busmap_df)
+
+For more details see the API documentation or the thesis where the methods were implemented and tested [SCR]_.
+
 References
 ----------
 
 .. [DENA] A.C. Agricola et al.:
     *dena-Verteilnetzstudie: Ausbau- und Innovationsbedarf der Stromverteilnetze in Deutschland bis 2030*. 2012.
+
+.. [PyPSA] `PyPSA - Spatial Clustering Documentation
+            <https://pypsa.readthedocs.io/en/latest/examples/spatial-clustering.html>`_
+
+.. [SCR]    `Master Thesis - Malte Jahn - Analysis of the effects of spatial complexity reduction on Distribution
+            network expansion planning with flexibilities (written in German)
+            <https://github.com/mltja/eDisGo/blob/dev_with_literature/literature/Masterarbeit%20-%20Malte%20Jahn.pdf>`_
+
+.. [HoerschBrown]   `Jonas Hörsch, Tom Brown: The role of spatial scale in joint optimisations of
+                    generation and transmission for European highly renewable scenarios
+                    <https://arxiv.org/pdf/1705.07617.pdf>`_

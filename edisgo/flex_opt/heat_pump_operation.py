@@ -56,4 +56,4 @@ def operating_strategy(
         ),
     )
 
-    logging.debug(f"Heat pump operating strategy {strategy} completed.")
+    logger.debug(f"Heat pump operating strategy {strategy} completed.")

@@ -1,7 +1,5 @@
 import copy
 
-from math import sqrt
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -19,38 +17,6 @@ class TestTools:
         self.edisgo.set_time_series_worst_case_analysis()
         self.timesteps = self.edisgo.timeseries.timeindex
         self.edisgo.analyze()
-
-    def test_calculate_relative_line_load(self):
-        # test without providing lines and time steps
-        rel_line_load = tools.calculate_relative_line_load(self.edisgo)
-        assert rel_line_load.shape == (4, 131)
-
-        # test with providing lines
-        rel_line_load = tools.calculate_relative_line_load(
-            self.edisgo, lines=["Line_10005", "Line_50000002", "Line_90000021"]
-        )
-        assert rel_line_load.shape == (4, 3)
-        assert np.isclose(
-            rel_line_load.at[self.timesteps[0], "Line_10005"],
-            self.edisgo.results.i_res.at[self.timesteps[0], "Line_10005"]
-            / (7.274613391789284 / 2 / 20 / sqrt(3)),
-        )
-        assert np.isclose(
-            rel_line_load.at[self.timesteps[1], "Line_50000002"],
-            self.edisgo.results.i_res.at[self.timesteps[1], "Line_50000002"]
-            / (0.08521689973238901 / 0.4 / sqrt(3)),
-        )
-
-        # test with providing lines and timesteps
-        rel_line_load = tools.calculate_relative_line_load(
-            self.edisgo, lines=["Line_10005"], timesteps=self.timesteps[0]
-        )
-        assert rel_line_load.shape == (1, 1)
-        assert np.isclose(
-            rel_line_load.at[self.timesteps[0], "Line_10005"],
-            self.edisgo.results.i_res.at[self.timesteps[0], "Line_10005"]
-            / (7.274613391789284 / 2 / 20 / sqrt(3)),
-        )
 
     def test_calculate_line_reactance(self):
         # test single line
@@ -304,6 +270,18 @@ class TestTools:
         # but there are generators in the grid that have that weather cell
         # for some reason..
         assert 1122074 in weather_cells
+
+    @pytest.mark.local
+    def test_get_weather_cells_intersecting_with_grid_district_egon(self):
+        edisgo_obj = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
+            edisgo_obj, pytest.engine
+        )
+        assert len(weather_cells) == 2
+        assert 11051 in weather_cells
+        assert 11052 in weather_cells
 
     def test_add_line_susceptance(self):
         assert self.edisgo.topology.lines_df.loc["Line_10006", "b"] == 0

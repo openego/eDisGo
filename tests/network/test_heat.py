@@ -42,11 +42,20 @@ class TestHeatPump:
             "HP_442081",
             "Heat_Pump_LVGrid_1163850014_district_heating_6",
             "HP_448156",
+            "Heat_Pump_LVGrid_1163850014_district_heating_6_2",
+            "Heat_Pump_LVGrid_1163850014_district_heating_6_3",
         ]
-        building_ids = [442081, None, 448156]
-        sector = ["individual_heating", "district_heating", "individual_heating"]
-        weather_cell_ids = [11051, 11051, 11052]
-        district_heating_ids = [None, 5, None]
+        building_ids = [442081, None, 430859, None, None]
+        sector = [
+            "individual_heating",
+            "district_heating",
+            "individual_heating",
+            "district_heating_resistive_heater",
+            "district_heating_resistive_heater",
+        ]
+        weather_cell_ids = [11051, 11051, 11052, 11051, 11052]
+        district_heating_ids = [None, 5, None, 5, 6]
+        area_ids = [None, 4, None, 4, 5]
         hp_df = pd.DataFrame(
             data={
                 "bus": "dummy_bus",
@@ -56,6 +65,7 @@ class TestHeatPump:
                 "sector": sector,
                 "weather_cell_id": weather_cell_ids,
                 "district_heating_id": district_heating_ids,
+                "area_id": area_ids,
             },
             index=names,
         )
@@ -123,6 +133,15 @@ class TestHeatPump:
                 heat_pump_names=edisgo_object.topology.loads_df.index[0:4],
             )
 
+        # test with heat_pump_names empty
+        edisgo_object.heat_pump.set_cop(
+            edisgo_object,
+            "oedb",
+            engine=pytest.engine,
+            heat_pump_names=[],
+        )
+        assert edisgo_object.heat_pump.cop_df.empty
+
         # test with missing weather cell information (some values None) - raises
         # warning
         hp_data_egon = self.setup_egon_heat_pump_data()
@@ -140,16 +159,25 @@ class TestHeatPump:
                 heat_pump_names=heat_pump_names,
             )
         assert "There are heat pumps with no weather cell ID." in caplog.text
-        assert edisgo_object.heat_pump.cop_df.shape == (8760, 4)
-
-        # test with empty list for heat_pump_names
-        edisgo_object.heat_pump.set_cop(
-            edisgo_object,
-            "oedb",
-            engine=pytest.engine,
-            heat_pump_names=[],
-        )
-        assert edisgo_object.heat_pump.cop_df.shape == (8760, 4)
+        assert edisgo_object.heat_pump.cop_df.shape == (8760, 6)
+        assert (
+            edisgo_object.heat_pump.cop_df.loc[
+                :, "Heat_Pump_LVGrid_1163850014_district_heating_6_2"
+            ]
+            == 0.99
+        ).all()
+        assert (
+            edisgo_object.heat_pump.cop_df.loc[
+                :, "Heat_Pump_LVGrid_1163850014_district_heating_6_3"
+            ]
+            == 0.99
+        ).all()
+        assert (
+            edisgo_object.heat_pump.cop_df.loc[:, "HP_442081"]
+            == edisgo_object.heat_pump.cop_df.loc[
+                :, "Heat_Pump_LVGrid_1163850014_district_heating_6"
+            ]
+        ).all()
 
     def test_set_heat_demand(self):
         # test with dataframe
@@ -202,7 +230,7 @@ class TestHeatPump:
             engine=pytest.engine,
             scenario="eGon2035",
         )
-        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 3)
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 5)
         assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2035
 
         # ###### test with timeindex to get year from and invalid heat pump name #####
@@ -218,7 +246,7 @@ class TestHeatPump:
             scenario="eGon2035",
             heat_pump_names=["HP_442081", "HP_dummy"],
         )
-        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 1)
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (2, 1)
         assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2011
 
         # ###### test with empty list for heat pump names #####
@@ -229,7 +257,7 @@ class TestHeatPump:
             scenario="eGon2035",
             heat_pump_names=[],
         )
-        assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 1)
+        assert edisgo_object.heat_pump.heat_demand_df.shape == (2, 1)
         assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2011
 
     def test_reduce_memory(self):
@@ -342,3 +370,41 @@ class TestHeatPump:
         heatpump.resample_timeseries(freq="1H")
         assert len(heatpump.heat_demand_df) == 2
         assert len(heatpump.cop_df) == 2
+
+    def test_check_integrity(self, caplog):
+        # check for empty HeatPump class
+        heatpump = HeatPump()
+        with caplog.at_level(logging.WARNING):
+            heatpump.check_integrity()
+        assert len(caplog.text) == 0
+
+        caplog.clear()
+
+        # create duplicate entries and loads that do not appear in each DSM dataframe
+        heat_demand_df = pd.concat(
+            [
+                self.heat_demand,
+                pd.DataFrame(
+                    data={
+                        "hp1": [1.0, 2.0],
+                        "hp3": [3.0, 4.0],
+                    },
+                    index=self.timeindex,
+                ),
+            ],
+            axis=1,
+        )
+        heatpump.cop_df = self.cop
+        heatpump.heat_demand_df = heat_demand_df
+
+        with caplog.at_level(logging.WARNING):
+            heatpump.check_integrity()
+        assert len(caplog.messages) == 2
+        assert (
+            "HeatPump timeseries heat_demand_df contains the following duplicates:"
+            in caplog.text
+        )
+        assert (
+            "HeatPump timeseries cop_df is missing the following entries:"
+            in caplog.text
+        )

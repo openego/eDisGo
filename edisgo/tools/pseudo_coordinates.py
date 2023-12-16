@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import copy
 import logging
 import math
 
-from time import time
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -210,49 +208,33 @@ def make_pseudo_coordinates_graph(G: Graph, branch_detour_factor: float) -> Grap
         Graph with pseudo coordinates for all nodes.
 
     """
-    start_time = time()
-    logger.debug("Start - Making pseudo coordinates for graph")
-
     x0, y0 = G.nodes[list(nx.nodes(G))[0]]["pos"]
     G = _make_coordinates(G, branch_detour_factor)
     x0, y0 = coor_transform.transform(x0, y0)
     for node in G.nodes():
         x, y = G.nodes[node]["pos"]
         G.nodes[node]["pos"] = coor_transform_back.transform(x + x0, y + y0)
-
-    logger.debug("Finished in {}s".format(time() - start_time))
     return G
 
 
-def make_pseudo_coordinates(
-    edisgo_root: EDisGo, mv_coordinates: bool = False
-) -> EDisGo:
+def make_pseudo_coordinates(edisgo_obj: EDisGo, mv_coordinates: bool = False):
     """
     Generates pseudo coordinates for all LV grids and optionally MV grid.
 
+    Bus coordinates are changed in the Topology object directly. If you want to keep
+    information on the original coordinates, hand a copy of the EDisGo object to this
+    function.
+
     Parameters
     ----------
-    edisgo_root : :class:`~.EDisGo`
-        eDisGo object
+    edisgo_obj : :class:`~.EDisGo`
+        eDisGo object to create pseudo coordinates for.
     mv_coordinates : bool, optional
-        If True pseudo coordinates are also generated for MV grid.
+        If False, pseudo coordinates are only generated for LV busses. If True, pseudo
+        coordinates are as well generated for MV busses.
         Default: False.
 
-    Returns
-    -------
-    :class:`~.EDisGo`
-        eDisGo object with pseudo coordinates for all LV nodes and optionally MV nodes.
-
     """
-    start_time = time()
-    logger.debug(
-        "Start - Making pseudo coordinates for grid: {}".format(
-            str(edisgo_root.topology.mv_grid)
-        )
-    )
-
-    edisgo_obj = copy.deepcopy(edisgo_root)
-
     grids = list(edisgo_obj.topology.mv_grid.lv_grids)
     if mv_coordinates:
         grids = [edisgo_obj.topology.mv_grid] + grids
@@ -267,6 +249,3 @@ def make_pseudo_coordinates(
             x, y = G.nodes[node]["pos"]
             edisgo_obj.topology.buses_df.loc[node, "x"] = x
             edisgo_obj.topology.buses_df.loc[node, "y"] = y
-
-    logger.debug("Finished in {}s".format(time() - start_time))
-    return edisgo_obj

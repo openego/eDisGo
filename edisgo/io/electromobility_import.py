@@ -4,14 +4,19 @@ import json
 import logging
 import os
 
+from collections import Counter
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+import saio
 
 from numpy.random import default_rng
 from sklearn import preprocessing
+from sqlalchemy.engine.base import Engine
+
+from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -19,7 +24,7 @@ if "READTHEDOCS" not in os.environ:
 if TYPE_CHECKING:
     from edisgo import EDisGo
 
-logger = logging.getLogger("edisgo")
+logger = logging.getLogger(__name__)
 
 min_max_scaler = preprocessing.MinMaxScaler()
 
@@ -99,7 +104,7 @@ PRIVATE_DESTINATIONS = {
 }
 
 
-def import_electromobility(
+def import_electromobility_from_dir(
     edisgo_obj: EDisGo,
     simbev_directory: PurePath | str,
     tracbev_directory: PurePath | str,
@@ -108,7 +113,7 @@ def import_electromobility(
     """
     Import electromobility data from
     `SimBEV <https://github.com/rl-institut/simbev>`_ and
-    `TracBEV <https://github.com/rl-institut/tracbev>`_.
+    `TracBEV <https://github.com/rl-institut/tracbev>`_ from directory.
 
     Parameters
     ----------
@@ -159,10 +164,14 @@ def import_electromobility(
         simbev_config_file=kwargs.pop("simbev_config_file", "metadata_simbev_run.json"),
     )
 
+    potential_charging_parks_gdf = read_gpkg_potential_charging_parks(
+        tracbev_directory,
+        edisgo_obj,
+    )
     edisgo_obj.electromobility.potential_charging_parks_gdf = (
-        read_gpkg_potential_charging_parks(
-            tracbev_directory,
-            edisgo_obj,
+        assure_minimum_potential_charging_parks(
+            edisgo_obj=edisgo_obj,
+            potential_charging_parks_gdf=potential_charging_parks_gdf,
             **kwargs,
         )
     )
@@ -262,7 +271,7 @@ def read_simbev_config_df(
     """
     try:
         if simbev_config_file is not None:
-            with open(os.path.join(path, simbev_config_file), "r") as f:
+            with open(os.path.join(path, simbev_config_file)) as f:
                 data = json.load(f)
 
             df = pd.DataFrame.from_dict(
@@ -272,12 +281,10 @@ def read_simbev_config_df(
             for col in ["start_date", "end_date"]:
                 df[col] = pd.to_datetime(df[col])
 
-            df = df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
-
-            return df
+            return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
 
     except Exception:
-        logging.warning(
+        logger.warning(
             "SimBEV config file could not be imported. Charging point "
             "efficiency is set to 100%, the stepsize is set to 15 minutes "
             "and the simulated days are estimated from the charging "
@@ -293,7 +300,7 @@ def read_simbev_config_df(
         return pd.DataFrame(data=data, index=[0])
 
 
-def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
+def read_gpkg_potential_charging_parks(path, edisgo_obj):
     """
     Get GeoDataFrame with all
     `TracBEV <https://github.com/rl-institut/tracbev>`_ potential charging parks.
@@ -301,14 +308,14 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
     Parameters
     ----------
     path : str
-        Main path holding SimBEV output data
+        Main path holding TracBEV data.
     edisgo_obj : :class:`~.EDisGo`
 
     Returns
     -------
     :geopandas:`GeoDataFrame`
         GeoDataFrame with AGS, charging use case (home, work, public or
-        hpc), user centric weight and geometry.
+        hpc), user-centric weight and geometry.
 
     """
     files = [f for f in os.listdir(path) if f.endswith(".gpkg")]
@@ -355,8 +362,16 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
             ignore_index=True,
         ),
         crs=potential_charging_parks_gdf_list[0].crs,
-    ).astype(DTYPES["potential_charging_parks_gdf"])
+    )
 
+    return potential_charging_parks_gdf
+
+
+def assure_minimum_potential_charging_parks(
+    edisgo_obj: EDisGo,
+    potential_charging_parks_gdf: gpd.GeoDataFrame,
+    **kwargs,
+):
     # ensure minimum number of potential charging parks per car
     num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
 
@@ -376,7 +391,7 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
 
         num_gcs = len(use_case_gdf)
 
-        # if simbev doesn't provide possible grid connections choose a
+        # if tracbev doesn't provide possible grid connections choose a
         # random public potential charging park and duplicate
         if num_gcs == 0:
             logger.warning(
@@ -394,16 +409,17 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
                 random_state=edisgo_obj.topology.mv_grid.id,
             ).assign(use_case=use_case)
 
-            potential_charging_parks_gdf = gpd.GeoDataFrame(
-                pd.concat(
-                    [
-                        potential_charging_parks_gdf,
-                        random_gcs,
-                    ],
-                    ignore_index=True,
-                ),
-                crs=potential_charging_parks_gdf.crs,
+            potential_charging_parks_gdf = pd.concat(
+                [
+                    potential_charging_parks_gdf,
+                    random_gcs,
+                ],
+                ignore_index=True,
             )
+            use_case_gdf = potential_charging_parks_gdf.loc[
+                potential_charging_parks_gdf.use_case == use_case
+            ]
+            num_gcs = len(use_case_gdf)
 
         # escape zero division
         actual_gc_to_car_rate = np.Infinity if num_cars == 0 else num_gcs / num_cars
@@ -415,20 +431,17 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
         while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
             logger.info(
                 f"Duplicating potential charging parks to meet the desired grid "
-                f"connections to cars rate of {gc_to_car_rate*100:.2f} %. Iteration: "
-                f"{n+1}."
+                f"connections to cars rate of {gc_to_car_rate*100:.2f} % for use case "
+                f"{use_case}. Iteration: {n+1}."
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
-                potential_charging_parks_gdf = gpd.GeoDataFrame(
-                    pd.concat(
-                        [
-                            potential_charging_parks_gdf,
-                            use_case_gdf,
-                        ],
-                        ignore_index=True,
-                    ),
-                    crs=potential_charging_parks_gdf.crs,
+                potential_charging_parks_gdf = pd.concat(
+                    [
+                        potential_charging_parks_gdf,
+                        use_case_gdf,
+                    ],
+                    ignore_index=True,
                 )
 
             else:
@@ -441,15 +454,12 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
                     n=extra_gcs, random_state=edisgo_obj.topology.mv_grid.id
                 )
 
-                potential_charging_parks_gdf = gpd.GeoDataFrame(
-                    pd.concat(
-                        [
-                            potential_charging_parks_gdf,
-                            extra_gdf,
-                        ],
-                        ignore_index=True,
-                    ),
-                    crs=potential_charging_parks_gdf.crs,
+                potential_charging_parks_gdf = pd.concat(
+                    [
+                        potential_charging_parks_gdf,
+                        extra_gdf,
+                    ],
+                    ignore_index=True,
                 )
 
             use_case_gdf = potential_charging_parks_gdf.loc[
@@ -469,9 +479,13 @@ def read_gpkg_potential_charging_parks(path, edisgo_obj, **kwargs):
 
     # in case of polygons use the centroid as potential charging parks point
     # and set crs to match edisgo object
-    return potential_charging_parks_gdf.assign(
-        geometry=potential_charging_parks_gdf.geometry.representative_point()
-    ).to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
+    return (
+        potential_charging_parks_gdf.assign(
+            geometry=potential_charging_parks_gdf.geometry.representative_point()
+        )
+        .to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
+        .astype(DTYPES["potential_charging_parks_gdf"])
+    )
 
 
 def distribute_charging_demand(edisgo_obj, **kwargs):
@@ -754,7 +768,7 @@ def weighted_random_choice(
 ):
     """
     Weighted random choice of a potential charging park. Setting the chosen
-    values into :obj:`~.network.electromobility.charging_processes_df`
+    values into :obj:`~.network.electromobility.Electromobility.charging_processes_df`
 
     Parameters
     ----------
@@ -1063,14 +1077,12 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
             edisgo_obj.electromobility.charging_processes_df.at[
                 idx, "charging_point_id"
             ] = charging_point_id
-            try:
-                available_charging_points_df.loc[
-                    charging_point_id
-                ] = edisgo_obj.electromobility.charging_processes_df.loc[
-                    idx, available_charging_points_df.columns
-                ].tolist()
-            except Exception:
-                print("break")
+
+            available_charging_points_df.loc[
+                charging_point_id
+            ] = edisgo_obj.electromobility.charging_processes_df.loc[
+                idx, available_charging_points_df.columns
+            ].tolist()
 
             designated_charging_point_capacity_df.at[
                 charging_park_id, "designated_charging_point_capacity"
@@ -1133,3 +1145,226 @@ def integrate_charging_parks(edisgo_obj):
         data=edisgo_ids,
         index=charging_park_ids,
     )
+
+
+def import_electromobility_from_oedb(
+    edisgo_obj: EDisGo,
+    scenario: str,
+    engine: Engine,
+    **kwargs,
+):
+    """
+    Gets electromobility data for specified scenario from oedb.
+
+    Electromobility data includes data on standing times, charging demand,
+    etc. per vehicle, as well as information on potential charging point locations.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    scenario : str
+        Scenario for which to retrieve electromobility data. Possible options
+        are 'eGon2035' and 'eGon100RE'.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Other Parameters
+    ----------------
+    kwargs :
+        Possible options are `gc_to_car_rate_home`, `gc_to_car_rate_work`,
+        `gc_to_car_rate_public`, `gc_to_car_rate_hpc`, and `mode_parking_times`. See
+        parameter documentation of `import_electromobility_data_kwds` parameter in
+        :attr:`~.EDisGo.import_electromobility` for more information.
+
+    """
+    edisgo_obj.electromobility.charging_processes_df = charging_processes_from_oedb(
+        edisgo_obj=edisgo_obj, engine=engine, scenario=scenario, **kwargs
+    )
+    edisgo_obj.electromobility.simbev_config_df = simbev_config_from_oedb(
+        scenario=scenario, engine=engine
+    )
+    potential_charging_parks_gdf = potential_charging_parks_from_oedb(
+        edisgo_obj=edisgo_obj, engine=engine, **kwargs
+    )
+    edisgo_obj.electromobility.potential_charging_parks_gdf = (
+        assure_minimum_potential_charging_parks(
+            edisgo_obj=edisgo_obj,
+            potential_charging_parks_gdf=potential_charging_parks_gdf,
+            **kwargs,
+        )
+    )
+
+
+def simbev_config_from_oedb(
+    scenario: str,
+    engine: Engine,
+):
+    """
+    Gets :attr:`~.network.electromobility.Electromobility.simbev_config_df`
+    for specified scenario from oedb.
+
+    Parameters
+    ----------
+    scenario : str
+        Scenario for which to retrieve electromobility data. Possible options
+        are 'eGon2035' and 'eGon100RE'.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        See :attr:`~.network.electromobility.Electromobility.simbev_config_df` for
+        more information.
+
+    """
+    saio.register_schema("demand", engine)
+    from saio.demand import egon_ev_metadata
+
+    with session_scope_egon_data(engine) as session:
+        query = session.query(egon_ev_metadata).filter(
+            egon_ev_metadata.scenario == scenario
+        )
+
+        df = pd.read_sql(sql=query.statement, con=query.session.bind)
+
+    return df.assign(days=(df.end_date - df.start_date).iat[0].days + 1)
+
+
+def potential_charging_parks_from_oedb(
+    edisgo_obj: EDisGo,
+    engine: Engine,
+):
+    """
+    Gets :attr:`~.network.electromobility.Electromobility.potential_charging_parks_gdf`
+    data from oedb.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    Returns
+    --------
+    :geopandas:`geopandas.GeoDataFrame<GeoDataFrame>`
+        See
+        :attr:`~.network.electromobility.Electromobility.potential_charging_parks_gdf`
+        for more information.
+
+    """
+    saio.register_schema("grid", engine)
+    from saio.grid import egon_emob_charging_infrastructure
+
+    crs = edisgo_obj.topology.grid_district["srid"]
+
+    with session_scope_egon_data(engine) as session:
+        srid = get_srid_of_db_table(session, egon_emob_charging_infrastructure.geometry)
+
+        query = session.query(
+            egon_emob_charging_infrastructure.cp_id,
+            egon_emob_charging_infrastructure.use_case,
+            egon_emob_charging_infrastructure.weight.label("user_centric_weight"),
+            egon_emob_charging_infrastructure.geometry.label("geom"),
+        ).filter(egon_emob_charging_infrastructure.mv_grid_id == edisgo_obj.topology.id)
+
+        gdf = gpd.read_postgis(
+            sql=query.statement,
+            con=query.session.bind,
+            geom_col="geom",
+            crs=f"EPSG:{srid}",
+            index_col="cp_id",
+        ).to_crs(crs)
+
+    return gdf.assign(ags=0)
+
+
+def charging_processes_from_oedb(
+    edisgo_obj: EDisGo, engine: Engine, scenario: str, **kwargs
+):
+    """
+    Gets :attr:`~.network.electromobility.Electromobility.charging_processes_df` data
+    for specified scenario from oedb.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+    scenario : str
+        Scenario for which to retrieve data. Possible options are 'eGon2035' and
+        'eGon100RE'.
+
+    Other Parameters
+    ----------------
+    kwargs :
+        Possible option is `mode_parking_times`. See parameter documentation of
+        `import_electromobility_data_kwds` parameter in
+        :attr:`~.EDisGo.import_electromobility` for more information.
+
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        See :attr:`~.network.electromobility.Electromobility.charging_processes_df` for
+        more information.
+
+    """
+
+    saio.register_schema("demand", engine)
+    from saio.demand import egon_ev_mv_grid_district, egon_ev_trip
+
+    # get EV pool in grid
+    scenario_variation = {"eGon2035": "NEP C 2035", "eGon100RE": "Reference 2050"}
+    with session_scope_egon_data(engine) as session:
+        query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
+            egon_ev_mv_grid_district.scenario == scenario,
+            egon_ev_mv_grid_district.scenario_variation == scenario_variation[scenario],
+            egon_ev_mv_grid_district.bus_id == edisgo_obj.topology.id,
+        )
+
+        pool = Counter(pd.read_sql(sql=query.statement, con=engine).egon_ev_pool_ev_id)
+
+    # get charging processes for each EV ID
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            egon_ev_trip.egon_ev_pool_ev_id.label("car_id"),
+            egon_ev_trip.use_case,
+            egon_ev_trip.location.label("destination"),
+            egon_ev_trip.charging_capacity_nominal.label(
+                "nominal_charging_capacity_kW"
+            ),
+            egon_ev_trip.charging_capacity_grid.label("grid_charging_capacity_kW"),
+            egon_ev_trip.charging_demand.label("chargingdemand_kWh"),
+            egon_ev_trip.park_start.label("park_start_timesteps"),
+            egon_ev_trip.park_end.label("park_end_timesteps"),
+        ).filter(
+            egon_ev_trip.scenario == scenario,
+            egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
+        )
+        if kwargs.get("mode_parking_times", "frugal") == "frugal":
+            query = query.filter(egon_ev_trip.charging_demand > 0)
+        ev_trips_df = pd.read_sql(sql=query.statement, con=engine)
+
+    # duplicate EVs that were chosen more than once from EV pool
+    df_list = []
+    last_id = 0
+    n_max = max(pool.values())
+    for i in range(n_max, 0, -1):
+        evs = sorted([ev_id for ev_id, count in pool.items() if count >= i])
+        df = ev_trips_df.loc[ev_trips_df.car_id.isin(evs)]
+        mapping = {ev: count + last_id for count, ev in enumerate(evs)}
+        df.car_id = df.car_id.map(mapping)
+        last_id = max(mapping.values()) + 1
+        df_list.append(df)
+    df = pd.concat(df_list, ignore_index=True)
+
+    # make sure count starts at 0
+    if df.park_start_timesteps.min() == 1:
+        df.loc[:, ["park_start_timesteps", "park_end_timesteps"]] -= 1
+
+    return df.assign(
+        ags=0,
+        park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
+        charging_park_id=np.nan,
+        charging_point_id=np.nan,
+    ).astype(DTYPES["charging_processes_df"])

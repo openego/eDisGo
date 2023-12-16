@@ -65,9 +65,9 @@ class TestCosts:
                 "quantity": [1, 1, 1, 2, 1, 1, 3, 1],
             },
             index=[
-                "MVGrid_1",
-                "LVGrid_1",
-                "LVGrid_1",
+                "MVGrid_1_station",
+                "LVGrid_1_station",
+                "LVGrid_1_station",
                 "Line_10006",
                 "Line_10019",
                 "Line_10019",

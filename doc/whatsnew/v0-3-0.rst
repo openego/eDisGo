@@ -6,10 +6,20 @@ Release date: <month> <day>, <year>
 Changes
 -------
 
+* Added functionalities to obtain electromobility, DSM, storage and electricity timeseries data from oedb `#328 <https://github.com/openego/eDisGo/pull/328>`_
 * Added functionalities to obtain heat pump data from oedb `#324 <https://github.com/openego/eDisGo/pull/324>`_
 * Added functionality to resample and check integrity of flexibility bands `#341 <https://github.com/openego/eDisGo/pull/341>`_
+* Added spatial complexity reduction methods `#343 <https://github.com/openego/eDisGo/pull/343>`_
 * Added function to sort buses in lines dataframe such that bus0 is always the upstream bus `#335 <https://github.com/openego/eDisGo/pull/335>`_
 * Changed to_pypsa function such that pypsa network can be build even though not all components have time series `#335 <https://github.com/openego/eDisGo/pull/335>`_
 * Added class holding data from overlying grid, such as curtailment requirements and
   conventional generator dispatch `#335 <https://github.com/openego/eDisGo/pull/335>`_
 * Added integrity check for very short lines `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Refactoring of check_tech_constraints functions `#290 <https://github.com/openego/eDisGo/pull/290>`_
+* Add background map to plots `#346 <https://github.com/openego/eDisGo/pull/364>`_
+* Added method to scale timeseries `#353 <https://github.com/openego/eDisGo/pull/353>`_
+* Added method to iteratively reinforce a grid in case the power flow analysis does not always converge `#353 <https://github.com/openego/eDisGo/pull/353>`_
+* Added method to aggregate LV grid buses to station bus secondary side `#353 <https://github.com/openego/eDisGo/pull/353>`_
+* Adapted codebase to work with pandas 2.0 `#373 <https://github.com/openego/eDisGo/pull/373>`_
+* Added option to run reinforcement with reduced number of time steps `#379 <https://github.com/openego/eDisGo/pull/379>`_
+* Added a new reinforcement method that separate lv grids when the overloading is very high `#380 <https://github.com/openego/eDisGo/pull/380>`_

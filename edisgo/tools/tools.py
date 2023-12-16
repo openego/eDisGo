@@ -3,25 +3,26 @@ from __future__ import annotations
 import logging
 import os
 
+from hashlib import md5
 from math import pi, sqrt
+from typing import TYPE_CHECKING
 
 import networkx as nx
 import numpy as np
 import pandas as pd
+import saio
 
-from sqlalchemy import func
+from sqlalchemy.engine.base import Engine
 
-from edisgo.flex_opt import check_tech_constraints, exceptions
+from edisgo.flex_opt import exceptions
+from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
 from edisgo.tools import session_scope
 
 if "READTHEDOCS" not in os.environ:
-
-    import geopandas as gpd
-
     from egoio.db_tables import climate
-    from shapely.geometry.multipolygon import MultiPolygon
-    from shapely.wkt import loads as wkt_loads
 
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -60,55 +61,6 @@ def select_worstcase_snapshots(edisgo_obj):
     }
 
     return timestamp
-
-
-def calculate_relative_line_load(edisgo_obj, lines=None, timesteps=None):
-    """
-    Calculates relative line loading for specified lines and time steps.
-
-    Line loading is calculated by dividing the current at the given time step
-    by the allowed current.
-
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    lines : list(str) or None, optional
-        Line names/representatives of lines to calculate line loading for. If
-        None, line loading is calculated for all lines in the network.
-        Default: None.
-    timesteps : :pandas:`pandas.Timestamp<Timestamp>` or \
-        list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
-        Specifies time steps to calculate line loading for. If timesteps is
-        None, all time steps power flow analysis was conducted for are used.
-        Default: None.
-
-    Returns
-    --------
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with relative line loading (unitless). Index of
-        the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
-        columns are the line representatives.
-
-    """
-    if timesteps is None:
-        timesteps = edisgo_obj.results.i_res.index
-    # check if timesteps is array-like, otherwise convert to list
-    if not hasattr(timesteps, "__len__"):
-        timesteps = [timesteps]
-
-    if lines is not None:
-        line_indices = lines
-    else:
-        line_indices = edisgo_obj.topology.lines_df.index
-
-    mv_lines_allowed_load = check_tech_constraints.lines_allowed_load(edisgo_obj, "mv")
-    lv_lines_allowed_load = check_tech_constraints.lines_allowed_load(edisgo_obj, "lv")
-    lines_allowed_load = pd.concat(
-        [mv_lines_allowed_load, lv_lines_allowed_load], axis=1, sort=False
-    ).loc[timesteps, line_indices]
-
-    return check_tech_constraints.lines_relative_load(edisgo_obj, lines_allowed_load)
 
 
 def calculate_line_reactance(line_inductance_per_km, line_length, num_parallel):
@@ -371,7 +323,7 @@ def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
     -------
     list(str)
         List of buses (as in index of :attr:`~.network.topology.Topology.buses_df`)
-        downstream of the given component.
+        downstream of the given component incl. the initial bus.
 
     """
     graph = edisgo_obj.topology.to_graph()
@@ -391,17 +343,22 @@ def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
         bus = bus0 if len(path_to_station_bus0) > len(path_to_station_bus1) else bus1
         bus_upstream = bus0 if bus == bus1 else bus1
     else:
-        return None
+        raise ValueError(
+            f"Component type needs to be either 'bus' or 'line'. Given {comp_type=} is "
+            f"not valid."
+        )
 
     # remove edge between bus and next bus upstream
     graph.remove_edge(bus, bus_upstream)
 
     # get subgraph containing relevant bus
-    subgraphs = list(graph.subgraph(c) for c in nx.connected_components(graph))
+    subgraphs = [graph.subgraph(c) for c in nx.connected_components(graph)]
+
     for subgraph in subgraphs:
         if bus in subgraph.nodes():
             return list(subgraph.nodes())
-    return None
+
+    return [bus]
 
 
 def assign_voltage_level_to_component(df, buses_df):
@@ -562,55 +519,49 @@ def determine_bus_voltage_level(edisgo_object, bus_name):
     return voltage_level
 
 
-def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
+def get_weather_cells_intersecting_with_grid_district(
+    edisgo_obj: EDisGo,
+    engine: Engine | None = None,
+) -> set:
     """
     Get all weather cells that intersect with the grid district.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine. Only needed when using new egon_data data.
 
     Returns
     -------
-    set
-        Set with weather cell IDs
+    set(int)
+        Set with weather cell IDs.
 
     """
-
     # Download geometries of weather cells
+    sql_geom = sql_grid_geom(edisgo_obj)
     srid = edisgo_obj.topology.grid_district["srid"]
-    table = climate.Cosmoclmgrid
-    with session_scope() as session:
-        query = session.query(
-            table.gid,
-            func.ST_AsText(func.ST_Transform(table.geom, srid)).label("geometry"),
-        )
-    geom_data = pd.read_sql_query(query.statement, query.session.bind)
-    geom_data.geometry = geom_data.apply(lambda _: wkt_loads(_.geometry), axis=1)
-    geom_data = gpd.GeoDataFrame(geom_data, crs=f"EPSG:{srid}")
 
-    # Make sure MV Geometry is MultiPolygon
-    mv_geom = edisgo_obj.topology.grid_district["geom"]
-    if mv_geom.geom_type == "Polygon":
-        # Transform Polygon to MultiPolygon and overwrite geometry
-        p = wkt_loads(str(mv_geom))
-        m = MultiPolygon([p])
-        edisgo_obj.topology.grid_district["geom"] = m
-    elif mv_geom.geom_type == "MultiPolygon":
-        m = mv_geom
+    if edisgo_obj.legacy_grids is True:
+        table = climate.Cosmoclmgrid
+        with session_scope() as session:
+            query = session.query(
+                table.gid,
+            ).filter(sql_intersects(table.geom, sql_geom, srid))
+            weather_cells = pd.read_sql(sql=query.statement, con=query.session.bind).gid
     else:
-        raise ValueError(
-            f"Grid district geometry is of type {type(mv_geom)}."
-            " Only Shapely Polygon or MultiPolygon are accepted."
-        )
-    mv_geom_gdf = gpd.GeoDataFrame(data={"geometry": [m]}, crs=f"EPSG:{srid}")
+        saio.register_schema("supply", engine)
+        from saio.supply import egon_era5_weather_cells
 
+        with session_scope_egon_data(engine=engine) as session:
+            query = session.query(
+                egon_era5_weather_cells.w_id,
+            ).filter(sql_intersects(egon_era5_weather_cells.geom, sql_geom, srid))
+            weather_cells = pd.read_sql(sql=query.statement, con=engine).w_id
     return set(
         np.append(
-            gpd.sjoin(
-                geom_data, mv_geom_gdf, how="right", op="intersects"
-            ).gid.unique(),
-            edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique(),
+            weather_cells,
+            edisgo_obj.topology.generators_df.weather_cell_id.dropna(),
         )
     )
 
@@ -937,3 +888,24 @@ def get_year_based_on_scenario(scenario):
         return 2045
     else:
         return None
+
+
+def hash_dataframe(df: pd.DataFrame) -> str:
+    """
+    Get hash of dataframe.
+
+    Can be used to check if dataframes have the same content.
+
+    Parameters
+    -----------
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame to hash.
+
+    Returns
+    --------
+    str
+        Hash of dataframe as string.
+
+    """
+    s = df.to_json()
+    return md5(s.encode()).hexdigest()

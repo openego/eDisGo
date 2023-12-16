@@ -12,11 +12,7 @@ import pandas as pd
 
 from edisgo.flex_opt import q_control
 from edisgo.io import timeseries_import
-from edisgo.tools.tools import (
-    assign_voltage_level_to_component,
-    get_weather_cells_intersecting_with_grid_district,
-    resample,
-)
+from edisgo.tools.tools import assign_voltage_level_to_component, resample
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -51,7 +47,6 @@ class TimeSeries:
     """
 
     def __init__(self, **kwargs):
-
         self._timeindex = kwargs.get("timeindex", pd.DatetimeIndex([]))
         self.time_series_raw = TimeSeriesRaw()
 
@@ -661,9 +656,14 @@ class TimeSeries:
                     periods=len(worst_cases),
                     freq="H",
                 )
-                self.timeindex_worst_cases = self.timeindex_worst_cases.append(
-                    pd.Series(time_stamps, index=worst_cases)
+
+                self.timeindex_worst_cases = pd.concat(
+                    [
+                        self.timeindex_worst_cases,
+                        pd.Series(data=time_stamps, index=worst_cases),
+                    ]
                 )
+
                 self.timeindex = self.timeindex.append(time_stamps)
 
         if generators_names is None:
@@ -720,7 +720,7 @@ class TimeSeries:
                 set(df.index) - set(self.loads_active_power.columns)
             )
             if loads_without_ts:
-                logging.warning(
+                logger.warning(
                     "There are loads where information on type of load is missing. "
                     "Handled types are 'conventional_load', 'charging_point', and "
                     "'heat_pump'. Loads with missing type information are handled as "
@@ -793,7 +793,7 @@ class TimeSeries:
         # get power scaling factors for different technologies, voltage levels and
         # feed-in/load case
         types = ["pv", "wind", "other"]
-        power_scaling = pd.DataFrame(columns=types)
+        power_scaling = pd.DataFrame(columns=types, dtype=float)
         for t in types:
             for case in cases:
                 power_scaling.at[f"{case}_mv", t] = worst_case_scale_factors[
@@ -1178,7 +1178,12 @@ class TimeSeries:
         return active_power, reactive_power
 
     def predefined_fluctuating_generators_by_technology(
-        self, edisgo_object, ts_generators, generator_names=None
+        self,
+        edisgo_object,
+        ts_generators,
+        generator_names=None,
+        timeindex=None,
+        engine=None,
     ):
         """
         Set active power feed-in time series for fluctuating generators by technology.
@@ -1199,10 +1204,12 @@ class TimeSeries:
                 Technology and weather cell specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_
-                for the weather year 2011. See
-                :func:`edisgo.io.timeseries_import.import_feedin_timeseries` for more
-                information.
+                <https://openenergy-platform.org/dataedit/schemas>`_. See
+                :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
+
+                This option requires that the parameter `engine` is provided in case
+                new ding0 grids with geo-referenced LV grids are used. For further
+                settings, the parameter `timeindex` can also be provided.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
 
@@ -1229,19 +1236,30 @@ class TimeSeries:
 
         generator_names : list(str)
             Defines for which fluctuating generators to use technology-specific time
-            series. If None, all generators technology (and weather cell) specific time
-            series are provided for are used. In case the time series are retrieved from
-            the oedb, all solar and wind generators are used. Default: None.
+            series. If None, all generators for which technology- (and weather cell-)
+            specific time series are provided are used. In case the time series are
+            retrieved from the oedb, all solar and wind generators are used.
+            Default: None.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            Specifies time steps for which to set feed-in time series. This parameter
+            is only used in case `ts_generators` is 'oedb'. See parameter `timeindex`
+            in :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine. This parameter is only required in case
+            `ts_generators` is 'oedb' and new ding0 grids with geo-referenced LV grids
+            are used.
 
         """
         # in case time series from oedb are used, retrieve oedb time series
         if isinstance(ts_generators, str) and ts_generators == "oedb":
-            weather_cell_ids = get_weather_cells_intersecting_with_grid_district(
-                edisgo_object
-            )
-            ts_generators = timeseries_import.feedin_oedb(
-                edisgo_object.config, weather_cell_ids, self.timeindex
-            )
+            if edisgo_object.legacy_grids is True:
+                ts_generators = timeseries_import.feedin_oedb_legacy(
+                    edisgo_object, timeindex=timeindex
+                )
+            else:
+                ts_generators = timeseries_import.feedin_oedb(
+                    edisgo_object, engine=engine, timeindex=timeindex
+                )
         elif not isinstance(ts_generators, pd.DataFrame):
             raise ValueError(
                 "'ts_generators' must either be a pandas DataFrame or 'oedb'."
@@ -1253,7 +1271,9 @@ class TimeSeries:
                 groups = edisgo_object.topology.generators_df.groupby(
                     ["type", "weather_cell_id"]
                 ).groups
+
                 combinations = ts_generators.columns
+
                 generator_names = np.concatenate(
                     [groups[_].values for _ in combinations if _ in groups.keys()]
                 )
@@ -1262,6 +1282,7 @@ class TimeSeries:
                 generator_names = edisgo_object.topology.generators_df[
                     edisgo_object.topology.generators_df.type.isin(technologies)
                 ].index
+
         generator_names = self._check_if_components_exist(
             edisgo_object, generator_names, "generators"
         )
@@ -1278,6 +1299,7 @@ class TimeSeries:
                 lambda x: ts_generators[x.type].T * x.p_nom,
                 axis=1,
             ).T
+
         if not ts_scaled.empty:
             self.add_component_time_series("generators_active_power", ts_scaled)
 
@@ -1362,7 +1384,7 @@ class TimeSeries:
             self.add_component_time_series("generators_active_power", ts_scaled)
 
     def predefined_conventional_loads_by_sector(
-        self, edisgo_object, ts_loads, load_names=None
+        self, edisgo_object, ts_loads, load_names=None, timeindex=None
     ):
         """
         Set active power demand time series for conventional loads by sector.
@@ -1376,34 +1398,32 @@ class TimeSeries:
 
             * 'demandlib'
 
-                Time series for the year specified :py:attr:`~timeindex` are
-                generated using standard electric load profiles from the oemof
-                `demandlib <https://github.com/oemof/demandlib/>`_.
-                The demandlib provides sector-specific time series for the sectors
-                'residential', 'retail', 'industrial', and 'agricultural'.
+                See parameter `conventional_loads_ts` in
+                :func:`~.edisgo.EDisGo.set_time_series_active_power_predefined` for
+                more information.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
 
-                DataFrame with load time series per sector normalized to an annual
-                consumption of 1. Index needs to
-                be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
-                Columns contain the sector as string.
-                In the current grid existing load types can be retrieved from column
-                `sector` in :attr:`~.network.topology.Topology.loads_df` (make sure to
-                select `type` 'conventional_load').
-                In ding0 grid the differentiated sectors are 'residential', 'retail',
-                'industrial', and 'agricultural'.
+                See parameter `conventional_loads_ts` in
+                :func:`~.edisgo.EDisGo.set_time_series_active_power_predefined` for
+                more information.
+
         load_names : list(str)
             Defines for which conventional loads to use sector-specific time series.
             If None, all loads of sectors for which sector-specific time series are
             provided are used. In case the demandlib is used, all loads of sectors
-            'residential', 'retail', 'industrial', and 'agricultural' are used.
+            'residential', 'cts', 'industrial', and 'agricultural' are used.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            Specifies time steps for which to set time series. This parameter
+            is only used in case `ts_loads` is 'demandlib'. See parameter `timeindex`
+            in :func:`edisgo.io.timeseries_import.load_time_series_demandlib` for
+            more information.
 
         """
         # in case time series from demandlib are used, retrieve demandlib time series
         if isinstance(ts_loads, str) and ts_loads == "demandlib":
             ts_loads = timeseries_import.load_time_series_demandlib(
-                edisgo_object.config, timeindex=self.timeindex
+                edisgo_object, timeindex=timeindex
             )
         elif not isinstance(ts_loads, pd.DataFrame):
             raise ValueError(
@@ -2110,7 +2130,7 @@ class TimeSeries:
         """
         Checks if all provided components exist in the network.
 
-        Raises warning if there any provided components that are not in the network.
+        Raises warning if there are any provided components that are not in the network.
 
         Parameters
         ----------
@@ -2132,17 +2152,15 @@ class TimeSeries:
         comps_not_in_network = list(set(component_names) - set(comps_in_network))
 
         if comps_not_in_network:
-            logging.warning(
+            logger.warning(
                 f"Some of the provided {component_type} are not in the network. This "
                 f"concerns the following components: {comps_not_in_network}."
             )
 
-            return set(component_names) - set(comps_not_in_network)
-        return component_names
+            return list(set(component_names) - set(comps_not_in_network))
+        return list(component_names)
 
-    def resample_timeseries(
-        self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
-    ):
+    def resample(self, method: str = "ffill", freq: str | pd.Timedelta = "15min"):
         """
         Resamples all generator, load and storage time series to a desired resolution.
 
@@ -2174,7 +2192,7 @@ class TimeSeries:
                 self.timeindex[0],
                 self.timeindex[-1] + freq_orig,
                 freq=freq,
-                closed="left",
+                inclusive="left",
             )
         else:  # down-sampling
             index = pd.date_range(
@@ -2185,6 +2203,36 @@ class TimeSeries:
 
         # set new timeindex
         self._timeindex = index
+
+    def scale_timeseries(
+        self, p_scaling_factor: float = 1.0, q_scaling_factor: float = 1.0
+    ):
+        """
+        Scales component time series by given factors.
+
+        The changes are directly applied to the TimeSeries object.
+
+        Parameters
+        -----------
+        p_scaling_factor : float
+            Scaling factor to use for active power time series. Values between 0 and 1
+            will scale down the time series and values above 1 will scale the
+            timeseries up. Default: 1.
+        q_scaling_factor : float
+            Scaling factor to use for reactive power time series. Values between 0 and 1
+            will scale down the time series and values above 1 will scale the
+            timeseries up. Default: 1.
+
+        """
+        attributes_type = ["generators", "loads", "storage_units"]
+        power_types = {
+            "active_power": p_scaling_factor,
+            "reactive_power": q_scaling_factor,
+        }
+        for suffix, scaling_factor in power_types.items():
+            for type in attributes_type:
+                attribute = f"{type}_{suffix}"
+                setattr(self, attribute, getattr(self, attribute) * scaling_factor)
 
 
 class TimeSeriesRaw:
@@ -2231,7 +2279,7 @@ class TimeSeriesRaw:
         normalized to an annual consumption of 1. Index needs to
         be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
         Columns represent load type. In ding0 grids the
-        differentiated sectors are 'residential', 'retail', 'industrial', and
+        differentiated sectors are 'residential', 'cts', 'industrial', and
         'agricultural'.
     charging_points_active_power_by_use_case : :pandas:`pandas.DataFrame<DataFrame>`
         DataFrame with charging demand time series per use case normalized to a nominal

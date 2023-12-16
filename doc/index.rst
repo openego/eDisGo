@@ -45,7 +45,7 @@ See :ref:`quickstart` for the first steps.
 A deeper guide is provided in :ref:`usage-details`.
 Methodologies are explained in detail in :ref:`features-in-detail`.
 For those of you who want to contribute see :ref:`dev-notes` and the
-:ref:`api` reference.
+API reference.
 
 eDisGo was initially developed in the
 `open_eGo <https://openegoproject.wordpress.com>`_ research project as part of
@@ -69,6 +69,5 @@ Contents
    definitions_and_units
    configs
    equipment
-   api
    whatsnew
    genindex
