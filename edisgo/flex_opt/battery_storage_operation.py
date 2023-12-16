@@ -89,9 +89,7 @@ def _reference_operation(
             if storage_soe < 0.0:
                 # since storage_soe is negative in this case it can be taken as
                 # demand
-                storage_power = (
-                    storage_power + storage_soe * efficiency_dispatch / freq
-                )
+                storage_power = storage_power + storage_soe * efficiency_dispatch / freq
                 storage_soe = 0.0
 
         # If the storage is full or empty, the demand is not affected
@@ -106,7 +104,9 @@ def _reference_operation(
     return df.round(6)
 
 
-def apply_reference_operation(edisgo_obj, storage_units_names=None, soe_init=0.0, freq=1):
+def apply_reference_operation(
+    edisgo_obj, storage_units_names=None, soe_init=0.0, freq=1
+):
     """
     Applies reference storage operation to specified home storage units.
 
@@ -211,7 +211,9 @@ def apply_reference_operation(edisgo_obj, storage_units_names=None, soe_init=0.0
                     f"Parameter efficiency_dispatch for storage unit {stor_name} is "
                     f"not a number. It needs to be set in Topology.storage_units_df."
                 )
-            pv_feedin = edisgo_obj.timeseries.generators_active_power[pv_gens].sum(axis=1)
+            pv_feedin = edisgo_obj.timeseries.generators_active_power[pv_gens].sum(
+                axis=1
+            )
             house_demand = edisgo_obj.timeseries.loads_active_power[loads].sum(axis=1)
             # apply operation strategy
             storage_ts = _reference_operation(
@@ -233,7 +235,9 @@ def apply_reference_operation(edisgo_obj, storage_units_names=None, soe_init=0.0
                     data=storage_ts.storage_power.values,
                 )
             )
-            soe_df = pd.concat([soe_df, storage_ts.storage_soe.to_frame(stor_name)], axis=1)
+            soe_df = pd.concat(
+                [soe_df, storage_ts.storage_soe.to_frame(stor_name)], axis=1
+            )
 
     edisgo_obj.set_time_series_reactive_power_control(
         generators_parametrisation=None,
