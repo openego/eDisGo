@@ -51,7 +51,7 @@ COLUMNS = {
         "subtype",
         "source_id",
     ],
-    "storage_units_df": ["bus", "control", "p_nom", "max_hours"],
+    "storage_units_df": ["bus", "control", "p_nom", "max_hours", "efficiency_store", "efficiency_dispatch"],
     "transformers_df": ["bus0", "bus1", "x_pu", "r_pu", "s_nom", "type_info"],
     "lines_df": [
         "bus0",
@@ -367,6 +367,14 @@ class Topology:
             max_hours : float
                 Maximum state of charge capacity in terms of hours at full output
                 capacity p_nom.
+
+            efficiency_store : float
+                Efficiency of storage system in case of charging. So far only used in
+                :func:`~.edisgo.flex_opt.battery_storage_operation.apply_reference_operation.`
+
+            efficiency_dispatch : float
+                Efficiency of storage system in case of discharging. So far only used in
+                :func:`~.edisgo.flex_opt.battery_storage_operation.apply_reference_operation.`
 
         Returns
         --------
