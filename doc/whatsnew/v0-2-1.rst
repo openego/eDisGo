@@ -10,4 +10,3 @@ Changes
 * Added MV grid ID to logging output `#309 <https://github.com/openego/eDisGo/pull/309>`_
 * Added automatic link checking `#297 <https://github.com/openego/eDisGo/pull/297>`_
 * Bug fix `#346 <https://github.com/openego/eDisGo/pull/346>`_
-* Add methods to the Grid class to get information of the feeders `#360 <https://github.com/openego/eDisGo/pull/360>`_

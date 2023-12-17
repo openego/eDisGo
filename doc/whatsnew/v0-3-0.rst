@@ -23,3 +23,4 @@ Changes
 * Adapted codebase to work with pandas 2.0 `#373 <https://github.com/openego/eDisGo/pull/373>`_
 * Added option to run reinforcement with reduced number of time steps `#379 <https://github.com/openego/eDisGo/pull/379>`_
 * Added a new reinforcement method that separate lv grids when the overloading is very high `#380 <https://github.com/openego/eDisGo/pull/380>`_
+* Move function to assign feeder to Topology class and add methods to the Grid class to get information on the feeders `#360 <https://github.com/openego/eDisGo/pull/360>`_
