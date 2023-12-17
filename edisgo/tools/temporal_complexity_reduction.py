@@ -300,25 +300,12 @@ def _scored_most_critical_voltage_issues_time_interval(
     costs = pd.concat([costs_lines, costs_trafos_lv])
 
     # set feeder using MV feeder for MV components and LV feeder for LV components
-    edisgo_obj.topology.assign_feeders(mode="mv_feeder")
     edisgo_obj.topology.assign_feeders(mode="grid_feeder")
-    edisgo_obj.topology.lines_df["feeder"] = edisgo_obj.topology.lines_df.apply(
-        lambda _: _.mv_feeder
-        if _.name in edisgo_obj.topology.mv_grid.lines_df.index
-        else _.grid_feeder,
-        axis=1,
-    )
-    edisgo_obj.topology.buses_df["feeder"] = edisgo_obj.topology.buses_df.apply(
-        lambda _: _.mv_feeder
-        if _.name in edisgo_obj.topology.mv_grid.buses_df.index
-        else _.grid_feeder,
-        axis=1,
-    )
     # feeders of buses at MV/LV station's secondary sides are set to the name of the
     # station bus to have them as separate feeders
-    edisgo_obj.topology.buses_df.loc[lv_station_buses, "feeder"] = lv_station_buses
+    edisgo_obj.topology.buses_df.loc[lv_station_buses, "grid_feeder"] = lv_station_buses
 
-    feeder_lines = edisgo_obj.topology.lines_df.feeder
+    feeder_lines = edisgo_obj.topology.lines_df.grid_feeder
     feeder_trafos_lv = pd.Series(
         index=lv_station_buses,
         data=lv_station_buses,
@@ -332,7 +319,7 @@ def _scored_most_critical_voltage_issues_time_interval(
 
     # check for every feeder if any of the buses within violate the allowed voltage
     # deviation, by grouping voltage_diff per feeder
-    feeder_buses = edisgo_obj.topology.buses_df.feeder
+    feeder_buses = edisgo_obj.topology.buses_df.grid_feeder
     columns = [feeder_buses.loc[col] for col in voltage_diff.columns]
     voltage_diff_copy = deepcopy(voltage_diff).fillna(0)
     voltage_diff.columns = columns
