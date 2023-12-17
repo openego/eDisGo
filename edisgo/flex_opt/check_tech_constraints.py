@@ -656,7 +656,7 @@ def stations_allowed_load(edisgo_obj, grids=None):
 
     """
     if grids is None:
-        grids = list(edisgo_obj.topology.lv_grids) + [edisgo_obj.topology.mv_grid]
+        grids = edisgo_obj.topology.grids
 
     allowed_loading = pd.DataFrame()
     for grid in grids:
@@ -695,7 +695,7 @@ def stations_relative_load(edisgo_obj, grids=None):
 
     """
     if grids is None:
-        grids = list(edisgo_obj.topology.lv_grids) + [edisgo_obj.topology.mv_grid]
+        grids = edisgo_obj.topology.grids
 
     # get allowed loading
     allowed_loading = stations_allowed_load(edisgo_obj, grids)

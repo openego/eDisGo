@@ -673,7 +673,7 @@ class Topology:
         :class:`~.network.grids.LVGrid` objects.
 
         """
-        return [self._mv_grid] + list(self.lv_grids)
+        return [self.mv_grid] + list(self.lv_grids)
 
     @property
     def mv_grid(self):
