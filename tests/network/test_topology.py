@@ -875,6 +875,7 @@ class TestTopology:
     def test_assign_feeders(self):
         # Test mode 'grid_feeder'
         self.topology.assign_feeders(mode="grid_feeder")
+        # check specific values
         assert self.topology.buses_df.loc[
             ["Bus_MVStation_1", "Bus_Generator_1"], "grid_feeder"
         ].to_list() == [
@@ -887,9 +888,13 @@ class TestTopology:
             "Bus_BranchTee_MVGrid_1_1",
             "Bus_BranchTee_MVGrid_1_4",
         ]
+        # check that all buses and lines have a grid feeder assigned
+        assert not self.topology.lines_df.grid_feeder.isna().any()
+        assert not self.topology.buses_df.grid_feeder.isna().any()
 
         # test mode 'mv_feeder'
         self.topology.assign_feeders(mode="mv_feeder")
+        # check specific values
         assert self.topology.buses_df.loc[
             ["Bus_MVStation_1", "Bus_Generator_1"], "mv_feeder"
         ].to_list() == [
