@@ -3093,20 +3093,38 @@ class Topology:
             )
 
     def assign_feeders(self, mode: str = "grid_feeder"):
-        """Assign the feeder of the grid or the mv feeder to all grids.
+        """
+        Assigns MV or LV feeder to each bus and line, depending on the `mode`.
+
+        The feeder name is written to a new column `mv_feeder` or `grid_feeder`,
+        depending on the `mode`, in :class:`~.network.topology.Topology`'s
+        :attr:`~.network.topology.Topology.buses_df` and
+        :attr:`~.network.topology.Topology.lines_df`.
+
+        The MV feeder name corresponds to the name of the neighboring node of the
+        HV/MV station. The grid feeder name corresponds to the name of the neighboring
+        node of the respective grid's station. The feeder name of the source node, i.e.
+        the station, is set to "station_node".
 
         Parameters
         ----------
         mode : str
-            Select 'grid_feeder' or 'mv_feeder' to assign the feeders.
+            Specifies whether to assign MV or grid feeder.
+            If mode is "mv_feeder" the MV feeder the buses and lines are in are
+            determined. If mode is "grid_feeder" LV buses and lines are assigned the
+            LV feeder they are in and MV buses and lines are assigned the MV feeder
+            they are in. Default: "grid_feeder".
+
         """
         if mode == "grid_feeder":
             for grid in self.grids:
                 grid.assign_grid_feeder(mode="grid_feeder")
         elif mode == "mv_feeder":
-            self.grids[0].assign_grid_feeder(mode="mv_feeder")
+            self.mv_grid.assign_grid_feeder(mode="mv_feeder")
         else:
-            raise ValueError(f"Invalid mode '{mode}'!")
+            raise ValueError(
+                f"Invalid mode '{mode}'! Needs to be 'mv_feeder' or 'grid_feeder'."
+            )
 
     def aggregate_lv_grid_at_station(self, lv_grid_id: int | str) -> None:
         """
