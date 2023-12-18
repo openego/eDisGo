@@ -110,6 +110,7 @@ class TestGrids:
         )
 
     def test_assign_grid_feeder(self):
+        # further things are checked in tests for Topology.assign_feeders
         mv_grid = self.topology.mv_grid
         lv_grid = self.topology.get_lv_grid(3)
 
@@ -120,7 +121,7 @@ class TestGrids:
         assert not mv_grid.buses_df["grid_feeder"].isnull().any()
         assert not lv_grid.buses_df["grid_feeder"].isnull().any()
 
-        # Check that feeder to station node of station node is 'station_node' and
+        # Check that feeder of station node is 'station_node' and
         # one other feeder get the right feeder assigned
         assert mv_grid.buses_df.iloc[0:2]["grid_feeder"].to_list() == [
             "station_node",
