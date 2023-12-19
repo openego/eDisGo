@@ -230,8 +230,8 @@ def make_pseudo_coordinates(edisgo_obj: EDisGo, mv_coordinates: bool = False):
     edisgo_obj : :class:`~.EDisGo`
         eDisGo object to create pseudo coordinates for.
     mv_coordinates : bool, optional
-        If False, pseudo coordinates are only generated for LV busses. If True, pseudo
-        coordinates are as well generated for MV busses.
+        If False, pseudo coordinates are only generated for LV buses. If True, pseudo
+        coordinates are as well generated for MV buses.
         Default: False.
 
     """
