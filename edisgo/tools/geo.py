@@ -258,7 +258,6 @@ def find_nearest_conn_objects(grid_topology, bus, lines, conn_diff_tolerance=0.0
     bus_shp = transform(proj2equidistant(srid), Point(bus.x, bus.y))
     projection = proj2equidistant(srid)
     for line in lines:
-
         line_bus0 = grid_topology.buses_df.loc[grid_topology.lines_df.loc[line, "bus0"]]
         line_bus1 = grid_topology.buses_df.loc[grid_topology.lines_df.loc[line, "bus1"]]
 

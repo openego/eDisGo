@@ -61,7 +61,6 @@ class Results:
     """
 
     def __init__(self, edisgo_object):
-
         self.edisgo_object = edisgo_object
         self._measures = ["original"]
 
