@@ -60,7 +60,6 @@ class TestPlots:
         pseudo_coordinates,
         node_selection,
     ):
-
         if edisgo_obj_name == "edisgo_root":
             edisgo_obj = self.edisgo_root
         elif edisgo_obj_name == "edisgo_analyzed":

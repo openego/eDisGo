@@ -254,7 +254,9 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         checking.
 
         """
-        query = session.query(egon_individual_heating.capacity,).filter(
+        query = session.query(
+            egon_individual_heating.capacity,
+        ).filter(
             egon_individual_heating.scenario == scenario,
             egon_individual_heating.carrier == "heat_pump",
             egon_individual_heating.mv_grid_id == edisgo_object.topology.id,

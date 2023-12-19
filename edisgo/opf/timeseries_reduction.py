@@ -12,7 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 def _scored_critical_loading(edisgo_obj):
-
     # Get current relative to allowed current
     relative_s_res = check_tech_constraints.lines_relative_load(
         edisgo_obj, lines=edisgo_obj.topology.mv_grid.lines_df.index
@@ -31,7 +30,6 @@ def _scored_critical_loading(edisgo_obj):
 
 
 def _scored_critical_overvoltage(edisgo_obj):
-
     voltage_dev = check_tech_constraints.voltage_deviation_from_allowed_voltage_limits(
         edisgo_obj,
         buses=edisgo_obj.topology.mv_grid.buses_df.index,

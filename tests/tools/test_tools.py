@@ -110,7 +110,6 @@ class TestTools:
         assert num_parallel_cables == 1
 
     def test_get_downstream_buses(self):
-
         # ######## test with LV bus ########
         buses_downstream = tools.get_downstream_buses(
             self.edisgo, "BusBar_MVGrid_1_LVGrid_1_LV"

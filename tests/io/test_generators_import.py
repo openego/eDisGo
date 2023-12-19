@@ -25,7 +25,6 @@ class TestGeneratorsImport:
         self.edisgo.set_time_series_worst_case_analysis()
 
     def test_update_grids(self):
-
         x = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "x"]
         y = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "y"]
         geom_gen_new = Point((x, y))
@@ -128,7 +127,6 @@ class TestGeneratorsImport:
         )
 
     def test_update_grids_target_capacity(self):
-
         x = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "x"]
         y = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "y"]
         geom_gen_new = Point((x, y))
@@ -487,7 +485,6 @@ class TestGeneratorsImportOEDB:
 
     @pytest.mark.slow
     def test_oedb_legacy_without_timeseries(self):
-
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_2_path,
             generator_scenario="nep2035",
@@ -501,7 +498,6 @@ class TestGeneratorsImportOEDB:
 
     @pytest.mark.slow
     def test_oedb_legacy_with_worst_case_timeseries(self):
-
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.set_time_series_worst_case_analysis()
 
@@ -573,7 +569,6 @@ class TestGeneratorsImportOEDB:
 
     @pytest.mark.slow
     def test_oedb_legacy_with_timeseries_by_technology(self):
-
         timeindex = pd.date_range("1/1/2012", periods=3, freq="H")
         ts_gen_dispatchable = pd.DataFrame(
             {"other": [0.775] * 3, "gas": [0.9] * 3}, index=timeindex
@@ -653,7 +648,6 @@ class TestGeneratorsImportOEDB:
 
     @pytest.mark.slow
     def test_target_capacity(self):
-
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_2_path,
             worst_case_analysis="worst-case",
