@@ -12,7 +12,6 @@ from edisgo.network.heat import HeatPump
 class TestHeatPump:
     @classmethod
     def setup_class(cls):
-
         cls.timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         cls.cop = pd.DataFrame(
             data={
@@ -72,7 +71,6 @@ class TestHeatPump:
         return hp_df
 
     def test_set_cop(self):
-
         # ################### test with dataframe ###################
         heat_pump = HeatPump()
         cop = pd.DataFrame(
@@ -105,7 +103,6 @@ class TestHeatPump:
 
     @pytest.mark.local
     def test_set_cop_oedb(self, caplog):
-
         # ################### test with oedb ###################
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -261,7 +258,6 @@ class TestHeatPump:
         assert edisgo_object.heat_pump.heat_demand_df.index[0].year == 2011
 
     def test_reduce_memory(self):
-
         heatpump = HeatPump()
         heatpump.cop_df = self.cop
         heatpump.heat_demand_df = self.heat_demand
@@ -286,7 +282,6 @@ class TestHeatPump:
         heatpump.reduce_memory()
 
     def test_to_csv(self):
-
         heatpump = HeatPump()
         heatpump.cop_df = self.cop
         heatpump.heat_demand_df = self.heat_demand
@@ -314,7 +309,6 @@ class TestHeatPump:
         shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-
         heatpump = HeatPump()
         heatpump.cop_df = self.cop
         heatpump.heat_demand_df = self.heat_demand

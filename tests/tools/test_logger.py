@@ -7,7 +7,7 @@ from edisgo.tools.logger import setup_logger
 class TestClass:
     def test_setup_logger(self):
         def check_file_output(output):
-            with open("edisgo.log", "r") as file:
+            with open("edisgo.log") as file:
                 last_line = file.readlines()[-1].split(" ")[3:]
                 last_line = " ".join(last_line)
             assert last_line == output

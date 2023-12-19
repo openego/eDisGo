@@ -31,7 +31,6 @@ def read(fname):
 
 
 requirements = [
-    "beautifulsoup4",
     "contextily",
     "dash < 2.9.0",
     "demandlib",
@@ -55,7 +54,7 @@ requirements = [
     "pypsa >= 0.17.0, <= 0.20.1",
     "pyyaml",
     "saio",
-    "scikit-learn",
+    "scikit-learn <= 1.1.1",
     "shapely >= 1.7.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel",
@@ -72,7 +71,7 @@ dev_requirements = [
     "pytest",
     "pytest-notebook",
     "pyupgrade",
-    "sphinx >= 4.3.0, < 5.1.0",
+    "sphinx",
     "sphinx_rtd_theme >=0.5.2",
     "sphinx-autodoc-typehints",
     "sphinx-autoapi",

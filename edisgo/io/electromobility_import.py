@@ -552,7 +552,6 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
     """
 
     def _get_lv_grid_weights():
-
         """
         DataFrame containing technical data of LV grids.
 

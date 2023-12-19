@@ -1052,7 +1052,10 @@ def get_cts_profiles_per_grid(
             db_table = egon_cts_heat_demand_building_share
 
         with session_scope_egon_data(engine) as session:
-            query = session.query(db_table.building_id, db_table.profile_share,).filter(
+            query = session.query(
+                db_table.building_id,
+                db_table.profile_share,
+            ).filter(
                 db_table.scenario == scenario,
                 db_table.bus_id == bus_id,
             )
@@ -1080,7 +1083,10 @@ def get_cts_profiles_per_grid(
             db_table = egon_etrago_heat_cts
 
         with session_scope_egon_data(engine) as session:
-            query = session.query(db_table.bus_id, db_table.p_set,).filter(
+            query = session.query(
+                db_table.bus_id,
+                db_table.p_set,
+            ).filter(
                 db_table.scn_name == scenario,
                 db_table.bus_id == bus_id,
             )
@@ -1126,7 +1132,6 @@ def get_cts_profiles_per_grid(
     saio.register_schema("demand", engine)
 
     if sector == "electricity":
-
         from saio.demand import (
             egon_cts_electricity_demand_building_share,
             egon_etrago_electricity_cts,
@@ -1138,7 +1143,6 @@ def get_cts_profiles_per_grid(
         df_demand_share = _get_demand_share()
 
     elif sector == "heat":
-
         from saio.demand import (
             egon_cts_heat_demand_building_share,
             egon_etrago_heat_cts,

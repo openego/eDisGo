@@ -30,7 +30,6 @@ class TestHeatPumpOperation:
         self.edisgo.heat_pump.heat_demand_df = self.heat_demand
 
     def test_operating_strategy(self):
-
         # test with default parameters
         operating_strategy(self.edisgo)
 

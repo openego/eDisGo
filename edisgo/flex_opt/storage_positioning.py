@@ -415,7 +415,6 @@ def one_storage_per_feeder(
         )
 
         if battery_node:
-
             # add to output lists
             if debug:
                 feeder_repr.append(repr(feeder))
@@ -435,7 +434,6 @@ def one_storage_per_feeder(
             # if p_storage is greater than or equal to the minimum storage
             # power required, do storage integration
             if p_storage >= p_storage_min:
-
                 # third step: integrate storage
 
                 share = p_storage / storage_nominal_power
@@ -472,7 +470,6 @@ def one_storage_per_feeder(
                 # reinforcement costs or number of issues
 
                 if check_costs_reduction == "each_feeder":
-
                     # calculate new network expansion costs
 
                     grid_expansion_results_new = edisgo.reinforce(

@@ -577,7 +577,6 @@ class CurtailmentControl:
     def __init__(
         self, edisgo, methodology, curtailment_timeseries, mode=None, **kwargs
     ):
-
         raise NotImplementedError
 
         logging.info("Start curtailment methodology {}.".format(methodology))

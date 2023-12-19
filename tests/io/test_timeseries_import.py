@@ -229,7 +229,6 @@ class TestTimeseriesImport:
 
     @pytest.mark.local
     def test_get_cts_profiles_per_building(self):
-
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -251,7 +250,6 @@ class TestTimeseriesImport:
 
     @pytest.mark.local
     def test_get_cts_profiles_per_grid(self):
-
         df = timeseries_import.get_cts_profiles_per_grid(
             33535, "eGon2035", "heat", pytest.engine
         )

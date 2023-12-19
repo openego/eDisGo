@@ -99,7 +99,6 @@ class TestHeatPumpImport:
         assert determine_bus_voltage_level(self.edisgo, hp_df.bus[0]) == 7
 
     def test__grid_integration(self, caplog):
-
         # ############# test integration of central heat pumps ####################
         heat_pump_import._grid_integration(
             self.edisgo,
@@ -199,7 +198,6 @@ class TestHeatPumpImport:
 
     @pytest.mark.local
     def test_efficiency_resistive_heaters_oedb(self):
-
         eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
             scenario="eGon2035", engine=pytest.engine
         )

@@ -30,7 +30,6 @@ class TestElectromobilityImport:
         cls.edisgo_obj.resample_timeseries()
 
     def test_import_electromobility(self):
-
         electromobility_import.import_electromobility_from_dir(
             self.edisgo_obj, self.simbev_path, self.tracbev_path
         )
@@ -80,7 +79,6 @@ class TestElectromobilityImport:
         assert len(pot_cp_gdf[pot_cp_gdf.use_case == "work"]) == 4
 
     def test_distribute_charging_demand(self):
-
         # test user friendly
         electromobility_import.distribute_charging_demand(self.edisgo_obj)
 
@@ -162,7 +160,6 @@ class TestElectromobilityImport:
         )
 
     def test_integrate_charging_parks(self):
-
         electromobility_import.integrate_charging_parks(self.edisgo_obj)
 
         electromobility = self.edisgo_obj.electromobility

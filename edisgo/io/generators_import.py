@@ -315,7 +315,6 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     )
 
     if oedb_data_source == "model_draft":
-
         # import ORMs
         orm_conv_generators = model_draft.__getattribute__(orm_conv_generators_name)
         orm_re_generators = model_draft.__getattribute__(orm_re_generators_name)
@@ -325,7 +324,6 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
         orm_re_generators_version = 1 == 1
 
     elif oedb_data_source == "versioned":
-
         data_version = edisgo_object.config["versioned"]["version"]
 
         # import ORMs
@@ -1359,7 +1357,6 @@ def _integrate_power_and_chp_plants(edisgo_object, power_plants_gdf, chp_gdf):
     # status quo and future scenario
     existing_gens_with_source = gens_df[~gens_df.source_id.isna()]
     if len(existing_gens_with_source) > 0:
-
         # join dataframes at source ID
         existing_gens_with_source.index.name = "gen_name"
         power_plants_gdf.index.name = "gen_index_new"

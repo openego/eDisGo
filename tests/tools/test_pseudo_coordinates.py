@@ -11,7 +11,6 @@ class TestPseudoCoordinates:
         cls.edisgo_root = EDisGo(ding0_grid=pytest.ding0_test_network_path)
 
     def test_make_pseudo_coordinates(self):
-
         # test coordinates before
         coordinates = self.edisgo_root.topology.buses_df.loc[
             "Bus_BranchTee_LVGrid_1_9", ["x", "y"]
