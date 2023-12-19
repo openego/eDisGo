@@ -62,7 +62,7 @@ jobs:
         if: runner.os == 'Linux' && matrix.python-version == 3.8 && matrix.name-suffix == 'coverage'
         run: |
           pip install pytest pytest-notebook coveralls
-          coverage run --source=edisgo -m pytest --runslow --disable-warnings --color=yes -v
+          coverage run --source=edisgo -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
           coveralls
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

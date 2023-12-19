@@ -90,7 +90,6 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
 
     # define buses_df, slack_df and components for each use case
     if mode is None:
-
         pypsa_network.mode = "mv"
 
         buses_df = edisgo_object.topology.buses_df.loc[:, ["v_nom"]]
@@ -114,7 +113,6 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         }
 
     elif "mv" in mode:
-
         pypsa_network.mode = "mv"
 
         grid_object = edisgo_object.topology.mv_grid
@@ -191,7 +189,6 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
                 )
 
     elif mode == "lv":
-
         pypsa_network.mode = "lv"
 
         lv_grid_id = kwargs.get("lv_grid_id", None)
@@ -473,7 +470,9 @@ def _get_grid_component_dict(grid_object):
     components = {
         "Load": grid_object.loads_df.loc[:, ["bus", "p_set"]],
         "Generator": grid_object.generators_df.loc[:, ["bus", "control", "p_nom"]],
-        "StorageUnit": grid_object.storage_units_df.loc[:, ["bus", "control"]],
+        "StorageUnit": grid_object.storage_units_df.loc[
+            :, ["bus", "control", "p_nom", "max_hours"]
+        ],
         "Line": grid_object.lines_df.loc[
             :,
             ["bus0", "bus1", "x", "r", "s_nom", "num_parallel", "length"],

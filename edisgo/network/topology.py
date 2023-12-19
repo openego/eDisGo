@@ -1799,9 +1799,9 @@ class Topology:
 
     def sort_buses(self):
         """
-        Sorts buses in :py:attr:`~buses_df` such that bus0 is always the upstream bus.
+        Sorts buses in :py:attr:`~lines_df` such that bus0 is always the upstream bus.
 
-        The changes are directly written to :py:attr:`~buses_df` dataframe.
+        The changes are directly written to :py:attr:`~lines_df` dataframe.
 
         """
         # create BFS tree to get successor node of each node
@@ -2622,7 +2622,7 @@ class Topology:
 
             return branch_tee_repr
 
-        # bus ist nearest connection point
+        # bus is the nearest connection point
         else:
             # add new branch for satellite (station to station)
             line_length = geo.calc_geo_dist_vincenty(

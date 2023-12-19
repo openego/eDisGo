@@ -1,285 +1,258 @@
-import json
 import logging
+import os
+
+from zipfile import ZipFile
 
 import pandas as pd
-
-from edisgo.tools.preprocess_pypsa_opf_structure import (
-    aggregate_fluct_generators,
-    preprocess_pypsa_opf_structure,
-)
 
 logger = logging.getLogger(__name__)
 
 
-def read_from_json(edisgo_obj, path, mode="mv"):
-    """
-    Read optimization results from json file.
-
-    This reads the optimization results directly from a JSON result file
-    without carrying out the optimization process.
-
-    Parameters
-    -----------
-    edisgo_obj : :class:`~.EDisGo`
-        An edisgo object with the same topology that the optimization was run
-        on.
-    path : str
-        Path to the optimization result JSON file.
-    mode : str
-        Voltage level, currently only supports "mv"
-
-    """
-    pypsa_net = edisgo_obj.to_pypsa(
-        mode=mode, timesteps=edisgo_obj.timeseries.timeindex
-    )
-    timehorizon = len(pypsa_net.snapshots)
-    pypsa_net.name = "ding0_{}_t_{}".format(edisgo_obj.topology.id, timehorizon)
-    preprocess_pypsa_opf_structure(edisgo_obj, pypsa_net, hvmv_trafo=False)
-    aggregate_fluct_generators(pypsa_net)
-    edisgo_obj.opf_results.set_solution(path, pypsa_net)
-
-
 class LineVariables:
     def __init__(self):
-        self.p = None
-        self.q = None
-        self.cm = None
+        self.p = pd.DataFrame()
+        self.q = pd.DataFrame()
+        self.ccm = pd.DataFrame()
+
+    def _attributes(self):
+        return ["p", "q", "ccm"]
 
 
-class BusVariables:
+class HeatStorage:
     def __init__(self):
-        self.w = None
+        self.p = pd.DataFrame()
+        self.e = pd.DataFrame()
+        self.p_slack = pd.DataFrame()
+
+    def _attributes(self):
+        return ["p", "e", "p_slack"]
 
 
-class GeneratorVariables:
+class BatteryStorage:
     def __init__(self):
-        self.pg = None
-        self.qg = None
+        self.p = pd.DataFrame()
+        self.e = pd.DataFrame()
+
+    def _attributes(self):
+        return ["p", "e"]
 
 
-class LoadVariables:
+class GridSlacks:
     def __init__(self):
-        self.pd = None
-        self.qd = None
+        self.gen_d_crt = pd.DataFrame()
+        self.gen_nd_crt = pd.DataFrame()
+        self.load_shedding = pd.DataFrame()
+        self.cp_load_shedding = pd.DataFrame()
+        self.hp_load_shedding = pd.DataFrame()
+        self.hp_operation_slack = pd.DataFrame()
 
-
-class StorageVariables:
-    def __init__(self):
-        self.ud = None
-        self.uc = None
-        self.soc = None
+    def _attributes(self):
+        return [
+            "gen_d_crt",
+            "gen_nd_crt",
+            "load_shedding",
+            "cp_load_shedding",
+            "hp_load_shedding",
+            "hp_operation_slack",
+        ]
 
 
 class OPFResults:
     def __init__(self):
-        self.solution_file = None
-        self.solution_data = None
-        self.name = None
-        self.obj = None
         self.status = None
         self.solution_time = None
         self.solver = None
-        self.lines = None
-        self.pypsa = None
         self.lines_t = LineVariables()
-        self.buses_t = BusVariables()
-        self.generators_t = GeneratorVariables()
-        self.loads_t = LoadVariables()
-        self.storage_units = None
-        self.storage_units_t = StorageVariables()
+        self.slack_generator_t = pd.DataFrame()
+        self.heat_storage_t = HeatStorage()
+        self.hv_requirement_slacks_t = pd.DataFrame()
+        self.grid_slacks_t = GridSlacks()
+        self.overlying_grid = pd.DataFrame()
+        self.battery_storage_t = BatteryStorage()
 
-    def set_solution(self, solution_name, pypsa_net):
-        self.read_solution_file(solution_name)
-        self.set_solution_to_results(pypsa_net)
+    def to_csv(self, directory, attributes=None):
+        """
+        Exports OPF results data to csv files.
 
-    def read_solution_file(self, solution_name):
-        with open(solution_name) as json_file:
-            self.solution_data = json.load(json_file)
-        self.solution_file = solution_name
+        The following attributes can be exported:
 
-    def dump_solution_file(self, solution_name=[]):
-        if not solution_name:
-            solution_name = self.solution_name
-        with open(solution_name, "w") as outfile:
-            json.dump(self.solution_data, outfile)
+        * 'lines_t' : The results of the three variables in attribute
+          :py:attr:`~lines_t` are saved to `lines_t_p.csv`, `lines_t_p.csv`, and
+          `lines_t_ccm.csv`.
+        * 'slack_generator_t' : Attribute :py:attr:`~slack_generator_t` is saved to
+          `slack_generator_t.csv`.
+        * 'heat_storage_t' : The results of the two variables in attribute
+          :py:attr:`~heat_storage_t` are saved to `heat_storage_t_p.csv` and
+          `heat_storage_t_e.csv`.
+        * 'hv_requirement_slacks_t' : Attribute :py:attr:`~hv_requirement_slacks_t` is
+          saved to `hv_requirement_slacks_t.csv`.
+        * 'grid_slacks_t' : The results of the five variables in attribute
+          :py:attr:`~grid_slacks_t` are saved to `dispatchable_gen_crt.csv`,
+          `non_dispatchable_gen_crt.csv`, `load_shedding.csv`, `cp_load_shedding.csv`
+          and `hp_load_shedding.csv`.
+        * 'overlying_grid' : Attribute :py:attr:`~overlying_grid` is saved to
+          `overlying_grid.csv`.
 
-    def set_solution_to_results(self, pypsa_net):
-        solution_data = self.solution_data
-        self.name = solution_data["name"]
-        self.obj = solution_data["obj"]
-        self.status = solution_data["status"]
-        self.solution_time = solution_data["sol_time"]
-        self.solver = solution_data["solver"]
-        self.pypsa = pypsa_net
-        # Line Variables
-        self.set_line_variables(pypsa_net)
-        # Bus Variables
-        self.set_bus_variables(pypsa_net)
-        # Generator Variables
-        # TODO: Adjust for case that generators are fixed and no variables are returned
-        # from julia
-        self.set_gen_variables(pypsa_net)
-        self.set_load_variables(pypsa_net)
-        # Storage Variables
-        self.set_strg_variables(pypsa_net)
+        Parameters
+        ----------
+        directory : str
+            Path to save OPF results data to.
+        attributes : list(str) or None
+            List of attributes to export. See above for attributes that can be exported.
+            If None, all specified attributes are exported. Default: None.
 
-    def set_line_variables(self, pypsa_net):
-        solution_data = self.solution_data
+        """
+        os.makedirs(directory, exist_ok=True)
 
-        # time independent variables: ne: line expansion factor, 1.0 => no expansion
-        br_statics = pd.Series(
-            solution_data["branch"]["static"]["ne"], name="nep"
-        ).to_frame()
-        br_statics.index = br_statics.index.astype(int)
-        br_statics = br_statics.sort_index()
-        br_statics.index = pypsa_net.lines.index
-        self.lines = br_statics
+        attrs_file_names = _get_matching_dict_of_attributes_and_file_names()
 
-        # time dependent variables: cm: squared current magnitude, p: active power flow,
-        # q: reactive power flow
-        ts = pypsa_net.snapshots.sort_values()
-        cm_t = pd.DataFrame(index=ts, columns=pypsa_net.lines.index)
-        p_t = pd.DataFrame(index=ts, columns=pypsa_net.lines.index)
-        q_t = pd.DataFrame(index=ts, columns=pypsa_net.lines.index)
-        for (t, date_idx) in enumerate(ts):
-            branch_t = pd.DataFrame(solution_data["branch"]["nw"][str(t + 1)])
-            branch_t.index = branch_t.index.astype(int)
-            branch_t = branch_t.sort_index()
-            branch_t.insert(0, "br_idx", branch_t.index)
-            branch_t.index = pypsa_net.lines.index
-            p_t.loc[date_idx] = branch_t.p.T
-            q_t.loc[date_idx] = branch_t.q.T
-            cm_t.loc[date_idx] = branch_t.cm.T
-        self.lines_t.cm = cm_t
-        self.lines_t.p = p_t
-        self.lines_t.q = q_t
-        return
+        if attributes is None:
+            attributes = list(attrs_file_names.keys())
 
-    def set_bus_variables(self, pypsa_net):
-        solution_data = self.solution_data
-        ts = pypsa_net.snapshots.sort_values()
-        w_t = pd.DataFrame(index=ts, columns=pypsa_net.buses.index)
-        for (t, date_idx) in enumerate(ts):
-            bus_t = pd.DataFrame(solution_data["bus"]["nw"][str(t + 1)])
-            bus_t.index = bus_t.index.astype(int)
-            bus_t = bus_t.sort_index()
-            bus_t.index = pypsa_net.buses.index
-            w_t.loc[date_idx] = bus_t.w
-        self.buses_t.w = w_t
-        return
+        for attr in attributes:
+            file = attrs_file_names[attr]
+            df = getattr(self, attr)
+            if attr in [
+                "lines_t",
+                "heat_storage_t",
+                "grid_slacks_t",
+                "battery_storage_t",
+            ]:
+                for variable in file.keys():
+                    if variable in df._attributes() and not getattr(df, variable).empty:
+                        path = os.path.join(directory, file[variable])
+                        getattr(df, variable).to_csv(path)
+            else:
+                if not df.empty:
+                    path = os.path.join(directory, file)
+                    df.to_csv(path)
 
-    def set_gen_variables(self, pypsa_net):
-        # ToDo disaggregate aggregated generators?
-        gen_solution_data = self.solution_data["gen"]["nw"]
-        ts = pypsa_net.snapshots.sort_values()
+    def from_csv(self, data_path, from_zip_archive=False):
+        """
+        Restores OPF results from csv files.
 
-        # in case no curtailment requirement was given, all generators are
-        # made to fixed loads and Slack is the only remaining generator
-        if len(gen_solution_data["1"]["pg"].keys()) == 1:
-            try:
-                # check if generator index in pypsa corresponds to generator
-                # int
-                slack = pypsa_net.generators[
-                    pypsa_net.generators.control == "Slack"
-                ].index.values[0]
-                ind = pypsa_net.generators.index.get_loc(slack) + 1
-                if not str(ind) in gen_solution_data["1"]["pg"].keys():
-                    logger.warning("Slack indexes do not match.")
-                # write slack results
-                pg_t = pd.DataFrame(index=ts, columns=[slack])
-                qg_t = pd.DataFrame(index=ts, columns=[slack])
-                for (t, date_idx) in enumerate(ts):
-                    gen_t = pd.DataFrame(gen_solution_data[str(t + 1)])
-                    gen_t.index = [slack]
-                    pg_t.loc[date_idx] = gen_t.pg
-                    qg_t.loc[date_idx] = gen_t.qg
-                self.generators_t.pg = pg_t
-                self.generators_t.qg = qg_t
-            except Exception:
-                logger.warning("Error in writing OPF solutions for slack time series.")
-        else:
-            try:
-                pg_t = pd.DataFrame(index=ts, columns=pypsa_net.generators.index)
-                qg_t = pd.DataFrame(index=ts, columns=pypsa_net.generators.index)
-                for (t, date_idx) in enumerate(ts):
-                    gen_t = pd.DataFrame(gen_solution_data[str(t + 1)])
-                    gen_t.index = gen_t.index.astype(int)
-                    gen_t = gen_t.sort_index()
-                    gen_t.index = pypsa_net.generators.index
-                    pg_t.loc[date_idx] = gen_t.pg
-                    qg_t.loc[date_idx] = gen_t.qg
-                self.generators_t.pg = pg_t
-                self.generators_t.qg = qg_t
-            except Exception:
-                logger.warning(
-                    "Error in writing OPF solutions for generator time series."
+        Parameters
+        ----------
+        data_path : str
+            Path to OPF results csv files.
+        from_zip_archive : bool, optional
+            Set True if data is archived in a zip archive. Default: False.
+
+        """
+        attrs = _get_matching_dict_of_attributes_and_file_names()
+
+        if from_zip_archive:
+            # read from zip archive
+            # setup ZipFile Class
+            zip = ZipFile(data_path)
+
+            # get all directories and files within zip archive
+            files = zip.namelist()
+
+            # add directory and .csv to files to match zip archive
+            attrs = {
+                k: (
+                    f"opf_results/{v}"
+                    if isinstance(v, str)
+                    else {k2: f"opf_results/{v2}" for k2, v2 in v.items()}
                 )
+                for k, v in attrs.items()
+            }
 
-    def set_load_variables(self, pypsa_net):
+        else:
+            # read from directory
+            # check files within the directory
+            files = os.listdir(data_path)
 
-        load_solution_data = self.solution_data["load"]["nw"]
-        ts = pypsa_net.snapshots.sort_values()
+        attrs_to_read = {
+            k: v
+            for k, v in attrs.items()
+            if (isinstance(v, str) and v in files)
+            or (isinstance(v, dict) and any([_ in files for _ in v.values()]))
+        }
 
-        pd_t = pd.DataFrame(
-            index=ts,
-            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()],
-        )
-        qd_t = pd.DataFrame(
-            index=ts,
-            columns=[int(_) for _ in load_solution_data["1"]["pd"].keys()],
-        )
-        for (t, date_idx) in enumerate(ts):
-            load_t = pd.DataFrame(load_solution_data[str(t + 1)])
-            load_t.index = load_t.index.astype(int)
-            pd_t.loc[date_idx] = load_t.pd
-            qd_t.loc[date_idx] = load_t.qd
+        for attr, file in attrs_to_read.items():
+            if attr in [
+                "lines_t",
+                "heat_storage_t",
+                "grid_slacks_t",
+                "battery_storage_t",
+            ]:
+                for variable, file_name in file.items():
+                    if file_name in files:
+                        if from_zip_archive:
+                            # open zip file to make it readable for pandas
+                            with zip.open(file_name) as f:
+                                setattr(
+                                    getattr(self, attr),
+                                    variable,
+                                    pd.read_csv(f, index_col=0, parse_dates=True),
+                                )
+                        else:
+                            path = os.path.join(data_path, file_name)
+                            setattr(
+                                getattr(self, attr),
+                                variable,
+                                pd.read_csv(path, index_col=0, parse_dates=True),
+                            )
+            else:
+                if from_zip_archive:
+                    # open zip file to make it readable for pandas
+                    with zip.open(file) as f:
+                        df = pd.read_csv(f, index_col=0, parse_dates=True)
+                else:
+                    path = os.path.join(data_path, file)
+                    df = pd.read_csv(path, index_col=0, parse_dates=True)
 
-        load_buses = self.pypsa.loads.bus.unique()
-        load_bus_df = pd.DataFrame(columns=["bus_loc"], index=[load_buses])
-        for b in load_buses:
-            load_bus_df.at[b, "bus_loc"] = self.pypsa.buses.index.get_loc(b)
-        load_bus_df = load_bus_df.sort_values(by="bus_loc").reset_index()
-        load_bus_df.index = load_bus_df.index + 1
-        pd_t = pd_t.rename(columns=load_bus_df.level_0.to_dict())
-        qd_t = qd_t.rename(columns=load_bus_df.level_0.to_dict())
-        self.loads_t.pd = pd_t
-        self.loads_t.qd = qd_t
+                setattr(self, attr, df)
 
-    def set_strg_variables(self, pypsa_net):
-        solution_data = self.solution_data
+        if from_zip_archive:
+            # make sure to destroy ZipFile Class to close any open connections
+            zip.close()
 
-        # time independent values
-        strg_statics = pd.DataFrame.from_dict(
-            solution_data["storage"]["static"]["emax"], orient="index"
-        )
-        if not strg_statics.empty:
-            strg_statics.columns = ["emax"]
 
-            strg_statics.index = strg_statics.index.astype(int)
-            strg_statics = strg_statics.sort_index()
+def _get_matching_dict_of_attributes_and_file_names():
+    """
+    Helper function to specify which OPF results attributes to save and
+    restore and maps them to the file name.
 
-            # Convert one-based storage indices back to string names
-            idx_names = [pypsa_net.buses.index[i - 1] for i in strg_statics.index]
-            strg_statics.index = pd.Index(idx_names)
+    Is used in functions
+    :attr:`~.opf.results.opf_results_class.from_csv` and
+    :attr:`~.opf.results.opf_results_class.to_csv`.
 
-            self.storage_units = strg_statics
+    Returns
+    -------
+    dict
+        Dict of OPF results attributes to save and restore as keys and matching files as
+        values.
 
-            # time dependent values
-            ts = pypsa_net.snapshots
-            uc_t = pd.DataFrame(index=ts, columns=strg_statics.index)
-            ud_t = pd.DataFrame(index=ts, columns=strg_statics.index)
-            soc_t = pd.DataFrame(index=ts, columns=strg_statics.index)
+    """
+    opf_results_dict = {
+        "slack_generator_t": "slack_generator_t.csv",
+        "hv_requirement_slacks_t": "hv_requirement_slacks_t.csv",
+        "overlying_grid": "overlying_grid.csv",
+        "lines_t": {
+            "p": "lines_t_p.csv",
+            "q": "lines_t_q.csv",
+            "ccm": "lines_t_ccm.csv",
+        },
+        "heat_storage_t": {
+            "p": "heat_storage_t_p.csv",
+            "e": "heat_storage_t_e.csv",
+            "p_slack": "heat_storage_t_p_slack.csv",
+        },
+        "battery_storage_t": {
+            "p": "battery_storage_t_p.csv",
+            "e": "battery_storage_t_e.csv",
+        },
+        "grid_slacks_t": {
+            "gen_d_crt": "dispatchable_gen_crt.csv",
+            "gen_nd_crt": "non_dispatchable_gen_crt.csv",
+            "load_shedding": "load_shedding.csv",
+            "cp_load_shedding": "cp_load_shedding.csv",
+            "hp_load_shedding": "hp_load_shedding.csv",
+            "hp_operation_slack": "hp_operation_slack.csv",
+        },
+    }
 
-            for (t, date_idx) in enumerate(ts):
-                strg_t = pd.DataFrame(solution_data["storage"]["nw"][str(t + 1)])
-                strg_t.index = strg_t.index.astype(int)
-                strg_t = strg_t.sort_index()
-                strg_t.index = strg_statics.index
-
-                uc_t.loc[date_idx].update(strg_t["uc"])
-                ud_t.loc[date_idx].update(strg_t["ud"])
-                soc_t.loc[date_idx].update(strg_t["soc"])
-
-            self.storage_units_t.soc = soc_t
-            self.storage_units_t.uc = uc_t
-            self.storage_units_t.ud = ud_t
+    return opf_results_dict

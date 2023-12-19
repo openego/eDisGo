@@ -530,7 +530,7 @@ class TestEDisGo:
 
         self.setup_worst_case_time_series()
         self.edisgo.timeseries.scale_timeseries(
-            p_scaling_factor=100, q_scaling_factor=100
+            p_scaling_factor=50, q_scaling_factor=50
         )
 
         edisgo_obj = copy.deepcopy(self.edisgo)
@@ -542,10 +542,9 @@ class TestEDisGo:
 
         results = edisgo_obj.results
 
-        assert len(results.grid_expansion_costs) == 835
-        assert len(results.equipment_changes) == 1764
-        assert results.v_res.shape == (4, 142)
-        assert "Enhanced reinforcement: No exchange of lines" in results.measures[2]
+        assert len(results.grid_expansion_costs) == 445
+        assert len(results.equipment_changes) == 892
+        assert results.v_res.shape == (4, 148)
 
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()

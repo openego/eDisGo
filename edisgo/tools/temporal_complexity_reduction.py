@@ -404,7 +404,7 @@ def _troubleshooting_mode(edisgo_obj):
             "not all time steps converged. Power flow is run again with reduced "
             "network load."
         )
-        for fraction in np.linspace(0.9, 0.2, 8):
+        for fraction in np.arange(0.8, 0.0, step=-0.1):
             try:
                 edisgo_obj.analyze(
                     troubleshooting_mode="iteration",
@@ -417,7 +417,7 @@ def _troubleshooting_mode(edisgo_obj):
                 )
                 break
             except Exception:
-                if fraction == 0.2:
+                if fraction == 0.1:
                     raise ValueError(
                         f"Power flow did not converge for smallest reduction "
                         f"factor of {fraction}. Most critical time intervals "

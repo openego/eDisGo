@@ -404,7 +404,7 @@ class TestTimeSeries:
         comp = "Load_residential_LVGrid_1_4"  # lv, hpc
         p_set = 0.001397
         exp = pd.Series(
-            data=[0.15 * p_set, 0.0 * p_set, 1.0 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=timeindex,
         )
@@ -898,7 +898,7 @@ class TestTimeSeries:
         comp = "CP1"  # mv, hpc
         p_set = 0.1
         exp = pd.Series(
-            data=[0.15 * p_set, 0.0 * p_set, 1.0 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -909,7 +909,7 @@ class TestTimeSeries:
         comp = "CP2"  # mv, public
         p_set = 0.2
         exp = pd.Series(
-            data=[0.15 * p_set, 0.0 * p_set, 1.0 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -920,7 +920,7 @@ class TestTimeSeries:
         comp = "CP3"  # lv, home
         p_set = 0.3
         exp = pd.Series(
-            data=[0.15 * p_set, 0.0 * p_set, 0.2 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 0.2 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -931,7 +931,7 @@ class TestTimeSeries:
         comp = "CP4"  # lv, work
         p_set = 0.4
         exp = pd.Series(
-            data=[0.15 * p_set, 0.0 * p_set, 0.2 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 0.2 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -960,7 +960,7 @@ class TestTimeSeries:
         comp = "CP3"  # lv, home
         p_set = 0.3
         exp = pd.Series(
-            data=[0.15 * p_set, 0.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set],
             name=comp,
             index=index,
         )

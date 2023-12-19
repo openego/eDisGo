@@ -302,8 +302,8 @@ def reinforce_grid(
             ]
         )
         raise exceptions.MaximumIterationError(
-            "Overloading issues could not be solved after maximum allowed "
-            "iterations."
+            f"The following overloading issues could not be solved after maximum "
+            f"allowed iterations: {edisgo.results.unresolved_issues}"
         )
     else:
         logger.info(
@@ -355,11 +355,11 @@ def reinforce_grid(
 
     # check if all voltage problems were solved after maximum number of
     # iterations allowed
-    if while_counter == max_while_iterations and crit_nodes.empty:
+    if while_counter == max_while_iterations and not crit_nodes.empty:
         edisgo.results.unresolved_issues = pd.concat(
             [
                 edisgo.results.unresolved_issues,
-                pd.concat([_ for _ in crit_nodes.values()]),
+                crit_nodes,
             ]
         )
         raise exceptions.MaximumIterationError(
@@ -420,11 +420,11 @@ def reinforce_grid(
 
         # check if all voltage problems were solved after maximum number of
         # iterations allowed
-        if while_counter == max_while_iterations and crit_stations.empty:
+        if while_counter == max_while_iterations and not crit_stations.empty:
             edisgo.results.unresolved_issues = pd.concat(
                 [
                     edisgo.results.unresolved_issues,
-                    pd.concat([_ for _ in crit_stations.values()]),
+                    crit_stations,
                 ]
             )
             raise exceptions.MaximumIterationError(
@@ -485,11 +485,11 @@ def reinforce_grid(
 
         # check if all voltage problems were solved after maximum number of
         # iterations allowed
-        if while_counter == max_while_iterations and crit_nodes.empty:
+        if while_counter == max_while_iterations and not crit_nodes.empty:
             edisgo.results.unresolved_issues = pd.concat(
                 [
                     edisgo.results.unresolved_issues,
-                    pd.concat([_ for _ in crit_nodes.values()]),
+                    crit_nodes,
                 ]
             )
             raise exceptions.MaximumIterationError(
@@ -626,8 +626,8 @@ def reinforce_grid(
             ]
         )
         raise exceptions.MaximumIterationError(
-            "Overloading issues (after solving over-voltage issues) for the"
-            f"following lines could not be solved: {crit_lines}"
+            f"The following overloading issues could not be solved after maximum "
+            f"allowed iterations: {edisgo.results.unresolved_issues}"
         )
     else:
         logger.info(
@@ -823,6 +823,7 @@ def enhanced_reinforce_grid(
     specified through parameter `separation_threshold`, are split, so that part of the
     load is served by a separate MV/LV station. See
     :func:`~.flex_opt.reinforce_grid.run_separate_lv_grids` for more information.
+    In a second step, all LV grids are reinforced independently.
     Afterwards it is tried to run the grid reinforcement for all voltage levels at once.
     If this fails, reinforcement is first conducted for the MV level only, afterwards
     for the MV level including MV/LV stations and at last for each LV grid separately.
@@ -881,18 +882,48 @@ def enhanced_reinforce_grid(
         )
         run_separate_lv_grids(edisgo_obj, threshold=separation_threshold)
 
+    logger.info("Run initial grid reinforcement for single LV grids.")
+    for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids):
+        logger.info(f"Check initial convergence for {lv_grid=}.")
+        _, ts_not_converged = edisgo_obj.analyze(
+            mode="lv", raise_not_converged=False, lv_grid_id=lv_grid.id
+        )
+        if len(ts_not_converged) > 0:
+            logger.info(
+                f"Not all time steps converged in initial power flow analysis for "
+                f"{lv_grid=}. It is therefore tried to be split."
+            )
+            transformers_changes, lines_changes = separate_lv_grid(edisgo_obj, lv_grid)
+            if len(lines_changes) > 0:
+                _add_lines_changes_to_equipment_changes(edisgo_obj, lines_changes, 1)
+            if len(transformers_changes) > 0:
+                _add_transformer_changes_to_equipment_changes(
+                    edisgo_obj, transformers_changes, 1, "added"
+                )
+        try:
+            logger.info(f"Try initial mode 'lv' reinforcement for {lv_grid=}.")
+            edisgo_obj.reinforce(
+                mode="lv",
+                lv_grid_id=lv_grid.id,
+                catch_convergence_problems=True,
+                **kwargs,
+            )
+            logger.info(f"Initial mode 'lv' reinforcement for {lv_grid} successful.")
+        except (ValueError, RuntimeError, exceptions.MaximumIterationError):
+            logger.warning(f"Initial mode 'lv' reinforcement for {lv_grid} failed.")
+
     try:
         logger.info("Try initial enhanced reinforcement.")
         edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
         logger.info("Initial enhanced reinforcement succeeded.")
-    except (ValueError, RuntimeError):
+    except (ValueError, RuntimeError, exceptions.MaximumIterationError):
         logger.info("Initial enhanced reinforcement failed.")
         logger.info("Try mode 'mv' reinforcement.")
 
         try:
             edisgo_obj.reinforce(mode="mv", catch_convergence_problems=True, **kwargs)
             logger.info("Mode 'mv' reinforcement succeeded.")
-        except (ValueError, RuntimeError):
+        except (ValueError, RuntimeError, exceptions.MaximumIterationError):
             logger.info("Mode 'mv' reinforcement failed.")
 
         logger.info("Try mode 'mvlv' reinforcement.")
@@ -900,7 +931,7 @@ def enhanced_reinforce_grid(
         try:
             edisgo_obj.reinforce(mode="mvlv", catch_convergence_problems=True, **kwargs)
             logger.info("Mode 'mvlv' reinforcement succeeded.")
-        except (ValueError, RuntimeError):
+        except (ValueError, RuntimeError, exceptions.MaximumIterationError):
             logger.info("Mode 'mvlv' reinforcement failed.")
 
         for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids):
@@ -911,7 +942,8 @@ def enhanced_reinforce_grid(
             if len(ts_not_converged) > 0:
                 logger.info(
                     f"Not all time steps converged in power flow analysis for "
-                    f"{lv_grid=}. It is therefore tried to be split.")
+                    f"{lv_grid=}. It is therefore tried to be split."
+                )
                 transformers_changes, lines_changes = separate_lv_grid(
                     edisgo_obj, lv_grid
                 )
@@ -932,19 +964,25 @@ def enhanced_reinforce_grid(
                     **kwargs,
                 )
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} successful.")
-            except (ValueError, RuntimeError):
+            except (ValueError, RuntimeError, exceptions.MaximumIterationError):
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} failed.")
                 if activate_cost_results_disturbing_mode:
                     try:
                         logger.warning(
                             f"Change all lines to standard type in {lv_grid=}."
                         )
+                        edisgo_obj.results.measures = f"Standard lines in {lv_grid=}."
                         num_lv_grids_standard_lines += 1
                         lv_standard_line_type = edisgo_obj.config[
                             "grid_expansion_standard_equipment"
                         ]["lv_line"]
+                        lines = lv_grid.lines_df.index
                         edisgo_obj.topology.change_line_type(
-                            lv_grid.lines_df.index.to_list(), lv_standard_line_type
+                            lines, lv_standard_line_type
+                        )
+                        lines_changes = {_: 1 for _ in lines}
+                        _add_lines_changes_to_equipment_changes(
+                            edisgo_obj, lines_changes, 1
                         )
                         edisgo_obj.reinforce(
                             mode="lv",
@@ -955,11 +993,12 @@ def enhanced_reinforce_grid(
                         logger.info(
                             f"Changed lines mode 'lv' for {lv_grid} successful."
                         )
-                    except (ValueError, RuntimeError):
+                    except (ValueError, RuntimeError, exceptions.MaximumIterationError):
                         logger.info(f"Changed lines mode 'lv' for {lv_grid} failed.")
                         logger.warning(
                             f"Aggregate all nodes to station bus in {lv_grid=}."
                         )
+                        edisgo_obj.results.measures = f"Aggregation of {lv_grid=}."
                         num_lv_grids_aggregated += 1
                         try:
                             edisgo_obj.topology.aggregate_lv_grid_at_station(
@@ -973,6 +1012,7 @@ def enhanced_reinforce_grid(
                                 f"Aggregate to station for {lv_grid} failed with "
                                 f"exception:\n{e}"
                             )
+                            raise e
 
         try:
             edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)

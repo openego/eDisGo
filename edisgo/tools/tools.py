@@ -626,6 +626,54 @@ def get_files_recursive(path, files=None):
     return files
 
 
+def calculate_impedance_for_parallel_components(parallel_components, pu=False):
+    """
+    Method to calculate parallel impedance and power of parallel elements.
+
+    """
+    if pu:
+        raise NotImplementedError(
+            "Calculation in pu for parallel components not implemented yet."
+        )
+    else:
+        if not (parallel_components.diff().dropna() < 1e-6).all().all():
+            parallel_impedance = 1 / sum(
+                1 / complex(comp.r, comp.x)
+                for name, comp in parallel_components.iterrows()
+            )
+            # apply current devider and use minimum
+            s_parallel = min(
+                abs(
+                    comp.s_nom
+                    / (
+                        1
+                        / complex(comp.r, comp.x)
+                        / sum(
+                            1 / complex(comp.r, comp.x)
+                            for name, comp in parallel_components.iterrows()
+                        )
+                    )
+                )
+                for name, comp in parallel_components.iterrows()
+            )
+            return pd.Series(
+                {
+                    "r": parallel_impedance.real,
+                    "x": parallel_impedance.imag,
+                    "s_nom": s_parallel,
+                }
+            )
+        else:
+            nr_components = len(parallel_components)
+        return pd.Series(
+            {
+                "r": parallel_components.iloc[0].r / nr_components,
+                "x": parallel_components.iloc[0].x / nr_components,
+                "s_nom": parallel_components.iloc[0].s_nom * nr_components,
+            }
+        )
+
+
 def add_line_susceptance(
     edisgo_obj,
     mode="mv_b",
@@ -697,6 +745,289 @@ def add_line_susceptance(
         )
 
     return edisgo_obj
+
+
+def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=None):
+    """
+    Aggregate PtH components that feed into the same district heating network.
+
+    Besides aggregating PtH components, feed-in from other heat supply sources can
+    be specified, which is subtracted from the heat demand in the district heating
+    network in order to determine the heat demand that needs to be covered by the PtH
+    units.
+
+    Concerning the aggregated components, rated power of the single components is added
+    up and COP for combined component is calculated from COP of all components weighed
+    with their rated power. If active and reactive power time series were previously
+    set for the PtH units they are overwritten.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+    feedin_district_heating : :pandas:`pandas.DataFrame<DataFrame>`
+        Other thermal feed-in into district heating per district heating area (in
+        columns) and time step (in index) in MW.
+
+    """
+    if feedin_district_heating is None:
+        feedin_district_heating = pd.DataFrame()
+
+    if "district_heating_id" in edisgo_obj.topology.loads_df.columns:
+        for (
+            district
+        ) in edisgo_obj.topology.loads_df.district_heating_id.dropna().unique():
+            # get PtH units in district heating network
+            district_hps = edisgo_obj.topology.loads_df[
+                edisgo_obj.topology.loads_df.district_heating_id == district
+            ]
+            # in case there is more than 1 PtH unit, get name of heat pump, otherwise
+            # get name of single PtH unit
+            if len(district_hps) > 1:
+                # district heat pump component
+                district_hp = district_hps[
+                    district_hps.sector == "district_heating"
+                ].index[0]
+            else:
+                district_hp = district_hps.index[0]
+
+            # reduce demand by feedin from other sources (e.g. solarthermal, geothermal)
+            if not feedin_district_heating.empty:
+                if str(int(district)) in feedin_district_heating.columns:
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
+                        edisgo_obj.heat_pump.heat_demand_df[district_hp]
+                        - feedin_district_heating[str(int(district))]
+                    )
+                else:
+                    logger.info(
+                        f"There are no other heat supply sources in district heating "
+                        f"grid {district}."
+                    )
+
+            if len(district_hps) > 1:
+                # get name of resistive heater component
+                district_rh = district_hps[
+                    district_hps.sector == "district_heating_resistive_heater"
+                ].index[0]
+                # calculate rated power of aggregated component
+                new_p_set = edisgo_obj.topology.loads_df.loc[
+                    district_hps.index
+                ].p_set.sum()
+                el_demand = (
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp]
+                    / edisgo_obj.heat_pump.cop_df[district_hp]
+                ).clip(lower=0)
+                hp_p_set = edisgo_obj.topology.loads_df.at[district_hp, "p_set"]
+                if (el_demand > hp_p_set).any():
+                    # calculate COP by weighted COP of single components
+                    # (weighted by their contribution to cover heat demand)
+                    # determine percentage of contribution per component
+                    df = pd.concat(
+                        [
+                            (el_demand.clip(upper=hp_p_set) / el_demand)
+                            .fillna(1)
+                            .to_frame(district_hp),
+                            ((el_demand - el_demand.clip(upper=hp_p_set)) / el_demand)
+                            .fillna(0)
+                            .to_frame(district_rh),
+                        ],
+                        axis=1,
+                    )
+                    new_cop = (
+                        edisgo_obj.heat_pump.cop_df[district_hps.index] * df
+                    ).sum(axis=1)
+                else:
+                    new_cop = edisgo_obj.heat_pump.cop_df[district_hp]
+                # delete COP timeseries and heat demand timeseries of resistive heater
+                for attr in ["cop_df", "heat_demand_df"]:
+                    setattr(
+                        edisgo_obj.heat_pump,
+                        attr,
+                        getattr(edisgo_obj.heat_pump, attr).drop(columns=[district_rh]),
+                    )
+                # delete resistive heater component in loads_df
+                edisgo_obj.topology.loads_df = edisgo_obj.topology.loads_df.drop(
+                    district_rh
+                )
+                # delete active and reactive power timeseries of resistive heater
+                edisgo_obj.timeseries.drop_component_time_series(
+                    "loads_active_power", district_rh
+                )
+                edisgo_obj.timeseries.drop_component_time_series(
+                    "loads_reactive_power", district_rh
+                )
+
+                # add COP timeseries of aggregated component
+                edisgo_obj.heat_pump.cop_df[district_hp] = new_cop
+                # add aggregated component to loads_df
+                edisgo_obj.topology.loads_df.at[district_hp, "p_set"] = new_p_set
+                # check if storage was assigned to resistive heater and if so
+                # assign to heat pump
+                if district_rh in edisgo_obj.heat_pump.thermal_storage_units_df.index:
+                    edisgo_obj.heat_pump.thermal_storage_units_df.rename(
+                        index={district_rh: district_hp}, inplace=True
+                    )
+
+            # if time series was previously set, overwrite time series in case
+            # components were aggregated components or heat demand reduced by feed-in
+            # from other components
+            if district_hp in edisgo_obj.timeseries.loads_active_power.columns:
+                edisgo_obj.apply_heat_pump_operating_strategy(
+                    heat_pump_names=[district_hp]
+                )
+
+
+def reduce_timeseries_data_to_given_timeindex(
+    edisgo_obj,
+    timeindex,
+    freq="1H",
+    timeseries=True,
+    electromobility=True,
+    save_ev_soc_initial=True,
+    heat_pump=True,
+    dsm=True,
+    overlying_grid=True,
+):
+    """
+    Reduces timeseries data in EDisGo object to given time index.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time index to set.
+    freq : str or :pandas:`pandas.Timedelta<Timedelta>`, optional
+        Frequency of time series data. This is only needed if it cannot be inferred from
+        the given `timeindex` and if electromobility data and/or overlying grid data is
+        reduced, as the initial SoC is tried to be set using the time step before the
+        first time step in the given `timeindex`. Offset aliases can be found here:
+        https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases.
+        Default: '1H'.
+    timeseries : bool
+        Indicates whether timeseries in :class:`~.network.timeseries.TimeSeries`
+        are reduced to given time index. Default: True.
+    electromobility : bool
+        Indicates whether timeseries in
+        :class:`~.network.electromobility.Electromobility` are reduced to given time
+        index. Default: True.
+    save_ev_soc_initial : bool
+        Indicates whether to save initial EV SOC from timestep before first timestep of
+        given time index. Default: True.
+    heat_pump : bool
+        Indicates whether timeseries in :class:`~.network.heat.HeatPump`
+        are reduced to given time index. Default: True.
+    dsm : bool
+        Indicates whether timeseries in :class:`~.network.dsm.DSM`
+        are reduced to given time index. Default: True.
+    overlying_grid : bool
+        Indicates whether timeseries in :class:`~.network.overlying_grid.OverlyingGrid`
+        are reduced to given time index. Default: True.
+
+    """
+    # get frequency from time index data or default frequency
+    try:
+        frequency = timeindex[1] - timeindex[0]
+    except KeyError:
+        frequency = freq
+    if not isinstance(frequency, pd.Timedelta):
+        frequency = pd.Timedelta(frequency)
+
+    # generators, loads and storage units timeseries
+    if timeseries:
+        attributes = edisgo_obj.timeseries._attributes
+        edisgo_obj.timeseries.timeindex = timeindex
+        for attr in attributes:
+            if not getattr(edisgo_obj.timeseries, attr).empty:
+                setattr(
+                    edisgo_obj.timeseries,
+                    attr,
+                    getattr(edisgo_obj.timeseries, attr).loc[timeindex],
+                )
+    # Battery electric vehicle timeseries
+    if electromobility:
+        if save_ev_soc_initial:
+            # timestep EV SOC from timestep before if possible
+            ts_before = timeindex[0] - frequency
+            if not edisgo_obj.electromobility.flexibility_bands["upper_energy"].empty:
+                try:
+                    initial_soc_cp = (
+                        1
+                        / 2
+                        * (
+                            edisgo_obj.electromobility.flexibility_bands[
+                                "upper_energy"
+                            ].loc[ts_before]
+                            + edisgo_obj.electromobility.flexibility_bands[
+                                "lower_energy"
+                            ].loc[ts_before]
+                        )
+                    )
+                except KeyError:
+                    initial_soc_cp = (
+                        1
+                        / 2
+                        * (
+                            edisgo_obj.electromobility.flexibility_bands[
+                                "upper_energy"
+                            ].loc[timeindex[0]]
+                            + edisgo_obj.electromobility.flexibility_bands[
+                                "lower_energy"
+                            ].loc[timeindex[0]]
+                        )
+                    )
+                edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
+        for key, df in edisgo_obj.electromobility.flexibility_bands.items():
+            if not df.empty:
+                df = df.loc[timeindex]
+                edisgo_obj.electromobility.flexibility_bands.update({key: df})
+    # Heat pumps timeseries
+    if heat_pump:
+        for attr in ["cop_df", "heat_demand_df"]:
+            if not getattr(edisgo_obj.heat_pump, attr).empty:
+                setattr(
+                    edisgo_obj.heat_pump,
+                    attr,
+                    getattr(edisgo_obj.heat_pump, attr).loc[timeindex],
+                )
+    # Demand Side Management timeseries
+    if dsm:
+        for attr in edisgo_obj.dsm._attributes:
+            if not getattr(edisgo_obj.dsm, attr).empty:
+                setattr(
+                    edisgo_obj.dsm,
+                    attr,
+                    getattr(edisgo_obj.dsm, attr).loc[timeindex],
+                )
+    # Overlying grid timeseries
+    if overlying_grid:
+        for attr in edisgo_obj.overlying_grid._attributes:
+            if not getattr(edisgo_obj.overlying_grid, attr).empty:
+                if attr in [
+                    "thermal_storage_units_central_soc",
+                    "thermal_storage_units_decentral_soc",
+                    "storage_units_soc",
+                ]:
+                    try:
+                        setattr(
+                            edisgo_obj.overlying_grid,
+                            attr,
+                            getattr(edisgo_obj.overlying_grid, attr).loc[
+                                pd.Index(timeindex).append(
+                                    pd.Index([timeindex[-1] + frequency])
+                                )
+                            ],
+                        )
+                    except KeyError:
+                        setattr(
+                            edisgo_obj.overlying_grid,
+                            attr,
+                            getattr(edisgo_obj.overlying_grid, attr).loc[timeindex],
+                        )
+                else:
+                    setattr(
+                        edisgo_obj.overlying_grid,
+                        attr,
+                        getattr(edisgo_obj.overlying_grid, attr).loc[timeindex],
+                    )
 
 
 def resample(
