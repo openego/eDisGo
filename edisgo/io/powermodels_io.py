@@ -1372,7 +1372,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
         management strategy.
 
     Returns
-     ----------
+    ----------
     :numpy:`numpy.ndarray<ndarray>` or list
         Updated array containing all flexible loads that allow for application of demand
         side management strategy.
@@ -1714,6 +1714,8 @@ def _build_component_timeseries(
             for storage in psa_net.storage_units.index
             if storage not in list(flexible_storage_units)
         ]
+    flex_loads = np.concatenate((flexible_hps, flexible_cps))
+    inflexible_loads = [_ for _ in psa_net.loads.index if _ not in flex_loads]
     if kind == "gen":
         p_set2 = (psa_net.generators_t.p_set[disp_gens]).round(20)
         q_set2 = (psa_net.generators_t.q_set[disp_gens]).round(20)
@@ -1797,61 +1799,32 @@ def _build_component_timeseries(
                 "qg": q_set[comp].values.tolist(),
             }
     elif kind == "load":
-        flex_loads = np.concatenate((flexible_hps, flexible_cps))
-        if len(flex_loads) == 0:
-            p_set = (
-                pd.concat(
-                    [
-                        psa_net.loads_t.p_set,
-                        -1
-                        * psa_net.storage_units_t.p_set[inflexible_storage_units].clip(
-                            upper=0
-                        ),
-                    ],
-                    axis=1,
-                )
-                / s_base
-            ).round(20)
-            q_set = (
-                pd.concat(
-                    [
-                        psa_net.loads_t.q_set,
-                        -1
-                        * psa_net.storage_units_t.q_set[inflexible_storage_units].clip(
-                            lower=0
-                        ),
-                    ],
-                    axis=1,
-                )
-                / s_base
-            ).round(20)
-        else:
-            p_set = (
-                pd.concat(
-                    [
-                        psa_net.loads_t.p_set.drop(columns=flex_loads),
-                        -1
-                        * psa_net.storage_units_t.p_set[inflexible_storage_units].clip(
-                            upper=0
-                        ),
-                    ],
-                    axis=1,
-                )
-                / s_base
-            ).round(20)
-            q_set = (
-                pd.concat(
-                    [
-                        psa_net.loads_t.q_set.drop(columns=flex_loads),
-                        -1
-                        * psa_net.storage_units_t.q_set[inflexible_storage_units].clip(
-                            lower=0
-                        ),
-                    ],
-                    axis=1,
-                )
-                / s_base
-            ).round(20)
+        p_set = (
+            pd.concat(
+                [
+                    psa_net.loads_t.p_set.loc[:, inflexible_loads],
+                    -1
+                    * psa_net.storage_units_t.p_set[inflexible_storage_units].clip(
+                        upper=0
+                    ),
+                ],
+                axis=1,
+            )
+            / s_base
+        ).round(20)
+        q_set = (
+            pd.concat(
+                [
+                    psa_net.loads_t.q_set.loc[:, inflexible_loads],
+                    -1
+                    * psa_net.storage_units_t.q_set[inflexible_storage_units].clip(
+                        lower=0
+                    ),
+                ],
+                axis=1,
+            )
+            / s_base
+        ).round(20)
         for comp in p_set.columns:
             comp_i = _mapping(
                 psa_net,

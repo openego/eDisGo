@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import datetime
 import logging
 
@@ -700,8 +699,7 @@ def catch_convergence_reinforce_grid(
     logger.debug("Start 'catch-convergence' reinforcement.")
 
     # Get the timesteps from kwargs and then remove it to set it later manually
-    timesteps_pfa = kwargs.get("timesteps_pfa")
-    kwargs.pop("timesteps_pfa")
+    timesteps_pfa = kwargs.pop("timesteps_pfa", None)
     selected_timesteps = timesteps_pfa
 
     # Initial try
@@ -864,12 +862,6 @@ def enhanced_reinforce_grid(
         The reinforced eDisGo object.
 
     """
-    if kwargs.get("copy_grid", True):
-        edisgo_obj = copy.deepcopy(edisgo_object)
-    else:
-        edisgo_obj = edisgo_object
-
-    kwargs["copy_grid"] = False
     kwargs.pop("skip_mv_reinforcement", False)
 
     num_lv_grids_standard_lines = 0
@@ -880,12 +872,12 @@ def enhanced_reinforce_grid(
             "Separating lv grids. Set the parameter 'separate_lv_grids' to False if "
             "this is not desired."
         )
-        run_separate_lv_grids(edisgo_obj, threshold=separation_threshold)
+        run_separate_lv_grids(edisgo_object, threshold=separation_threshold)
 
     logger.info("Run initial grid reinforcement for single LV grids.")
-    for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids):
+    for lv_grid in list(edisgo_object.topology.mv_grid.lv_grids):
         logger.info(f"Check initial convergence for {lv_grid=}.")
-        _, ts_not_converged = edisgo_obj.analyze(
+        _, ts_not_converged = edisgo_object.analyze(
             mode="lv", raise_not_converged=False, lv_grid_id=lv_grid.id
         )
         if len(ts_not_converged) > 0:
@@ -893,16 +885,18 @@ def enhanced_reinforce_grid(
                 f"Not all time steps converged in initial power flow analysis for "
                 f"{lv_grid=}. It is therefore tried to be split."
             )
-            transformers_changes, lines_changes = separate_lv_grid(edisgo_obj, lv_grid)
+            transformers_changes, lines_changes = separate_lv_grid(
+                edisgo_object, lv_grid
+            )
             if len(lines_changes) > 0:
-                _add_lines_changes_to_equipment_changes(edisgo_obj, lines_changes, 1)
+                _add_lines_changes_to_equipment_changes(edisgo_object, lines_changes, 1)
             if len(transformers_changes) > 0:
                 _add_transformer_changes_to_equipment_changes(
-                    edisgo_obj, transformers_changes, 1, "added"
+                    edisgo_object, transformers_changes, 1, "added"
                 )
         try:
             logger.info(f"Try initial mode 'lv' reinforcement for {lv_grid=}.")
-            edisgo_obj.reinforce(
+            edisgo_object.reinforce(
                 mode="lv",
                 lv_grid_id=lv_grid.id,
                 catch_convergence_problems=True,
@@ -914,14 +908,16 @@ def enhanced_reinforce_grid(
 
     try:
         logger.info("Try initial enhanced reinforcement.")
-        edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
+        edisgo_object.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
         logger.info("Initial enhanced reinforcement succeeded.")
     except (ValueError, RuntimeError, exceptions.MaximumIterationError):
         logger.info("Initial enhanced reinforcement failed.")
         logger.info("Try mode 'mv' reinforcement.")
 
         try:
-            edisgo_obj.reinforce(mode="mv", catch_convergence_problems=True, **kwargs)
+            edisgo_object.reinforce(
+                mode="mv", catch_convergence_problems=True, **kwargs
+            )
             logger.info("Mode 'mv' reinforcement succeeded.")
         except (ValueError, RuntimeError, exceptions.MaximumIterationError):
             logger.info("Mode 'mv' reinforcement failed.")
@@ -929,14 +925,16 @@ def enhanced_reinforce_grid(
         logger.info("Try mode 'mvlv' reinforcement.")
 
         try:
-            edisgo_obj.reinforce(mode="mvlv", catch_convergence_problems=True, **kwargs)
+            edisgo_object.reinforce(
+                mode="mvlv", catch_convergence_problems=True, **kwargs
+            )
             logger.info("Mode 'mvlv' reinforcement succeeded.")
         except (ValueError, RuntimeError, exceptions.MaximumIterationError):
             logger.info("Mode 'mvlv' reinforcement failed.")
 
-        for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids):
+        for lv_grid in list(edisgo_object.topology.mv_grid.lv_grids):
             logger.info(f"Check convergence for {lv_grid=}.")
-            _, ts_not_converged = edisgo_obj.analyze(
+            _, ts_not_converged = edisgo_object.analyze(
                 mode="lv", raise_not_converged=False, lv_grid_id=lv_grid.id
             )
             if len(ts_not_converged) > 0:
@@ -945,19 +943,19 @@ def enhanced_reinforce_grid(
                     f"{lv_grid=}. It is therefore tried to be split."
                 )
                 transformers_changes, lines_changes = separate_lv_grid(
-                    edisgo_obj, lv_grid
+                    edisgo_object, lv_grid
                 )
                 if len(lines_changes) > 0:
                     _add_lines_changes_to_equipment_changes(
-                        edisgo_obj, lines_changes, 1
+                        edisgo_object, lines_changes, 1
                     )
                 if len(transformers_changes) > 0:
                     _add_transformer_changes_to_equipment_changes(
-                        edisgo_obj, transformers_changes, 1, "added"
+                        edisgo_object, transformers_changes, 1, "added"
                     )
             try:
                 logger.info(f"Try mode 'lv' reinforcement for {lv_grid=}.")
-                edisgo_obj.reinforce(
+                edisgo_object.reinforce(
                     mode="lv",
                     lv_grid_id=lv_grid.id,
                     catch_convergence_problems=True,
@@ -971,20 +969,22 @@ def enhanced_reinforce_grid(
                         logger.warning(
                             f"Change all lines to standard type in {lv_grid=}."
                         )
-                        edisgo_obj.results.measures = f"Standard lines in {lv_grid=}."
+                        edisgo_object.results.measures = (
+                            f"Standard lines in {lv_grid=}."
+                        )
                         num_lv_grids_standard_lines += 1
-                        lv_standard_line_type = edisgo_obj.config[
+                        lv_standard_line_type = edisgo_object.config[
                             "grid_expansion_standard_equipment"
                         ]["lv_line"]
                         lines = lv_grid.lines_df.index
-                        edisgo_obj.topology.change_line_type(
+                        edisgo_object.topology.change_line_type(
                             lines, lv_standard_line_type
                         )
                         lines_changes = {_: 1 for _ in lines}
                         _add_lines_changes_to_equipment_changes(
-                            edisgo_obj, lines_changes, 1
+                            edisgo_object, lines_changes, 1
                         )
-                        edisgo_obj.reinforce(
+                        edisgo_object.reinforce(
                             mode="lv",
                             lv_grid_id=lv_grid.id,
                             catch_convergence_problems=True,
@@ -998,10 +998,10 @@ def enhanced_reinforce_grid(
                         logger.warning(
                             f"Aggregate all nodes to station bus in {lv_grid=}."
                         )
-                        edisgo_obj.results.measures = f"Aggregation of {lv_grid=}."
+                        edisgo_object.results.measures = f"Aggregation of {lv_grid=}."
                         num_lv_grids_aggregated += 1
                         try:
-                            edisgo_obj.topology.aggregate_lv_grid_at_station(
+                            edisgo_object.topology.aggregate_lv_grid_at_station(
                                 lv_grid_id=lv_grid.id
                             )
                             logger.info(
@@ -1015,7 +1015,9 @@ def enhanced_reinforce_grid(
                             raise e
 
         try:
-            edisgo_obj.reinforce(mode=None, catch_convergence_problems=True, **kwargs)
+            edisgo_object.reinforce(
+                mode=None, catch_convergence_problems=True, **kwargs
+            )
             logger.info("Enhanced reinforcement succeeded.")
         except Exception as e:
             logger.info("Enhanced reinforcement failed.")
@@ -1028,23 +1030,23 @@ def enhanced_reinforce_grid(
                 f"exchanged by standard lines."
             )
             logger.warning(msg)
-            edisgo_obj.results.measures = msg
+            edisgo_object.results.measures = msg
         else:
             msg = (
                 "Enhanced reinforcement: No exchange of lines with standard lines or "
                 "aggregation at MV/LV station needed."
             )
             logger.info(msg)
-            edisgo_obj.results.measures = msg
+            edisgo_object.results.measures = msg
         if num_lv_grids_aggregated > 0:
             msg = (
                 f"Enhanced reinforcement: In {num_lv_grids_aggregated} LV grid(s) all "
                 f"components were aggregated at the MV/LV station."
             )
             logger.warning(msg)
-            edisgo_obj.results.measures = msg
+            edisgo_object.results.measures = msg
 
-    return edisgo_obj
+    return edisgo_object
 
 
 def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> None:
