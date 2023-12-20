@@ -52,16 +52,11 @@ def _make_grid_list(edisgo_obj: EDisGo, grid: object = None) -> list:
     if edisgo_obj is None and grid is None:
         raise ValueError("Pass an EDisGo object and an grid")
     elif grid is not None:
-        grid_name_list = [str(edisgo_obj.topology.mv_grid)]
-        grid_name_list = grid_name_list + list(
-            map(str, edisgo_obj.topology.mv_grid.lv_grids)
-        )
-        grid_list = [edisgo_obj.topology.mv_grid]
-        grid_list = grid_list + list(edisgo_obj.topology.mv_grid.lv_grids)
+        grid_list = edisgo_obj.topology.grids
+        grid_name_list = list(map(str, grid_list))
         grid_list = [grid_list[grid_name_list.index(str(grid))]]
     else:
-        grid_list = [edisgo_obj.topology.mv_grid]
-        grid_list = grid_list + list(edisgo_obj.topology.mv_grid.lv_grids)
+        grid_list = edisgo_obj.topology.grids
 
     return grid_list
 

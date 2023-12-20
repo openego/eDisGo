@@ -11,7 +11,6 @@ from edisgo.network.dsm import DSM
 class TestDSM:
     @pytest.yield_fixture(autouse=True)
     def setup_dsm_test_data(self):
-
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.p_max = pd.DataFrame(
             data={
@@ -48,7 +47,6 @@ class TestDSM:
         self.dsm.e_min = self.e_min
 
     def test_reduce_memory(self):
-
         # check with default value
         assert (self.dsm.p_max.dtypes == "float64").all()
         assert (self.dsm.e_max.dtypes == "float64").all()
@@ -69,7 +67,6 @@ class TestDSM:
         self.dsm.reduce_memory()
 
     def test_to_csv(self):
-
         # test with default values
         save_dir = os.path.join(os.getcwd(), "dsm_csv")
         self.dsm.to_csv(save_dir)
@@ -93,7 +90,6 @@ class TestDSM:
         shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-
         # write to csv
         save_dir = os.path.join(os.getcwd(), "dsm_csv")
         self.dsm.to_csv(save_dir)
