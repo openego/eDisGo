@@ -63,7 +63,6 @@ class TestStorageImport:
         assert "do not have a generator with the same building ID." not in caplog.text
 
     def test__grid_integration(self, caplog):
-
         # ############### test without PV rooftop ###############
 
         # manipulate bus of the largest storage to be an MV bus

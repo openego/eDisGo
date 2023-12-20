@@ -6,7 +6,6 @@ from edisgo.network.components import Generator, Load, Storage, Switch
 
 
 class TestComponents:
-
     # ToDo add tests for PotentialChargingParks
 
     @classmethod

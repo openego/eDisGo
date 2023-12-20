@@ -30,7 +30,6 @@ class TestOverlyingGrid:
         )
 
     def test_reduce_memory(self):
-
         # check with default value
         assert self.overlying_grid.renewables_curtailment.dtypes == "float64"
         assert (self.overlying_grid.feedin_district_heating.dtypes == "float64").all()
@@ -49,7 +48,6 @@ class TestOverlyingGrid:
         assert (self.overlying_grid.feedin_district_heating.dtypes == "float32").all()
 
     def test_to_csv(self):
-
         # test with default values
         save_dir = os.path.join(os.getcwd(), "overlying_grid_csv")
         self.overlying_grid.to_csv(save_dir)
@@ -71,7 +69,6 @@ class TestOverlyingGrid:
         shutil.rmtree(save_dir, ignore_errors=True)
 
     def test_from_csv(self):
-
         renewables_curtailment = self.overlying_grid.renewables_curtailment
         feedin_district_heating = self.overlying_grid.feedin_district_heating
 
@@ -104,7 +101,6 @@ class TestOverlyingGrid:
         shutil.rmtree(save_dir)
 
     def test_resample(self, caplog):
-
         mean_value_curtailment_orig = self.overlying_grid.renewables_curtailment.mean()
         mean_value_feedin_dh_orig = self.overlying_grid.feedin_district_heating.mean()
 
@@ -352,7 +348,6 @@ class TestOverlyingGridFunc:
                 )
 
     def test_distribute_overlying_grid_timeseries(self):
-
         self.setup_flexibility_data()
         edisgo_copy = distribute_overlying_grid_requirements(self.edisgo)
 
