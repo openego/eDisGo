@@ -796,7 +796,7 @@ def oedb(
     * Removes decommissioned power and CHP plants (all plants that do not have a source
       ID or whose source ID can not be matched to a new plant and are not of subtype
       pv_rooftop, as these are handled in a separate function)
-    * Updates existing power plants (plants whose source ID is in
+    * Updates existing power plants (plants whose source ID
       can be matched; solar, wind and CHP plants never have a source ID in
       the future scenarios and are therefore never updated). The following two cases
       are distinguished:
