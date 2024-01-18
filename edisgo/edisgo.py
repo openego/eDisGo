@@ -998,7 +998,7 @@ class EDisGo:
         range_num: int = 10,
         scale_timeseries: float | None = None,
         **kwargs,
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> tuple[pd.DatetimeIndex, pd.DatetimeIndex]:
         """
         Conducts a static, non-linear power flow analysis.
 
@@ -1196,6 +1196,7 @@ class EDisGo:
     def reinforce(
         self,
         timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
+        reduced_analysis: bool = False,
         copy_grid: bool = False,
         max_while_iterations: int = 20,
         split_voltage_band: bool = True,
@@ -1237,14 +1238,15 @@ class EDisGo:
               time steps. If your time series already represents the worst-case,
               keep the default value of None because finding the worst-case
               snapshots takes some time.
-            * 'reduced_analysis'
-              Reinforcement is conducted for all time steps at which at least one
-              branch shows its highest overloading or one bus shows its highest voltage
-              violation.
             * :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
               :pandas:`pandas.Timestamp<Timestamp>`
               Use this option to explicitly choose which time steps to consider.
-
+        reduced_analysis : bool
+              If True, reinforcement is conducted for all time steps at which at least
+              one branch shows its highest overloading or one bus shows its highest
+              voltage violation. Time steps to consider are specified through parameter
+              `timesteps_pfa`. If False, all time steps in parameter `timesteps_pfa`
+              are used. Default: False.
         copy_grid : bool
             If True, reinforcement is conducted on a copied grid and discarded.
             Default: False.
@@ -1301,26 +1303,31 @@ class EDisGo:
             reinforce MV/LV stations for LV worst-cases.
             Default: False.
         num_steps_loading : int
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            In case `reduced_analysis` is set to True, this parameter can be
             used to specify the number of most critical overloading events to consider.
             If None, `percentage` is used. Default: None.
         num_steps_voltage : int
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            In case `reduced_analysis` is set to True, this parameter can be
             used to specify the number of most critical voltage issues to select. If
             None, `percentage` is used. Default: None.
         percentage : float
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            In case `reduced_analysis` is set to True, this parameter can be
             used to specify the percentage of most critical time steps to select. The
             default is 1.0, in which case all most critical time steps are selected.
             Default: 1.0.
         use_troubleshooting_mode : bool
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            In case `reduced_analysis` is set to True, this parameter can be
             used to specify how to handle non-convergence issues in the power flow
             analysis. If set to True, non-convergence issues are tried to be
             circumvented by reducing load and feed-in until the power flow converges.
             The most critical time steps are then determined based on the power flow
             results with the reduced load and feed-in. If False, an error will be
             raised in case time steps do not converge. Default: True.
+        run_initial_analyze : bool
+            In case `reduced_analysis` is set to True, this parameter can be
+            used to specify whether to run an initial analyze to determine most
+            critical time steps or to use existing results. If set to False,
+            `use_troubleshooting_mode` is ignored. Default: True.
 
         Returns
         --------
@@ -1407,6 +1414,7 @@ class EDisGo:
 
             func(
                 edisgo_obj,
+                reduced_analysis=reduced_analysis,
                 max_while_iterations=max_while_iterations,
                 split_voltage_band=split_voltage_band,
                 without_generator_import=without_generator_import,

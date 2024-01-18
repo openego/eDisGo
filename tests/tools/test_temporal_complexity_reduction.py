@@ -51,6 +51,14 @@ class TestTemporalComplexityReduction:
         )
         assert len(ts_crit) == 3
 
+        ts_crit = temp_red.get_most_critical_time_steps(
+            self.edisgo,
+            num_steps_loading=2,
+            num_steps_voltage=2,
+            timesteps=self.edisgo.timeseries.timeindex[:24],
+        )
+        assert len(ts_crit) == 2
+
     def test__scored_most_critical_loading_time_interval(self):
         # test with default values
         ts_crit = temp_red._scored_most_critical_loading_time_interval(self.edisgo, 24)

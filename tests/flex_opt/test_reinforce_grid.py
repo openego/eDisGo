@@ -58,7 +58,7 @@ class TestReinforceGrid:
         # test reduced analysis
         res_reduced = reinforce_grid(
             edisgo=copy.deepcopy(self.edisgo),
-            timesteps_pfa="reduced_analysis",
+            reduced_analysis=True,
             num_steps_loading=4,
         )
         assert_frame_equal(

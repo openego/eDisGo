@@ -382,7 +382,13 @@ def _scored_most_critical_voltage_issues_time_interval(
     return time_intervals_df
 
 
-def _troubleshooting_mode(edisgo_obj):
+def _troubleshooting_mode(
+    edisgo_obj,
+    mode=None,
+    timesteps=None,
+    lv_grid_id=None,
+    scale_timeseries=None,
+):
     """
     Handles non-convergence issues in power flow by iteratively reducing load and
     feed-in until the power flow converges.
@@ -390,10 +396,36 @@ def _troubleshooting_mode(edisgo_obj):
     Load and feed-in is reduced in steps of 10% down to 20% of the original load
     and feed-in. The most critical time intervals / time steps can then be determined
     based on the power flow results with the reduced load and feed-in.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object
+    mode : str or None
+        Allows to toggle between power flow analysis for the whole network or just
+        the MV or one LV grid. See parameter `mode` in function
+        :attr:`~.EDisGo.analyze` for more information.
+    timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+        :pandas:`pandas.Timestamp<Timestamp>`
+        Timesteps specifies from which time steps to select most critical ones. It
+        defaults to None in which case all time steps in
+        :attr:`~.network.timeseries.TimeSeries.timeindex` are used.
+    lv_grid_id : int or str
+        ID (e.g. 1) or name (string representation, e.g. "LVGrid_1") of LV grid
+        to analyze in case mode is 'lv'. Default: None.
+    scale_timeseries : float or None
+        See parameter `scale_timeseries` in function :attr:`~.EDisGo.analyze` for more
+        information.
+
     """
     try:
         logger.debug("Running initial power flow for temporal complexity reduction.")
-        edisgo_obj.analyze()
+        edisgo_obj.analyze(
+            mode=mode,
+            timesteps=timesteps,
+            lv_grid_id=lv_grid_id,
+            scale_timeseries=scale_timeseries,
+        )
     # Exception is used, as non-convergence can also lead to RuntimeError, not only
     # ValueError
     except Exception:
@@ -404,12 +436,17 @@ def _troubleshooting_mode(edisgo_obj):
             "not all time steps converged. Power flow is run again with reduced "
             "network load."
         )
-        for fraction in np.arange(0.8, 0.0, step=-0.1):
+        if isinstance(scale_timeseries, float):
+            iter_start = scale_timeseries - 0.1
+        else:
+            iter_start = 0.8
+        for fraction in np.arange(iter_start, 0.0, step=-0.1):
             try:
                 edisgo_obj.analyze(
-                    troubleshooting_mode="iteration",
-                    range_start=fraction,
-                    range_num=1,
+                    mode=mode,
+                    timesteps=timesteps,
+                    lv_grid_id=lv_grid_id,
+                    scale_timeseries=fraction,
                 )
                 logger.info(
                     f"Power flow fully converged for a reduction factor "
@@ -601,10 +638,15 @@ def get_most_critical_time_intervals(
 
 def get_most_critical_time_steps(
     edisgo_obj: EDisGo,
+    mode=None,
+    timesteps=None,
+    lv_grid_id=None,
+    scale_timeseries=None,
     num_steps_loading=None,
     num_steps_voltage=None,
     percentage: float = 1.0,
     use_troubleshooting_mode=True,
+    run_initial_analyze=True,
 ) -> pd.DatetimeIndex:
     """
     Get the time steps with the most critical overloading and voltage issues.
@@ -613,6 +655,21 @@ def get_most_critical_time_steps(
     -----------
     edisgo_obj : :class:`~.EDisGo`
         The eDisGo API object
+    mode : str or None
+        Allows to toggle between power flow analysis for the whole network or just
+        the MV or one LV grid. See parameter `mode` in function
+        :attr:`~.EDisGo.analyze` for more information.
+    timesteps : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+        :pandas:`pandas.Timestamp<Timestamp>`
+        Timesteps specifies from which time steps to select most critical ones. It
+        defaults to None in which case all time steps in
+        :attr:`~.network.timeseries.TimeSeries.timeindex` are used.
+    lv_grid_id : int or str
+        ID (e.g. 1) or name (string representation, e.g. "LVGrid_1") of LV grid
+        to analyze in case mode is 'lv'. Default: None.
+    scale_timeseries : float or None
+        See parameter `scale_timeseries` in function :attr:`~.EDisGo.analyze` for more
+        information.
     num_steps_loading : int
         The number of most critical overloading events to select. If None, `percentage`
         is used. Default: None.
@@ -630,6 +687,10 @@ def get_most_critical_time_steps(
         are then determined based on the power flow results with the reduced load and
         feed-in. If False, an error will be raised in case time steps do not converge.
         Default: True.
+    run_initial_analyze : bool
+        This parameter can be used to specify whether to run an initial analyze to
+        determine most critical time steps or to use existing results. If set to False,
+        `use_troubleshooting_mode` is ignored. Default: True.
 
     Returns
     --------
@@ -639,11 +700,25 @@ def get_most_critical_time_steps(
 
     """
     # Run power flow
-    if use_troubleshooting_mode:
-        edisgo_obj = _troubleshooting_mode(edisgo_obj)
-    else:
-        logger.debug("Running initial power flow for temporal complexity reduction.")
-        edisgo_obj.analyze()
+    if run_initial_analyze:
+        if use_troubleshooting_mode:
+            edisgo_obj = _troubleshooting_mode(
+                edisgo_obj,
+                mode=mode,
+                timesteps=timesteps,
+                lv_grid_id=lv_grid_id,
+                scale_timeseries=scale_timeseries,
+            )
+        else:
+            logger.debug(
+                "Running initial power flow for temporal complexity reduction."
+            )
+            edisgo_obj.analyze(
+                mode=mode,
+                timesteps=timesteps,
+                lv_grid_id=lv_grid_id,
+                scale_timeseries=scale_timeseries,
+            )
 
     # Select most critical steps based on current violations
     loading_scores = _scored_most_critical_loading(edisgo_obj)

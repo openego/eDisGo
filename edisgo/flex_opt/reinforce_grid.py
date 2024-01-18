@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 def reinforce_grid(
     edisgo: EDisGo,
     timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
+    reduced_analysis: bool = False,
     max_while_iterations: int = 20,
     split_voltage_band: bool = True,
     mode: str | None = None,
@@ -47,6 +48,10 @@ def reinforce_grid(
         timesteps_pfa specifies for which time steps power flow analysis is
         conducted. See parameter `timesteps_pfa` in function :attr:`~.EDisGo.reinforce`
         for more information.
+    reduced_analysis : bool
+        Specifies, whether to run reinforcement on a subset of time steps that are most
+        critical. See parameter `reduced_analysis` in function
+        :attr:`~.EDisGo.reinforce` for more information.
     max_while_iterations : int
         Maximum number of times each while loop is conducted. Default: 20.
     split_voltage_band : bool
@@ -84,23 +89,28 @@ def reinforce_grid(
         reinforce MV/LV stations for LV worst-cases.
         Default: False.
     num_steps_loading : int
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify the number of most critical overloading events to consider.
         If None, `percentage` is used. Default: None.
     num_steps_voltage : int
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify the number of most critical voltage issues to select. If None,
         `percentage` is used. Default: None.
     percentage : float
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify the percentage of most critical time steps to select. The default
         is 1.0, in which case all most critical time steps are selected.
         Default: 1.0.
     use_troubleshooting_mode : bool
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify how to handle non-convergence issues in the power flow analysis.
         See parameter `use_troubleshooting_mode` in function :attr:`~.EDisGo.reinforce`
         for more information. Default: True.
+    run_initial_analyze : bool
+        In case `reduced_analysis` is set to True, this parameter can be
+        used to specify whether to run an initial analyze to determine most
+        critical time steps or to use existing results. If set to False,
+        `use_troubleshooting_mode` is ignored. Default: True.
 
     Returns
     -------
@@ -139,14 +149,6 @@ def reinforce_grid(
                     snapshots["min_residual_load"],
                 ]
             ).dropna()
-        elif isinstance(timesteps_pfa, str) and timesteps_pfa == "reduced_analysis":
-            timesteps_pfa = get_most_critical_time_steps(
-                edisgo,
-                num_steps_loading=kwargs.get("num_steps_loading", None),
-                num_steps_voltage=kwargs.get("num_steps_voltage", None),
-                percentage=kwargs.get("percentage", 1.0),
-                use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
-            )
         # if timesteps_pfa is not of type datetime or does not contain
         # datetimes throw an error
         elif not isinstance(timesteps_pfa, datetime.datetime):
@@ -169,6 +171,23 @@ def reinforce_grid(
         analyze_mode = None
     else:
         analyze_mode = mode
+
+    if reduced_analysis:
+        timesteps_pfa = get_most_critical_time_steps(
+            edisgo,
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            lv_grid_id=lv_grid_id,
+            scale_timeseries=scale_timeseries,
+            num_steps_loading=kwargs.get("num_steps_loading", None),
+            num_steps_voltage=kwargs.get("num_steps_voltage", None),
+            percentage=kwargs.get("percentage", 1.0),
+            use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
+            run_initial_analyze=kwargs.get("run_initial_analyze", True),
+        )
+    if timesteps_pfa is not None and len(timesteps_pfa) == 0:
+        logger.debug("Zero time steps for grid reinforcement.")
+        return edisgo.results
 
     edisgo.analyze(
         mode=analyze_mode,
@@ -686,6 +705,7 @@ def catch_convergence_reinforce_grid(
                 edisgo,
                 timesteps_pfa=selected_timesteps,
                 scale_timeseries=set_scaling_factor,
+                use_troubleshooting_mode=troubleshooting_mode,
                 **kwargs,
             )
             converged = True
@@ -701,11 +721,13 @@ def catch_convergence_reinforce_grid(
     # Get the timesteps from kwargs and then remove it to set it later manually
     timesteps_pfa = kwargs.pop("timesteps_pfa", None)
     selected_timesteps = timesteps_pfa
+    troubleshooting_mode_set = kwargs.pop("troubleshooting_mode", True)
 
     # Initial try
     logger.info("Run initial reinforcement.")
     set_scaling_factor = 1.0
     iteration = 0
+    troubleshooting_mode = False
     converged = reinforce()
     if converged is False:
         logger.info("Initial reinforcement did not succeed.")
@@ -737,6 +759,7 @@ def catch_convergence_reinforce_grid(
             "reinforcement."
         )
         selected_timesteps = converging_timesteps
+        troubleshooting_mode = troubleshooting_mode_set
         reinforce()
 
     # Run reinforcement for time steps that did not converge after initial reinforcement
@@ -746,6 +769,7 @@ def catch_convergence_reinforce_grid(
             "reinforcement."
         )
         selected_timesteps = non_converging_timesteps
+        troubleshooting_mode = False
         converged = reinforce()
 
     if converged:
@@ -779,6 +803,7 @@ def catch_convergence_reinforce_grid(
                     ) + highest_converged_scaling_factor
 
             logger.info(f"Try reinforcement with {set_scaling_factor=} at {iteration=}")
+            troubleshooting_mode = False
             converged = reinforce()
             if converged:
                 logger.info(
@@ -799,6 +824,7 @@ def catch_convergence_reinforce_grid(
     if set_scaling_factor != 1:
         logger.info("Run final reinforcement.")
         selected_timesteps = timesteps_pfa
+        troubleshooting_mode = False
         reinforce()
 
     return edisgo.results
@@ -809,6 +835,7 @@ def enhanced_reinforce_grid(
     activate_cost_results_disturbing_mode: bool = False,
     separate_lv_grids: bool = True,
     separation_threshold: int | float = 2,
+    use_standard_line_type: bool = True,
     **kwargs,
 ) -> EDisGo:
     """
@@ -849,7 +876,12 @@ def enhanced_reinforce_grid(
     separation_threshold : int or float
         Overloading threshold for LV grid separation. If the overloading is higher than
         the threshold times the total nominal apparent power of the MV/LV transformer(s)
-        the grid is separated.
+        the grid is separated. Default: 2.
+    use_standard_line_type : bool
+        Only used when `separate_lv_grids` is set to True. If use_standard_line_type is
+        True, standard line type is used to connect bus, where feeder is split, to
+        the station. If False, the same line type and number of parallel lines as
+        the original line is used. Default: True.
     kwargs : dict
         Keyword arguments can be all parameters of function
         :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`, except
@@ -863,6 +895,7 @@ def enhanced_reinforce_grid(
 
     """
     kwargs.pop("skip_mv_reinforcement", False)
+    # ToDo kwargs timesteps_pfa is currently ignored, should that be changed?
 
     num_lv_grids_standard_lines = 0
     num_lv_grids_aggregated = 0
@@ -872,12 +905,16 @@ def enhanced_reinforce_grid(
             "Separating lv grids. Set the parameter 'separate_lv_grids' to False if "
             "this is not desired."
         )
-        run_separate_lv_grids(edisgo_object, threshold=separation_threshold)
+        run_separate_lv_grids(
+            edisgo_object,
+            threshold=separation_threshold,
+            use_standard_line_type=use_standard_line_type,
+        )
 
     logger.info("Run initial grid reinforcement for single LV grids.")
     for lv_grid in list(edisgo_object.topology.mv_grid.lv_grids):
         logger.info(f"Check initial convergence for {lv_grid=}.")
-        _, ts_not_converged = edisgo_object.analyze(
+        ts_converged, ts_not_converged = edisgo_object.analyze(
             mode="lv", raise_not_converged=False, lv_grid_id=lv_grid.id
         )
         if len(ts_not_converged) > 0:
@@ -896,12 +933,32 @@ def enhanced_reinforce_grid(
                 )
         try:
             logger.info(f"Try initial mode 'lv' reinforcement for {lv_grid=}.")
-            edisgo_object.reinforce(
-                mode="lv",
-                lv_grid_id=lv_grid.id,
-                catch_convergence_problems=True,
-                **kwargs,
-            )
+            if len(ts_not_converged) > 0:
+                # if there are time steps that did not converge, run reinforcement
+                # first on converged time steps
+                edisgo_object.reinforce(
+                    mode="lv",
+                    lv_grid_id=lv_grid.id,
+                    catch_convergence_problems=False,
+                    timesteps_pfa=ts_converged,
+                    **kwargs,
+                )
+                # run reinforcement again in catch-convergence mode with all time steps
+                edisgo_object.reinforce(
+                    mode="lv",
+                    lv_grid_id=lv_grid.id,
+                    catch_convergence_problems=True,
+                    **kwargs,
+                )
+            else:
+                # if all time steps converged, run normal reinforcement
+                edisgo_object.reinforce(
+                    mode="lv",
+                    lv_grid_id=lv_grid.id,
+                    catch_convergence_problems=False,
+                    run_initial_analyze=False,
+                    **kwargs,
+                )
             logger.info(f"Initial mode 'lv' reinforcement for {lv_grid} successful.")
         except (ValueError, RuntimeError, exceptions.MaximumIterationError):
             logger.warning(f"Initial mode 'lv' reinforcement for {lv_grid} failed.")
@@ -934,7 +991,7 @@ def enhanced_reinforce_grid(
 
         for lv_grid in list(edisgo_object.topology.mv_grid.lv_grids):
             logger.info(f"Check convergence for {lv_grid=}.")
-            _, ts_not_converged = edisgo_object.analyze(
+            ts_converged, ts_not_converged = edisgo_object.analyze(
                 mode="lv", raise_not_converged=False, lv_grid_id=lv_grid.id
             )
             if len(ts_not_converged) > 0:
@@ -955,12 +1012,33 @@ def enhanced_reinforce_grid(
                     )
             try:
                 logger.info(f"Try mode 'lv' reinforcement for {lv_grid=}.")
-                edisgo_object.reinforce(
-                    mode="lv",
-                    lv_grid_id=lv_grid.id,
-                    catch_convergence_problems=True,
-                    **kwargs,
-                )
+                if len(ts_not_converged) > 0:
+                    # if there are time steps that did not converge, run reinforcement
+                    # first on converged time steps
+                    edisgo_object.reinforce(
+                        mode="lv",
+                        lv_grid_id=lv_grid.id,
+                        catch_convergence_problems=False,
+                        timesteps_pfa=ts_converged,
+                        **kwargs,
+                    )
+                    # run reinforcement again in catch-convergence mode with all time
+                    # steps
+                    edisgo_object.reinforce(
+                        mode="lv",
+                        lv_grid_id=lv_grid.id,
+                        catch_convergence_problems=True,
+                        **kwargs,
+                    )
+                else:
+                    # if all time steps converged, run normal reinforcement
+                    edisgo_object.reinforce(
+                        mode="lv",
+                        lv_grid_id=lv_grid.id,
+                        catch_convergence_problems=False,
+                        run_initial_analyze=False,
+                        **kwargs,
+                    )
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} successful.")
             except (ValueError, RuntimeError, exceptions.MaximumIterationError):
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} failed.")
@@ -1049,7 +1127,11 @@ def enhanced_reinforce_grid(
     return edisgo_object
 
 
-def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> None:
+def run_separate_lv_grids(
+    edisgo_obj: EDisGo,
+    threshold: int | float = 2,
+    use_standard_line_type: bool = True,
+) -> None:
     """
     Separate all highly overloaded LV grids within the MV grid.
 
@@ -1067,6 +1149,10 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
         Overloading threshold. If the overloading is higher than the threshold times
         the total nominal apparent power of the MV/LV transformer(s), the grid is
         separated.
+    use_standard_line_type : bool
+        If use_standard_line_type is True, standard line type is used to connect bus
+        where feeder is split to the station. If False, the same line type and number
+        of parallel lines as the original line is used. Default: True.
 
     Returns
     -------
@@ -1141,7 +1227,7 @@ def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> Non
             if worst_case > threshold * transformers_s_nom:
                 logger.info(f"Trying to separate {lv_grid}...")
                 transformers_changes, lines_changes = separate_lv_grid(
-                    edisgo_obj, lv_grid
+                    edisgo_obj, lv_grid, use_standard_line_type
                 )
                 if len(lines_changes) > 0:
                     _add_lines_changes_to_equipment_changes(
