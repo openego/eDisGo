@@ -172,7 +172,7 @@ def add_basemap(ax, zoom=12):
     Adds map to a plot.
 
     """
-    url = ctx.providers.Stamen.TonerLite
+    url = ctx.providers.CartoDB.Positron
     xmin, xmax, ymin, ymax = ax.axis()
     basemap, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=url)
     ax.imshow(basemap, extent=extent, interpolation="bilinear")
