@@ -7,7 +7,7 @@ from edisgo.tools import temporal_complexity_reduction as temp_red
 
 
 class TestTemporalComplexityReduction:
-    @classmethod
+    @pytest.fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
