@@ -42,7 +42,7 @@ def _scored_most_critical_loading(edisgo_obj: EDisGo) -> pd.Series:
     # Get lines that have violations
     crit_lines_score = relative_i_res[relative_i_res > 1]
 
-    # Get most critical timesteps per component
+    # Get most critical time steps per component
     crit_lines_score = (
         (crit_lines_score[crit_lines_score == crit_lines_score.max()])
         .dropna(how="all")
@@ -115,23 +115,23 @@ def _scored_most_critical_loading_time_interval(
         The eDisGo API object
     time_steps_per_time_interval : int
         Amount of continuous time steps in an interval that violation is determined for.
-        Currently, these can only be multiples of 24.
+        See parameter `time_steps_per_time_interval` in
+        :func:`~get_most_critical_time_intervals` for more information.
         Default: 168.
     time_steps_per_day : int
-        Number of time steps in one day. In case of an hourly resolution this is 24.
-        As currently only an hourly resolution is possible, this value should always be
-        24.
+        Number of time steps in one day. See parameter `time_steps_per_day` in
+        :func:`~get_most_critical_time_intervals` for more information.
         Default: 24.
     time_step_day_start : int
-        Time step of the day at which each interval should start. If you want it to
-        start at midnight, this should be set to 0. Default: 0.
+        Time step of the day at which each interval should start. See parameter
+        `time_step_day_start` in :func:`~get_most_critical_time_intervals` for more
+        information.
+        Default: 0.
     overloading_factor : float
         Factor at which an overloading of a component is considered to be close enough
-        to the highest overloading of that component. This is used to determine the
-        number of components that reach their highest overloading in each time interval.
-        Per default, it is set to 0.95, which means that if the highest overloading of
-        a component is 2, it will be considered maximally overloaded at an overloading
-        of higher or equal to 2*0.95.
+        to the highest overloading of that component. See parameter
+        `overloading_factor` in :func:`~get_most_critical_time_intervals` for more
+        information.
         Default: 0.95.
 
     Returns
@@ -171,52 +171,15 @@ def _scored_most_critical_loading_time_interval(
     costs = pd.concat([costs_lines, costs_trafos_lv, costs_trafos_mv])
     crit_lines_cost = crit_lines_score * costs
 
-    # Get highest overloading in each window for each component and sum it up
-    crit_timesteps = (
-        crit_lines_cost.rolling(
-            window=int(time_steps_per_time_interval), closed="right"
-        )
-        .max()
-        .sum(axis=1)
+    time_intervals_df = _most_critical_time_interval(
+        costs_per_time_step=crit_lines_cost,
+        grid_issues_magnitude_df=crit_lines_score,
+        which="overloading",
+        deviation_factor=overloading_factor,
+        time_steps_per_time_interval=time_steps_per_time_interval,
+        time_steps_per_day=time_steps_per_day,
+        time_step_day_start=time_step_day_start,
     )
-    # select each nth time window to only consider windows starting at a certain time
-    # of day and sort time intervals in descending order
-    # ToDo: To make function work for frequencies other than hourly, the following
-    #  needs to be adapted to index based on time index instead of iloc
-    crit_timesteps = (
-        crit_timesteps.iloc[int(time_steps_per_time_interval) - 1 :]
-        .iloc[time_step_day_start + 1 :: time_steps_per_day]
-        .sort_values(ascending=False)
-    )
-    # move time index as rolling gives the end of the time interval, but we want the
-    # beginning
-    timesteps = crit_timesteps.index - pd.DateOffset(
-        hours=int(time_steps_per_time_interval)
-    )
-    time_intervals = [
-        pd.date_range(
-            start=timestep, periods=int(time_steps_per_time_interval), freq="h"
-        )
-        for timestep in timesteps
-    ]
-
-    # make dataframe with time steps in each time interval and the percentage of
-    # components that reach their maximum overloading
-    time_intervals_df = pd.DataFrame(
-        index=range(len(time_intervals)),
-        columns=["time_steps", "percentage_max_overloaded_components"],
-    )
-    time_intervals_df["time_steps"] = time_intervals
-    lines_no_max = crit_lines_score.columns.values
-    total_lines = len(lines_no_max)
-    max_per_line = crit_lines_score.max()
-    for i in range(len(time_intervals)):
-        # check if worst overloading of every line is included in time interval
-        max_per_line_ti = crit_lines_score.loc[time_intervals[i]].max()
-        time_intervals_df["percentage_max_overloaded_components"][i] = (
-            len(max_per_line_ti[max_per_line_ti >= max_per_line * overloading_factor])
-            / total_lines
-        )
 
     return time_intervals_df
 
@@ -245,24 +208,23 @@ def _scored_most_critical_voltage_issues_time_interval(
         The eDisGo API object
     time_steps_per_time_interval : int
         Amount of continuous time steps in an interval that violation is determined for.
-        Currently, these can only be multiples of 24.
+        See parameter `time_steps_per_time_interval` in
+        :func:`~get_most_critical_time_intervals` for more information.
         Default: 168.
     time_steps_per_day : int
-        Number of time steps in one day. In case of an hourly resolution this is 24.
-        As currently only an hourly resolution is possible, this value should always be
-        24.
+        Number of time steps in one day. See parameter `time_steps_per_day` in
+        :func:`~get_most_critical_time_intervals` for more information.
         Default: 24.
     time_step_day_start : int
-        Time step of the day at which each interval should start. If you want it to
-        start at midnight, this should be set to 0. Default: 0.
+        Time step of the day at which each interval should start. See parameter
+        `time_step_day_start` in :func:`~get_most_critical_time_intervals` for more
+        information.
+        Default: 0.
     voltage_deviation_factor : float
         Factor at which a voltage deviation at a bus is considered to be close enough
-        to the highest voltage deviation at that bus. This is used to determine the
-        number of buses that reach their highest voltage deviation in each time
-        interval. Per default, it is set to 0.95. This means that if the highest voltage
-        deviation at a bus is 0.2, it will be included in the determination of number
-        of buses that reach their maximum voltage deviation in a certain time interval
-        at a voltage deviation of higher or equal to 0.2*0.95.
+        to the highest voltage deviation at that bus. See parameter
+        `voltage_deviation_factor` in :func:`~get_most_critical_time_intervals` for more
+        information.
         Default: 0.95.
 
     Returns
@@ -284,7 +246,7 @@ def _scored_most_critical_voltage_issues_time_interval(
     voltage_diff = check_tech_constraints.voltage_deviation_from_allowed_voltage_limits(
         edisgo_obj
     )
-    voltage_diff = voltage_diff.abs()[voltage_diff.abs() > 0]
+    voltage_diff = voltage_diff[voltage_diff != 0.0].abs()
 
     # determine costs per feeder
     lv_station_buses = [
@@ -331,9 +293,92 @@ def _scored_most_critical_voltage_issues_time_interval(
     # weigh feeder voltage violation with costs per feeder
     voltage_diff_feeder = voltage_diff_feeder * costs_per_feeder.squeeze()
 
-    # Get the highest voltage issues in each window for each feeder and sum it up
+    time_intervals_df = _most_critical_time_interval(
+        costs_per_time_step=voltage_diff_feeder,
+        grid_issues_magnitude_df=voltage_diff_copy,
+        which="voltage",
+        deviation_factor=voltage_deviation_factor,
+        time_steps_per_time_interval=time_steps_per_time_interval,
+        time_steps_per_day=time_steps_per_day,
+        time_step_day_start=time_step_day_start,
+    )
+
+    return time_intervals_df
+
+
+def _most_critical_time_interval(
+    costs_per_time_step,
+    grid_issues_magnitude_df,
+    which,
+    deviation_factor=0.95,
+    time_steps_per_time_interval=168,
+    time_steps_per_day=24,
+    time_step_day_start=0,
+):
+    """
+    Helper function used in functions
+    :func:`~_scored_most_critical_loading_time_interval` and
+    :func:`~_scored_most_critical_voltage_issues_time_interval`
+    to get time intervals sorted by severity of grid issue.
+
+    This function currently only works for an hourly resolution!
+
+    Parameters
+    -----------
+    costs_per_time_step : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing the estimated grid expansion costs per line or feeder.
+        Columns contain line or feeder names.
+        Index of the dataframe are all time steps power flow analysis
+        was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
+    grid_issues_magnitude_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe containing the relative overloading or voltage deviation per time
+        step in case of an overloading or voltage issue in that time step.
+        Columns contain line or bus names.
+        Index of the dataframe are all time steps power flow analysis
+        was conducted for of type :pandas:`pandas.Timestamp<Timestamp>`.
+    which : str
+        Defines whether function is used to determine most critical time intervals for
+        voltage or overloading problems. Can either be "voltage" or "overloading".
+    deviation_factor : float
+        Factor at which a grid issue is considered to be close enough to the highest
+        grid issue. In case parameter `which` is "voltage", see parameter
+        `voltage_deviation_factor` in :func:`~get_most_critical_time_intervals` for more
+        information. In case parameter `which` is "overloading", see parameter
+        `overloading_factor` in :func:`~get_most_critical_time_intervals` for more
+        information.
+        Default: 0.95.
+    time_steps_per_time_interval : int
+        Amount of continuous time steps in an interval that violation is determined for.
+        See parameter `time_steps_per_time_interval` in
+        :func:`~get_most_critical_time_intervals` for more information.
+        Default: 168.
+    time_steps_per_day : int
+        Number of time steps in one day. See parameter `time_steps_per_day` in
+        :func:`~get_most_critical_time_intervals` for more information.
+        Default: 24.
+    time_step_day_start : int
+        Time step of the day at which each interval should start. See parameter
+        `time_step_day_start` in :func:`~get_most_critical_time_intervals` for more
+        information.
+        Default: 0.
+
+    Returns
+    --------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Contains time intervals in which grid expansion needs due to voltage issues
+        are detected. The time intervals are sorted descending
+        by the expected cumulated grid expansion costs, so that the time interval with
+        the highest expected costs corresponds to index 0. The time steps in the
+        respective time interval are given in column "time_steps" and the share
+        of buses for which the maximum voltage deviation is reached during the time
+        interval is given in column "percentage_buses_max_voltage_deviation". Each bus
+        is only considered once. That means if its maximum voltage deviation was
+        already considered in an earlier time interval, it is not considered again.
+
+    """
+    # get the highest issues in each window for each feeder and sum it up
     crit_timesteps = (
-        voltage_diff_feeder.rolling(
+        costs_per_time_step.rolling(
             window=int(time_steps_per_time_interval), closed="right"
         )
         .max()
@@ -359,26 +404,26 @@ def _scored_most_critical_voltage_issues_time_interval(
     ]
 
     # make dataframe with time steps in each time interval and the percentage of
-    # buses that reach their maximum voltage deviation
+    # buses/branches that reach their maximum voltage deviation / overloading
+    if which == "voltage":
+        percentage = "percentage_buses_max_voltage_deviation"
+    else:
+        percentage = "percentage_max_overloaded_components"
     time_intervals_df = pd.DataFrame(
         index=range(len(time_intervals)),
-        columns=["time_steps", "percentage_buses_max_voltage_deviation"],
+        columns=["time_steps", percentage],
     )
     time_intervals_df["time_steps"] = time_intervals
 
-    max_per_bus = voltage_diff_copy.max().fillna(0)
-    buses_no_max = max_per_bus.index.values
-    total_buses = len(buses_no_max)
+    max_per_bus = grid_issues_magnitude_df.max().fillna(0)
+    total_buses = len(grid_issues_magnitude_df.columns)
     for i in range(len(time_intervals)):
         # check if worst voltage deviation of every bus is included in time interval
-        max_per_bus_ti = voltage_diff_copy.loc[time_intervals[i]].max()
-        time_intervals_df["percentage_buses_max_voltage_deviation"][i] = (
-            len(
-                max_per_bus_ti[max_per_bus_ti >= max_per_bus * voltage_deviation_factor]
-            )
+        max_per_bus_ti = grid_issues_magnitude_df.loc[time_intervals[i]].max()
+        time_intervals_df[percentage][i] = (
+            len(max_per_bus_ti[max_per_bus_ti >= max_per_bus * deviation_factor])
             / total_buses
         )
-
     return time_intervals_df
 
 
