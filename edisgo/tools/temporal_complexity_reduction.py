@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import os
 
-from copy import deepcopy
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -97,12 +96,13 @@ def _scored_most_critical_loading_time_interval(
     time_steps_per_day=24,
     time_step_day_start=0,
     overloading_factor=0.95,
+    weigh_by_costs=True,
 ):
     """
     Get time intervals sorted by severity of overloadings.
 
-    The overloading is weighed by the estimated expansion costs of each respective line
-    and transformer.
+    The overloading can weighed by the estimated expansion costs of each respective line
+    and transformer. See parameter `weigh_by_costs` for more information.
     The length of the time intervals and hour of day at which the time intervals should
     begin can be set through the parameters `time_steps_per_time_interval` and
     `time_step_day_start`.
@@ -133,6 +133,11 @@ def _scored_most_critical_loading_time_interval(
         `overloading_factor` in :func:`~get_most_critical_time_intervals` for more
         information.
         Default: 0.95.
+    weigh_by_costs : bool
+        Defines whether overloading issues should be weighed by estimated grid expansion
+        costs or not. See parameter `weigh_by_costs` in
+        :func:`~get_most_critical_time_intervals` for more information.
+        Default: True.
 
     Returns
     --------
@@ -153,26 +158,29 @@ def _scored_most_critical_loading_time_interval(
     # Get lines that have violations and replace nan values with 0
     crit_lines_score = relative_i_res[relative_i_res > 1].fillna(0)
 
-    # weight line violations with expansion costs
-    costs_lines = (
-        line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
-    )
-    costs_trafos_lv = pd.Series(
-        index=[
-            str(lv_grid) + "_station"
-            for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids)
-        ],
-        data=edisgo_obj.config["costs_transformers"]["lv"],
-    )
-    costs_trafos_mv = pd.Series(
-        index=["MVGrid_" + str(edisgo_obj.topology.id) + "_station"],
-        data=edisgo_obj.config["costs_transformers"]["mv"],
-    )
-    costs = pd.concat([costs_lines, costs_trafos_lv, costs_trafos_mv])
-    crit_lines_cost = crit_lines_score * costs
+    if weigh_by_costs:
+        # weigh line violations with expansion costs
+        costs_lines = (
+            line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
+        )
+        costs_trafos_lv = pd.Series(
+            index=[
+                str(lv_grid) + "_station"
+                for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids)
+            ],
+            data=edisgo_obj.config["costs_transformers"]["lv"],
+        )
+        costs_trafos_mv = pd.Series(
+            index=["MVGrid_" + str(edisgo_obj.topology.id) + "_station"],
+            data=edisgo_obj.config["costs_transformers"]["mv"],
+        )
+        costs = pd.concat([costs_lines, costs_trafos_lv, costs_trafos_mv])
+        crit_lines_weighed = crit_lines_score * costs
+    else:
+        crit_lines_weighed = crit_lines_score.copy()
 
     time_intervals_df = _most_critical_time_interval(
-        costs_per_time_step=crit_lines_cost,
+        costs_per_time_step=crit_lines_weighed,
         grid_issues_magnitude_df=crit_lines_score,
         which="overloading",
         deviation_factor=overloading_factor,
@@ -190,12 +198,13 @@ def _scored_most_critical_voltage_issues_time_interval(
     time_steps_per_day=24,
     time_step_day_start=0,
     voltage_deviation_factor=0.95,
+    weigh_by_costs=True,
 ):
     """
     Get time intervals sorted by severity of voltage issues.
 
-    The voltage issues are weighed by the estimated expansion costs in each respective
-    feeder.
+    The voltage issues can be weighed by the estimated expansion costs in each
+    respective feeder. See parameter `weigh_by_costs` for more information.
     The length of the time intervals and hour of day at which the time intervals should
     begin can be set through the parameters `time_steps_per_time_interval` and
     `time_step_day_start`.
@@ -226,6 +235,11 @@ def _scored_most_critical_voltage_issues_time_interval(
         `voltage_deviation_factor` in :func:`~get_most_critical_time_intervals` for more
         information.
         Default: 0.95.
+    weigh_by_costs : bool
+        Defines whether voltage issues should be weighed by estimated grid expansion
+        costs or not. See parameter `weigh_by_costs` in
+        :func:`~get_most_critical_time_intervals` for more information.
+        Default: True.
 
     Returns
     --------
@@ -242,60 +256,61 @@ def _scored_most_critical_voltage_issues_time_interval(
 
     """
 
-    # Get voltage deviation from allowed voltage limits
+    # get voltage deviation from allowed voltage limits
     voltage_diff = check_tech_constraints.voltage_deviation_from_allowed_voltage_limits(
         edisgo_obj
     )
-    voltage_diff = voltage_diff[voltage_diff != 0.0].abs()
-
-    # determine costs per feeder
-    lv_station_buses = [
-        lv_grid.station.index[0] for lv_grid in edisgo_obj.topology.mv_grid.lv_grids
-    ]
-    costs_lines = (
-        line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
-    )
-    costs_trafos_lv = pd.Series(
-        index=lv_station_buses,
-        data=edisgo_obj.config._data["costs_transformers"]["lv"],
-    )
-    costs = pd.concat([costs_lines, costs_trafos_lv])
+    voltage_diff = voltage_diff[voltage_diff != 0.0].abs().fillna(0)
 
     # set feeder using MV feeder for MV components and LV feeder for LV components
     edisgo_obj.topology.assign_feeders(mode="grid_feeder")
     # feeders of buses at MV/LV station's secondary sides are set to the name of the
     # station bus to have them as separate feeders
+    lv_station_buses = [
+        lv_grid.station.index[0] for lv_grid in edisgo_obj.topology.mv_grid.lv_grids
+    ]
     edisgo_obj.topology.buses_df.loc[lv_station_buses, "grid_feeder"] = lv_station_buses
-
-    feeder_lines = edisgo_obj.topology.lines_df.grid_feeder
-    feeder_trafos_lv = pd.Series(
-        index=lv_station_buses,
-        data=lv_station_buses,
-    )
-    feeder = pd.concat([feeder_lines, feeder_trafos_lv])
-    costs_per_feeder = (
-        pd.concat([costs.rename("costs"), feeder.rename("feeder")], axis=1)
-        .groupby(by="feeder")[["costs"]]
-        .sum()
-    )
 
     # check for every feeder if any of the buses within violate the allowed voltage
     # deviation, by grouping voltage_diff per feeder
     feeder_buses = edisgo_obj.topology.buses_df.grid_feeder
     columns = [feeder_buses.loc[col] for col in voltage_diff.columns]
-    voltage_diff_copy = deepcopy(voltage_diff).fillna(0)
-    voltage_diff.columns = columns
+    voltage_diff_feeder = voltage_diff.copy()
+    voltage_diff_feeder.columns = columns
     voltage_diff_feeder = (
-        voltage_diff.transpose().reset_index().groupby(by="index").sum().transpose()
+        voltage_diff.transpose().reset_index().groupby(by="Bus").sum().transpose()
     )
     voltage_diff_feeder[voltage_diff_feeder != 0] = 1
 
-    # weigh feeder voltage violation with costs per feeder
-    voltage_diff_feeder = voltage_diff_feeder * costs_per_feeder.squeeze()
+    if weigh_by_costs:
+        # determine costs per feeder
+        costs_lines = (
+            line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
+        )
+        costs_trafos_lv = pd.Series(
+            index=lv_station_buses,
+            data=edisgo_obj.config._data["costs_transformers"]["lv"],
+        )
+        costs = pd.concat([costs_lines, costs_trafos_lv])
+
+        feeder_lines = edisgo_obj.topology.lines_df.grid_feeder
+        feeder_trafos_lv = pd.Series(
+            index=lv_station_buses,
+            data=lv_station_buses,
+        )
+        feeder = pd.concat([feeder_lines, feeder_trafos_lv])
+        costs_per_feeder = (
+            pd.concat([costs.rename("costs"), feeder.rename("feeder")], axis=1)
+            .groupby(by="feeder")[["costs"]]
+            .sum()
+        )
+
+        # weigh feeder voltage violation with costs per feeder
+        voltage_diff_feeder = voltage_diff_feeder * costs_per_feeder.squeeze()
 
     time_intervals_df = _most_critical_time_interval(
         costs_per_time_step=voltage_diff_feeder,
-        grid_issues_magnitude_df=voltage_diff_copy,
+        grid_issues_magnitude_df=voltage_diff,
         which="voltage",
         deviation_factor=voltage_deviation_factor,
         time_steps_per_time_interval=time_steps_per_time_interval,
@@ -524,11 +539,12 @@ def get_most_critical_time_intervals(
     use_troubleshooting_mode=True,
     overloading_factor=0.95,
     voltage_deviation_factor=0.95,
+    weigh_by_costs=True,
 ):
     """
     Get time intervals sorted by severity of overloadings as well as voltage issues.
 
-    The overloading and voltage issues are weighed by the estimated expansion costs
+    The overloading and voltage issues can be weighed by the estimated expansion costs
     solving the issue would require.
     The length of the time intervals and hour of day at which the time intervals should
     begin can be set through the parameters `time_steps_per_time_interval` and
@@ -585,6 +601,33 @@ def get_most_critical_time_intervals(
         of buses that reach their maximum voltage deviation in a certain time interval
         at a voltage deviation of higher or equal to 0.2*0.95.
         Default: 0.95.
+    weigh_by_costs : bool
+        Defines whether overloading and voltage issues should be weighed by estimated
+        grid expansion costs or not. This can be done in order to take into account that
+        some grid issues are more relevant, as reinforcing a certain line or feeder will
+        be more expensive than another one.
+
+        In case of voltage issues:
+        If True, the costs for each MV and LV feeder, as well as MV/LV station are
+        determined using the costs for earth work and new lines over the full length of
+        the feeder respectively for a new MV/LV station. In each time interval, the
+        estimated costs are only taken into account, in case there is a voltage issue
+        somewhere in the feeder.
+        The costs don't convey the actual costs but are an estimation, as
+        the real number of parallel lines needed is not determined and the whole feeder
+        length is used instead of the length over two-thirds of the feeder.
+        If False, the severity of each feeder's voltage issue is set to be the same.
+
+        In case of overloading issues:
+        If True, the overloading of each line is multiplied by
+        the respective grid expansion costs of that line including costs for earth work
+        and one new line.
+        The costs don't convey the actual costs but are an estimation, as
+        the discrete needed number of parallel lines is not considered.
+        If False, only the relative overloading is used to determine the most relevant
+        time intervals.
+
+        Default: True.
 
     Returns
     --------
@@ -626,6 +669,7 @@ def get_most_critical_time_intervals(
         time_steps_per_time_interval,
         time_step_day_start=time_step_day_start,
         overloading_factor=overloading_factor,
+        weigh_by_costs=weigh_by_costs,
     )
     if num_time_intervals is None:
         num_time_intervals = int(np.ceil(len(loading_scores) * percentage))
@@ -646,6 +690,7 @@ def get_most_critical_time_intervals(
         time_steps_per_time_interval,
         time_step_day_start=time_step_day_start,
         voltage_deviation_factor=voltage_deviation_factor,
+        weigh_by_costs=weigh_by_costs,
     )
     if num_time_intervals is None:
         num_time_intervals = int(np.ceil(len(voltage_scores) * percentage))
