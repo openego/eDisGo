@@ -62,10 +62,10 @@ class TestTemporalComplexityReduction:
     def test__scored_most_critical_loading_time_interval(self):
         # test with default values
         ts_crit = temp_red._scored_most_critical_loading_time_interval(self.edisgo, 24)
-        assert len(ts_crit) == 9
+        assert len(ts_crit) == 10
         assert (
             ts_crit.loc[0, "time_steps"]
-            == pd.date_range("1/5/2018", periods=24, freq="H")
+            == pd.date_range("1/8/2018", periods=24, freq="H")
         ).all()
         assert np.isclose(
             ts_crit.loc[0, "percentage_max_overloaded_components"], 0.96479
@@ -85,29 +85,41 @@ class TestTemporalComplexityReduction:
         ).all()
         assert ts_crit.loc[0, "percentage_max_overloaded_components"] == 1
 
+        # test without weighting by costs
+        ts_crit = temp_red._scored_most_critical_loading_time_interval(
+            self.edisgo,
+            48,
+            weight_by_costs=False,
+        )
+        assert len(ts_crit) == 9
+        assert (
+            ts_crit.loc[0, "time_steps"]
+            == pd.date_range("1/5/2018 0:00", periods=48, freq="H")
+        ).all()
+
     def test__scored_most_critical_voltage_issues_time_interval(self):
         # test with default values
         ts_crit = temp_red._scored_most_critical_voltage_issues_time_interval(
             self.edisgo, 24
         )
-        assert len(ts_crit) == 9
+        assert len(ts_crit) == 5
         assert (
             ts_crit.loc[0, "time_steps"]
             == pd.date_range("1/1/2018", periods=24, freq="H")
         ).all()
-        assert np.isclose(ts_crit.loc[0, "percentage_buses_max_voltage_deviation"], 1.0)
-        assert np.isclose(ts_crit.loc[1, "percentage_buses_max_voltage_deviation"], 1.0)
+        assert (
+            ts_crit.loc[:, "percentage_buses_max_voltage_deviation"].values == 1.0
+        ).all()
 
         # test with non-default values
         ts_crit = temp_red._scored_most_critical_voltage_issues_time_interval(
-            self.edisgo, 24, time_step_day_start=4, voltage_deviation_factor=0.5
+            self.edisgo, 72, time_step_day_start=4, weight_by_costs=False
         )
-        assert len(ts_crit) == 9
+        assert len(ts_crit) == 5
         assert (
             ts_crit.loc[0, "time_steps"]
-            == pd.date_range("1/1/2018 4:00", periods=24, freq="H")
+            == pd.date_range("1/1/2018 4:00", periods=72, freq="H")
         ).all()
-        assert np.isclose(ts_crit.loc[0, "percentage_buses_max_voltage_deviation"], 1.0)
 
     def test_get_most_critical_time_intervals(self):
         self.edisgo.timeseries.timeindex = self.edisgo.timeseries.timeindex[:25]
