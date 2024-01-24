@@ -122,11 +122,17 @@ class TestTemporalComplexityReduction:
         ).all()
 
     def test_get_most_critical_time_intervals(self):
-        self.edisgo.timeseries.timeindex = self.edisgo.timeseries.timeindex[:25]
-        self.edisgo.timeseries.scale_timeseries(p_scaling_factor=5, q_scaling_factor=5)
+        self.edisgo.timeseries.scale_timeseries(p_scaling_factor=2, q_scaling_factor=2)
         steps = temp_red.get_most_critical_time_intervals(
-            self.edisgo, time_steps_per_time_interval=24
+            self.edisgo, time_steps_per_time_interval=24, percentage=0.5
         )
 
-        assert len(steps) == 1
-        assert len(steps.columns) == 4
+        assert len(steps) == 5
+        assert (
+            steps.loc[0, "time_steps_overloading"]
+            == pd.date_range("1/8/2018", periods=24, freq="H")
+        ).all()
+        assert (
+            steps.loc[0, "time_steps_voltage_issues"]
+            == pd.date_range("1/1/2018", periods=24, freq="H")
+        ).all()
