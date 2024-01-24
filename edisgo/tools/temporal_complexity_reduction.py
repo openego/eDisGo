@@ -96,13 +96,13 @@ def _scored_most_critical_loading_time_interval(
     time_steps_per_day=24,
     time_step_day_start=0,
     overloading_factor=0.95,
-    weigh_by_costs=True,
+    weight_by_costs=True,
 ):
     """
     Get time intervals sorted by severity of overloadings.
 
-    The overloading can weighed by the estimated expansion costs of each respective line
-    and transformer. See parameter `weigh_by_costs` for more information.
+    The overloading can weighted by the estimated expansion costs of each respective
+    line and transformer. See parameter `weight_by_costs` for more information.
     The length of the time intervals and hour of day at which the time intervals should
     begin can be set through the parameters `time_steps_per_time_interval` and
     `time_step_day_start`.
@@ -133,9 +133,9 @@ def _scored_most_critical_loading_time_interval(
         `overloading_factor` in :func:`~get_most_critical_time_intervals` for more
         information.
         Default: 0.95.
-    weigh_by_costs : bool
-        Defines whether overloading issues should be weighed by estimated grid expansion
-        costs or not. See parameter `weigh_by_costs` in
+    weight_by_costs : bool
+        Defines whether overloading issues should be weighted by estimated grid
+        expansion costs or not. See parameter `weight_by_costs` in
         :func:`~get_most_critical_time_intervals` for more information.
         Default: True.
 
@@ -158,8 +158,8 @@ def _scored_most_critical_loading_time_interval(
     # Get lines that have violations and replace nan values with 0
     crit_lines_score = relative_i_res[relative_i_res > 1].fillna(0)
 
-    if weigh_by_costs:
-        # weigh line violations with expansion costs
+    if weight_by_costs:
+        # weight line violations with expansion costs
         costs_lines = (
             line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
         )
@@ -175,12 +175,12 @@ def _scored_most_critical_loading_time_interval(
             data=edisgo_obj.config["costs_transformers"]["mv"],
         )
         costs = pd.concat([costs_lines, costs_trafos_lv, costs_trafos_mv])
-        crit_lines_weighed = crit_lines_score * costs
+        crit_lines_weighted = crit_lines_score * costs
     else:
-        crit_lines_weighed = crit_lines_score.copy()
+        crit_lines_weighted = crit_lines_score.copy()
 
     time_intervals_df = _most_critical_time_interval(
-        costs_per_time_step=crit_lines_weighed,
+        costs_per_time_step=crit_lines_weighted,
         grid_issues_magnitude_df=crit_lines_score,
         which="overloading",
         deviation_factor=overloading_factor,
@@ -198,13 +198,13 @@ def _scored_most_critical_voltage_issues_time_interval(
     time_steps_per_day=24,
     time_step_day_start=0,
     voltage_deviation_factor=0.95,
-    weigh_by_costs=True,
+    weight_by_costs=True,
 ):
     """
     Get time intervals sorted by severity of voltage issues.
 
-    The voltage issues can be weighed by the estimated expansion costs in each
-    respective feeder. See parameter `weigh_by_costs` for more information.
+    The voltage issues can be weighted by the estimated expansion costs in each
+    respective feeder. See parameter `weight_by_costs` for more information.
     The length of the time intervals and hour of day at which the time intervals should
     begin can be set through the parameters `time_steps_per_time_interval` and
     `time_step_day_start`.
@@ -235,9 +235,9 @@ def _scored_most_critical_voltage_issues_time_interval(
         `voltage_deviation_factor` in :func:`~get_most_critical_time_intervals` for more
         information.
         Default: 0.95.
-    weigh_by_costs : bool
-        Defines whether voltage issues should be weighed by estimated grid expansion
-        costs or not. See parameter `weigh_by_costs` in
+    weight_by_costs : bool
+        Defines whether voltage issues should be weighted by estimated grid expansion
+        costs or not. See parameter `weight_by_costs` in
         :func:`~get_most_critical_time_intervals` for more information.
         Default: True.
 
@@ -282,7 +282,7 @@ def _scored_most_critical_voltage_issues_time_interval(
     )
     voltage_diff_feeder[voltage_diff_feeder != 0] = 1
 
-    if weigh_by_costs:
+    if weight_by_costs:
         # determine costs per feeder
         costs_lines = (
             line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
@@ -305,7 +305,7 @@ def _scored_most_critical_voltage_issues_time_interval(
             .sum()
         )
 
-        # weigh feeder voltage violation with costs per feeder
+        # weight feeder voltage violation with costs per feeder
         voltage_diff_feeder = voltage_diff_feeder * costs_per_feeder.squeeze()
 
     time_intervals_df = _most_critical_time_interval(
@@ -539,12 +539,12 @@ def get_most_critical_time_intervals(
     use_troubleshooting_mode=True,
     overloading_factor=0.95,
     voltage_deviation_factor=0.95,
-    weigh_by_costs=True,
+    weight_by_costs=True,
 ):
     """
     Get time intervals sorted by severity of overloadings as well as voltage issues.
 
-    The overloading and voltage issues can be weighed by the estimated expansion costs
+    The overloading and voltage issues can be weighted by the estimated expansion costs
     solving the issue would require.
     The length of the time intervals and hour of day at which the time intervals should
     begin can be set through the parameters `time_steps_per_time_interval` and
@@ -601,8 +601,8 @@ def get_most_critical_time_intervals(
         of buses that reach their maximum voltage deviation in a certain time interval
         at a voltage deviation of higher or equal to 0.2*0.95.
         Default: 0.95.
-    weigh_by_costs : bool
-        Defines whether overloading and voltage issues should be weighed by estimated
+    weight_by_costs : bool
+        Defines whether overloading and voltage issues should be weighted by estimated
         grid expansion costs or not. This can be done in order to take into account that
         some grid issues are more relevant, as reinforcing a certain line or feeder will
         be more expensive than another one.
@@ -669,7 +669,7 @@ def get_most_critical_time_intervals(
         time_steps_per_time_interval,
         time_step_day_start=time_step_day_start,
         overloading_factor=overloading_factor,
-        weigh_by_costs=weigh_by_costs,
+        weight_by_costs=weight_by_costs,
     )
     if num_time_intervals is None:
         num_time_intervals = int(np.ceil(len(loading_scores) * percentage))
@@ -690,7 +690,7 @@ def get_most_critical_time_intervals(
         time_steps_per_time_interval,
         time_step_day_start=time_step_day_start,
         voltage_deviation_factor=voltage_deviation_factor,
-        weigh_by_costs=weigh_by_costs,
+        weight_by_costs=weight_by_costs,
     )
     if num_time_intervals is None:
         num_time_intervals = int(np.ceil(len(voltage_scores) * percentage))
