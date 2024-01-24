@@ -405,17 +405,18 @@ def _most_critical_time_interval(
     #  needs to be adapted to index based on time index instead of iloc
     crit_timesteps = (
         crit_timesteps.iloc[int(time_steps_per_time_interval) - 1 :]
-        .iloc[time_step_day_start + 1 :: time_steps_per_day]
+        .iloc[time_step_day_start::time_steps_per_day]
         .sort_values(ascending=False)
     )
-    timesteps = crit_timesteps.index - pd.DateOffset(
-        hours=int(time_steps_per_time_interval)
-    )
+    # get time steps in each time interval - these are set up setting the given time
+    # step to be the end of the respective time interval, as rolling() function gives
+    # the time step at the end of the considered time interval; further, only time
+    # intervals with a sum greater than zero are considered, as zero values mean, that
+    # there is no grid issue in the respective time interval
     time_intervals = [
-        pd.date_range(
-            start=timestep, periods=int(time_steps_per_time_interval), freq="h"
-        )
-        for timestep in timesteps
+        pd.date_range(end=timestep, periods=int(time_steps_per_time_interval), freq="h")
+        for timestep in crit_timesteps.index
+        if crit_timesteps[timestep] != 0.0
     ]
 
     # make dataframe with time steps in each time interval and the percentage of
