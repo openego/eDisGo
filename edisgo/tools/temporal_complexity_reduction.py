@@ -160,21 +160,7 @@ def _scored_most_critical_loading_time_interval(
 
     if weight_by_costs:
         # weight line violations with expansion costs
-        costs_lines = (
-            line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
-        )
-        costs_trafos_lv = pd.Series(
-            index=[
-                str(lv_grid) + "_station"
-                for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids)
-            ],
-            data=edisgo_obj.config["costs_transformers"]["lv"],
-        )
-        costs_trafos_mv = pd.Series(
-            index=["MVGrid_" + str(edisgo_obj.topology.id) + "_station"],
-            data=edisgo_obj.config["costs_transformers"]["mv"],
-        )
-        costs = pd.concat([costs_lines, costs_trafos_lv, costs_trafos_mv])
+        costs = _costs_per_line_and_transformer(edisgo_obj)
         crit_lines_weighted = crit_lines_score * costs
     else:
         crit_lines_weighted = crit_lines_score.copy()
@@ -283,30 +269,10 @@ def _scored_most_critical_voltage_issues_time_interval(
     voltage_diff_feeder[voltage_diff_feeder != 0] = 1
 
     if weight_by_costs:
-        # determine costs per feeder
-        costs_lines = (
-            line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
-        )
-        costs_trafos_lv = pd.Series(
-            index=lv_station_buses,
-            data=edisgo_obj.config._data["costs_transformers"]["lv"],
-        )
-        costs = pd.concat([costs_lines, costs_trafos_lv])
-
-        feeder_lines = edisgo_obj.topology.lines_df.grid_feeder
-        feeder_trafos_lv = pd.Series(
-            index=lv_station_buses,
-            data=lv_station_buses,
-        )
-        feeder = pd.concat([feeder_lines, feeder_trafos_lv])
-        costs_per_feeder = (
-            pd.concat([costs.rename("costs"), feeder.rename("feeder")], axis=1)
-            .groupby(by="feeder")[["costs"]]
-            .sum()
-        )
-
+        # get costs per feeder
+        costs_per_feeder = _costs_per_feeder(edisgo_obj, lv_station_buses)
         # weight feeder voltage violation with costs per feeder
-        voltage_diff_feeder = voltage_diff_feeder * costs_per_feeder.squeeze()
+        voltage_diff_feeder = voltage_diff_feeder * costs_per_feeder
 
     time_intervals_df = _most_critical_time_interval(
         costs_per_time_step=voltage_diff_feeder,
@@ -319,6 +285,93 @@ def _scored_most_critical_voltage_issues_time_interval(
     )
 
     return time_intervals_df
+
+
+def _costs_per_line_and_transformer(edisgo_obj):
+    """
+    Helper function to get costs per line (including earthwork and costs for one new
+    line) and per transformer.
+
+    Transformers are named after the grid at the lower voltage level and with the
+    expansion "_station", e.g. "LVGrid_0_station".
+
+    Returns
+    -------
+    :pandas:`pandas.Series<Series>`
+        Series with component name in index and costs in kEUR as values.
+
+    """
+    costs_lines = (
+        line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
+    )
+    costs_trafos_lv = pd.Series(
+        index=[
+            str(lv_grid) + "_station"
+            for lv_grid in list(edisgo_obj.topology.mv_grid.lv_grids)
+        ],
+        data=edisgo_obj.config["costs_transformers"]["lv"],
+    )
+    costs_trafos_mv = pd.Series(
+        index=["MVGrid_" + str(edisgo_obj.topology.id) + "_station"],
+        data=edisgo_obj.config["costs_transformers"]["mv"],
+    )
+    return pd.concat([costs_lines, costs_trafos_lv, costs_trafos_mv])
+
+
+def _costs_per_feeder(edisgo_obj, lv_station_buses=None):
+    """
+    Helper function to get costs per MV and LV feeder (including earthwork and costs for
+    one new line) and per MV/LV transformer (as they are considered as feeders).
+
+    Transformers are named after the bus at the MV/LV station's secondary side.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+    lv_station_buses : list(str) or None
+        List of bus names of buses at the secondary side of the MV/LV transformers.
+        If None, list is generated.
+
+    Returns
+    -------
+    :pandas:`pandas.Series<Series>`
+        Series with feeder names in index and costs in kEUR as values.
+
+    """
+    if lv_station_buses is None:
+        lv_station_buses = [
+            lv_grid.station.index[0] for lv_grid in edisgo_obj.topology.mv_grid.lv_grids
+        ]
+    if "grid_feeder" not in edisgo_obj.topology.buses_df.columns:
+        # set feeder using MV feeder for MV components and LV feeder for LV components
+        edisgo_obj.topology.assign_feeders(mode="grid_feeder")
+
+    # feeders of buses at MV/LV station's secondary sides are set to the name of the
+    # station bus to have them as separate feeders
+    edisgo_obj.topology.buses_df.loc[lv_station_buses, "grid_feeder"] = lv_station_buses
+
+    costs_lines = (
+        line_expansion_costs(edisgo_obj).drop(columns="voltage_level").sum(axis=1)
+    )
+    costs_trafos_lv = pd.Series(
+        index=lv_station_buses,
+        data=edisgo_obj.config._data["costs_transformers"]["lv"],
+    )
+    costs = pd.concat([costs_lines, costs_trafos_lv])
+
+    feeder_lines = edisgo_obj.topology.lines_df.grid_feeder
+    feeder_trafos_lv = pd.Series(
+        index=lv_station_buses,
+        data=lv_station_buses,
+    )
+    feeder = pd.concat([feeder_lines, feeder_trafos_lv])
+    costs_per_feeder = (
+        pd.concat([costs.rename("costs"), feeder.rename("feeder")], axis=1)
+        .groupby(by="feeder")[["costs"]]
+        .sum()
+    )
+
+    return costs_per_feeder.squeeze()
 
 
 def _most_critical_time_interval(

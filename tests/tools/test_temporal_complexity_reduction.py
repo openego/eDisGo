@@ -121,6 +121,18 @@ class TestTemporalComplexityReduction:
             == pd.date_range("1/1/2018 4:00", periods=72, freq="H")
         ).all()
 
+    def test__costs_per_line_and_transformer(self):
+        costs = temp_red._costs_per_line_and_transformer(self.edisgo)
+        assert len(costs) == 131 + 11
+        assert np.isclose(costs["Line_10007"], 0.722445826838636 * 80)
+        assert np.isclose(costs["LVGrid_1_station"], 10)
+
+    def test__costs_per_feeder(self):
+        costs = temp_red._costs_per_feeder(self.edisgo)
+        assert len(costs) == 37
+        assert np.isclose(costs["Bus_BranchTee_MVGrid_1_1"], 295.34795)
+        assert np.isclose(costs["BusBar_MVGrid_1_LVGrid_1_LV"], 10)
+
     def test_get_most_critical_time_intervals(self):
         self.edisgo.timeseries.scale_timeseries(p_scaling_factor=2, q_scaling_factor=2)
         steps = temp_red.get_most_critical_time_intervals(
