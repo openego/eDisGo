@@ -57,7 +57,7 @@ def _scored_most_critical_loading(
     if weight_by_costs:
         # weight line violations with expansion costs
         costs = _costs_per_line_and_transformer(edisgo_obj)
-        crit_lines_score = crit_lines_score * costs
+        crit_lines_score = crit_lines_score * costs.loc[crit_lines_score.columns]
     else:
         crit_lines_score = crit_lines_score - 1
 
@@ -133,7 +133,7 @@ def _scored_most_critical_voltage_issues(
                 for bus_name in feeder_buses.index
             }
         )
-        voltage_diff = voltage_diff * costs_buses
+        voltage_diff = voltage_diff * costs_buses.loc[voltage_diff.columns]
 
     # drop components and time steps without violations
     voltage_diff = voltage_diff.dropna(how="all").dropna(how="all", axis=1).fillna(0)
