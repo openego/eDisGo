@@ -17,21 +17,31 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _scored_most_critical_loading(edisgo_obj: EDisGo) -> pd.Series:
+def _scored_most_critical_loading(
+    edisgo_obj: EDisGo, weight_by_costs: bool = True
+) -> pd.Series:
     """
-    Method to get time steps where at least one component shows its highest overloading.
+    Get time steps sorted by severity of overloadings.
+
+    The overloading can be weighted by the estimated expansion costs of each respective
+    line and transformer. See parameter `weight_by_costs` for more information.
 
     Parameters
     -----------
     edisgo_obj : :class:`~.EDisGo`
+    weight_by_costs : bool
+        Defines whether overloading issues should be weighted by estimated grid
+        expansion costs or not. See parameter `weight_by_costs` in
+        :func:`~get_most_critical_time_steps` for more information.
+        Default: True.
 
     Returns
     --------
     :pandas:`pandas.Series<Series>`
         Series with time index and corresponding sum of maximum relative overloadings
-        of lines and transformers. The series only contains time steps, where at least
-        one component is maximally overloaded, and is sorted descending by the
-        sum of maximum relative overloadings.
+        of lines and transformers (weighted by estimated reinforcement costs, in case
+        `weight_by_costs` is True). The series only contains time steps, where at least
+        one component is maximally overloaded, and is sorted descending order.
 
     """
 
@@ -42,30 +52,47 @@ def _scored_most_critical_loading(edisgo_obj: EDisGo) -> pd.Series:
     crit_lines_score = relative_i_res[relative_i_res > 1]
 
     # Get most critical time steps per component
+    crit_lines_score = crit_lines_score[crit_lines_score == crit_lines_score.max()]
+
+    if weight_by_costs:
+        # weight line violations with expansion costs
+        costs = _costs_per_line_and_transformer(edisgo_obj)
+        crit_lines_score = crit_lines_score * costs
+    else:
+        crit_lines_score = crit_lines_score - 1
+
+    # drop components and time steps without violations
     crit_lines_score = (
-        (crit_lines_score[crit_lines_score == crit_lines_score.max()])
-        .dropna(how="all")
-        .dropna(how="all", axis=1)
+        crit_lines_score.dropna(how="all").dropna(how="all", axis=1).fillna(0)
     )
-
-    # Sort according to highest cumulated relative overloading
-    crit_lines_score = (crit_lines_score - 1).sum(axis=1)
-    return crit_lines_score.sort_values(ascending=False)
+    # sort sum in descending order
+    return crit_lines_score.sum(axis=1).sort_values(ascending=False)
 
 
-def _scored_most_critical_voltage_issues(edisgo_obj: EDisGo) -> pd.Series:
+def _scored_most_critical_voltage_issues(
+    edisgo_obj: EDisGo, weight_by_costs: bool = True
+) -> pd.Series:
     """
     Method to get time steps where at least one bus shows its highest deviation from
     allowed voltage boundaries.
 
+    The voltage issues can be weighted by the estimated expansion costs in each
+    respective feeder. See parameter `weight_by_costs` for more information.
+
     Parameters
     -----------
     edisgo_obj : :class:`~.EDisGo`
+    weight_by_costs : bool
+        Defines whether voltage issues should be weighted by estimated grid expansion
+        costs or not. See parameter `weight_by_costs` in
+        :func:`~get_most_critical_time_steps` for more information.
+        Default: True.
 
     Returns
     --------
     :pandas:`pandas.Series<Series>`
-        Series with time index and corresponding sum of maximum voltage deviations.
+        Series with time index and corresponding sum of maximum voltage deviations
+        (weighted by estimated reinforcement costs, in case `weight_by_costs` is True).
         The series only contains time steps, where at least one bus has its highest
         deviation from the allowed voltage limits, and is sorted descending by the
         sum of maximum voltage deviations.
@@ -76,18 +103,42 @@ def _scored_most_critical_voltage_issues(edisgo_obj: EDisGo) -> pd.Series:
     )
 
     # Get score for nodes that are over or under the allowed deviations
-    voltage_diff = voltage_diff.abs()[voltage_diff.abs() > 0]
+    voltage_diff = voltage_diff[voltage_diff != 0.0].abs()
     # get only most critical events for component
     # Todo: should there be different ones for over and undervoltage?
-    voltage_diff = (
-        (voltage_diff[voltage_diff.abs() == voltage_diff.abs().max()])
-        .dropna(how="all")
-        .dropna(how="all", axis=1)
-    )
+    voltage_diff = voltage_diff[voltage_diff == voltage_diff.max()]
 
-    voltage_diff = voltage_diff.sum(axis=1)
+    if weight_by_costs:
+        # set feeder using MV feeder for MV components and LV feeder for LV components
+        edisgo_obj.topology.assign_feeders(mode="grid_feeder")
+        # feeders of buses at MV/LV station's secondary sides are set to the name of the
+        # station bus to have them as separate feeders
+        lv_station_buses = [
+            lv_grid.station.index[0] for lv_grid in edisgo_obj.topology.mv_grid.lv_grids
+        ]
+        edisgo_obj.topology.buses_df.loc[
+            lv_station_buses, "grid_feeder"
+        ] = lv_station_buses
+        # weight voltage violations with expansion costs
+        costs = _costs_per_feeder(edisgo_obj, lv_station_buses=lv_station_buses)
+        # map feeder costs to buses
+        feeder_buses = edisgo_obj.topology.buses_df.grid_feeder
+        costs_buses = pd.Series(
+            {
+                bus_name: (
+                    costs[feeder_buses[bus_name]]
+                    if feeder_buses[bus_name] != "station_node"
+                    else 0
+                )
+                for bus_name in feeder_buses.index
+            }
+        )
+        voltage_diff = voltage_diff * costs_buses
 
-    return voltage_diff.sort_values(ascending=False)
+    # drop components and time steps without violations
+    voltage_diff = voltage_diff.dropna(how="all").dropna(how="all", axis=1).fillna(0)
+    # sort sum in descending order
+    return voltage_diff.sum(axis=1).sort_values(ascending=False)
 
 
 def _scored_most_critical_loading_time_interval(
@@ -101,7 +152,7 @@ def _scored_most_critical_loading_time_interval(
     """
     Get time intervals sorted by severity of overloadings.
 
-    The overloading can weighted by the estimated expansion costs of each respective
+    The overloading can be weighted by the estimated expansion costs of each respective
     line and transformer. See parameter `weight_by_costs` for more information.
     The length of the time intervals and hour of day at which the time intervals should
     begin can be set through the parameters `time_steps_per_time_interval` and
@@ -791,6 +842,7 @@ def get_most_critical_time_steps(
     percentage: float = 1.0,
     use_troubleshooting_mode=True,
     run_initial_analyze=True,
+    weight_by_costs=True,
 ) -> pd.DatetimeIndex:
     """
     Get the time steps with the most critical overloading and voltage issues.
@@ -835,6 +887,31 @@ def get_most_critical_time_steps(
         This parameter can be used to specify whether to run an initial analyze to
         determine most critical time steps or to use existing results. If set to False,
         `use_troubleshooting_mode` is ignored. Default: True.
+    weight_by_costs : bool
+        Defines whether overloading and voltage issues should be weighted by estimated
+        grid expansion costs or not. This can be done in order to take into account that
+        some grid issues are more relevant, as reinforcing a certain line or feeder will
+        be more expensive than another one.
+
+        In case of voltage issues:
+        If True, the voltage issues at each bus are weighted by the estimated grid
+        expansion costs for the MV or LV feeder the bus is in or in case of MV/LV
+        stations by the costs for a new transformer. Feeder costs are determined using
+        the costs for earth work and new lines over the full length of the feeder.
+        The costs don't convey the actual costs but are an estimation, as
+        the real number of parallel lines needed is not determined and the whole feeder
+        length is used instead of the length over two-thirds of the feeder.
+        If False, the severity of each feeder's voltage issue is set to be the same.
+
+        In case of overloading issues:
+        If True, the overloading of each line is multiplied by
+        the respective grid expansion costs of that line including costs for earth work
+        and one new line.
+        The costs don't convey the actual costs but are an estimation, as
+        the discrete needed number of parallel lines is not considered.
+        If False, only the relative overloading is used.
+
+        Default: True.
 
     Returns
     --------
@@ -865,7 +942,9 @@ def get_most_critical_time_steps(
             )
 
     # Select most critical steps based on current violations
-    loading_scores = _scored_most_critical_loading(edisgo_obj)
+    loading_scores = _scored_most_critical_loading(
+        edisgo_obj, weight_by_costs=weight_by_costs
+    )
     if num_steps_loading is None:
         num_steps_loading = int(len(loading_scores) * percentage)
     else:
@@ -880,7 +959,9 @@ def get_most_critical_time_steps(
     steps = loading_scores[:num_steps_loading].index
 
     # Select most critical steps based on voltage violations
-    voltage_scores = _scored_most_critical_voltage_issues(edisgo_obj)
+    voltage_scores = _scored_most_critical_voltage_issues(
+        edisgo_obj, weight_by_costs=weight_by_costs
+    )
     if num_steps_voltage is None:
         num_steps_voltage = int(len(voltage_scores) * percentage)
     else:

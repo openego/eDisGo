@@ -32,18 +32,31 @@ class TestTemporalComplexityReduction:
         self.edisgo.analyze()
 
     def test__scored_most_critical_loading(self):
-        ts_crit = temp_red._scored_most_critical_loading(self.edisgo)
-
+        ts_crit = temp_red._scored_most_critical_loading(
+            self.edisgo, weight_by_costs=False
+        )
         assert len(ts_crit) == 180
         assert np.isclose(ts_crit.iloc[0], 1.45613)
         assert np.isclose(ts_crit.iloc[-1], 1.14647)
 
-    def test__scored_most_critical_voltage_issues(self):
-        ts_crit = temp_red._scored_most_critical_voltage_issues(self.edisgo)
+        ts_crit = temp_red._scored_most_critical_loading(self.edisgo)
 
+        assert len(ts_crit) == 180
+        assert np.isclose(ts_crit.iloc[0], 190.63611)
+        assert np.isclose(ts_crit.iloc[-1], 48.13501)
+
+    def test__scored_most_critical_voltage_issues(self):
+        ts_crit = temp_red._scored_most_critical_voltage_issues(
+            self.edisgo, weight_by_costs=False
+        )
         assert len(ts_crit) == 120
         assert np.isclose(ts_crit.iloc[0], 0.01062258)
         assert np.isclose(ts_crit.iloc[-1], 0.01062258)
+
+        ts_crit = temp_red._scored_most_critical_voltage_issues(self.edisgo)
+        assert len(ts_crit) == 120
+        assert np.isclose(ts_crit.iloc[0], 0.1062258)
+        assert np.isclose(ts_crit.iloc[-1], 0.1062258)
 
     def test_get_most_critical_time_steps(self):
         ts_crit = temp_red.get_most_critical_time_steps(
