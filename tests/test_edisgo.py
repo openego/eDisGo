@@ -546,6 +546,17 @@ class TestEDisGo:
         assert len(results.equipment_changes) == 892
         assert results.v_res.shape == (4, 148)
 
+        edisgo_obj = copy.deepcopy(self.edisgo)
+        edisgo_obj = enhanced_reinforce_grid(
+            edisgo_obj,
+            reduced_analysis=True,
+            is_worst_case=False,
+            separate_lv_grids=True,
+            num_steps_loading=1,
+            num_steps_voltage=1,
+        )
+        assert edisgo_obj.results.v_res.shape == (2, 162)
+
     def test_add_component(self, caplog):
         self.setup_worst_case_time_series()
         index = self.edisgo.timeseries.timeindex
