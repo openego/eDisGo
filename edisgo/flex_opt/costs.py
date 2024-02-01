@@ -79,7 +79,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
                     {
                         "costs_transformers": len(mvlv_trafos)
                         * [float(edisgo_obj.config["costs_transformers"]["lv"])],
-                        "voltage_level": len(hvmv_trafos) * ["mv/lv"],
+                        "voltage_level": len(mvlv_trafos) * ["mv/lv"],
                     },
                     index=mvlv_trafos,
                 ),
