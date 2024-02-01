@@ -1973,7 +1973,7 @@ class Topology:
             # object)
             comp_connected = False
             for dist_min_obj in conn_objects_min_stack:
-                # do not allow connection to virtual busses
+                # do not allow connection to virtual buses
                 if "virtual" not in dist_min_obj["repr"]:
                     line_type, num_parallel = select_cable(edisgo_object, "mv", power)
                     target_obj_result = self._connect_mv_bus_to_target_object(
@@ -2602,8 +2602,6 @@ class Topology:
                 num_parallel=number_parallel_lines,
             )
             # add line to equipment changes
-            # ToDo number_parallel_lines should be given to
-            #  _add_line_to_equipment_changes
             edisgo_object.results._add_line_to_equipment_changes(
                 line=self.lines_df.loc[new_line_name, :],
             )
