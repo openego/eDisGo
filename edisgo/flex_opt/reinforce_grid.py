@@ -111,6 +111,12 @@ def reinforce_grid(
         used to specify whether to run an initial analyze to determine most
         critical time steps or to use existing results. If set to False,
         `use_troubleshooting_mode` is ignored. Default: True.
+    weight_by_costs : bool
+        In case `reduced_analysis` is set to True, this parameter can be
+        used to specify whether to weight time steps by estimated grid expansion costs.
+        See parameter `weight_by_costs` in
+        :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_steps`
+        for more information. Default: False.
 
     Returns
     -------
@@ -184,6 +190,7 @@ def reinforce_grid(
             percentage=kwargs.get("percentage", 1.0),
             use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
             run_initial_analyze=kwargs.get("run_initial_analyze", True),
+            weight_by_costs=kwargs.get("weight_by_costs", False),
         )
     if timesteps_pfa is not None and len(timesteps_pfa) == 0:
         logger.debug("Zero time steps for grid reinforcement.")
@@ -914,7 +921,7 @@ def enhanced_reinforce_grid(
     logger.info("Run initial grid reinforcement for single LV grids.")
     for lv_grid in list(edisgo_object.topology.mv_grid.lv_grids):
         logger.info(f"Check initial convergence for {lv_grid=}.")
-        ts_converged, ts_not_converged = edisgo_object.analyze(
+        _, ts_not_converged = edisgo_object.analyze(
             mode="lv", raise_not_converged=False, lv_grid_id=lv_grid.id
         )
         if len(ts_not_converged) > 0:
@@ -933,32 +940,12 @@ def enhanced_reinforce_grid(
                 )
         try:
             logger.info(f"Try initial mode 'lv' reinforcement for {lv_grid=}.")
-            if len(ts_not_converged) > 0:
-                # if there are time steps that did not converge, run reinforcement
-                # first on converged time steps
-                edisgo_object.reinforce(
-                    mode="lv",
-                    lv_grid_id=lv_grid.id,
-                    catch_convergence_problems=False,
-                    timesteps_pfa=ts_converged,
-                    **kwargs,
-                )
-                # run reinforcement again in catch-convergence mode with all time steps
-                edisgo_object.reinforce(
-                    mode="lv",
-                    lv_grid_id=lv_grid.id,
-                    catch_convergence_problems=True,
-                    **kwargs,
-                )
-            else:
-                # if all time steps converged, run normal reinforcement
-                edisgo_object.reinforce(
-                    mode="lv",
-                    lv_grid_id=lv_grid.id,
-                    catch_convergence_problems=False,
-                    run_initial_analyze=False,
-                    **kwargs,
-                )
+            edisgo_object.reinforce(
+                mode="lv",
+                lv_grid_id=lv_grid.id,
+                catch_convergence_problems=True,
+                **kwargs,
+            )
             logger.info(f"Initial mode 'lv' reinforcement for {lv_grid} successful.")
         except (ValueError, RuntimeError, exceptions.MaximumIterationError):
             logger.warning(f"Initial mode 'lv' reinforcement for {lv_grid} failed.")
@@ -991,7 +978,7 @@ def enhanced_reinforce_grid(
 
         for lv_grid in list(edisgo_object.topology.mv_grid.lv_grids):
             logger.info(f"Check convergence for {lv_grid=}.")
-            ts_converged, ts_not_converged = edisgo_object.analyze(
+            _, ts_not_converged = edisgo_object.analyze(
                 mode="lv", raise_not_converged=False, lv_grid_id=lv_grid.id
             )
             if len(ts_not_converged) > 0:
@@ -1012,33 +999,12 @@ def enhanced_reinforce_grid(
                     )
             try:
                 logger.info(f"Try mode 'lv' reinforcement for {lv_grid=}.")
-                if len(ts_not_converged) > 0:
-                    # if there are time steps that did not converge, run reinforcement
-                    # first on converged time steps
-                    edisgo_object.reinforce(
-                        mode="lv",
-                        lv_grid_id=lv_grid.id,
-                        catch_convergence_problems=False,
-                        timesteps_pfa=ts_converged,
-                        **kwargs,
-                    )
-                    # run reinforcement again in catch-convergence mode with all time
-                    # steps
-                    edisgo_object.reinforce(
-                        mode="lv",
-                        lv_grid_id=lv_grid.id,
-                        catch_convergence_problems=True,
-                        **kwargs,
-                    )
-                else:
-                    # if all time steps converged, run normal reinforcement
-                    edisgo_object.reinforce(
-                        mode="lv",
-                        lv_grid_id=lv_grid.id,
-                        catch_convergence_problems=False,
-                        run_initial_analyze=False,
-                        **kwargs,
-                    )
+                edisgo_object.reinforce(
+                    mode="lv",
+                    lv_grid_id=lv_grid.id,
+                    catch_convergence_problems=True,
+                    **kwargs,
+                )
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} successful.")
             except (ValueError, RuntimeError, exceptions.MaximumIterationError):
                 logger.info(f"Mode 'lv' reinforcement for {lv_grid} failed.")

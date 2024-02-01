@@ -1328,6 +1328,12 @@ class EDisGo:
             used to specify whether to run an initial analyze to determine most
             critical time steps or to use existing results. If set to False,
             `use_troubleshooting_mode` is ignored. Default: True.
+        weight_by_costs : bool
+            In case `reduced_analysis` is set to True, this parameter can be used
+            to specify whether to weight time steps by estimated grid expansion costs.
+            See parameter `weight_by_costs` in
+            :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_steps`
+            for more information. Default: False.
 
         Returns
         --------
