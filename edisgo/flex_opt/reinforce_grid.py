@@ -842,7 +842,6 @@ def enhanced_reinforce_grid(
     activate_cost_results_disturbing_mode: bool = False,
     separate_lv_grids: bool = True,
     separation_threshold: int | float = 2,
-    use_standard_line_type: bool = True,
     **kwargs,
 ) -> EDisGo:
     """
@@ -883,12 +882,7 @@ def enhanced_reinforce_grid(
     separation_threshold : int or float
         Overloading threshold for LV grid separation. If the overloading is higher than
         the threshold times the total nominal apparent power of the MV/LV transformer(s)
-        the grid is separated. Default: 2.
-    use_standard_line_type : bool
-        Only used when `separate_lv_grids` is set to True. If use_standard_line_type is
-        True, standard line type is used to connect bus, where feeder is split, to
-        the station. If False, the same line type and number of parallel lines as
-        the original line is used. Default: True.
+        the grid is separated.
     kwargs : dict
         Keyword arguments can be all parameters of function
         :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`, except
@@ -902,7 +896,6 @@ def enhanced_reinforce_grid(
 
     """
     kwargs.pop("skip_mv_reinforcement", False)
-    # ToDo kwargs timesteps_pfa is currently ignored, should that be changed?
 
     num_lv_grids_standard_lines = 0
     num_lv_grids_aggregated = 0
@@ -912,11 +905,7 @@ def enhanced_reinforce_grid(
             "Separating lv grids. Set the parameter 'separate_lv_grids' to False if "
             "this is not desired."
         )
-        run_separate_lv_grids(
-            edisgo_object,
-            threshold=separation_threshold,
-            use_standard_line_type=use_standard_line_type,
-        )
+        run_separate_lv_grids(edisgo_object, threshold=separation_threshold)
 
     logger.info("Run initial grid reinforcement for single LV grids.")
     for lv_grid in list(edisgo_object.topology.mv_grid.lv_grids):
@@ -1093,11 +1082,7 @@ def enhanced_reinforce_grid(
     return edisgo_object
 
 
-def run_separate_lv_grids(
-    edisgo_obj: EDisGo,
-    threshold: int | float = 2,
-    use_standard_line_type: bool = True,
-) -> None:
+def run_separate_lv_grids(edisgo_obj: EDisGo, threshold: int | float = 2) -> None:
     """
     Separate all highly overloaded LV grids within the MV grid.
 
@@ -1115,10 +1100,6 @@ def run_separate_lv_grids(
         Overloading threshold. If the overloading is higher than the threshold times
         the total nominal apparent power of the MV/LV transformer(s), the grid is
         separated.
-    use_standard_line_type : bool
-        If use_standard_line_type is True, standard line type is used to connect bus
-        where feeder is split to the station. If False, the same line type and number
-        of parallel lines as the original line is used. Default: True.
 
     Returns
     -------
@@ -1193,7 +1174,7 @@ def run_separate_lv_grids(
             if worst_case > threshold * transformers_s_nom:
                 logger.info(f"Trying to separate {lv_grid}...")
                 transformers_changes, lines_changes = separate_lv_grid(
-                    edisgo_obj, lv_grid, use_standard_line_type
+                    edisgo_obj, lv_grid
                 )
                 if len(lines_changes) > 0:
                     _add_lines_changes_to_equipment_changes(

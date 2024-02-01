@@ -304,22 +304,15 @@ class TestReinforceMeasures:
         #   Line_50000003 (which is first line in feeder and not a
         #   standard line)
         # * check where node_2_3 is not in_building => problem at
-        #   Bus_BranchTee_LVGrid_5_3, leads to reinforcement of line
-        #   Line_50000006 (which is first line in feeder and a standard line)
-        # * check where node_2_3 is not in_building => problem at
         #   Bus_BranchTee_LVGrid_5_5, leads to reinforcement of line
         #   Line_50000009 (which is first line in feeder and a standard line)
 
         crit_nodes = pd.DataFrame(
             {
-                "abs_max_voltage_dev": [0.08, 0.05, 0.07],
-                "time_index": [self.timesteps[0], self.timesteps[0], self.timesteps[0]],
+                "abs_max_voltage_dev": [0.08, 0.05],
+                "time_index": [self.timesteps[0], self.timesteps[0]],
             },
-            index=[
-                "Bus_BranchTee_LVGrid_5_2",
-                "Bus_BranchTee_LVGrid_5_3",
-                "Bus_BranchTee_LVGrid_5_5",
-            ],
+            index=["Bus_BranchTee_LVGrid_5_2", "Bus_BranchTee_LVGrid_5_5"],
         )
 
         grid = self.edisgo.topology.get_lv_grid("LVGrid_5")
@@ -328,12 +321,10 @@ class TestReinforceMeasures:
         )
 
         reinforced_lines = lines_changes.keys()
-        assert len(lines_changes) == 3
+        assert len(lines_changes) == 2
         assert "Line_50000003" in reinforced_lines
-        assert "Line_50000006" in reinforced_lines
-        assert "Line_50000008" in reinforced_lines
-        # check that LV station is one of the buses for first two issues where
-        # disconnection at 2/3 was done
+        assert "Line_50000009" in reinforced_lines
+        # check that LV station is one of the buses
         assert (
             "BusBar_MVGrid_1_LVGrid_5_LV"
             in self.edisgo.topology.lines_df.loc[
@@ -343,14 +334,14 @@ class TestReinforceMeasures:
         assert (
             "BusBar_MVGrid_1_LVGrid_5_LV"
             in self.edisgo.topology.lines_df.loc[
-                "Line_50000006", ["bus0", "bus1"]
+                "Line_50000009", ["bus0", "bus1"]
             ].values
         )
         # check other bus
         assert (
-            "Bus_BranchTee_LVGrid_5_3"
+            "Bus_BranchTee_LVGrid_5_5"
             in self.edisgo.topology.lines_df.loc[
-                "Line_50000006", ["bus0", "bus1"]
+                "Line_50000009", ["bus0", "bus1"]
             ].values
         )
         assert (
@@ -359,30 +350,26 @@ class TestReinforceMeasures:
                 "Line_50000003", ["bus0", "bus1"]
             ].values
         )
-        # check buses of line that was only exchanged by standard line
-        assert (
-            self.edisgo.topology.lines_df.at["Line_50000008", "bus0"]
-            == "Bus_BranchTee_LVGrid_5_5"
-        )
-        assert (
-            self.edisgo.topology.lines_df.at["Line_50000008", "bus1"]
-            == "Bus_BranchTee_LVGrid_5_6"
-        )
-        # check line parameters - all lines where exchanged by one standard line
+        # check line parameters
         std_line = self.edisgo.topology.equipment_data["lv_cables"].loc[
             self.edisgo.config["grid_expansion_standard_equipment"]["lv_line"]
         ]
-        for line_name in ["Line_50000003", "Line_50000006", "Line_50000008"]:
-            line = self.edisgo.topology.lines_df.loc[line_name]
-            assert line.type_info == std_line.name
-            assert np.isclose(line.r, std_line.R_per_km * line.length)
-            assert np.isclose(
-                line.x, std_line.L_per_km * line.length * 2 * np.pi * 50 / 1e3
-            )
-            assert np.isclose(
-                line.s_nom, np.sqrt(3) * grid.nominal_voltage * std_line.I_max_th
-            )
-            assert line.num_parallel == 1
+        line = self.edisgo.topology.lines_df.loc["Line_50000003"]
+        assert line.type_info == std_line.name
+        assert np.isclose(line.r, std_line.R_per_km * line.length)
+        assert np.isclose(
+            line.x, std_line.L_per_km * line.length * 2 * np.pi * 50 / 1e3
+        )
+        assert np.isclose(
+            line.s_nom, np.sqrt(3) * grid.nominal_voltage * std_line.I_max_th
+        )
+        assert line.num_parallel == 1
+        line = self.edisgo.topology.lines_df.loc["Line_50000009"]
+        assert line.type_info == std_line.name
+        assert line.num_parallel == 2
+        assert np.isclose(line.r, 0.02781 / 2)
+        assert np.isclose(line.x, 0.010857344210806 / 2)
+        assert np.isclose(line.s_nom, 0.190525588832576 * 2)
 
     def test_reinforce_lines_overloading(self):
         # * check for needed parallel standard lines (MV and LV) => problems at
