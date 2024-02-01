@@ -2555,10 +2555,6 @@ class Topology:
             # switch data
             if switch_bus and switch_bus == line_data.bus0:
                 self.switches_df.loc[switch_data.name, "branch"] = line_name_bus0
-            # add line to equipment changes
-            edisgo_object.results._add_line_to_equipment_changes(
-                line=self.lines_df.loc[line_name_bus0, :],
-            )
 
             # add new line between newly created branch tee and line's bus0
             line_length = geo.calc_geo_dist_vincenty(
@@ -2584,10 +2580,6 @@ class Topology:
             # switch data
             if switch_bus and switch_bus == line_data.bus1:
                 self.switches_df.loc[switch_data.name, "branch"] = line_name_bus1
-            # add line to equipment changes
-            edisgo_object.results._add_line_to_equipment_changes(
-                line=self.lines_df.loc[line_name_bus1, :],
-            )
 
             # add new line for new bus
             line_length = geo.calc_geo_dist_vincenty(
