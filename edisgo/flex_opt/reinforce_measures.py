@@ -365,11 +365,9 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     -----
     Reinforce measures:
 
-    1. For LV only, exchange all cables in feeder by standard cable if smaller cable is
-    currently used.
-    2. Disconnect line at 2/3 of the length between station and critical node
+    1. Disconnect line at 2/3 of the length between station and critical node
     farthest away from the station and install new standard line
-    3. Install parallel standard line
+    2. Install parallel standard line
 
     In LV grids only lines outside buildings are reinforced; loads and
     generators in buildings cannot be directly connected to the MV/LV station.
@@ -384,18 +382,15 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
 
     """
 
-    # load standard line data and set reinforce measure to exchange small cables by
-    # standard cables to True in case of LV grids
+    # load standard line data
     if isinstance(grid, LVGrid):
         standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
             "lv_line"
         ]
-        check_standard_cable = True
     elif isinstance(grid, MVGrid):
         standard_line = edisgo_obj.config["grid_expansion_standard_equipment"][
             f"mv_line_{int(grid.nominal_voltage)}kv"
         ]
-        check_standard_cable = False
     else:
         raise ValueError("Inserted grid is invalid.")
 
@@ -419,185 +414,104 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         nodes_feeder.setdefault(path[1], []).append(node)
 
     lines_changes = {}
-    # per default, measure to disconnect at two-thirds is set to True and only if cables
-    # in grid are exchanged by standard lines it is set to False, to recheck voltage
-    disconnect_2_3 = True
-    if check_standard_cable is True:
-        # get all cables in feeder (moved here to only run it once, not for every
-        # feeder)
-        grid.assign_grid_feeder()
     for repr_node in nodes_feeder.keys():
-        if check_standard_cable is True:
-            lines_in_feeder = grid.lines_df[grid.lines_df.grid_feeder == repr_node]
-            # check if line type is any of the following
-            small_cables = ["NAYY 4x1x120", "NAYY 4x1x95", "NAYY 4x1x50", "NAYY 4x1x35"]
-            small_lines_in_feeder = lines_in_feeder[
-                lines_in_feeder.type_info.isin(small_cables)
-            ]
-            # filter cables connecting houses (their type is kept)
-            # ToDo Currently new components can be connected to house connection via
-            #  a new cable, wherefore it is checked, whether the house connecting cable
-            #  is an end cable. Needs to be changed once grid connection is changed.
-            for line in small_lines_in_feeder.index:
-                lines_bus0 = edisgo_obj.topology.get_connected_lines_from_bus(
-                    small_lines_in_feeder.at[line, "bus0"]
-                )
-                lines_bus1 = edisgo_obj.topology.get_connected_lines_from_bus(
-                    small_lines_in_feeder.at[line, "bus1"]
-                )
-                if len(lines_bus0) == 1 or len(lines_bus1) == 1:
-                    small_lines_in_feeder.drop(index=line, inplace=True)
-            # if there are small lines, exchange them
-            if len(small_lines_in_feeder) > 0:
-                edisgo_obj.topology.change_line_type(
-                    small_lines_in_feeder.index, standard_line
-                )
-                # check if s_nom before is larger than when using standard cable
-                # and if so, install parallel cable
-                lines_lower_snom = small_lines_in_feeder[
-                    small_lines_in_feeder.s_nom
-                    > grid.lines_df.loc[small_lines_in_feeder.index, "s_nom"]
-                ]
-                if len(lines_lower_snom) > 0:
-                    number_parallel_lines = np.ceil(
-                        lines_lower_snom.s_nom
-                        / grid.lines_df.loc[lines_lower_snom.index, "s_nom"]
-                    )
-                    # update number of parallel lines
-                    edisgo_obj.topology.update_number_of_parallel_lines(
-                        number_parallel_lines
-                    )
-                # add to lines changes
-                update_dict = {
-                    _: grid.lines_df.at[_, "num_parallel"]
-                    for _ in small_lines_in_feeder.index
-                }
-                lines_changes.update(update_dict)
-                logger.debug(
-                    f"When solving voltage issues in LV grid {grid.id} in feeder "
-                    f"{repr_node}, {len(small_lines_in_feeder)} were exchanged by "
-                    f"standard lines."
-                )
-                # if any cable was changed, set disconnect_2_3 to False
-                disconnect_2_3 = False
-
-        if disconnect_2_3 is True:
-            # find node farthest away
-            get_weight = lambda u, v, data: data["length"]  # noqa: E731
-            path_length = 0
-            for n in nodes_feeder[repr_node]:
-                path_length_dict_tmp = dijkstra_shortest_path_length(
-                    graph, station_node, get_weight, target=n
-                )
-                if path_length_dict_tmp[n] > path_length:
-                    node = n
-                    path_length = path_length_dict_tmp[n]
-                    path_length_dict = path_length_dict_tmp
-            path = paths[node]
-
-            # find first node in path that exceeds 2/3 of the line length
-            # from station to critical node farthest away from the station
-            node_2_3 = next(
-                j for j in path if path_length_dict[j] >= path_length_dict[node] * 2 / 3
+        # find node farthest away
+        get_weight = lambda u, v, data: data["length"]  # noqa: E731
+        path_length = 0
+        for n in nodes_feeder[repr_node]:
+            path_length_dict_tmp = dijkstra_shortest_path_length(
+                graph, station_node, get_weight, target=n
             )
+            if path_length_dict_tmp[n] > path_length:
+                node = n
+                path_length = path_length_dict_tmp[n]
+                path_length_dict = path_length_dict_tmp
+        path = paths[node]
 
-            # if LVGrid: check if node_2_3 is outside of a house
-            # and if not find next BranchTee outside the house
-            if isinstance(grid, LVGrid):
-                while (
-                    ~np.isnan(grid.buses_df.loc[node_2_3].in_building)
-                    and grid.buses_df.loc[node_2_3].in_building
-                ):
-                    node_2_3 = path[path.index(node_2_3) - 1]
-                    # break if node is station
-                    if node_2_3 is path[0]:
-                        logger.error("Could not reinforce voltage issue.")
-                        break
+        # find first node in path that exceeds 2/3 of the line length
+        # from station to critical node farthest away from the station
+        node_2_3 = next(
+            j for j in path if path_length_dict[j] >= path_length_dict[node] * 2 / 3
+        )
 
-            # if MVGrid: check if node_2_3 is LV station and if not find
-            # next LV station
-            else:
-                while node_2_3 not in edisgo_obj.topology.transformers_df.bus0.values:
-                    try:
-                        # try to find LVStation behind node_2_3
-                        node_2_3 = path[path.index(node_2_3) + 1]
-                    except IndexError:
-                        # if no LVStation between node_2_3 and node with
-                        # voltage problem, connect node directly to
-                        # MVStation
-                        node_2_3 = node
-                        break
+        # if LVGrid: check if node_2_3 is outside of a house
+        # and if not find next BranchTee outside the house
+        if isinstance(grid, LVGrid):
+            while (
+                ~np.isnan(grid.buses_df.loc[node_2_3].in_building)
+                and grid.buses_df.loc[node_2_3].in_building
+            ):
+                node_2_3 = path[path.index(node_2_3) - 1]
+                # break if node is station
+                if node_2_3 is path[0]:
+                    logger.error("Could not reinforce voltage issue.")
+                    break
 
-            # if node_2_3 is a representative (meaning it is already
-            # directly connected to the station), line cannot be
-            # disconnected and must therefore be reinforced
-            if node_2_3 in nodes_feeder.keys():
-                crit_line_name = graph.get_edge_data(station_node, node_2_3)[
-                    "branch_name"
-                ]
-                crit_line = grid.lines_df.loc[crit_line_name]
+        # if MVGrid: check if node_2_3 is LV station and if not find
+        # next LV station
+        else:
+            while node_2_3 not in edisgo_obj.topology.transformers_df.bus0.values:
+                try:
+                    # try to find LVStation behind node_2_3
+                    node_2_3 = path[path.index(node_2_3) + 1]
+                except IndexError:
+                    # if no LVStation between node_2_3 and node with
+                    # voltage problem, connect node directly to
+                    # MVStation
+                    node_2_3 = node
+                    break
 
-                # if critical line is already a standard line install one
-                # more parallel line
-                if crit_line.type_info == standard_line:
-                    edisgo_obj.topology.update_number_of_parallel_lines(
-                        pd.Series(
-                            index=[crit_line_name],
-                            data=[
-                                edisgo_obj.topology._lines_df.at[
-                                    crit_line_name, "num_parallel"
-                                ]
-                                + 1
-                            ],
-                        )
+        # if node_2_3 is a representative (meaning it is already
+        # directly connected to the station), line cannot be
+        # disconnected and must therefore be reinforced
+        if node_2_3 in nodes_feeder.keys():
+            crit_line_name = graph.get_edge_data(station_node, node_2_3)["branch_name"]
+            crit_line = grid.lines_df.loc[crit_line_name]
+
+            # if critical line is already a standard line install one
+            # more parallel line
+            if crit_line.type_info == standard_line:
+                edisgo_obj.topology.update_number_of_parallel_lines(
+                    pd.Series(
+                        index=[crit_line_name],
+                        data=[
+                            edisgo_obj.topology._lines_df.at[
+                                crit_line_name, "num_parallel"
+                            ]
+                            + 1
+                        ],
                     )
-                    lines_changes[crit_line_name] = 1
-
-                # if critical line is not yet a standard line replace old
-                # line by a standard line
-                else:
-                    # number of parallel standard lines could be calculated
-                    # following [2] p.103; for now number of parallel
-                    # standard lines is iterated
-                    edisgo_obj.topology.change_line_type(
-                        [crit_line_name], standard_line
-                    )
-                    lines_changes[crit_line_name] = 1
-                logger.debug(
-                    f"When solving voltage issues in grid {grid.id} in feeder "
-                    f"{repr_node}, disconnection at 2/3 was tried but bus is already "
-                    f"connected to the station, wherefore line {crit_line_name} was "
-                    f"reinforced."
                 )
+                lines_changes[crit_line_name] = 1
 
-            # if node_2_3 is not a representative, disconnect line
+            # if critical line is not yet a standard line replace old
+            # line by a standard line
             else:
-                # get line between node_2_3 and predecessor node (that is
-                # closer to the station)
-                pred_node = path[path.index(node_2_3) - 1]
-                crit_line_name = graph.get_edge_data(node_2_3, pred_node)["branch_name"]
-                if grid.lines_df.at[crit_line_name, "bus0"] == pred_node:
-                    edisgo_obj.topology._lines_df.at[
-                        crit_line_name, "bus0"
-                    ] = station_node
-                elif grid.lines_df.at[crit_line_name, "bus1"] == pred_node:
-                    edisgo_obj.topology._lines_df.at[
-                        crit_line_name, "bus1"
-                    ] = station_node
-                else:
-                    raise ValueError("Bus not in line buses. Please check.")
-                # change line length and type
-                edisgo_obj.topology._lines_df.at[
-                    crit_line_name, "length"
-                ] = path_length_dict[node_2_3]
+                # number of parallel standard lines could be calculated
+                # following [2] p.103; for now number of parallel
+                # standard lines is iterated
                 edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
                 lines_changes[crit_line_name] = 1
-                # TODO: Include switch disconnector
-                logger.debug(
-                    f"When solving voltage issues in grid {grid.id} in feeder "
-                    f"{repr_node}, disconnection at 2/3 was conducted "
-                    f"(line {crit_line_name})."
-                )
+
+        # if node_2_3 is not a representative, disconnect line
+        else:
+            # get line between node_2_3 and predecessor node (that is
+            # closer to the station)
+            pred_node = path[path.index(node_2_3) - 1]
+            crit_line_name = graph.get_edge_data(node_2_3, pred_node)["branch_name"]
+            if grid.lines_df.at[crit_line_name, "bus0"] == pred_node:
+                edisgo_obj.topology._lines_df.at[crit_line_name, "bus0"] = station_node
+            elif grid.lines_df.at[crit_line_name, "bus1"] == pred_node:
+                edisgo_obj.topology._lines_df.at[crit_line_name, "bus1"] = station_node
+            else:
+                raise ValueError("Bus not in line buses. Please check.")
+            # change line length and type
+            edisgo_obj.topology._lines_df.at[
+                crit_line_name, "length"
+            ] = path_length_dict[node_2_3]
+            edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
+            lines_changes[crit_line_name] = 1
+            # TODO: Include switch disconnector
 
     if not lines_changes:
         logger.debug(
