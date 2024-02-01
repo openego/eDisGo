@@ -67,7 +67,8 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         costs_trafos = pd.DataFrame(
             {
                 "costs_transformers": len(hvmv_trafos)
-                * [float(edisgo_obj.config["costs_transformers"]["mv"])]
+                * [float(edisgo_obj.config["costs_transformers"]["mv"])],
+                "voltage_level": len(hvmv_trafos) * ["hv/mv"],
             },
             index=hvmv_trafos,
         )
@@ -77,13 +78,14 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
                 pd.DataFrame(
                     {
                         "costs_transformers": len(mvlv_trafos)
-                        * [float(edisgo_obj.config["costs_transformers"]["lv"])]
+                        * [float(edisgo_obj.config["costs_transformers"]["lv"])],
+                        "voltage_level": len(hvmv_trafos) * ["mv/lv"],
                     },
                     index=mvlv_trafos,
                 ),
             ]
         )
-        return costs_trafos.loc[trafos.index, "costs_transformers"].values
+        return costs_trafos.loc[trafos.index, :]
 
     def _get_line_costs(lines_added):
         costs_lines = line_expansion_costs(edisgo_obj, lines_added.index)
@@ -128,16 +130,16 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         )
         trafos = all_trafos.loc[added_transformers["equipment"]]
         # calculate costs for each transformer
-        # ToDo voltage level should be hv/mv for HV/MV transformers
+        transformer_costs = _get_transformer_costs(trafos)
         costs = pd.concat(
             [
                 costs,
                 pd.DataFrame(
                     {
                         "type": trafos.type_info.values,
-                        "total_costs": _get_transformer_costs(trafos),
+                        "total_costs": transformer_costs.costs_transformers,
                         "quantity": len(trafos) * [1],
-                        "voltage_level": len(trafos) * ["mv/lv"],
+                        "voltage_level": transformer_costs.voltage_level,
                     },
                     index=trafos.index,
                 ),

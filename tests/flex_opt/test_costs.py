@@ -81,7 +81,7 @@ class TestCosts:
         assert len(costs) == 4
         assert (
             costs.loc["MVStation_1_transformer_reinforced_2", "voltage_level"]
-            == "mv/lv"
+            == "hv/mv"
         )
         assert costs.loc["MVStation_1_transformer_reinforced_2", "quantity"] == 1
         assert costs.loc["MVStation_1_transformer_reinforced_2", "total_costs"] == 1000
