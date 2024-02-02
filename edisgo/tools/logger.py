@@ -140,9 +140,9 @@ def setup_logger(
         log_dir = os.path.join(
             get_default_root_dir(), cfg_edisgo.get("user_dirs", "log_dir")
         )
-    create_dir(log_dir)
 
     if log_dir is not None:
+        create_dir(log_dir)
         file_name = os.path.join(log_dir, file_name)
 
     if reset_loggers:
