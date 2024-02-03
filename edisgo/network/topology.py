@@ -516,6 +516,165 @@ class TopologyBase(ABC):
     def switches_df(self, df):
         self._switches_df = df
 
+    def to_csv(self, directory):
+        """
+        Exports topology to csv files.
+
+        The following attributes are exported:
+
+        * 'loads_df' : Attribute :py:attr:`~loads_df` is saved to
+          `loads.csv`.
+        * 'generators_df' : Attribute :py:attr:`~generators_df` is saved to
+          `generators.csv`.
+        * 'storage_units_df' : Attribute :py:attr:`~storage_units_df` is
+          saved to `storage_units.csv`.
+        * 'transformers_df' : Attribute :py:attr:`~transformers_df` is saved to
+          `transformers.csv`.
+        * 'transformers_hvmv_df' : Attribute :py:attr:`~transformers_df` is
+          saved to `transformers.csv`.
+        * 'lines_df' : Attribute :py:attr:`~lines_df` is saved to
+          `lines.csv`.
+        * 'buses_df' : Attribute :py:attr:`~buses_df` is saved to
+          `buses.csv`.
+        * 'switches_df' : Attribute :py:attr:`~switches_df` is saved to
+          `switches.csv`.
+
+        Attributes are exported in a way that they can be directly imported to
+        pypsa.
+
+        Parameters
+        ----------
+        directory : str
+            Path to save topology to.
+
+        """
+        os.makedirs(directory, exist_ok=True)
+        if not self.loads_df.empty:
+            self.loads_df.to_csv(os.path.join(directory, "loads.csv"))
+        if not self.generators_df.empty:
+            self.generators_df.to_csv(os.path.join(directory, "generators.csv"))
+        if not self.storage_units_df.empty:
+            self.storage_units_df.to_csv(os.path.join(directory, "storage_units.csv"))
+        if not self.transformers_df.empty:
+            self.transformers_df.rename({"x_pu": "x", "r_pu": "r"}, axis=1).to_csv(
+                os.path.join(directory, "transformers.csv")
+            )
+        if not self.transformers_hvmv_df.empty:
+            self.transformers_hvmv_df.rename({"x_pu": "x", "r_pu": "r"}, axis=1).to_csv(
+                os.path.join(directory, "transformers_hvmv.csv")
+            )
+        self.lines_df.to_csv(os.path.join(directory, "lines.csv"))
+        self.buses_df.to_csv(os.path.join(directory, "buses.csv"))
+        if not self.switches_df.empty:
+            self.switches_df.to_csv(os.path.join(directory, "switches.csv"))
+
+    def _get_matching_dict_of_attributes_and_file_names(self):
+        """
+        Helper function that matches attribute names to file names.
+
+        Is used in function :attr:`~.network.topology.TopologyBase.from_csv` to set
+        which attribute of :class:`~.network.topology.TopologyBase` is saved under
+        which file name.
+
+        Returns
+        -------
+        dict
+            Dictionary matching attribute names and file names with attribute
+            names as keys and corresponding file names as values.
+
+        """
+        return {
+            "buses_df": "buses.csv",
+            "lines_df": "lines.csv",
+            "loads_df": "loads.csv",
+            "generators_df": "generators.csv",
+            "storage_units_df": "storage_units.csv",
+            "transformers_df": "transformers.csv",
+            "transformers_hvmv_df": "transformers_hvmv.csv",
+            "switches_df": "switches.csv",
+        }
+
+    def from_csv(self, data_path, edisgo_obj, from_zip_archive=False):
+        """
+        Restores topology from csv files.
+
+        Parameters
+        ----------
+        data_path : str
+            Path to topology csv files or zip archive.
+        edisgo_obj : :class:`~.EDisGo`
+        from_zip_archive : bool
+            Set to True if data is archived in a zip archive. Default: False.
+
+        """
+        # get all attributes and corresponding file names
+        attrs = self._get_matching_dict_of_attributes_and_file_names()
+
+        if from_zip_archive:
+            # read from zip archive
+            # setup ZipFile Class
+            zip = ZipFile(data_path)
+
+            # get all directories and files within zip archive
+            files = zip.namelist()
+
+            # add directory to attributes to match zip archive
+            attrs = {k: f"topology/{v}" for k, v in attrs.items()}
+
+        else:
+            # read from directory
+            # check files within the directory
+            files = os.listdir(data_path)
+
+        attrs_to_read = {k: v for k, v in attrs.items() if v in files}
+
+        for attr, file in attrs_to_read.items():
+            if from_zip_archive:
+                # open zip file to make it readable for pandas
+                with zip.open(file) as f:
+                    df = pd.read_csv(f, index_col=0)
+            else:
+                path = os.path.join(data_path, file)
+                df = pd.read_csv(path, index_col=0)
+
+            if attr == "generators_df":
+                # delete slack if it was included
+                df = df.loc[df.control != "Slack"]
+            elif "transformers" in attr:
+                # rename columns to match convention
+                df = df.rename(columns={"x": "x_pu", "r": "r_pu"})
+            elif attr == "network":
+                # rename columns to match convention
+                df = df.rename(
+                    columns={
+                        "mv_grid_district_geom": "geom",
+                        "mv_grid_district_population": "population",
+                    }
+                )
+
+                # set grid district information
+                setattr(
+                    self,
+                    "grid_district",
+                    {
+                        "population": df.population.iat[0],
+                        "geom": wkt_loads(df.geom.iat[0]),
+                        "srid": df.srid.iat[0],
+                    },
+                )
+
+                # set up medium voltage grid
+                setattr(self, "mv_grid", MVGrid(edisgo_obj=edisgo_obj, id=df.index[0]))
+
+                continue
+
+            # set attribute
+            setattr(self, attr, df)
+
+        if from_zip_archive:
+            # make sure to destroy ZipFile Class to close any open connections
+            zip.close()
+
 
 class Topology(TopologyBase):
     """
@@ -2796,29 +2955,13 @@ class Topology(TopologyBase):
         """
         Exports topology to csv files.
 
-        The following attributes are exported:
+        Extends function :attr:`~.network.topology.TopologyBase.to_csv`.
 
-        * 'loads_df' : Attribute :py:attr:`~loads_df` is saved to
-          `loads.csv`.
-        * 'generators_df' : Attribute :py:attr:`~generators_df` is saved to
-          `generators.csv`.
-        * 'storage_units_df' : Attribute :py:attr:`~storage_units_df` is
-          saved to `storage_units.csv`.
-        * 'transformers_df' : Attribute :py:attr:`~transformers_df` is saved to
-          `transformers.csv`.
-        * 'transformers_hvmv_df' : Attribute :py:attr:`~transformers_df` is
-          saved to `transformers.csv`.
-        * 'lines_df' : Attribute :py:attr:`~lines_df` is saved to
-          `lines.csv`.
-        * 'buses_df' : Attribute :py:attr:`~buses_df` is saved to
-          `buses.csv`.
-        * 'switches_df' : Attribute :py:attr:`~switches_df` is saved to
-          `switches.csv`.
+        Exports all attributes listed in :attr:`~.network.topology.TopologyBase.to_csv`
+        plus:
+
         * 'grid_district' : Attribute :py:attr:`~grid_district` is saved to
           `network.csv`.
-
-        Attributes are exported in a way that they can be directly imported to
-        pypsa.
 
         Parameters
         ----------
@@ -2826,25 +2969,7 @@ class Topology(TopologyBase):
             Path to save topology to.
 
         """
-        os.makedirs(directory, exist_ok=True)
-        if not self.loads_df.empty:
-            self.loads_df.to_csv(os.path.join(directory, "loads.csv"))
-        if not self.generators_df.empty:
-            self.generators_df.to_csv(os.path.join(directory, "generators.csv"))
-        if not self.storage_units_df.empty:
-            self.storage_units_df.to_csv(os.path.join(directory, "storage_units.csv"))
-        if not self.transformers_df.empty:
-            self.transformers_df.rename({"x_pu": "x", "r_pu": "r"}, axis=1).to_csv(
-                os.path.join(directory, "transformers.csv")
-            )
-        if not self.transformers_hvmv_df.empty:
-            self.transformers_hvmv_df.rename({"x_pu": "x", "r_pu": "r"}, axis=1).to_csv(
-                os.path.join(directory, "transformers_hvmv.csv")
-            )
-        self.lines_df.to_csv(os.path.join(directory, "lines.csv"))
-        self.buses_df.to_csv(os.path.join(directory, "buses.csv"))
-        if not self.switches_df.empty:
-            self.switches_df.to_csv(os.path.join(directory, "switches.csv"))
+        super().to_csv(directory=directory)
 
         network = {"name": self.mv_grid.id}
         network.update(self._grid_district)
@@ -2856,9 +2981,39 @@ class Topology(TopologyBase):
             axis=1,
         ).to_csv(os.path.join(directory, "network.csv"))
 
+    def _get_matching_dict_of_attributes_and_file_names(self):
+        """
+        Helper function that matches attribute names to file names.
+
+        Is used in function :attr:`~.network.topology.Topology.from_csv` to set
+        which attribute of :class:`~.network.topology.Topology` is saved under
+        which file name.
+
+        Function :attr:`~.network.topology.TopologyBase.\
+        _get_matching_dict_of_attributes_and_file_names` is extended by this function.
+
+        Returns
+        -------
+        dict
+            Dictionary matching attribute names and file names with attribute
+            names as keys and corresponding file names as values.
+
+        """
+        helper_dict = super()._get_matching_dict_of_attributes_and_file_names()
+        helper_dict.update(
+            {
+                "network": "network.csv",
+            }
+        )
+        return helper_dict
+
     def from_csv(self, data_path, edisgo_obj, from_zip_archive=False):
         """
         Restores topology from csv files.
+
+        Extends function :attr:`~.network.topology.TopologyBase.from_csv` by also
+        importing network.csv and original grid data.
+        Also performs an integrity check of the imported grid topology data.
 
         Parameters
         ----------
@@ -2869,102 +3024,11 @@ class Topology(TopologyBase):
             Set to True if data is archived in a zip archive. Default: False.
 
         """
-
-        def _get_matching_dict_of_attributes_and_file_names():
-            """
-            Helper function that matches attribute names to file names.
-
-            Is used in function :attr:`~.network.topology.Topology.from_csv` to set
-            which attribute of :class:`~.network.topology.Topology` is saved under
-            which file name.
-
-            Returns
-            -------
-            dict
-                Dictionary matching attribute names and file names with attribute
-                names as keys and corresponding file names as values.
-
-            """
-            return {
-                "buses_df": "buses.csv",
-                "lines_df": "lines.csv",
-                "loads_df": "loads.csv",
-                "generators_df": "generators.csv",
-                "charging_points_df": "charging_points.csv",
-                "storage_units_df": "storage_units.csv",
-                "transformers_df": "transformers.csv",
-                "transformers_hvmv_df": "transformers_hvmv.csv",
-                "switches_df": "switches.csv",
-                "network": "network.csv",
-            }
-
-        # get all attributes and corresponding file names
-        attrs = _get_matching_dict_of_attributes_and_file_names()
-
-        if from_zip_archive:
-            # read from zip archive
-            # setup ZipFile Class
-            zip = ZipFile(data_path)
-
-            # get all directories and files within zip archive
-            files = zip.namelist()
-
-            # add directory to attributes to match zip archive
-            attrs = {k: f"topology/{v}" for k, v in attrs.items()}
-
-        else:
-            # read from directory
-            # check files within the directory
-            files = os.listdir(data_path)
-
-        attrs_to_read = {k: v for k, v in attrs.items() if v in files}
-
-        for attr, file in attrs_to_read.items():
-            if from_zip_archive:
-                # open zip file to make it readable for pandas
-                with zip.open(file) as f:
-                    df = pd.read_csv(f, index_col=0)
-            else:
-                path = os.path.join(data_path, file)
-                df = pd.read_csv(path, index_col=0)
-
-            if attr == "generators_df":
-                # delete slack if it was included
-                df = df.loc[df.control != "Slack"]
-            elif "transformers" in attr:
-                # rename columns to match convention
-                df = df.rename(columns={"x": "x_pu", "r": "r_pu"})
-            elif attr == "network":
-                # rename columns to match convention
-                df = df.rename(
-                    columns={
-                        "mv_grid_district_geom": "geom",
-                        "mv_grid_district_population": "population",
-                    }
-                )
-
-                # set grid district information
-                setattr(
-                    self,
-                    "grid_district",
-                    {
-                        "population": df.population.iat[0],
-                        "geom": wkt_loads(df.geom.iat[0]),
-                        "srid": df.srid.iat[0],
-                    },
-                )
-
-                # set up medium voltage grid
-                setattr(self, "mv_grid", MVGrid(edisgo_obj=edisgo_obj, id=df.index[0]))
-
-                continue
-
-            # set attribute
-            setattr(self, attr, df)
-
-        if from_zip_archive:
-            # make sure to destroy ZipFile Class to close any open connections
-            zip.close()
+        super().from_csv(
+            data_path=data_path,
+            edisgo_obj=edisgo_obj,
+            from_zip_archive=from_zip_archive,
+        )
 
         # Check data integrity
         self.check_integrity()
