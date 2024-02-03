@@ -1,8 +1,6 @@
 import logging
 import os
 
-import pytest
-
 from edisgo.tools.logger import setup_logger
 
 
@@ -13,10 +11,16 @@ def check_file_output(filename, output):
     assert last_line == output
 
 
-def reset_loggers():
+def reset_loggers(filename):
     logger = logging.getLogger("edisgo")
     logger.handlers.clear()
     logger.propagate = True
+    # try removing file - when run on github for Windows removing the file leads
+    # to a PermissionError
+    try:
+        os.remove(filename)
+    except PermissionError:
+        pass
 
 
 class TestClass:
@@ -44,10 +48,9 @@ class TestClass:
         logging.debug("root")
         check_file_output(filename, "root - DEBUG: root\n")
 
-        reset_loggers()
-        os.remove(filename)
+        reset_loggers(filename)
 
-    @pytest.mark.runonlinux
+    # @pytest.mark.runonlinux
     def test_setup_logger_2(self):
         """
         This test is only run on linux, as the log file is written to the user
@@ -77,5 +80,4 @@ class TestClass:
         logging.debug("root")
         check_file_output(filename, "edisgo - DEBUG: edisgo\n")
 
-        reset_loggers()
-        os.remove(filename)
+        reset_loggers(filename)
