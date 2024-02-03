@@ -1,6 +1,8 @@
 import logging
 import os
 
+import pytest
+
 from edisgo.tools.logger import setup_logger
 
 
@@ -50,7 +52,7 @@ class TestClass:
 
         reset_loggers(filename)
 
-    # @pytest.mark.runonlinux
+    @pytest.mark.runonlinux
     def test_setup_logger_2(self):
         """
         This test is only run on linux, as the log file is written to the user
