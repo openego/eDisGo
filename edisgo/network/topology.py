@@ -5,6 +5,7 @@ import os
 import random
 import warnings
 
+from abc import ABC
 from zipfile import ZipFile
 
 import networkx as nx
@@ -77,132 +78,16 @@ COLUMNS = {
 }
 
 
-class Topology:
+class TopologyBase(ABC):
     """
-    Container for all grid topology data of a single MV grid.
+    Base class for container for all grid topology data of a single MV grid.
 
     Data may as well include grid topology data of underlying LV grids.
-
-    Other Parameters
-    -----------------
-    config : None or :class:`~.tools.config.Config`
-        Provide your configurations if you want to load self-provided equipment
-        data. Path to csv files containing the technical data is set in
-        `config_system.cfg` in sections `system_dirs` and `equipment`.
-        The default is None in which case the equipment data provided by
-        eDisGo is used.
 
     """
 
     def __init__(self, **kwargs):
-        # load technical data of equipment
-        self._equipment_data = self._load_equipment_data(kwargs.get("config", None))
-
-    @staticmethod
-    def _load_equipment_data(config=None):
-        """
-        Load equipment data for transformers, cables etc.
-
-        Parameters
-        -----------
-        config : :class:`~.tools.config.Config`
-            Config object with configuration data from config files.
-
-        Returns
-        -------
-        dict
-            Dictionary with :pandas:`pandas.DataFrame<DataFrame>` containing
-            equipment data. Keys of the dictionary are 'mv_transformers',
-            'mv_overhead_lines', 'mv_cables', 'lv_transformers', and
-            'lv_cables'.
-
-        Notes
-        ------
-        This function calculates electrical values of transformers from
-        standard values (so far only for MV/LV transformers, not necessary for
-        HV/MV transformers as MV impedances are not used).
-
-        $z_{pu}$ is calculated as follows:
-
-        .. math:: z_{pu} = \frac{u_{kr}}{100}
-
-        using the following simplification:
-
-        .. math:: z_{pu} = \frac{Z}{Z_{nom}}
-
-        with
-
-        .. math:: Z = \frac{u_{kr}}{100} \\cdot \frac{U_n^2}{S_{nom}}
-
-        and
-
-        .. math:: Z_{nom} = \frac{U_n^2}{S_{nom}}
-
-        $r_{pu}$ is calculated as follows:
-
-        .. math:: r_{pu} = \frac{P_k}{S_{nom}}
-
-        using the simplification of
-
-        .. math:: r_{pu} = \frac{R}{Z_{nom}}
-
-        with
-
-        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \\cdot \frac{U_{nom}^2}{S_{nom}^2}
-
-        $x_{pu}$ is calculated as follows:
-
-        .. math::  x_{pu} = \\sqrt(z_{pu}^2-r_{pu}^2)
-
-        """
-
-        equipment = {
-            "mv": ["transformers", "overhead_lines", "cables"],
-            "lv": ["transformers", "cables"],
-        }
-
-        # if config is not provided set default path and filenames
-        if config is None:
-            equipment_dir = "equipment"
-            config = {}
-            for voltage_level, eq_list in equipment.items():
-                for i in eq_list:
-                    config[
-                        "equipment_{}_parameters_{}".format(voltage_level, i)
-                    ] = "equipment-parameters_{}_{}.csv".format(
-                        voltage_level.upper(), i
-                    )
-        else:
-            equipment_dir = config["system_dirs"]["equipment_dir"]
-            config = config["equipment"]
-
-        package_path = edisgo.__path__[0]
-        data = {}
-
-        for voltage_level, eq_list in equipment.items():
-            for i in eq_list:
-                equipment_parameters = config[
-                    "equipment_{}_parameters_{}".format(voltage_level, i)
-                ]
-                data["{}_{}".format(voltage_level, i)] = pd.read_csv(
-                    os.path.join(package_path, equipment_dir, equipment_parameters),
-                    comment="#",
-                    index_col="name",
-                    delimiter=",",
-                    decimal=".",
-                )
-                # calculate electrical values of transformer from standard
-                # values (so far only for LV transformers, not necessary for
-                # MV as MV impedances are not used)
-                if voltage_level == "lv" and i == "transformers":
-                    name = f"{voltage_level}_{i}"
-
-                    data[name]["r_pu"] = data[name]["P_k"] / data[name]["S_nom"]
-
-                    data[name]["x_pu"] = np.sqrt(
-                        (data[name]["u_kr"] / 100) ** 2 - data[name]["r_pu"] ** 2
-                    )
-        return data
+        pass
 
     @property
     def loads_df(self):
@@ -630,6 +515,135 @@ class Topology:
     @switches_df.setter
     def switches_df(self, df):
         self._switches_df = df
+
+
+class Topology(TopologyBase):
+    """
+    Container for all grid topology data of a single MV grid.
+
+    Data may as well include grid topology data of underlying LV grids.
+
+    Other Parameters
+    -----------------
+    config : None or :class:`~.tools.config.Config`
+        Provide your configurations if you want to load self-provided equipment
+        data. Path to csv files containing the technical data is set in
+        `config_system.cfg` in sections `system_dirs` and `equipment`.
+        The default is None in which case the equipment data provided by
+        eDisGo is used.
+
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # load technical data of equipment
+        self._equipment_data = self._load_equipment_data(kwargs.get("config", None))
+
+    @staticmethod
+    def _load_equipment_data(config=None):
+        """
+        Load equipment data for transformers, cables etc.
+
+        Parameters
+        -----------
+        config : :class:`~.tools.config.Config`
+            Config object with configuration data from config files.
+
+        Returns
+        -------
+        dict
+            Dictionary with :pandas:`pandas.DataFrame<DataFrame>` containing
+            equipment data. Keys of the dictionary are 'mv_transformers',
+            'mv_overhead_lines', 'mv_cables', 'lv_transformers', and
+            'lv_cables'.
+
+        Notes
+        ------
+        This function calculates electrical values of transformers from
+        standard values (so far only for MV/LV transformers, not necessary for
+        HV/MV transformers as MV impedances are not used).
+
+        $z_{pu}$ is calculated as follows:
+
+        .. math:: z_{pu} = \frac{u_{kr}}{100}
+
+        using the following simplification:
+
+        .. math:: z_{pu} = \frac{Z}{Z_{nom}}
+
+        with
+
+        .. math:: Z = \frac{u_{kr}}{100} \\cdot \frac{U_n^2}{S_{nom}}
+
+        and
+
+        .. math:: Z_{nom} = \frac{U_n^2}{S_{nom}}
+
+        $r_{pu}$ is calculated as follows:
+
+        .. math:: r_{pu} = \frac{P_k}{S_{nom}}
+
+        using the simplification of
+
+        .. math:: r_{pu} = \frac{R}{Z_{nom}}
+
+        with
+
+        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \\cdot \frac{U_{nom}^2}{S_{nom}^2}
+
+        $x_{pu}$ is calculated as follows:
+
+        .. math::  x_{pu} = \\sqrt(z_{pu}^2-r_{pu}^2)
+
+        """
+
+        equipment = {
+            "mv": ["transformers", "overhead_lines", "cables"],
+            "lv": ["transformers", "cables"],
+        }
+
+        # if config is not provided set default path and filenames
+        if config is None:
+            equipment_dir = "equipment"
+            config = {}
+            for voltage_level, eq_list in equipment.items():
+                for i in eq_list:
+                    config[
+                        "equipment_{}_parameters_{}".format(voltage_level, i)
+                    ] = "equipment-parameters_{}_{}.csv".format(
+                        voltage_level.upper(), i
+                    )
+        else:
+            equipment_dir = config["system_dirs"]["equipment_dir"]
+            config = config["equipment"]
+
+        package_path = edisgo.__path__[0]
+        data = {}
+
+        for voltage_level, eq_list in equipment.items():
+            for i in eq_list:
+                equipment_parameters = config[
+                    "equipment_{}_parameters_{}".format(voltage_level, i)
+                ]
+                data["{}_{}".format(voltage_level, i)] = pd.read_csv(
+                    os.path.join(package_path, equipment_dir, equipment_parameters),
+                    comment="#",
+                    index_col="name",
+                    delimiter=",",
+                    decimal=".",
+                )
+                # calculate electrical values of transformer from standard
+                # values (so far only for LV transformers, not necessary for
+                # MV as MV impedances are not used)
+                if voltage_level == "lv" and i == "transformers":
+                    name = f"{voltage_level}_{i}"
+
+                    data[name]["r_pu"] = data[name]["P_k"] / data[name]["S_nom"]
+
+                    data[name]["x_pu"] = np.sqrt(
+                        (data[name]["u_kr"] / 100) ** 2 - data[name]["r_pu"] ** 2
+                    )
+        return data
 
     @property
     def charging_points_df(self):
