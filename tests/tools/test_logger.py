@@ -1,22 +1,26 @@
 import logging
 import os
 
+import pytest
+
 from edisgo.tools.logger import setup_logger
+
+
+def check_file_output(filename, output):
+    with open(filename) as file:
+        last_line = file.readlines()[-1].split(" ")[3:]
+        last_line = " ".join(last_line)
+    assert last_line == output
+
+
+def reset_loggers():
+    logger = logging.getLogger("edisgo")
+    logger.handlers.clear()
+    logger.propagate = True
 
 
 class TestClass:
     def test_setup_logger(self):
-        def check_file_output(filename, output):
-            with open(filename) as file:
-                last_line = file.readlines()[-1].split(" ")[3:]
-                last_line = " ".join(last_line)
-            assert last_line == output
-
-        def reset_loggers():
-            logger = logging.getLogger("edisgo")
-            logger.handlers.clear()
-            logger.propagate = True
-
         filename = os.path.join(
             os.path.expanduser("~"), ".edisgo", "log", "test_log.log"
         )
@@ -43,6 +47,19 @@ class TestClass:
         reset_loggers()
         os.remove(filename)
 
+    @pytest.mark.runonlinux
+    def test_setup_logger_2(self):
+        """
+        This test is only run on linux, as the log file is written to the user
+        home directory, which is not allowed when tests are run on github.
+
+        """
+
+        # delete any existing log files
+        log_files = [_ for _ in os.listdir(os.getcwd()) if ".log" in _]
+        for log_file in log_files:
+            os.remove(log_file)
+
         setup_logger(
             loggers=[
                 {"name": "edisgo", "file_level": "debug", "stream_level": "debug"},
@@ -52,11 +69,7 @@ class TestClass:
         )
         logger = logging.getLogger("edisgo")
 
-        filename = [_ for _ in os.listdir(os.getcwd()) if ".log" in _]
-        # if not 1 there are several log files, which shouldn't be the case and could
-        # mess up the following tests
-        assert len(filename) == 1
-        filename = filename[0]
+        filename = [_ for _ in os.listdir(os.getcwd()) if ".log" in _][0]
         # Test that edisgo logger writes to file.
         logger.debug("edisgo")
         check_file_output(filename, "edisgo - DEBUG: edisgo\n")
