@@ -5,6 +5,7 @@ import os
 import random
 import warnings
 
+from abc import ABC
 from zipfile import ZipFile
 
 import networkx as nx
@@ -77,132 +78,16 @@ COLUMNS = {
 }
 
 
-class Topology:
+class TopologyBase(ABC):
     """
-    Container for all grid topology data of a single MV grid.
+    Base class for container for all grid topology data of a single MV grid.
 
     Data may as well include grid topology data of underlying LV grids.
-
-    Other Parameters
-    -----------------
-    config : None or :class:`~.tools.config.Config`
-        Provide your configurations if you want to load self-provided equipment
-        data. Path to csv files containing the technical data is set in
-        `config_system.cfg` in sections `system_dirs` and `equipment`.
-        The default is None in which case the equipment data provided by
-        eDisGo is used.
 
     """
 
     def __init__(self, **kwargs):
-        # load technical data of equipment
-        self._equipment_data = self._load_equipment_data(kwargs.get("config", None))
-
-    @staticmethod
-    def _load_equipment_data(config=None):
-        """
-        Load equipment data for transformers, cables etc.
-
-        Parameters
-        -----------
-        config : :class:`~.tools.config.Config`
-            Config object with configuration data from config files.
-
-        Returns
-        -------
-        dict
-            Dictionary with :pandas:`pandas.DataFrame<DataFrame>` containing
-            equipment data. Keys of the dictionary are 'mv_transformers',
-            'mv_overhead_lines', 'mv_cables', 'lv_transformers', and
-            'lv_cables'.
-
-        Notes
-        ------
-        This function calculates electrical values of transformers from
-        standard values (so far only for MV/LV transformers, not necessary for
-        HV/MV transformers as MV impedances are not used).
-
-        $z_{pu}$ is calculated as follows:
-
-        .. math:: z_{pu} = \frac{u_{kr}}{100}
-
-        using the following simplification:
-
-        .. math:: z_{pu} = \frac{Z}{Z_{nom}}
-
-        with
-
-        .. math:: Z = \frac{u_{kr}}{100} \\cdot \frac{U_n^2}{S_{nom}}
-
-        and
-
-        .. math:: Z_{nom} = \frac{U_n^2}{S_{nom}}
-
-        $r_{pu}$ is calculated as follows:
-
-        .. math:: r_{pu} = \frac{P_k}{S_{nom}}
-
-        using the simplification of
-
-        .. math:: r_{pu} = \frac{R}{Z_{nom}}
-
-        with
-
-        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \\cdot \frac{U_{nom}^2}{S_{nom}^2}
-
-        $x_{pu}$ is calculated as follows:
-
-        .. math::  x_{pu} = \\sqrt(z_{pu}^2-r_{pu}^2)
-
-        """
-
-        equipment = {
-            "mv": ["transformers", "overhead_lines", "cables"],
-            "lv": ["transformers", "cables"],
-        }
-
-        # if config is not provided set default path and filenames
-        if config is None:
-            equipment_dir = "equipment"
-            config = {}
-            for voltage_level, eq_list in equipment.items():
-                for i in eq_list:
-                    config[
-                        "equipment_{}_parameters_{}".format(voltage_level, i)
-                    ] = "equipment-parameters_{}_{}.csv".format(
-                        voltage_level.upper(), i
-                    )
-        else:
-            equipment_dir = config["system_dirs"]["equipment_dir"]
-            config = config["equipment"]
-
-        package_path = edisgo.__path__[0]
-        data = {}
-
-        for voltage_level, eq_list in equipment.items():
-            for i in eq_list:
-                equipment_parameters = config[
-                    "equipment_{}_parameters_{}".format(voltage_level, i)
-                ]
-                data["{}_{}".format(voltage_level, i)] = pd.read_csv(
-                    os.path.join(package_path, equipment_dir, equipment_parameters),
-                    comment="#",
-                    index_col="name",
-                    delimiter=",",
-                    decimal=".",
-                )
-                # calculate electrical values of transformer from standard
-                # values (so far only for LV transformers, not necessary for
-                # MV as MV impedances are not used)
-                if voltage_level == "lv" and i == "transformers":
-                    name = f"{voltage_level}_{i}"
-
-                    data[name]["r_pu"] = data[name]["P_k"] / data[name]["S_nom"]
-
-                    data[name]["x_pu"] = np.sqrt(
-                        (data[name]["u_kr"] / 100) ** 2 - data[name]["r_pu"] ** 2
-                    )
-        return data
+        pass
 
     @property
     def loads_df(self):
@@ -630,6 +515,294 @@ class Topology:
     @switches_df.setter
     def switches_df(self, df):
         self._switches_df = df
+
+    def to_csv(self, directory):
+        """
+        Exports topology to csv files.
+
+        The following attributes are exported:
+
+        * 'loads_df' : Attribute :py:attr:`~loads_df` is saved to
+          `loads.csv`.
+        * 'generators_df' : Attribute :py:attr:`~generators_df` is saved to
+          `generators.csv`.
+        * 'storage_units_df' : Attribute :py:attr:`~storage_units_df` is
+          saved to `storage_units.csv`.
+        * 'transformers_df' : Attribute :py:attr:`~transformers_df` is saved to
+          `transformers.csv`.
+        * 'transformers_hvmv_df' : Attribute :py:attr:`~transformers_df` is
+          saved to `transformers.csv`.
+        * 'lines_df' : Attribute :py:attr:`~lines_df` is saved to
+          `lines.csv`.
+        * 'buses_df' : Attribute :py:attr:`~buses_df` is saved to
+          `buses.csv`.
+        * 'switches_df' : Attribute :py:attr:`~switches_df` is saved to
+          `switches.csv`.
+
+        Attributes are exported in a way that they can be directly imported to
+        pypsa.
+
+        Parameters
+        ----------
+        directory : str
+            Path to save topology to.
+
+        """
+        os.makedirs(directory, exist_ok=True)
+        if not self.loads_df.empty:
+            self.loads_df.to_csv(os.path.join(directory, "loads.csv"))
+        if not self.generators_df.empty:
+            self.generators_df.to_csv(os.path.join(directory, "generators.csv"))
+        if not self.storage_units_df.empty:
+            self.storage_units_df.to_csv(os.path.join(directory, "storage_units.csv"))
+        if not self.transformers_df.empty:
+            self.transformers_df.rename({"x_pu": "x", "r_pu": "r"}, axis=1).to_csv(
+                os.path.join(directory, "transformers.csv")
+            )
+        if not self.transformers_hvmv_df.empty:
+            self.transformers_hvmv_df.rename({"x_pu": "x", "r_pu": "r"}, axis=1).to_csv(
+                os.path.join(directory, "transformers_hvmv.csv")
+            )
+        self.lines_df.to_csv(os.path.join(directory, "lines.csv"))
+        self.buses_df.to_csv(os.path.join(directory, "buses.csv"))
+        if not self.switches_df.empty:
+            self.switches_df.to_csv(os.path.join(directory, "switches.csv"))
+
+    def _get_matching_dict_of_attributes_and_file_names(self):
+        """
+        Helper function that matches attribute names to file names.
+
+        Is used in function :attr:`~.network.topology.TopologyBase.from_csv` to set
+        which attribute of :class:`~.network.topology.TopologyBase` is saved under
+        which file name.
+
+        Returns
+        -------
+        dict
+            Dictionary matching attribute names and file names with attribute
+            names as keys and corresponding file names as values.
+
+        """
+        return {
+            "buses_df": "buses.csv",
+            "lines_df": "lines.csv",
+            "loads_df": "loads.csv",
+            "generators_df": "generators.csv",
+            "storage_units_df": "storage_units.csv",
+            "transformers_df": "transformers.csv",
+            "transformers_hvmv_df": "transformers_hvmv.csv",
+            "switches_df": "switches.csv",
+        }
+
+    def from_csv(self, data_path, edisgo_obj, from_zip_archive=False):
+        """
+        Restores topology from csv files.
+
+        Parameters
+        ----------
+        data_path : str
+            Path to topology csv files or zip archive.
+        edisgo_obj : :class:`~.EDisGo`
+        from_zip_archive : bool
+            Set to True if data is archived in a zip archive. Default: False.
+
+        """
+        # get all attributes and corresponding file names
+        attrs = self._get_matching_dict_of_attributes_and_file_names()
+
+        if from_zip_archive:
+            # read from zip archive
+            # setup ZipFile Class
+            zip = ZipFile(data_path)
+
+            # get all directories and files within zip archive
+            files = zip.namelist()
+
+            # add directory to attributes to match zip archive
+            attrs = {k: f"topology/{v}" for k, v in attrs.items()}
+
+        else:
+            # read from directory
+            # check files within the directory
+            files = os.listdir(data_path)
+
+        attrs_to_read = {k: v for k, v in attrs.items() if v in files}
+
+        for attr, file in attrs_to_read.items():
+            if from_zip_archive:
+                # open zip file to make it readable for pandas
+                with zip.open(file) as f:
+                    df = pd.read_csv(f, index_col=0)
+            else:
+                path = os.path.join(data_path, file)
+                df = pd.read_csv(path, index_col=0)
+
+            if attr == "generators_df":
+                # delete slack if it was included
+                df = df.loc[df.control != "Slack"]
+            elif "transformers" in attr:
+                # rename columns to match convention
+                df = df.rename(columns={"x": "x_pu", "r": "r_pu"})
+            elif attr == "network":
+                # rename columns to match convention
+                df = df.rename(
+                    columns={
+                        "mv_grid_district_geom": "geom",
+                        "mv_grid_district_population": "population",
+                    }
+                )
+
+                # set grid district information
+                setattr(
+                    self,
+                    "grid_district",
+                    {
+                        "population": df.population.iat[0],
+                        "geom": wkt_loads(df.geom.iat[0]),
+                        "srid": df.srid.iat[0],
+                    },
+                )
+
+                # set up medium voltage grid
+                setattr(self, "mv_grid", MVGrid(edisgo_obj=edisgo_obj, id=df.index[0]))
+
+                continue
+
+            # set attribute
+            setattr(self, attr, df)
+
+        if from_zip_archive:
+            # make sure to destroy ZipFile Class to close any open connections
+            zip.close()
+
+
+class Topology(TopologyBase):
+    """
+    Container for all grid topology data of a single MV grid.
+
+    Data may as well include grid topology data of underlying LV grids.
+
+    Other Parameters
+    -----------------
+    config : None or :class:`~.tools.config.Config`
+        Provide your configurations if you want to load self-provided equipment
+        data. Path to csv files containing the technical data is set in
+        `config_system.cfg` in sections `system_dirs` and `equipment`.
+        The default is None in which case the equipment data provided by
+        eDisGo is used.
+
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # load technical data of equipment
+        self._equipment_data = self._load_equipment_data(kwargs.get("config", None))
+
+    @staticmethod
+    def _load_equipment_data(config=None):
+        """
+        Load equipment data for transformers, cables etc.
+
+        Parameters
+        -----------
+        config : :class:`~.tools.config.Config`
+            Config object with configuration data from config files.
+
+        Returns
+        -------
+        dict
+            Dictionary with :pandas:`pandas.DataFrame<DataFrame>` containing
+            equipment data. Keys of the dictionary are 'mv_transformers',
+            'mv_overhead_lines', 'mv_cables', 'lv_transformers', and
+            'lv_cables'.
+
+        Notes
+        ------
+        This function calculates electrical values of transformers from
+        standard values (so far only for MV/LV transformers, not necessary for
+        HV/MV transformers as MV impedances are not used).
+
+        $z_{pu}$ is calculated as follows:
+
+        .. math:: z_{pu} = \frac{u_{kr}}{100}
+
+        using the following simplification:
+
+        .. math:: z_{pu} = \frac{Z}{Z_{nom}}
+
+        with
+
+        .. math:: Z = \frac{u_{kr}}{100} \\cdot \frac{U_n^2}{S_{nom}}
+
+        and
+
+        .. math:: Z_{nom} = \frac{U_n^2}{S_{nom}}
+
+        $r_{pu}$ is calculated as follows:
+
+        .. math:: r_{pu} = \frac{P_k}{S_{nom}}
+
+        using the simplification of
+
+        .. math:: r_{pu} = \frac{R}{Z_{nom}}
+
+        with
+
+        .. math:: R = \frac{P_k}{3 I_{nom}^2} = P_k \\cdot \frac{U_{nom}^2}{S_{nom}^2}
+
+        $x_{pu}$ is calculated as follows:
+
+        .. math::  x_{pu} = \\sqrt(z_{pu}^2-r_{pu}^2)
+
+        """
+
+        equipment = {
+            "mv": ["transformers", "overhead_lines", "cables"],
+            "lv": ["transformers", "cables"],
+        }
+
+        # if config is not provided set default path and filenames
+        if config is None:
+            equipment_dir = "equipment"
+            config = {}
+            for voltage_level, eq_list in equipment.items():
+                for i in eq_list:
+                    config[
+                        "equipment_{}_parameters_{}".format(voltage_level, i)
+                    ] = "equipment-parameters_{}_{}.csv".format(
+                        voltage_level.upper(), i
+                    )
+        else:
+            equipment_dir = config["system_dirs"]["equipment_dir"]
+            config = config["equipment"]
+
+        package_path = edisgo.__path__[0]
+        data = {}
+
+        for voltage_level, eq_list in equipment.items():
+            for i in eq_list:
+                equipment_parameters = config[
+                    "equipment_{}_parameters_{}".format(voltage_level, i)
+                ]
+                data["{}_{}".format(voltage_level, i)] = pd.read_csv(
+                    os.path.join(package_path, equipment_dir, equipment_parameters),
+                    comment="#",
+                    index_col="name",
+                    delimiter=",",
+                    decimal=".",
+                )
+                # calculate electrical values of transformer from standard
+                # values (so far only for LV transformers, not necessary for
+                # MV as MV impedances are not used)
+                if voltage_level == "lv" and i == "transformers":
+                    name = f"{voltage_level}_{i}"
+
+                    data[name]["r_pu"] = data[name]["P_k"] / data[name]["S_nom"]
+
+                    data[name]["x_pu"] = np.sqrt(
+                        (data[name]["u_kr"] / 100) ** 2 - data[name]["r_pu"] ** 2
+                    )
+        return data
 
     @property
     def charging_points_df(self):
@@ -1973,7 +2146,7 @@ class Topology:
             # object)
             comp_connected = False
             for dist_min_obj in conn_objects_min_stack:
-                # do not allow connection to virtual busses
+                # do not allow connection to virtual buses
                 if "virtual" not in dist_min_obj["repr"]:
                     line_type, num_parallel = select_cable(edisgo_object, "mv", power)
                     target_obj_result = self._connect_mv_bus_to_target_object(
@@ -2555,10 +2728,6 @@ class Topology:
             # switch data
             if switch_bus and switch_bus == line_data.bus0:
                 self.switches_df.loc[switch_data.name, "branch"] = line_name_bus0
-            # add line to equipment changes
-            edisgo_object.results._add_line_to_equipment_changes(
-                line=self.lines_df.loc[line_name_bus0, :],
-            )
 
             # add new line between newly created branch tee and line's bus0
             line_length = geo.calc_geo_dist_vincenty(
@@ -2584,10 +2753,6 @@ class Topology:
             # switch data
             if switch_bus and switch_bus == line_data.bus1:
                 self.switches_df.loc[switch_data.name, "branch"] = line_name_bus1
-            # add line to equipment changes
-            edisgo_object.results._add_line_to_equipment_changes(
-                line=self.lines_df.loc[line_name_bus1, :],
-            )
 
             # add new line for new bus
             line_length = geo.calc_geo_dist_vincenty(
@@ -2790,29 +2955,13 @@ class Topology:
         """
         Exports topology to csv files.
 
-        The following attributes are exported:
+        Extends function :attr:`~.network.topology.TopologyBase.to_csv`.
 
-        * 'loads_df' : Attribute :py:attr:`~loads_df` is saved to
-          `loads.csv`.
-        * 'generators_df' : Attribute :py:attr:`~generators_df` is saved to
-          `generators.csv`.
-        * 'storage_units_df' : Attribute :py:attr:`~storage_units_df` is
-          saved to `storage_units.csv`.
-        * 'transformers_df' : Attribute :py:attr:`~transformers_df` is saved to
-          `transformers.csv`.
-        * 'transformers_hvmv_df' : Attribute :py:attr:`~transformers_df` is
-          saved to `transformers.csv`.
-        * 'lines_df' : Attribute :py:attr:`~lines_df` is saved to
-          `lines.csv`.
-        * 'buses_df' : Attribute :py:attr:`~buses_df` is saved to
-          `buses.csv`.
-        * 'switches_df' : Attribute :py:attr:`~switches_df` is saved to
-          `switches.csv`.
+        Exports all attributes listed in :attr:`~.network.topology.TopologyBase.to_csv`
+        plus:
+
         * 'grid_district' : Attribute :py:attr:`~grid_district` is saved to
           `network.csv`.
-
-        Attributes are exported in a way that they can be directly imported to
-        pypsa.
 
         Parameters
         ----------
@@ -2820,25 +2969,7 @@ class Topology:
             Path to save topology to.
 
         """
-        os.makedirs(directory, exist_ok=True)
-        if not self.loads_df.empty:
-            self.loads_df.to_csv(os.path.join(directory, "loads.csv"))
-        if not self.generators_df.empty:
-            self.generators_df.to_csv(os.path.join(directory, "generators.csv"))
-        if not self.storage_units_df.empty:
-            self.storage_units_df.to_csv(os.path.join(directory, "storage_units.csv"))
-        if not self.transformers_df.empty:
-            self.transformers_df.rename({"x_pu": "x", "r_pu": "r"}, axis=1).to_csv(
-                os.path.join(directory, "transformers.csv")
-            )
-        if not self.transformers_hvmv_df.empty:
-            self.transformers_hvmv_df.rename({"x_pu": "x", "r_pu": "r"}, axis=1).to_csv(
-                os.path.join(directory, "transformers_hvmv.csv")
-            )
-        self.lines_df.to_csv(os.path.join(directory, "lines.csv"))
-        self.buses_df.to_csv(os.path.join(directory, "buses.csv"))
-        if not self.switches_df.empty:
-            self.switches_df.to_csv(os.path.join(directory, "switches.csv"))
+        super().to_csv(directory=directory)
 
         network = {"name": self.mv_grid.id}
         network.update(self._grid_district)
@@ -2850,9 +2981,39 @@ class Topology:
             axis=1,
         ).to_csv(os.path.join(directory, "network.csv"))
 
+    def _get_matching_dict_of_attributes_and_file_names(self):
+        """
+        Helper function that matches attribute names to file names.
+
+        Is used in function :attr:`~.network.topology.Topology.from_csv` to set
+        which attribute of :class:`~.network.topology.Topology` is saved under
+        which file name.
+
+        Function :attr:`~.network.topology.TopologyBase.\
+        _get_matching_dict_of_attributes_and_file_names` is extended by this function.
+
+        Returns
+        -------
+        dict
+            Dictionary matching attribute names and file names with attribute
+            names as keys and corresponding file names as values.
+
+        """
+        helper_dict = super()._get_matching_dict_of_attributes_and_file_names()
+        helper_dict.update(
+            {
+                "network": "network.csv",
+            }
+        )
+        return helper_dict
+
     def from_csv(self, data_path, edisgo_obj, from_zip_archive=False):
         """
         Restores topology from csv files.
+
+        Extends function :attr:`~.network.topology.TopologyBase.from_csv` by also
+        importing network.csv and original grid data.
+        Also performs an integrity check of the imported grid topology data.
 
         Parameters
         ----------
@@ -2863,102 +3024,11 @@ class Topology:
             Set to True if data is archived in a zip archive. Default: False.
 
         """
-
-        def _get_matching_dict_of_attributes_and_file_names():
-            """
-            Helper function that matches attribute names to file names.
-
-            Is used in function :attr:`~.network.topology.Topology.from_csv` to set
-            which attribute of :class:`~.network.topology.Topology` is saved under
-            which file name.
-
-            Returns
-            -------
-            dict
-                Dictionary matching attribute names and file names with attribute
-                names as keys and corresponding file names as values.
-
-            """
-            return {
-                "buses_df": "buses.csv",
-                "lines_df": "lines.csv",
-                "loads_df": "loads.csv",
-                "generators_df": "generators.csv",
-                "charging_points_df": "charging_points.csv",
-                "storage_units_df": "storage_units.csv",
-                "transformers_df": "transformers.csv",
-                "transformers_hvmv_df": "transformers_hvmv.csv",
-                "switches_df": "switches.csv",
-                "network": "network.csv",
-            }
-
-        # get all attributes and corresponding file names
-        attrs = _get_matching_dict_of_attributes_and_file_names()
-
-        if from_zip_archive:
-            # read from zip archive
-            # setup ZipFile Class
-            zip = ZipFile(data_path)
-
-            # get all directories and files within zip archive
-            files = zip.namelist()
-
-            # add directory to attributes to match zip archive
-            attrs = {k: f"topology/{v}" for k, v in attrs.items()}
-
-        else:
-            # read from directory
-            # check files within the directory
-            files = os.listdir(data_path)
-
-        attrs_to_read = {k: v for k, v in attrs.items() if v in files}
-
-        for attr, file in attrs_to_read.items():
-            if from_zip_archive:
-                # open zip file to make it readable for pandas
-                with zip.open(file) as f:
-                    df = pd.read_csv(f, index_col=0)
-            else:
-                path = os.path.join(data_path, file)
-                df = pd.read_csv(path, index_col=0)
-
-            if attr == "generators_df":
-                # delete slack if it was included
-                df = df.loc[df.control != "Slack"]
-            elif "transformers" in attr:
-                # rename columns to match convention
-                df = df.rename(columns={"x": "x_pu", "r": "r_pu"})
-            elif attr == "network":
-                # rename columns to match convention
-                df = df.rename(
-                    columns={
-                        "mv_grid_district_geom": "geom",
-                        "mv_grid_district_population": "population",
-                    }
-                )
-
-                # set grid district information
-                setattr(
-                    self,
-                    "grid_district",
-                    {
-                        "population": df.population.iat[0],
-                        "geom": wkt_loads(df.geom.iat[0]),
-                        "srid": df.srid.iat[0],
-                    },
-                )
-
-                # set up medium voltage grid
-                setattr(self, "mv_grid", MVGrid(edisgo_obj=edisgo_obj, id=df.index[0]))
-
-                continue
-
-            # set attribute
-            setattr(self, attr, df)
-
-        if from_zip_archive:
-            # make sure to destroy ZipFile Class to close any open connections
-            zip.close()
+        super().from_csv(
+            data_path=data_path,
+            edisgo_obj=edisgo_obj,
+            from_zip_archive=from_zip_archive,
+        )
 
         # Check data integrity
         self.check_integrity()

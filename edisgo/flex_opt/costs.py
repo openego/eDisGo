@@ -67,7 +67,8 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         costs_trafos = pd.DataFrame(
             {
                 "costs_transformers": len(hvmv_trafos)
-                * [float(edisgo_obj.config["costs_transformers"]["mv"])]
+                * [float(edisgo_obj.config["costs_transformers"]["mv"])],
+                "voltage_level": len(hvmv_trafos) * ["hv/mv"],
             },
             index=hvmv_trafos,
         )
@@ -77,13 +78,14 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
                 pd.DataFrame(
                     {
                         "costs_transformers": len(mvlv_trafos)
-                        * [float(edisgo_obj.config["costs_transformers"]["lv"])]
+                        * [float(edisgo_obj.config["costs_transformers"]["lv"])],
+                        "voltage_level": len(mvlv_trafos) * ["mv/lv"],
                     },
                     index=mvlv_trafos,
                 ),
             ]
         )
-        return costs_trafos.loc[trafos.index, "costs_transformers"].values
+        return costs_trafos.loc[trafos.index, :]
 
     def _get_line_costs(lines_added):
         costs_lines = line_expansion_costs(edisgo_obj, lines_added.index)
@@ -107,9 +109,8 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     # costs for transformers
     if not equipment_changes.empty:
         transformers = equipment_changes[
-            equipment_changes.index.isin(
-                [f"{_}_station" for _ in edisgo_obj.topology._grids_repr]
-            )
+            equipment_changes.equipment.str.contains("Transformer")
+            | equipment_changes.equipment.str.contains("transformer")
         ]
         added_transformers = transformers[transformers["change"] == "added"]
         removed_transformers = transformers[transformers["change"] == "removed"]
@@ -129,15 +130,16 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         )
         trafos = all_trafos.loc[added_transformers["equipment"]]
         # calculate costs for each transformer
+        transformer_costs = _get_transformer_costs(trafos)
         costs = pd.concat(
             [
                 costs,
                 pd.DataFrame(
                     {
                         "type": trafos.type_info.values,
-                        "total_costs": _get_transformer_costs(trafos),
+                        "total_costs": transformer_costs.costs_transformers,
                         "quantity": len(trafos) * [1],
-                        "voltage_level": len(trafos) * ["mv/lv"],
+                        "voltage_level": transformer_costs.voltage_level,
                     },
                     index=trafos.index,
                 ),
@@ -161,6 +163,19 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
             .sum()
             .loc[lines_added_unique, ["quantity"]]
         )
+        # use the minimum of quantity and num_parallel, as sometimes lines are added
+        # and in a next reinforcement step removed again, e.g. when feeder is split
+        # at 2/3 and a new single standard line is added
+        lines_added = pd.merge(
+            lines_added,
+            edisgo_obj.topology.lines_df.loc[:, ["num_parallel"]],
+            how="left",
+            left_index=True,
+            right_index=True,
+        )
+        lines_added["quantity_added"] = lines_added.loc[
+            :, ["quantity", "num_parallel"]
+        ].min(axis=1)
         lines_added["length"] = edisgo_obj.topology.lines_df.loc[
             lines_added.index, "length"
         ]
@@ -176,9 +191,9 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
                             ].values,
                             "total_costs": line_costs.costs.values,
                             "length": (
-                                lines_added.quantity * lines_added.length
+                                lines_added.quantity_added * lines_added.length
                             ).values,
-                            "quantity": lines_added.quantity.values,
+                            "quantity": lines_added.quantity_added.values,
                             "voltage_level": line_costs.voltage_level.values,
                         },
                         index=lines_added.index,
@@ -288,3 +303,69 @@ def line_expansion_costs(edisgo_obj, lines_names=None):
         ]
     )
     return costs_lines.loc[lines_df.index]
+
+
+def transformer_expansion_costs(edisgo_obj, transformer_names=None):
+    """
+    Returns costs per transformer in kEUR as well as voltage level they are in.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        eDisGo object
+    transformer_names: None or list(str)
+        List of names of transformers to return cost information for. If None, it is
+        returned for all transformers in
+        :attr:`~.network.topology.Topology.transformers_df` and
+        :attr:`~.network.topology.Topology.transformers_hvmv_df`.
+
+    Returns
+    -------
+    costs: :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with names of transformers in index and columns 'costs' with
+        costs per transformer in kEUR and 'voltage_level' with information on voltage
+        level the transformer is in.
+
+    """
+    transformers_df = pd.concat(
+        [
+            edisgo_obj.topology.transformers_df.copy(),
+            edisgo_obj.topology.transformers_hvmv_df.copy(),
+        ]
+    )
+    if transformer_names is not None:
+        transformers_df = transformers_df.loc[transformer_names, ["type_info"]]
+
+    if len(transformers_df) == 0:
+        return pd.DataFrame(columns=["costs", "voltage_level"])
+
+    hvmv_transformers = transformers_df[
+        transformers_df.index.isin(edisgo_obj.topology.transformers_hvmv_df.index)
+    ].index
+    mvlv_transformers = transformers_df[
+        transformers_df.index.isin(edisgo_obj.topology.transformers_df.index)
+    ].index
+
+    costs_hvmv = float(edisgo_obj.config["costs_transformers"]["mv"])
+    costs_mvlv = float(edisgo_obj.config["costs_transformers"]["lv"])
+
+    costs_df = pd.DataFrame(
+        {
+            "costs": costs_hvmv,
+            "voltage_level": "hv/mv",
+        },
+        index=hvmv_transformers,
+    )
+    costs_df = pd.concat(
+        [
+            costs_df,
+            pd.DataFrame(
+                {
+                    "costs": costs_mvlv,
+                    "voltage_level": "mv/lv",
+                },
+                index=mvlv_transformers,
+            ),
+        ]
+    )
+    return costs_df

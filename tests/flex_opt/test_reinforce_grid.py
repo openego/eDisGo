@@ -81,7 +81,7 @@ class TestReinforceGrid:
                 assert len(g.buses_df) > 1
 
         assert len(lv_grids_new) == 26
-        assert np.isclose(edisgo.results.grid_expansion_costs.total_costs.sum(), 280.06)
+        assert np.isclose(edisgo.results.grid_expansion_costs.total_costs.sum(), 440.06)
 
         # check if all generators are still present
         assert np.isclose(
