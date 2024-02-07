@@ -38,7 +38,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up julia
-        if: runner.os == 'Linux'
         uses: julia-actions/setup-julia@v1
         with:
           version: "1.6"
