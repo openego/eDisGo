@@ -1785,8 +1785,7 @@ class TimeSeries:
                 "storage_units_reactive_power", reactive_power
             )
 
-    @property
-    def residual_load(self):
+    def residual_load(self, feeder=None, edisgo_obj=None):
         """
         Returns residual load in network.
 

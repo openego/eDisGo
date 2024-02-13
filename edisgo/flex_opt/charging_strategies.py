@@ -211,7 +211,7 @@ def charging_strategy(
         )
 
         # get residual load
-        init_residual_load = edisgo_obj.timeseries.residual_load
+        init_residual_load = edisgo_obj.timeseries.residual_load()
 
         len_residual_load = int(charging_processes_df.park_end_timesteps.max())
 

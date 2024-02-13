@@ -53,7 +53,7 @@ def select_worstcase_snapshots(edisgo_obj):
         :pandas:`pandas.Timestamp<Timestamp>`.
 
     """
-    residual_load = edisgo_obj.timeseries.residual_load
+    residual_load = edisgo_obj.timeseries.residual_load()
 
     timestamp = {
         "min_residual_load": residual_load.idxmin(),
