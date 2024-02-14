@@ -117,6 +117,26 @@ class TestCheckTechConstraints:
             df.at[self.timesteps[0], "Line_10024"],
             7.27461339178928,
         )
+        # check n-1
+        df = check_tech_constraints._lines_allowed_load_voltage_level(
+            self.edisgo, "mv", n_minus_one=True
+        )
+        # check shape of dataframe
+        assert (4, 30) == df.shape
+        # check in feed-in case
+        assert np.isclose(
+            df.at[self.timesteps[2], "Line_10005"],
+            7.27461339178928,
+        )
+        # check in load case
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"],
+            7.274613391789284 / 2,
+        )
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10024"],
+            7.27461339178928,
+        )
 
         # check for LV
         df = check_tech_constraints._lines_allowed_load_voltage_level(self.edisgo, "lv")

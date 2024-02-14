@@ -1,3 +1,4 @@
+import itertools
 import logging
 
 import numpy as np
@@ -250,7 +251,8 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level, n_minus_one=Fal
         section 'grid_expansion_load_factors' are used. This is the default.
         In case it is set to True, allowed load factors defined in the config file
         'config_grid_expansion' in section 'grid_expansion_load_factors_n_minus_one'
-        are used. This case is currently not implemented.
+        are used for lines in rings. For all other lines, 'grid_expansion_load_factors'
+        are used.
 
     Returns
     -------
@@ -282,45 +284,37 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level, n_minus_one=Fal
 
     # get allowed loads per case
     if n_minus_one is True:
-        raise NotImplementedError("n-1 security can currently not be checked.")
-        # # handle lines in cycles differently from lines in stubs
-        # for case in ["feed-in_case", "load_case"]:
-        #     if (
-        #         edisgo_obj.config["grid_expansion_load_factors_n_minus_one"][
-        #             f"{voltage_level}_{case}_line"
-        #         ]
-        #         != 1.0
-        #     ):
-        #
-        #         buses_in_cycles = list(
-        #             set(itertools.chain.from_iterable(edisgo_obj.topology.rings))
-        #         )
-        #
-        #         # Find lines in cycles
-        #         lines_in_cycles = list(
-        #             lines_df.loc[
-        #                 lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
-        #             ].index.values
-        #         )
-        #         lines_radial_feeders = list(
-        #             lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values
-        #         )
-        #
-        #         # lines in cycles have to be n-1 secure
-        #         allowed_load_per_case[case] = (
-        #             lines_df.loc[lines_in_cycles].s_nom
-        #             * edisgo_obj.config["grid_expansion_load_factors_n_minus_one"][
-        #                 f"{voltage_level}_{case}_line"
-        #             ]
-        #         )
-        #
-        #         # lines in radial feeders are not n-1 secure anyway
-        #         allowed_load_per_case[case] = pd.concat(
-        #             [
-        #                 allowed_load_per_case[case],
-        #                 lines_df.loc[lines_radial_feeders].s_nom,
-        #             ]
-        #         )
+        # handle lines in cycles differently from lines in stubs
+        buses_in_cycles = list(
+            set(itertools.chain.from_iterable(edisgo_obj.topology.rings))
+        )
+        # find lines in cycles
+        lines_in_cycles = list(
+            lines_df.loc[
+                lines_df[["bus0", "bus1"]].isin(buses_in_cycles).all(axis=1)
+            ].index.values
+        )
+        lines_radial_feeders = list(
+            lines_df.loc[~lines_df.index.isin(lines_in_cycles)].index.values
+        )
+        for case in ["feed-in_case", "load_case"]:
+            # lines in cycles have to be n-1 secure
+            allowed_load_per_case[case] = (
+                lines_df.loc[lines_in_cycles].s_nom
+                * edisgo_obj.config["grid_expansion_load_factors_n_minus_one"][
+                    f"{voltage_level}_{case}_line"
+                ]
+            )
+            # lines in radial feeders are not n-1 secure anyway
+            allowed_load_per_case[case] = pd.concat(
+                [
+                    allowed_load_per_case[case],
+                    lines_df.loc[lines_radial_feeders].s_nom
+                    * edisgo_obj.config["grid_expansion_load_factors"][
+                        f"{voltage_level}_{case}_line"
+                    ],
+                ]
+            )
     else:
         for case in ["feed-in_case", "load_case"]:
             allowed_load_per_case[case] = (
