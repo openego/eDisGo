@@ -18,9 +18,7 @@ def mv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
     edisgo_obj : :class:`~.EDisGo`
     n_minus_one : bool
         Determines which allowed load factors to use (see :py:attr:`~lines_allowed_load`
-        for more information). Currently, n-1 security cannot be handled correctly,
-        wherefore the case where this parameter is set to True will lead to an error
-        being raised.
+        for more information).
 
     Returns
     -------
@@ -39,7 +37,8 @@ def mv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
     -----
     Line over-load is determined based on allowed load factors for feed-in and
     load cases that are defined in the config file 'config_grid_expansion' in
-    section 'grid_expansion_load_factors'.
+    section 'grid_expansion_load_factors' or in case of n-1 security
+    'grid_expansion_load_factors_n_minus_one'.
 
     """
 
@@ -68,9 +67,7 @@ def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False, lv_grid_id=None
     edisgo_obj : :class:`~.EDisGo`
     n_minus_one : bool
         Determines which allowed load factors to use (see :py:attr:`~lines_allowed_load`
-        for more information). Currently, n-1 security cannot be handled correctly,
-        wherefore the case where this parameter is set to True will lead to an error
-        being raised.
+        for more information).
     lv_grid_id : str or int or None
         If None, checks overloading for all LV lines. Otherwise, only lines in given
         LV grid are checked. Default: None.
@@ -92,7 +89,8 @@ def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False, lv_grid_id=None
     -----
     Line over-load is determined based on allowed load factors for feed-in and
     load cases that are defined in the config file 'config_grid_expansion' in
-    section 'grid_expansion_load_factors'.
+    section 'grid_expansion_load_factors' or in case of n-1 security
+    'grid_expansion_load_factors_n_minus_one'.
 
     """
 
