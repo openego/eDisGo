@@ -91,7 +91,7 @@ The steps required to set up HSL  are also described in the
 Here is a short version for reference:
 
 First, you need to obtain an academic license for HSL Solvers.
-Under https://www.hsl.rl.ac.uk/ipopt/ download the sources for Coin-HSL Full (Stable).
+Under https://licences.stfc.ac.uk/product/coin-hsl download the sources for Coin-HSL Full (Stable).
 You will need to provide an institutional e-mail to gain access.
 
 Unpack the tar.gz:
@@ -163,7 +163,7 @@ Beyond a running and up-to-date installation of eDisGo you need **grid topology
 data**. Currently synthetic grid data generated with the python project
 `Ding0 <https://github.com/openego/ding0>`_
 is the only supported data source. You can retrieve data from
-`Zenodo <https://zenodo.org/record/890479>`_
+`Zenodo <https://zenodo.org/records/890479>`_
 (make sure you choose latest data) or check out the
 `Ding0 documentation <https://dingo.readthedocs.io/en/dev/usage_details.html#ding0-examples>`_
 on how to generate grids yourself.
