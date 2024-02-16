@@ -44,7 +44,12 @@ def _scored_most_critical_loading(
         one component is maximally overloaded, and is sorted descending order.
 
     """
-
+    # ToDo The relative loading is used in this function to determine most critical
+    #  time steps. While this makes sense to determine which lines are overloaded, it
+    #  is not the best indicator for the weighting as it does not convey the number
+    #  of additional lines needed to solve a problem. For that the number of parallel
+    #  standard lines and transformers needed would be better. However, for now
+    #  using the relative overloading as an estimation is okay.
     # Get current relative to allowed current
     relative_i_res = check_tech_constraints.components_relative_load(edisgo_obj)
 
