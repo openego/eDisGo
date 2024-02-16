@@ -5,7 +5,7 @@ channels:
 dependencies:
   - python >= 3.8, < 3.10
   - pip
-  - pandas >= 1.4
+  - pandas >= 1.4, < 2.2.0
   - conda-forge::fiona
   - conda-forge::geopy
   - conda-forge::geopandas
