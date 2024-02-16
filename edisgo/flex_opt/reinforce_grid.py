@@ -685,7 +685,7 @@ def catch_convergence_reinforce_grid(
     Reinforcement strategy to reinforce grids with non-converging time steps.
 
     First, conducts a grid reinforcement with only converging time steps.
-    Afterwards, tries to run reinforcement with all time steps that did not converge
+    Afterward, tries to run reinforcement with all time steps that did not converge
     in the beginning. At last, if there are still time steps that do not converge,
     the feed-in and load time series are iteratively scaled and the grid reinforced,
     starting with a low grid load and scaling-up the time series until the original
@@ -769,15 +769,17 @@ def catch_convergence_reinforce_grid(
         troubleshooting_mode = troubleshooting_mode_set
         reinforce()
 
-    # Run reinforcement for time steps that did not converge after initial reinforcement
-    if not non_converging_timesteps.empty:
-        logger.info(
-            "Run reinforcement for time steps that did not converge after initial "
-            "reinforcement."
-        )
-        selected_timesteps = non_converging_timesteps
-        troubleshooting_mode = False
-        converged = reinforce()
+        # Run reinforcement for time steps that did not converge after initial
+        # reinforcement (only needs to done, when grid was previously reinforced using
+        # converged time steps, wherefore it is within that if-statement)
+        if not non_converging_timesteps.empty:
+            logger.info(
+                "Run reinforcement for time steps that did not converge after initial "
+                "reinforcement."
+            )
+            selected_timesteps = non_converging_timesteps
+            troubleshooting_mode = False
+            converged = reinforce()
 
     if converged:
         return edisgo.results
