@@ -956,6 +956,12 @@ def get_most_critical_time_steps(
                 f"{len(loading_scores)} time steps are exported."
             )
             num_steps_loading = len(loading_scores)
+        elif num_steps_loading < len(loading_scores):
+            logger.info(
+                f"{num_steps_loading} of a total of {len(loading_scores)} relevant "
+                f"time steps for overloading issues are chosen for the selection "
+                f"of most critical time steps."
+            )
     steps = loading_scores[:num_steps_loading].index
 
     # Select most critical steps based on voltage violations
@@ -973,6 +979,12 @@ def get_most_critical_time_steps(
                 f"{len(voltage_scores)} time steps are exported."
             )
             num_steps_voltage = len(voltage_scores)
+        elif num_steps_voltage < len(voltage_scores):
+            logger.info(
+                f"{num_steps_voltage} of a total of {len(voltage_scores)} relevant "
+                f"time steps for voltage issues are chosen for the selection "
+                f"of most critical time steps."
+            )
     steps = steps.append(voltage_scores[:num_steps_voltage].index)
 
     if len(steps) == 0:
