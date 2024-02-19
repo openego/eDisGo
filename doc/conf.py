@@ -116,7 +116,7 @@ extlinks = {
         "networkx.%s",
     ),
     "sqlalchemy": (
-        "http://docs.sqlalchemy.org/en/latest/core/connections.html#%s",
+        "https://docs.sqlalchemy.org/en/20/core/connections.html#%s",
         "sqlalchemy.%s",
     ),
     "numpy": (
