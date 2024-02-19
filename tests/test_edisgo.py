@@ -430,6 +430,7 @@ class TestEDisGo:
         assert "Current fraction in iterative process: 1.0." in caplog.text
 
     def test_reinforce(self):
+        # ToDo add tests to check content of equipment_changes
         # ###################### test with default settings ##########################
         self.setup_worst_case_time_series()
         results = self.edisgo.reinforce()
