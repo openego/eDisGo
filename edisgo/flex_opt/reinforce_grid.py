@@ -105,7 +105,7 @@ def reinforce_grid(
         In case `reduced_analysis` is set to True, this parameter can be used
         to specify how to handle non-convergence issues in the power flow analysis.
         See parameter `use_troubleshooting_mode` in function :attr:`~.EDisGo.reinforce`
-        for more information. Default: True.
+        for more information. Default: False.
     run_initial_analyze : bool
         In case `reduced_analysis` is set to True, this parameter can be
         used to specify whether to run an initial analyze to determine most
@@ -188,7 +188,7 @@ def reinforce_grid(
             num_steps_loading=kwargs.get("num_steps_loading", None),
             num_steps_voltage=kwargs.get("num_steps_voltage", None),
             percentage=kwargs.get("percentage", 1.0),
-            use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
+            use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", False),
             run_initial_analyze=kwargs.get("run_initial_analyze", True),
             weight_by_costs=kwargs.get("weight_by_costs", False),
         )
@@ -712,7 +712,6 @@ def catch_convergence_reinforce_grid(
                 edisgo,
                 timesteps_pfa=selected_timesteps,
                 scale_timeseries=set_scaling_factor,
-                use_troubleshooting_mode=troubleshooting_mode,
                 **kwargs,
             )
             converged = True
@@ -728,13 +727,11 @@ def catch_convergence_reinforce_grid(
     # Get the timesteps from kwargs and then remove it to set it later manually
     timesteps_pfa = kwargs.pop("timesteps_pfa", None)
     selected_timesteps = timesteps_pfa
-    troubleshooting_mode_set = kwargs.pop("troubleshooting_mode", True)
 
     # Initial try
     logger.info("Run initial reinforcement.")
     set_scaling_factor = 1.0
     iteration = 0
-    troubleshooting_mode = False
     converged = reinforce()
     if converged is False:
         logger.info("Initial reinforcement did not succeed.")
@@ -766,7 +763,6 @@ def catch_convergence_reinforce_grid(
             "reinforcement."
         )
         selected_timesteps = converging_timesteps
-        troubleshooting_mode = troubleshooting_mode_set
         reinforce()
 
         # Run reinforcement for time steps that did not converge after initial
@@ -778,7 +774,6 @@ def catch_convergence_reinforce_grid(
                 "reinforcement."
             )
             selected_timesteps = non_converging_timesteps
-            troubleshooting_mode = False
             converged = reinforce()
 
     if converged:
@@ -812,7 +807,6 @@ def catch_convergence_reinforce_grid(
                     ) + highest_converged_scaling_factor
 
             logger.info(f"Try reinforcement with {set_scaling_factor=} at {iteration=}")
-            troubleshooting_mode = False
             converged = reinforce()
             if converged:
                 logger.info(
@@ -833,7 +827,6 @@ def catch_convergence_reinforce_grid(
     if set_scaling_factor != 1:
         logger.info("Run final reinforcement.")
         selected_timesteps = timesteps_pfa
-        troubleshooting_mode = False
         reinforce()
 
     return edisgo.results
