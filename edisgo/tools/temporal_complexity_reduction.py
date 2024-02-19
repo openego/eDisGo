@@ -320,9 +320,8 @@ def _scored_most_critical_voltage_issues_time_interval(
     voltage_diff_feeder = voltage_diff.copy()
     voltage_diff_feeder.columns = columns
     voltage_diff_feeder = (
-        voltage_diff.transpose().reset_index().groupby(by="Bus").sum().transpose()
+        voltage_diff.transpose().reset_index().groupby(by="Bus").max().transpose()
     )
-    voltage_diff_feeder[voltage_diff_feeder != 0] = 1
 
     if weight_by_costs:
         # get costs per feeder
@@ -726,14 +725,14 @@ def get_most_critical_time_intervals(
         The costs don't convey the actual costs but are an estimation, as
         the real number of parallel lines needed is not determined and the whole feeder
         length is used instead of the length over two-thirds of the feeder.
-        If False, the severity of each feeder's voltage issue is set to be the same.
+        If False, only the maximum voltage deviation in the feeder is used to determine
+        the most relevant time intervals.
 
         In case of overloading issues:
-        If True, the overloading of each line is multiplied by
-        the respective grid expansion costs of that line including costs for earth work
-        and one new line.
+        If True, the overloading of each line is multiplied by the respective grid
+        expansion costs of that line including costs for earth work and one new line.
         The costs don't convey the actual costs but are an estimation, as
-        the discrete needed number of parallel lines is not considered.
+        the discrete number of needed parallel lines is not considered.
         If False, only the relative overloading is used to determine the most relevant
         time intervals.
 
