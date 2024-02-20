@@ -116,7 +116,7 @@ extlinks = {
         "networkx.%s",
     ),
     "sqlalchemy": (
-        "https://docs.sqlalchemy.org/en/20/core/connections.html#%s",
+        "https://docs.sqlalchemy.org/en/latest/core/connections.html#%s",
         "sqlalchemy.%s",
     ),
     "numpy": (
@@ -134,6 +134,11 @@ extlinks = {
         "plotly.%s",
     ),
 }
+# ignore the following external links when checking the links
+# stackoverflow is listed here because for some reason the link check fails for these
+# in the github action, even though the link is correct
+linkcheck_ignore = [r"https://stackoverflow.com*"]
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
