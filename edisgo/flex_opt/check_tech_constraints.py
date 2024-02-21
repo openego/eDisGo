@@ -414,7 +414,9 @@ def hv_mv_station_max_overload(edisgo_obj, n_minus_one=False):
     'grid_expansion_load_factors_n_minus_one'.
 
     """
-    crit_stations = _station_max_overload(edisgo_obj, edisgo_obj.topology.mv_grid, n_minus_one=n_minus_one)
+    crit_stations = _station_max_overload(
+        edisgo_obj, edisgo_obj.topology.mv_grid, n_minus_one=n_minus_one
+    )
     if not crit_stations.empty:
         logger.debug("==> HV/MV station has load issues.")
     else:
@@ -702,7 +704,11 @@ def stations_allowed_load(edisgo_obj, grids=None, n_minus_one=False):
     allowed_loading = pd.DataFrame()
     for grid in grids:
         allowed_loading = pd.concat(
-            [allowed_loading, _station_allowed_load(edisgo_obj, grid, n_minus_one=n_minus_one)], axis=1
+            [
+                allowed_loading,
+                _station_allowed_load(edisgo_obj, grid, n_minus_one=n_minus_one),
+            ],
+            axis=1,
         )
     return allowed_loading
 

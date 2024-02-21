@@ -1833,7 +1833,7 @@ class TimeSeries:
             )
         else:
             # check if feeder was already assigned and if not, assign it
-            if not feeder in edisgo_obj.topology.buses_df.columns:
+            if feeder not in edisgo_obj.topology.buses_df.columns:
                 edisgo_obj.topology.assign_feeders(mode=feeder)
             # iterate over components and add/subtract to/from residual load
             residual_load = pd.DataFrame(
@@ -1851,15 +1851,19 @@ class TimeSeries:
                 groupby_bus = pd.merge(
                     getattr(edisgo_obj.topology, f"{comp_type}_df"),
                     edisgo_obj.topology.buses_df,
-                    how="left", left_on="bus", right_index=True,
+                    how="left",
+                    left_on="bus",
+                    right_index=True,
                 ).groupby(feeder)
                 residual_load = residual_load.add(
-                    sign_dict[comp_type] * pd.concat(
+                    sign_dict[comp_type]
+                    * pd.concat(
                         [
                             pd.DataFrame(
                                 {
-                                    k: getattr(self, f"{comp_type}_active_power").loc[
-                                       :, v].sum(axis=1)
+                                    k: getattr(self, f"{comp_type}_active_power")
+                                    .loc[:, v]
+                                    .sum(axis=1)
                                 }
                             )
                             for k, v in groupby_bus.groups.items()
@@ -2266,8 +2270,10 @@ class TimeSeries:
         self._timeindex = index
 
     def scale_timeseries(
-        self, p_scaling_factor: float = 1.0, q_scaling_factor: float = 1.0,
-        components: list | None = None
+        self,
+        p_scaling_factor: float = 1.0,
+        q_scaling_factor: float = 1.0,
+        components: list | None = None,
     ):
         """
         Scales component time series by given factors.

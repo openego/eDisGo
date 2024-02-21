@@ -175,19 +175,20 @@ class TestCheckTechConstraints:
 
         # check with specifying lines and n-1 is True
         df = check_tech_constraints.lines_relative_load(
-            self.edisgo, lines=["Line_10005", "Line_10024", "Line_50000002"],
-            n_minus_one=True
+            self.edisgo,
+            lines=["Line_10005", "Line_10024", "Line_50000002"],
+            n_minus_one=True,
         )
         # check shape of dataframe
         assert (4, 3) == df.shape
         # check in load case
         assert np.isclose(
-            df.at[self.timesteps[0], "Line_10005"],
-            0.00142 / (7.27461 / 2), atol=1e-5
+            df.at[self.timesteps[0], "Line_10005"], 0.00142 / (7.27461 / 2), atol=1e-5
         )
         assert np.isclose(
             df.at[self.timesteps[0], "Line_10024"],
-            0.06931 / 7.27461339178928, atol=1e-5
+            0.06931 / 7.27461339178928,
+            atol=1e-5,
         )
 
     def test_hv_mv_station_max_overload(self):
@@ -210,7 +211,9 @@ class TestCheckTechConstraints:
         assert df.at["MVGrid_1_station", "time_index"] == self.timesteps[0]
 
         # check n-1
-        df = check_tech_constraints.hv_mv_station_max_overload(self.edisgo, n_minus_one=True)
+        df = check_tech_constraints.hv_mv_station_max_overload(
+            self.edisgo, n_minus_one=True
+        )
         # check shape of dataframe
         assert (1, 3) == df.shape
         # check missing transformer capacity

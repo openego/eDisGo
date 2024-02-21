@@ -2035,29 +2035,21 @@ class TestTimeSeries:
             self.edisgo.topology.loads_df.p_set.sum()
             + self.edisgo.topology.storage_units_df.p_nom.sum()
         )
-        assert np.allclose(
-            residual_load.loc[time_steps_load_case], peak_load
-        )
+        assert np.allclose(residual_load.loc[time_steps_load_case], peak_load)
         time_steps_feedin_case = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
         ].values
-        assert (
-            residual_load.loc[time_steps_feedin_case] < 0
-        ).all()
+        assert (residual_load.loc[time_steps_feedin_case] < 0).all()
         # test residual load per MV grid feeder
         residual_load_feeder = self.edisgo.timeseries.residual_load(
             feeder="mv_feeder", edisgo_obj=self.edisgo
         )
-        assert np.allclose(
-            residual_load, residual_load_feeder.sum(axis=1)
-        )
+        assert np.allclose(residual_load, residual_load_feeder.sum(axis=1))
         assert residual_load_feeder.shape == (4, 6)
         assert np.allclose(
             residual_load_feeder["BusBar_lac_1"], [0.31, 0.31, -3.00350, -3.01900]
         )
-        assert np.allclose(
-            residual_load_feeder["station_node"], [0.4, 0.4, -0.4, -0.4]
-        )
+        assert np.allclose(residual_load_feeder["station_node"], [0.4, 0.4, -0.4, -0.4])
         # test residual load per MV and LV feeder
         residual_load_feeder = self.edisgo.timeseries.residual_load(
             feeder="grid_feeder", edisgo_obj=self.edisgo
@@ -2067,7 +2059,8 @@ class TestTimeSeries:
         )
         assert residual_load_feeder.shape == (4, 28)
         assert np.allclose(
-            residual_load_feeder["Bus_BranchTee_LVGrid_1_11"], [0.002794, 0.002794, -0.0378309, -0.0379706]
+            residual_load_feeder["Bus_BranchTee_LVGrid_1_11"],
+            [0.002794, 0.002794, -0.0378309, -0.0379706],
         )
 
     def test_timesteps_load_feedin_case(self):
