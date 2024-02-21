@@ -194,7 +194,21 @@ def lines_allowed_load(edisgo_obj, lines=None, n_minus_one=False):
 
     Allowed loading is determined based on allowed load factors for feed-in and
     load cases that are defined in the config file 'config_grid_expansion' in
-    section 'grid_expansion_load_factors'.
+    section 'grid_expansion_load_factors' or in case of n-1 security
+    'grid_expansion_load_factors_n_minus_one'.
+
+    n-1 security load factors only apply to lines in rings, wherefore
+    'grid_expansion_load_factors_n_minus_one' are only used for those lines.
+    For all other lines, 'grid_expansion_load_factors' are always used.
+
+    Whether load factors for the load or feed-in case apply is determined using the
+    residual load in the grid. In case different load factors are used in the different
+    cases this may not be the best way, as it could be the case that in one feeder
+    the feed-in is higher than the load and in another feeder the load is higher than
+    the feed-in.
+    If you want to check for n-1 and have different allowed load factors for the load
+    and feed-in case it is suggested to use the reinforcement function
+    :func:`~.flex_opt.reinforce_grid.reinforce_for_n_minus_one`.
 
     Parameters
     ----------
@@ -208,7 +222,8 @@ def lines_allowed_load(edisgo_obj, lines=None, n_minus_one=False):
         section 'grid_expansion_load_factors' are used. This is the default.
         In case it is set to True, allowed load factors defined in the config file
         'config_grid_expansion' in section 'grid_expansion_load_factors_n_minus_one'
-        are used. This case is currently not implemented.
+        are used for lines in rings. For all other lines, 'grid_expansion_load_factors'
+        are used.
 
     Returns
     -------
@@ -221,7 +236,7 @@ def lines_allowed_load(edisgo_obj, lines=None, n_minus_one=False):
 
     """
     allowed_load_lv = _lines_allowed_load_voltage_level(
-        edisgo_obj, voltage_level="lv", n_minus_one=n_minus_one
+        edisgo_obj, voltage_level="lv", n_minus_one=False
     )
     allowed_load_mv = _lines_allowed_load_voltage_level(
         edisgo_obj, voltage_level="mv", n_minus_one=n_minus_one
@@ -244,13 +259,8 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level, n_minus_one=Fal
         Grid level, allowed line load is returned for. Possible options are
         "mv" or "lv".
     n_minus_one : bool
-        Determines which allowed load factors to use. In case it is set to False,
-        allowed load factors defined in the config file 'config_grid_expansion' in
-        section 'grid_expansion_load_factors' are used. This is the default.
-        In case it is set to True, allowed load factors defined in the config file
-        'config_grid_expansion' in section 'grid_expansion_load_factors_n_minus_one'
-        are used for lines in rings. For all other lines, 'grid_expansion_load_factors'
-        are used.
+        Determines which allowed load factors to use. See :py:attr:`~lines_allowed_load`
+        for more information.
 
     Returns
     -------

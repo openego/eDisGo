@@ -25,6 +25,9 @@ class TestCheckTechConstraints:
 
     def test_mv_line_max_relative_overload(self):
         # implicitly checks function _line_overload
+        # Note: n-1 cannot be checked easily, because load case is never more severe
+        # than feed-in case, even when load time series are scaled up. It just leads
+        # to a non-convergence at some point.
 
         df = check_tech_constraints.mv_line_max_relative_overload(self.edisgo)
         # check shape of dataframe
@@ -170,12 +173,22 @@ class TestCheckTechConstraints:
             df.at[self.timesteps[0], "Line_10005"], 0.00142 / 7.27461, atol=1e-5
         )
 
-        # check with specifying lines
+        # check with specifying lines and n-1 is True
         df = check_tech_constraints.lines_relative_load(
-            self.edisgo, lines=["Line_10005", "Line_50000002"]
+            self.edisgo, lines=["Line_10005", "Line_10024", "Line_50000002"],
+            n_minus_one=True
         )
         # check shape of dataframe
-        assert (4, 2) == df.shape
+        assert (4, 3) == df.shape
+        # check in load case
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"],
+            0.00142 / (7.27461 / 2), atol=1e-5
+        )
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10024"],
+            0.06931 / 7.27461339178928, atol=1e-5
+        )
 
     def test_hv_mv_station_max_overload(self):
         # implicitly checks function _station_overload
