@@ -19,6 +19,7 @@ def mv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
     n_minus_one : bool
         Determines which allowed load factors to use (see :py:attr:`~lines_allowed_load`
         for more information).
+        Default: False.
 
     Returns
     -------
@@ -71,6 +72,7 @@ def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False, lv_grid_id=None
     lv_grid_id : str or int or None
         If None, checks overloading for all LV lines. Otherwise, only lines in given
         LV grid are checked. Default: None.
+        Default: False.
 
     Returns
     -------
@@ -224,6 +226,7 @@ def lines_allowed_load(edisgo_obj, lines=None, n_minus_one=False):
         'config_grid_expansion' in section 'grid_expansion_load_factors_n_minus_one'
         are used for lines in rings. For all other lines, 'grid_expansion_load_factors'
         are used.
+        Default: False.
 
     Returns
     -------
@@ -380,13 +383,17 @@ def lines_relative_load(edisgo_obj, lines=None, n_minus_one=False):
     return loading / allowed_loading
 
 
-def hv_mv_station_max_overload(edisgo_obj):
+def hv_mv_station_max_overload(edisgo_obj, n_minus_one=False):
     """
     Checks for over-loading of HV/MV station.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+    n_minus_one : bool
+        Determines which allowed load factors to use. See
+        :py:attr:`~stations_allowed_load` for more information.
+        Default: False.
 
     Returns
     -------
@@ -403,10 +410,11 @@ def hv_mv_station_max_overload(edisgo_obj):
     -----
     Over-load is determined based on allowed load factors for feed-in and
     load cases that are defined in the config file 'config_grid_expansion' in
-    section 'grid_expansion_load_factors'.
+    section 'grid_expansion_load_factors' or in case of n-1 security
+    'grid_expansion_load_factors_n_minus_one'.
 
     """
-    crit_stations = _station_max_overload(edisgo_obj, edisgo_obj.topology.mv_grid)
+    crit_stations = _station_max_overload(edisgo_obj, edisgo_obj.topology.mv_grid, n_minus_one=n_minus_one)
     if not crit_stations.empty:
         logger.debug("==> HV/MV station has load issues.")
     else:
@@ -415,7 +423,7 @@ def hv_mv_station_max_overload(edisgo_obj):
     return crit_stations
 
 
-def mv_lv_station_max_overload(edisgo_obj, lv_grid_id=None):
+def mv_lv_station_max_overload(edisgo_obj, lv_grid_id=None, n_minus_one=False):
     """
     Checks for over-loading of MV/LV stations.
 
@@ -425,6 +433,10 @@ def mv_lv_station_max_overload(edisgo_obj, lv_grid_id=None):
     lv_grid_id : str or int or None
         If None, checks overloading for all MV/LV stations. Otherwise, only station
         in given LV grid is checked. Default: None.
+    n_minus_one : bool
+        Determines which allowed load factors to use. See
+        :py:attr:`~stations_allowed_load` for more information.
+        Default: False.
 
     Returns
     -------
@@ -441,7 +453,8 @@ def mv_lv_station_max_overload(edisgo_obj, lv_grid_id=None):
     -----
     Over-load is determined based on allowed load factors for feed-in and
     load cases that are defined in the config file 'config_grid_expansion' in
-    section 'grid_expansion_load_factors'.
+    section 'grid_expansion_load_factors' or in case of n-1 security
+    'grid_expansion_load_factors_n_minus_one'.
 
     """
     crit_stations = pd.DataFrame(dtype=float)
@@ -454,7 +467,7 @@ def mv_lv_station_max_overload(edisgo_obj, lv_grid_id=None):
         crit_stations = pd.concat(
             [
                 crit_stations,
-                _station_max_overload(edisgo_obj, lv_grid),
+                _station_max_overload(edisgo_obj, lv_grid, n_minus_one=n_minus_one),
             ]
         )
     if not crit_stations.empty:
@@ -469,7 +482,7 @@ def mv_lv_station_max_overload(edisgo_obj, lv_grid_id=None):
     return crit_stations
 
 
-def _station_max_overload(edisgo_obj, grid):
+def _station_max_overload(edisgo_obj, grid, n_minus_one=False):
     """
     Checks for over-loading of stations.
 
@@ -477,6 +490,10 @@ def _station_max_overload(edisgo_obj, grid):
     ----------
     edisgo_obj : :class:`~.EDisGo`
     grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
+    n_minus_one : bool
+        Determines which allowed load factors to use. See
+        :py:attr:`~stations_allowed_load` for more information.
+        Default: False.
 
     Returns
     -------
@@ -501,7 +518,7 @@ def _station_max_overload(edisgo_obj, grid):
     s_station_pfa = _station_load(edisgo_obj, grid)
 
     # get maximum allowed apparent power of station in each time step
-    s_station_allowed = _station_allowed_load(edisgo_obj, grid)
+    s_station_allowed = _station_allowed_load(edisgo_obj, grid, n_minus_one=n_minus_one)
 
     # calculate residual apparent power (if negative, station is over-loaded)
     s_res = s_station_allowed - s_station_pfa
@@ -583,10 +600,9 @@ def _station_load(edisgo_obj, grid):
         raise ValueError("Inserted grid is invalid.")
 
 
-def _station_allowed_load(edisgo_obj, grid):
+def _station_allowed_load(edisgo_obj, grid, n_minus_one=False):
     """
-    Returns allowed loading of grid's station to the overlying voltage level per time
-    step in MVA.
+    Returns allowed loading of grid's station per time step in MVA.
 
     Allowed loading considers allowed load factors in heavy load flow case ('load case')
     and reverse power flow case ('feed-in case') that are defined in the config file
@@ -597,6 +613,9 @@ def _station_allowed_load(edisgo_obj, grid):
     edisgo_obj : :class:`~.EDisGo`
     grid : :class:`~.network.grids.LVGrid` or :class:`~.network.grids.MVGrid`
         Grid to get allowed station loading for.
+    n_minus_one : bool
+        Determines which allowed load factors to use. See
+        :py:attr:`~stations_allowed_load` for more information.
 
     Returns
     -------
@@ -620,10 +639,12 @@ def _station_allowed_load(edisgo_obj, grid):
 
     # get maximum allowed apparent power of station in each time step
     s_station = sum(transformers_df.s_nom)
+    if n_minus_one is True:
+        which = "grid_expansion_load_factors_n_minus_one"
+    else:
+        which = "grid_expansion_load_factors"
     load_factor = edisgo_obj.timeseries.timesteps_load_feedin_case.apply(
-        lambda _: edisgo_obj.config["grid_expansion_load_factors"][
-            f"{voltage_level}_{_}_transformer"
-        ]
+        lambda _: edisgo_obj.config[which][f"{voltage_level}_{_}_transformer"]
     )
 
     return pd.DataFrame(
@@ -631,14 +652,24 @@ def _station_allowed_load(edisgo_obj, grid):
     )
 
 
-def stations_allowed_load(edisgo_obj, grids=None):
+def stations_allowed_load(edisgo_obj, grids=None, n_minus_one=False):
     """
-    Returns allowed loading of specified grids stations to the overlying voltage level
+    Returns allowed loading of specified grid's stations to the overlying voltage level
     per time step in MVA.
 
     Allowed loading considers allowed load factors in heavy load flow case ('load case')
     and reverse power flow case ('feed-in case') that are defined in the config file
-    'config_grid_expansion' in section 'grid_expansion_load_factors'.
+    'config_grid_expansion' in section 'grid_expansion_load_factors' or in case of n-1
+    security 'grid_expansion_load_factors_n_minus_one'.
+
+    Whether load factors for the load or feed-in case apply is determined using the
+    residual load in the grid. In case different load factors are used in the different
+    cases for MV-LV stations this may not be the best way, as it could be the case that
+    the residual load in the entire grid is positive while it is negative in some LV
+    grids.
+    If you want to check for n-1 and have different allowed load factors for the load
+    and feed-in case it is suggested to use the reinforcement function
+    :func:`~.flex_opt.reinforce_grid.reinforce_for_n_minus_one`.
 
     Parameters
     ----------
@@ -646,6 +677,14 @@ def stations_allowed_load(edisgo_obj, grids=None):
     grids : list(:class:`~.network.grids.Grid`)
         List of MV and LV grids to get allowed station loading for. Per default
         allowed loading is returned for all stations in the network. Default: None.
+    n_minus_one : bool
+        Determines which allowed load factors to use. In case it is set to False,
+        allowed load factors defined in the config file 'config_grid_expansion' in
+        section 'grid_expansion_load_factors' are used. This is the default.
+        In case it is set to True, allowed load factors defined in the config file
+        'config_grid_expansion' in section 'grid_expansion_load_factors_n_minus_one'
+        are used.
+        Default: False.
 
     Returns
     -------
@@ -663,12 +702,12 @@ def stations_allowed_load(edisgo_obj, grids=None):
     allowed_loading = pd.DataFrame()
     for grid in grids:
         allowed_loading = pd.concat(
-            [allowed_loading, _station_allowed_load(edisgo_obj, grid)], axis=1
+            [allowed_loading, _station_allowed_load(edisgo_obj, grid, n_minus_one=n_minus_one)], axis=1
         )
     return allowed_loading
 
 
-def stations_relative_load(edisgo_obj, grids=None):
+def stations_relative_load(edisgo_obj, grids=None, n_minus_one=False):
     """
     Returns relative loading of specified grids stations to the overlying voltage level
     per time step in p.u..
@@ -729,6 +768,7 @@ def components_relative_load(edisgo_obj, n_minus_one=False):
     n_minus_one : bool
         Determines which allowed load factors to use. See :py:attr:`~lines_allowed_load`
         for more information.
+        ToDo stations
 
     Returns
     -------
@@ -743,7 +783,7 @@ def components_relative_load(edisgo_obj, n_minus_one=False):
         :attr:`~.network.grids.Grid.station_name`).
 
     """
-    stations_rel_load = stations_relative_load(edisgo_obj)
+    stations_rel_load = stations_relative_load(edisgo_obj, n_minus_one=n_minus_one)
     lines_rel_load = lines_relative_load(
         edisgo_obj, lines=None, n_minus_one=n_minus_one
     )

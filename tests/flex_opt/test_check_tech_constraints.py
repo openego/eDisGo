@@ -209,6 +209,17 @@ class TestCheckTechConstraints:
         )
         assert df.at["MVGrid_1_station", "time_index"] == self.timesteps[0]
 
+        # check n-1
+        df = check_tech_constraints.hv_mv_station_max_overload(self.edisgo, n_minus_one=True)
+        # check shape of dataframe
+        assert (1, 3) == df.shape
+        # check missing transformer capacity
+        assert np.isclose(
+            df.at["MVGrid_1_station", "s_missing"],
+            (np.hypot(30, 30) - 20),
+        )
+        assert df.at["MVGrid_1_station", "time_index"] == self.timesteps[0]
+
     def test_mv_lv_station_max_overload(self):
         # implicitly checks function _station_overload
 
@@ -289,6 +300,16 @@ class TestCheckTechConstraints:
         feed_in_cases = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
         ]
+        assert np.isclose(40.0, df.loc[feed_in_cases.values].values).all()
+
+        # check MV grid n-1
+        df = check_tech_constraints._station_allowed_load(
+            self.edisgo, grid, n_minus_one=True
+        )
+        # check shape of dataframe
+        assert (4, 1) == df.shape
+        # check values
+        assert np.isclose(20.0, df.loc[load_cases.values].values).all()
         assert np.isclose(40.0, df.loc[feed_in_cases.values].values).all()
 
     def test_stations_allowed_load(self):
