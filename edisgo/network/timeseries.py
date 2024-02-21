@@ -1787,7 +1787,7 @@ class TimeSeries:
 
     def residual_load(self, feeder=None, edisgo_obj=None):
         """
-        Returns residual load in network.
+        Returns residual load in network or per feeder.
 
         Residual load for each time step is calculated from total load
         minus total generation minus storage active power (discharge is
@@ -1796,17 +1796,79 @@ class TimeSeries:
         residual load here represents a feed-in case.
         Grid losses are not considered.
 
+        Parameters
+        -----------
+        feeder : str
+            Specifies whether to determine the residual load for the entire grid
+            or per feeder. Feeder can be either the MV or grid feeder.
+            If set to None, which is the default, the residual load for the entire grid
+            is returned.
+            If set to "mv_feeder", the MV feeders the buses and lines are in are
+            determined. If mode is "grid_feeder", LV buses and lines are assigned the
+            LV feeder they are in and MV buses and lines are assigned the MV feeder
+            they are in. The residual load is in both cases returned per feeder.
+            Default: None.
+
         Returns
         -------
-        :pandas:`pandas.Series<Series>`
-            Series with residual load in MW.
+        :pandas:`pandas.Series<Series>` or :pandas:`pandas.DataFrame<DataFrame>`
+            Returns residual load per time step in MW. Index is a time index.
+            If `feeder` is None, a series with the residual load in the entire grid
+            is returned. If `feeder` is "mv_feeder" or "grid_feeder"
+            a dataframe is returned where the column names correspond to the feeder
+            name. As the station is not in any feeder, it is assigned the name
+            "station_node" and only components directly connected to the station are
+            considered in the calculation of its residual load. In case `feeder` is set
+            to "mv_grid" the "station_node" just includes the HV-MV station, but in case
+            `feeder` is set to "grid_feeder" all MV-LV stations as well as the HV-MV
+            station are included in the "station_node" (this could be changed at some
+            point).
 
         """
-        return (
-            self.loads_active_power.sum(axis=1)
-            - self.generators_active_power.sum(axis=1)
-            - self.storage_units_active_power.sum(axis=1)
-        )
+        if feeder is None:
+            return (
+                self.loads_active_power.sum(axis=1)
+                - self.generators_active_power.sum(axis=1)
+                - self.storage_units_active_power.sum(axis=1)
+            )
+        else:
+            # check if feeder was already assigned and if not, assign it
+            if not feeder in edisgo_obj.topology.buses_df.columns:
+                edisgo_obj.topology.assign_feeders(mode=feeder)
+            # iterate over components and add/subtract to/from residual load
+            residual_load = pd.DataFrame(
+                data=0.0,
+                columns=edisgo_obj.topology.buses_df.loc[:, feeder].unique(),
+                index=self.timeindex,
+            )
+            sign_dict = {
+                "loads": 1.0,
+                "generators": -1.0,
+                "storage_units": -1.0,
+            }
+            for comp_type in sign_dict.keys():
+                # groupby feeder
+                groupby_bus = pd.merge(
+                    getattr(edisgo_obj.topology, f"{comp_type}_df"),
+                    edisgo_obj.topology.buses_df,
+                    how="left", left_on="bus", right_index=True,
+                ).groupby(feeder)
+                residual_load = residual_load.add(
+                    sign_dict[comp_type] * pd.concat(
+                        [
+                            pd.DataFrame(
+                                {
+                                    k: getattr(self, f"{comp_type}_active_power").loc[
+                                       :, v].sum(axis=1)
+                                }
+                            )
+                            for k, v in groupby_bus.groups.items()
+                        ],
+                        axis=1,
+                    ),
+                    fill_value=0.0,
+                )
+            return residual_load
 
     @property
     def timesteps_load_feedin_case(self):
@@ -1834,7 +1896,7 @@ class TimeSeries:
 
         """
 
-        return self.residual_load.apply(
+        return self.residual_load().apply(
             lambda _: "feed-in_case" if _ < 0.0 else "load_case"
         )
 
