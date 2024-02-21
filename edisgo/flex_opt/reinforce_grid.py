@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 def reinforce_grid(
     edisgo: EDisGo,
     timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
+    reduced_analysis: bool = False,
     max_while_iterations: int = 20,
     split_voltage_band: bool = True,
     mode: str | None = None,
@@ -47,6 +48,10 @@ def reinforce_grid(
         timesteps_pfa specifies for which time steps power flow analysis is
         conducted. See parameter `timesteps_pfa` in function :attr:`~.EDisGo.reinforce`
         for more information.
+    reduced_analysis : bool
+        Specifies, whether to run reinforcement on a subset of time steps that are most
+        critical. See parameter `reduced_analysis` in function
+        :attr:`~.EDisGo.reinforce` for more information.
     max_while_iterations : int
         Maximum number of times each while loop is conducted. Default: 20.
     split_voltage_band : bool
@@ -84,23 +89,34 @@ def reinforce_grid(
         reinforce MV/LV stations for LV worst-cases.
         Default: False.
     num_steps_loading : int
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify the number of most critical overloading events to consider.
         If None, `percentage` is used. Default: None.
     num_steps_voltage : int
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify the number of most critical voltage issues to select. If None,
         `percentage` is used. Default: None.
     percentage : float
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify the percentage of most critical time steps to select. The default
         is 1.0, in which case all most critical time steps are selected.
         Default: 1.0.
     use_troubleshooting_mode : bool
-        In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be used
+        In case `reduced_analysis` is set to True, this parameter can be used
         to specify how to handle non-convergence issues in the power flow analysis.
         See parameter `use_troubleshooting_mode` in function :attr:`~.EDisGo.reinforce`
-        for more information. Default: True.
+        for more information. Default: False.
+    run_initial_analyze : bool
+        In case `reduced_analysis` is set to True, this parameter can be
+        used to specify whether to run an initial analyze to determine most
+        critical time steps or to use existing results. If set to False,
+        `use_troubleshooting_mode` is ignored. Default: True.
+    weight_by_costs : bool
+        In case `reduced_analysis` is set to True, this parameter can be
+        used to specify whether to weight time steps by estimated grid expansion costs.
+        See parameter `weight_by_costs` in
+        :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_steps`
+        for more information. Default: False.
 
     Returns
     -------
@@ -139,14 +155,6 @@ def reinforce_grid(
                     snapshots["min_residual_load"],
                 ]
             ).dropna()
-        elif isinstance(timesteps_pfa, str) and timesteps_pfa == "reduced_analysis":
-            timesteps_pfa = get_most_critical_time_steps(
-                edisgo,
-                num_steps_loading=kwargs.get("num_steps_loading", None),
-                num_steps_voltage=kwargs.get("num_steps_voltage", None),
-                percentage=kwargs.get("percentage", 1.0),
-                use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", True),
-            )
         # if timesteps_pfa is not of type datetime or does not contain
         # datetimes throw an error
         elif not isinstance(timesteps_pfa, datetime.datetime):
@@ -169,6 +177,24 @@ def reinforce_grid(
         analyze_mode = None
     else:
         analyze_mode = mode
+
+    if reduced_analysis:
+        timesteps_pfa = get_most_critical_time_steps(
+            edisgo,
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            lv_grid_id=lv_grid_id,
+            scale_timeseries=scale_timeseries,
+            num_steps_loading=kwargs.get("num_steps_loading", None),
+            num_steps_voltage=kwargs.get("num_steps_voltage", None),
+            percentage=kwargs.get("percentage", 1.0),
+            use_troubleshooting_mode=kwargs.get("use_troubleshooting_mode", False),
+            run_initial_analyze=kwargs.get("run_initial_analyze", True),
+            weight_by_costs=kwargs.get("weight_by_costs", False),
+        )
+    if timesteps_pfa is not None and len(timesteps_pfa) == 0:
+        logger.debug("Zero time steps for grid reinforcement.")
+        return edisgo.results
 
     edisgo.analyze(
         mode=analyze_mode,
@@ -659,7 +685,7 @@ def catch_convergence_reinforce_grid(
     Reinforcement strategy to reinforce grids with non-converging time steps.
 
     First, conducts a grid reinforcement with only converging time steps.
-    Afterwards, tries to run reinforcement with all time steps that did not converge
+    Afterward, tries to run reinforcement with all time steps that did not converge
     in the beginning. At last, if there are still time steps that do not converge,
     the feed-in and load time series are iteratively scaled and the grid reinforced,
     starting with a low grid load and scaling-up the time series until the original
@@ -739,14 +765,16 @@ def catch_convergence_reinforce_grid(
         selected_timesteps = converging_timesteps
         reinforce()
 
-    # Run reinforcement for time steps that did not converge after initial reinforcement
-    if not non_converging_timesteps.empty:
-        logger.info(
-            "Run reinforcement for time steps that did not converge after initial "
-            "reinforcement."
-        )
-        selected_timesteps = non_converging_timesteps
-        converged = reinforce()
+        # Run reinforcement for time steps that did not converge after initial
+        # reinforcement (only needs to done, when grid was previously reinforced using
+        # converged time steps, wherefore it is within that if-statement)
+        if not non_converging_timesteps.empty:
+            logger.info(
+                "Run reinforcement for time steps that did not converge after initial "
+                "reinforcement."
+            )
+            selected_timesteps = non_converging_timesteps
+            converged = reinforce()
 
     if converged:
         return edisgo.results

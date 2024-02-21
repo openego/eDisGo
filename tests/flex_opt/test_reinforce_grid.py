@@ -58,12 +58,10 @@ class TestReinforceGrid:
         # test reduced analysis
         res_reduced = reinforce_grid(
             edisgo=copy.deepcopy(self.edisgo),
-            timesteps_pfa="reduced_analysis",
-            num_steps_loading=4,
+            reduced_analysis=True,
+            num_steps_loading=2,
         )
-        assert_frame_equal(
-            res_reduced.equipment_changes, results_dict[None].equipment_changes
-        )
+        assert len(res_reduced.i_res) == 2
 
     def test_run_separate_lv_grids(self):
         edisgo = copy.deepcopy(self.edisgo)

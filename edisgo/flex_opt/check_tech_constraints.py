@@ -709,7 +709,7 @@ def stations_relative_load(edisgo_obj, grids=None):
         except Exception:
             pass
 
-    return loading / allowed_loading.loc[:, loading.columns]
+    return loading / allowed_loading.loc[loading.index, loading.columns]
 
 
 def components_relative_load(edisgo_obj, n_minus_one=False):
@@ -1190,6 +1190,10 @@ def voltage_deviation_from_allowed_voltage_limits(
     v_dev_allowed_upper, v_dev_allowed_lower = allowed_voltage_limits(
         edisgo_obj, buses=buses, split_voltage_band=split_voltage_band
     )
+    # the following is needed in case the power flow was only conducted for one LV
+    # grid - voltage at station node cannot be checked, warning is already raised
+    # in allowed_voltage_limits()
+    buses = v_dev_allowed_upper.columns
 
     # get voltages from power flow analysis
     v_mag_pu_pfa = edisgo_obj.results.v_res.loc[:, buses]
