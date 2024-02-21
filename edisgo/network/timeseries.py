@@ -2204,7 +2204,8 @@ class TimeSeries:
         self._timeindex = index
 
     def scale_timeseries(
-        self, p_scaling_factor: float = 1.0, q_scaling_factor: float = 1.0
+        self, p_scaling_factor: float = 1.0, q_scaling_factor: float = 1.0,
+        components: list | None = None
     ):
         """
         Scales component time series by given factors.
@@ -2221,15 +2222,19 @@ class TimeSeries:
             Scaling factor to use for reactive power time series. Values between 0 and 1
             will scale down the time series and values above 1 will scale the
             timeseries up. Default: 1.
+        components : list(str)
+            Components to scale. Possible options are "generators", "loads", and
+            "storage_units". Per default (if components is None), all are scaled.
 
         """
-        attributes_type = ["generators", "loads", "storage_units"]
+        if components is None:
+            components = ["generators", "loads", "storage_units"]
         power_types = {
             "active_power": p_scaling_factor,
             "reactive_power": q_scaling_factor,
         }
         for suffix, scaling_factor in power_types.items():
-            for type in attributes_type:
+            for type in components:
                 attribute = f"{type}_{suffix}"
                 setattr(self, attribute, getattr(self, attribute) * scaling_factor)
 
