@@ -94,12 +94,17 @@ class TestCheckTechConstraints:
             0.08521689973238901,
         )
 
-        # check with specifying lines
+        # check with specifying lines and n-1
         df = check_tech_constraints.lines_allowed_load(
-            self.edisgo, lines=["Line_10005", "Line_50000002"]
+            self.edisgo, lines=["Line_10005", "Line_50000002"], n_minus_one=True
         )
         # check shape of dataframe
         assert (4, 2) == df.shape
+        # check value of line in ring
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"],
+            7.274613391789284 / 2,
+        )
 
     def test__lines_allowed_load_voltage_level(self):
         # check for MV

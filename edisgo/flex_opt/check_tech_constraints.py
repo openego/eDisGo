@@ -69,10 +69,10 @@ def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False, lv_grid_id=None
     n_minus_one : bool
         Determines which allowed load factors to use (see :py:attr:`~lines_allowed_load`
         for more information).
+        Default: False.
     lv_grid_id : str or int or None
         If None, checks overloading for all LV lines. Otherwise, only lines in given
         LV grid are checked. Default: None.
-        Default: False.
 
     Returns
     -------
@@ -126,6 +126,7 @@ def _line_max_relative_overload(
     n_minus_one : bool
         Determines which allowed load factors to use. See :py:attr:`~lines_allowed_load`
         for more information.
+        Default: False.
     lv_grid_id : str or int or None
         This parameter is only used in case `voltage_level` is "lv".
         If None, checks overloading for all LV lines. Otherwise, only lines in given
@@ -264,6 +265,7 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level, n_minus_one=Fal
     n_minus_one : bool
         Determines which allowed load factors to use. See :py:attr:`~lines_allowed_load`
         for more information.
+        Default: False.
 
     Returns
     -------
@@ -358,6 +360,7 @@ def lines_relative_load(edisgo_obj, lines=None, n_minus_one=False):
     n_minus_one : bool
         Determines which allowed load factors to use. See :py:attr:`~lines_allowed_load`
         for more information.
+        Default: False.
 
     Returns
     --------
@@ -618,6 +621,7 @@ def _station_allowed_load(edisgo_obj, grid, n_minus_one=False):
     n_minus_one : bool
         Determines which allowed load factors to use. See
         :py:attr:`~stations_allowed_load` for more information.
+        Default: False.
 
     Returns
     -------
@@ -778,6 +782,7 @@ def components_relative_load(edisgo_obj, n_minus_one=False):
     n_minus_one : bool
         Determines which allowed load factors to use. See :py:attr:`~lines_allowed_load`
         and :py:attr:`~stations_allowed_load` for more information.
+        Default: False.
 
     Returns
     -------
