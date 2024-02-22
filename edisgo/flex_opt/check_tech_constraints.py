@@ -730,6 +730,10 @@ def stations_relative_load(edisgo_obj, grids=None, n_minus_one=False):
         List of MV and LV grids to get relative station loading for. Per default
         relative loading is returned for all stations in the network that were
         included in the power flow analysis. Default: None.
+    n_minus_one : bool
+        Determines which allowed load factors to use. See
+        :py:attr:`~stations_allowed_load` for more information.
+        Default: False.
 
     Returns
     -------
@@ -745,7 +749,7 @@ def stations_relative_load(edisgo_obj, grids=None, n_minus_one=False):
         grids = edisgo_obj.topology.grids
 
     # get allowed loading
-    allowed_loading = stations_allowed_load(edisgo_obj, grids)
+    allowed_loading = stations_allowed_load(edisgo_obj, grids, n_minus_one=n_minus_one)
 
     # get loading from power flow results
     loading = pd.DataFrame()
@@ -763,7 +767,7 @@ def components_relative_load(edisgo_obj, n_minus_one=False):
     """
     Returns relative loading of all lines and stations included in power flow analysis.
 
-    The component's relative loading is determined by dividing the stations loading
+    The component's relative loading is determined by dividing the loading
     (from power flow analysis) by the allowed loading (considering allowed load factors
     in heavy load flow case ('load case') and reverse power flow case ('feed-in case')
     from config files).
@@ -773,8 +777,7 @@ def components_relative_load(edisgo_obj, n_minus_one=False):
     edisgo_obj : :class:`~.EDisGo`
     n_minus_one : bool
         Determines which allowed load factors to use. See :py:attr:`~lines_allowed_load`
-        for more information.
-        ToDo stations
+        and :py:attr:`~stations_allowed_load` for more information.
 
     Returns
     -------

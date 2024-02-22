@@ -406,6 +406,26 @@ class TestCheckTechConstraints:
             df.at[self.timesteps[0], "Line_10005"], 0.00142 / 7.27461, atol=1e-5
         )
 
+        # check with power flow results available for all components and n-1
+        df = check_tech_constraints.components_relative_load(
+            self.edisgo, n_minus_one=True
+        )
+        # check shape of dataframe
+        assert (4, 142) == df.shape
+        # check values
+        load_cases = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ]
+        assert np.isclose(
+            0.02853, df.loc[load_cases.values, "LVGrid_4_station"].values, atol=1e-5
+        ).all()
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"], 0.00142 / 7.27461 * 2, atol=1e-5
+        )
+        assert np.isclose(
+            0.03427 * 2, df.loc[load_cases.values, "MVGrid_1_station"].values, atol=1e-5
+        ).all()
+
         # check with power flow results not available for all components
         self.edisgo.analyze(mode="mvlv")
         df = check_tech_constraints.components_relative_load(self.edisgo)
