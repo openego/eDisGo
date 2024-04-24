@@ -44,7 +44,9 @@ requirements = [
     "matplotlib >= 3.3.0",
     "multiprocess",
     "networkx >= 2.5.0",
-    "pandas >= 1.4.0",
+    # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
+    # sqlalchemy leads to new errors.. should be fixed at some point
+    "pandas >= 1.4.0, < 2.2.0",
     "plotly",
     "pydot",
     "pygeos",
