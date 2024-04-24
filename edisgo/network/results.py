@@ -628,7 +628,7 @@ class Results:
                         "iteration_step": [0],
                         "change": ["added"],
                         "equipment": [line.type_info],
-                        "quantity": [1],
+                        "quantity": [line.num_parallel],
                     },
                     index=[line.name],
                 ),
