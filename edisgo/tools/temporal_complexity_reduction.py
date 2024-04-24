@@ -44,7 +44,12 @@ def _scored_most_critical_loading(
         one component is maximally overloaded, and is sorted descending order.
 
     """
-
+    # ToDo The relative loading is used in this function to determine most critical
+    #  time steps. While this makes sense to determine which lines are overloaded, it
+    #  is not the best indicator for the weighting as it does not convey the number
+    #  of additional lines needed to solve a problem. For that the number of parallel
+    #  standard lines and transformers needed would be better. However, for now
+    #  using the relative overloading as an estimation is okay.
     # Get current relative to allowed current
     relative_i_res = check_tech_constraints.components_relative_load(edisgo_obj)
 
@@ -315,9 +320,8 @@ def _scored_most_critical_voltage_issues_time_interval(
     voltage_diff_feeder = voltage_diff.copy()
     voltage_diff_feeder.columns = columns
     voltage_diff_feeder = (
-        voltage_diff.transpose().reset_index().groupby(by="Bus").sum().transpose()
+        voltage_diff.transpose().reset_index().groupby(by="Bus").max().transpose()
     )
-    voltage_diff_feeder[voltage_diff_feeder != 0] = 1
 
     if weight_by_costs:
         # get costs per feeder
@@ -721,14 +725,14 @@ def get_most_critical_time_intervals(
         The costs don't convey the actual costs but are an estimation, as
         the real number of parallel lines needed is not determined and the whole feeder
         length is used instead of the length over two-thirds of the feeder.
-        If False, the severity of each feeder's voltage issue is set to be the same.
+        If False, only the maximum voltage deviation in the feeder is used to determine
+        the most relevant time intervals.
 
         In case of overloading issues:
-        If True, the overloading of each line is multiplied by
-        the respective grid expansion costs of that line including costs for earth work
-        and one new line.
+        If True, the overloading of each line is multiplied by the respective grid
+        expansion costs of that line including costs for earth work and one new line.
         The costs don't convey the actual costs but are an estimation, as
-        the discrete needed number of parallel lines is not considered.
+        the discrete number of needed parallel lines is not considered.
         If False, only the relative overloading is used to determine the most relevant
         time intervals.
 
@@ -956,6 +960,12 @@ def get_most_critical_time_steps(
                 f"{len(loading_scores)} time steps are exported."
             )
             num_steps_loading = len(loading_scores)
+        elif num_steps_loading < len(loading_scores):
+            logger.info(
+                f"{num_steps_loading} of a total of {len(loading_scores)} relevant "
+                f"time steps for overloading issues are chosen for the selection "
+                f"of most critical time steps."
+            )
     steps = loading_scores[:num_steps_loading].index
 
     # Select most critical steps based on voltage violations
@@ -973,6 +983,12 @@ def get_most_critical_time_steps(
                 f"{len(voltage_scores)} time steps are exported."
             )
             num_steps_voltage = len(voltage_scores)
+        elif num_steps_voltage < len(voltage_scores):
+            logger.info(
+                f"{num_steps_voltage} of a total of {len(voltage_scores)} relevant "
+                f"time steps for voltage issues are chosen for the selection "
+                f"of most critical time steps."
+            )
     steps = steps.append(voltage_scores[:num_steps_voltage].index)
 
     if len(steps) == 0:
