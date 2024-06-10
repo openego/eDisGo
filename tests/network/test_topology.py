@@ -867,8 +867,15 @@ class TestTopology:
         self.topology.to_csv(dir)
 
         saved_files = os.listdir(dir)
-        assert len(saved_files) == 9
+        assert len(saved_files) == 10
         assert "generators.csv" in saved_files
+        assert "network.csv" in saved_files
+
+        # check original network
+        saved_files = os.listdir(os.path.join(dir, "original_grid_topology"))
+        assert len(saved_files) == 9
+        assert "buses.csv" in saved_files
+        assert "lines.csv" in saved_files
 
         shutil.rmtree(dir)
 
