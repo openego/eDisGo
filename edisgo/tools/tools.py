@@ -1119,7 +1119,7 @@ def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.Da
     be reduced to a smaller data type.
 
     Source:
-    https://www.mikulskibartosz.name/how-to-reduce-memory-usage-in-pandas/
+    https://mikulskibartosz.name/how-to-reduce-memory-usage-in-pandas
 
     Parameters
     ----------

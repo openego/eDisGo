@@ -1316,13 +1316,19 @@ class EDisGo:
             default is 1.0, in which case all most critical time steps are selected.
             Default: 1.0.
         use_troubleshooting_mode : bool
-            In case `reduced_analysis` is set to True, this parameter can be
-            used to specify how to handle non-convergence issues in the power flow
-            analysis. If set to True, non-convergence issues are tried to be
+            In case `reduced_analysis` is set to True, this parameter can be used to
+            specify how to handle non-convergence issues when determining the most
+            critical time steps. If set to True, non-convergence issues are tried to be
             circumvented by reducing load and feed-in until the power flow converges.
             The most critical time steps are then determined based on the power flow
             results with the reduced load and feed-in. If False, an error will be
-            raised in case time steps do not converge. Default: True.
+            raised in case time steps do not converge.
+            Setting this to True doesn't make sense for the grid reinforcement as the
+            troubleshooting mode is only used when determining the most critical time
+            steps not when running a power flow analysis to determine grid reinforcement
+            needs. To handle non-convergence in the grid reinforcement set parameter
+            `catch_convergence_problems` to True.
+            Default: False.
         run_initial_analyze : bool
             In case `reduced_analysis` is set to True, this parameter can be
             used to specify whether to run an initial analyze to determine most

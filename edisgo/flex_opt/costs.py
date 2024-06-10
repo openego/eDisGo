@@ -1,3 +1,4 @@
+import logging
 import os
 
 import pandas as pd
@@ -6,6 +7,8 @@ if "READTHEDOCS" not in os.environ:
     from shapely.ops import transform
 
 from edisgo.tools.geo import proj2equidistant
+
+logger = logging.getLogger(__name__)
 
 
 def grid_expansion_costs(edisgo_obj, without_generator_import=False):
