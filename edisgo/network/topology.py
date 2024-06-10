@@ -842,12 +842,12 @@ class Topology:
 
         Parameters
         ----------
-        :py:class:`~.network.topology.TopologyBase`
+        :py:class:`~.network.topology.Topology`
             Topology class with original grid topology data.
 
         Returns
         --------
-        :py:class:`~.network.topology.TopologyBase`
+        :py:class:`~.network.topology.Topology`
 
         """
         return self._original_grid_topology
@@ -2793,8 +2793,6 @@ class Topology:
         """
         Exports topology to csv files.
 
-        Extends function :attr:`~.network.topology.TopologyBase.to_csv`.
-
         The following attributes are exported:
 
         * 'loads_df' : Attribute :py:attr:`~loads_df` is saved to
@@ -2891,10 +2889,6 @@ class Topology:
     def from_csv(self, data_path, edisgo_obj, from_zip_archive=False):
         """
         Restores topology from csv files.
-
-        Extends function :attr:`~.network.topology.TopologyBase.from_csv` by also
-        importing network.csv and original grid data.
-        Also performs an integrity check of the imported grid topology data.
 
         Parameters
         ----------
