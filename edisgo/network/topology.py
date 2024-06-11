@@ -634,6 +634,22 @@ class Topology:
         self._switches_df = df
 
     @property
+    def charging_points_df(self):
+        """
+        Returns a subset of :py:attr:`~loads_df` containing only charging points.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            DataFrame with all chargings points in the grid.
+
+        """
+        if "charging_point" in self.loads_df.type.unique():
+            return self.loads_df.loc[self.loads_df.type == "charging_point"]
+        else:
+            return pd.DataFrame(columns=COLUMNS["loads_df"])
+
+    @property
     def id(self):
         """
         MV network ID.
