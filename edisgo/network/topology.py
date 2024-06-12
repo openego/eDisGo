@@ -2916,6 +2916,68 @@ class Topology:
             Set to True if data is archived in a zip archive. Default: False.
 
         """
+
+        def _set_data(attrs_to_set, set_obj):
+            """
+            Sets topology attributes from csv files.
+
+            Parameters
+            ----------
+            attrs_to_set : dict
+                Dictionary with attributes to set in the form as returned by
+                _get_matching_dict_of_attributes_and_file_names().
+            set_obj : Topology
+                Topology object on which to set the data, as data can be set to the
+                Topology object in Topology.original_grid_data as well.
+
+            """
+            for attr, file in attrs_to_set.items():
+                if from_zip_archive:
+                    # open zip file to make it readable for pandas
+                    with zip.open(file) as f:
+                        df = pd.read_csv(f, index_col=0)
+                else:
+                    path = os.path.join(data_path, file)
+                    df = pd.read_csv(path, index_col=0)
+
+                if attr == "generators_df":
+                    # delete slack if it was included
+                    df = df.loc[df.control != "Slack"]
+                elif "transformers" in attr:
+                    # rename columns to match convention
+                    df = df.rename(columns={"x": "x_pu", "r": "r_pu"})
+                elif attr == "network":
+                    # rename columns to match convention
+                    df = df.rename(
+                        columns={
+                            "mv_grid_district_geom": "geom",
+                            "mv_grid_district_population": "population",
+                        }
+                    )
+
+                    # set grid district information
+                    setattr(
+                        set_obj,
+                        "grid_district",
+                        {
+                            "population": df.population.iat[0],
+                            "geom": wkt_loads(df.geom.iat[0]),
+                            "srid": df.srid.iat[0],
+                        },
+                    )
+
+                    # set up medium voltage grid
+                    setattr(
+                        set_obj,
+                        "mv_grid",
+                        MVGrid(edisgo_obj=edisgo_obj, id=df.index[0]),
+                    )
+
+                    continue
+
+                # set attribute
+                setattr(set_obj, attr, df)
+
         # get all attributes and corresponding file names
         attrs = self._get_matching_dict_of_attributes_and_file_names()
 
@@ -2936,51 +2998,30 @@ class Topology:
             files = os.listdir(data_path)
 
         attrs_to_read = {k: v for k, v in attrs.items() if v in files}
+        _set_data(attrs_to_read, self)
 
-        for attr, file in attrs_to_read.items():
-            if from_zip_archive:
-                # open zip file to make it readable for pandas
-                with zip.open(file) as f:
-                    df = pd.read_csv(f, index_col=0)
+        # read original grid topology data
+        attrs = self._get_matching_dict_of_attributes_and_file_names()
+        if from_zip_archive:
+            # add directory to attributes to match zip archive
+            attrs = {
+                k: f"topology/original_grid_topology/{v}" for k, v in attrs.items()
+            }
+            attrs_to_read = {k: v for k, v in attrs.items() if v in files}
+        else:
+            if "original_grid_topology" in files:
+                files = os.listdir(os.path.join(data_path, "original_grid_topology"))
+                attrs_to_read = {
+                    k: f"original_grid_topology/{v}"
+                    for k, v in attrs.items()
+                    if v in files
+                }
             else:
-                path = os.path.join(data_path, file)
-                df = pd.read_csv(path, index_col=0)
+                attrs_to_read = {}
+        if attrs_to_read:
+            self.original_grid_topology = Topology()
+            _set_data(attrs_to_read, self.original_grid_topology)
 
-            if attr == "generators_df":
-                # delete slack if it was included
-                df = df.loc[df.control != "Slack"]
-            elif "transformers" in attr:
-                # rename columns to match convention
-                df = df.rename(columns={"x": "x_pu", "r": "r_pu"})
-            elif attr == "network":
-                # rename columns to match convention
-                df = df.rename(
-                    columns={
-                        "mv_grid_district_geom": "geom",
-                        "mv_grid_district_population": "population",
-                    }
-                )
-
-                # set grid district information
-                setattr(
-                    self,
-                    "grid_district",
-                    {
-                        "population": df.population.iat[0],
-                        "geom": wkt_loads(df.geom.iat[0]),
-                        "srid": df.srid.iat[0],
-                    },
-                )
-
-                # set up medium voltage grid
-                setattr(self, "mv_grid", MVGrid(edisgo_obj=edisgo_obj, id=df.index[0]))
-
-                continue
-
-            # set attribute
-            setattr(self, attr, df)
-
-        # ToDo original grid topology
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
             zip.close()

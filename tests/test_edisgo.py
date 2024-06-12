@@ -1964,6 +1964,11 @@ class TestEDisGoFunc:
             data={"load_1": [5.0, 6.0], "load_2": [7.0, 8.0]},
             index=edisgo_obj.timeseries.timeindex[0:2],
         )
+        # manipulate original grid topology, to check whether it is retrieved correctly
+        # or if the actual topology is used
+        edisgo_obj.topology.original_grid_topology.remove_load(
+            "Load_agricultural_LVGrid_3_1"
+        )
 
         # ################ test with non-existing path ######################
 
@@ -1989,6 +1994,9 @@ class TestEDisGoFunc:
             edisgo_obj.topology.loads_df,
             check_dtype=False,
         )
+        # check original grid data
+        assert len(edisgo_obj_loaded.topology.original_grid_topology.buses_df) == 141
+        assert len(edisgo_obj_loaded.topology.original_grid_topology.loads_df) == 49
         # check time series
         assert edisgo_obj_loaded.timeseries.timeindex.empty
         # check configs
@@ -1997,7 +2005,17 @@ class TestEDisGoFunc:
         assert edisgo_obj_loaded.results.i_res.empty
 
         # ############ test with loading other data ###########
-
+        # delete directory
+        shutil.rmtree(save_dir)
+        edisgo_obj.topology.original_grid_topology = None
+        edisgo_obj.save(
+            save_dir,
+            save_results=False,
+            save_electromobility=True,
+            save_heatpump=True,
+            save_overlying_grid=True,
+            save_dsm=True,
+        )
         edisgo_obj_loaded = import_edisgo_from_files(
             save_dir,
             import_electromobility=True,
@@ -2098,3 +2116,23 @@ class TestEDisGoFunc:
 
         # delete zip file
         os.remove(zip_file)
+
+        # check zipping original grid data
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        # manipulate original grid topology, to check whether it is retrieved correctly
+        # or if the actual topology is used
+        edisgo_obj.topology.original_grid_topology.remove_load(
+            "Load_agricultural_LVGrid_3_1"
+        )
+        edisgo_obj.save(
+            save_dir,
+            archive=True,
+        )
+        zip_file = f"{save_dir}.zip"
+        edisgo_obj_loaded = import_edisgo_from_files(
+            zip_file,
+            from_zip_archive=True,
+        )
+        # check original grid data
+        assert len(edisgo_obj_loaded.topology.original_grid_topology.buses_df) == 141
+        assert len(edisgo_obj_loaded.topology.original_grid_topology.loads_df) == 49
