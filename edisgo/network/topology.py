@@ -870,13 +870,14 @@ class Topology:
 
     @original_grid_topology.setter
     def original_grid_topology(self, topo):
-        # deepcopy is used so that in case topology object is changed the original
-        # topology is not changed
-        topo = copy.deepcopy(topo)
-        # make sure the original topology is set to None, to avoid recursive behavior
-        # when topology object is written to csv
-        if topo._original_grid_topology is not None:
-            topo._original_grid_topology = None
+        if topo is not None:
+            # deepcopy is used so that in case topology object is changed the original
+            # topology is not changed
+            topo = copy.deepcopy(topo)
+            # make sure the original topology is set to None, to avoid recursive
+            # behavior when topology object is written to csv
+            if topo._original_grid_topology is not None:
+                topo._original_grid_topology = None
         self._original_grid_topology = topo
 
     def get_connected_lines_from_bus(self, bus_name):
