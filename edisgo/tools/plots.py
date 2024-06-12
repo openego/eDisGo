@@ -6,7 +6,6 @@ import os
 from typing import TYPE_CHECKING
 
 import matplotlib
-import matplotlib.cm as cm
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -888,7 +887,7 @@ def color_map_color(
     """
     norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
     if isinstance(cmap_name, str):
-        cmap = cm.get_cmap(cmap_name)
+        cmap = matplotlib.pyplot.colormaps.get_cmap(cmap_name)
     else:
         cmap = matplotlib.colors.LinearSegmentedColormap.from_list("mycmap", cmap_name)
     rgb = cmap(norm(abs(value)))[:3]
