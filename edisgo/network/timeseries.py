@@ -1448,6 +1448,13 @@ class TimeSeries:
         load_names = self._check_if_components_exist(edisgo_object, load_names, "loads")
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
 
+        # check if loads contain annual demand
+        if not all(loads_df.annual_consumption.notnull()):
+            raise AttributeError(
+                "The following loads have missing information on annual consumption: "
+                f"{loads_df[~loads_df.annual_consumption.notnull()].index.values}."
+            )
+
         # scale time series by annual consumption
         ts_scaled = loads_df.apply(
             lambda x: ts_loads[x.sector] * x.annual_consumption,
