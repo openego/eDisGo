@@ -44,41 +44,41 @@ Installation using MacOS
 We don't have any experience with our package on MacOS yet! If you try eDisGo on MacOS
 we would be happy if you let us know about your experience!
 
-Requirements for edisgoOPF package
-----------------------------------
+edisgoOPF Package
+-----------------
 
-.. warning:: The non-linear optimal power flow is currently not maintained and might not work out of the box!
+Introduction
+^^^^^^^^^^^^^
+edisgoOPF is a Python package designed for optimal power flow (OPF) calculations in electrical distribution systems. This package leverages the power of Julia, a high-performance programming language for technical computing, to perform efficient OPF calculations.
 
-To use the multiperiod optimal power flow that is provided in the julia package
-edisgoOPF in eDisGo you additionally need to install julia version 1.1.1.
-Download julia from
-`julia download page <https://julialang.org/downloads/oldreleases/>`_ and
-add it to your path (see
-`platform specific instructions <https://julialang.org/downloads/platform/>`_
-for more information).
 
-Before using the edisgoOPF julia package for the first time you need to
-instantiate it. Therefore, in a terminal change directory to the edisgoOPF
-package located in eDisGo/edisgo/opf/edisgoOPF and call julia from there.
-Change to package mode by typing
 
-.. code-block:: bash
+To use edisgoOPF effectively, you'll need to set up a specific environment that includes:
 
-    ]
+1. **Julia**: Version 1.6.7 is required.
+2. **Gurobi Optimizer**: A powerful optimization solver.
 
-Then activate the package:
+Installation Steps
+^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: bash
+1. Install Julia 1.6.7
 
-    (v1.0) pkg> activate .
 
-And finally instantiate it:
+Download Julia 1.6.7 from the `Julia LTS releases page <https://julialang.org/downloads/#long_term_support_release>`_.
+
+For Linux users, you can use the following commands:
 
 .. code-block:: bash
 
-    (SomeProject) pkg> instantiate
+    wget https://julialang-s3.julialang.org/bin/linux/x64/1.6/julia-1.6.7-linux-x86_64.tar.gz
+    tar zxvf julia-1.6.7-linux-x86_64.tar.gz
+    export PATH="$PATH:<path to julia folder>/julia-1.6.7/bin"
 
-.. _prerequisites:
+2. Install Gurobi
+
+
+Follow the `Gurobi installation guide <https://support.gurobi.com/hc/en-us/articles/14799677517585-Getting-Started-with-Gurobi-Optimizer>`_ to install Gurobi and add it to your system path.
+
 
 Additional linear solver
 ^^^^^^^^^^^^^^^^^^^^^^^^^
