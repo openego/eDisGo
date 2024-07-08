@@ -138,9 +138,14 @@ extlinks = {
     ),
 }
 # ignore the following external links when checking the links
-# stackoverflow is listed here because for some reason the link check fails for these
+# stackoverflow and gurobi is listed here because for some reason
+# the link check fails for these
 # in the github action, even though the link is correct
-linkcheck_ignore = [r"https://stackoverflow.com*"]
+linkcheck_ignore = [
+    r"https://stackoverflow.com*",
+    r"https://support.gurobi.com/hc/en-us/articles\
+        /14799677517585-Getting-Started-with-Gurobi-Optimizer",
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
