@@ -1549,6 +1549,7 @@ class TestTimeSeries:
         )
         # fmt: on
 
+    @pytest.mark.oedb
     def test_predefined_conventional_loads_by_sector(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")
         self.edisgo.timeseries.timeindex = index

@@ -57,6 +57,12 @@ def pytest_addoption(parser):
         default=False,
         help="run tests that only work locally",
     )
+    parser.addoption(
+        "--oedb",
+        action="store_true",
+        default=False,
+        help="run tests that used to fail due to oedb errors",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -75,3 +81,8 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "runonlinux" in item.keywords:
                 item.add_marker(skip_windows)
+    if not config.getoption("--oedb"):
+        skip_oedb = pytest.mark.skip(reason="need --oedb option to run")
+        for item in items:
+            if "oedb" in item.keywords:
+                item.add_marker(skip_oedb)

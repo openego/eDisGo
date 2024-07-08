@@ -28,7 +28,7 @@ def oedb(
 ):
     """
     Gets industrial and CTS DSM profiles from the
-    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
 
     Profiles comprise minimum and maximum load increase in MW as well as maximum energy
     pre- and postponing in MWh.

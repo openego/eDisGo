@@ -188,8 +188,8 @@ Aside from grid topology data you may eventually need a dataset on future
 installation of power plants. You may therefore use the scenarios developed in
 the `open_eGo <https://openegoproject.wordpress.com>`_ project that
 are available in the
-`OpenEnergy DataBase (oedb) <https://openenergy-platform.org/dataedit/schemas>`_
-hosted on the `OpenEnergy Platform (OEP) <https://openenergy-platform.org/>`_.
+`OpenEnergy DataBase (oedb) <https://openenergyplatform.org/dataedit/schemas>`_
+hosted on the `OpenEnergy Platform (OEP) <https://openenergyplatform.org/>`_.
 eDisGo provides an interface to the oedb using the package
 `ego.io <https://github.com/openego/ego.io>`_. ego.io gives you a python
 SQL-Alchemy representations of the oedb and access to it by using the
