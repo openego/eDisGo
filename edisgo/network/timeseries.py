@@ -1450,9 +1450,9 @@ class TimeSeries:
 
         # check if loads contain annual demand
         if not all(loads_df.annual_consumption.notnull()):
-            raise AttributeError(
-                "The following loads have missing information on annual consumption: "
-                f"{loads_df[~loads_df.annual_consumption.notnull()].index.values}."
+            raise Warning(
+                "Not all affected loads have information on annual consumption. Please "
+                "check and adapt if necessary."
             )
 
         # scale time series by annual consumption
