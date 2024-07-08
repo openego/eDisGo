@@ -143,8 +143,7 @@ extlinks = {
 # in the github action, even though the link is correct
 linkcheck_ignore = [
     r"https://stackoverflow.com*",
-    r"https://support.gurobi.com/hc/en-us/articles\
-        /14799677517585-Getting-Started-with-Gurobi-Optimizer",
+    r"https://support.gurobi.com/*",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
