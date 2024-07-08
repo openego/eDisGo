@@ -417,7 +417,7 @@ class EDisGo:
                 Technology- and weather cell-specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_. See
+                <https://openenergyplatform.org/dataedit/schemas>`_. See
                 :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
 
                 This option requires that the parameter `engine` is provided in case
@@ -478,7 +478,7 @@ class EDisGo:
 
                 Sets active power demand time series using individual hourly electricity
                 load time series for one year obtained from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_.
+                <https://openenergyplatform.org/dataedit/schemas>`_.
 
                 This option requires that the parameters `engine` and `scenario` are
                 provided. For further settings, the parameter `timeindex` can also be
@@ -933,7 +933,7 @@ class EDisGo:
         Gets generator park for specified scenario and integrates generators into grid.
 
         The generator data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_. Decommissioned
+        `open energy platform <https://openenergyplatform.org/>`_. Decommissioned
         generators are removed from the grid, generators with changed capacity
         updated and new generators newly integrated into the grid.
 
@@ -1928,7 +1928,7 @@ class EDisGo:
         Imports electromobility data and integrates charging points into grid.
 
         Electromobility data can be obtained from the `OpenEnergy DataBase
-        <https://openenergy-platform.org/dataedit/schemas>`_ or from self-provided
+        <https://openenergyplatform.org/dataedit/schemas>`_ or from self-provided
         data. In case you want to use self-provided data, it needs to be generated
         using the tools
         `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
@@ -1960,7 +1960,7 @@ class EDisGo:
             * "oedb"
 
                 Electromobility data is obtained from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_.
+                <https://openenergyplatform.org/dataedit/schemas>`_.
 
                 This option requires that the parameters `scenario` and `engine` are
                 provided.
@@ -2143,7 +2143,7 @@ class EDisGo:
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_.
+        `open energy platform <https://openenergyplatform.org/>`_.
 
         # ToDo Add information on scenarios and from which tables data is retrieved.
 
@@ -2305,7 +2305,7 @@ class EDisGo:
     def import_dsm(self, scenario: str, engine: Engine, timeindex=None):
         """
         Gets industrial and CTS DSM profiles from the
-        `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+        `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
 
         Profiles comprise minimum and maximum load increase in MW as well as maximum
         energy pre- and postponing in MWh. The data is written to the
@@ -2356,7 +2356,7 @@ class EDisGo:
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_.
+        `open energy platform <https://openenergyplatform.org/>`_.
 
         The batteries are integrated into the grid (added to
         :attr:`~.network.topology.Topology.storage_units_df`) based on their building

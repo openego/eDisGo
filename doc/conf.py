@@ -128,7 +128,10 @@ extlinks = {
         "shapely.%s",
     ),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "ding0.%s"),
-    "pypsa": ("https://pypsa.readthedocs.io/en/latest/components.html#%s", "pypsa.%s"),
+    "pypsa": (
+        "https://pypsa.readthedocs.io/en/latest/user-guide/components.html#%s",
+        "pypsa.%s",
+    ),
     "plotly": (
         "https://plotly.com/python-api-reference/generated/%s.html",
         "plotly.%s",
