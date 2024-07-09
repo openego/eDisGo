@@ -78,10 +78,8 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "runonlinux" in item.keywords:
                 item.add_marker(skip_windows)
-    if config.getoption("--runoedbtest"):
-        # If the --runoedbtest option is specified, do not skip any tests
-        return
-    skip_oedbtest = pytest.mark.skip(reason="Need --runoedbtest option to run")
-    for item in items:
-        if "oedbtest" in item.keywords:
-            item.add_marker(skip_oedbtest)
+    if not config.getoption("--runoedbtest"):
+        skip_oedbtest = pytest.mark.skip(reason="need --runoedbtest option to run")
+        for item in items:
+            if "oedbtest" in item.keywords:
+                item.add_marker(skip_oedbtest)
