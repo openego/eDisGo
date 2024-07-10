@@ -3,10 +3,10 @@
 Getting started
 ================
 
+.. warning:: Make sure to use python 3.8 or higher!
+
 Installation using Linux
 -------------------------
-
-.. warning:: Make sure to use python 3.8 or higher!
 
 Install latest eDisGo version through pip. Therefore, we highly recommend using
 a virtual environment and its pip.
@@ -20,8 +20,6 @@ You may also consider installing a developer version as detailed in
 
 Installation using Windows
 --------------------------
-
-.. warning:: Make sure to use python 3.8 or higher!
 
 For Windows users we recommend using Anaconda and to install the geo stack
 using the conda-forge channel prior to installing eDisGo. You may use the provided
@@ -44,16 +42,10 @@ Installation using MacOS
 We don't have any experience with our package on MacOS yet! If you try eDisGo on MacOS
 we would be happy if you let us know about your experience!
 
-edisgoOPF Package
------------------
+Additional requirements for Optimal Power Flow
+---------------------------------------------------
 
-Introduction
-^^^^^^^^^^^^^
-edisgoOPF is a Python package designed for optimal power flow (OPF) calculations in electrical distribution systems. This package leverages the power of Julia, a high-performance programming language for technical computing, to perform efficient OPF calculations.
-
-
-
-To use edisgoOPF effectively, you'll need to set up a specific environment that includes:
+In order to use the optimal power flow, you additionally need:
 
 1. **Julia**: Version 1.6.7 is required.
 2. **Gurobi Optimizer**: A powerful optimization solver.
@@ -78,83 +70,6 @@ For Linux users, you can use the following commands:
 
 
 Follow the `Gurobi installation guide <https://support.gurobi.com/hc/en-us/articles/14799677517585-Getting-Started-with-Gurobi-Optimizer>`_ to install Gurobi and add it to your system path.
-
-
-Additional linear solver
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-As with the default linear solver in Ipopt (local solver used in the OPF)
-the limit for prolem sizes is reached quite quickly, you may want to instead use
-the solver HSL_MA97.
-The steps required to set up HSL  are also described in the
-`Ipopt Documentation <https://coin-or.github.io/Ipopt/INSTALL.html#DOWNLOAD_HSL>`_.
-Here is a short version for reference:
-
-First, you need to obtain an academic license for HSL Solvers.
-Under https://licences.stfc.ac.uk/product/coin-hsl download the sources for Coin-HSL Full (Stable).
-You will need to provide an institutional e-mail to gain access.
-
-Unpack the tar.gz:
-
-.. code-block:: bash
-
-    tar -xvzf coinhsl-2014.01.10.tar.gz
-
-To install the solver, clone the Ipopt Third Party HSL tools:
-
-.. code-block:: bash
-
-    git clone https://github.com/coin-or-tools/ThirdParty-HSL.git
-    cd ThirdParty-HSL
-
-
-Under `ThirdParty-HSL`, create a folder for the HSL sources named `coinhsl` and
-copy the contents of the HSL archive into it.
-Under Ubuntu, you'll need BLAS, LAPACK and GCC for Fortran. If you don't have them, install them via:
-
-.. code-block:: bash
-
-    sudo apt-get install libblas-dev liblapack-dev gfortran
-
-You can then configure and install your HSL Solvers:
-
-.. code-block:: bash
-
-    ./configure
-    make
-    sudo make install
-
-To make Ipopt pick up the solver, you need to add it to your path.
-During install, there will be an output that tells you where the libraries have
-been put. Usually like this:
-
-.. code-block:: bash
-
-    Libraries have been installed in:
-        /usr/local/lib
-
-
-Add this path to the variable `LD_LIBRARY_PATH`:
-
-.. code-block:: bash
-
-    export LD_LIBRARY="/usr/local/bin":$LD_LIBRARY_PATH
-
-You might also want to add this to your .bashrc to make it persistent.
-
-For some reason, Ipopt looks for a library named `libhsl.so`, which is not what
-the file is named, so we'll also need to provide a symlink:
-
-.. code-block:: bash
-
-    cd /usr/local/lib
-    ln -s libcoinhsl.so libhsl.so
-
-MA97 should now work and can be called from Julia with:
-
-.. code-block:: julia
-
-    JuMP.setsolver(pm.model,IpoptSolver(linear_solver="ma97"))
 
 Prerequisites
 -------------
