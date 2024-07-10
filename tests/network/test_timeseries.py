@@ -1235,6 +1235,7 @@ class TestTimeSeries:
             )
 
     @pytest.mark.slow
+    @pytest.mark.oedbtest
     def test_predefined_fluctuating_generators_by_technology(self):
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.edisgo.timeseries.timeindex = timeindex
