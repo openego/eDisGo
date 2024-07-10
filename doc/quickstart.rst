@@ -58,13 +58,8 @@ Installation Steps
 
 Download Julia 1.6.7 from the `Julia LTS releases page <https://julialang.org/downloads/#long_term_support_release>`_.
 
-For Linux users, you can use the following commands:
+Install Julia by following the instructions in the `Julia installation guide <https://julialang.org/downloads/platform/#linux_and_freebsd>`_. Make sure to add Julia to your system path.
 
-.. code-block:: bash
-
-    wget https://julialang-s3.julialang.org/bin/linux/x64/1.6/julia-1.6.7-linux-x86_64.tar.gz
-    tar zxvf julia-1.6.7-linux-x86_64.tar.gz
-    export PATH="$PATH:<path to julia folder>/julia-1.6.7/bin"
 
 2. Install Gurobi
 
