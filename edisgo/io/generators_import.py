@@ -42,9 +42,9 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     The importer uses SQLAlchemy ORM objects. These are defined in
     `ego.io <https://github.com/openego/ego.io/tree/dev/egoio/db_tables/>`_.
     The data is imported from the tables
-    `conventional power plants <https://openenergy-platform.org/dataedit/\
+    `conventional power plants <https://openenergyplatform.org/dataedit/\
     view/supply/ego_dp_conv_powerplant>`_ and
-    `renewable power plants <https://openenergy-platform.org/dataedit/\
+    `renewable power plants <https://openenergyplatform.org/dataedit/\
     view/supply/ego_dp_res_powerplant>`_.
 
     When the generator data is retrieved, the following steps are conducted:
