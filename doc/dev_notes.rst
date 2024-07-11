@@ -24,7 +24,7 @@ following commands within your eDisGo directory:
 
 .. code-block:: bash
 
-    python -m pip install -e .[full]  # install eDisGo from source
+    python -m pip install -e .[dev]  # install eDisGo from source
     pre-commit install  # install pre-commit hooks
 
 
