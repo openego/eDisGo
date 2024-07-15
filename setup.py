@@ -50,7 +50,6 @@ requirements = [
     "plotly",
     "pydot",
     "pygeos",
-    # "pyomo <= 6.4.2",  # Problem with PyPSA 20.1 fixed in newest PyPSA release
     "pypower",
     "pyproj >= 3.0.0",
     "pypsa",
