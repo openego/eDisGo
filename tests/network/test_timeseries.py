@@ -1235,6 +1235,7 @@ class TestTimeSeries:
             )
 
     @pytest.mark.slow
+    @pytest.mark.oedbtest
     def test_predefined_fluctuating_generators_by_technology(self):
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.edisgo.timeseries.timeindex = timeindex
@@ -1792,6 +1793,26 @@ class TestTimeSeries:
                 * profiles_new["industrial"]
             ).values,
         ).all()
+
+        # test Error if 'annual_consumption' is missing
+        # Save the original 'annual_consumption' values
+        original_annual_consumption = self.edisgo.topology.loads_df[
+            "annual_consumption"
+        ].copy()
+        # Set 'annual_consumption' to None for the test
+        self.edisgo.topology.loads_df["annual_consumption"] = None
+        with pytest.raises(AttributeError) as exc_info:
+            self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+                self.edisgo, "demandlib"
+            )
+        assert (
+            exc_info.value.args[0]
+            == "The annual consumption of some loads is missing. Please provide"
+        )
+        # Restore the original 'annual_consumption' values
+        self.edisgo.topology.loads_df[
+            "annual_consumption"
+        ] = original_annual_consumption
 
     def test_predefined_charging_points_by_use_case(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")

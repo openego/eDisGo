@@ -33,7 +33,7 @@ def read(fname):
 requirements = [
     "contextily",
     "dash < 2.9.0",
-    "demandlib",
+    "demandlib < 0.2.0",
     "descartes",
     "egoio >= 0.4.7",
     "geoalchemy2 < 0.7.0",
@@ -52,7 +52,7 @@ requirements = [
     "pygeos",
     "pypower",
     "pyproj >= 3.0.0",
-    "pypsa",
+    "pypsa == 0.26.2",
     "pyyaml",
     "saio",
     "scikit-learn <= 1.1.1",

@@ -1204,7 +1204,7 @@ class TimeSeries:
                 Technology and weather cell specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_. See
+                <https://openenergyplatform.org/dataedit/schemas>`_. See
                 :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
 
                 This option requires that the parameter `engine` is provided in case
@@ -1447,6 +1447,12 @@ class TimeSeries:
             ].index
         load_names = self._check_if_components_exist(edisgo_object, load_names, "loads")
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
+
+        # check if loads contain annual demand
+        if not all(loads_df.annual_consumption.notnull()):
+            raise AttributeError(
+                "The annual consumption of some loads is missing. Please provide"
+            )
 
         # scale time series by annual consumption
         ts_scaled = loads_df.apply(

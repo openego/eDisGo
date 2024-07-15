@@ -59,6 +59,7 @@ class TestTimeseriesImport:
         assert_index_equal(ind, given_index)
         assert_index_equal(ind_full, timeindex)
 
+    @pytest.mark.oedbtest
     def test_feedin_oedb_legacy(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         timeindex = pd.date_range("1/1/2010", periods=3000, freq="H")
