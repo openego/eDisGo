@@ -20,13 +20,13 @@ jobs:
         include:
           - name-suffix: "coverage"
             os: ubuntu-latest
-            python-version: 3.8
-          - name-suffix: "basic"
-            os: ubuntu-latest
             python-version: 3.9
           - name-suffix: "basic"
+            os: ubuntu-latest
+            python-version: 3.10
+          - name-suffix: "basic"
             os: windows-latest
-            python-version: 3.8
+            python-version: 3.9
 
     steps:
       - name: Checkout repo
@@ -71,7 +71,7 @@ jobs:
           python -m pytest --runslow --disable-warnings --color=yes -v
 
       - name: Run tests, coverage and send to coveralls
-        if: runner.os == 'Linux' && matrix.python-version == 3.8 && matrix.name-suffix == 'coverage'
+        if: runner.os == 'Linux' && matrix.python-version == 3.9 && matrix.name-suffix == 'coverage'
         run: |
           pip install pytest pytest-notebook coveralls
           coverage run --source=edisgo -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
