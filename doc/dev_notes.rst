@@ -18,8 +18,7 @@ Installation using Linux
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 To set up a source installation using linux simply use a virtual environment and install
-the source code with pip. Make sure to use python3.7 or higher (recommended
-python3.8). **After** setting up your virtual environment and activating it run the
+the source code with pip. Make sure to use python3.9 or higher. **After** setting up your virtual environment and activating it run the
 following commands within your eDisGo directory:
 
 .. code-block:: bash
