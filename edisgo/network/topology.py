@@ -2123,7 +2123,7 @@ class Topology:
 
             """
             if comp_type == "generator":
-                random.seed(a=comp_data["generator_id"])
+                random.seed(a=int(comp_data["generator_id"]))
             elif comp_type == "storage_unit":
                 random.seed(a=len(self.storage_units_df))
             else:
