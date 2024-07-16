@@ -1,5 +1,5 @@
 dash < 2.9.0
-demandlib
+demandlib < 0.2.0
 egoio >= 0.4.7
 geopy >= 2.0.0
 jupyter_dash
