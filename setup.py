@@ -50,10 +50,9 @@ requirements = [
     "plotly",
     "pydot",
     "pygeos",
-    "pyomo <= 6.4.2",  # Problem with PyPSA 20.1 fixed in newest PyPSA release
     "pypower",
     "pyproj >= 3.0.0",
-    "pypsa >= 0.17.0, <= 0.20.1",
+    "pypsa == 0.26.2",
     "pyyaml",
     "saio",
     "scikit-learn <= 1.1.1",
