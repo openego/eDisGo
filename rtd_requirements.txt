@@ -1,5 +1,6 @@
 dash < 2.9.0
 demandlib < 0.2.0
+demandlib < 0.2.0
 egoio >= 0.4.7
 geopy >= 2.0.0
 jupyter_dash
@@ -10,7 +11,7 @@ pandas >= 1.4.0
 plotly
 pypower
 pyproj >= 3.0.0
-pypsa  == 0.26.2
+pypsa == 0.26.2
 pyyaml
 saio
 scikit-learn < 1.3.0
