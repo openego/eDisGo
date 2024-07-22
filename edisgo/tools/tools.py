@@ -284,29 +284,27 @@ def select_cable(
         Number of necessary parallel cables.
 
     """
-    if not max_voltage_drop:
-        if level == "mv":
-            max_voltage_drop = edisgo_obj.config._data[
-                "grid_expansion_allowed_voltage_deviations"
-            ]["mv_max_v_drop"]
-        elif level == "lv":
-            max_voltage_drop = edisgo_obj.config._data[
-                "grid_expansion_allowed_voltage_deviations"
-            ]["lv_max_v_drop"]
-    cable_count = 1
 
     if level == "mv":
         cable_data = edisgo_obj.topology.equipment_data["mv_cables"]
         available_cables = cable_data[
             cable_data["U_n"] == edisgo_obj.topology.mv_grid.nominal_voltage
         ]
+        if not max_voltage_drop:
+            max_voltage_drop = edisgo_obj.config._data["new_components"][
+                "mv_max_voltage_deviation"
+            ]
     elif level == "lv":
         available_cables = edisgo_obj.topology.equipment_data["lv_cables"]
+        if not max_voltage_drop:
+            max_voltage_drop = edisgo_obj.config._data["new_components"][
+                "lv_max_voltage_deviation"
+            ]
     else:
         raise ValueError(
             "Specified voltage level is not valid. Must either be 'mv' or 'lv'."
         )
-
+    cable_count = 1
     suitable_cables = available_cables[
         calculate_apparent_power(
             available_cables["U_n"], available_cables["I_max_th"], cable_count

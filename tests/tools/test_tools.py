@@ -175,7 +175,7 @@ class TestTools:
             self.edisgo, "lv", 0.18, 1000
         )
         assert cable_data.name == "NAYY 4x1x240"
-        assert num_parallel_cables == 3
+        assert num_parallel_cables == 5
 
         cable_data, num_parallel_cables = tools.select_cable(
             self.edisgo, "lv", 0.18, 1000, max_voltage_drop=0.01, max_cables=100
