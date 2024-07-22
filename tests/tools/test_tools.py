@@ -30,6 +30,54 @@ class TestTools:
         data = tools.calculate_line_reactance(np.array([2, 3]), 3, 2)
         assert_allclose(data, np.array([1.88496 / 2, 2.82743 / 2]), rtol=1e-5)
 
+    def test_voltage_drop(self):
+        data = tools.calculate_voltage_drop(50, 0.125, 0.36, 20, 0.9)
+        assert np.isclose(data, 0.67355 * 1e-3)
+        data = tools.calculate_voltage_drop(
+            np.array([50, 50]),
+            np.array([0.125, 0.125]),
+            np.array([0.36, 0.36]),
+            20,
+            0.9,
+        )
+        assert_allclose(data, np.array([0.67355 * 1e-3, 0.67355 * 1e-3]), rtol=1e-5)
+        data = tools.calculate_voltage_drop(50, 0.125, 0.36, 40, 0.9)
+        assert np.isclose(data, 0.67355 * 1e-3 / 2)
+        data = tools.calculate_voltage_drop(100, 0.125, 0.36, 20, 0.9)
+        assert np.isclose(data, 0.67355 * 1e-3 * 2)
+        data = tools.calculate_voltage_drop(
+            np.array([100, 100]),
+            np.array([0.125, 0.125]),
+            np.array([0.36, 0.36]),
+            np.array([20, 20]),
+            0.9,
+        )
+        assert_allclose(
+            data, np.array([0.67355 * 1e-3 * 2, 0.67355 * 1e-3 * 2]), rtol=1e-5
+        )
+
+    def test_voltage_drop_percentage(self):
+        data = tools.voltage_drop_percentage(0.152, 0.360, 1, 1, 20, 50, 0.9)
+        assert np.isclose(data, 2.326224820444546e-5)
+        data = tools.voltage_drop_percentage(
+            np.array([0.152, 0.152]), np.array([0.360, 0.360]), 1, 1, 20, 50, 0.9
+        )
+        assert_allclose(
+            data, np.array([2.326224820444546e-5, 2.326224820444546e-5]), rtol=1e-5
+        )
+        data = tools.voltage_drop_percentage(0.152, 0.360, 2, 1, 20, 50, 0.9)
+        assert np.isclose(data, 2 * 2.326224820444546e-5)
+        data = tools.voltage_drop_percentage(
+            np.array([0.152, 0.152]), np.array([0.360, 0.360]), 2, 1, 20, 50, 0.9
+        )
+        assert_allclose(
+            data,
+            np.array([2 * 2.326224820444546e-5, 2 * 2.326224820444546e-5]),
+            rtol=1e-5,
+        )
+        data = tools.voltage_drop_percentage(0.152, 0.360, 1, 2, 20, 50, 0.9)
+        assert np.isclose(data, 2.326224820444546e-5 / 2)
+
     def test_calculate_line_resistance(self):
         # test single line
         data = tools.calculate_line_resistance(2, 3, 1)
@@ -97,6 +145,7 @@ class TestTools:
         assert (check_df.loc[:, "a"] == [4, 5, 6]).all()
 
     def test_select_cable(self):
+        # no length given
         cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "mv", 5.1)
         assert cable_data.name == "NA2XS2Y 3x1x150 RE/25"
         assert num_parallel_cables == 1
@@ -108,6 +157,31 @@ class TestTools:
         cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "lv", 0.18)
         assert cable_data.name == "NAYY 4x1x150"
         assert num_parallel_cables == 1
+
+        # length given
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo, "mv", 5.1, 1000
+        )
+        assert cable_data.name == "NA2XS2Y 3x1x150 RE/25"
+        assert num_parallel_cables == 1
+
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo, "mv", 40, 1000
+        )
+        assert cable_data.name == "NA2XS(FL)2Y 3x1x500 RM/35"
+        assert num_parallel_cables == 2
+
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo, "lv", 0.18, 1000
+        )
+        assert cable_data.name == "NAYY 4x1x240"
+        assert num_parallel_cables == 3
+
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo, "lv", 0.18, 1000, max_voltage_drop=0.01, max_cables=100
+        )
+        assert cable_data.name == "NAYY 4x1x300"
+        assert num_parallel_cables == 15
 
     def test_get_downstream_buses(self):
         # ######## test with LV bus ########
