@@ -4,12 +4,39 @@ import os
 import subprocess
 import sys
 
+import networkx as nx
 import numpy as np
 
 from edisgo.flex_opt import exceptions
 from edisgo.io.powermodels_io import from_powermodels
 
 logger = logging.getLogger(__name__)
+
+
+def find_meshes(edisgo_obj) -> list:
+    """
+    Find all meshes in the grid.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~edisgo.EDisGo`
+        EDisGo object.
+
+    Returns
+    -------
+    meshes : list
+        List of all meshes in the grid.
+
+    """
+    meshes = nx.cycle_basis(edisgo_obj.to_graph())
+    if meshes:
+        logger.warning(
+            "Grid contains mesh(es). This might cause problems in "
+            "the power flow or optimisation."
+        )
+        return meshes
+    else:
+        return None
 
 
 def pm_optimize(
@@ -105,6 +132,7 @@ def pm_optimize(
         Default: True.
 
     """
+    find_meshes(edisgo_obj)
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
     pm, hv_flex_dict = edisgo_obj.to_powermodels(
