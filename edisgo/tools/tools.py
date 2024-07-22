@@ -193,7 +193,72 @@ def drop_duplicated_columns(df, keep="last"):
     return df.loc[:, ~df.columns.duplicated(keep=keep)]
 
 
-def select_cable(edisgo_obj, level, apparent_power):
+def calculate_voltage_drop(s_max, r_total, x_total, v_nom, cos_phi=0.95):
+    """
+    Calculate voltage drop in kV.
+
+    Parameters
+    ----------
+    s_max : float or array-like
+        Apparent power in kVA.
+    r_total : float or array-like
+        Total resistance in Ohm.
+    x_total : float or array-like
+        Total reactance in Ohm.
+    v_nom : float or array-like
+        Nominal voltage in kV.
+    cos_phi : float
+        Cosine phi of the load or generator. Default: 0.95.
+    Returns
+    -------
+    float
+        Voltage drop in kV.
+    """
+    return np.abs(
+        s_max / v_nom * (r_total * cos_phi + x_total * sqrt(1 - (cos_phi) ** 2)) * 1e-3
+    )
+
+
+def voltage_drop_percentage(
+    R_per_km, L_per_km, length, num_parallel, v_nom, s_max, cos_phi=0.95
+):
+    """
+    Calculate the voltage drop percentage.
+
+    Parameters
+    ----------
+    R_per_km : float or array-like
+        Resistance per kilometer of the cable in ohm/km.
+    L_per_km : float or array-like
+        Inductance per kilometer of the cable in mH/km.
+    length : float
+        Length of the cable in km.
+    num_parallel : int
+        Number of parallel cables.
+    v_nom : int
+        Nominal voltage in kV.
+    s_max : float
+        Apparent power in kVA.
+    cos_phi : float
+        Cosine phi of the load or generator. Default: 0.95.
+    Returns
+    -------
+    float
+        Voltage drop in percentage of nominal voltage.
+    """
+    # Calculate resistance and reactance for the given length and
+    # number of parallel cables
+    r_total = calculate_line_resistance(R_per_km, length, num_parallel)
+    x_total = calculate_line_reactance(L_per_km, length, num_parallel)
+
+    # Calculate the voltage drop or increase
+    delta_v = calculate_voltage_drop(s_max, r_total, x_total, v_nom, cos_phi)
+    return delta_v / v_nom
+
+
+def select_cable(
+    edisgo_obj, level, apparent_power, length=0, max_voltage_drop=None, max_cables=7
+):
     """
     Selects suitable cable type and quantity using given apparent power.
 
@@ -219,7 +284,15 @@ def select_cable(edisgo_obj, level, apparent_power):
         Number of necessary parallel cables.
 
     """
-
+    if not max_voltage_drop:
+        if level == "mv":
+            max_voltage_drop = edisgo_obj.config._data[
+                "grid_expansion_allowed_voltage_deviations"
+            ]["mv_max_v_drop"]
+        elif level == "lv":
+            max_voltage_drop = edisgo_obj.config._data[
+                "grid_expansion_allowed_voltage_deviations"
+            ]["lv_max_v_drop"]
     cable_count = 1
 
     if level == "mv":
@@ -240,18 +313,42 @@ def select_cable(edisgo_obj, level, apparent_power):
         )
         > apparent_power
     ]
+    if length != 0:
+        suitable_cables = suitable_cables[
+            voltage_drop_percentage(
+                R_per_km=available_cables["R_per_km"],
+                L_per_km=available_cables["L_per_km"],
+                length=length,
+                num_parallel=cable_count,
+                v_nom=available_cables["U_n"],
+                s_max=apparent_power,
+                cos_phi=0.9,
+            )
+            < max_voltage_drop
+        ]
 
     # increase cable count until appropriate cable type is found
-    while suitable_cables.empty and cable_count < 7:
+    while suitable_cables.empty and cable_count < max_cables:  # parameter
         cable_count += 1
         suitable_cables = available_cables[
             calculate_apparent_power(
-                available_cables["U_n"],
-                available_cables["I_max_th"],
-                cable_count,
+                available_cables["U_n"], available_cables["I_max_th"], cable_count
             )
             > apparent_power
         ]
+        if length != 0:
+            suitable_cables = suitable_cables[
+                voltage_drop_percentage(
+                    R_per_km=available_cables["R_per_km"],
+                    L_per_km=available_cables["L_per_km"],
+                    length=length,
+                    num_parallel=cable_count,
+                    v_nom=available_cables["U_n"],
+                    s_max=apparent_power,
+                    cos_phi=0.9,
+                )
+                < max_voltage_drop
+            ]
     if suitable_cables.empty:
         raise exceptions.MaximumIterationError(
             "Could not find a suitable cable for apparent power of "
