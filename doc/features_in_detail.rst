@@ -12,6 +12,8 @@ All loads and generators are modelled as PQ nodes. The slack is positioned at th
 Multi period optimal power flow
 ---------------------------------
 
+ToDo: Text aus Abschlussbericht
+
 .. warning:: The non-linear optimal power flow is currently not maintained and might not work out of the box!
 
 .. todo:: Add
@@ -173,6 +175,7 @@ Reinforce lines due to voltage
   After each feeder with voltage problems has been considered, a power flow analysis is conducted and the voltage rechecked. The process of solving voltage issues is repeated until voltage issues are solved
   or until the maximum number of allowed iterations is reached.
 
+ToDo: Enhanced reinforcement
 
 Grid expansion costs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -317,31 +320,51 @@ minimum_charging_capacity_factor.
 This is an active charging strategy. The cars are charged when the residual load in the MV grid is lowest
 (high generation and low consumption). Charging processes with a low flexibility are given priority.
 
+'grid-optimal'
+""""""""""""""""""
+ToDo
+the flexibility potential for
+controlled charging is mapped using
+so-called flexibility bands. These bands comprise an upper and lower power band for
+the charging power and an upper and lower energy band for the energy to be recharged
+for each charging point in hourly resolution. The lower power band is always zero, as
+power can only be drawn but not fed back into the grid. The upper power band describes
+the maximum charging power that can be used for charging. This depends on the charging
+power of the vehicle or the charging station, whichever is lower, and is zero if no
+vehicle is present. The upper energy band describes the energy recharged at the
+charging point in the event that the vehicle charges at full power immediately after
+arriving at the charging station until it is fully charged. The lower energy band
+describes the recharged energy in the event that the vehicle is charged as late as
+possible. The charging process can be made more flexible within these bands. If there
+are several charging stations at a charging point charging point, the bands are added
+together. The flexibility bands are determined for each charging point within the
+eDisGo tool and are not part of eGon-data.
 
 .. _storage-integration-label:
 
-Storage integration
---------------------
+..
+    Storage integration
+    --------------------
 
-.. warning:: The storage integration methods described below are not yet adapted to the refactored code and therefore currently do not work.
+    .. warning:: The storage integration methods described below are not yet adapted to the refactored code and therefore currently do not work.
 
-Besides the possibility to connect a storage with a given operation to any node in the
-grid, eDisGo provides a methodology that takes
-a given storage capacity and allocates it to multiple smaller storage units such that it
-reduces line overloading and voltage deviations.
-The methodology is implemented in :py:func:`~edisgo.flex_opt.storage_positioning.one_storage_per_feeder`.
-As the above described
-curtailment allocation methodologies it is intended to be used in combination
-with `eTraGo <https://github.com/openego/eTraGo>`_ where
-storage capacity and operation is optimized.
+    Besides the possibility to connect a storage with a given operation to any node in the
+    grid, eDisGo provides a methodology that takes
+    a given storage capacity and allocates it to multiple smaller storage units such that it
+    reduces line overloading and voltage deviations.
+    The methodology is implemented in :py:func:`~edisgo.flex_opt.storage_positioning.one_storage_per_feeder`.
+    As the above described
+    curtailment allocation methodologies it is intended to be used in combination
+    with `eTraGo <https://github.com/openego/eTraGo>`_ where
+    storage capacity and operation is optimized.
 
-For each feeder with load or voltage issues it is checked if integrating a
-storage will reduce peaks in the feeder, starting with the feeder with
-the highest theoretical grid expansion costs. A heuristic approach is used
-to estimate storage sizing and siting while storage operation is carried
-over from the given storage operation.
+    For each feeder with load or voltage issues it is checked if integrating a
+    storage will reduce peaks in the feeder, starting with the feeder with
+    the highest theoretical grid expansion costs. A heuristic approach is used
+    to estimate storage sizing and siting while storage operation is carried
+    over from the given storage operation.
 
-A more thorough documentation will follow soon.
+    A more thorough documentation will follow soon.
 
 Spatial complexity reduction
 ----------------------------
@@ -414,6 +437,10 @@ If you want more flexibility in using the complexity reduction, you can also run
     edisgo_reduced, linemap_df = apply_busmap(edisgo_obj, busmap_df)
 
 For more details see the API documentation or the thesis where the methods were implemented and tested [SCR]_.
+
+Temporal complexity reduction
+-------------------------------
+ToDo: Abschlussbericht
 
 References
 ----------
