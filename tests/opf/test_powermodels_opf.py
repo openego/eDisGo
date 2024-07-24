@@ -338,7 +338,7 @@ class TestPowerModelsOPF:
             )
         )
 
-    def test_find_meshes(self, caplog):
+    def test_find_meshes(self, caplog: pytest.LogCaptureFixture):
         meshes = find_meshes(self.edisgo)
         assert not meshes
         self.edisgo.topology.add_line(
