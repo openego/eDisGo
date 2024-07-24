@@ -3,10 +3,10 @@
 Getting started
 ================
 
+.. warning:: Make sure to use python 3.9 or higher!
+
 Installation using Linux
 -------------------------
-
-.. warning:: Make sure to use python 3.8 or higher!
 
 Install latest eDisGo version through pip. Therefore, we highly recommend using
 a virtual environment and its pip.
@@ -20,8 +20,6 @@ You may also consider installing a developer version as detailed in
 
 Installation using Windows
 --------------------------
-
-.. warning:: Make sure to use python 3.8 or higher!
 
 For Windows users we recommend using Anaconda and to install the geo stack
 using the conda-forge channel prior to installing eDisGo. You may use the provided
@@ -44,117 +42,29 @@ Installation using MacOS
 We don't have any experience with our package on MacOS yet! If you try eDisGo on MacOS
 we would be happy if you let us know about your experience!
 
-Requirements for edisgoOPF package
-----------------------------------
+Additional requirements for Optimal Power Flow
+---------------------------------------------------
 
-.. warning:: The non-linear optimal power flow is currently not maintained and might not work out of the box!
+In order to use the optimal power flow, you additionally need:
 
-To use the multiperiod optimal power flow that is provided in the julia package
-edisgoOPF in eDisGo you additionally need to install julia version 1.1.1.
-Download julia from
-`julia download page <https://julialang.org/downloads/oldreleases/>`_ and
-add it to your path (see
-`platform specific instructions <https://julialang.org/downloads/platform/>`_
-for more information).
+1. **Julia**: Version 1.6.7 is required.
+2. **Gurobi Optimizer**: A powerful optimization solver.
 
-Before using the edisgoOPF julia package for the first time you need to
-instantiate it. Therefore, in a terminal change directory to the edisgoOPF
-package located in eDisGo/edisgo/opf/edisgoOPF and call julia from there.
-Change to package mode by typing
+Installation Steps
+^^^^^^^^^^^^^^^^^^^
 
-.. code-block:: bash
-
-    ]
-
-Then activate the package:
-
-.. code-block:: bash
-
-    (v1.0) pkg> activate .
-
-And finally instantiate it:
-
-.. code-block:: bash
-
-    (SomeProject) pkg> instantiate
-
-.. _prerequisites:
-
-Additional linear solver
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-As with the default linear solver in Ipopt (local solver used in the OPF)
-the limit for prolem sizes is reached quite quickly, you may want to instead use
-the solver HSL_MA97.
-The steps required to set up HSL  are also described in the
-`Ipopt Documentation <https://coin-or.github.io/Ipopt/INSTALL.html#DOWNLOAD_HSL>`_.
-Here is a short version for reference:
-
-First, you need to obtain an academic license for HSL Solvers.
-Under https://licences.stfc.ac.uk/product/coin-hsl download the sources for Coin-HSL Full (Stable).
-You will need to provide an institutional e-mail to gain access.
-
-Unpack the tar.gz:
-
-.. code-block:: bash
-
-    tar -xvzf coinhsl-2014.01.10.tar.gz
-
-To install the solver, clone the Ipopt Third Party HSL tools:
-
-.. code-block:: bash
-
-    git clone https://github.com/coin-or-tools/ThirdParty-HSL.git
-    cd ThirdParty-HSL
+1. Install Julia 1.6.7
 
 
-Under `ThirdParty-HSL`, create a folder for the HSL sources named `coinhsl` and
-copy the contents of the HSL archive into it.
-Under Ubuntu, you'll need BLAS, LAPACK and GCC for Fortran. If you don't have them, install them via:
+Download Julia 1.6.7 from the `Julia LTS releases page <https://julialang.org/downloads/#long_term_support_release>`_.
 
-.. code-block:: bash
-
-    sudo apt-get install libblas-dev liblapack-dev gfortran
-
-You can then configure and install your HSL Solvers:
-
-.. code-block:: bash
-
-    ./configure
-    make
-    sudo make install
-
-To make Ipopt pick up the solver, you need to add it to your path.
-During install, there will be an output that tells you where the libraries have
-been put. Usually like this:
-
-.. code-block:: bash
-
-    Libraries have been installed in:
-        /usr/local/lib
+Install Julia by following the instructions in the `Julia installation guide <https://julialang.org/downloads/platform/#linux_and_freebsd>`_. Make sure to add Julia to your system path.
 
 
-Add this path to the variable `LD_LIBRARY_PATH`:
+2. Install Gurobi
 
-.. code-block:: bash
 
-    export LD_LIBRARY="/usr/local/bin":$LD_LIBRARY_PATH
-
-You might also want to add this to your .bashrc to make it persistent.
-
-For some reason, Ipopt looks for a library named `libhsl.so`, which is not what
-the file is named, so we'll also need to provide a symlink:
-
-.. code-block:: bash
-
-    cd /usr/local/lib
-    ln -s libcoinhsl.so libhsl.so
-
-MA97 should now work and can be called from Julia with:
-
-.. code-block:: julia
-
-    JuMP.setsolver(pm.model,IpoptSolver(linear_solver="ma97"))
+Follow the `Gurobi installation guide <https://support.gurobi.com/hc/en-us/articles/14799677517585-Getting-Started-with-Gurobi-Optimizer>`_ to install Gurobi and add it to your system path.
 
 Prerequisites
 -------------
@@ -188,8 +98,8 @@ Aside from grid topology data you may eventually need a dataset on future
 installation of power plants. You may therefore use the scenarios developed in
 the `open_eGo <https://openegoproject.wordpress.com>`_ project that
 are available in the
-`OpenEnergy DataBase (oedb) <https://openenergy-platform.org/dataedit/schemas>`_
-hosted on the `OpenEnergy Platform (OEP) <https://openenergy-platform.org/>`_.
+`OpenEnergy DataBase (oedb) <https://openenergyplatform.org/dataedit/schemas>`_
+hosted on the `OpenEnergy Platform (OEP) <https://openenergyplatform.org/>`_.
 eDisGo provides an interface to the oedb using the package
 `ego.io <https://github.com/openego/ego.io>`_. ego.io gives you a python
 SQL-Alchemy representations of the oedb and access to it by using the

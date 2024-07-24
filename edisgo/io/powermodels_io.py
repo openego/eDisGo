@@ -957,10 +957,16 @@ def _build_load(
             )
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
             p_d = -min(
-                [psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0], 0]
+                [
+                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0],
+                    np.float64(0.0),
+                ]
             )
             q_d = -max(
-                [psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0], 0]
+                [
+                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0],
+                    np.float64(0.0),
+                ]
             )
             pm["load"][str(stor_i + len(loads_df.index) + 1)] = {
                 "pd": p_d.round(20) / s_base,

@@ -382,6 +382,7 @@ class TestEDisGo:
         )
 
     @pytest.mark.slow
+    @pytest.mark.oedbtest
     def test_generator_import(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.import_generators("nep2035")
@@ -521,7 +522,7 @@ class TestEDisGo:
         )
         results = self.edisgo.reinforce(catch_convergence_problems=True)
         assert results.unresolved_issues.empty
-        assert len(results.grid_expansion_costs) == 132
+        assert len(results.grid_expansion_costs) == 134
         assert len(results.equipment_changes) == 218
         assert results.v_res.shape == (4, 142)
 
@@ -543,7 +544,7 @@ class TestEDisGo:
 
         results = edisgo_obj.results
 
-        assert len(results.grid_expansion_costs) == 445
+        assert len(results.grid_expansion_costs) == 454
         assert len(results.equipment_changes) == 892
         assert results.v_res.shape == (4, 148)
 

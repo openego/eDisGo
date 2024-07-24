@@ -74,7 +74,7 @@ def _timeindex_helper_func(
 def feedin_oedb_legacy(edisgo_object, timeindex=None):
     """
     Import feed-in time series data for wind and solar power plants from the
-    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
 
     Parameters
     ----------
@@ -158,7 +158,7 @@ def feedin_oedb(
 ):
     """
     Import feed-in time series data for wind and solar power plants from the
-    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
 
     Parameters
     ----------
@@ -319,7 +319,7 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
 def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
     """
     Get COP (coefficient of performance) time series data from the
-    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
 
     Parameters
     ----------
@@ -377,7 +377,7 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
 def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
     """
     Get heat demand profiles for heat pumps from the
-    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
 
     Heat demand data is returned for all heat pumps in the grid.
     For more information on how individual heat demand profiles are obtained see
@@ -498,7 +498,7 @@ def electricity_demand_oedb(
 ):
     """
     Get electricity demand profiles for all conventional loads from the
-    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
 
     Conventional loads comprise conventional electricity applications in the
     residential, CTS and industrial sector.
@@ -1191,7 +1191,7 @@ def get_residential_electricity_profiles_per_building(building_ids, scenario, en
         List of building IDs to retrieve electricity demand profiles for.
     scenario : str
         Scenario for which to retrieve demand data. Possible options
-        are 'eGon2035' and 'eGon100RE'.
+        are 'eGon2021', 'eGon2035' and 'eGon100RE'.
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
 
@@ -1220,30 +1220,21 @@ def get_residential_electricity_profiles_per_building(building_ids, scenario, en
             column factor.
 
         """
-        with session_scope_egon_data(engine) as session:
-            if scenario == "eGon2035":
-                query = session.query(
-                    egon_household_electricity_profile_in_census_cell.cell_id,
-                    egon_household_electricity_profile_in_census_cell.factor_2035.label(
-                        "factor"
-                    ),
-                ).filter(
-                    egon_household_electricity_profile_in_census_cell.cell_id.in_(
-                        zensus_ids
-                    )
-                )
-            else:
-                query = session.query(
-                    egon_household_electricity_profile_in_census_cell.cell_id,
-                    egon_household_electricity_profile_in_census_cell.factor_2050.label(
-                        "factor"
-                    ),
-                ).filter(
-                    egon_household_electricity_profile_in_census_cell.cell_id.in_(
-                        zensus_ids
-                    )
-                )
-        return pd.read_sql(query.statement, engine, index_col="cell_id")
+        if scenario == "eGon2021":
+            return pd.DataFrame(index=zensus_ids, data={"factor": 1.0})
+        else:
+            with session_scope_egon_data(engine) as session:
+                if scenario == "eGon2035":
+                    query = session.query(
+                        hh_profile.cell_id,
+                        hh_profile.factor_2035.label("factor"),
+                    ).filter(hh_profile.cell_id.in_(zensus_ids))
+                else:
+                    query = session.query(
+                        hh_profile.cell_id,
+                        hh_profile.factor_2050.label("factor"),
+                    ).filter(hh_profile.cell_id.in_(zensus_ids))
+            return pd.read_sql(query.statement, engine, index_col="cell_id")
 
     def _get_profile_ids_of_buildings(building_ids):
         """
@@ -1302,7 +1293,9 @@ def get_residential_electricity_profiles_per_building(building_ids, scenario, en
 
     saio.register_schema("demand", engine)
     from saio.demand import (
-        egon_household_electricity_profile_in_census_cell,
+        egon_household_electricity_profile_in_census_cell as hh_profile,
+    )
+    from saio.demand import (
         egon_household_electricity_profile_of_buildings,
         iee_household_load_profiles,
     )
@@ -1350,7 +1343,7 @@ def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
         List of industrial site and OSM IDs to retrieve electricity demand profiles for.
     scenario : str
         Scenario for which to retrieve demand data. Possible options
-        are 'eGon2035' and 'eGon100RE'.
+        are 'eGon2021', 'eGon2035' and 'eGon100RE'.
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
 

@@ -59,6 +59,7 @@ class TestTimeseriesImport:
         assert_index_equal(ind, given_index)
         assert_index_equal(ind_full, timeindex)
 
+    @pytest.mark.oedbtest
     def test_feedin_oedb_legacy(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         timeindex = pd.date_range("1/1/2010", periods=3000, freq="H")
@@ -268,6 +269,13 @@ class TestTimeseriesImport:
         assert df.shape == (8760, 1)
         assert np.isclose(df.loc[:, 442081].sum(), 3.20688, atol=1e-3)
 
+        # test with status quo
+        df = timeseries_import.get_residential_electricity_profiles_per_building(
+            [-1, 442081], "eGon2021", pytest.engine
+        )
+        assert df.shape == (8760, 1)
+        assert np.isclose(df.loc[:, 442081].sum(), 4.288845, atol=1e-3)
+
     @pytest.mark.local
     def test_get_industrial_electricity_profiles_per_site(self):
         # test with one site and one OSM area
@@ -283,3 +291,11 @@ class TestTimeseriesImport:
             [541658], "eGon2035", pytest.engine
         )
         assert df.shape == (8760, 1)
+
+        # test with status quo
+        df = timeseries_import.get_industrial_electricity_profiles_per_site(
+            [1, 541658], "eGon2021", pytest.engine
+        )
+        assert df.shape == (8760, 2)
+        assert np.isclose(df.loc[:, 1].sum(), 31655.640, atol=1e-3)
+        assert np.isclose(df.loc[:, 541658].sum(), 2910.816, atol=1e-3)
