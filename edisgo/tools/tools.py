@@ -202,7 +202,7 @@ def calculate_voltage_diff_per_line(
     cos_phi: float = 0.95,
 ) -> float | np.ndarray:
     """
-    Calculate the voltage drop across a line in kV.
+    Calculate the voltage difference across a line in kV.
 
     Parameters
     ----------
@@ -223,7 +223,7 @@ def calculate_voltage_diff_per_line(
     Returns
     -------
     float or array-like
-        Voltage drop in kV.
+        Voltage difference in kV.
     """
     sin_phi = np.sqrt(1 - cos_phi**2)
     voltage_diff = np.abs(
@@ -243,7 +243,7 @@ def voltage_diff_pu(
     sign: int = -1,
 ) -> float | np.ndarray:
     """
-    Calculate the voltage drop per unit of nominal voltage.
+    Calculate the voltage difference per unit of nominal voltage.
 
     Parameters
     ----------
@@ -267,7 +267,7 @@ def voltage_diff_pu(
     Returns
     -------
     float
-        Voltage drop in per unit of nominal voltage.
+        Voltage difference in per unit of nominal voltage.
     """
     # Calculate total resistance and reactance for the given length and
     # number of parallel cables
@@ -279,10 +279,10 @@ def voltage_diff_pu(
         s_max, r_total, x_total, v_nom, sign=sign, cos_phi=cos_phi
     )
 
-    # Convert voltage drop to per unit of nominal voltage
-    voltage_drop_pu = delta_v / v_nom
+    # Convert voltage difference to per unit of nominal voltage
+    voltage_difference_pu = delta_v / v_nom
 
-    return voltage_drop_pu
+    return voltage_difference_pu
 
 
 def select_cable(
@@ -313,7 +313,7 @@ def select_cable(
     length : float
         Length of the cable in km. Default: 0.
     max_voltage_diff : float
-        Maximum voltage drop in pu. Default: None.
+        Maximum voltage difference in pu. Default: None.
     max_cables : int
         Maximum number of parallel cables to consider. Default is 7.
     cos_phi : float

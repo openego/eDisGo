@@ -59,7 +59,7 @@ class TestTools:
             data, np.array([correct_value * 2, correct_value * 2]), rtol=1e-5
         )
 
-    def test_voltage_drop_pu(self):
+    def test_voltage_diff_pu(self):
         data = tools.voltage_diff_pu(0.1, 0.350, 1, 1, 20, 50, 0.9, -1)
         correct_value = 0.52589253567891375 * 1e-2
         assert np.isclose(data, correct_value)
