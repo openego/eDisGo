@@ -4,6 +4,8 @@ import os
 import subprocess
 import sys
 
+from typing import List, Optional
+
 import networkx as nx
 import numpy as np
 
@@ -13,20 +15,21 @@ from edisgo.io.powermodels_io import from_powermodels
 logger = logging.getLogger(__name__)
 
 
-def find_meshes(edisgo_obj) -> list:
+def find_meshes(edisgo_obj) -> Optional[List[List[int]]]:
     """
     Find all meshes in the grid.
 
     Parameters
     ----------
-    edisgo_obj : :class:`~edisgo.EDisGo`
+    edisgo_obj : EDisGo
         EDisGo object.
 
     Returns
     -------
-    meshes : list
+    Optional[List[List[int]]]
         List of all meshes in the grid.
-
+        Each mesh is represented as a list of node indices.
+        If no meshes are found, None is returned.
     """
     meshes = nx.cycle_basis(edisgo_obj.to_graph())
     if meshes:
@@ -41,16 +44,16 @@ def find_meshes(edisgo_obj) -> list:
 
 def pm_optimize(
     edisgo_obj,
-    s_base=1,
-    flexible_cps=None,
-    flexible_hps=None,
-    flexible_loads=None,
-    flexible_storage_units=None,
-    opf_version=1,
-    method="soc",
-    warm_start=False,
-    silence_moi=False,
-):
+    s_base: int = 1,
+    flexible_cps: Optional[np.ndarray] = None,
+    flexible_hps: Optional[np.ndarray] = None,
+    flexible_loads: Optional[np.ndarray] = None,
+    flexible_storage_units: Optional[np.ndarray] = None,
+    opf_version: int = 1,
+    method: str = "soc",
+    warm_start: bool = False,
+    silence_moi: bool = False,
+) -> None:
     """
     Run OPF for edisgo object in julia subprocess and write results of OPF to edisgo
     object. Results of OPF are time series of operation schedules of flexibilities.
