@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def select_worstcase_snapshots(edisgo_obj):
+def select_worstcase_snapshots(edisgo_obj: EDisGo) -> dict[str, pd.Timestamp]:
     """
     Select two worst-case snapshots from time series
 
@@ -63,7 +63,11 @@ def select_worstcase_snapshots(edisgo_obj):
     return timestamp
 
 
-def calculate_line_reactance(line_inductance_per_km, line_length, num_parallel):
+def calculate_line_reactance(
+    line_inductance_per_km: float | np.ndarray,
+    line_length: float,
+    num_parallel: int,
+) -> float | np.ndarray:
     """
     Calculates line reactance in Ohm.
 
@@ -85,7 +89,11 @@ def calculate_line_reactance(line_inductance_per_km, line_length, num_parallel):
     return line_inductance_per_km / 1e3 * line_length * 2 * pi * 50 / num_parallel
 
 
-def calculate_line_resistance(line_resistance_per_km, line_length, num_parallel):
+def calculate_line_resistance(
+    line_resistance_per_km: float | np.ndarray,
+    line_length: float,
+    num_parallel: int,
+) -> float | np.ndarray:
     """
     Calculates line resistance in Ohm.
 
@@ -107,7 +115,9 @@ def calculate_line_resistance(line_resistance_per_km, line_length, num_parallel)
     return line_resistance_per_km * line_length / num_parallel
 
 
-def calculate_line_susceptance(line_capacitance_per_km, line_length, num_parallel):
+def calculate_line_susceptance(
+    line_capacitance_per_km: float, line_length: float, num_parallel: int
+) -> float:
     """
     Calculates line shunt susceptance in Siemens.
 
@@ -129,7 +139,11 @@ def calculate_line_susceptance(line_capacitance_per_km, line_length, num_paralle
     return line_capacitance_per_km / 1e6 * line_length * 2 * pi * 50 * num_parallel
 
 
-def calculate_apparent_power(nominal_voltage, current, num_parallel):
+def calculate_apparent_power(
+    nominal_voltage: float | np.ndarray,
+    current: float | np.ndarray,
+    num_parallel: int | np.ndarray,
+) -> float | np.ndarray:
     """
     Calculates apparent power in MVA from given voltage and current.
 
@@ -151,7 +165,9 @@ def calculate_apparent_power(nominal_voltage, current, num_parallel):
     return sqrt(3) * nominal_voltage * current * num_parallel
 
 
-def drop_duplicated_indices(dataframe, keep="last"):
+def drop_duplicated_indices(
+    dataframe: pd.DataFrame, keep: str = "last"
+) -> pd.DataFrame:
     """
     Drop rows of duplicate indices in dataframe.
 
@@ -172,7 +188,7 @@ def drop_duplicated_indices(dataframe, keep="last"):
     return dataframe[~dataframe.index.duplicated(keep=keep)]
 
 
-def drop_duplicated_columns(df, keep="last"):
+def drop_duplicated_columns(df: pd.DataFrame, keep: str = "last") -> pd.DataFrame:
     """
     Drop columns of dataframe that appear more than once.
 
@@ -263,7 +279,7 @@ def select_cable(edisgo_obj, level, apparent_power):
     return cable_type, cable_count
 
 
-def get_path_length_to_station(edisgo_obj):
+def get_path_length_to_station(edisgo_obj: EDisGo) -> pd.Series:
     """
     Determines path length from each bus to HV-MV station.
 
@@ -301,7 +317,9 @@ def get_path_length_to_station(edisgo_obj):
     return edisgo_obj.topology.buses_df.path_length_to_station
 
 
-def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
+def get_downstream_buses(
+    edisgo_obj: EDisGo, comp_name: str, comp_type: str = "bus"
+) -> list[str]:
     """
     Returns all buses downstream (farther away from station) of the given bus or line.
 
@@ -361,7 +379,9 @@ def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
     return [bus]
 
 
-def assign_voltage_level_to_component(df, buses_df):
+def assign_voltage_level_to_component(
+    df: pd.DataFrame, buses_df: pd.DataFrame
+) -> pd.DataFrame:
     """
     Adds column with specification of voltage level component is in.
 
@@ -395,7 +415,9 @@ def assign_voltage_level_to_component(df, buses_df):
     return df
 
 
-def determine_grid_integration_voltage_level(edisgo_object, power):
+def determine_grid_integration_voltage_level(
+    edisgo_object: EDisGo, power: float
+) -> int:
     """
     Gives voltage level component should be integrated into based on its nominal power.
 
@@ -446,7 +468,7 @@ def determine_grid_integration_voltage_level(edisgo_object, power):
     return voltage_level
 
 
-def determine_bus_voltage_level(edisgo_object, bus_name):
+def determine_bus_voltage_level(edisgo_object: EDisGo, bus_name: str) -> int:
     """
     Gives voltage level as integer from 4 to 7 of given bus.
 
@@ -566,7 +588,7 @@ def get_weather_cells_intersecting_with_grid_district(
     )
 
 
-def get_directory_size(start_dir):
+def get_directory_size(start_dir: str) -> int:
     """
     Calculates the size of all files within the start path.
 
@@ -599,7 +621,7 @@ def get_directory_size(start_dir):
     return total_size
 
 
-def get_files_recursive(path, files=None):
+def get_files_recursive(path: str, files: list[str] | None = None) -> list[str]:
     """
     Recursive function to get all files in a given path and its sub directories.
 
@@ -626,7 +648,9 @@ def get_files_recursive(path, files=None):
     return files
 
 
-def calculate_impedance_for_parallel_components(parallel_components, pu=False):
+def calculate_impedance_for_parallel_components(
+    parallel_components: pd.DataFrame, pu: bool = False
+) -> pd.Series:
     """
     Method to calculate parallel impedance and power of parallel elements.
 
@@ -674,10 +698,7 @@ def calculate_impedance_for_parallel_components(parallel_components, pu=False):
         )
 
 
-def add_line_susceptance(
-    edisgo_obj,
-    mode="mv_b",
-):
+def add_line_susceptance(edisgo_obj: EDisGo, mode: str = "mv_b") -> EDisGo:
     """
     Adds line susceptance information in Siemens to lines in existing grids.
 
@@ -747,7 +768,9 @@ def add_line_susceptance(
     return edisgo_obj
 
 
-def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=None):
+def aggregate_district_heating_components(
+    edisgo_obj: EDisGo, feedin_district_heating: pd.DataFrame | None = None
+) -> None:
     """
     Aggregate PtH components that feed into the same district heating network.
 
@@ -877,16 +900,16 @@ def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=No
 
 
 def reduce_timeseries_data_to_given_timeindex(
-    edisgo_obj,
-    timeindex,
-    freq="1H",
-    timeseries=True,
-    electromobility=True,
-    save_ev_soc_initial=True,
-    heat_pump=True,
-    dsm=True,
-    overlying_grid=True,
-):
+    edisgo_obj: EDisGo,
+    timeindex: pd.DatetimeIndex,
+    freq: str | None = "1H",
+    timeseries: bool = True,
+    electromobility: bool = True,
+    save_ev_soc_initial: bool = True,
+    heat_pump: bool = True,
+    dsm: bool = True,
+    overlying_grid: bool = True,
+) -> None:
     """
     Reduces timeseries data in EDisGo object to given time index.
 
@@ -1032,11 +1055,11 @@ def reduce_timeseries_data_to_given_timeindex(
 
 def resample(
     object,
-    freq_orig,
+    freq_orig: pd.Timedelta,
     method: str = "ffill",
     freq: str | pd.Timedelta = "15min",
-    attr_to_resample=None,
-):
+    attr_to_resample: list[str] | None = None,
+) -> None:
     """
     Resamples time series data to a desired resolution.
 
@@ -1173,7 +1196,7 @@ def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.Da
     return df
 
 
-def get_year_based_on_timeindex(edisgo_obj):
+def get_year_based_on_timeindex(edisgo_obj: EDisGo) -> int | None:
     """
     Checks if :py:attr:`~.network.timeseries.TimeSeries.timeindex` is already set and
     if so, returns the year of the time index.
@@ -1196,7 +1219,7 @@ def get_year_based_on_timeindex(edisgo_obj):
         return year[0]
 
 
-def get_year_based_on_scenario(scenario):
+def get_year_based_on_scenario(scenario: str) -> int | None:
     """
     Returns the year the given scenario was set up for.
 
