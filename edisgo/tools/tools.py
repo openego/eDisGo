@@ -193,37 +193,57 @@ def drop_duplicated_columns(df, keep="last"):
     return df.loc[:, ~df.columns.duplicated(keep=keep)]
 
 
-def calculate_voltage_drop(s_max, r_total, x_total, v_nom, cos_phi=0.95):
+def calculate_voltage_diff_per_line(
+    s_max: float | np.ndarray,
+    r_total: float | np.ndarray,
+    x_total: float | np.ndarray,
+    v_nom: float | np.ndarray,
+    sign: int = -1,
+    cos_phi: float = 0.95,
+) -> float | np.ndarray:
     """
-    Calculate voltage drop in kV.
+    Calculate the voltage drop across a line in kV.
 
     Parameters
     ----------
     s_max : float or array-like
-        Apparent power in kVA.
+        Apparent power the cable must carry in MVA.
     r_total : float or array-like
-        Total resistance in Ohm.
+        Total resistance in Ohms.
     x_total : float or array-like
-        Total reactance in Ohm.
+        Total reactance in Ohms.
     v_nom : float or array-like
         Nominal voltage in kV.
-    cos_phi : float
-        Cosine phi of the load or generator. Default: 0.95.
+    sign : int, optional
+        Sign of the reactance. -1 for inductive and +1 for capacitive. Default is -1.
+    cos_phi : float, optional
+        Power factor (cosine of the phase angle) of the load or generator.
+        Default is 0.95.
+
     Returns
     -------
-    float
+    float or array-like
         Voltage drop in kV.
     """
-    return np.abs(
-        s_max / v_nom * (r_total * cos_phi + x_total * sqrt(1 - (cos_phi) ** 2)) * 1e-3
+    sin_phi = np.sqrt(1 - cos_phi**2)
+    voltage_diff = np.abs(
+        (s_max * 1e6 / (v_nom * 1e3)) * (r_total * cos_phi + sign * x_total * sin_phi)
     )
+    return voltage_diff / 1e3  # Convert to kV
 
 
-def voltage_drop_percentage(
-    R_per_km, L_per_km, length, num_parallel, v_nom, s_max, cos_phi=0.95
-):
+def voltage_diff_pu(
+    R_per_km: float | np.ndarray,
+    L_per_km: float | np.ndarray,
+    length: float,
+    num_parallel: int,
+    v_nom: float | np.ndarray,
+    s_max: float | np.ndarray,
+    cos_phi: float = 0.95,
+    sign: int = -1,
+) -> float | np.ndarray:
     """
-    Calculate the voltage drop percentage.
+    Calculate the voltage drop per unit of nominal voltage.
 
     Parameters
     ----------
@@ -238,27 +258,43 @@ def voltage_drop_percentage(
     v_nom : int
         Nominal voltage in kV.
     s_max : float
-        Apparent power in kVA.
-    cos_phi : float
+        Apparent power the cable must carry in MVA.
+    cos_phi : float, optional
         Cosine phi of the load or generator. Default: 0.95.
+    sign : int, optional
+        Sign of the reactance. -1 for inductive and +1 for capacitive. Default is -1.
+
     Returns
     -------
     float
-        Voltage drop in percentage of nominal voltage.
+        Voltage drop in per unit of nominal voltage.
     """
-    # Calculate resistance and reactance for the given length and
+    # Calculate total resistance and reactance for the given length and
     # number of parallel cables
     r_total = calculate_line_resistance(R_per_km, length, num_parallel)
     x_total = calculate_line_reactance(L_per_km, length, num_parallel)
 
     # Calculate the voltage drop or increase
-    delta_v = calculate_voltage_drop(s_max, r_total, x_total, v_nom, cos_phi)
-    return delta_v / v_nom
+    delta_v = calculate_voltage_diff_per_line(
+        s_max, r_total, x_total, v_nom, sign=sign, cos_phi=cos_phi
+    )
+
+    # Convert voltage drop to per unit of nominal voltage
+    voltage_drop_pu = delta_v / v_nom
+
+    return voltage_drop_pu
 
 
 def select_cable(
-    edisgo_obj, level, apparent_power, length=0, max_voltage_drop=None, max_cables=7
-):
+    edisgo_obj: EDisGo,
+    level: str,
+    apparent_power: float,
+    length: float = 0,
+    max_voltage_diff: float | None = None,
+    max_cables: int = 7,
+    cos_phi: float | None = 0.95,
+    inductive_reactance: bool = True,
+) -> tuple[pd.Series, int]:
     """
     Selects suitable cable type and quantity using given apparent power.
 
@@ -274,6 +310,17 @@ def select_cable(
         'lv'.
     apparent_power : float
         Apparent power the cable must carry in MVA.
+    length : float
+        Length of the cable in km. Default: 0.
+    max_voltage_diff : float
+        Maximum voltage drop in pu. Default: None.
+    max_cables : int
+        Maximum number of parallel cables to consider. Default is 7.
+    cos_phi : float
+        Cosine phi of the load or generator. Default: 0.95.
+    inductive_reactance : bool
+        If True, inductive reactance is considered. Default
+        is True. If False, capacitive reactance is considered.
 
     Returns
     -------
@@ -284,20 +331,25 @@ def select_cable(
         Number of necessary parallel cables.
 
     """
-
+    if not cos_phi:
+        cos_phi = 0.95
+    if inductive_reactance:
+        sign = -1
+    else:
+        sign = 1
     if level == "mv":
         cable_data = edisgo_obj.topology.equipment_data["mv_cables"]
         available_cables = cable_data[
             cable_data["U_n"] == edisgo_obj.topology.mv_grid.nominal_voltage
         ]
-        if not max_voltage_drop:
-            max_voltage_drop = edisgo_obj.config._data["new_components"][
+        if not max_voltage_diff:
+            max_voltage_diff = edisgo_obj.config["grid_connection"][
                 "mv_max_voltage_deviation"
             ]
     elif level == "lv":
         available_cables = edisgo_obj.topology.equipment_data["lv_cables"]
-        if not max_voltage_drop:
-            max_voltage_drop = edisgo_obj.config._data["new_components"][
+        if not max_voltage_diff:
+            max_voltage_diff = edisgo_obj.config["grid_connection"][
                 "lv_max_voltage_deviation"
             ]
     else:
@@ -313,16 +365,17 @@ def select_cable(
     ]
     if length != 0:
         suitable_cables = suitable_cables[
-            voltage_drop_percentage(
+            voltage_diff_pu(
                 R_per_km=available_cables["R_per_km"],
                 L_per_km=available_cables["L_per_km"],
                 length=length,
                 num_parallel=cable_count,
                 v_nom=available_cables["U_n"],
                 s_max=apparent_power,
-                cos_phi=0.9,
+                cos_phi=cos_phi,
+                sign=sign,
             )
-            < max_voltage_drop
+            < max_voltage_diff
         ]
 
     # increase cable count until appropriate cable type is found
@@ -336,16 +389,17 @@ def select_cable(
         ]
         if length != 0:
             suitable_cables = suitable_cables[
-                voltage_drop_percentage(
+                voltage_diff_pu(
                     R_per_km=available_cables["R_per_km"],
                     L_per_km=available_cables["L_per_km"],
                     length=length,
                     num_parallel=cable_count,
                     v_nom=available_cables["U_n"],
                     s_max=apparent_power,
-                    cos_phi=0.9,
+                    cos_phi=cos_phi,
+                    sign=sign,
                 )
-                < max_voltage_drop
+                < max_voltage_diff
             ]
     if suitable_cables.empty:
         raise exceptions.MaximumIterationError(
