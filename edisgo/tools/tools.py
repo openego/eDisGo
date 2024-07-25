@@ -226,9 +226,10 @@ def calculate_voltage_diff_per_line(
         Voltage difference in kV.
     """
     sin_phi = np.sqrt(1 - cos_phi**2)
+    # Calculate the voltage difference using the formula from VDE-AR-N 4105
     voltage_diff = np.abs(
         (s_max * 1e6 / (v_nom * 1e3)) * (r_total * cos_phi + sign * x_total * sin_phi)
-    )
+    )  # in V
     return voltage_diff / 1e3  # Convert to kV
 
 
