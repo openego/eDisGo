@@ -9,6 +9,7 @@ import shutil
 
 from numbers import Number
 from pathlib import PurePath
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -59,6 +60,10 @@ if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    import networkx as nx
+    import pypsa
 
 
 class EDisGo:
@@ -228,7 +233,7 @@ class EDisGo:
     def config(self, kwargs):
         self._config = Config(**kwargs)
 
-    def import_ding0_grid(self, path, legacy_ding0_grids=True):
+    def import_ding0_grid(self, path: str, legacy_ding0_grids: bool = True) -> None:
         """
         Import ding0 topology data from csv files in the format as
         `Ding0 <https://github.com/openego/ding0>`_ provides it.
@@ -244,7 +249,7 @@ class EDisGo:
         if path is not None:
             import_ding0_grid(path, self, legacy_ding0_grids)
 
-    def set_timeindex(self, timeindex):
+    def set_timeindex(self, timeindex: pd.DatetimeIndex) -> None:
         """
         Sets :py:attr:`~.network.timeseries.TimeSeries.timeindex` all time-dependent
         attributes are indexed by.
@@ -262,13 +267,13 @@ class EDisGo:
 
     def set_time_series_manual(
         self,
-        generators_p=None,
-        loads_p=None,
-        storage_units_p=None,
-        generators_q=None,
-        loads_q=None,
-        storage_units_q=None,
-    ):
+        generators_p: pd.DataFrame = None,
+        loads_p: pd.DataFrame = None,
+        storage_units_p: pd.DataFrame = None,
+        generators_q: pd.DataFrame = None,
+        loads_q: pd.DataFrame = None,
+        storage_units_q: pd.DataFrame = None,
+    ) -> None:
         """
         Sets given component time series.
 
@@ -334,11 +339,11 @@ class EDisGo:
 
     def set_time_series_worst_case_analysis(
         self,
-        cases=None,
-        generators_names=None,
-        loads_names=None,
-        storage_units_names=None,
-    ):
+        cases: str | list[str] = None,
+        generators_names: list[str] = None,
+        loads_names: list[str] = None,
+        storage_units_names: list[str] = None,
+    ) -> None:
         """
         Sets demand and feed-in of all loads, generators and storage units for the
         specified worst cases.
@@ -373,16 +378,16 @@ class EDisGo:
 
     def set_time_series_active_power_predefined(
         self,
-        fluctuating_generators_ts=None,
-        fluctuating_generators_names=None,
-        dispatchable_generators_ts=None,
-        dispatchable_generators_names=None,
-        conventional_loads_ts=None,
-        conventional_loads_names=None,
-        charging_points_ts=None,
-        charging_points_names=None,
+        fluctuating_generators_ts: str | pd.DataFrame | None = None,
+        fluctuating_generators_names: list[str] | None = None,
+        dispatchable_generators_ts: pd.DataFrame | None = None,
+        dispatchable_generators_names: list[str] | None = None,
+        conventional_loads_ts: str | pd.DataFrame | None = None,
+        conventional_loads_names: list[str] | None = None,
+        charging_points_ts: pd.DataFrame | None = None,
+        charging_points_names: list[str] | None = None,
         **kwargs,
-    ):
+    ) -> None:
         """
         Uses predefined feed-in or demand profiles to set active power time series.
 
@@ -603,11 +608,11 @@ class EDisGo:
 
     def set_time_series_reactive_power_control(
         self,
-        control="fixed_cosphi",
-        generators_parametrisation="default",
-        loads_parametrisation="default",
-        storage_units_parametrisation="default",
-    ):
+        control: str = "fixed_cosphi",
+        generators_parametrisation: str | pd.DataFrame = "default",
+        loads_parametrisation: str | pd.DataFrame = "default",
+        storage_units_parametrisation: str | pd.DataFrame = "default",
+    ) -> None:
         """
         Set reactive power time series of components.
 
@@ -689,8 +694,12 @@ class EDisGo:
             raise ValueError("'control' must be 'fixed_cosphi'.")
 
     def to_pypsa(
-        self, mode=None, timesteps=None, check_edisgo_integrity=False, **kwargs
-    ):
+        self,
+        mode: str | None = None,
+        timesteps: pd.DatetimeIndex | pd.Timestamp | None = None,
+        check_edisgo_integrity: bool = False,
+        **kwargs,
+    ) -> pypsa.Network:
         """
         Convert grid to :pypsa:`PyPSA.Network<network>` representation.
 
@@ -788,13 +797,13 @@ class EDisGo:
 
     def to_powermodels(
         self,
-        s_base=1,
-        flexible_cps=None,
-        flexible_hps=None,
-        flexible_loads=None,
-        flexible_storage_units=None,
-        opf_version=1,
-    ):
+        s_base: int = 1,
+        flexible_cps: np.ndarray | None = None,
+        flexible_hps: np.ndarray | None = None,
+        flexible_loads: np.ndarray | None = None,
+        flexible_storage_units: np.ndarray | None = None,
+        opf_version: int = 1,
+    ) -> dict:
         """
         Convert eDisGo representation of the network topology and timeseries to
         PowerModels network data format.
@@ -840,19 +849,19 @@ class EDisGo:
 
     def pm_optimize(
         self,
-        s_base=1,
-        flexible_cps=None,
-        flexible_hps=None,
-        flexible_loads=None,
-        flexible_storage_units=None,
-        opf_version=1,
-        method="soc",
-        warm_start=False,
-        silence_moi=False,
-        save_heat_storage=True,
-        save_slack_gen=True,
-        save_slacks=True,
-    ):
+        s_base: int = 1,
+        flexible_cps: np.ndarray | None = None,
+        flexible_hps: np.ndarray | None = None,
+        flexible_loads: np.ndarray | None = None,
+        flexible_storage_units: np.ndarray | None = None,
+        opf_version: int = 1,
+        method: str = "soc",
+        warm_start: bool = False,
+        silence_moi: bool = False,
+        save_heat_storage: bool = True,
+        save_slack_gen: bool = True,
+        save_slacks: bool = True,
+    ) -> None:
         """
         Run OPF in julia subprocess and write results of OPF back to edisgo object.
 
@@ -913,7 +922,7 @@ class EDisGo:
             silence_moi=silence_moi,
         )
 
-    def to_graph(self):
+    def to_graph(self) -> nx.Graph:
         """
         Returns networkx graph representation of the grid.
 
@@ -928,7 +937,9 @@ class EDisGo:
 
         return self.topology.to_graph()
 
-    def import_generators(self, generator_scenario=None, **kwargs):
+    def import_generators(
+        self, generator_scenario: str | None = None, **kwargs
+    ) -> None:
         """
         Gets generator park for specified scenario and integrates generators into grid.
 
@@ -1456,11 +1467,11 @@ class EDisGo:
 
     def add_component(
         self,
-        comp_type,
-        ts_active_power=None,
-        ts_reactive_power=None,
+        comp_type: str,
+        ts_active_power: pd.Series | None = None,
+        ts_reactive_power: pd.Series | str | None = None,
         **kwargs,
-    ):
+    ) -> str:
         """
         Adds single component to network.
 
@@ -1533,7 +1544,7 @@ class EDisGo:
         #    at a time, change topology.add_load etc. to add_loads, where
         #    lists of parameters can be inserted
 
-        def _get_q_default_df(comp_name):
+        def _get_q_default_df(comp_name: str) -> pd.DataFrame:
             return pd.DataFrame(
                 {
                     "components": [[comp_name]],
@@ -1608,14 +1619,14 @@ class EDisGo:
 
     def integrate_component_based_on_geolocation(
         self,
-        comp_type,
-        geolocation,
-        voltage_level=None,
-        add_ts=True,
-        ts_active_power=None,
-        ts_reactive_power=None,
+        comp_type: str,
+        geolocation: Point | tuple[float, float],
+        voltage_level: int | None = None,
+        add_ts: bool = True,
+        ts_active_power: pd.Series | None = None,
+        ts_reactive_power: pd.Series | None = None,
         **kwargs,
-    ):
+    ) -> str:
         """
         Adds single component to topology based on geolocation.
 
