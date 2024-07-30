@@ -14,7 +14,7 @@ import saio
 
 from sqlalchemy.engine.base import Engine
 
-from edisgo.flex_opt import exceptions
+from edisgo.flex_opt import exceptions, q_control
 from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
 from edisgo.tools import session_scope
 
@@ -198,8 +198,8 @@ def calculate_voltage_diff_per_line(
     r_total: float | np.ndarray,
     x_total: float | np.ndarray,
     v_nom: float | np.ndarray,
-    sign: int = -1,
-    cos_phi: float = 0.95,
+    reactive_power_mode: str = "inductive",
+    power_factor: float = 0.95,
 ) -> float | np.ndarray:
     """
     Calculate the voltage difference across a line in kV.
@@ -209,14 +209,14 @@ def calculate_voltage_diff_per_line(
     s_max : float or array-like
         Apparent power the cable must carry in MVA.
     r_total : float or array-like
-        Total resistance in Ohms.
+        Total resistance of the line in Ohms.
     x_total : float or array-like
-        Total reactance in Ohms.
+        Total reactance of the line in Ohms.
     v_nom : float or array-like
-        Nominal voltage in kV.
+        Nominal voltage of the line in kV.
     sign : int, optional
         Sign of the reactance. -1 for inductive and +1 for capacitive. Default is -1.
-    cos_phi : float, optional
+    power_factor : float, optional
         Power factor (cosine of the phase angle) of the load or generator.
         Default is 0.95.
 
@@ -225,12 +225,13 @@ def calculate_voltage_diff_per_line(
     float or array-like
         Voltage difference in kV.
     """
-    sin_phi = np.sqrt(1 - cos_phi**2)
+    sign = q_control.get_q_sign_generator(reactive_power_mode)
+    sin_phi = np.sqrt(1 - power_factor**2)
     # Calculate the voltage difference using the formula from VDE-AR-N 4105
-    voltage_diff = np.abs(
-        (s_max * 1e6 / (v_nom * 1e3)) * (r_total * cos_phi + sign * x_total * sin_phi)
-    )  # in V
-    return voltage_diff / 1e3  # Convert to kV
+    voltage_diff = (s_max / (v_nom)) * (
+        r_total * power_factor + sign * x_total * sin_phi
+    )
+    return voltage_diff  # in kV
 
 
 def voltage_diff_pu(
@@ -240,8 +241,8 @@ def voltage_diff_pu(
     num_parallel: int,
     v_nom: float | np.ndarray,
     s_max: float | np.ndarray,
-    cos_phi: float = 0.95,
-    sign: int = -1,
+    power_factor: float = 0.95,
+    reactive_power_mode: str = "inductive",
 ) -> float | np.ndarray:
     """
     Calculate the voltage difference per unit of nominal voltage.
@@ -260,7 +261,7 @@ def voltage_diff_pu(
         Nominal voltage in kV.
     s_max : float
         Apparent power the cable must carry in MVA.
-    cos_phi : float, optional
+    power_factor : float, optional
         Cosine phi of the load or generator. Default: 0.95.
     sign : int, optional
         Sign of the reactance. -1 for inductive and +1 for capacitive. Default is -1.
@@ -277,7 +278,12 @@ def voltage_diff_pu(
 
     # Calculate the voltage drop or increase
     delta_v = calculate_voltage_diff_per_line(
-        s_max, r_total, x_total, v_nom, sign=sign, cos_phi=cos_phi
+        s_max,
+        r_total,
+        x_total,
+        v_nom,
+        reactive_power_mode=reactive_power_mode,
+        power_factor=power_factor,
     )
 
     # Convert voltage difference to per unit of nominal voltage
@@ -293,15 +299,17 @@ def select_cable(
     length: float = 0,
     max_voltage_diff: float | None = None,
     max_cables: int = 7,
-    cos_phi: float | None = 0.95,
-    inductive_reactance: bool = True,
+    power_factor: float | None = None,
+    component_type: str | None = None,
+    reactive_power_mode: str = "inductive",
 ) -> tuple[pd.Series, int]:
     """
-    Selects suitable cable type and quantity using given apparent power.
+    Selects suitable cable type and quantity based on apparent power and
+    voltage deviation.
 
-    Cable is selected to be able to carry the given `apparent_power`, no load
-    factor is considered. Overhead lines are not considered in choosing a
-    suitable cable.
+    The cable is selected to carry the given `apparent_power` and to ensure
+    acceptable voltage deviation over the cable length. No load factor is
+    considered. Overhead lines are not considered in choosing a suitable cable.
 
     Parameters
     ----------
@@ -314,30 +322,37 @@ def select_cable(
     length : float
         Length of the cable in km. Default: 0.
     max_voltage_diff : float
-        Maximum voltage difference in pu. Default: None.
+        Maximum allowed voltage difference (p.u. of nominal voltage).
+        If None, it defaults to the value specified in the configuration file
+        under the `grid_connection` section for the respective voltage level.
+        Default: None.
     max_cables : int
-        Maximum number of parallel cables to consider. Default is 7.
-    cos_phi : float
-        Cosine phi of the load or generator. Default: 0.95.
-    inductive_reactance : bool
-        If True, inductive reactance is considered. Default
-        is True. If False, capacitive reactance is considered.
+        Maximum number of cables to consider. Default: 7.
+    power_factor : float
+        Power factor of the load.
+    component_type : str
+        Type of the component to be connected, used to obtain the default power factor
+        from the configuration.
+        possible options are 'gen', 'load', 'cp', 'hp'
+    reactive_power_mode : str
+        Mode of the reactive power. Default: 'inductive'
 
     Returns
     -------
-    :pandas:`pandas.Series<Series>`
-        Series with attributes of selected cable as in equipment data and
-        cable type as series name.
-    int
-        Number of necessary parallel cables.
-
+    tuple[pd.Series, int]
+        A tuple containing the selected cable type and the quantity needed.
     """
-    if not cos_phi:
-        cos_phi = 0.95
-    if inductive_reactance:
-        sign = -1
+    if component_type is None:
+        component_type = level + "_load"
+    elif component_type in ["gen", "load", "cp", "hp"]:
+        component_type = level + "_" + component_type
     else:
-        sign = 1
+        raise ValueError(
+            "Specified component type is not valid. "
+            "Must either be 'gen', 'load', 'cp' or 'hp'."
+        )
+    if power_factor is None:
+        power_factor = edisgo_obj.config["reactive_power_factor"][component_type]
     if level == "mv":
         cable_data = edisgo_obj.topology.equipment_data["mv_cables"]
         available_cables = cable_data[
@@ -373,8 +388,8 @@ def select_cable(
                 num_parallel=cable_count,
                 v_nom=available_cables["U_n"],
                 s_max=apparent_power,
-                cos_phi=cos_phi,
-                sign=sign,
+                power_factor=power_factor,
+                reactive_power_mode=reactive_power_mode,
             )
             < max_voltage_diff
         ]
@@ -397,8 +412,8 @@ def select_cable(
                     num_parallel=cable_count,
                     v_nom=available_cables["U_n"],
                     s_max=apparent_power,
-                    cos_phi=cos_phi,
-                    sign=sign,
+                    power_factor=power_factor,
+                    reactive_power_mode=reactive_power_mode,
                 )
                 < max_voltage_diff
             ]
