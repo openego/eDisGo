@@ -183,14 +183,49 @@ class TestTools:
             self.edisgo,
             "lv",
             0.18,
-            1,
+            length=1,
             max_voltage_diff=0.01,
             max_cables=100,
-            cos_phi=1,
-            inductive_reactance=False,
+            power_factor=1,
+            reactive_power_mode="inductive",
         )
         assert cable_data.name == "NAYY 4x1x300"
         assert num_parallel_cables == 12
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo, "lv", 0.18, length=1
+        )
+        assert cable_data.name == "NAYY 4x1x300"
+        assert num_parallel_cables == 3
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo,
+            "lv",
+            0.18,
+            length=1,
+            max_voltage_diff=0.01,
+            max_cables=100,
+            power_factor=None,
+            reactive_power_mode="inductive",
+            component_type="gen",
+        )
+        assert cable_data.name == "NAYY 4x1x300"
+        assert num_parallel_cables == 8
+        try:
+            cable_data, num_parallel_cables = tools.select_cable(
+                self.edisgo,
+                "lv",
+                0.18,
+                length=1,
+                max_voltage_diff=0.01,
+                max_cables=100,
+                power_factor=None,
+                reactive_power_mode="inductive",
+                component_type="fail",
+            )
+        except ValueError as e:
+            assert (
+                str(e) == "Specified component type is not valid. "
+                "Must either be 'gen', 'load', 'cp' or 'hp'."
+            )
 
     def test_get_downstream_buses(self):
         # ######## test with LV bus ########
