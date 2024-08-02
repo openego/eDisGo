@@ -200,6 +200,7 @@ def calculate_voltage_diff_per_line(
     v_nom: float | np.ndarray,
     reactive_power_mode: str = "inductive",
     power_factor: float = 0.95,
+    component_type: str = "load",
 ) -> float | np.ndarray:
     """
     Calculate the voltage difference across a line in kV.
@@ -214,18 +215,28 @@ def calculate_voltage_diff_per_line(
         Total reactance of the line in Ohms.
     v_nom : float or array-like
         Nominal voltage of the line in kV.
-    sign : int, optional
-        Sign of the reactance. -1 for inductive and +1 for capacitive. Default is -1.
+    reactive_power_mode : str, optional
+        Mode of the reactive power. Default: 'inductive'.
+        alternative: 'capacitive'
     power_factor : float, optional
         Power factor (cosine of the phase angle) of the load or generator.
         Default is 0.95.
+    component_type : str, optional
+        Type of the component to be connected, used to obtain the default reactive power
+        mode from the configuration. Default: 'load'.
+        alternative: 'gen'
 
     Returns
     -------
     float or array-like
         Voltage difference in kV.
     """
-    sign = q_control.get_q_sign_generator(reactive_power_mode)
+    if "gen" in component_type:
+        sign = q_control.get_q_sign_generator(reactive_power_mode)
+    elif "load" in component_type or "cp" in component_type or "hp" in component_type:
+        sign = q_control.get_q_sign_load(reactive_power_mode)
+    else:
+        raise ValueError("Component type not supported.")
     sin_phi = np.sqrt(1 - power_factor**2)
     # Calculate the voltage difference using the formula from VDE-AR-N 4105
     voltage_diff = (s_max / (v_nom)) * (
@@ -243,6 +254,7 @@ def voltage_diff_pu(
     s_max: float | np.ndarray,
     power_factor: float = 0.95,
     reactive_power_mode: str = "inductive",
+    component_type: str = "load",
 ) -> float | np.ndarray:
     """
     Calculate the voltage difference per unit of nominal voltage.
@@ -263,8 +275,10 @@ def voltage_diff_pu(
         Apparent power the cable must carry in MVA.
     power_factor : float, optional
         Cosine phi of the load or generator. Default: 0.95.
-    sign : int, optional
-        Sign of the reactance. -1 for inductive and +1 for capacitive. Default is -1.
+    component_type : str, optional
+        Type of the component to be connected, used to obtain the default reactive power
+        mode from the configuration. Default: 'load'.
+        alternative: 'gen'
 
     Returns
     -------
@@ -284,6 +298,7 @@ def voltage_diff_pu(
         v_nom,
         reactive_power_mode=reactive_power_mode,
         power_factor=power_factor,
+        component_type=component_type,
     )
 
     # Convert voltage difference to per unit of nominal voltage
@@ -300,7 +315,7 @@ def select_cable(
     max_voltage_diff: float | None = None,
     max_cables: int = 7,
     power_factor: float | None = None,
-    component_type: str | None = None,
+    component_type: str | None = "load",
     reactive_power_mode: str = "inductive",
 ) -> tuple[pd.Series, int]:
     """
@@ -334,6 +349,7 @@ def select_cable(
         Type of the component to be connected, used to obtain the default power factor
         from the configuration.
         possible options are 'gen', 'load', 'cp', 'hp'
+        Default: 'load'.
     reactive_power_mode : str
         Mode of the reactive power. Default: 'inductive'
 
@@ -344,6 +360,7 @@ def select_cable(
     """
     if component_type is None:
         component_type = level + "_load"
+
     elif component_type in ["gen", "load", "cp", "hp"]:
         component_type = level + "_" + component_type
     else:
@@ -390,6 +407,7 @@ def select_cable(
                 s_max=apparent_power,
                 power_factor=power_factor,
                 reactive_power_mode=reactive_power_mode,
+                component_type=component_type,
             )
             < max_voltage_diff
         ]
@@ -414,6 +432,7 @@ def select_cable(
                     s_max=apparent_power,
                     power_factor=power_factor,
                     reactive_power_mode=reactive_power_mode,
+                    component_type=component_type,
                 )
                 < max_voltage_diff
             ]
