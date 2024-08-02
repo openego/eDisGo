@@ -30,54 +30,142 @@ class TestTools:
         data = tools.calculate_line_reactance(np.array([2, 3]), 3, 2)
         assert_allclose(data, np.array([1.88496 / 2, 2.82743 / 2]), rtol=1e-5)
 
-    def test_voltage_diff(self):
-        data = tools.calculate_voltage_diff_per_line(50, 0.125, 0.36, 20, -1, 0.9)
-        correct_value = 0.11105090491866049
+    def test_calculate_voltage_diff_per_line(self):
+        data = tools.calculate_voltage_diff_per_line(
+            s_max=50,
+            r_total=0.125,
+            x_total=0.36,
+            v_nom=20,
+            reactive_power_mode="inductive",
+            power_factor=0.9,
+            component_type="gen",
+        )
+        correct_value = -0.11105090491866049
         assert np.isclose(data, correct_value)
         data = tools.calculate_voltage_diff_per_line(
-            np.array([50, 50]),
-            np.array([0.125, 0.125]),
-            np.array([0.36, 0.36]),
-            20,
-            -1,
-            0.9,
+            s_max=np.array([50, 50]),
+            r_total=np.array([0.125, 0.125]),
+            x_total=np.array([0.36, 0.36]),
+            v_nom=20,
+            reactive_power_mode="inductive",
+            power_factor=0.9,
+            component_type="gen",
         )
         assert_allclose(data, np.array([correct_value, correct_value]), rtol=1e-5)
-        data = tools.calculate_voltage_diff_per_line(50, 0.125, 0.36, 40, -1, 0.9)
+        data = tools.calculate_voltage_diff_per_line(
+            s_max=50,
+            r_total=0.125,
+            x_total=0.36,
+            v_nom=40,
+            reactive_power_mode="inductive",
+            power_factor=0.9,
+            component_type="gen",
+        )
         assert np.isclose(data, correct_value / 2)
-        data = tools.calculate_voltage_diff_per_line(100, 0.125, 0.36, 20, -1, 0.9)
+        data = tools.calculate_voltage_diff_per_line(
+            s_max=100,
+            r_total=0.125,
+            x_total=0.36,
+            v_nom=20,
+            reactive_power_mode="inductive",
+            power_factor=0.9,
+            component_type="gen",
+        )
         assert np.isclose(data, correct_value * 2)
         data = tools.calculate_voltage_diff_per_line(
-            np.array([100, 100]),
-            np.array([0.125, 0.125]),
-            np.array([0.36, 0.36]),
-            np.array([20, 20]),
-            -1,
-            0.9,
+            s_max=np.array([100, 100]),
+            r_total=np.array([0.125, 0.125]),
+            x_total=np.array([0.36, 0.36]),
+            v_nom=np.array([20, 20]),
+            reactive_power_mode="inductive",
+            power_factor=0.9,
+            component_type="gen",
         )
         assert_allclose(
             data, np.array([correct_value * 2, correct_value * 2]), rtol=1e-5
         )
+        Phi = np.pi / 6
+        arctanphi = np.arctan(Phi)
+        R = 0.125
+        X = arctanphi * R
+        data = tools.calculate_voltage_diff_per_line(
+            s_max=-0.027,  # 27 kW generator
+            r_total=R,
+            x_total=X,
+            v_nom=0.23,
+            reactive_power_mode="capacitive",
+            power_factor=0.95,
+            component_type="gen",
+        )
+        data = data / 0.23  # convert to pu
+        # assert np.isclose(data, 0.2)
 
     def test_voltage_diff_pu(self):
-        data = tools.voltage_diff_pu(0.1, 0.350, 1, 1, 20, 50, 0.9, -1)
+        data = tools.voltage_diff_pu(
+            R_per_km=0.1,
+            L_per_km=0.350,
+            length=1,
+            num_parallel=1,
+            v_nom=20,
+            s_max=50,
+            power_factor=0.9,
+            reactive_power_mode="inductive",
+            component_type="gen",
+        )
         correct_value = 0.52589253567891375 * 1e-2
         assert np.isclose(data, correct_value)
         data = tools.voltage_diff_pu(
-            np.array([0.1, 0.1]), np.array([0.35, 0.35]), 1, 1, 20, 50, 0.9, -1
+            R_per_km=np.array([0.1, 0.1]),
+            L_per_km=np.array([0.35, 0.35]),
+            length=1,
+            num_parallel=1,
+            v_nom=20,
+            s_max=50,
+            power_factor=0.9,
+            reactive_power_mode="inductive",
+            component_type="gen",
         )
         assert_allclose(data, np.array([correct_value, correct_value]), rtol=1e-5)
-        data = tools.voltage_diff_pu(0.1, 0.35, 2, 1, 20, 50, 0.9, -1)
+        data = tools.voltage_diff_pu(
+            R_per_km=0.1,
+            L_per_km=0.35,
+            length=2,
+            num_parallel=1,
+            v_nom=20,
+            s_max=50,
+            power_factor=0.9,
+            reactive_power_mode="inductive",
+            component_type="gen",
+        )
         assert np.isclose(data, 2 * correct_value)
         data = tools.voltage_diff_pu(
-            np.array([0.1, 0.1]), np.array([0.35, 0.35]), 2, 1, 20, 50, 0.9, -1
+            R_per_km=np.array([0.1, 0.1]),
+            L_per_km=np.array([0.35, 0.35]),
+            length=2,
+            num_parallel=1,
+            v_nom=20,
+            s_max=50,
+            power_factor=0.9,
+            reactive_power_mode="inductive",
+            component_type="gen",
         )
         assert_allclose(
             data,
             np.array([2 * correct_value, 2 * correct_value]),
             rtol=1e-5,
         )
-        data = tools.voltage_diff_pu(0.1, 0.35, 1, 2, 20, 50, 0.9, -1)
+
+        data = tools.voltage_diff_pu(
+            R_per_km=0.1,
+            L_per_km=0.35,
+            length=1,
+            num_parallel=2,
+            v_nom=20,
+            s_max=50,
+            power_factor=0.9,
+            reactive_power_mode="inductive",
+            component_type="gen",
+        )
         assert np.isclose(data, correct_value / 2)
 
     def test_calculate_line_resistance(self):
@@ -148,36 +236,90 @@ class TestTools:
 
     def test_select_cable(self):
         # no length given
-        cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "mv", 5.1)
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo,
+            "mv",
+            5.1,
+            length=0,
+            max_voltage_diff=None,
+            max_cables=7,
+            power_factor=None,
+            component_type="load",
+            reactive_power_mode="inductive",
+        )
         assert cable_data.name == "NA2XS2Y 3x1x150 RE/25"
         assert num_parallel_cables == 1
 
-        cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "mv", 40)
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo,
+            "mv",
+            40,
+            length=0,
+            max_voltage_diff=None,
+            max_cables=7,
+            power_factor=None,
+            component_type="load",
+            reactive_power_mode="inductive",
+        )
         assert cable_data.name == "NA2XS(FL)2Y 3x1x500 RM/35"
         assert num_parallel_cables == 2
 
-        cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "lv", 0.18)
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo,
+            "lv",
+            0.18,
+            length=0,
+            max_voltage_diff=None,
+            max_cables=7,
+            power_factor=None,
+            component_type="load",
+            reactive_power_mode="inductive",
+        )
         assert cable_data.name == "NAYY 4x1x150"
         assert num_parallel_cables == 1
 
         # length given
-        cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "mv", 5.1, 2)
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo,
+            "mv",
+            5.1,
+            length=2,
+            max_voltage_diff=None,
+            max_cables=7,
+            power_factor=None,
+            component_type="load",
+            reactive_power_mode="inductive",
+        )
         assert cable_data.name == "NA2XS2Y 3x1x150 RE/25"
         assert num_parallel_cables == 1
 
-        cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "mv", 40, 1)
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo,
+            "mv",
+            40,
+            length=1,
+            max_voltage_diff=None,
+            max_cables=7,
+            power_factor=None,
+            component_type="load",
+            reactive_power_mode="inductive",
+        )
         assert cable_data.name == "NA2XS(FL)2Y 3x1x500 RM/35"
         assert num_parallel_cables == 2
 
-        cable_data, num_parallel_cables = tools.select_cable(self.edisgo, "lv", 0.18, 1)
-        assert cable_data.name == "NAYY 4x1x300"
-        assert num_parallel_cables == 3
-
         cable_data, num_parallel_cables = tools.select_cable(
-            self.edisgo, "lv", 0.18, 1, max_voltage_diff=0.01, max_cables=100
+            self.edisgo,
+            "lv",
+            0.18,
+            length=1,
+            max_voltage_diff=None,
+            max_cables=7,
+            power_factor=None,
+            component_type="load",
+            reactive_power_mode="inductive",
         )
         assert cable_data.name == "NAYY 4x1x300"
-        assert num_parallel_cables == 8
+        assert num_parallel_cables == 5
 
         cable_data, num_parallel_cables = tools.select_cable(
             self.edisgo,
@@ -187,15 +329,12 @@ class TestTools:
             max_voltage_diff=0.01,
             max_cables=100,
             power_factor=1,
+            component_type="load",
             reactive_power_mode="inductive",
         )
         assert cable_data.name == "NAYY 4x1x300"
         assert num_parallel_cables == 12
-        cable_data, num_parallel_cables = tools.select_cable(
-            self.edisgo, "lv", 0.18, length=1
-        )
-        assert cable_data.name == "NAYY 4x1x300"
-        assert num_parallel_cables == 3
+
         cable_data, num_parallel_cables = tools.select_cable(
             self.edisgo,
             "lv",
@@ -204,11 +343,26 @@ class TestTools:
             max_voltage_diff=0.01,
             max_cables=100,
             power_factor=None,
+            component_type="load",
             reactive_power_mode="inductive",
+        )
+        assert cable_data.name == "NAYY 4x1x300"
+        assert num_parallel_cables == 14
+
+        cable_data, num_parallel_cables = tools.select_cable(
+            self.edisgo,
+            "lv",
+            0.18,
+            length=1,
+            max_voltage_diff=0.01,
+            max_cables=100,
+            power_factor=None,
             component_type="gen",
+            reactive_power_mode="inductive",
         )
         assert cable_data.name == "NAYY 4x1x300"
         assert num_parallel_cables == 8
+
         try:
             cable_data, num_parallel_cables = tools.select_cable(
                 self.edisgo,
@@ -218,8 +372,8 @@ class TestTools:
                 max_voltage_diff=0.01,
                 max_cables=100,
                 power_factor=None,
-                reactive_power_mode="inductive",
                 component_type="fail",
+                reactive_power_mode="inductive",
             )
         except ValueError as e:
             assert (
