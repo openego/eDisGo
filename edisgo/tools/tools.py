@@ -193,7 +193,7 @@ def drop_duplicated_columns(df, keep="last"):
     return df.loc[:, ~df.columns.duplicated(keep=keep)]
 
 
-def calculate_voltage_diff_per_line(
+def calculate_voltage_diff_pu_per_line(
     s_max: float | np.ndarray,
     r_total: float | np.ndarray,
     x_total: float | np.ndarray,
@@ -229,7 +229,7 @@ def calculate_voltage_diff_per_line(
     Returns
     -------
     float or array-like
-        Voltage difference in kV. If positive, the voltage difference behaves like
+        Voltage difference in pu. If positive, the voltage difference behaves like
         expected, it rises for generators and drops for loads. If negative,
         the voltage difference behaves counterintuitively, it drops for generators
         and rises for loads.
@@ -242,11 +242,13 @@ def calculate_voltage_diff_per_line(
         raise ValueError("Component type not supported.")
     sin_phi = np.sqrt(1 - power_factor**2)
     # Calculate the voltage difference using the formula from VDE-AR-N 4105
-    voltage_diff = (s_max / v_nom) * (r_total * power_factor + sign * x_total * sin_phi)
-    return voltage_diff  # in kV
+    voltage_diff = (s_max / (v_nom**2)) * (
+        r_total * power_factor + sign * x_total * sin_phi
+    )
+    return voltage_diff  # in pu
 
 
-def voltage_diff_pu_per_line(
+def calculate_voltage_difference_pu_per_line_with_length(
     R_per_km: float | np.ndarray,
     L_per_km: float | np.ndarray,
     length: float,
@@ -292,7 +294,7 @@ def voltage_diff_pu_per_line(
     x_total = calculate_line_reactance(L_per_km, length, num_parallel)
 
     # Calculate the voltage drop or increase
-    delta_v = calculate_voltage_diff_per_line(
+    delta_v = calculate_voltage_diff_pu_per_line(
         s_max,
         r_total,
         x_total,
@@ -303,7 +305,7 @@ def voltage_diff_pu_per_line(
     )
 
     # Convert voltage difference to per unit of nominal voltage
-    voltage_difference_pu = delta_v / v_nom
+    voltage_difference_pu = delta_v
 
     return voltage_difference_pu
 
@@ -399,7 +401,7 @@ def select_cable(
     ]
     if length != 0:
         suitable_cables = suitable_cables[
-            voltage_diff_pu_per_line(
+            calculate_voltage_difference_pu_per_line_with_length(
                 R_per_km=available_cables["R_per_km"],
                 L_per_km=available_cables["L_per_km"],
                 length=length,
@@ -424,7 +426,7 @@ def select_cable(
         ]
         if length != 0:
             suitable_cables = suitable_cables[
-                voltage_diff_pu_per_line(
+                calculate_voltage_difference_pu_per_line_with_length(
                     R_per_km=available_cables["R_per_km"],
                     L_per_km=available_cables["L_per_km"],
                     length=length,
