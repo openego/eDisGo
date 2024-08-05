@@ -31,77 +31,133 @@ class TestTools:
         assert_allclose(data, np.array([1.88496 / 2, 2.82743 / 2]), rtol=1e-5)
 
     def test_calculate_voltage_diff_per_line(self):
+        correct_value_positive_sign = 0.6523893665569375
+        correct_value_negative_sign = 1.2016106334430623
+        r_total = 0.412
+        x_total = 0.252
         data = tools.calculate_voltage_diff_per_line(
             s_max=50,
-            r_total=0.125,
-            x_total=0.36,
+            r_total=r_total,
+            x_total=x_total,
             v_nom=20,
             reactive_power_mode="inductive",
             power_factor=0.9,
             component_type="gen",
         )
-        correct_value = -0.11105090491866049
-        assert np.isclose(data, correct_value)
+        assert np.isclose(data, correct_value_positive_sign)
         data = tools.calculate_voltage_diff_per_line(
             s_max=np.array([50, 50]),
-            r_total=np.array([0.125, 0.125]),
-            x_total=np.array([0.36, 0.36]),
+            r_total=np.array([r_total, r_total]),
+            x_total=np.array([x_total, x_total]),
             v_nom=20,
             reactive_power_mode="inductive",
             power_factor=0.9,
             component_type="gen",
         )
-        assert_allclose(data, np.array([correct_value, correct_value]), rtol=1e-5)
+        assert_allclose(
+            data,
+            np.array([correct_value_positive_sign, correct_value_positive_sign]),
+            rtol=1e-5,
+        )
         data = tools.calculate_voltage_diff_per_line(
             s_max=50,
-            r_total=0.125,
-            x_total=0.36,
+            r_total=r_total,
+            x_total=x_total,
             v_nom=40,
             reactive_power_mode="inductive",
             power_factor=0.9,
             component_type="gen",
         )
-        assert np.isclose(data, correct_value / 2)
+        assert np.isclose(data, correct_value_positive_sign / 2)
         data = tools.calculate_voltage_diff_per_line(
             s_max=100,
-            r_total=0.125,
-            x_total=0.36,
+            r_total=r_total,
+            x_total=x_total,
             v_nom=20,
             reactive_power_mode="inductive",
             power_factor=0.9,
             component_type="gen",
         )
-        assert np.isclose(data, correct_value * 2)
+        assert np.isclose(data, correct_value_positive_sign * 2)
         data = tools.calculate_voltage_diff_per_line(
             s_max=np.array([100, 100]),
-            r_total=np.array([0.125, 0.125]),
-            x_total=np.array([0.36, 0.36]),
+            r_total=np.array([r_total, r_total]),
+            x_total=np.array([x_total, x_total]),
             v_nom=np.array([20, 20]),
             reactive_power_mode="inductive",
             power_factor=0.9,
             component_type="gen",
         )
         assert_allclose(
-            data, np.array([correct_value * 2, correct_value * 2]), rtol=1e-5
+            data,
+            np.array(
+                [correct_value_positive_sign * 2, correct_value_positive_sign * 2]
+            ),
+            rtol=1e-5,
         )
+        data = tools.calculate_voltage_diff_per_line(
+            s_max=100,
+            r_total=r_total,
+            x_total=x_total,
+            v_nom=20,
+            reactive_power_mode="capacitive",
+            power_factor=0.9,
+            component_type="gen",
+        )
+        assert np.isclose(data, correct_value_negative_sign * 2)
+        data = tools.calculate_voltage_diff_per_line(
+            s_max=100,
+            r_total=r_total,
+            x_total=x_total,
+            v_nom=20,
+            reactive_power_mode="inductive",
+            power_factor=0.9,
+            component_type="load",
+        )
+        assert np.isclose(data, correct_value_negative_sign * 2)
+        data = tools.calculate_voltage_diff_per_line(
+            s_max=100,
+            r_total=r_total,
+            x_total=x_total,
+            v_nom=20,
+            reactive_power_mode="capacitive",
+            power_factor=0.9,
+            component_type="load",
+        )
+        assert np.isclose(data, correct_value_positive_sign * 2)
+        try:
+            data = tools.calculate_voltage_diff_per_line(
+                s_max=100,
+                r_total=r_total,
+                x_total=x_total,
+                v_nom=20,
+                reactive_power_mode="inductive",
+                power_factor=0.9,
+                component_type="fail",
+            )
+        except ValueError as e:
+            assert str(e) == "Component type not supported."
+
         Phi = np.pi / 6
         arctanphi = np.arctan(Phi)
-        R = 0.125
+        R = r_total
         X = arctanphi * R
+        v_nom = 0.4
         data = tools.calculate_voltage_diff_per_line(
-            s_max=-0.027,  # 27 kW generator
+            s_max=0.027,  # 27 kW generator
             r_total=R,
             x_total=X,
-            v_nom=0.23,
-            reactive_power_mode="capacitive",
+            v_nom=v_nom,
+            reactive_power_mode="inductive",
             power_factor=0.95,
             component_type="gen",
         )
-        data = data / 0.23  # convert to pu
-        # assert np.isclose(data, 0.2)
+        assert np.isclose(data / v_nom, 0.022230950086158 / v_nom)
 
-    def test_voltage_diff_pu(self):
-        data = tools.voltage_diff_pu(
+    def test_voltage_diff_pu_per_line(self):
+        correct_value_negative_sign = 0.52589253567891375 * 1e-2
+        correct_value_positive_sign = 0.017241074643210865
+        data = tools.voltage_diff_pu_per_line(
             R_per_km=0.1,
             L_per_km=0.350,
             length=1,
@@ -112,9 +168,8 @@ class TestTools:
             reactive_power_mode="inductive",
             component_type="gen",
         )
-        correct_value = 0.52589253567891375 * 1e-2
-        assert np.isclose(data, correct_value)
-        data = tools.voltage_diff_pu(
+        assert np.isclose(data, correct_value_negative_sign)
+        data = tools.voltage_diff_pu_per_line(
             R_per_km=np.array([0.1, 0.1]),
             L_per_km=np.array([0.35, 0.35]),
             length=1,
@@ -125,8 +180,12 @@ class TestTools:
             reactive_power_mode="inductive",
             component_type="gen",
         )
-        assert_allclose(data, np.array([correct_value, correct_value]), rtol=1e-5)
-        data = tools.voltage_diff_pu(
+        assert_allclose(
+            data,
+            np.array([correct_value_negative_sign, correct_value_negative_sign]),
+            rtol=1e-5,
+        )
+        data = tools.voltage_diff_pu_per_line(
             R_per_km=0.1,
             L_per_km=0.35,
             length=2,
@@ -137,8 +196,8 @@ class TestTools:
             reactive_power_mode="inductive",
             component_type="gen",
         )
-        assert np.isclose(data, 2 * correct_value)
-        data = tools.voltage_diff_pu(
+        assert np.isclose(data, 2 * correct_value_negative_sign)
+        data = tools.voltage_diff_pu_per_line(
             R_per_km=np.array([0.1, 0.1]),
             L_per_km=np.array([0.35, 0.35]),
             length=2,
@@ -151,11 +210,13 @@ class TestTools:
         )
         assert_allclose(
             data,
-            np.array([2 * correct_value, 2 * correct_value]),
+            np.array(
+                [2 * correct_value_negative_sign, 2 * correct_value_negative_sign]
+            ),
             rtol=1e-5,
         )
 
-        data = tools.voltage_diff_pu(
+        data = tools.voltage_diff_pu_per_line(
             R_per_km=0.1,
             L_per_km=0.35,
             length=1,
@@ -166,7 +227,46 @@ class TestTools:
             reactive_power_mode="inductive",
             component_type="gen",
         )
-        assert np.isclose(data, correct_value / 2)
+        assert np.isclose(data, correct_value_negative_sign / 2)
+
+        data = tools.voltage_diff_pu_per_line(
+            R_per_km=0.1,
+            L_per_km=0.35,
+            length=1,
+            num_parallel=2,
+            v_nom=20,
+            s_max=50,
+            power_factor=0.9,
+            reactive_power_mode="inductive",
+            component_type="load",
+        )
+        assert np.isclose(data, correct_value_positive_sign / 2)
+
+        data = tools.voltage_diff_pu_per_line(
+            R_per_km=0.1,
+            L_per_km=0.35,
+            length=1,
+            num_parallel=2,
+            v_nom=20,
+            s_max=50,
+            power_factor=0.9,
+            reactive_power_mode="capacitive",
+            component_type="load",
+        )
+        assert np.isclose(data, correct_value_negative_sign / 2)
+
+        data = tools.voltage_diff_pu_per_line(
+            R_per_km=0.1,
+            L_per_km=0.35,
+            length=1,
+            num_parallel=2,
+            v_nom=20,
+            s_max=50,
+            power_factor=0.9,
+            reactive_power_mode="capacitive",
+            component_type="gen",
+        )
+        assert np.isclose(data, correct_value_positive_sign / 2)
 
     def test_calculate_line_resistance(self):
         # test single line
@@ -244,7 +344,7 @@ class TestTools:
             max_voltage_diff=None,
             max_cables=7,
             power_factor=None,
-            component_type="load",
+            component_type=None,
             reactive_power_mode="inductive",
         )
         assert cable_data.name == "NA2XS2Y 3x1x150 RE/25"
