@@ -30,12 +30,12 @@ class TestTools:
         data = tools.calculate_line_reactance(np.array([2, 3]), 3, 2)
         assert_allclose(data, np.array([1.88496 / 2, 2.82743 / 2]), rtol=1e-5)
 
-    def test_calculate_voltage_diff_per_line(self):
-        correct_value_positive_sign = 0.6523893665569375
-        correct_value_negative_sign = 1.2016106334430623
+    def test_calculate_voltage_diff_pu_per_line(self):
+        correct_value_positive_sign = 0.03261946832784687
+        correct_value_negative_sign = 0.06008053167215312
         r_total = 0.412
         x_total = 0.252
-        data = tools.calculate_voltage_diff_per_line(
+        data = tools.calculate_voltage_diff_pu_per_line(
             s_max=50,
             r_total=r_total,
             x_total=x_total,
@@ -45,7 +45,7 @@ class TestTools:
             component_type="gen",
         )
         assert np.isclose(data, correct_value_positive_sign)
-        data = tools.calculate_voltage_diff_per_line(
+        data = tools.calculate_voltage_diff_pu_per_line(
             s_max=np.array([50, 50]),
             r_total=np.array([r_total, r_total]),
             x_total=np.array([x_total, x_total]),
@@ -59,7 +59,7 @@ class TestTools:
             np.array([correct_value_positive_sign, correct_value_positive_sign]),
             rtol=1e-5,
         )
-        data = tools.calculate_voltage_diff_per_line(
+        data = tools.calculate_voltage_diff_pu_per_line(
             s_max=50,
             r_total=r_total,
             x_total=x_total,
@@ -68,8 +68,8 @@ class TestTools:
             power_factor=0.9,
             component_type="gen",
         )
-        assert np.isclose(data, correct_value_positive_sign / 2)
-        data = tools.calculate_voltage_diff_per_line(
+        assert np.isclose(data, correct_value_positive_sign / 4)
+        data = tools.calculate_voltage_diff_pu_per_line(
             s_max=100,
             r_total=r_total,
             x_total=x_total,
@@ -79,7 +79,7 @@ class TestTools:
             component_type="gen",
         )
         assert np.isclose(data, correct_value_positive_sign * 2)
-        data = tools.calculate_voltage_diff_per_line(
+        data = tools.calculate_voltage_diff_pu_per_line(
             s_max=np.array([100, 100]),
             r_total=np.array([r_total, r_total]),
             x_total=np.array([x_total, x_total]),
@@ -95,7 +95,7 @@ class TestTools:
             ),
             rtol=1e-5,
         )
-        data = tools.calculate_voltage_diff_per_line(
+        data = tools.calculate_voltage_diff_pu_per_line(
             s_max=100,
             r_total=r_total,
             x_total=x_total,
@@ -105,7 +105,7 @@ class TestTools:
             component_type="gen",
         )
         assert np.isclose(data, correct_value_negative_sign * 2)
-        data = tools.calculate_voltage_diff_per_line(
+        data = tools.calculate_voltage_diff_pu_per_line(
             s_max=100,
             r_total=r_total,
             x_total=x_total,
@@ -115,7 +115,7 @@ class TestTools:
             component_type="load",
         )
         assert np.isclose(data, correct_value_negative_sign * 2)
-        data = tools.calculate_voltage_diff_per_line(
+        data = tools.calculate_voltage_diff_pu_per_line(
             s_max=100,
             r_total=r_total,
             x_total=x_total,
@@ -126,7 +126,7 @@ class TestTools:
         )
         assert np.isclose(data, correct_value_positive_sign * 2)
         try:
-            data = tools.calculate_voltage_diff_per_line(
+            data = tools.calculate_voltage_diff_pu_per_line(
                 s_max=100,
                 r_total=r_total,
                 x_total=x_total,
@@ -143,7 +143,7 @@ class TestTools:
         R = r_total
         X = arctanphi * R
         v_nom = 0.4
-        data = tools.calculate_voltage_diff_per_line(
+        data = tools.calculate_voltage_diff_pu_per_line(
             s_max=0.027,  # 27 kW generator
             r_total=R,
             x_total=X,
@@ -152,12 +152,35 @@ class TestTools:
             power_factor=0.95,
             component_type="gen",
         )
-        assert np.isclose(data / v_nom, 0.022230950086158 / v_nom)
+        assert np.isclose(data, 0.055577375215395)
 
-    def test_voltage_diff_pu_per_line(self):
+        # test the examples from  VDE-AR-N 4105 attachment D
+        data = tools.calculate_voltage_diff_pu_per_line(
+            s_max=0.02,
+            r_total=0.2001,
+            x_total=0.1258,
+            v_nom=0.4,
+            reactive_power_mode="inductive",
+            power_factor=1,
+            component_type="gen",
+        )
+        assert np.isclose(data, 0.025, rtol=1e-2)
+
+        data = tools.calculate_voltage_diff_pu_per_line(
+            s_max=0.022,
+            r_total=0.2001,
+            x_total=0.1258,
+            v_nom=0.4,
+            reactive_power_mode="inductive",
+            power_factor=0.9,
+            component_type="gen",
+        )
+        assert np.isclose(data, 0.0173, rtol=1e-2)
+
+    def test_calculate_voltage_difference_pu_per_line_with_length(self):
         correct_value_negative_sign = 0.52589253567891375 * 1e-2
         correct_value_positive_sign = 0.017241074643210865
-        data = tools.voltage_diff_pu_per_line(
+        data = tools.calculate_voltage_difference_pu_per_line_with_length(
             R_per_km=0.1,
             L_per_km=0.350,
             length=1,
@@ -169,7 +192,7 @@ class TestTools:
             component_type="gen",
         )
         assert np.isclose(data, correct_value_negative_sign)
-        data = tools.voltage_diff_pu_per_line(
+        data = tools.calculate_voltage_difference_pu_per_line_with_length(
             R_per_km=np.array([0.1, 0.1]),
             L_per_km=np.array([0.35, 0.35]),
             length=1,
@@ -185,7 +208,7 @@ class TestTools:
             np.array([correct_value_negative_sign, correct_value_negative_sign]),
             rtol=1e-5,
         )
-        data = tools.voltage_diff_pu_per_line(
+        data = tools.calculate_voltage_difference_pu_per_line_with_length(
             R_per_km=0.1,
             L_per_km=0.35,
             length=2,
@@ -197,7 +220,7 @@ class TestTools:
             component_type="gen",
         )
         assert np.isclose(data, 2 * correct_value_negative_sign)
-        data = tools.voltage_diff_pu_per_line(
+        data = tools.calculate_voltage_difference_pu_per_line_with_length(
             R_per_km=np.array([0.1, 0.1]),
             L_per_km=np.array([0.35, 0.35]),
             length=2,
@@ -216,7 +239,7 @@ class TestTools:
             rtol=1e-5,
         )
 
-        data = tools.voltage_diff_pu_per_line(
+        data = tools.calculate_voltage_difference_pu_per_line_with_length(
             R_per_km=0.1,
             L_per_km=0.35,
             length=1,
@@ -229,7 +252,7 @@ class TestTools:
         )
         assert np.isclose(data, correct_value_negative_sign / 2)
 
-        data = tools.voltage_diff_pu_per_line(
+        data = tools.calculate_voltage_difference_pu_per_line_with_length(
             R_per_km=0.1,
             L_per_km=0.35,
             length=1,
@@ -242,7 +265,7 @@ class TestTools:
         )
         assert np.isclose(data, correct_value_positive_sign / 2)
 
-        data = tools.voltage_diff_pu_per_line(
+        data = tools.calculate_voltage_difference_pu_per_line_with_length(
             R_per_km=0.1,
             L_per_km=0.35,
             length=1,
@@ -255,7 +278,7 @@ class TestTools:
         )
         assert np.isclose(data, correct_value_negative_sign / 2)
 
-        data = tools.voltage_diff_pu_per_line(
+        data = tools.calculate_voltage_difference_pu_per_line_with_length(
             R_per_km=0.1,
             L_per_km=0.35,
             length=1,
