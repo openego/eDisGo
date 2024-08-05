@@ -229,7 +229,10 @@ def calculate_voltage_diff_per_line(
     Returns
     -------
     float or array-like
-        Voltage difference in kV.
+        Voltage difference in kV. If positive, the voltage difference behaves like
+        expected, it rises for generators and drops for loads. If negative,
+        the voltage difference behaves counterintuitively, it drops for generators
+        and rises for loads.
     """
     if "gen" in component_type:
         sign = q_control.get_q_sign_generator(reactive_power_mode)
