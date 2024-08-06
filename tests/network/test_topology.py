@@ -948,7 +948,11 @@ class TestTopologyWithEdisgoObject:
     @pytest.yield_fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        self.edisgo3 = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
         self.edisgo.set_time_series_worst_case_analysis()
+        self.edisgo3.set_time_series_worst_case_analysis()
 
     def test_to_geopandas(self):
         geopandas_container = self.edisgo.topology.to_geopandas()
@@ -1786,6 +1790,32 @@ class TestTopologyWithEdisgoObject:
         assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 1
         # check new storage
         assert self.edisgo.topology.storage_units_df.at[comp_name, "p_nom"] == 0.03
+
+    def test_connect_to_lv_based_on_geolocation(self):
+        # ######### ChargingPoint #############
+        # create directories to save ding0 example grid into
+        # lines_before = self.edisgo3.topology.lines_df
+        # buses_before = self.edisgo3.topology.buses_df
+        # generators_before = self.edisgo3.topology.generators_df
+
+        # add CHargingPoint
+        x = self.edisgo3.topology.buses_df.at["Busbar_mvgd_33535_MV", "x"]
+        y = self.edisgo3.topology.buses_df.at["Busbar_mvgd_33535_MV", "y"]
+        geom = Point((x, y))
+        test_cp = {
+            "p_set": 0.01,
+            "geom": geom,
+            "sector": "home",
+            "voltage_level": 7,
+            "mvlv_subst_id": 3.0,
+        }
+        neu = self.edisgo3.topology.connect_to_lv_based_on_geolocation(
+            edisgo_object=self.edisgo3,
+            comp_data=test_cp,
+            comp_type="charging_point",
+            max_distance_from_target_bus=0.1,
+        )
+        assert neu == "Charging_Point_LVGrid_1170540000_home_1"
 
     def test_check_integrity(self, caplog):
         """Test of validation of grids."""
