@@ -234,9 +234,9 @@ def calculate_voltage_diff_pu_per_line(
         the voltage difference behaves counterintuitively, it drops for generators
         and rises for loads.
     """
-    if "gen" in component_type:
+    if component_type in ["generator", "storage_unit"]:
         sign = q_control.get_q_sign_generator(reactive_power_mode)
-    elif "load" in component_type or "cp" in component_type or "hp" in component_type:
+    elif component_type in ["conventional_load", "heat_pump", "charging_point"]:
         sign = q_control.get_q_sign_load(reactive_power_mode)
     else:
         raise ValueError("Component type not supported.")
@@ -362,14 +362,21 @@ def select_cable(
         A tuple containing the selected cable type and the quantity needed.
     """
     if component_type is None:
-        component_type = level + "_load"
+        component_type = level + "conventional_load"
 
-    elif component_type in ["gen", "load", "cp", "hp"]:
+    elif component_type in [
+        "generator",
+        "conventional_load",
+        "charging_point",
+        "heat_pump",
+        "storage_unit",
+    ]:
         component_type = level + "_" + component_type
     else:
         raise ValueError(
             "Specified component type is not valid. "
-            "Must either be 'gen', 'load', 'cp' or 'hp'."
+            "Must either be 'generator', 'conventional_load', 'charging_point', "
+            "'heat_pump' or 'storage_unit'."
         )
     if power_factor is None:
         power_factor = edisgo_obj.config["reactive_power_factor"][component_type]
