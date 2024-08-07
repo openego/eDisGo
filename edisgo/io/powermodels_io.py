@@ -2062,12 +2062,8 @@ def _get_pf(edisgo_obj, pm, idx_bus, kind):
 
     """
     grid_level = pm["bus"][str(idx_bus)]["grid_level"]
-    pf = edisgo_obj.config._data["reactive_power_factor"][
-        "{}_{}".format(grid_level, kind)
-    ]
-    sign = edisgo_obj.config._data["reactive_power_mode"][
-        "{}_{}".format(grid_level, kind)
-    ]
+    pf = edisgo_obj.config["reactive_power_factor"]["{}_{}".format(grid_level, kind)]
+    sign = edisgo_obj.config["reactive_power_mode"]["{}_{}".format(grid_level, kind)]
     if kind in ["generator", "storage_unit"]:
         if sign == "inductive":
             sign = -1
