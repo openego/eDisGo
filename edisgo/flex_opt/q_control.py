@@ -100,7 +100,7 @@ def _fixed_cosphi_default_power_factor(comp_df, component_type, configs):
     -----------
     comp_df : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with component names (in the index) of all components
-        reactive power factor needs to be set. Only required column is
+        reactive power factor needs to be set for. Only required column is
         column 'voltage_level', giving the voltage level the component is in (the
         voltage level can be set using the function
         :func:`~.tools.tools.assign_voltage_level_to_component`).
