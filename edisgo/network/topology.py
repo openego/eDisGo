@@ -15,7 +15,7 @@ import edisgo
 
 from edisgo.network.components import Switch
 from edisgo.network.grids import LVGrid, MVGrid
-from edisgo.tools import geo, networkx_helper
+from edisgo.tools import geo, geopandas_helper, networkx_helper
 from edisgo.tools.tools import (
     calculate_apparent_power,
     calculate_line_reactance,
@@ -2777,7 +2777,9 @@ class Topology:
             within the grid(s).
 
         """
-        if mode == "mv":
+        if mode is None:
+            return geopandas_helper.to_geopandas(self, srid=self.grid_district["srid"])
+        elif mode == "mv":
             return self.mv_grid.geopandas
         elif mode == "lv":
             raise NotImplementedError("LV Grids are not georeferenced yet.")

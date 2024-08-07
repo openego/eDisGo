@@ -102,7 +102,7 @@ class Grid(ABC):
             within the grid.
 
         """
-        return to_geopandas(self)
+        return to_geopandas(self, srid=self.edisgo_obj.topology.grid_district["srid"])
 
     @property
     def station(self):

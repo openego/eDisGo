@@ -11,6 +11,7 @@ if "READTHEDOCS" not in os.environ:
 
 if TYPE_CHECKING:
     from edisgo.network.grids import Grid
+    from edisgo.network.topology import Topology
 
 COMPONENTS: list[str] = [
     "generators_df",
@@ -162,14 +163,17 @@ class GeoPandasGridContainer:
             raise NotImplementedError
 
 
-def to_geopandas(grid_obj: Grid):
+def to_geopandas(grid_obj: Grid | Topology, srid: int) -> GeoPandasGridContainer:
     """
-    Translates all DataFrames with geolocations within a Grid class to GeoDataFrames.
+    Translates all DataFrames with geolocations within a grid topology to GeoDataFrames.
 
     Parameters
     ----------
-    grid_obj : :class:`~.network.grids.Grid`
-        Grid object to transform.
+    grid_obj : :class:`~.network.grids.Grid` or :class:`~.network.topology.Topology`
+        Grid or Topology object to transform.
+    srid : int
+        SRID (spatial reference ID) of x and y coordinates of buses. Usually given in
+        Topology.grid_district["srid"].
 
     Returns
     -------
@@ -178,9 +182,6 @@ def to_geopandas(grid_obj: Grid):
         their geolocation.
 
     """
-    # get srid id
-    srid = grid_obj._edisgo_obj.topology.grid_district["srid"]
-
     # convert buses_df
     buses_df = grid_obj.buses_df
     buses_df = buses_df.assign(
