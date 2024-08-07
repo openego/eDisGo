@@ -204,9 +204,7 @@ def to_geopandas(grid_obj: Grid):
             crs=f"EPSG:{srid}",
         )
         if components_dict[component.replace("_df", "_gdf")].empty:
-            components_dict[component.replace("_df", "_gdf")].index = components_dict[
-                component.replace("_df", "_gdf")
-            ].index.astype(object)
+            components_dict[component.replace("_df", "_gdf")].index = attr.index
 
     # convert lines_df
     lines_df = grid_obj.lines_df
