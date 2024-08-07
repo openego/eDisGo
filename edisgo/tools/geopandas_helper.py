@@ -211,18 +211,22 @@ def to_geopandas(grid_obj: Grid):
     # convert lines_df
     lines_df = grid_obj.lines_df
 
-    geom_0 = lines_df.merge(
-        buses_gdf[["geometry"]], left_on="bus0", right_index=True
-    ).geometry
-    geom_1 = lines_df.merge(
-        buses_gdf[["geometry"]], left_on="bus1", right_index=True
-    ).geometry
-
-    geometry = [
-        LineString([point_0, point_1]) for point_0, point_1 in list(zip(geom_0, geom_1))
-    ]
-
-    lines_gdf = gpd.GeoDataFrame(lines_df.assign(geometry=geometry), crs=f"EPSG:{srid}")
+    lines_gdf = lines_df.merge(
+        buses_gdf[["geometry", "v_nom"]].rename(columns={"geometry": "geom_0"}),
+        left_on="bus0",
+        right_index=True,
+    )
+    lines_gdf = lines_gdf.merge(
+        buses_gdf[["geometry"]].rename(columns={"geometry": "geom_1"}),
+        left_on="bus1",
+        right_index=True,
+    )
+    lines_gdf["geometry"] = lines_gdf.apply(
+        lambda _: LineString([_["geom_0"], _["geom_1"]]), axis=1
+    )
+    lines_gdf = gpd.GeoDataFrame(
+        lines_gdf.drop(columns=["geom_0", "geom_1"]), crs=f"EPSG:{srid}"
+    )
 
     return GeoPandasGridContainer(
         crs=f"EPSG:{srid}",
