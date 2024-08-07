@@ -5,6 +5,7 @@ import os
 import random
 import warnings
 
+from typing import TYPE_CHECKING
 from zipfile import ZipFile
 
 import networkx as nx
@@ -15,7 +16,7 @@ import edisgo
 
 from edisgo.network.components import Switch
 from edisgo.network.grids import LVGrid, MVGrid
-from edisgo.tools import geo, networkx_helper
+from edisgo.tools import geo, geopandas_helper, networkx_helper
 from edisgo.tools.tools import (
     calculate_apparent_power,
     calculate_line_reactance,
@@ -29,6 +30,9 @@ if "READTHEDOCS" not in os.environ:
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
+
+if TYPE_CHECKING:
+    from edisgo.tools.geopandas_helper import GeoPandasGridContainer
 
 logger = logging.getLogger(__name__)
 
@@ -2756,7 +2760,9 @@ class Topology:
             self.transformers_df,
         )
 
-    def to_geopandas(self, mode: str = "mv"):
+    def to_geopandas(
+        self, mode: str | None = None, lv_grid_id: int | None = None
+    ) -> GeoPandasGridContainer:
         """
         Returns components as :geopandas:`GeoDataFrame`\\ s.
 
@@ -2766,23 +2772,29 @@ class Topology:
         Parameters
         ----------
         mode : str
-            Return mode. If mode is "mv" the mv components are returned. If mode is "lv"
-            a generator with a container per lv grid is returned. Default: "mv"
+            If `mode` is None, GeoDataFrames for the MV grid and underlying LV grids is
+            returned. If `mode` is "mv", GeoDataFrames for only the MV grid are
+            returned. If `mode` is "lv", GeoDataFrames for the LV grid specified through
+            `lv_grid_id` are returned.
+            Default: None.
+        lv_grid_id : int
+            Only needs to be provided in case `mode` is "lv". In that case `lv_grid_id`
+            gives the LV grid ID as integer of the LV grid for which to return the
+            geodataframes.
 
         Returns
         -------
-        :class:`~.tools.geopandas_helper.GeoPandasGridContainer` or \
-            list(:class:`~.tools.geopandas_helper.GeoPandasGridContainer`)
+        :class:`~.tools.geopandas_helper.GeoPandasGridContainer`
             Data container with GeoDataFrames containing all georeferenced components
-            within the grid(s).
+            within the grid.
 
         """
-        if mode == "mv":
+        if mode is None:
+            return geopandas_helper.to_geopandas(self, srid=self.grid_district["srid"])
+        elif mode == "mv":
             return self.mv_grid.geopandas
         elif mode == "lv":
-            raise NotImplementedError("LV Grids are not georeferenced yet.")
-            # for lv_grid in self.mv_grid.lv_grids:
-            #     yield lv_grid.geopandas
+            return self.get_lv_grid(name=lv_grid_id).geopandas
         else:
             raise ValueError(f"{mode} is not valid. See docstring for more info.")
 
