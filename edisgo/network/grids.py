@@ -650,10 +650,3 @@ class LVGrid(Grid):
         else:
             plt.savefig(filename, dpi=150, bbox_inches="tight", pad_inches=0.1)
             plt.close()
-
-    @property
-    def geopandas(self):
-        """
-        TODO: Remove this as soon as LVGrids are georeferenced
-        """
-        raise NotImplementedError("LV Grids are not georeferenced yet.")
