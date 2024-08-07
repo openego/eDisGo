@@ -90,17 +90,16 @@ class Grid(ABC):
     @property
     def geopandas(self):
         """
-        Returns components as :geopandas:`GeoDataFrame`\\ s
+        Returns components as :geopandas:`GeoDataFrame`\\ s.
 
         Returns container with :geopandas:`GeoDataFrame`\\ s containing all
         georeferenced components within the grid.
 
         Returns
         -------
-        :class:`~.tools.geopandas_helper.GeoPandasGridContainer` or \
-            list(:class:`~.tools.geopandas_helper.GeoPandasGridContainer`)
+        :class:`~.tools.geopandas_helper.GeoPandasGridContainer`
             Data container with GeoDataFrames containing all georeferenced components
-            within the grid(s).
+            within the grid.
 
         """
         return to_geopandas(self)
