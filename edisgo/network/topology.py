@@ -5,6 +5,7 @@ import os
 import random
 import warnings
 
+from typing import TYPE_CHECKING
 from zipfile import ZipFile
 
 import networkx as nx
@@ -29,6 +30,9 @@ if "READTHEDOCS" not in os.environ:
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
+
+if TYPE_CHECKING:
+    from edisgo.tools.geopandas_helper import GeoPandasGridContainer
 
 logger = logging.getLogger(__name__)
 
@@ -2756,7 +2760,9 @@ class Topology:
             self.transformers_df,
         )
 
-    def to_geopandas(self, mode: str = None, lv_grid_id: int = None):
+    def to_geopandas(
+        self, mode: str | None = None, lv_grid_id: int | None = None
+    ) -> GeoPandasGridContainer:
         """
         Returns components as :geopandas:`GeoDataFrame`\\ s.
 
