@@ -2756,7 +2756,7 @@ class Topology:
             self.transformers_df,
         )
 
-    def to_geopandas(self, mode: str = "mv"):
+    def to_geopandas(self, mode: str = None, lv_grid_id: int = None):
         """
         Returns components as :geopandas:`GeoDataFrame`\\ s.
 
@@ -2766,15 +2766,21 @@ class Topology:
         Parameters
         ----------
         mode : str
-            Return mode. If mode is "mv" the mv components are returned. If mode is "lv"
-            a generator with a container per lv grid is returned. Default: "mv"
+            If `mode` is None, GeoDataFrames for the MV grid and underlying LV grids is
+            returned. If `mode` is "mv", GeoDataFrames for only the MV grid are
+            returned. If `mode` is "lv", GeoDataFrames for the LV grid specified through
+            `lv_grid_id` are returned.
+            Default: None.
+        lv_grid_id : int
+            Only needs to be provided in case `mode` is "lv". In that case `lv_grid_id`
+            gives the LV grid ID as integer of the LV grid for which to return the
+            geodataframes.
 
         Returns
         -------
-        :class:`~.tools.geopandas_helper.GeoPandasGridContainer` or \
-            list(:class:`~.tools.geopandas_helper.GeoPandasGridContainer`)
+        :class:`~.tools.geopandas_helper.GeoPandasGridContainer`
             Data container with GeoDataFrames containing all georeferenced components
-            within the grid(s).
+            within the grid.
 
         """
         if mode is None:
@@ -2782,9 +2788,7 @@ class Topology:
         elif mode == "mv":
             return self.mv_grid.geopandas
         elif mode == "lv":
-            raise NotImplementedError("LV Grids are not georeferenced yet.")
-            # for lv_grid in self.mv_grid.lv_grids:
-            #     yield lv_grid.geopandas
+            return self.get_lv_grid(name=lv_grid_id).geopandas
         else:
             raise ValueError(f"{mode} is not valid. See docstring for more info.")
 
