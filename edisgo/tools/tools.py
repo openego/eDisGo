@@ -14,7 +14,7 @@ import saio
 
 from sqlalchemy.engine.base import Engine
 
-from edisgo.flex_opt import exceptions, q_control
+from edisgo.flex_opt import exceptions
 from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
 from edisgo.tools import session_scope
 
@@ -198,12 +198,11 @@ def calculate_voltage_diff_pu_per_line(
     r_total: float | np.ndarray,
     x_total: float | np.ndarray,
     v_nom: float | np.ndarray,
-    reactive_power_mode: str = "inductive",
-    power_factor: float = 0.95,
-    component_type: str = "load",
+    q_sign: int,
+    power_factor: float,
 ) -> float | np.ndarray:
     """
-    Calculate the voltage difference across a line in kV.
+    Calculate the voltage difference across a line in p.u..
 
     Parameters
     ----------
@@ -215,35 +214,27 @@ def calculate_voltage_diff_pu_per_line(
         Total reactance of the line in Ohms.
     v_nom : float or array-like
         Nominal voltage of the line in kV.
-    reactive_power_mode : str, optional
-        Mode of the reactive power. Default: 'inductive'.
-        alternative: 'capacitive'
-    power_factor : float, optional
-        Power factor (cosine of the phase angle) of the load or generator.
-        Default is 0.95.
-    component_type : str, optional
-        Type of the component to be connected, used to obtain the default reactive power
-        mode from the configuration. Default: 'load'.
-        alternative: 'gen'
+    q_sign : int
+        `q_sign` defines whether the reactive power is positive or
+        negative and must either be -1 or +1. In case of generators and storage units,
+        inductive reactive power is negative. In case of loads, inductive reactive
+        power is positive.
+    power_factor : :pandas:`pandas.Series<Series>` or float
+        Ratio of real to apparent power.
 
     Returns
     -------
     float or array-like
-        Voltage difference in pu. If positive, the voltage difference behaves like
+        Voltage difference in p.u.. If positive, the voltage difference behaves like
         expected, it rises for generators and drops for loads. If negative,
         the voltage difference behaves counterintuitively, it drops for generators
         and rises for loads.
+
     """
-    if component_type in ["generator", "storage_unit"]:
-        sign = q_control.get_q_sign_generator(reactive_power_mode)
-    elif component_type in ["conventional_load", "heat_pump", "charging_point"]:
-        sign = q_control.get_q_sign_load(reactive_power_mode)
-    else:
-        raise ValueError("Component type not supported.")
     sin_phi = np.sqrt(1 - power_factor**2)
     # Calculate the voltage difference using the formula from VDE-AR-N 4105
     voltage_diff = (s_max / (v_nom**2)) * (
-        r_total * power_factor + sign * x_total * sin_phi
+        r_total * power_factor + q_sign * x_total * sin_phi
     )
     return voltage_diff  # in pu
 
