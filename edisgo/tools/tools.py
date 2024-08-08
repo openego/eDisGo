@@ -332,20 +332,18 @@ def select_cable(
     edisgo_obj: EDisGo,
     level: str,
     apparent_power: float,
-    length: float = 0,
+    component_type: str | None = None,
+    length: float = 0.0,
     max_voltage_diff: float | None = None,
     max_cables: int = 7,
-    power_factor: float | None = None,
-    component_type: str | None = "load",
-    reactive_power_mode: str = "inductive",
 ) -> tuple[pd.Series, int]:
     """
     Selects suitable cable type and quantity based on apparent power and
     voltage deviation.
 
     The cable is selected to carry the given `apparent_power` and to ensure
-    acceptable voltage deviation over the cable length. No load factor is
-    considered. Overhead lines are not considered in choosing a suitable cable.
+    acceptable voltage deviation over the cable.
+    Overhead lines are not considered in choosing a suitable cable.
 
     Parameters
     ----------
@@ -355,49 +353,33 @@ def select_cable(
         'lv'.
     apparent_power : float
         Apparent power the cable must carry in MVA.
+    component_type : str
+        Type of the component to be connected. Possible options are "generator",
+        "conventional_load", "charging_point", "heat_pump" or "storage_unit".
+        Only needed in case a cable length is given and thus the voltage difference over
+        the cable can be taken into account for selecting a suitable cable. In that case
+        it is used to obtain the default power factor and reactive power mode from the
+        configuration files in sections `reactive_power_factor` and
+        `reactive_power_mode`.
+        Default: None.
     length : float
         Length of the cable in km. Default: 0.
     max_voltage_diff : float
-        Maximum allowed voltage difference (p.u. of nominal voltage).
+        Maximum allowed voltage difference in p.u..
         If None, it defaults to the value specified in the configuration file
-        under the `grid_connection` section for the respective voltage level.
+        under the `grid_connection` section for the respective voltage level
+        (lv_max_voltage_deviation for LV and mv_max_voltage_deviation for MV).
         Default: None.
     max_cables : int
         Maximum number of cables to consider. Default: 7.
-    power_factor : float
-        Power factor of the load.
-    component_type : str
-        Type of the component to be connected, used to obtain the default power factor
-        from the configuration.
-        possible options are 'gen', 'load', 'cp', 'hp'
-        Default: 'load'.
-    reactive_power_mode : str
-        Mode of the reactive power. Default: 'inductive'
 
     Returns
     -------
-    tuple[pd.Series, int]
-        A tuple containing the selected cable type and the quantity needed.
-    """
-    if component_type is None:
-        component_type = level + "conventional_load"
+    tuple[:pandas:`pandas.Series<Series>`, int]
+        A tuple containing information on the selected cable type and the quantity
+        needed.
 
-    elif component_type in [
-        "generator",
-        "conventional_load",
-        "charging_point",
-        "heat_pump",
-        "storage_unit",
-    ]:
-        component_type = level + "_" + component_type
-    else:
-        raise ValueError(
-            "Specified component type is not valid. "
-            "Must either be 'generator', 'conventional_load', 'charging_point', "
-            "'heat_pump' or 'storage_unit'."
-        )
-    if power_factor is None:
-        power_factor = edisgo_obj.config["reactive_power_factor"][component_type]
+    """
     if level == "mv":
         cable_data = edisgo_obj.topology.equipment_data["mv_cables"]
         available_cables = cable_data[
@@ -417,6 +399,7 @@ def select_cable(
         raise ValueError(
             "Specified voltage level is not valid. Must either be 'mv' or 'lv'."
         )
+
     cable_count = 1
     suitable_cables = available_cables[
         calculate_apparent_power(
