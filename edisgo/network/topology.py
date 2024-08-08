@@ -1932,7 +1932,13 @@ class Topology:
             # avoid very short lines by limiting line length to at least 1m
             line_length = max(line_length, 0.001)
 
-            line_type, num_parallel = select_cable(edisgo_object, "mv", power)
+            line_type, num_parallel = select_cable(
+                edisgo_obj=edisgo_object,
+                level="mv",
+                apparent_power=power,
+                length=line_length,
+                component_type=comp_type,
+            )
 
             line_name = self.add_line(
                 bus0=self.mv_grid.station.index[0],
@@ -1979,13 +1985,12 @@ class Topology:
             for dist_min_obj in conn_objects_min_stack:
                 # do not allow connection to virtual busses
                 if "virtual" not in dist_min_obj["repr"]:
-                    line_type, num_parallel = select_cable(edisgo_object, "mv", power)
                     target_obj_result = self._connect_mv_bus_to_target_object(
                         edisgo_object=edisgo_object,
                         bus=self.buses_df.loc[bus, :],
                         target_obj=dist_min_obj,
-                        line_type=line_type.name,
-                        number_parallel_lines=num_parallel,
+                        comp_type=comp_type,
+                        power=power,
                     )
 
                     if target_obj_result is not None:
@@ -2452,7 +2457,12 @@ class Topology:
         return comp_name
 
     def _connect_mv_bus_to_target_object(
-        self, edisgo_object, bus, target_obj, line_type, number_parallel_lines
+        self,
+        edisgo_object,
+        bus,
+        target_obj,
+        comp_type,
+        power,
     ):
         """
         Connects given MV bus to given target object (MV line or bus).
@@ -2481,11 +2491,12 @@ class Topology:
                 * shp : :shapely:`Shapely Point object<points>` or \
                 :shapely:`Shapely Line object<linestrings>`
                     Geometry of line or bus to connect to.
-
-        line_type : str
-            Line type to use to connect new component with.
-        number_parallel_lines : int
-            Number of parallel lines to connect new component with.
+        comp_type : str
+            Type of added component. Can be 'generator', 'charging_point', 'heat_pump'
+            or 'storage_unit'.
+            Default: 'generator'.
+        power : float
+            Nominal power of the new component to be connected.
 
         Returns
         -------
@@ -2602,6 +2613,13 @@ class Topology:
                     "branch_detour_factor"
                 ],
             )
+            line_type, num_parallel = select_cable(
+                edisgo_obj=edisgo_object,
+                level="mv",
+                apparent_power=power,
+                length=line_length,
+                component_type=comp_type,
+            )
             # avoid very short lines by limiting line length to at least 1m
             if line_length < 0.001:
                 line_length = 0.001
@@ -2610,8 +2628,8 @@ class Topology:
                 bus1=bus.name,
                 length=line_length,
                 kind="cable",
-                type_info=line_type,
-                num_parallel=number_parallel_lines,
+                type_info=line_type.name,
+                num_parallel=num_parallel,
             )
             # add line to equipment changes
             edisgo_object.results._add_line_to_equipment_changes(
@@ -2628,7 +2646,7 @@ class Topology:
 
         # bus is the nearest connection point
         else:
-            # add new branch for satellite (station to station)
+            # add new line between new bus and closest bus
             line_length = geo.calc_geo_dist_vincenty(
                 grid_topology=self,
                 bus_source=bus.name,
@@ -2636,6 +2654,13 @@ class Topology:
                 branch_detour_factor=edisgo_object.config["grid_connection"][
                     "branch_detour_factor"
                 ],
+            )
+            line_type, num_parallel = select_cable(
+                edisgo_obj=edisgo_object,
+                level="mv",
+                apparent_power=power,
+                length=line_length,
+                component_type=comp_type,
             )
             # avoid very short lines by limiting line length to at least 1m
             if line_length < 0.001:
@@ -2646,8 +2671,8 @@ class Topology:
                 bus1=bus.name,
                 length=line_length,
                 kind="cable",
-                type_info=line_type,
-                num_parallel=number_parallel_lines,
+                type_info=line_type.name,
+                num_parallel=num_parallel,
             )
 
             # add line to equipment changes
@@ -2725,7 +2750,13 @@ class Topology:
         line_length = max(line_length, 0.001)
 
         # get suitable line type
-        line_type, num_parallel = select_cable(edisgo_object, "lv", comp_data["p"])
+        line_type, num_parallel = select_cable(
+            edisgo_obj=edisgo_object,
+            level="lv",
+            apparent_power=comp_data["p"],
+            component_type=comp_type,
+            length=line_length,
+        )
         line_name = self.add_line(
             bus0=target_bus,
             bus1=b,
