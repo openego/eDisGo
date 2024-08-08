@@ -14,7 +14,7 @@ import saio
 
 from sqlalchemy.engine.base import Engine
 
-from edisgo.flex_opt import exceptions
+from edisgo.flex_opt import exceptions, q_control
 from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
 from edisgo.tools import session_scope
 
@@ -239,66 +239,93 @@ def calculate_voltage_diff_pu_per_line(
     return voltage_diff  # in pu
 
 
-def calculate_voltage_difference_pu_per_line_with_length(
-    R_per_km: float | np.ndarray,
-    L_per_km: float | np.ndarray,
+def calculate_voltage_diff_pu_per_line_from_type(
+    edisgo_obj: EDisGo,
+    cable_names: str | np.ndarray,
     length: float,
     num_parallel: int,
     v_nom: float | np.ndarray,
     s_max: float | np.ndarray,
-    power_factor: float = 0.95,
-    reactive_power_mode: str = "inductive",
-    component_type: str = "load",
+    component_type: str,
 ) -> float | np.ndarray:
     """
-    Calculate the voltage difference per unit of nominal voltage.
+    Calculate the voltage difference across a line in p.u. depending on line type
+    and component type.
+
+    This function serves as a helper function for function
+    :py:func:`calculate_voltage_diff_pu_per_line`, as it automatically obtains the
+    equipment data per line type from the provided equipment data and default reactive
+    power data per component type from the configuration files.
 
     Parameters
     ----------
-    R_per_km : float or array-like
+    edisgo_obj : :class:`~.EDisGo`
+    cable_names : str or array-like
         Resistance per kilometer of the cable in ohm/km.
-    L_per_km : float or array-like
-        Inductance per kilometer of the cable in mH/km.
     length : float
         Length of the cable in km.
     num_parallel : int
         Number of parallel cables.
     v_nom : int
-        Nominal voltage in kV.
+        Nominal voltage of the cable(s) in kV.
     s_max : float
         Apparent power the cable must carry in MVA.
-    power_factor : float, optional
-        Cosine phi of the load or generator. Default: 0.95.
     component_type : str, optional
         Type of the component to be connected, used to obtain the default reactive power
-        mode from the configuration. Default: 'load'.
-        alternative: 'gen'
+        mode and power factor from the configuration file. If this is given,
+        `reactive_power_mode` and `power_factor` are not considered.
+        Possible options are "generator", "conventional_load", "charging_point",
+        "heat_pump" and "storage_unit".
 
     Returns
     -------
-    float
-        Voltage difference in per unit of nominal voltage.
+    float or array-like
+        Voltage difference in p.u.. If positive, the voltage difference behaves like
+        expected, it rises for generators and drops for loads. If negative,
+        the voltage difference behaves counterintuitively, it drops for generators
+        and rises for loads.
+
     """
-    # Calculate total resistance and reactance for the given length and
-    # number of parallel cables
-    r_total = calculate_line_resistance(R_per_km, length, num_parallel)
-    x_total = calculate_line_reactance(L_per_km, length, num_parallel)
+    # calculate total resistance and reactance for the given length and
+    # number of parallel cables for given cable types
+    config_type = "mv_cables" if v_nom > 1.0 else "lv_cables"
+    cable_data = edisgo_obj.topology.equipment_data[config_type]
+    r_total = calculate_line_resistance(
+        cable_data.loc[cable_names, "R_per_km"], length, num_parallel
+    )
+    x_total = calculate_line_reactance(
+        cable_data.loc[cable_names, "L_per_km"], length, num_parallel
+    )
+
+    # get sign of reactive power based on component type
+    config_type = f"mv_{component_type}" if v_nom > 1.0 else f"lv_{component_type}"
+    if component_type in ["generator", "storage_unit"]:
+        q_sign = q_control.get_q_sign_generator(
+            edisgo_obj.config["reactive_power_mode"][config_type]
+        )
+    elif component_type in ["conventional_load", "heat_pump", "charging_point"]:
+        q_sign = q_control.get_q_sign_load(
+            edisgo_obj.config["reactive_power_mode"][config_type]
+        )
+    else:
+        raise ValueError(
+            "Specified component type is not valid. "
+            "Must either be 'generator', 'conventional_load', 'charging_point', "
+            "'heat_pump' or 'storage_unit'."
+        )
+
+    # get power factor based on component type
+    power_factor = edisgo_obj.config["reactive_power_factor"][config_type]
 
     # Calculate the voltage drop or increase
-    delta_v = calculate_voltage_diff_pu_per_line(
+    return calculate_voltage_diff_pu_per_line(
         s_max,
         r_total,
         x_total,
         v_nom,
-        reactive_power_mode=reactive_power_mode,
-        power_factor=power_factor,
-        component_type=component_type,
+        q_sign,
+        power_factor,
     )
-
-    # Convert voltage difference to per unit of nominal voltage
-    voltage_difference_pu = delta_v
-
-    return voltage_difference_pu
 
 
 def select_cable(
@@ -399,15 +426,13 @@ def select_cable(
     ]
     if length != 0:
         suitable_cables = suitable_cables[
-            calculate_voltage_difference_pu_per_line_with_length(
-                R_per_km=available_cables["R_per_km"],
-                L_per_km=available_cables["L_per_km"],
+            calculate_voltage_diff_pu_per_line_from_type(
+                edisgo_obj=edisgo_obj,
+                cable_names=suitable_cables.index,
                 length=length,
                 num_parallel=cable_count,
-                v_nom=available_cables["U_n"],
+                v_nom=available_cables["U_n"].values[0],
                 s_max=apparent_power,
-                power_factor=power_factor,
-                reactive_power_mode=reactive_power_mode,
                 component_type=component_type,
             )
             < max_voltage_diff
@@ -424,15 +449,13 @@ def select_cable(
         ]
         if length != 0:
             suitable_cables = suitable_cables[
-                calculate_voltage_difference_pu_per_line_with_length(
-                    R_per_km=available_cables["R_per_km"],
-                    L_per_km=available_cables["L_per_km"],
+                calculate_voltage_diff_pu_per_line_from_type(
+                    edisgo_obj=edisgo_obj,
+                    cable_names=available_cables.index,
                     length=length,
                     num_parallel=cable_count,
-                    v_nom=available_cables["U_n"],
+                    v_nom=available_cables["U_n"].values[0],
                     s_max=apparent_power,
-                    power_factor=power_factor,
-                    reactive_power_mode=reactive_power_mode,
                     component_type=component_type,
                 )
                 < max_voltage_diff
