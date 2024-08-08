@@ -1720,7 +1720,7 @@ class TestTopologyWithEdisgoObject:
         loads_before = self.edisgo.topology.loads_df
 
         test_hp = {
-            "p_set": 0.3,
+            "p_set": 0.1,
             "geom": geom,
             "voltage_level": 6,
             "mvlv_subst_id": 6,
@@ -1751,7 +1751,7 @@ class TestTopologyWithEdisgoObject:
             new_line_df.loc[new_line_df.index[0], ["bus0", "bus1"]]
         )
         # check new heat pump
-        assert self.edisgo.topology.loads_df.at[comp_name, "p_set"] == 0.3
+        assert self.edisgo.topology.loads_df.at[comp_name, "p_set"] == 0.1
 
         # ############# storage unit #################
         # test existing substation ID (voltage level 7)
