@@ -371,10 +371,49 @@ def assure_minimum_potential_charging_parks(
     edisgo_obj: EDisGo,
     potential_charging_parks_gdf: gpd.GeoDataFrame,
     **kwargs,
-):
-    # ensure minimum number of potential charging parks per car
+) -> gpd.GeoDataFrame:
+    """
+    Ensures that there is a minimum number of potential charging parks
+    relative to the number of electric vehicles for each use case (home, work,
+    public, and high-power charging). This function adjusts the potential
+    charging parks by duplicating entries if necessary.
+
+    Parameters
+    ----------
+    edisgo_obj : EDisGo
+        The eDisGo object containing grid and electromobility data.
+    potential_charging_parks_gdf : gpd.GeoDataFrame
+        A GeoDataFrame containing potential charging park locations
+        and their attributes.
+    **kwargs : dict, optional
+        Additional keyword arguments to specify the grid connection to car
+        rate for different use cases. Expected keys:
+        - 'gc_to_car_rate_home' : float, optional, default 0.5
+        - 'gc_to_car_rate_work' : float, optional, default 0.25
+        - 'gc_to_car_rate_public' : float, optional, default 0.1
+        - 'gc_to_car_rate_hpc' : float, optional, default 0.005
+
+    Returns
+    -------
+    gpd.GeoDataFrame
+        A GeoDataFrame with adjusted potential charging park locations,
+        ensuring the minimum required number of parks per use case.
+
+    Notes
+    -----
+    - The function may duplicate potential charging park entries if the
+      current number does not meet the required rate relative to the number
+      of cars for each use case.
+    - If no charging parks are available for a use case, a random sample of
+      10% of public charging parks will be duplicated and assigned to the
+      missing use case.
+    """
+
+    # Calculate the total number of unique cars
     num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
 
+    # Iterate over each use case to ensure the minimum number of potential charging
+    # parks
     for use_case in USECASES:
         if use_case == "home":
             gc_to_car_rate = kwargs.get("gc_to_car_rate_home", 0.5)
@@ -385,30 +424,33 @@ def assure_minimum_potential_charging_parks(
         elif use_case == "hpc":
             gc_to_car_rate = kwargs.get("gc_to_car_rate_hpc", 0.005)
 
+        # Filter the GeoDataFrame for the current use case
         use_case_gdf = potential_charging_parks_gdf.loc[
             potential_charging_parks_gdf.use_case == use_case
         ]
 
+        # Count the number of potential grid connections (GCs) for the use case
         num_gcs = len(use_case_gdf)
 
-        # if tracbev doesn't provide possible grid connections choose a
-        # random public potential charging park and duplicate
+        # Handle cases where no potential charging parks exist for a specific use case
         if num_gcs == 0:
             logger.warning(
-                f"There are no potential charging parks for use case {use_case}. "
-                f"Therefore 10 % of public potential charging parks are duplicated "
-                f"randomly and assigned to use case {use_case}."
+                f"No potential charging parks found for use case '{use_case}'. "
+                f"Duplicating 10% of public potential charging parks and assigning "
+                f"them to use case '{use_case}'."
             )
 
+            # Randomly sample 10% of public charging parks and assign to the current use
+            # case
             public_gcs = potential_charging_parks_gdf.loc[
                 potential_charging_parks_gdf.use_case == "public"
             ]
-
             random_gcs = public_gcs.sample(
                 int(np.ceil(len(public_gcs) / 10)),
                 random_state=edisgo_obj.topology.mv_grid.id,
             ).assign(use_case=use_case)
 
+            # Append the new entries to the GeoDataFrame
             potential_charging_parks_gdf = pd.concat(
                 [
                     potential_charging_parks_gdf,
@@ -421,21 +463,22 @@ def assure_minimum_potential_charging_parks(
             ]
             num_gcs = len(use_case_gdf)
 
-        # escape zero division
+        # Calculate the actual grid connection to car rate
         actual_gc_to_car_rate = np.Infinity if num_cars == 0 else num_gcs / num_cars
 
-        # duplicate potential charging parks until desired quantity is ensured
+        # Duplicate potential charging parks until the required rate is met
         max_it = 50
         n = 0
-
         while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
             logger.info(
                 f"Duplicating potential charging parks to meet the desired grid "
-                f"connections to cars rate of {gc_to_car_rate*100:.2f} % for use case "
-                f"{use_case}. Iteration: {n+1}."
+                f"connections to cars rate of {gc_to_car_rate * 100:.2f}% for use case "
+                f"'{use_case}'. Iteration: {n + 1}."
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
+                # Double the number of potential charging parks by duplicating the
+                # entire subset
                 potential_charging_parks_gdf = pd.concat(
                     [
                         potential_charging_parks_gdf,
@@ -443,17 +486,15 @@ def assure_minimum_potential_charging_parks(
                     ],
                     ignore_index=True,
                 )
-
             else:
+                # Calculate the number of extra grid connections needed and sample them
                 extra_gcs = (
                     int(np.ceil(num_gcs * gc_to_car_rate / actual_gc_to_car_rate))
                     - num_gcs
                 )
-
                 extra_gdf = use_case_gdf.sample(
                     n=extra_gcs, random_state=edisgo_obj.topology.mv_grid.id
                 )
-
                 potential_charging_parks_gdf = pd.concat(
                     [
                         potential_charging_parks_gdf,
@@ -462,23 +503,21 @@ def assure_minimum_potential_charging_parks(
                     ignore_index=True,
                 )
 
+            # Recalculate the grid connection to car rate after duplication
             use_case_gdf = potential_charging_parks_gdf.loc[
                 potential_charging_parks_gdf.use_case == use_case
             ]
-
             num_gcs = len(use_case_gdf)
-
             actual_gc_to_car_rate = num_gcs / num_cars
 
             n += 1
 
-    # sort GeoDataFrame
+    # Sort the GeoDataFrame by use case, AGS, and user-centric weight
     potential_charging_parks_gdf = potential_charging_parks_gdf.sort_values(
         by=["use_case", "ags", "user_centric_weight"], ascending=[True, True, False]
     ).reset_index(drop=True)
 
-    # in case of polygons use the centroid as potential charging parks point
-    # and set crs to match edisgo object
+    # For polygon geometries, use the centroid as the charging park point and match CRS
     return (
         potential_charging_parks_gdf.assign(
             geometry=potential_charging_parks_gdf.geometry.representative_point()
