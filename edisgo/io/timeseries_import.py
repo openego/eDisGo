@@ -298,8 +298,8 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
                 "night": edisgo_obj.config["demandlib"]["weekend_night"],
             },
             "holiday": {
-                "day": edisgo_obj.config["demandlib"]["weekend_day"],
-                "night": edisgo_obj.config["demandlib"]["weekend_night"],
+                "day": edisgo_obj.config["demandlib"]["holiday_day"],
+                "night": edisgo_obj.config["demandlib"]["holiday_night"],
             },
         },
     )
