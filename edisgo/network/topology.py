@@ -1997,20 +1997,6 @@ class Topology:
 
         return comp_name
 
-    def get_component_at_bus(self, lv_bus, comp_type):
-        if comp_type == "generator":
-            comps_at_bus = self.generators_df[self.generators_df.bus == lv_bus]
-        elif comp_type == "charging_point":
-            comps_at_bus = self.charging_points_df[
-                self.charging_points_df.bus == lv_bus
-            ]
-        elif comp_type == "heat_pump":
-            hp_df = self.loads_df[self.loads_df.type == "heat_pump"]
-            comps_at_bus = hp_df[hp_df.bus == lv_bus]
-        else:
-            comps_at_bus = self.storage_units_df[self.storage_units_df.bus == lv_bus]
-        return comps_at_bus
-
     def connect_to_lv(
         self,
         edisgo_object,
@@ -2169,7 +2155,7 @@ class Topology:
             # if substation ID (= LV grid ID) is given but it does not match an
             # existing LV grid ID a random LV grid to connect in is chosen
             else:
-                # TODO:
+                # ToDo
                 # lv_grid = _choose_random_substation_id()
                 # logger.warning(
                 #     "Given mvlv_subst_id does not exist, wherefore a random "
@@ -2305,7 +2291,20 @@ class Topology:
                 lv_bus = lv_buses_rnd.pop()
 
                 # determine number of components of the same type at LV bus
-                comps_at_bus = self.get_component_at_bus(lv_bus, comp_type)
+                if comp_type == "generator":
+                    comps_at_bus = self.generators_df[self.generators_df.bus == lv_bus]
+                elif comp_type == "charging_point":
+                    comps_at_bus = self.charging_points_df[
+                        self.charging_points_df.bus == lv_bus
+                    ]
+                elif comp_type == "heat_pump":
+                    hp_df = self.loads_df[self.loads_df.type == "heat_pump"]
+                    comps_at_bus = hp_df[hp_df.bus == lv_bus]
+                else:
+                    comps_at_bus = self.storage_units_df[
+                        self.storage_units_df.bus == lv_bus
+                    ]
+
                 # ToDo: Increase number of generators/charging points
                 #  allowed at one load in case all loads already have one
                 #  generator/charging point
@@ -2332,11 +2331,10 @@ class Topology:
     def connect_to_lv_based_on_geolocation(
         self,
         edisgo_object,
-        comp_data: dict,
-        comp_type: str,
-        max_distance_from_target_bus: float = 0.02,
-        allowed_number_of_comp_per_bus=2,
-    ) -> str:
+        comp_data,
+        comp_type,
+        max_distance_from_target_bus=0.02,
+    ):
         """
         Add and connect new component to LV grid topology based on its geolocation.
 
@@ -2383,8 +2381,6 @@ class Topology:
             before a new bus is created. If the new component is closer to the target
             bus than the maximum specified distance, it is directly connected to that
             target bus. Default: 0.1.
-        allowed_number_of_comp_per_bus : int
-            Specifies, how many components of the same type are at most allowed to be
 
         Returns
         -------
@@ -2426,30 +2422,11 @@ class Topology:
         # find the nearest substation or LV bus
         if voltage_level == 6:
             substations = self.buses_df.loc[self.transformers_df.bus1.unique()]
-            if comp_type == "charging_point":
-                if comp_data["sector"] == "home":
-                    lv_loads = self.loads_df[self.loads_df.sector == "residential"]
-                    lv_buses = lv_loads[lv_loads.index.isin(lv_loads.bus)]
             target_bus, target_bus_distance = geo.find_nearest_bus(
                 geolocation, substations
             )
         else:
             lv_buses = self.buses_df.drop(self.mv_grid.buses_df.index)
-            if comp_type == "charging_point":
-                if comp_data["sector"] == "home":
-                    lv_loads = self.loads_df[self.loads_df.sector == "residential"]
-                    lv_buses = lv_buses[lv_buses.index.isin(lv_loads.bus)]
-                elif comp_data["sector"] == "work":
-                    lv_loads = self.loads_df[self.loads_df.sector == "cts"]
-                    lv_buses = lv_buses[lv_buses.index.isin(lv_loads.bus)]
-
-            lv_buses.sort_index()
-            lv_buses["components_at_bus"] = lv_buses.index.map(
-                lambda bus: len(self.get_component_at_bus(bus, comp_type))
-            )
-            lv_buses = lv_buses[
-                lv_buses.components_at_bus <= allowed_number_of_comp_per_bus
-            ]
             target_bus, target_bus_distance = geo.find_nearest_bus(
                 geolocation, lv_buses
             )
