@@ -2334,10 +2334,8 @@ class Topology:
         edisgo_object,
         comp_data: dict,
         comp_type: str,
-        max_distance_from_target_bus: float = 0.1,
-        allowed_number_of_comp_per_bus: int = 2,
-        allow_mv_connection: bool = False,
-        factor_mv_connection: float = 3.0,
+        max_distance_from_target_bus: float = 0.02,
+        allowed_number_of_comp_per_bus=2,
     ) -> str:
         """
         Add and connect new component to LV grid topology based on its geolocation.
@@ -2387,14 +2385,6 @@ class Topology:
             target bus. Default: 0.1.
         allowed_number_of_comp_per_bus : int
             Specifies, how many components of the same type are at most allowed to be
-            placed at the same bus. Default: 2.
-        allow_mv_connection : bool
-            Specifies whether the component can be connected to the MV grid in case
-            the closest LV bus is too far away. Default: False.
-        factor_mv_connection : float
-            Specifies the factor by which the distance to the closest MV bus is
-            multiplied to decide whether the component is connected to the MV grid
-            instead of the LV grid. Default: 3.0.
 
         Returns
         -------
@@ -2404,123 +2394,81 @@ class Topology:
             :attr:`~.network.topology.Topology.loads_df` or
             :attr:`~.network.topology.Topology.storage_units_df`, depending on component
             type.
+
         """
 
-        def get_add_func(comp_type):
-            if comp_type == "generator":
-                return self.add_generator
-            elif comp_type in ["charging_point", "heat_pump"]:
-                comp_data["type"] = comp_type
-                return self.add_load
-            elif comp_type == "storage_unit":
-                return self.add_storage_unit
-            else:
-                logger.error(f"Component type {comp_type} is not a valid option.")
-                return None
-
-        # TODO:
-        # - Calculate the distance for each bus using Geopy
-        # and store it in a separate column.
-        # - Sort the buses based on the distance.
-        # - Delete all buses outside the boundary.
-        # - Take the first bus that has 0 components.
-        # - If a bus with fewer components is found, take that bus.
-        # - If no suitable bus is found, search for the nearest
-        # MV bus and connect there.
-        # - If no MV bus is found, connect to the MV station.
-        # - If that is not possible, search outside the radius
-        # and connect to a new bus.
-        # - Perform the entire process throughout the network,
-        # the LV grid is not relevant.
-
-        if "p" not in comp_data:
-            comp_data["p"] = comp_data.get("p_set", comp_data.get("p_nom"))
+        if "p" not in comp_data.keys():
+            comp_data["p"] = (
+                comp_data["p_set"]
+                if "p_set" in comp_data.keys()
+                else comp_data["p_nom"]
+            )
 
         voltage_level = comp_data.pop("voltage_level")
         if voltage_level not in [6, 7]:
             raise ValueError(
-                f"Voltage level must either be 6 or 7 but given"
-                f" voltage level is {voltage_level}."
+                f"Voltage level must either be 6 or 7 but given voltage level "
+                f"is {voltage_level}."
             )
-
         geolocation = comp_data.get("geom")
-        add_func = get_add_func(comp_type)
-        if not add_func:
+
+        if comp_type == "generator":
+            add_func = self.add_generator
+        elif comp_type == "charging_point" or comp_type == "heat_pump":
+            add_func = self.add_load
+            comp_data["type"] = comp_type
+        elif comp_type == "storage_unit":
+            add_func = self.add_storage_unit
+        else:
+            logger.error(f"Component type {comp_type} is not a valid option.")
             return
 
+        # find the nearest substation or LV bus
         if voltage_level == 6:
             substations = self.buses_df.loc[self.transformers_df.bus1.unique()]
+            if comp_type == "charging_point":
+                if comp_data["sector"] == "home":
+                    lv_loads = self.loads_df[self.loads_df.sector == "residential"]
+                    lv_buses = lv_loads[lv_loads.index.isin(lv_loads.bus)]
             target_bus, target_bus_distance = geo.find_nearest_bus(
                 geolocation, substations
             )
         else:
-            all_buses = self.buses_df
-            # Count components of the same type at each bus
-            comp_counts = (
-                self.loads_df[self.loads_df.type == comp_type].groupby("bus").size()
-            )
-            all_buses = all_buses.join(
-                comp_counts.rename("comp_count"), on="Bus"
-            ).fillna({"comp_count": 0})
-
+            lv_buses = self.buses_df.drop(self.mv_grid.buses_df.index)
             if comp_type == "charging_point":
-                sector = comp_data.get("sector")
-                if sector == "home":
+                if comp_data["sector"] == "home":
                     lv_loads = self.loads_df[self.loads_df.sector == "residential"]
-                elif sector == "work":
+                    lv_buses = lv_buses[lv_buses.index.isin(lv_loads.bus)]
+                elif comp_data["sector"] == "work":
                     lv_loads = self.loads_df[self.loads_df.sector == "cts"]
-                else:
-                    lv_loads = self.loads_df
-                lv_buses = all_buses[all_buses.index.isin(lv_loads.bus)]
-            else:
-                lv_buses = all_buses
+                    lv_buses = lv_buses[lv_buses.index.isin(lv_loads.bus)]
 
-            # # Count components of the same type at each bus
-            # comp_counts = self.loads_df[self.loads_df.type == comp_type].
-            # groupby('bus').size()
-            # all_buses = all_buses.join(comp_counts.rename('comp_count'),
-            # on='Bus').fillna({'comp_count': 0})
-            all_buses = all_buses[
-                all_buses.comp_count <= allowed_number_of_comp_per_bus
-            ]
-            lv_buses = lv_buses[lv_buses.comp_count <= allowed_number_of_comp_per_bus]
-            if lv_buses.empty:
-                target_bus, target_bus_distance = geo.find_nearest_bus(
-                    geolocation, all_buses
-                )
-            else:
-                target_bus, target_bus_distance = geo.find_nearest_bus(
-                    geolocation, lv_buses
-                )
-            target_bus, target_bus_distance = geo.find_nearest_bus(
-                geolocation, all_buses
+            lv_buses.sort_index()
+            lv_buses["components_at_bus"] = lv_buses.index.map(
+                lambda bus: len(self.get_component_at_bus(bus, comp_type))
             )
-            if allow_mv_connection:
-                target_bus_all, target_bus_distance_all = geo.find_nearest_bus(
-                    geolocation, self.mv_grid.buses_df
-                )
-            else:
-                target_bus_all, target_bus_distance_all = None, np.nan
+            lv_buses = lv_buses[
+                lv_buses.components_at_bus <= allowed_number_of_comp_per_bus
+            ]
+            target_bus, target_bus_distance = geo.find_nearest_bus(
+                geolocation, lv_buses
+            )
 
-        if target_bus_distance_all < factor_mv_connection * target_bus_distance:
-            target_bus, target_bus_distance = target_bus_all, target_bus_distance_all
-
+        # check distance from target bus
         if target_bus_distance > max_distance_from_target_bus:
-            if target_bus_distance_all < max_distance_from_target_bus:
-                comp_data["voltage_level"] = 5
-                comp_data.pop("type", None)
-                return self.connect_to_mv(edisgo_object, comp_data, comp_type=comp_type)
-            else:
-                bus = self._connect_to_lv_bus(
-                    edisgo_object, target_bus, comp_type, comp_data
-                )
-                self.buses_df.loc[bus, "components_at_bus"] = 1
+            # if target bus is too far away from the component, connect the component
+            # via a new bus
+            bus = self._connect_to_lv_bus(
+                edisgo_object, target_bus, comp_type, comp_data
+            )
         else:
+            # if target bus is very close to the component, the component is directly
+            # connected at the target bus
             bus = target_bus
-
-        comp_data.pop("geom", None)
-        comp_data.pop("p", None)
-        return add_func(bus=bus, **comp_data)
+        comp_data.pop("geom")
+        comp_data.pop("p")
+        comp_name = add_func(bus=bus, **comp_data)
+        return comp_name
 
     def _connect_mv_bus_to_target_object(
         self, edisgo_object, bus, target_obj, line_type, number_parallel_lines
