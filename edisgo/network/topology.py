@@ -3092,6 +3092,9 @@ class Topology:
                 f"optimisation."
             )
 
+        # check for meshed grid
+        self.find_meshes()
+
     def assign_feeders(self, mode: str = "grid_feeder"):
         """
         Assigns MV or LV feeder to each bus and line, depending on the `mode`.
@@ -3160,3 +3163,29 @@ class Topology:
 
     def __repr__(self):
         return f"Network topology {self.id}"
+
+    def find_meshes(edisgo_obj) -> list[list[int]] | None:
+        """
+        Find all meshes in the grid.
+
+        Parameters
+        ----------
+        edisgo_obj : EDisGo
+            EDisGo object.
+
+        Returns
+        -------
+        Optional[List[List[int]]]
+            List of all meshes in the grid.
+            Each mesh is represented as a list of node indices.
+            If no meshes are found, None is returned.
+        """
+        meshes = nx.cycle_basis(edisgo_obj.to_graph())
+        if meshes:
+            logger.warning(
+                "Grid contains mesh(es). This might cause problems in "
+                "the power flow or optimisation."
+            )
+            return meshes
+        else:
+            return None

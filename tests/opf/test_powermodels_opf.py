@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from edisgo import EDisGo
-from edisgo.opf.powermodels_opf import find_meshes, pm_optimize
+from edisgo.opf.powermodels_opf import pm_optimize
 from edisgo.tools.tools import aggregate_district_heating_components
 
 
@@ -336,29 +336,4 @@ class TestPowerModelsOPF:
                     atol=1e-3,
                 )
             )
-        )
-
-    def test_find_meshes(self, caplog: pytest.LogCaptureFixture):
-        meshes = find_meshes(self.edisgo)
-        assert not meshes
-        self.edisgo.topology.add_line(
-            "Bus_GeneratorFluctuating_2",
-            "Bus_GeneratorFluctuating_6",
-            0.1,
-            x=0.1,
-            r=0.1,
-        )
-        meshes = find_meshes(self.edisgo)
-        assert len(meshes) == 1
-        assert "Bus_GeneratorFluctuating_2" in meshes[0]
-        assert "Bus_GeneratorFluctuating_6" in meshes[0]
-        self.edisgo.topology.add_line(
-            "Bus_BranchTee_LVGrid_2_3", "Bus_BranchTee_LVGrid_3_3", 0.1, x=0.1, r=0.1
-        )
-        meshes = find_meshes(self.edisgo)
-        assert len(meshes) == 2
-        assert "Bus_BranchTee_LVGrid_2_3" in meshes[1]
-        assert (
-            "Grid contains mesh(es). This might cause problems"
-            " in the power flow or optimisation." in caplog.text
         )
