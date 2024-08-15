@@ -2559,6 +2559,8 @@ class Topology:
                 lv_buses_masked = lv_buses_masked[
                     lv_buses_masked.num_comps == lv_buses_masked.num_comps.min()
                 ]
+                if lv_buses_masked.num_comps.min() >= allowed_number_of_comp_per_bus:
+                    warnings.warn("Maximum number of components per bus exceeded")
                 target_bus = lv_buses_masked.loc[lv_buses_masked.distance.idxmin()]
 
             # Remove unnecessary keys from comp_data
