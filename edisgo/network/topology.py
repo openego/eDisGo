@@ -2455,7 +2455,13 @@ class Topology:
             comp_name = add_func(bus=bus, **comp_data)
         else:
             # For voltage level 7, find the nearest LV bus
-            mv_buses = self.buses_df.loc[self.mv_grid.buses_df.index]
+            if allow_mv_connection:
+                mv_buses = self.buses_df.loc[self.mv_grid.buses_df.index]
+                mv_buses = self.calculate_distance_to_bus(mv_buses, geolocation)
+                mv_buses_masked = mv_buses.loc[
+                    mv_buses.distance < max_distance_from_target_bus
+                ]
+
             lv_buses = self.buses_df.drop(self.mv_grid.buses_df.index)
             if comp_type == "charging_point":
                 if comp_data["sector"] == "home":
@@ -2468,14 +2474,10 @@ class Topology:
             else:
                 lv_buses = lv_buses.loc[self.loads_df.bus]
 
-            # Calculate distances to MV and LV buses
-            mv_buses = self.calculate_distance_to_bus(mv_buses, geolocation)
+            # Calculate distances to LV buses
             lv_buses = self.calculate_distance_to_bus(lv_buses, geolocation)
 
             # Filter buses within the max distance
-            mv_buses_masked = mv_buses.loc[
-                mv_buses.distance < max_distance_from_target_bus
-            ]
             lv_buses_masked = lv_buses.loc[
                 lv_buses.distance < max_distance_from_target_bus
             ]
