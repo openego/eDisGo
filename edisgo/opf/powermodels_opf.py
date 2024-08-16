@@ -4,21 +4,16 @@ import os
 import subprocess
 import sys
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 
 from edisgo.flex_opt import exceptions
 from edisgo.io.powermodels_io import from_powermodels
 
-if TYPE_CHECKING:
-    from edisgo import EDisGo
-
 logger = logging.getLogger(__name__)
 
 
 def pm_optimize(
-    edisgo_obj: EDisGo,
+    edisgo_obj,
     s_base: int = 1,
     flexible_cps: np.ndarray | None = None,
     flexible_hps: np.ndarray | None = None,

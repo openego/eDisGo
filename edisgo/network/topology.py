@@ -5,7 +5,6 @@ import os
 import random
 import warnings
 
-from typing import TYPE_CHECKING
 from zipfile import ZipFile
 
 import networkx as nx
@@ -30,9 +29,6 @@ if "READTHEDOCS" not in os.environ:
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
-
-if TYPE_CHECKING:
-    from edisgo import EDisGo
 
 
 logger = logging.getLogger(__name__)
@@ -1822,7 +1818,7 @@ class Topology:
                 self.lines_df.at[line, "bus1"] = bus0
 
     def connect_to_mv(
-        self, edisgo_object: EDisGo, comp_data: dict, comp_type: str = "generator"
+        self, edisgo_object, comp_data: dict, comp_type: str = "generator"
     ) -> str:
         """
         Add and connect new component.
@@ -2006,7 +2002,7 @@ class Topology:
 
     def connect_to_lv(
         self,
-        edisgo_object: EDisGo,
+        edisgo_object,
         comp_data: dict,
         comp_type: str = "generator",
         allowed_number_of_comp_per_bus: int = 2,
@@ -2662,7 +2658,7 @@ class Topology:
 
     def _connect_to_lv_bus(
         self,
-        edisgo_object: EDisGo,
+        edisgo_object,
         target_bus: str,
         comp_type: str,
         comp_data: dict,
