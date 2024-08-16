@@ -5,6 +5,7 @@ import os
 import random
 import warnings
 
+from typing import TYPE_CHECKING
 from zipfile import ZipFile
 
 import networkx as nx
@@ -29,6 +30,10 @@ if "READTHEDOCS" not in os.environ:
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
+
 
 logger = logging.getLogger(__name__)
 
@@ -400,7 +405,7 @@ class Topology:
         self._storage_units_df = df
 
     @property
-    def transformers_df(self):
+    def transformers_df(self) -> pd.DataFrame:
         """
         Dataframe with all MV/LV transformers.
 
@@ -441,11 +446,11 @@ class Topology:
             return pd.DataFrame(columns=COLUMNS["transformers_df"])
 
     @transformers_df.setter
-    def transformers_df(self, df):
+    def transformers_df(self, df: pd.DataFrame) -> None:
         self._transformers_df = df
 
     @property
-    def transformers_hvmv_df(self):
+    def transformers_hvmv_df(self) -> pd.DataFrame:
         """
         Dataframe with all HV/MV transformers.
 
@@ -468,7 +473,7 @@ class Topology:
             return pd.DataFrame(columns=COLUMNS["transformers_df"])
 
     @transformers_hvmv_df.setter
-    def transformers_hvmv_df(self, df):
+    def transformers_hvmv_df(self, df: pd.DataFrame) -> None:
         self._transformers_hvmv_df = df
 
     @property
@@ -528,7 +533,7 @@ class Topology:
             return pd.DataFrame(columns=COLUMNS["lines_df"])
 
     @lines_df.setter
-    def lines_df(self, df):
+    def lines_df(self, df: pd.DataFrame) -> None:
         self._lines_df = df
 
     @property
@@ -1480,7 +1485,7 @@ class Topology:
         )
         return line_name
 
-    def add_bus(self, bus_name, v_nom, **kwargs):
+    def add_bus(self, bus_name: str, v_nom: float, **kwargs) -> str:
         """
         Adds bus to topology.
 
@@ -1542,7 +1547,7 @@ class Topology:
         )
         return bus_name
 
-    def remove_load(self, name):
+    def remove_load(self, name: str) -> None:
         """
         Removes load with given name from topology.
 
@@ -1564,7 +1569,7 @@ class Topology:
                 self.remove_line(line_name)
                 logger.debug(f"Line {line_name} removed together with load {name}.")
 
-    def remove_generator(self, name):
+    def remove_generator(self, name: str) -> None:
         """
         Removes generator with given name from topology.
 
@@ -1590,7 +1595,7 @@ class Topology:
                     f"Line {line_name} removed together with generator {name}."
                 )
 
-    def remove_storage_unit(self, name):
+    def remove_storage_unit(self, name: str) -> None:
         """
         Removes storage with given name from topology.
 
@@ -1616,7 +1621,7 @@ class Topology:
                     f"Line {line_name} removed together with storage unit {name}."
                 )
 
-    def remove_line(self, name):
+    def remove_line(self, name: str) -> None:
         """
         Removes line with given name from topology.
 
@@ -1653,7 +1658,7 @@ class Topology:
             self.remove_bus(bus1)
             logger.debug(f"Bus {bus1} removed together with line {name}")
 
-    def remove_bus(self, name):
+    def remove_bus(self, name: str) -> None:
         """
         Removes bus with given name from topology.
 
@@ -1681,7 +1686,7 @@ class Topology:
         else:
             self._buses_df = self.buses_df.drop(name)
 
-    def update_number_of_parallel_lines(self, lines_num_parallel):
+    def update_number_of_parallel_lines(self, lines_num_parallel: pd.Series) -> None:
         """
         Changes number of parallel lines and updates line attributes.
 
@@ -1723,7 +1728,7 @@ class Topology:
             lines_num_parallel.index, "num_parallel"
         ] = lines_num_parallel
 
-    def change_line_type(self, lines, new_line_type):
+    def change_line_type(self, lines: list[str], new_line_type: str) -> None:
         """
         Changes line type of specified lines to given new line type.
 
@@ -1797,7 +1802,7 @@ class Topology:
             self._lines_df.loc[lines, "num_parallel"],
         )
 
-    def sort_buses(self):
+    def sort_buses(self) -> None:
         """
         Sorts buses in :py:attr:`~lines_df` such that bus0 is always the upstream bus.
 
@@ -1816,7 +1821,9 @@ class Topology:
                 self.lines_df.at[line, "bus0"] = bus1
                 self.lines_df.at[line, "bus1"] = bus0
 
-    def connect_to_mv(self, edisgo_object, comp_data, comp_type="generator"):
+    def connect_to_mv(
+        self, edisgo_object: EDisGo, comp_data: dict, comp_type: str = "generator"
+    ) -> str:
         """
         Add and connect new component.
 
@@ -1999,11 +2006,11 @@ class Topology:
 
     def connect_to_lv(
         self,
-        edisgo_object,
-        comp_data,
-        comp_type="generator",
-        allowed_number_of_comp_per_bus=2,
-    ):
+        edisgo_object: EDisGo,
+        comp_data: dict,
+        comp_type: str = "generator",
+        allowed_number_of_comp_per_bus: int = 2,
+    ) -> str:
         """
         Add and connect new component to LV grid topology.
 
@@ -2653,7 +2660,13 @@ class Topology:
 
             return target_obj["repr"]
 
-    def _connect_to_lv_bus(self, edisgo_object, target_bus, comp_type, comp_data):
+    def _connect_to_lv_bus(
+        self,
+        edisgo_object: EDisGo,
+        target_bus: str,
+        comp_type: str,
+        comp_data: dict,
+    ) -> str:
         """
         Sets up new bus and line to connect new component to specified target bus.
 
@@ -2738,7 +2751,7 @@ class Topology:
 
         return b
 
-    def to_graph(self):
+    def to_graph(self) -> nx.Graph:
         """
         Returns graph representation of the grid.
 
@@ -2786,7 +2799,7 @@ class Topology:
         else:
             raise ValueError(f"{mode} is not valid. See docstring for more info.")
 
-    def to_csv(self, directory):
+    def to_csv(self, directory: str) -> None:
         """
         Exports topology to csv files.
 
