@@ -5,6 +5,9 @@ import os
 
 from typing import TYPE_CHECKING
 
+import geopy.distance
+import pandas as pd
+
 from geopy.distance import geodesic
 from pyproj import Transformer
 
@@ -324,3 +327,30 @@ def mv_grid_gdf(edisgo_obj: EDisGo):
         geometry=[edisgo_obj.topology.grid_district["geom"]],
         crs=f"EPSG:{edisgo_obj.topology.grid_district['srid']}",
     )
+
+
+def calculate_distance_to_buses_df(bus_df: pd.DataFrame, geom: Point) -> pd.DataFrame:
+    """
+    Calculate the distance between a bus and a given geometry.
+
+    Parameters
+    ----------
+    bus_df : pandas.DataFrame
+        Data of bus.
+        DataFrame has same rows as columns of
+        :attr:`~.network.topology.Topology.buses_df`.
+    geom : shapely.geometry.Point
+        Geometry to calculate distance to.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Data of bus with additional column 'distance' containing the distance
+        to the given geometry
+    """
+    distances = bus_df.apply(
+        lambda row: geopy.distance.distance((row["x"], row["y"]), (geom.x, geom.y)).km,
+        axis=1,
+    )
+    bus_df.loc[:, "distance"] = distances
+    return bus_df

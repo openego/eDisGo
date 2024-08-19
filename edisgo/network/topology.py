@@ -7,7 +7,6 @@ import warnings
 
 from zipfile import ZipFile
 
-import geopy.distance
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -2573,36 +2572,6 @@ class Topology:
             comp_name = add_func(bus=target_bus.name, **comp_data)
 
         return comp_name
-
-    def calculate_distance_to_bus(
-        self, bus_df: pd.DataFrame, geom: Point
-    ) -> pd.DataFrame:
-        """
-        Calculate the distance between a bus and a given geometry.
-
-        Parameters
-        ----------
-        bus_df : pandas.DataFrame
-            Data of bus.
-            DataFrame has same rows as columns of
-            :attr:`~.network.topology.Topology.buses_df`.
-        geom : shapely.geometry.Point
-            Geometry to calculate distance to.
-
-        Returns
-        -------
-        pandas.DataFrame
-            Data of bus with additional column 'distance' containing the distance
-            to the given geometry
-        """
-        distances = bus_df.apply(
-            lambda row: geopy.distance.distance(
-                (row["x"], row["y"]), (geom.x, geom.y)
-            ).km,
-            axis=1,
-        )
-        bus_df.loc[:, "distance"] = distances
-        return bus_df
 
     def _connect_mv_bus_to_target_object(
         self, edisgo_object, bus, target_obj, line_type, number_parallel_lines
