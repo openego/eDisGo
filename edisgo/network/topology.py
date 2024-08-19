@@ -2468,13 +2468,17 @@ class Topology:
         # Set the component type in comp_data if necessary
         if comp_type in ["charging_point", "heat_pump"]:
             comp_data["type"] = comp_type
+        elif comp_type in ["generator", "storage_unit"]:
+            comp_data["p_nom"] = comp_data["p"]
 
         # Determine the appropriate add function based on component type
         add_func = add_func_map.get(comp_type)
 
         if add_func is None:
-            logger.error(f"Component type {comp_type} is not a valid option.")
-            return
+            raise ValueError(
+                f"Provided component type {comp_type} is not valid. Must either be"
+                f"'generator', 'charging_point', 'heat_pump' or 'storage_unit'."
+            )
 
         # Find the nearest substation or MV bus
         if voltage_level == 6:
@@ -2512,16 +2516,27 @@ class Topology:
                     lv_loads = self.loads_df[
                         self.loads_df.sector.isin(["residential", "home"])
                     ]
+                    lv_loads = lv_loads.loc[
+                        ~lv_loads.bus.isin(self.mv_grid.buses_df.index)
+                    ]
                 elif comp_data["sector"] == "work":
                     lv_loads = self.loads_df[
                         self.loads_df.sector.isin(
                             ["industrial", "cts", "agricultural", "work"]
                         )
                     ]
+                    lv_loads = lv_loads.loc[
+                        ~lv_loads.bus.isin(self.mv_grid.buses_df.index)
+                    ]
+
                 else:
                     # public charging points should not be in buildings
                     lv_loads = self.loads_df
+                    lv_loads = lv_loads.loc[
+                        ~lv_loads.bus.isin(self.mv_grid.buses_df.index)
+                    ]
                     lv_buses = lv_buses.loc[~lv_buses.in_building]
+
                 lv_buses = lv_buses.loc[lv_loads.bus]
 
             # Calculate distances to LV buses
