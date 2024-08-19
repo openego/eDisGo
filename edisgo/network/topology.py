@@ -2275,7 +2275,9 @@ class Topology:
                     "component is therefore connected to random LV bus."
                 )
                 bus = random.choice(
-                    lv_grid.buses_df[~lv_grid.buses_df.in_building.astype(bool)].index
+                    lv_grid.buses_df[
+                        ~lv_grid.buses_df.in_building.astype(bool)
+                    ].index.tolist()
                 )
                 comp_data.pop("geom", None)
                 comp_data.pop("p")
