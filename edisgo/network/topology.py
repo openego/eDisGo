@@ -2433,8 +2433,12 @@ class Topology:
                 If the distance to the closest LV bus is less than the specified
                 maximum distance, the component is connected to the closest LV bus.
                 If the distance is greater, the distance to the closest MV bus is
-                calculated. If the distance to the closest MV bus is less than the
-                specified factor multiplied by the distance to the closest LV bus,
+                calculated. If the distance to the closest MV bus multiplied with
+                the factor is less than the distance to the closest LV bus, the
+                component is connected to the closest MV bus. The is no restriction
+                on the number of components of the same type connected to
+                the MV bus. If the distance is greater, the component
+                is connected to a new LV bus.
         """
 
         # Ensure 'p' is in comp_data, defaulting to 'p_set' or 'p_nom'
@@ -2472,7 +2476,7 @@ class Topology:
             logger.error(f"Component type {comp_type} is not a valid option.")
             return
 
-        # Find the nearest substation or LV bus
+        # Find the nearest substation or MV bus
         if voltage_level == 6:
             substations = self.buses_df.loc[self.transformers_df.bus1.unique()]
             mv_buses = self.buses_df.loc[self.mv_grid.buses_df.index]
@@ -2492,7 +2496,7 @@ class Topology:
             comp_data.pop("geom")
             comp_data.pop("p")
             comp_name = add_func(bus=bus, **comp_data)
-        else:
+        elif voltage_level == 7:
             # For voltage level 7, find the nearest LV bus
             if allow_mv_connection:
                 # find MV buses within the max distance
@@ -2530,17 +2534,23 @@ class Topology:
 
             # Handle cases where no LV buses are within the max distance
             if len(lv_buses_masked) == 0:
+                # If MV connection is allowed, connect to the nearest MV bus
+                # if it is closer than the factor multiplied by the distance
+                # to the nearest LV bus and there are MV buses within the
+                # max distance
                 if (
                     allow_mv_connection
                     and len(mv_buses_masked) > 0
-                    and mv_buses.distance.min()
-                    < factor_mv_connection * lv_buses.distance.min()
+                    and mv_buses.distance.min() * factor_mv_connection
+                    < lv_buses.distance.min()
                 ):
                     mv_buses_masked = mv_buses[
                         mv_buses.distance == mv_buses.distance.min()
                     ]
                 else:
-                    # If no LV buses are within the max distance, connect via a new bus
+                    # If no LV buses are within the max distance,
+                    # and MV connection is not allowed or no MV buses are
+                    # within the max distance, connect via a new bus
                     target_bus = self._connect_to_lv_bus(
                         edisgo_object=edisgo_object,
                         target_bus=lv_buses.distance.idxmin(),
@@ -2589,10 +2599,7 @@ class Topology:
                     lv_buses_masked = pd.DataFrame(self.buses_df.loc[target_bus]).T
                     lv_buses_masked["distance"] = 0
                     mv_buses_masked = pd.DataFrame()
-                    warnings.warn(
-                        "Maximum number of components per bus exceeded, "
-                        "connecting to new bus."
-                    )
+
                 target_bus = lv_buses_masked.loc[lv_buses_masked.distance.idxmin()]
                 if isinstance(target_bus, pd.DataFrame):
                     target_bus = target_bus.iloc[0]
