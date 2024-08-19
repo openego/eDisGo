@@ -945,10 +945,14 @@ class TestTopologyWithEdisgoObject:
 
     """
 
-    @pytest.yield_fixture(autouse=True)
+    @pytest.fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
+        self.edisgo3 = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        self.edisgo3.set_time_series_worst_case_analysis()
 
     def test_to_geopandas(self):
         geopandas_container = self.edisgo.topology.to_geopandas()
@@ -1909,3 +1913,121 @@ class TestTopologyWithEdisgoObject:
         assert "There are lines with very short line lengths" in caplog.text
         assert "Very small values for impedance of lines" and line in caplog.text
         caplog.clear()
+
+    # Define the parameters
+    sector_values = ["home", "work"]
+    comp_type_values = ["charging_point", "heat_pump", "storage_unit", "generator"]
+    voltage_level_values = [6, 7]
+    max_distance_from_target_bus_values = [0.01]
+    allowed_number_of_comp_per_bus_values = [2]
+    allow_mv_connection_values = [True, False]
+
+    # Parametrize the test function
+    @pytest.mark.parametrize("sector", sector_values)
+    @pytest.mark.parametrize("comp_type", comp_type_values)
+    @pytest.mark.parametrize("voltage_level", voltage_level_values)
+    @pytest.mark.parametrize(
+        "max_distance_from_target_bus", max_distance_from_target_bus_values
+    )
+    @pytest.mark.parametrize(
+        "allowed_number_of_comp_per_bus", allowed_number_of_comp_per_bus_values
+    )
+    @pytest.mark.parametrize("allow_mv_connection", allow_mv_connection_values)
+    def test_connect_to_lv_based_on_geolocation(
+        self,
+        sector,
+        comp_type,
+        voltage_level,
+        max_distance_from_target_bus,
+        allowed_number_of_comp_per_bus,
+        allow_mv_connection,
+    ):
+        x = self.edisgo3.topology.buses_df.at["Busbar_mvgd_33535_MV", "x"]
+        y = self.edisgo3.topology.buses_df.at["Busbar_mvgd_33535_MV", "y"]
+        test_cp = {
+            "p_set": 0.01,
+            "geom": Point((x, y)),
+            "sector": sector,
+            "voltage_level": voltage_level,
+            "mvlv_subst_id": 3.0,
+        }
+        if comp_type == "generator":
+            test_cp["generator_type"] = "solar"
+            test_cp["generator_id"] = 23456
+
+        if (
+            comp_type == "charging_point"
+            and sector == "home"
+            and voltage_level == 7
+            and not allow_mv_connection
+            and max_distance_from_target_bus == 0.01
+            and allowed_number_of_comp_per_bus == 2
+        ):
+            for _ in range(5):
+                test_cp = {
+                    "p_set": 0.01,
+                    "geom": Point((x, y)),
+                    "sector": sector,
+                    "voltage_level": voltage_level,
+                    "mvlv_subst_id": 3.0,
+                }
+                comp_name = self.edisgo3.topology.connect_to_lv_based_on_geolocation(
+                    edisgo_object=self.edisgo3,
+                    comp_data=test_cp,
+                    comp_type=comp_type,
+                    max_distance_from_target_bus=max_distance_from_target_bus,
+                    allowed_number_of_comp_per_bus=allowed_number_of_comp_per_bus,
+                    allow_mv_connection=allow_mv_connection,
+                )
+                assert comp_name.startswith("Charging_Point_")
+            assert len(self.edisgo3.topology.charging_points_df) == 5
+            assert len(self.edisgo3.topology.charging_points_df.bus.unique()) == 3
+
+        else:
+            comp_name = self.edisgo3.topology.connect_to_lv_based_on_geolocation(
+                edisgo_object=self.edisgo3,
+                comp_data=test_cp,
+                comp_type=comp_type,
+                max_distance_from_target_bus=max_distance_from_target_bus,
+                allowed_number_of_comp_per_bus=allowed_number_of_comp_per_bus,
+                allow_mv_connection=allow_mv_connection,
+            )
+            if comp_type == "charging_point":
+                assert comp_name.startswith("Charging_Point_")
+            elif comp_type == "heat_pump":
+                assert comp_name.startswith("Heat_Pump_")
+            elif comp_type == "storage_unit":
+                assert comp_name.startswith("StorageUnit")
+            else:
+                assert comp_name.startswith("Generator_")
+
+    # Separate test cases for specific combinations
+    @pytest.mark.parametrize(
+        "sector, comp_type, voltage_level",
+        [
+            ("public", "charging_point", 8),
+            ("public", "failing_test", 6),
+            ("public", "failing_test", 8),
+        ],
+    )
+    def test_connect_to_lv_based_on_geolocation_value_error(
+        self, sector, comp_type, voltage_level
+    ):
+        x = self.edisgo3.topology.buses_df.at["Busbar_mvgd_33535_MV", "x"]
+        y = self.edisgo3.topology.buses_df.at["Busbar_mvgd_33535_MV", "y"]
+        test_cp = {
+            "p_set": 0.01,
+            "geom": Point((x, y)),
+            "sector": sector,
+            "voltage_level": voltage_level,
+            "mvlv_subst_id": 3.0,
+        }
+        with pytest.raises(ValueError):
+            self.edisgo3.topology.connect_to_lv_based_on_geolocation(
+                edisgo_object=self.edisgo3,
+                comp_data=test_cp,
+                comp_type=comp_type,
+                max_distance_from_target_bus=0.01,
+                allowed_number_of_comp_per_bus=2,
+                allow_mv_connection=False,
+            )
