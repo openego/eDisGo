@@ -2483,7 +2483,10 @@ class Topology:
         # Find the nearest substation or MV bus
         if voltage_level == 6:
             substations = self.buses_df.loc[self.transformers_df.bus1.unique()]
-            mv_buses = self.buses_df.loc[self.mv_grid.buses_df.index]
+            if comp_type == "charging_point":
+                mv_buses = self.buses_df.loc[self.mv_grid.buses_df.index]
+            else:
+                mv_buses = pd.DataFrame()
             substations = pd.concat([substations, mv_buses])
             target_bus, target_bus_distance = geo.find_nearest_bus(
                 geolocation, substations
