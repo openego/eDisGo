@@ -215,12 +215,9 @@ def find_nearest_bus(point, bus_target):
         Tuple that contains the name of the nearest bus and its distance in km.
 
     """
-    bus_target["dist"] = [
-        geodesic((point.y, point.x), (y, x)).km
-        for (x, y) in zip(bus_target["x"], bus_target["y"])
-    ]
+    bus_target = calculate_distance_to_buses_df(point, bus_target)
 
-    return bus_target["dist"].idxmin(), bus_target["dist"].min()
+    return bus_target["distance"].idxmin(), bus_target["distance"].min()
 
 
 def find_nearest_conn_objects(grid_topology, bus, lines, conn_diff_tolerance=0.0001):
@@ -329,28 +326,33 @@ def mv_grid_gdf(edisgo_obj: EDisGo):
     )
 
 
-def calculate_distance_to_buses_df(bus_df: pd.DataFrame, geom: Point) -> pd.DataFrame:
+def calculate_distance_to_buses_df(
+    point: Point, busses_df: pd.DataFrame
+) -> pd.DataFrame:
     """
-    Calculate the distance between a bus and a given geometry.
+    Calculate the distance between buses and a given geometry.
 
     Parameters
     ----------
-    bus_df : pandas.DataFrame
-        Data of bus.
-        DataFrame has same rows as columns of
+    point : :shapely:`shapely.Point<Point>`
+        Geolocation to calculate distance to.
+    busses_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with buses and their positions given in 'x' and 'y'
+        columns. The dataframe has the same format as
         :attr:`~.network.topology.Topology.buses_df`.
-    geom : shapely.geometry.Point
-        Geometry to calculate distance to.
 
     Returns
     -------
-    pandas.DataFrame
-        Data of bus with additional column 'distance' containing the distance
-        to the given geometry
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Data of `bus_df` with additional column 'distance' containing the distance
+        to the given geometry in km.
+
     """
-    distances = bus_df.apply(
-        lambda row: geopy.distance.distance((row["x"], row["y"]), (geom.x, geom.y)).km,
+    distances = busses_df.apply(
+        lambda row: geopy.distance.distance(
+            (row["x"], row["y"]), (point.x, point.y)
+        ).km,
         axis=1,
     )
-    bus_df.loc[:, "distance"] = distances
-    return bus_df
+    busses_df.loc[:, "distance"] = distances
+    return busses_df
