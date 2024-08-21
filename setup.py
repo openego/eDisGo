@@ -33,7 +33,7 @@ def read(fname):
 requirements = [
     "contextily",
     "dash < 2.9.0",
-    "demandlib < 0.2.0",
+    "demandlib",
     "descartes",
     "egoio >= 0.4.7",
     "geoalchemy2 < 0.7.0",
