@@ -72,8 +72,12 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
     grid.import_from_csv_folder(path)
 
     # write dataframes to edisgo_obj
-    edisgo_obj.topology.buses_df = grid.buses[edisgo_obj.topology.buses_df.columns]
-    edisgo_obj.topology.lines_df = grid.lines[edisgo_obj.topology.lines_df.columns]
+    edisgo_obj.topology.buses_df = grid.buses[
+        edisgo_obj.topology.buses_df.columns
+    ].copy()
+    edisgo_obj.topology.lines_df = grid.lines[
+        edisgo_obj.topology.lines_df.columns
+    ].copy()
     if legacy_ding0_grids:
         logger.debug("Use ding0 legacy grid import.")
         # rename column peak_load to p_set
