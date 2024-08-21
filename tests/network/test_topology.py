@@ -1930,7 +1930,4 @@ class TestTopologyWithEdisgoObject:
         meshes = Topology.find_meshes(self.edisgo)
         assert len(meshes) == 2
         assert "Bus_BranchTee_LVGrid_2_3" in meshes[1]
-        assert (
-            "Grid contains mesh(es). This might cause problems"
-            " in the power flow or optimisation." in caplog.text
-        )
+        assert "Grid contains mesh(es)." in caplog.text

@@ -3183,8 +3183,10 @@ class Topology:
         meshes = nx.cycle_basis(edisgo_obj.to_graph())
         if meshes:
             logger.warning(
-                "Grid contains mesh(es). This might cause problems in "
-                "the power flow or optimisation."
+                "Grid contains mesh(es). Be aware, that the grid expansion methodology "
+                "is currently not able to handle meshes. Further, the optimisation of "
+                "flexibility dispatch is not exact in case of meshed grids, but can "
+                "still be used."
             )
             return meshes
         else:
