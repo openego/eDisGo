@@ -2441,72 +2441,52 @@ class Topology:
                 is connected to a new LV bus.
         """
 
-        # Ensure 'p' is in comp_data, defaulting to 'p_set' or 'p_nom'
-        if "p" not in comp_data.keys():
-            comp_data["p"] = (
-                comp_data["p_set"]
-                if "p_set" in comp_data.keys()
-                else comp_data["p_nom"]
+        def validate_voltage_level(voltage_level):
+            if voltage_level not in [6, 7]:
+                raise ValueError(
+                    f"Voltage level must either be 6 or 7 but given voltage level "
+                    f"is {voltage_level}."
+                )
+
+        def get_add_function(comp_type):
+            add_func_map = {
+                "generator": self.add_generator,
+                "charging_point": self.add_load,
+                "heat_pump": self.add_load,
+                "storage_unit": self.add_storage_unit,
+            }
+            add_func = add_func_map.get(comp_type)
+            if add_func is None:
+                raise ValueError(
+                    f"Provided component type {comp_type} is not valid. Must either be"
+                    f"'generator', 'charging_point', 'heat_pump' or 'storage_unit'."
+                )
+            return add_func
+
+        def find_nearest_bus(geolocation, buses):
+            return geo.find_nearest_bus(geolocation, buses)
+
+        def connect_to_lv_bus(edisgo_object, target_bus, comp_type, comp_data):
+            return self._connect_to_lv_bus(
+                edisgo_object, target_bus, comp_type, comp_data
             )
 
-        # Extract and validate voltage level
-        voltage_level = comp_data.pop("voltage_level")
-        if voltage_level not in [6, 7]:
-            raise ValueError(
-                f"Voltage level must either be 6 or 7 but given voltage level "
-                f"is {voltage_level}."
-            )
-        geolocation = comp_data.get("geom")
-
-        # Dictionary to map component types to their corresponding add functions
-        add_func_map = {
-            "generator": self.add_generator,
-            "charging_point": self.add_load,
-            "heat_pump": self.add_load,
-            "storage_unit": self.add_storage_unit,
-        }
-        # Set the component type in comp_data if necessary
-        if comp_type in ["charging_point", "heat_pump"]:
-            comp_data["type"] = comp_type
-        elif comp_type in ["generator", "storage_unit"]:
-            comp_data["p_nom"] = comp_data["p"]
-
-        # Determine the appropriate add function based on component type
-        add_func = add_func_map.get(comp_type)
-
-        if add_func is None:
-            raise ValueError(
-                f"Provided component type {comp_type} is not valid. Must either be"
-                f"'generator', 'charging_point', 'heat_pump' or 'storage_unit'."
-            )
-
-        # Find the nearest substation or MV bus
-        if voltage_level == 6:
+        def handle_voltage_level_6():
             substations = self.buses_df.loc[self.transformers_df.bus1.unique()]
             if comp_type == "charging_point":
                 mv_buses = self.buses_df.loc[self.mv_grid.buses_df.index]
             else:
                 mv_buses = pd.DataFrame()
             substations = pd.concat([substations, mv_buses])
-            target_bus, target_bus_distance = geo.find_nearest_bus(
-                geolocation, substations
-            )
-            # Check distance from target bus
+            target_bus, target_bus_distance = find_nearest_bus(geolocation, substations)
             if target_bus_distance > max_distance_from_target_bus:
-                # If target bus is too far away, connect via a new bus
-                bus = self._connect_to_lv_bus(
-                    edisgo_object, target_bus, comp_type, comp_data
-                )
+                bus = connect_to_lv_bus(edisgo_object, target_bus, comp_type, comp_data)
             else:
-                # If target bus is close, connect directly to the target bus
                 bus = target_bus
-            comp_data.pop("geom")
-            comp_data.pop("p")
-            comp_name = add_func(bus=bus, **comp_data)
-        elif voltage_level == 7:
-            # For voltage level 7, find the nearest LV bus
+            return bus
+
+        def handle_voltage_level_7():
             if allow_mv_connection:
-                # find MV buses within the max distance
                 mv_buses = self.buses_df.loc[self.mv_grid.buses_df.index]
                 mv_buses = geo.calculate_distance_to_buses_df(mv_buses, geolocation)
                 mv_buses_masked = mv_buses.loc[
@@ -2531,31 +2511,20 @@ class Topology:
                     lv_loads = lv_loads.loc[
                         ~lv_loads.bus.isin(self.mv_grid.buses_df.index)
                     ]
-
                 else:
-                    # public charging points should not be in buildings
                     lv_loads = self.loads_df
                     lv_loads = lv_loads.loc[
                         ~lv_loads.bus.isin(self.mv_grid.buses_df.index)
                     ]
                     lv_buses = lv_buses.loc[~lv_buses.in_building]
-
                 lv_buses = lv_buses.loc[lv_loads.bus]
 
-            # Calculate distances to LV buses
             lv_buses = geo.calculate_distance_to_buses_df(lv_buses, geolocation)
-
-            # Filter buses within the max distance
             lv_buses_masked = lv_buses.loc[
                 lv_buses.distance < max_distance_from_target_bus
             ].copy()
 
-            # Handle cases where no LV buses are within the max distance
             if len(lv_buses_masked) == 0:
-                # If MV connection is allowed, connect to the nearest MV bus
-                # if it is closer than the factor multiplied by the distance
-                # to the nearest LV bus and there are MV buses within the
-                # max distance
                 if (
                     allow_mv_connection
                     and len(mv_buses_masked) > 0
@@ -2566,14 +2535,8 @@ class Topology:
                         mv_buses.distance == mv_buses.distance.min()
                     ]
                 else:
-                    # If no LV buses are within the max distance,
-                    # and MV connection is not allowed or no MV buses are
-                    # within the max distance, connect via a new bus
-                    target_bus = self._connect_to_lv_bus(
-                        edisgo_object=edisgo_object,
-                        target_bus=lv_buses.distance.idxmin(),
-                        comp_type=comp_type,
-                        comp_data=comp_data,
+                    target_bus = connect_to_lv_bus(
+                        edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
                     )
                     lv_buses_masked = pd.DataFrame(self.buses_df.loc[target_bus]).T
                     lv_buses_masked["distance"] = 0
@@ -2583,8 +2546,6 @@ class Topology:
 
             if not mv_buses_masked.empty:
                 target_bus = mv_buses_masked.loc[mv_buses_masked.distance.idxmin()]
-            # Check how many components of the same type are already connected
-            # to the target bus
             else:
                 comp_df = {
                     "charging_point": self.charging_points_df,
@@ -2598,21 +2559,16 @@ class Topology:
                     .groupby("bus")
                     .size()
                 )
-
                 lv_buses_masked.loc[:, "num_comps"] = (
                     lv_buses_masked.index.map(comp_type_counts).fillna(0).astype(int)
                 )
-
                 lv_buses_masked = lv_buses_masked[
                     lv_buses_masked.num_comps == lv_buses_masked.num_comps.min()
                 ]
 
                 if lv_buses_masked.num_comps.min() >= allowed_number_of_comp_per_bus:
-                    target_bus = self._connect_to_lv_bus(
-                        edisgo_object=edisgo_object,
-                        target_bus=lv_buses.distance.idxmin(),
-                        comp_type=comp_type,
-                        comp_data=comp_data,
+                    target_bus = connect_to_lv_bus(
+                        edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
                     )
                     lv_buses_masked = pd.DataFrame(self.buses_df.loc[target_bus]).T
                     lv_buses_masked["distance"] = 0
@@ -2621,12 +2577,42 @@ class Topology:
                 target_bus = lv_buses_masked.loc[lv_buses_masked.distance.idxmin()]
                 if isinstance(target_bus, pd.DataFrame):
                     target_bus = target_bus.iloc[0]
-            # Remove unnecessary keys from comp_data
-            comp_data.pop("geom")
-            comp_data.pop("p")
+            return target_bus.name
 
-            # Add the component to the grid
-            comp_name = add_func(bus=target_bus.name, **comp_data)
+        # Ensure 'p' is in comp_data, defaulting to 'p_set' or 'p_nom'
+        if "p" not in comp_data.keys():
+            comp_data["p"] = (
+                comp_data["p_set"]
+                if "p_set" in comp_data.keys()
+                else comp_data["p_nom"]
+            )
+
+        # Extract and validate voltage level
+        voltage_level = comp_data.pop("voltage_level")
+        validate_voltage_level(voltage_level)
+        geolocation = comp_data.get("geom")
+
+        # Determine the appropriate add function based on component type
+        add_func = get_add_function(comp_type)
+
+        # Set the component type in comp_data if necessary
+        if comp_type in ["charging_point", "heat_pump"]:
+            comp_data["type"] = comp_type
+        elif comp_type in ["generator", "storage_unit"]:
+            comp_data["p_nom"] = comp_data["p"]
+
+        # Handle different voltage levels
+        if voltage_level == 6:
+            bus = handle_voltage_level_6()
+        elif voltage_level == 7:
+            bus = handle_voltage_level_7()
+
+        # Remove unnecessary keys from comp_data
+        comp_data.pop("geom")
+        comp_data.pop("p")
+
+        # Add the component to the grid
+        comp_name = add_func(bus=bus, **comp_data)
 
         return comp_name
 
