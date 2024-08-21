@@ -1933,25 +1933,15 @@ class TestTopologyWithEdisgoObject:
         assert "Very small values for impedance of lines" and line in caplog.text
         caplog.clear()
 
-    # Define the parameters
-    sector_values = ["home", "work"]
-    comp_type_values = ["charging_point", "heat_pump", "storage_unit", "generator"]
-    voltage_level_values = [6, 7]
-    max_distance_from_target_bus_values = [0.01]
-    allowed_number_of_comp_per_bus_values = [2]
-    allow_mv_connection_values = [True, False]
-
     # Parametrize the test function
-    @pytest.mark.parametrize("sector", sector_values)
-    @pytest.mark.parametrize("comp_type", comp_type_values)
-    @pytest.mark.parametrize("voltage_level", voltage_level_values)
+    @pytest.mark.parametrize("sector", ["home", "work"])
     @pytest.mark.parametrize(
-        "max_distance_from_target_bus", max_distance_from_target_bus_values
+        "comp_type", ["charging_point", "heat_pump", "storage_unit", "generator"]
     )
-    @pytest.mark.parametrize(
-        "allowed_number_of_comp_per_bus", allowed_number_of_comp_per_bus_values
-    )
-    @pytest.mark.parametrize("allow_mv_connection", allow_mv_connection_values)
+    @pytest.mark.parametrize("voltage_level", [6, 7])
+    @pytest.mark.parametrize("max_distance_from_target_bus", [0.01])
+    @pytest.mark.parametrize("allowed_number_of_comp_per_bus", [2])
+    @pytest.mark.parametrize("allow_mv_connection", [True, False])
     def test_connect_to_lv_based_on_geolocation_parametrized(
         self,
         sector,

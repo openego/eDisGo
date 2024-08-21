@@ -2472,24 +2472,24 @@ class Topology:
                 )
             return add_func
 
-        def find_nearest_bus(geolocation, buses):
-            return geo.find_nearest_bus(geolocation, buses)
-
-        def connect_to_lv_bus(edisgo_object, target_bus, comp_type, comp_data):
-            return self._connect_to_lv_bus(
-                edisgo_object, target_bus, comp_type, comp_data
-            )
-
         def handle_voltage_level_6():
+            # get substations and MV buses
             substations = self.buses_df.loc[self.transformers_df.bus1.unique()]
-            if comp_type == "charging_point":
+            if allow_mv_connection:
                 mv_buses = self.buses_df.loc[self.mv_grid.buses_df.index]
             else:
                 mv_buses = pd.DataFrame()
-            substations = pd.concat([substations, mv_buses])
-            target_bus, target_bus_distance = find_nearest_bus(geolocation, substations)
-            if target_bus_distance > max_distance_from_target_bus:
-                bus = connect_to_lv_bus(edisgo_object, target_bus, comp_type, comp_data)
+            all_buses = pd.concat([substations, mv_buses])
+            target_bus, target_bus_distance = geo.find_nearest_bus(
+                geolocation, all_buses
+            )
+            if target_bus in substations.index:
+                if target_bus_distance > max_distance_from_target_bus:
+                    bus = self._connect_to_lv_bus(
+                        edisgo_object, target_bus, comp_type, comp_data
+                    )
+                else:
+                    bus = self.connect_to_lv(edisgo_object, comp_data, comp_type)
             else:
                 bus = target_bus
             return bus
@@ -2543,49 +2543,51 @@ class Topology:
                     mv_buses_masked = mv_buses[
                         mv_buses.distance == mv_buses.distance.min()
                     ]
+                    target_bus = mv_buses_masked.loc[mv_buses_masked.distance.idxmin()]
+                    return target_bus.name
+
                 else:
-                    target_bus = connect_to_lv_bus(
+                    target_bus = self._connect_to_lv_bus(
                         edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
                     )
                     lv_buses_masked = pd.DataFrame(self.buses_df.loc[target_bus]).T
                     lv_buses_masked["distance"] = 0
                     mv_buses_masked = pd.DataFrame()
-            else:
+                    return target_bus
+
+            comp_df = {
+                "charging_point": self.charging_points_df,
+                "generator": self.generators_df,
+                "heat_pump": self.loads_df[self.loads_df.type == "heat_pump"],
+                "storage_unit": self.storage_units_df,
+            }.get(comp_type)
+
+            comp_type_counts = (
+                comp_df.loc[comp_df.bus.isin(lv_buses_masked.index)]
+                .groupby("bus")
+                .size()
+            )
+            lv_buses_masked.loc[:, "num_comps"] = (
+                lv_buses_masked.index.map(comp_type_counts).fillna(0).astype(int)
+            )
+            lv_buses_masked = lv_buses_masked[
+                lv_buses_masked.num_comps == lv_buses_masked.num_comps.min()
+            ]
+
+            if lv_buses_masked.num_comps.min() >= allowed_number_of_comp_per_bus:
+                # if all buses within the allowed distance have equal or more
+                # components of the same type connected to them than allowed,
+                # connect to new bus
+                target_bus = self._connect_to_lv_bus(
+                    edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
+                )
+                lv_buses_masked = pd.DataFrame(self.buses_df.loc[target_bus]).T
+                lv_buses_masked["distance"] = 0
                 mv_buses_masked = pd.DataFrame()
 
-            if not mv_buses_masked.empty:
-                target_bus = mv_buses_masked.loc[mv_buses_masked.distance.idxmin()]
-            else:
-                comp_df = {
-                    "charging_point": self.charging_points_df,
-                    "generator": self.generators_df,
-                    "heat_pump": self.loads_df[self.loads_df.type == "heat_pump"],
-                    "storage_unit": self.storage_units_df,
-                }.get(comp_type)
-
-                comp_type_counts = (
-                    comp_df.loc[comp_df.bus.isin(lv_buses_masked.index)]
-                    .groupby("bus")
-                    .size()
-                )
-                lv_buses_masked.loc[:, "num_comps"] = (
-                    lv_buses_masked.index.map(comp_type_counts).fillna(0).astype(int)
-                )
-                lv_buses_masked = lv_buses_masked[
-                    lv_buses_masked.num_comps == lv_buses_masked.num_comps.min()
-                ]
-
-                if lv_buses_masked.num_comps.min() >= allowed_number_of_comp_per_bus:
-                    target_bus = connect_to_lv_bus(
-                        edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
-                    )
-                    lv_buses_masked = pd.DataFrame(self.buses_df.loc[target_bus]).T
-                    lv_buses_masked["distance"] = 0
-                    mv_buses_masked = pd.DataFrame()
-
-                target_bus = lv_buses_masked.loc[lv_buses_masked.distance.idxmin()]
-                if isinstance(target_bus, pd.DataFrame):
-                    target_bus = target_bus.iloc[0]
+            target_bus = lv_buses_masked.loc[lv_buses_masked.distance.idxmin()]
+            if isinstance(target_bus, pd.DataFrame):
+                target_bus = target_bus.iloc[0]
             return target_bus.name
 
         # Ensure 'p' is in comp_data, defaulting to 'p_set' or 'p_nom'
@@ -2597,7 +2599,7 @@ class Topology:
             )
 
         # Extract and validate voltage level
-        voltage_level = comp_data.pop("voltage_level")
+        voltage_level = comp_data["voltage_level"]
         validate_voltage_level(voltage_level)
         geolocation = comp_data.get("geom")
 
@@ -2613,6 +2615,13 @@ class Topology:
         # Handle different voltage levels
         if voltage_level == 6:
             bus = handle_voltage_level_6()
+            if bus in self.mv_grid.buses_df.index:
+                if "type" in comp_data:
+                    comp_data.pop("type")
+                comp_name = self.connect_to_mv(
+                    edisgo_object, comp_data, comp_type=comp_type
+                )
+                return comp_name
         elif voltage_level == 7:
             bus = handle_voltage_level_7()
 
