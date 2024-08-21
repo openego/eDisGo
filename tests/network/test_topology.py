@@ -1928,3 +1928,25 @@ class TestTopologyWithEdisgoObject:
         assert "There are lines with very short line lengths" in caplog.text
         assert "Very small values for impedance of lines" and line in caplog.text
         caplog.clear()
+
+    def test_find_meshes(self, caplog: pytest.LogCaptureFixture):
+        meshes = Topology.find_meshes(self.edisgo)
+        assert not meshes
+        self.edisgo.topology.add_line(
+            "Bus_GeneratorFluctuating_2",
+            "Bus_GeneratorFluctuating_6",
+            0.1,
+            x=0.1,
+            r=0.1,
+        )
+        meshes = Topology.find_meshes(self.edisgo)
+        assert len(meshes) == 1
+        assert "Bus_GeneratorFluctuating_2" in meshes[0]
+        assert "Bus_GeneratorFluctuating_6" in meshes[0]
+        self.edisgo.topology.add_line(
+            "Bus_BranchTee_LVGrid_2_3", "Bus_BranchTee_LVGrid_3_3", 0.1, x=0.1, r=0.1
+        )
+        meshes = Topology.find_meshes(self.edisgo)
+        assert len(meshes) == 2
+        assert "Bus_BranchTee_LVGrid_2_3" in meshes[1]
+        assert "Grid contains mesh(es)." in caplog.text
