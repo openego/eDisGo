@@ -2488,7 +2488,7 @@ class Topology:
         def handle_voltage_level_7():
             if allow_mv_connection:
                 mv_buses = self.buses_df.loc[self.mv_grid.buses_df.index]
-                mv_buses = geo.calculate_distance_to_buses_df(mv_buses, geolocation)
+                mv_buses = geo.calculate_distance_to_buses_df(geolocation, mv_buses)
                 mv_buses_masked = mv_buses.loc[
                     mv_buses.distance < max_distance_from_target_bus
                 ]
@@ -2519,7 +2519,7 @@ class Topology:
                     lv_buses = lv_buses.loc[~lv_buses.in_building]
                 lv_buses = lv_buses.loc[lv_loads.bus]
 
-            lv_buses = geo.calculate_distance_to_buses_df(lv_buses, geolocation)
+            lv_buses = geo.calculate_distance_to_buses_df(geolocation, lv_buses)
             lv_buses_masked = lv_buses.loc[
                 lv_buses.distance < max_distance_from_target_bus
             ].copy()
