@@ -966,6 +966,17 @@ class TestTopologyWithEdisgoObject:
             "lv": {"edisgo_obj": edisgo_geo, "mode": "lv", "lv_grid_id": 1164120002},
             "mv+lv": {"edisgo_obj": edisgo_geo, "mode": None, "lv_grid_id": None},
         }
+        # further tests of to_geopandas are conducted in test_geopandas_helper.py
+
+        # set up edisgo object with georeferenced LV
+        edisgo_geo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        test_suits = {
+            "mv": {"edisgo_obj": self.edisgo, "mode": "mv", "lv_grid_id": None},
+            "lv": {"edisgo_obj": edisgo_geo, "mode": "lv", "lv_grid_id": 1164120002},
+            "mv+lv": {"edisgo_obj": edisgo_geo, "mode": None, "lv_grid_id": None},
+        }
 
         attrs = [
             "buses_gdf",
@@ -990,11 +1001,32 @@ class TestTopologyWithEdisgoObject:
                 grid = getattr(geopandas_container, "grid")
                 attr = getattr(geopandas_container, attr_str)
                 grid_attr = getattr(grid, attr_str.replace("_gdf", "_df"))
+        for test_suit, params in test_suits.items():
+            # call to_geopandas() function with different settings
+            geopandas_container = params["edisgo_obj"].topology.to_geopandas(
+                mode=params["mode"], lv_grid_id=params["lv_grid_id"]
+            )
 
+            assert isinstance(geopandas_container, GeoPandasGridContainer)
+
+            # check that content of geodataframes is the same as content of original
+            # dataframes
+            for attr_str in attrs:
+                grid = getattr(geopandas_container, "grid")
+                attr = getattr(geopandas_container, attr_str)
+                grid_attr = getattr(grid, attr_str.replace("_gdf", "_df"))
+
+                assert isinstance(attr, GeoDataFrame)
                 assert isinstance(attr, GeoDataFrame)
 
                 common_cols = list(set(attr.columns).intersection(grid_attr.columns))
+                common_cols = list(set(attr.columns).intersection(grid_attr.columns))
 
+                assert_frame_equal(
+                    attr[common_cols].sort_index(),
+                    grid_attr[common_cols].sort_index(),
+                    check_names=False,
+                )
                 assert_frame_equal(
                     attr[common_cols].sort_index(),
                     grid_attr[common_cols].sort_index(),
@@ -1774,6 +1806,7 @@ class TestTopologyWithEdisgoObject:
             new_line_df.loc[new_line_df.index[0], ["bus0", "bus1"]]
         )
         # check new heat pump
+        assert self.edisgo.topology.loads_df.at[comp_name, "p_set"] == 0.1
         assert self.edisgo.topology.loads_df.at[comp_name, "p_set"] == 0.1
 
         # ############# storage unit #################
