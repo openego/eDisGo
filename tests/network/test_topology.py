@@ -1017,16 +1017,10 @@ class TestTopologyWithEdisgoObject:
                 grid_attr = getattr(grid, attr_str.replace("_gdf", "_df"))
 
                 assert isinstance(attr, GeoDataFrame)
-                assert isinstance(attr, GeoDataFrame)
 
                 common_cols = list(set(attr.columns).intersection(grid_attr.columns))
                 common_cols = list(set(attr.columns).intersection(grid_attr.columns))
 
-                assert_frame_equal(
-                    attr[common_cols].sort_index(),
-                    grid_attr[common_cols].sort_index(),
-                    check_names=False,
-                )
                 assert_frame_equal(
                     attr[common_cols].sort_index(),
                     grid_attr[common_cols].sort_index(),
@@ -1806,7 +1800,6 @@ class TestTopologyWithEdisgoObject:
             new_line_df.loc[new_line_df.index[0], ["bus0", "bus1"]]
         )
         # check new heat pump
-        assert self.edisgo.topology.loads_df.at[comp_name, "p_set"] == 0.1
         assert self.edisgo.topology.loads_df.at[comp_name, "p_set"] == 0.1
 
         # ############# storage unit #################
