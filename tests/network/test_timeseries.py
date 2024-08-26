@@ -1565,9 +1565,9 @@ class TestTimeSeries:
             index=index,
             columns=["cts", "residential", "agricultural", "industrial"],
             data=[
-                [0.000059711, 0.0000782190, 0.00006540, 0.000099176],
-                [0.000052590, 0.0000563428, 0.00006110, 0.000099176],
-                [0.000045927, 0.0000451043, 0.00005843, 0.000099176],
+                [0.000059711, 0.0000782190, 0.00006540, 0.000098765],
+                [0.000052590, 0.0000563428, 0.00006110, 0.000098765],
+                [0.000045927, 0.0000451043, 0.00005843, 0.000098765],
             ],
         )
 
@@ -1656,7 +1656,7 @@ class TestTimeSeries:
             self.edisgo.timeseries.loads_active_power[
                 "Load_industrial_LVGrid_6_1"
             ].values,
-            [0.05752256272934643] * 3,
+            [0.05728395] * 3,
         ).all()
         assert np.isclose(
             self.edisgo.timeseries.loads_active_power.loc[
