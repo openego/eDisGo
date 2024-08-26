@@ -116,7 +116,7 @@ class Config:
 
     Get reactive power factor for generators in the MV network
 
-    >>> config['reactive_power_factor']['mv_gen']
+    >>> config['reactive_power_factor']['mv_generator']
 
     """
 
