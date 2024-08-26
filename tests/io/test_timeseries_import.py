@@ -98,9 +98,7 @@ class TestTimeseriesImport:
         assert np.isclose(load.loc[timeindex[453], "cts"], 8.33507e-05)
         assert np.isclose(load.loc[timeindex[13], "residential"], 1.73151e-04)
         assert np.isclose(load.loc[timeindex[6328], "agricultural"], 1.01346e-04)
-        assert np.isclose(
-            load.loc[timeindex[4325], "industrial"], 9.876543209876541e-05
-        )
+        assert np.isclose(load.loc[timeindex[4325], "industrial"], 9.87654320e-05)
         assert np.isclose(load.sum()["cts"], 1.0)
         assert np.isclose(load.sum()["residential"], 1.0)
         assert np.isclose(load.sum()["agricultural"], 1.0)
