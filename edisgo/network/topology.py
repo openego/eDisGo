@@ -2472,14 +2472,6 @@ class Topology:
                 )
             return add_func
 
-        def find_nearest_bus(geolocation, buses):
-            return geo.find_nearest_bus(geolocation, buses)
-
-        def connect_to_lv_bus(edisgo_object, target_bus, comp_type, comp_data):
-            return self._connect_to_lv_bus(
-                edisgo_object, target_bus, comp_type, comp_data
-            )
-
         def handle_voltage_level_6():
             substations = self.buses_df.loc[self.transformers_df.bus1.unique()]
             if comp_type == "charging_point":
@@ -2487,9 +2479,13 @@ class Topology:
             else:
                 mv_buses = pd.DataFrame()
             substations = pd.concat([substations, mv_buses])
-            target_bus, target_bus_distance = find_nearest_bus(geolocation, substations)
+            target_bus, target_bus_distance = geo.find_nearest_bus(
+                geolocation, substations
+            )
             if target_bus_distance > max_distance_from_target_bus:
-                bus = connect_to_lv_bus(edisgo_object, target_bus, comp_type, comp_data)
+                bus = self._connect_to_lv_bus(
+                    edisgo_object, target_bus, comp_type, comp_data
+                )
             else:
                 bus = target_bus
             return bus
@@ -2543,49 +2539,46 @@ class Topology:
                     mv_buses_masked = mv_buses[
                         mv_buses.distance == mv_buses.distance.min()
                     ]
+                    target_bus = mv_buses_masked.loc[mv_buses_masked.distance.idxmin()]
+                    return target_bus.name
                 else:
-                    target_bus = connect_to_lv_bus(
+                    target_bus = self._connect_to_lv_bus(
                         edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
                     )
                     lv_buses_masked = pd.DataFrame(self.buses_df.loc[target_bus]).T
                     lv_buses_masked["distance"] = 0
                     mv_buses_masked = pd.DataFrame()
-            else:
+                    return target_bus
+            comp_df = {
+                "charging_point": self.charging_points_df,
+                "generator": self.generators_df,
+                "heat_pump": self.loads_df[self.loads_df.type == "heat_pump"],
+                "storage_unit": self.storage_units_df,
+            }.get(comp_type)
+
+            comp_type_counts = (
+                comp_df.loc[comp_df.bus.isin(lv_buses_masked.index)]
+                .groupby("bus")
+                .size()
+            )
+            lv_buses_masked.loc[:, "num_comps"] = (
+                lv_buses_masked.index.map(comp_type_counts).fillna(0).astype(int)
+            )
+            lv_buses_masked = lv_buses_masked[
+                lv_buses_masked.num_comps == lv_buses_masked.num_comps.min()
+            ]
+
+            if lv_buses_masked.num_comps.min() >= allowed_number_of_comp_per_bus:
+                target_bus = self._connect_to_lv_bus(
+                    edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
+                )
+                lv_buses_masked = pd.DataFrame(self.buses_df.loc[target_bus]).T
+                lv_buses_masked["distance"] = 0
                 mv_buses_masked = pd.DataFrame()
 
-            if not mv_buses_masked.empty:
-                target_bus = mv_buses_masked.loc[mv_buses_masked.distance.idxmin()]
-            else:
-                comp_df = {
-                    "charging_point": self.charging_points_df,
-                    "generator": self.generators_df,
-                    "heat_pump": self.loads_df[self.loads_df.type == "heat_pump"],
-                    "storage_unit": self.storage_units_df,
-                }.get(comp_type)
-
-                comp_type_counts = (
-                    comp_df.loc[comp_df.bus.isin(lv_buses_masked.index)]
-                    .groupby("bus")
-                    .size()
-                )
-                lv_buses_masked.loc[:, "num_comps"] = (
-                    lv_buses_masked.index.map(comp_type_counts).fillna(0).astype(int)
-                )
-                lv_buses_masked = lv_buses_masked[
-                    lv_buses_masked.num_comps == lv_buses_masked.num_comps.min()
-                ]
-
-                if lv_buses_masked.num_comps.min() >= allowed_number_of_comp_per_bus:
-                    target_bus = connect_to_lv_bus(
-                        edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
-                    )
-                    lv_buses_masked = pd.DataFrame(self.buses_df.loc[target_bus]).T
-                    lv_buses_masked["distance"] = 0
-                    mv_buses_masked = pd.DataFrame()
-
-                target_bus = lv_buses_masked.loc[lv_buses_masked.distance.idxmin()]
-                if isinstance(target_bus, pd.DataFrame):
-                    target_bus = target_bus.iloc[0]
+            target_bus = lv_buses_masked.loc[lv_buses_masked.distance.idxmin()]
+            if isinstance(target_bus, pd.DataFrame):
+                target_bus = target_bus.iloc[0]
             return target_bus.name
 
         # Ensure 'p' is in comp_data, defaulting to 'p_set' or 'p_nom'
