@@ -2473,7 +2473,6 @@ class Topology:
             return add_func
 
         def handle_voltage_level_6():
-            comp_data["voltage_level"] = 6
             # get substations and MV buses
             substations = self.buses_df.loc[self.transformers_df.bus1.unique()]
             if allow_mv_connection:
@@ -2537,6 +2536,7 @@ class Topology:
                 lv_buses.distance < max_distance_from_target_bus
             ].copy()
 
+            # if no bus is within the allowed distance, connect to new bus
             if len(lv_buses_masked) == 0:
                 if (
                     allow_mv_connection
