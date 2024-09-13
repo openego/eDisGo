@@ -2372,9 +2372,9 @@ class Topology:
         * Method:
             * Voltage level 6:
                 If the voltage level is 6, the component is connected to the closest
-                MV/LV substation or MV bus, depending whether MV connection is allowed
-                or not. Therefore, the distance to the substations and MV buses is
-                calculated and the closest one is chosen as target bus.
+                MV/LV substation or MV bus, depending on whether MV connection is
+                allowed or not. Therefore, the distance to the substations and MV buses
+                is calculated and the closest one is chosen as target bus.
                 If the distance is greater than the specified maximum distance, a new
                 bus is created for the component.
 
@@ -2469,7 +2469,7 @@ class Topology:
             add_func = add_func_map.get(comp_type)
             if add_func is None:
                 raise ValueError(
-                    f"Provided component type {comp_type} is not valid. Must either be"
+                    f"Provided component type {comp_type} is not valid. Must either be "
                     f"'generator', 'charging_point', 'heat_pump' or 'storage_unit'."
                 )
             return add_func
