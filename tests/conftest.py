@@ -30,15 +30,14 @@ def pytest_configure(config):
     )
 
     pytest.egon_data_config_yml = os.path.join(
-        os.path.realpath(os.path.dirname(os.path.dirname(__file__))),
-        "egon-data.configuration.yaml",
+        "/home/jonas/.ssh/toetp.configuration.yaml",
     )
 
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "local: mark test as local to run")
 
     if config.getoption("--runlocal"):
-        pytest.engine = engine(path=pytest.egon_data_config_yml, ssh=True)
+        pytest.engine = engine(path=pytest.egon_data_config_yml, ssh=False)
 
 
 def pytest_addoption(parser):
