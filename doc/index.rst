@@ -28,18 +28,14 @@ The toolbox currently includes:
 * Automatic grid reinforcement methodology solving overloading and voltage issues
   to determine grid expansion needs and costs based on measures most commonly
   taken by German distribution grid operators
+* Non-linear optimal power flow based on julia package PowerModels.jl optimizing
+  flexibility dispatch. Considered flexibilities are controlled charging of electric
+  vehicles, heat pumps with heat stores, demand side management, battery storage units,
+  and curtailment of renewables.
 * Implementation of different charging strategies of electric vehicles
-* Multiperiod optimal power flow based on julia package PowerModels.jl optimizing
-  storage positioning and/or operation (Currently not maintained)
-  as well as generator dispatch with regard to minimizing grid expansion costs
 * Temporal complexity reduction
-* Heuristic for grid-supportive generator curtailment (Currently not maintained)
-* Heuristic grid-supportive battery storage integration (Currently not maintained)
 
-Currently, a method to optimize the flexibility that can be provided by electric
-vehicles through controlled charging is being implemented.
-Prospectively, demand side management and reactive power management will
-be included.
+Prospectively, reactive power management will be included.
 
 See :ref:`quickstart` for the first steps.
 A deeper guide is provided in :ref:`usage-details`.
@@ -50,11 +46,13 @@ API reference.
 eDisGo was initially developed in the
 `open_eGo <https://openegoproject.wordpress.com>`_ research project as part of
 a grid planning tool that can be used to determine the optimal grid and storage
-expansion of the German power grid over all voltage levels and has been used in
-two publications of the project:
+expansion of the German power grid over all voltage levels. Since then, it has been
+used and further developed in other research projects, most notably in the
+`eGo^n <https://ego-n.org/>`_ project. For further reading see:
 
 * `Integrated Techno-Economic Power System Planning of Transmission and Distribution Grids <https://www.mdpi.com/1996-1073/12/11/2091>`_
 * `Final report of the open_eGo project (in German) <https://www.uni-flensburg.de/fileadmin/content/abteilungen/industrial/dokumente/downloads/veroeffentlichungen/forschungsergebnisse/20190426endbericht-openego-fkz0325881-final.pdf>`_
+* `Final report of the eGo^n project (in German) <https://ego-n.org/papers/Endbericht_egon_v2.pdf>`_
 
 Contents
 ==================
