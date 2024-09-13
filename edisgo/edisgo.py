@@ -1329,6 +1329,7 @@ class EDisGo:
             changes, etc.
 
         """
+        # ToDo n-1 hier einbauen? Ansonsten Info dass es in extra Funktion gemacht wird
         if copy_grid:
             edisgo_obj = copy.deepcopy(self)
         else:
