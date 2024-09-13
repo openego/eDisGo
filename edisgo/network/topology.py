@@ -2546,6 +2546,7 @@ class Topology:
 
             # if no bus is within the allowed distance, connect to new bus
             if len(lv_buses_masked) == 0:
+                # connect to MV if this is the best option
                 if (
                     allow_mv_connection
                     and len(mv_buses_masked) > 0
@@ -2559,7 +2560,7 @@ class Topology:
                     return target_bus.name
                 else:
                     # if distance is larger than allowed, create new bus and connect to
-                    # closest bus via a new line
+                    # the closest bus via a new line
                     target_bus = self._connect_to_lv_bus(
                         edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
                     )
