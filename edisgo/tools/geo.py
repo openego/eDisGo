@@ -215,12 +215,9 @@ def find_nearest_bus(point, bus_target):
         Tuple that contains the name of the nearest bus and its distance in km.
 
     """
-    bus_target["dist"] = [
-        geodesic((point.y, point.x), (y, x)).km
-        for (x, y) in zip(bus_target["x"], bus_target["y"])
-    ]
+    bus_target = calculate_distance_to_buses_df(point, bus_target)
 
-    return bus_target["dist"].idxmin(), bus_target["dist"].min()
+    return bus_target["distance"].idxmin(), bus_target["distance"].min()
 
 
 def find_nearest_conn_objects(grid_topology, bus, lines, conn_diff_tolerance=0.0001):
