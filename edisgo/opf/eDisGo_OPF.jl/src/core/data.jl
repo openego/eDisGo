@@ -1,7 +1,4 @@
 function set_ac_bf_start_values!(network::Dict{String,<:Any})
-    for (i,bus) in network["bus"]
-        bus["w_start"] = bus["w"]
-    end
 
     for (i,gen) in network["gen_nd"]
         gen["pgc_start"] = gen["pgc"]

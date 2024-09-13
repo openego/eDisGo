@@ -5,6 +5,7 @@ import os
 import random
 import warnings
 
+from typing import TYPE_CHECKING
 from zipfile import ZipFile
 
 import networkx as nx
@@ -15,7 +16,7 @@ import edisgo
 
 from edisgo.network.components import Switch
 from edisgo.network.grids import LVGrid, MVGrid
-from edisgo.tools import geo, networkx_helper
+from edisgo.tools import geo, geopandas_helper, networkx_helper
 from edisgo.tools.tools import (
     calculate_apparent_power,
     calculate_line_reactance,
@@ -29,6 +30,9 @@ if "READTHEDOCS" not in os.environ:
     from shapely.geometry import LineString, Point
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
+
+if TYPE_CHECKING:
+    from edisgo.tools.geopandas_helper import GeoPandasGridContainer
 
 logger = logging.getLogger(__name__)
 
@@ -1928,7 +1932,13 @@ class Topology:
             # avoid very short lines by limiting line length to at least 1m
             line_length = max(line_length, 0.001)
 
-            line_type, num_parallel = select_cable(edisgo_object, "mv", power)
+            line_type, num_parallel = select_cable(
+                edisgo_obj=edisgo_object,
+                level="mv",
+                apparent_power=power,
+                length=line_length,
+                component_type=comp_type,
+            )
 
             line_name = self.add_line(
                 bus0=self.mv_grid.station.index[0],
@@ -1975,13 +1985,12 @@ class Topology:
             for dist_min_obj in conn_objects_min_stack:
                 # do not allow connection to virtual busses
                 if "virtual" not in dist_min_obj["repr"]:
-                    line_type, num_parallel = select_cable(edisgo_object, "mv", power)
                     target_obj_result = self._connect_mv_bus_to_target_object(
                         edisgo_object=edisgo_object,
                         bus=self.buses_df.loc[bus, :],
                         target_obj=dist_min_obj,
-                        line_type=line_type.name,
-                        number_parallel_lines=num_parallel,
+                        comp_type=comp_type,
+                        power=power,
                     )
 
                     if target_obj_result is not None:
@@ -2448,7 +2457,12 @@ class Topology:
         return comp_name
 
     def _connect_mv_bus_to_target_object(
-        self, edisgo_object, bus, target_obj, line_type, number_parallel_lines
+        self,
+        edisgo_object,
+        bus,
+        target_obj,
+        comp_type,
+        power,
     ):
         """
         Connects given MV bus to given target object (MV line or bus).
@@ -2477,11 +2491,12 @@ class Topology:
                 * shp : :shapely:`Shapely Point object<points>` or \
                 :shapely:`Shapely Line object<linestrings>`
                     Geometry of line or bus to connect to.
-
-        line_type : str
-            Line type to use to connect new component with.
-        number_parallel_lines : int
-            Number of parallel lines to connect new component with.
+        comp_type : str
+            Type of added component. Can be 'generator', 'charging_point', 'heat_pump'
+            or 'storage_unit'.
+            Default: 'generator'.
+        power : float
+            Nominal power of the new component to be connected.
 
         Returns
         -------
@@ -2598,6 +2613,13 @@ class Topology:
                     "branch_detour_factor"
                 ],
             )
+            line_type, num_parallel = select_cable(
+                edisgo_obj=edisgo_object,
+                level="mv",
+                apparent_power=power,
+                length=line_length,
+                component_type=comp_type,
+            )
             # avoid very short lines by limiting line length to at least 1m
             if line_length < 0.001:
                 line_length = 0.001
@@ -2606,8 +2628,8 @@ class Topology:
                 bus1=bus.name,
                 length=line_length,
                 kind="cable",
-                type_info=line_type,
-                num_parallel=number_parallel_lines,
+                type_info=line_type.name,
+                num_parallel=num_parallel,
             )
             # add line to equipment changes
             edisgo_object.results._add_line_to_equipment_changes(
@@ -2624,7 +2646,7 @@ class Topology:
 
         # bus is the nearest connection point
         else:
-            # add new branch for satellite (station to station)
+            # add new line between new bus and closest bus
             line_length = geo.calc_geo_dist_vincenty(
                 grid_topology=self,
                 bus_source=bus.name,
@@ -2632,6 +2654,13 @@ class Topology:
                 branch_detour_factor=edisgo_object.config["grid_connection"][
                     "branch_detour_factor"
                 ],
+            )
+            line_type, num_parallel = select_cable(
+                edisgo_obj=edisgo_object,
+                level="mv",
+                apparent_power=power,
+                length=line_length,
+                component_type=comp_type,
             )
             # avoid very short lines by limiting line length to at least 1m
             if line_length < 0.001:
@@ -2642,8 +2671,8 @@ class Topology:
                 bus1=bus.name,
                 length=line_length,
                 kind="cable",
-                type_info=line_type,
-                num_parallel=number_parallel_lines,
+                type_info=line_type.name,
+                num_parallel=num_parallel,
             )
 
             # add line to equipment changes
@@ -2721,7 +2750,13 @@ class Topology:
         line_length = max(line_length, 0.001)
 
         # get suitable line type
-        line_type, num_parallel = select_cable(edisgo_object, "lv", comp_data["p"])
+        line_type, num_parallel = select_cable(
+            edisgo_obj=edisgo_object,
+            level="lv",
+            apparent_power=comp_data["p"],
+            component_type=comp_type,
+            length=line_length,
+        )
         line_name = self.add_line(
             bus0=target_bus,
             bus1=b,
@@ -2756,7 +2791,9 @@ class Topology:
             self.transformers_df,
         )
 
-    def to_geopandas(self, mode: str = "mv"):
+    def to_geopandas(
+        self, mode: str | None = None, lv_grid_id: int | None = None
+    ) -> GeoPandasGridContainer:
         """
         Returns components as :geopandas:`GeoDataFrame`\\ s.
 
@@ -2766,23 +2803,29 @@ class Topology:
         Parameters
         ----------
         mode : str
-            Return mode. If mode is "mv" the mv components are returned. If mode is "lv"
-            a generator with a container per lv grid is returned. Default: "mv"
+            If `mode` is None, GeoDataFrames for the MV grid and underlying LV grids is
+            returned. If `mode` is "mv", GeoDataFrames for only the MV grid are
+            returned. If `mode` is "lv", GeoDataFrames for the LV grid specified through
+            `lv_grid_id` are returned.
+            Default: None.
+        lv_grid_id : int
+            Only needs to be provided in case `mode` is "lv". In that case `lv_grid_id`
+            gives the LV grid ID as integer of the LV grid for which to return the
+            geodataframes.
 
         Returns
         -------
-        :class:`~.tools.geopandas_helper.GeoPandasGridContainer` or \
-            list(:class:`~.tools.geopandas_helper.GeoPandasGridContainer`)
+        :class:`~.tools.geopandas_helper.GeoPandasGridContainer`
             Data container with GeoDataFrames containing all georeferenced components
-            within the grid(s).
+            within the grid.
 
         """
-        if mode == "mv":
+        if mode is None:
+            return geopandas_helper.to_geopandas(self, srid=self.grid_district["srid"])
+        elif mode == "mv":
             return self.mv_grid.geopandas
         elif mode == "lv":
-            raise NotImplementedError("LV Grids are not georeferenced yet.")
-            # for lv_grid in self.mv_grid.lv_grids:
-            #     yield lv_grid.geopandas
+            return self.get_lv_grid(name=lv_grid_id).geopandas
         else:
             raise ValueError(f"{mode} is not valid. See docstring for more info.")
 
@@ -3092,6 +3135,9 @@ class Topology:
                 f"optimisation."
             )
 
+        # check for meshed grid
+        self.find_meshes()
+
     def assign_feeders(self, mode: str = "grid_feeder"):
         """
         Assigns MV or LV feeder to each bus and line, depending on the `mode`.
@@ -3160,3 +3206,31 @@ class Topology:
 
     def __repr__(self):
         return f"Network topology {self.id}"
+
+    def find_meshes(edisgo_obj) -> list[list[int]] | None:
+        """
+        Find all meshes in the grid.
+
+        Parameters
+        ----------
+        edisgo_obj : EDisGo
+            EDisGo object.
+
+        Returns
+        -------
+        Optional[List[List[int]]]
+            List of all meshes in the grid.
+            Each mesh is represented as a list of node indices.
+            If no meshes are found, None is returned.
+        """
+        meshes = nx.cycle_basis(edisgo_obj.to_graph())
+        if meshes:
+            logger.warning(
+                "Grid contains mesh(es). Be aware, that the grid expansion methodology "
+                "is currently not able to handle meshes. Further, the optimisation of "
+                "flexibility dispatch is not exact in case of meshed grids, but can "
+                "still be used."
+            )
+            return meshes
+        else:
+            return None
