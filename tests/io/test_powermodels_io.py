@@ -310,7 +310,7 @@ class TestPowermodelsIO:
 
         # test mode None
         powermodels_network, hv_flex_dict = powermodels_io.to_powermodels(self.edisgo)
-        for component in ["gen", "storage"]:
+        for component in ["generator", "storage_unit"]:
             pf, sign = powermodels_io._get_pf(
                 self.edisgo, powermodels_network, 1, component
             )
@@ -322,10 +322,10 @@ class TestPowermodelsIO:
             assert pf == 0.95
             assert sign == -1
 
-        for component in ["hp", "cp"]:
+        for component in ["heat_pump", "charging_point"]:
             for bus in [1, 29]:
                 pf, sign = powermodels_io._get_pf(
-                    self.edisgo, powermodels_network, 1, component
+                    self.edisgo, powermodels_network, bus, component
                 )
                 assert pf == 1
                 assert sign == 1

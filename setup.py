@@ -4,9 +4,9 @@ import sys
 
 from setuptools import find_packages, setup
 
-if sys.version_info[:2] < (3, 8):
+if sys.version_info[:2] < (3, 9):
     error = (
-        "eDisGo requires Python 3.8 or later (%d.%d detected)." % sys.version_info[:2]
+        "eDisGo requires Python 3.9 or later (%d.%d detected)." % sys.version_info[:2]
     )
     sys.stderr.write(error + "\n")
     sys.exit(1)
@@ -44,17 +44,18 @@ requirements = [
     "matplotlib >= 3.3.0",
     "multiprocess",
     "networkx >= 2.5.0",
-    "pandas >= 1.4.0",
+    # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
+    # sqlalchemy leads to new errors.. should be fixed at some point
+    "pandas >= 1.4.0, < 2.2.0",
     "plotly",
     "pydot",
     "pygeos",
-    "pyomo <= 6.4.2",  # Problem with PyPSA 20.1 fixed in newest PyPSA release
     "pypower",
     "pyproj >= 3.0.0",
-    "pypsa >= 0.17.0, <= 0.20.1",
+    "pypsa == 0.26.2",
     "pyyaml",
     "saio",
-    "scikit-learn <= 1.1.1",
+    "scikit-learn < 1.3.0",
     "shapely >= 1.7.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel",

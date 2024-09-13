@@ -59,6 +59,7 @@ class TestTimeseriesImport:
         assert_index_equal(ind, given_index)
         assert_index_equal(ind_full, timeindex)
 
+    @pytest.mark.oedbtest
     def test_feedin_oedb_legacy(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         timeindex = pd.date_range("1/1/2010", periods=3000, freq="H")
@@ -88,16 +89,20 @@ class TestTimeseriesImport:
 
     def test_load_time_series_demandlib(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
-        timeindex = pd.date_range("1/1/2018", periods=7000, freq="H")
+        timeindex = pd.date_range("1/1/2018", periods=8760, freq="H")
         load = timeseries_import.load_time_series_demandlib(edisgo, timeindex)
         assert (
             load.columns == ["cts", "residential", "agricultural", "industrial"]
         ).all()
-        assert len(load) == 7000
+        assert len(load) == 8760
         assert np.isclose(load.loc[timeindex[453], "cts"], 8.33507e-05)
         assert np.isclose(load.loc[timeindex[13], "residential"], 1.73151e-04)
         assert np.isclose(load.loc[timeindex[6328], "agricultural"], 1.01346e-04)
-        assert np.isclose(load.loc[timeindex[4325], "industrial"], 9.91768e-05)
+        assert np.isclose(load.loc[timeindex[4325], "industrial"], 9.87654320e-05)
+        assert np.isclose(load.sum()["cts"], 1.0)
+        assert np.isclose(load.sum()["residential"], 1.0)
+        assert np.isclose(load.sum()["agricultural"], 1.0)
+        assert np.isclose(load.sum()["industrial"], 1.0)
 
     @pytest.mark.local
     def test_cop_oedb(self):
@@ -268,6 +273,13 @@ class TestTimeseriesImport:
         assert df.shape == (8760, 1)
         assert np.isclose(df.loc[:, 442081].sum(), 3.20688, atol=1e-3)
 
+        # test with status quo
+        df = timeseries_import.get_residential_electricity_profiles_per_building(
+            [-1, 442081], "eGon2021", pytest.engine
+        )
+        assert df.shape == (8760, 1)
+        assert np.isclose(df.loc[:, 442081].sum(), 4.288845, atol=1e-3)
+
     @pytest.mark.local
     def test_get_industrial_electricity_profiles_per_site(self):
         # test with one site and one OSM area
@@ -283,3 +295,11 @@ class TestTimeseriesImport:
             [541658], "eGon2035", pytest.engine
         )
         assert df.shape == (8760, 1)
+
+        # test with status quo
+        df = timeseries_import.get_industrial_electricity_profiles_per_site(
+            [1, 541658], "eGon2021", pytest.engine
+        )
+        assert df.shape == (8760, 2)
+        assert np.isclose(df.loc[:, 1].sum(), 31655.640, atol=1e-3)
+        assert np.isclose(df.loc[:, 541658].sum(), 2910.816, atol=1e-3)

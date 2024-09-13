@@ -163,7 +163,7 @@ def engine(path: Path | str, ssh: bool = False) -> Engine:
 
     Returns
     -------
-    sqlalchemy.engine.base.Engine
+    :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine
 
     """

@@ -1235,6 +1235,7 @@ class TestTimeSeries:
             )
 
     @pytest.mark.slow
+    @pytest.mark.oedbtest
     def test_predefined_fluctuating_generators_by_technology(self):
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.edisgo.timeseries.timeindex = timeindex
@@ -1564,9 +1565,9 @@ class TestTimeSeries:
             index=index,
             columns=["cts", "residential", "agricultural", "industrial"],
             data=[
-                [0.0000597, 0.0000782, 0.0000654, 0.0000992],
-                [0.0000526, 0.0000563, 0.0000611, 0.0000992],
-                [0.0000459, 0.0000451, 0.0000585, 0.0000992],
+                [0.000059711, 0.0000782190, 0.00006540, 0.00009876],
+                [0.000052590, 0.0000563428, 0.00006110, 0.00009876],
+                [0.000045927, 0.0000451043, 0.00005843, 0.00009876],
             ],
         )
 
@@ -1655,7 +1656,7 @@ class TestTimeSeries:
             self.edisgo.timeseries.loads_active_power[
                 "Load_industrial_LVGrid_6_1"
             ].values,
-            [0.05752256] * 3,
+            [0.05728395] * 3,
         ).all()
         assert np.isclose(
             self.edisgo.timeseries.loads_active_power.loc[
@@ -1792,6 +1793,26 @@ class TestTimeSeries:
                 * profiles_new["industrial"]
             ).values,
         ).all()
+
+        # test Error if 'annual_consumption' is missing
+        # Save the original 'annual_consumption' values
+        original_annual_consumption = self.edisgo.topology.loads_df[
+            "annual_consumption"
+        ].copy()
+        # Set 'annual_consumption' to None for the test
+        self.edisgo.topology.loads_df["annual_consumption"] = None
+        with pytest.raises(AttributeError) as exc_info:
+            self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+                self.edisgo, "demandlib"
+            )
+        assert (
+            exc_info.value.args[0]
+            == "The annual consumption of some loads is missing. Please provide"
+        )
+        # Restore the original 'annual_consumption' values
+        self.edisgo.topology.loads_df[
+            "annual_consumption"
+        ] = original_annual_consumption
 
     def test_predefined_charging_points_by_use_case(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")

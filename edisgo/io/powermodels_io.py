@@ -667,7 +667,7 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
                 gen.bus[gen_i],
                 flexible_storage_units=flexible_storage_units,
             )
-            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "gen")
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "generator")
             q = [
                 sign * np.tan(np.arccos(pf)) * gen.p_nom[gen_i],
                 sign * np.tan(np.arccos(pf)) * gen.p_nom_min[gen_i],
@@ -704,7 +704,7 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
                 psa_net.storage_units.bus.loc[inflexible_storage_units[stor_i]],
                 flexible_storage_units=flexible_storage_units,
             )
-            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_g = max(
                 [
                     psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0],
@@ -837,7 +837,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             flexible_storage_units=flexible_storage_units,
         )
         # retrieve power factor from config
-        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
 
         pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
@@ -919,22 +919,22 @@ def _build_load(
             edisgo_obj.topology.loads_df.loc[loads_df.index[load_i]].type
             == "conventional_load"
         ):
-            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "conventional_load")
         elif (
             edisgo_obj.topology.loads_df.loc[loads_df.index[load_i]].type == "heat_pump"
         ):
-            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "heat_pump")
         elif (
             edisgo_obj.topology.loads_df.loc[loads_df.index[load_i]].type
             == "charging_point"
         ):
-            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "cp")
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "charging_point")
         else:
             logger.warning(
                 "No type specified for load {}. Power factor and sign will"
                 "be set for conventional load.".format(loads_df.index[load_i])
             )
-            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "conventional_load")
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
         q_d = psa_net.loads_t.q_set[loads_df.index[load_i]]
         pm["load"][str(load_i + 1)] = {
@@ -955,12 +955,18 @@ def _build_load(
                 psa_net.storage_units.bus.loc[inflexible_storage_units[stor_i]],
                 flexible_storage_units=flexible_storage_units,
             )
-            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
+            pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_d = -min(
-                [psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0], 0]
+                [
+                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0],
+                    np.float64(0.0),
+                ]
             )
             q_d = -max(
-                [psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0], 0]
+                [
+                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0],
+                    np.float64(0.0),
+                ]
             )
             pm["load"][str(stor_i + len(loads_df.index) + 1)] = {
                 "pd": p_d.round(20) / s_base,
@@ -1030,7 +1036,7 @@ def _build_battery_storage(
             flexible_storage_units=flexible_storage_units,
         )
         # retrieve power factor from config
-        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage")
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
         e_max = (
             psa_net.storage_units.p_nom.loc[flexible_storage_units[stor_i]]
             * psa_net.storage_units.max_hours.loc[flexible_storage_units[stor_i]]
@@ -1145,7 +1151,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
             eta = edisgo_obj.electromobility.simbev_config_df.eta_cp.values[0]
         except IndexError:
             eta = 0.9
-        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "cp")
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "charging_point")
         q = (
             sign
             * np.tan(np.arccos(pf))
@@ -1212,7 +1218,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus[hp_i])
         # retrieve power factor and sign from config
-        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "hp")
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "heat_pump")
         q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
         p_d = heat_df2[heat_df.index[hp_i]]
         pm["heatpumps"][str(hp_i + 1)] = {
@@ -1440,7 +1446,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
     for dsm_i in np.arange(len(dsm_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, dsm_df.bus[dsm_i])
         # retrieve power factor and sign from config
-        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "load")
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "conventional_load")
         p_max = edisgo_obj.dsm.p_max[dsm_df.index[dsm_i]]
         p_min = edisgo_obj.dsm.p_min[dsm_df.index[dsm_i]]
         e_min = edisgo_obj.dsm.e_min[dsm_df.index[dsm_i]]
@@ -2047,7 +2053,8 @@ def _get_pf(edisgo_obj, pm, idx_bus, kind):
     idx_bus : int
         Bus index from PowerModels bus dictionary.
     kind : str
-        Must be one of ["gen", "load", "storage", "hp", "cp"].
+        Must be one of ["generator", "conventional_load", "storage_unit", "heat_pump",
+        "charging_point"].
 
     Returns
     -------
@@ -2055,18 +2062,14 @@ def _get_pf(edisgo_obj, pm, idx_bus, kind):
 
     """
     grid_level = pm["bus"][str(idx_bus)]["grid_level"]
-    pf = edisgo_obj.config._data["reactive_power_factor"][
-        "{}_{}".format(grid_level, kind)
-    ]
-    sign = edisgo_obj.config._data["reactive_power_mode"][
-        "{}_{}".format(grid_level, kind)
-    ]
-    if kind in ["gen", "storage"]:
+    pf = edisgo_obj.config["reactive_power_factor"]["{}_{}".format(grid_level, kind)]
+    sign = edisgo_obj.config["reactive_power_mode"]["{}_{}".format(grid_level, kind)]
+    if kind in ["generator", "storage_unit"]:
         if sign == "inductive":
             sign = -1
         else:
             sign = 1
-    elif kind in ["load", "hp", "cp"]:
+    elif kind in ["conventional_load", "heat_pump", "charging_point"]:
         if sign == "inductive":
             sign = 1
         else:

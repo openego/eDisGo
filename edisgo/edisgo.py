@@ -417,7 +417,7 @@ class EDisGo:
                 Technology- and weather cell-specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_. See
+                <https://openenergyplatform.org/dataedit/schemas>`_. See
                 :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
 
                 This option requires that the parameter `engine` is provided in case
@@ -478,7 +478,7 @@ class EDisGo:
 
                 Sets active power demand time series using individual hourly electricity
                 load time series for one year obtained from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_.
+                <https://openenergyplatform.org/dataedit/schemas>`_.
 
                 This option requires that the parameters `engine` and `scenario` are
                 provided. For further settings, the parameter `timeindex` can also be
@@ -933,7 +933,7 @@ class EDisGo:
         Gets generator park for specified scenario and integrates generators into grid.
 
         The generator data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_. Decommissioned
+        `open energy platform <https://openenergyplatform.org/>`_. Decommissioned
         generators are removed from the grid, generators with changed capacity
         updated and new generators newly integrated into the grid.
 
@@ -998,12 +998,12 @@ class EDisGo:
         range_num: int = 10,
         scale_timeseries: float | None = None,
         **kwargs,
-    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+    ) -> tuple[pd.DatetimeIndex, pd.DatetimeIndex]:
         """
         Conducts a static, non-linear power flow analysis.
 
         Conducts a static, non-linear power flow analysis using
-        `PyPSA <https://pypsa.readthedocs.io/en/latest/power_flow.html#\
+        `PyPSA <https://pypsa.readthedocs.io/en/latest/user-guide/power-flow.html#\
         full-non-linear-power-flow>`_
         and writes results (active, reactive and apparent power as well as
         current on lines and voltages at buses) to :class:`~.network.results.Results`
@@ -1196,6 +1196,7 @@ class EDisGo:
     def reinforce(
         self,
         timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
+        reduced_analysis: bool = False,
         copy_grid: bool = False,
         max_while_iterations: int = 20,
         split_voltage_band: bool = True,
@@ -1237,14 +1238,15 @@ class EDisGo:
               time steps. If your time series already represents the worst-case,
               keep the default value of None because finding the worst-case
               snapshots takes some time.
-            * 'reduced_analysis'
-              Reinforcement is conducted for all time steps at which at least one
-              branch shows its highest overloading or one bus shows its highest voltage
-              violation.
             * :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
               :pandas:`pandas.Timestamp<Timestamp>`
               Use this option to explicitly choose which time steps to consider.
-
+        reduced_analysis : bool
+              If True, reinforcement is conducted for all time steps at which at least
+              one branch shows its highest overloading or one bus shows its highest
+              voltage violation. Time steps to consider are specified through parameter
+              `timesteps_pfa`. If False, all time steps in parameter `timesteps_pfa`
+              are used. Default: False.
         copy_grid : bool
             If True, reinforcement is conducted on a copied grid and discarded.
             Default: False.
@@ -1301,26 +1303,43 @@ class EDisGo:
             reinforce MV/LV stations for LV worst-cases.
             Default: False.
         num_steps_loading : int
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            In case `reduced_analysis` is set to True, this parameter can be
             used to specify the number of most critical overloading events to consider.
             If None, `percentage` is used. Default: None.
         num_steps_voltage : int
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            In case `reduced_analysis` is set to True, this parameter can be
             used to specify the number of most critical voltage issues to select. If
             None, `percentage` is used. Default: None.
         percentage : float
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
+            In case `reduced_analysis` is set to True, this parameter can be
             used to specify the percentage of most critical time steps to select. The
             default is 1.0, in which case all most critical time steps are selected.
             Default: 1.0.
         use_troubleshooting_mode : bool
-            In case `timesteps_pfa` is set to 'reduced_analysis', this parameter can be
-            used to specify how to handle non-convergence issues in the power flow
-            analysis. If set to True, non-convergence issues are tried to be
+            In case `reduced_analysis` is set to True, this parameter can be used to
+            specify how to handle non-convergence issues when determining the most
+            critical time steps. If set to True, non-convergence issues are tried to be
             circumvented by reducing load and feed-in until the power flow converges.
             The most critical time steps are then determined based on the power flow
             results with the reduced load and feed-in. If False, an error will be
-            raised in case time steps do not converge. Default: True.
+            raised in case time steps do not converge.
+            Setting this to True doesn't make sense for the grid reinforcement as the
+            troubleshooting mode is only used when determining the most critical time
+            steps not when running a power flow analysis to determine grid reinforcement
+            needs. To handle non-convergence in the grid reinforcement set parameter
+            `catch_convergence_problems` to True.
+            Default: False.
+        run_initial_analyze : bool
+            In case `reduced_analysis` is set to True, this parameter can be
+            used to specify whether to run an initial analyze to determine most
+            critical time steps or to use existing results. If set to False,
+            `use_troubleshooting_mode` is ignored. Default: True.
+        weight_by_costs : bool
+            In case `reduced_analysis` is set to True, this parameter can be used
+            to specify whether to weight time steps by estimated grid expansion costs.
+            See parameter `weight_by_costs` in
+            :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_steps`
+            for more information. Default: False.
 
         Returns
         --------
@@ -1408,6 +1427,7 @@ class EDisGo:
 
             func(
                 edisgo_obj,
+                reduced_analysis=reduced_analysis,
                 max_while_iterations=max_while_iterations,
                 split_voltage_band=split_voltage_band,
                 without_generator_import=without_generator_import,
@@ -1909,7 +1929,7 @@ class EDisGo:
         Imports electromobility data and integrates charging points into grid.
 
         Electromobility data can be obtained from the `OpenEnergy DataBase
-        <https://openenergy-platform.org/dataedit/schemas>`_ or from self-provided
+        <https://openenergyplatform.org/dataedit/schemas>`_ or from self-provided
         data. In case you want to use self-provided data, it needs to be generated
         using the tools
         `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
@@ -1941,7 +1961,7 @@ class EDisGo:
             * "oedb"
 
                 Electromobility data is obtained from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_.
+                <https://openenergyplatform.org/dataedit/schemas>`_.
 
                 This option requires that the parameters `scenario` and `engine` are
                 provided.
@@ -2124,7 +2144,7 @@ class EDisGo:
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_.
+        `open energy platform <https://openenergyplatform.org/>`_.
 
         # ToDo Add information on scenarios and from which tables data is retrieved.
 
@@ -2286,7 +2306,7 @@ class EDisGo:
     def import_dsm(self, scenario: str, engine: Engine, timeindex=None):
         """
         Gets industrial and CTS DSM profiles from the
-        `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+        `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
 
         Profiles comprise minimum and maximum load increase in MW as well as maximum
         energy pre- and postponing in MWh. The data is written to the
@@ -2337,7 +2357,7 @@ class EDisGo:
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_.
+        `open energy platform <https://openenergyplatform.org/>`_.
 
         The batteries are integrated into the grid (added to
         :attr:`~.network.topology.Topology.storage_units_df`) based on their building

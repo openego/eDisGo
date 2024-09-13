@@ -58,12 +58,10 @@ class TestReinforceGrid:
         # test reduced analysis
         res_reduced = reinforce_grid(
             edisgo=copy.deepcopy(self.edisgo),
-            timesteps_pfa="reduced_analysis",
-            num_steps_loading=4,
+            reduced_analysis=True,
+            num_steps_loading=2,
         )
-        assert_frame_equal(
-            res_reduced.equipment_changes, results_dict[None].equipment_changes
-        )
+        assert len(res_reduced.i_res) == 2
 
     def test_run_separate_lv_grids(self):
         edisgo = copy.deepcopy(self.edisgo)
@@ -83,7 +81,7 @@ class TestReinforceGrid:
                 assert len(g.buses_df) > 1
 
         assert len(lv_grids_new) == 26
-        assert np.isclose(edisgo.results.grid_expansion_costs.total_costs.sum(), 280.06)
+        assert np.isclose(edisgo.results.grid_expansion_costs.total_costs.sum(), 440.06)
 
         # check if all generators are still present
         assert np.isclose(

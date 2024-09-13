@@ -821,10 +821,10 @@ class TimeSeries:
         # reactive power
         # get worst case configurations for each generator
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "generators", configs
+            df, "generator", configs
         )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "generators", configs
+            df, "generator", configs
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
@@ -899,10 +899,10 @@ class TimeSeries:
         # reactive power
         # get worst case configurations for each load
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "conventional_loads", configs
+            df, "conventional_load", configs
         )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "conventional_loads", configs
+            df, "conventional_load", configs
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
@@ -999,10 +999,10 @@ class TimeSeries:
         # reactive power
         # get worst case configurations for each charging point
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "charging_points", configs
+            df, "charging_point", configs
         )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "charging_points", configs
+            df, "charging_point", configs
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
@@ -1077,10 +1077,10 @@ class TimeSeries:
         # reactive power
         # get worst case configurations for each heat pump
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "heat_pumps", configs
+            df, "heat_pump", configs
         )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "heat_pumps", configs
+            df, "heat_pump", configs
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
@@ -1153,10 +1153,10 @@ class TimeSeries:
         # reactive power
         # get worst case configurations for each load
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "storage_units", configs
+            df, "storage_unit", configs
         )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "storage_units", configs
+            df, "storage_unit", configs
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
@@ -1204,7 +1204,7 @@ class TimeSeries:
                 Technology and weather cell specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_. See
+                <https://openenergyplatform.org/dataedit/schemas>`_. See
                 :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
 
                 This option requires that the parameter `engine` is provided in case
@@ -1448,6 +1448,12 @@ class TimeSeries:
         load_names = self._check_if_components_exist(edisgo_object, load_names, "loads")
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
 
+        # check if loads contain annual demand
+        if not all(loads_df.annual_consumption.notnull()):
+            raise AttributeError(
+                "The annual consumption of some loads is missing. Please provide"
+            )
+
         # scale time series by annual consumption
         ts_scaled = loads_df.apply(
             lambda x: ts_loads[x.sector] * x.annual_consumption,
@@ -1600,7 +1606,7 @@ class TimeSeries:
                                 q_sign,
                                 q_control._fixed_cosphi_default_reactive_power_sign(
                                     df[df["type"] == load_type],
-                                    f"{load_type}s",
+                                    load_type,
                                     edisgo_object.config,
                                 ),
                             ]
@@ -1610,17 +1616,17 @@ class TimeSeries:
                                 power_factor,
                                 q_control._fixed_cosphi_default_power_factor(
                                     df[df["type"] == load_type],
-                                    f"{load_type}s",
+                                    load_type,
                                     edisgo_object.config,
                                 ),
                             ]
                         )
                 else:
                     q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-                        df, type, edisgo_object.config
+                        df, type[:-1], edisgo_object.config
                     )
                     power_factor = q_control._fixed_cosphi_default_power_factor(
-                        df, type, edisgo_object.config
+                        df, type[:-1], edisgo_object.config
                     )
             elif isinstance(parametrisation, pd.DataFrame):
                 # check if all given components exist in network and only use existing
@@ -1653,7 +1659,7 @@ class TimeSeries:
                                             q_sign,
                                             default_func(
                                                 df[df["type"] == load_type],
-                                                f"{load_type}s",
+                                                load_type,
                                                 edisgo_object.config,
                                             ),
                                         ]
@@ -1662,7 +1668,9 @@ class TimeSeries:
                                 q_sign = pd.concat(
                                     [
                                         q_sign,
-                                        default_func(df, type, edisgo_object.config),
+                                        default_func(
+                                            df, type[:-1], edisgo_object.config
+                                        ),
                                     ]
                                 )
                         else:
@@ -1686,7 +1694,7 @@ class TimeSeries:
                                             power_factor,
                                             default_func(
                                                 df[df["type"] == load_type],
-                                                f"{load_type}s",
+                                                load_type,
                                                 edisgo_object.config,
                                             ),
                                         ]
@@ -1695,7 +1703,9 @@ class TimeSeries:
                                 power_factor = pd.concat(
                                     [
                                         power_factor,
-                                        default_func(df, type, edisgo_object.config),
+                                        default_func(
+                                            df, type[:-1], edisgo_object.config
+                                        ),
                                     ]
                                 )
                         else:

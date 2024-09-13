@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from edisgo import EDisGo
-from edisgo.flex_opt.costs import grid_expansion_costs, line_expansion_costs
+from edisgo.flex_opt import costs as costs_mod
 
 
 class TestCosts:
@@ -76,12 +76,12 @@ class TestCosts:
             ],
         )
 
-        costs = grid_expansion_costs(self.edisgo)
+        costs = costs_mod.grid_expansion_costs(self.edisgo)
 
         assert len(costs) == 4
         assert (
             costs.loc["MVStation_1_transformer_reinforced_2", "voltage_level"]
-            == "mv/lv"
+            == "hv/mv"
         )
         assert costs.loc["MVStation_1_transformer_reinforced_2", "quantity"] == 1
         assert costs.loc["MVStation_1_transformer_reinforced_2", "total_costs"] == 1000
@@ -97,13 +97,13 @@ class TestCosts:
         assert costs.loc["Line_10019", "type"] == "48-AL1/8-ST1A"
         assert costs.loc["Line_10019", "voltage_level"] == "mv"
         assert np.isclose(costs.loc["Line_50000002", "total_costs"], 2.34)
-        assert np.isclose(costs.loc["Line_50000002", "length"], 0.09)
-        assert costs.loc["Line_50000002", "quantity"] == 3
+        assert np.isclose(costs.loc["Line_50000002", "length"], 0.03)
+        assert costs.loc["Line_50000002", "quantity"] == 1
         assert costs.loc["Line_50000002", "type"] == "NAYY 4x1x35"
         assert costs.loc["Line_50000002", "voltage_level"] == "lv"
 
     def test_line_expansion_costs(self):
-        costs = line_expansion_costs(self.edisgo)
+        costs = costs_mod.line_expansion_costs(self.edisgo)
         assert len(costs) == len(self.edisgo.topology.lines_df)
         assert (costs.index == self.edisgo.topology.lines_df.index).all()
         assert len(costs[costs.voltage_level == "mv"]) == len(
@@ -116,7 +116,9 @@ class TestCosts:
         assert np.isclose(costs.at["Line_10000015", "costs_cable"], 0.27)
         assert costs.at["Line_10000015", "voltage_level"] == "lv"
 
-        costs = line_expansion_costs(self.edisgo, ["Line_10003", "Line_10000015"])
+        costs = costs_mod.line_expansion_costs(
+            self.edisgo, ["Line_10003", "Line_10000015"]
+        )
         assert len(costs) == 2
         assert (costs.index.values == ["Line_10003", "Line_10000015"]).all()
         assert np.isclose(costs.at["Line_10003", "costs_earthworks"], 0.083904 * 60)
@@ -125,3 +127,28 @@ class TestCosts:
         assert np.isclose(costs.at["Line_10000015", "costs_earthworks"], 1.53)
         assert np.isclose(costs.at["Line_10000015", "costs_cable"], 0.27)
         assert costs.at["Line_10000015", "voltage_level"] == "lv"
+
+    def test_transformer_expansion_costs(self):
+        costs = costs_mod.transformer_expansion_costs(self.edisgo)
+        transformers_df = pd.concat(
+            [
+                self.edisgo.topology.transformers_df,
+                self.edisgo.topology.transformers_hvmv_df,
+            ]
+        )
+        assert len(costs) == len(transformers_df)
+        assert sorted(costs.index) == sorted(transformers_df.index)
+        assert len(costs[costs.voltage_level == "hv/mv"]) == len(
+            self.edisgo.topology.transformers_hvmv_df
+        )
+        assert np.isclose(costs.at["MVStation_1_transformer_1", "costs"], 1000)
+        assert costs.at["MVStation_1_transformer_1", "voltage_level"] == "hv/mv"
+        assert np.isclose(costs.at["LVStation_4_transformer_2", "costs"], 10)
+        assert costs.at["LVStation_4_transformer_2", "voltage_level"] == "mv/lv"
+
+        costs = costs_mod.transformer_expansion_costs(
+            self.edisgo, ["LVStation_5_transformer_1"]
+        )
+        assert len(costs) == 1
+        assert np.isclose(costs.at["LVStation_5_transformer_1", "costs"], 10)
+        assert costs.at["LVStation_5_transformer_1", "voltage_level"] == "mv/lv"
