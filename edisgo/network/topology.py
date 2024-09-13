@@ -2486,10 +2486,13 @@ class Topology:
             else:
                 mv_buses = pd.DataFrame()
             all_buses = pd.concat([substations, mv_buses])
+            # calculate distance to possible buses
             target_bus, target_bus_distance = geo.find_nearest_bus(
                 geolocation, all_buses
             )
             if target_bus in substations.index:
+                # if distance is larger than allowed, create new bus and connect to
+                # station via a new line
                 if target_bus_distance > max_distance_from_target_bus:
                     bus = self._connect_to_lv_bus(
                         edisgo_object, target_bus, comp_type, comp_data
@@ -2556,6 +2559,8 @@ class Topology:
                     target_bus = mv_buses_masked.loc[mv_buses_masked.distance.idxmin()]
                     return target_bus.name
                 else:
+                    # if distance is larger than allowed, create new bus and connect to
+                    # closest bus via a new line
                     target_bus = self._connect_to_lv_bus(
                         edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
                     )
@@ -2564,13 +2569,16 @@ class Topology:
                     mv_buses_masked = pd.DataFrame()
                     return target_bus
 
+            # if LV bus is within distance, where no new bus needs to be created, check
+            # the number of already connected buses, so to not connect too many of the
+            # same components to that bus
             comp_df = {
                 "charging_point": self.charging_points_df,
                 "generator": self.generators_df,
                 "heat_pump": self.loads_df[self.loads_df.type == "heat_pump"],
                 "storage_unit": self.storage_units_df,
             }.get(comp_type)
-
+            # determine number of connected components per bus
             comp_type_counts = (
                 comp_df.loc[comp_df.bus.isin(lv_buses_masked.index)]
                 .groupby("bus")
@@ -2579,6 +2587,8 @@ class Topology:
             lv_buses_masked.loc[:, "num_comps"] = (
                 lv_buses_masked.index.map(comp_type_counts).fillna(0).astype(int)
             )
+            # get buses where the least number of components of the given type is
+            # connected
             lv_buses_masked = lv_buses_masked[
                 lv_buses_masked.num_comps == lv_buses_masked.num_comps.min()
             ]
