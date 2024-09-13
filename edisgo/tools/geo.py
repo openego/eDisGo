@@ -330,7 +330,7 @@ def mv_grid_gdf(edisgo_obj: EDisGo):
 
 
 def calculate_distance_to_buses_df(
-    point: Point, busses_df: pd.DataFrame
+    point: Point, buses_df: pd.DataFrame
 ) -> pd.DataFrame:
     """
     Calculate the distance between buses and a given geometry.
@@ -339,7 +339,7 @@ def calculate_distance_to_buses_df(
     ----------
     point : :shapely:`shapely.Point<Point>`
         Geolocation to calculate distance to.
-    busses_df : :pandas:`pandas.DataFrame<DataFrame>`
+    buses_df : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with buses and their positions given in 'x' and 'y'
         columns. The dataframe has the same format as
         :attr:`~.network.topology.Topology.buses_df`.
@@ -347,15 +347,15 @@ def calculate_distance_to_buses_df(
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        Data of `bus_df` with additional column 'distance' containing the distance
+        Data of `buses_df` with additional column 'distance' containing the distance
         to the given geometry in km.
 
     """
-    distances = busses_df.apply(
+    distances = buses_df.apply(
         lambda row: geopy.distance.distance(
             (row["x"], row["y"]), (point.x, point.y)
         ).km,
         axis=1,
     )
-    busses_df.loc[:, "distance"] = distances
-    return busses_df
+    buses_df.loc[:, "distance"] = distances
+    return buses_df
