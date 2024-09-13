@@ -2369,6 +2369,8 @@ class Topology:
         `max_distance_from_target_bus`. Otherwise, the new component is directly
         connected to the nearest bus.
 
+        In the following are some more details on the methodology:
+
         * Method:
             * Voltage level 6:
                 If the voltage level is 6, the component is connected to the closest
@@ -2380,11 +2382,12 @@ class Topology:
 
             * Voltage level 7:
                 If the voltage level is 7, the component is connected to the closest
-                LV bus.
+                LV bus. Two main cases can be distinguished:
 
                 * No MV connection allowed:
                     If the distance to the closest LV bus is less than the specified
-                    maximum distance, the component is connected to the closest LV bus.
+                    maximum distance `max_distance_from_target_bus`, the component is
+                    connected to the closest LV bus.
                     If the distance is greater, a new bus is created for the component.
                     If there are already components of the same type connected to the
                     target bus, the component is connected to the closest LV bus with
@@ -2396,13 +2399,14 @@ class Topology:
 
                 * MV connection allowed:
                     If the distance to the closest LV bus is less than the specified
-                    maximum distance, the component is connected to the closest LV bus.
+                    maximum distance `max_distance_from_target_bus`, the component is
+                    connected to the closest LV bus.
                     If the distance is greater, the distance to the closest MV bus is
                     calculated. If the distance to the closest MV bus multiplied with
-                    the factor is less than the distance to the closest LV bus, the
-                    component is connected to the closest MV bus. The is no restriction
-                    on the number of components of the same type connected to
-                    the MV bus. If the distance is greater, the component
+                    the factor `factor_mv_connection` is less than the distance to the
+                    closest LV bus, the component is connected to the closest MV bus.
+                    There is no restriction on the number of components of the same type
+                    connected to the MV bus. If the distance is greater, the component
                     is connected to a new LV bus.
 
         Parameters
