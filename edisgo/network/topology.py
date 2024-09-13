@@ -2371,8 +2371,6 @@ class Topology:
 
         In the following are some more details on the methodology:
 
-        Noch dokumentieren, welche Busse infrage kommen
-
         * Voltage level 6:
             If the voltage level is 6, the component is connected to the closest
             MV/LV substation or MV bus, depending on whether MV connection is
