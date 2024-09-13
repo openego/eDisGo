@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-import saio
 
 from numpy.random import default_rng
 from sklearn import preprocessing
 from sqlalchemy.engine.base import Engine
 
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
+from edisgo.tools.config import Config
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -1217,8 +1217,8 @@ def simbev_config_from_oedb(
         more information.
 
     """
-    saio.register_schema("demand", engine)
-    from saio.demand import egon_ev_metadata
+    config = Config()
+    (egon_ev_metadata,) = config.import_tables(engine, ["egon_ev_metadata"], "demand")
 
     with session_scope_egon_data(engine) as session:
         query = session.query(egon_ev_metadata).filter(
@@ -1252,8 +1252,10 @@ def potential_charging_parks_from_oedb(
         for more information.
 
     """
-    saio.register_schema("grid", engine)
-    from saio.grid import egon_emob_charging_infrastructure
+    config = Config()
+    (egon_emob_charging_infrastructure,) = config.import_tables(
+        engine, ["egon_emob_charging_infrastructure"], "grid"
+    )
 
     crs = edisgo_obj.topology.grid_district["srid"]
 
@@ -1308,9 +1310,10 @@ def charging_processes_from_oedb(
         more information.
 
     """
-
-    saio.register_schema("demand", engine)
-    from saio.demand import egon_ev_mv_grid_district, egon_ev_trip
+    config = Config()
+    egon_ev_mv_grid_district, egon_ev_trip = config.import_tables(
+        engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
+    )
 
     # get EV pool in grid
     scenario_variation = {"eGon2035": "NEP C 2035", "eGon100RE": "Reference 2050"}

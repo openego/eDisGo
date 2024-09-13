@@ -15,7 +15,7 @@ class TestDSMImport:
             edisgo_object, scenario="eGon2035", engine=pytest.engine
         )
         for dsm_profile in ["e_max", "e_min", "p_max", "p_min"]:
-            assert dsm_profiles[dsm_profile].shape == (8760, 85)
+            assert dsm_profiles[dsm_profile].shape == (8760, 87)
         assert (dsm_profiles["p_min"] <= 0.0).all().all()
         assert (dsm_profiles["e_min"] <= 0.0).all().all()
         assert (dsm_profiles["p_max"] >= 0.0).all().all()
@@ -26,14 +26,14 @@ class TestDSMImport:
             (edisgo_object.topology.loads_df.type == "conventional_load")
             & (edisgo_object.topology.loads_df.sector == "cts")
         ].index[0]
-        edisgo_object.topology.loads_df.at[dsm_load, "sector"] = "industry"
+        edisgo_object.topology.loads_df.at[dsm_load, "sector"] = "industrial"
         edisgo_object.topology.loads_df.at[dsm_load, "building_id"] = 1
 
         dsm_profiles = dsm_import.oedb(
             edisgo_object, scenario="eGon2035", engine=pytest.engine
         )
         for dsm_profile in ["e_max", "e_min", "p_max", "p_min"]:
-            assert dsm_profiles[dsm_profile].shape == (8760, 85)
+            assert dsm_profiles[dsm_profile].shape == (8760, 87)
             assert dsm_load in dsm_profiles[dsm_profile].columns
         assert (dsm_profiles["p_min"] <= 0.0).all().all()
         assert (dsm_profiles["e_min"] <= 0.0).all().all()

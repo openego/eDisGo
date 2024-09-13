@@ -6,11 +6,11 @@ import random
 from typing import TYPE_CHECKING
 
 import pandas as pd
-import saio
 
 from sqlalchemy.engine.base import Engine
 
 from edisgo.io.db import session_scope_egon_data
+from edisgo.tools.config import Config
 from edisgo.tools.tools import (
     determine_bus_voltage_level,
     determine_grid_integration_voltage_level,
@@ -49,8 +49,10 @@ def home_batteries_oedb(
         units.
 
     """
-    saio.register_schema("supply", engine)
-    from saio.supply import egon_home_batteries
+    config = Config()
+    (egon_home_batteries,) = config.import_tables(
+        engine, ["egon_home_batteries"], "supply"
+    )
 
     with session_scope_egon_data(engine) as session:
         query = (
