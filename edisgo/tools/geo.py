@@ -5,7 +5,6 @@ import os
 
 from typing import TYPE_CHECKING
 
-import geopy.distance
 import pandas as pd
 
 from geopy.distance import geodesic
@@ -349,9 +348,7 @@ def calculate_distance_to_buses_df(
 
     """
     distances = buses_df.apply(
-        lambda row: geopy.distance.distance(
-            (row["x"], row["y"]), (point.x, point.y)
-        ).km,
+        lambda row: geodesic((row["y"], row["x"]), (point.y, point.x)).km,
         axis=1,
     )
     buses_df.loc[:, "distance"] = distances

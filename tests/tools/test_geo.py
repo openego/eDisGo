@@ -31,4 +31,4 @@ class TestTools:
         point = Point((10.002736, 47.5426))
         nearest_bus, dist = geo.find_nearest_bus(point, self.edisgo.topology.buses_df)
         assert nearest_bus == "BranchTee_mvgd_33535_lvgd_1163360000_building_431698"
-        assert np.isclose(dist, 0.0008622, atol=1e-6)
+        assert np.isclose(dist, 0.000806993475812168, atol=1e-6)
