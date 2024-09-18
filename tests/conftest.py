@@ -33,11 +33,13 @@ def pytest_configure(config):
         "/home/jonas/.ssh/toetp.configuration.yaml",
     )
 
+    pytest.engine = engine()
+
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "local: mark test as local to run")
 
     if config.getoption("--runlocal"):
-        pytest.engine = engine(path=pytest.egon_data_config_yml, ssh=False)
+        pytest.engine_local = engine(path=pytest.egon_data_config_yml, ssh=False)
 
 
 def pytest_addoption(parser):
