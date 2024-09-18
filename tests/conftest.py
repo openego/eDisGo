@@ -30,7 +30,7 @@ def pytest_configure(config):
     )
 
     pytest.egon_data_config_yml = os.path.join(
-        "/home/jonas/.ssh/toetp.configuration.yaml",
+        "path/to/ssh/config.yml",
     )
 
     pytest.engine = engine()
