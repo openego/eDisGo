@@ -61,7 +61,6 @@ requirements = [
     "sshtunnel",
     "urllib3 < 2.0.0",
     "workalendar",
-    "oedialect",
 ]
 
 dev_requirements = [
