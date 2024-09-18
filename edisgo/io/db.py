@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 
 from contextlib import contextmanager
 from pathlib import Path
@@ -172,8 +171,7 @@ def engine(path: Path | str, ssh: bool = False) -> Engine:
 
     if not ssh:
         return create_engine(
-            f"postgresql+oedialect://{cred['POSTGRES_USER']}:"
-            f"{os.environ.get('TOEP_API_TOKEN')}@{cred['HOST']}",
+            "postgresql+oedialect//@toep.iks.cs.ovgu.de",
             echo=False,
         )
 
