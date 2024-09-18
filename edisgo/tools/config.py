@@ -181,11 +181,9 @@ class Config:
             - schema_mapping: A dictionary mapping source schema names to target schema
                 names.
         """
-        OEP_CONNECTION = "postgresql+oedialect://{user}:{token}@{platform}"
+        OEP_CONNECTION = "postgresql+oedialect://:@{platform}"
         platform = "toep.iks.cs.ovgu.de"
-        user = "joda9"
-        token = os.environ.get("TOEP_API_TOKEN")
-        conn_str = OEP_CONNECTION.format(user=user, token=token, platform=platform)
+        conn_str = OEP_CONNECTION.format(platform=platform)
         engine = sa.create_engine(conn_str)
         schema_name = "model_draft"  # Replace with the actual schema name if needed
         module_name = f"saio.{schema_name}"
