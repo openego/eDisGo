@@ -24,3 +24,4 @@ eDisGo.egg-info/
 # exclude .json files in opf
 /edisgo/opf/opf_solutions/*.json
 /edisgo/opf/eDisGo_OPF.jl/.vscode
+.vscode/settings.json
