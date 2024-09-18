@@ -1910,12 +1910,16 @@ class Topology:
         # add component to newly created bus
         comp_data.pop("geom")
         if comp_type == "generator":
+            comp_data.pop("type", None)
             comp_name = self.add_generator(bus=bus, **comp_data)
         elif comp_type == "charging_point":
+            comp_data.pop("type", None)
             comp_name = self.add_load(bus=bus, type="charging_point", **comp_data)
         elif comp_type == "heat_pump":
+            comp_data.pop("type", None)
             comp_name = self.add_load(bus=bus, type="heat_pump", **comp_data)
         else:
+            comp_data.pop("type", None)
             comp_name = self.add_storage_unit(bus=bus, **comp_data)
 
         # ===== voltage level 4: component is connected to MV station =====
@@ -2344,7 +2348,7 @@ class Topology:
         edisgo_object,
         comp_data: dict,
         comp_type: str,
-        max_distance_from_target_bus: float = 0.1,
+        max_distance_from_target_bus: float = 0.02,
         allowed_number_of_comp_per_bus: int = 2,
         allow_mv_connection: bool = False,
         factor_mv_connection: float = 3.0,
@@ -2499,10 +2503,11 @@ class Topology:
                 else:
                     mvlv_subst_id = self.buses_df.loc[target_bus].loc["lv_grid_id"]
                     comp_data["mvlv_subst_id"] = mvlv_subst_id
-                    comp_name = self.connect_to_lv(edisgo_object, comp_data, comp_type)
+                    comp_name = add_func(bus=target_bus, **comp_data)
                     return None, comp_name
             else:
-                bus = target_bus
+                comp_name = self.connect_to_mv(edisgo_object, comp_data, comp_type)
+                return None, comp_name
             return bus, None
 
         def handle_voltage_level_7():
@@ -2524,9 +2529,7 @@ class Topology:
                     ]
                 elif comp_data["sector"] == "work":
                     lv_loads = self.loads_df[
-                        self.loads_df.sector.isin(
-                            ["industrial", "cts", "agricultural", "work"]
-                        )
+                        self.loads_df.sector.isin(["industrial", "cts", "agricultural"])
                     ]
                     lv_loads = lv_loads.loc[
                         ~lv_loads.bus.isin(self.mv_grid.buses_df.index)
@@ -2557,17 +2560,17 @@ class Topology:
                         mv_buses.distance == mv_buses.distance.min()
                     ]
                     target_bus = mv_buses_masked.loc[mv_buses_masked.distance.idxmin()]
-                    return target_bus.name
+                    comp_name = self.connect_to_mv(edisgo_object, comp_data, comp_type)
+                    return None, comp_name
                 else:
                     # if distance is larger than allowed, create new bus and connect to
                     # the closest bus via a new line
+
                     target_bus = self._connect_to_lv_bus(
                         edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
                     )
                     lv_buses_masked = pd.DataFrame(self.buses_df.loc[target_bus]).T
-                    lv_buses_masked["distance"] = 0
-                    mv_buses_masked = pd.DataFrame()
-                    return target_bus
+                    return target_bus, None
 
             # if LV bus is within distance, where no new bus needs to be created, check
             # the number of already connected buses, so to not connect too many of the
@@ -2607,7 +2610,7 @@ class Topology:
             target_bus = lv_buses_masked.loc[lv_buses_masked.distance.idxmin()]
             if isinstance(target_bus, pd.DataFrame):
                 target_bus = target_bus.iloc[0]
-            return target_bus.name
+            return target_bus.name, None
 
         # Ensure 'p' is in comp_data, defaulting to 'p_set' or 'p_nom'
         if "p" not in comp_data.keys():
@@ -2637,7 +2640,9 @@ class Topology:
             if comp_name is not None:
                 return comp_name
         elif voltage_level == 7:
-            bus = handle_voltage_level_7()
+            bus, comp_name = handle_voltage_level_7()
+            if comp_name is not None:
+                return comp_name
 
         # Remove unnecessary keys from comp_data
         comp_data.pop("geom", None)
