@@ -942,7 +942,7 @@ def oedb(
         egon_chp_plants,
         egon_power_plants,
         egon_power_plants_pv_roof_building,
-    ) = config.import_tables(
+    ) = config.import_tables_from_oep(
         engine,
         ["egon_chp_plants", "egon_power_plants", "egon_power_plants_pv_roof_building"],
         "supply",

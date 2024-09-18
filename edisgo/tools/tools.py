@@ -742,7 +742,7 @@ def get_weather_cells_intersecting_with_grid_district(
             weather_cells = pd.read_sql(sql=query.statement, con=query.session.bind).gid
     else:
         config = Config()
-        (egon_era5_weather_cells,) = config.import_tables(
+        (egon_era5_weather_cells,) = config.import_tables_from_oep(
             engine, ["egon_era5_weather_cells"], "supply"
         )
 
