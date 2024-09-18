@@ -188,7 +188,7 @@ def feedin_oedb(
     )
 
     config = Config()
-    (egon_era5_renewable_feedin,) = config.import_tables(
+    (egon_era5_renewable_feedin,) = config.import_tables_from_oep(
         engine, ["egon_era5_renewable_feedin"], "supply"
     )
 
@@ -357,7 +357,7 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
     )
 
     config = Config()
-    (egon_era5_renewable_feedin,) = config.import_tables(
+    (egon_era5_renewable_feedin,) = config.import_tables_from_oep(
         engine, ["egon_era5_renewable_feedin"], "supply"
     )
 
@@ -655,7 +655,7 @@ def _get_zensus_cells_of_buildings(building_ids, engine):
 
     """
     config = Config()
-    (egon_map_zensus_mvgd_buildings,) = config.import_tables(
+    (egon_map_zensus_mvgd_buildings,) = config.import_tables_from_oep(
         engine, ["egon_map_zensus_mvgd_buildings"], "boundaries"
     )
 
@@ -840,7 +840,7 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
         egon_heat_idp_pool,
         egon_heat_timeseries_selected_profiles,
         egon_peta_heat,
-    ) = config.import_tables(
+    ) = config.import_tables_from_oep(
         engine,
         [
             "egon_daily_heat_demand_per_climate_zone",
@@ -850,7 +850,7 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
         ],
         "demand",
     )
-    (egon_map_zensus_climate_zones,) = config.import_tables(
+    (egon_map_zensus_climate_zones,) = config.import_tables_from_oep(
         engine, ["egon_map_zensus_climate_zones"], "boundaries"
     )
 
@@ -941,7 +941,7 @@ def get_district_heating_heat_demand_profiles(district_heating_ids, scenario, en
 
     """
     config = Config()
-    (egon_timeseries_district_heating,) = config.import_tables(
+    (egon_timeseries_district_heating,) = config.import_tables_from_oep(
         engine, ["egon_timeseries_district_heating"], "demand"
     )
 
@@ -996,7 +996,7 @@ def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
 
     """
     config = Config()
-    (egon_map_zensus_mvgd_buildings,) = config.import_tables(
+    (egon_map_zensus_mvgd_buildings,) = config.import_tables_from_oep(
         engine, ["egon_map_zensus_mvgd_buildings"], "boundaries"
     )
 
@@ -1160,7 +1160,7 @@ def get_cts_profiles_per_grid(
         (
             egon_cts_electricity_demand_building_share,
             egon_etrago_electricity_cts,
-        ) = config.import_tables(
+        ) = config.import_tables_from_oep(
             engine,
             [
                 "egon_cts_electricity_demand_building_share",
@@ -1179,7 +1179,7 @@ def get_cts_profiles_per_grid(
             egon_cts_heat_demand_building_share,
             egon_etrago_heat_cts,
             egon_peta_heat,
-        ) = config.import_tables(
+        ) = config.import_tables_from_oep(
             engine,
             [
                 "egon_cts_heat_demand_building_share",
@@ -1188,7 +1188,7 @@ def get_cts_profiles_per_grid(
             ],
             "demand",
         )
-        (egon_map_zensus_grid_districts,) = config.import_tables(
+        (egon_map_zensus_grid_districts,) = config.import_tables_from_oep(
             engine, ["egon_map_zensus_grid_districts"], "boundaries"
         )
         df_cts_substation_profiles = _get_substation_profile()
@@ -1335,7 +1335,7 @@ def get_residential_electricity_profiles_per_building(building_ids, scenario, en
         hh_profile,
         egon_household_electricity_profile_of_buildings,
         iee_household_load_profiles,
-    ) = config.import_tables(
+    ) = config.import_tables_from_oep(
         engine,
         [
             "egon_household_electricity_profile_in_census_cell",
@@ -1457,7 +1457,7 @@ def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
     (
         egon_osm_ind_load_curves_individual,
         egon_sites_ind_load_curves_individual,
-    ) = config.import_tables(
+    ) = config.import_tables_from_oep(
         engine,
         [
             "egon_osm_ind_load_curves_individual",

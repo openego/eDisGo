@@ -50,7 +50,7 @@ def home_batteries_oedb(
 
     """
     config = Config()
-    (egon_home_batteries,) = config.import_tables(
+    (egon_home_batteries,) = config.import_tables_from_oep(
         engine, ["egon_home_batteries"], "supply"
     )
 

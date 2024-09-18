@@ -205,11 +205,11 @@ class Config:
 
         return name_mapping, schema_mapping
 
-    def import_tables(
+    def import_tables_from_oep(
         self, engine: sa.engine.Engine, table_names: list[str], schema_name: str
     ) -> list[sa.Table]:
         """
-        Imports tables from the database based on the provided table names and
+        Imports tables from the OEP database based on the provided table names and
         schema name.
 
         Parameters

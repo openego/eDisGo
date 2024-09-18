@@ -1218,7 +1218,9 @@ def simbev_config_from_oedb(
 
     """
     config = Config()
-    (egon_ev_metadata,) = config.import_tables(engine, ["egon_ev_metadata"], "demand")
+    (egon_ev_metadata,) = config.import_tables_from_oep(
+        engine, ["egon_ev_metadata"], "demand"
+    )
 
     with session_scope_egon_data(engine) as session:
         query = session.query(egon_ev_metadata).filter(
@@ -1253,7 +1255,7 @@ def potential_charging_parks_from_oedb(
 
     """
     config = Config()
-    (egon_emob_charging_infrastructure,) = config.import_tables(
+    (egon_emob_charging_infrastructure,) = config.import_tables_from_oep(
         engine, ["egon_emob_charging_infrastructure"], "grid"
     )
 
@@ -1311,7 +1313,7 @@ def charging_processes_from_oedb(
 
     """
     config = Config()
-    egon_ev_mv_grid_district, egon_ev_trip = config.import_tables(
+    egon_ev_mv_grid_district, egon_ev_trip = config.import_tables_from_oep(
         engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
     )
 

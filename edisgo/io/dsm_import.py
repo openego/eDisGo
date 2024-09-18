@@ -130,7 +130,7 @@ def get_profiles_per_industrial_load(
         sites_ind_dsm_ts,
         egon_osm_ind_load_curves_individual_dsm_timeseries,
         egon_sites_ind_load_curves_individual_dsm_timeseries,
-    ) = config.import_tables(
+    ) = config.import_tables_from_oep(
         engine,
         [
             "egon_demandregio_sites_ind_electricity_dsm_timeseries",
@@ -236,7 +236,7 @@ def get_profile_cts(
 
     """
     config = Config()
-    (egon_etrago_electricity_cts_dsm_timeseries,) = config.import_tables(
+    (egon_etrago_electricity_cts_dsm_timeseries,) = config.import_tables_from_oep(
         engine, ["egon_etrago_electricity_cts_dsm_timeseries"], "demand"
     )
 

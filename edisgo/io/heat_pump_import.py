@@ -268,24 +268,30 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             return np.sum(cap)
 
     config = Config()
-    egon_district_heating_areas, egon_hp_capacity_buildings = config.import_tables(
+    (
+        egon_district_heating_areas,
+        egon_hp_capacity_buildings,
+    ) = config.import_tables_from_oep(
         engine, ["egon_district_heating_areas", "egon_hp_capacity_buildings"], "demand"
     )
     (
         egon_district_heating,
         egon_era5_weather_cells,
         egon_individual_heating,
-    ) = config.import_tables(
+    ) = config.import_tables_from_oep(
         engine,
         ["egon_district_heating", "egon_era5_weather_cells", "egon_individual_heating"],
         "supply",
     )
-    egon_map_zensus_mvgd_buildings, egon_map_zensus_weather_cell = config.import_tables(
+    (
+        egon_map_zensus_mvgd_buildings,
+        egon_map_zensus_weather_cell,
+    ) = config.import_tables_from_oep(
         engine,
         ["egon_map_zensus_mvgd_buildings", "egon_map_zensus_weather_cell"],
         "boundaries",
     )
-    egon_etrago_bus, egon_etrago_link = config.import_tables(
+    egon_etrago_bus, egon_etrago_link = config.import_tables_from_oep(
         engine, ["egon_etrago_bus", "egon_etrago_link"], "grid"
     )
 
@@ -608,7 +614,7 @@ def efficiency_resistive_heaters_oedb(scenario, engine):
 
     """
     config = Config()
-    (egon_scenario_parameters,) = config.import_tables(
+    (egon_scenario_parameters,) = config.import_tables_from_oep(
         engine, ["egon_scenario_parameters"], "scenario"
     )
 
