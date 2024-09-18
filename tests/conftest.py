@@ -29,9 +29,9 @@ def pytest_configure(config):
         os.path.realpath(os.path.dirname(__file__)), "data/tracbev_example_scenario"
     )
 
-    pytest.egon_data_config_yml = os.path.join(
-        "path/to/ssh/config.yml",
-    )
+    # pytest.egon_data_config_yml = os.path.join(
+    #     "path/to/ssh/config.yml",
+    # )
 
     pytest.engine = engine()
 
