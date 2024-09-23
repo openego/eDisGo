@@ -8,6 +8,7 @@ import numpy as np
 
 from edisgo.flex_opt import exceptions
 from edisgo.io.powermodels_io import from_powermodels
+from edisgo.network.topology import Topology
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,7 @@ def pm_optimize(
         Default: True.
 
     """
+    Topology.find_meshes(edisgo_obj)
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
     pm, hv_flex_dict = edisgo_obj.to_powermodels(
