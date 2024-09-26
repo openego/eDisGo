@@ -169,8 +169,9 @@ def engine(path: Path | str = None, ssh: bool = False) -> Engine:
     """
 
     if not ssh:
+        database_url = "toep.iks.cs.ovgu.de"
         return create_engine(
-            "postgresql+oedialect://:" "@toep.iks.cs.ovgu.de",
+            "postgresql+oedialect://:@" f"{database_url}",
             echo=False,
         )
 
