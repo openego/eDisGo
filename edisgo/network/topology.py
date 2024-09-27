@@ -2603,7 +2603,10 @@ class Topology:
                 target_bus = self._connect_to_lv_bus(
                     edisgo_object, lv_buses.distance.idxmin(), comp_type, comp_data
                 )
-                return target_bus, ModuleNotFoundError
+                if isinstance(target_bus, str):
+                    return target_bus, None
+                elif isinstance(target_bus, pd.DataFrame):
+                    return target_bus.index[0], None
 
             else:
                 target_bus = lv_buses_masked.loc[lv_buses_masked.distance.idxmin()]
