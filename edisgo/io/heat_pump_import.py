@@ -4,11 +4,11 @@ import random
 
 import numpy as np
 import pandas as pd
-import saio
 
 from sqlalchemy import func
 
 from edisgo.io import db
+from edisgo.tools.config import Config
 from edisgo.tools.tools import (
     determine_bus_voltage_level,
     determine_grid_integration_voltage_level,
@@ -267,24 +267,33 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         else:
             return np.sum(cap)
 
-    saio.register_schema("demand", engine)
-    from saio.demand import egon_district_heating_areas, egon_hp_capacity_buildings
-
-    saio.register_schema("supply", engine)
-    from saio.supply import (
+    config = Config()
+    (
+        egon_district_heating_areas,
+        egon_hp_capacity_buildings,
+    ) = config.import_tables_from_oep(
+        engine, ["egon_district_heating_areas", "egon_hp_capacity_buildings"], "demand"
+    )
+    (
         egon_district_heating,
         egon_era5_weather_cells,
         egon_individual_heating,
+    ) = config.import_tables_from_oep(
+        engine,
+        ["egon_district_heating", "egon_era5_weather_cells", "egon_individual_heating"],
+        "supply",
     )
-
-    saio.register_schema("boundaries", engine)
-    from saio.boundaries import (
+    (
         egon_map_zensus_mvgd_buildings,
         egon_map_zensus_weather_cell,
+    ) = config.import_tables_from_oep(
+        engine,
+        ["egon_map_zensus_mvgd_buildings", "egon_map_zensus_weather_cell"],
+        "boundaries",
     )
-
-    saio.register_schema("grid", engine)
-    from saio.grid import egon_etrago_bus, egon_etrago_link
+    egon_etrago_bus, egon_etrago_link = config.import_tables_from_oep(
+        engine, ["egon_etrago_bus", "egon_etrago_link"], "grid"
+    )
 
     building_ids = edisgo_object.topology.loads_df.building_id.unique()
     mv_grid_geom_srid = edisgo_object.topology.grid_district["srid"]
@@ -604,8 +613,10 @@ def efficiency_resistive_heaters_oedb(scenario, engine):
         given in p.u.
 
     """
-    saio.register_schema("scenario", engine)
-    from saio.scenario import egon_scenario_parameters
+    config = Config()
+    (egon_scenario_parameters,) = config.import_tables_from_oep(
+        engine, ["egon_scenario_parameters"], "scenario"
+    )
 
     # get cop from database
     with db.session_scope_egon_data(engine) as session:

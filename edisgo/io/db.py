@@ -149,7 +149,7 @@ def ssh_tunnel(cred: dict) -> str:
     return str(server.local_bind_port)
 
 
-def engine(path: Path | str, ssh: bool = False) -> Engine:
+def engine(path: Path | str = None, ssh: bool = False) -> Engine:
     """
     Engine for local or remote database.
 
@@ -167,16 +167,15 @@ def engine(path: Path | str, ssh: bool = False) -> Engine:
         Database engine
 
     """
-    cred = credentials(path=path)
 
     if not ssh:
+        database_url = "toep.iks.cs.ovgu.de"
         return create_engine(
-            f"postgresql+psycopg2://{cred['POSTGRES_USER']}:"
-            f"{cred['POSTGRES_PASSWORD']}@{cred['HOST']}:"
-            f"{cred['PORT']}/{cred['POSTGRES_DB']}",
+            "postgresql+oedialect://:@" f"{database_url}",
             echo=False,
         )
 
+    cred = credentials(path=path)
     local_port = ssh_tunnel(cred)
 
     return create_engine(

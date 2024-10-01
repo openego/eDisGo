@@ -8,13 +8,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-import saio
 
 from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
 from edisgo.tools import session_scope
+from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus, proj2equidistant
 from edisgo.tools.tools import (
     determine_bus_voltage_level,
@@ -937,11 +937,15 @@ def oedb(
             ).to_crs(srid_edisgo)
         return chp_gdf
 
-    saio.register_schema("supply", engine)
-    from saio.supply import (
+    config = Config()
+    (
         egon_chp_plants,
         egon_power_plants,
         egon_power_plants_pv_roof_building,
+    ) = config.import_tables_from_oep(
+        engine,
+        ["egon_chp_plants", "egon_power_plants", "egon_power_plants_pv_roof_building"],
+        "supply",
     )
 
     # get generator data from database

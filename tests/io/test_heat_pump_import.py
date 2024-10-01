@@ -57,7 +57,7 @@ class TestHeatPumpImport:
         )
         return hp_df
 
-    @pytest.mark.local
+    @pytest.mark.oedbtest
     def test_oedb(self, caplog):
         with caplog.at_level(logging.DEBUG):
             heat_pump_import.oedb(
@@ -196,7 +196,6 @@ class TestHeatPumpImport:
         bus_rh = hp_df[hp_df.p_set == 0.17].bus[0]
         assert determine_bus_voltage_level(self.edisgo, bus_rh) == 6
 
-    @pytest.mark.local
     def test_efficiency_resistive_heaters_oedb(self):
         eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
             scenario="eGon2035", engine=pytest.engine

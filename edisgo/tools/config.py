@@ -20,6 +20,7 @@ __author__ = "nesnoj, gplssm"
 
 import copy
 import datetime
+import importlib
 import json
 import logging
 import os
@@ -28,7 +29,15 @@ import shutil
 from glob import glob
 from zipfile import ZipFile
 
+import oedialect  # noqa: F401
+import saio
+import sqlalchemy as sa
+
+from saio import register_schema
+
 import edisgo
+
+from edisgo.io.db import session_scope_egon_data
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +138,104 @@ class Config:
                 filename=kwargs.get("json_filename", None),
                 from_zip_archive=kwargs.get("from_zip_archive", False),
             )
+        self._config_dict = {}
+
+    @property
+    def db_table_mapping(self):
+        if not self._config_dict.get("db_table_mapping"):
+            self._set_db_mappings()
+        return self._config_dict.get("db_table_mapping", {})
+
+    @db_table_mapping.setter
+    def db_table_mapping(self, value):
+        self._config_dict["db_table_mapping"] = value
+
+    @property
+    def db_schema_mapping(self):
+        if not self._config_dict.get("db_schema_mapping"):
+            self._set_db_mappings()
+        return self._config_dict.get("db_schema_mapping", {})
+
+    @db_schema_mapping.setter
+    def db_schema_mapping(self, value):
+        self._config_dict["db_schema_mapping"] = value
+
+    def _set_db_mappings(self) -> None:
+        """
+        Sets the database table and schema mappings by retrieving alias dictionaries.
+        """
+        name_mapping, schema_mapping = self.get_database_alias_dictionaries()
+        self.db_table_mapping = name_mapping
+        self.db_schema_mapping = schema_mapping
+
+    def get_database_alias_dictionaries(self) -> tuple[dict[str, str], dict[str, str]]:
+        """
+        Retrieves the database alias dictionaries for table and schema mappings.
+
+        Returns
+        -------
+        tuple
+            A tuple containing two dictionaries:
+            - name_mapping: A dictionary mapping source table names to target table
+                names.
+            - schema_mapping: A dictionary mapping source schema names to target schema
+                names.
+        """
+        OEP_CONNECTION = "postgresql+oedialect://:@{platform}"
+        platform = "toep.iks.cs.ovgu.de"
+        conn_str = OEP_CONNECTION.format(platform=platform)
+        engine = sa.create_engine(conn_str)
+        dictionary_schema_name = (
+            "model_draft"  # Replace with the actual schema name if needed
+        )
+        dictionary_module_name = f"saio.{dictionary_schema_name}"
+        register_schema(dictionary_schema_name, engine)
+        dictionary_table_name = "edut_00"
+        dictionary_table = importlib.import_module(dictionary_module_name).__getattr__(
+            dictionary_table_name
+        )
+        with session_scope_egon_data(engine) as session:
+            query = session.query(dictionary_table)
+            dictionary_entries = query.all()
+            name_mapping = {
+                entry.source_name: entry.target_name for entry in dictionary_entries
+            }
+            schema_mapping = {
+                entry.source_schema: getattr(entry, "target_schema", "model_draft")
+                for entry in dictionary_entries
+            }
+
+        return name_mapping, schema_mapping
+
+    def import_tables_from_oep(
+        self, engine: sa.engine.Engine, table_names: list[str], schema_name: str
+    ) -> list[sa.Table]:
+        """
+        Imports tables from the OEP database based on the provided table names and
+        schema name.
+
+        Parameters
+        ----------
+        engine : sqlalchemy.engine.Engine
+            The SQLAlchemy engine to use for database connection.
+        table_names : list of str
+            List of table names to import.
+        schema_name : str
+            The schema name to use for importing tables.
+
+        Returns
+        -------
+        list of sqlalchemy.Table
+            A list of SQLAlchemy Table objects corresponding to the imported tables.
+        """
+        schema = self.db_schema_mapping.get(schema_name)
+        saio.register_schema(schema, engine)
+        tables = []
+        for table in table_names:
+            table = self.db_table_mapping.get(table)
+            module_name = f"saio.{schema}"
+            tables.append(importlib.import_module(module_name).__getattr__(table))
+        return tables
 
     def from_cfg(self, config_path=None):
         """
@@ -199,7 +306,10 @@ class Config:
             config_dict["demandlib"]["day_end"].hour,
             config_dict["demandlib"]["day_end"].minute,
         )
-
+        (
+            config_dict["db_tables_dict"],
+            config_dict["db_schema_dict"],
+        ) = self.get_database_alias_dictionaries()
         return config_dict
 
     def to_json(self, directory, filename=None):
