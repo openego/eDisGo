@@ -185,11 +185,13 @@ class Config:
         platform = "toep.iks.cs.ovgu.de"
         conn_str = OEP_CONNECTION.format(platform=platform)
         engine = sa.create_engine(conn_str)
-        schema_name = "model_draft"  # Replace with the actual schema name if needed
-        module_name = f"saio.{schema_name}"
-        register_schema(schema_name, engine)
+        dictionary_schema_name = (
+            "model_draft"  # Replace with the actual schema name if needed
+        )
+        dictionary_module_name = f"saio.{dictionary_schema_name}"
+        register_schema(dictionary_schema_name, engine)
         dictionary_table_name = "edut_00"
-        dictionary_table = importlib.import_module(module_name).__getattr__(
+        dictionary_table = importlib.import_module(dictionary_module_name).__getattr__(
             dictionary_table_name
         )
         with session_scope_egon_data(engine) as session:
