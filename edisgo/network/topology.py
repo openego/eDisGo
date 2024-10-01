@@ -2412,6 +2412,14 @@ class Topology:
                 connected to the MV bus. If the distance is greater, the component
                 is connected to a new LV bus.
 
+            * Buses the components can be connected to:
+                - For voltage level 6: Components can be connected to MV/LV substations.
+                    If MV connection is allowed, components can also be connected to
+                    MV buses.
+                - For voltage level 7: Components can be connected to LV buses. If MV
+                    connection is allowed, components can also be connected
+                    to MV buses and MV/LV substations.
+
         Parameters
         ----------
         edisgo_object : :class:`~.EDisGo`
