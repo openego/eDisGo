@@ -2640,7 +2640,7 @@ class Topology:
         if comp_type in ["charging_point", "heat_pump"]:
             comp_data["type"] = comp_type
         elif comp_type in ["generator", "storage_unit"]:
-            comp_data["p_nom"] = comp_data["p"]
+            comp_data["p_nom"] = comp_data.pop("p")
 
         # Handle different voltage levels
         if voltage_level == 6:
