@@ -31,6 +31,7 @@ from edisgo.io import (
     pypsa_io,
     timeseries_import,
 )
+from edisgo.io.db import engine as toep_engine
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
@@ -568,7 +569,7 @@ class EDisGo:
                 self,
                 fluctuating_generators_ts,
                 fluctuating_generators_names,
-                engine=kwargs.get("engine"),
+                engine=kwargs.get("engine", toep_engine()),
                 timeindex=kwargs.get("timeindex", None),
             )
         if dispatchable_generators_ts is not None:
@@ -583,7 +584,7 @@ class EDisGo:
                 loads_ts_df = timeseries_import.electricity_demand_oedb(
                     edisgo_obj=self,
                     scenario=kwargs.get("scenario"),
-                    engine=kwargs.get("engine"),
+                    engine=kwargs.get("engine", toep_engine()),
                     timeindex=kwargs.get("timeindex", None),
                     load_names=conventional_loads_names,
                 )
@@ -984,7 +985,7 @@ class EDisGo:
         else:
             generators_import.oedb(
                 edisgo_object=self,
-                engine=kwargs.get("engine"),
+                engine=kwargs.get("engine", toep_engine()),
                 scenario=generator_scenario,
             )
 
