@@ -2120,7 +2120,6 @@ class TimeSeries:
             :attr:`~.network.timeseries.TimeSeries.generators_active_power`.
         ts_new : :pandas:`pandas.DataFrame<DataFrame>`
             Dataframe with new time series to add to existing time series dataframe.
-
         """
         # drop possibly already existing time series
         self.drop_component_time_series(df_name, ts_new.columns)

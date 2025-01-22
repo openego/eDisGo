@@ -54,6 +54,7 @@ from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
 from edisgo.tools.spatial_complexity_reduction import spatial_complexity_reduction
 from edisgo.tools.tools import determine_grid_integration_voltage_level
+from edisgo.io.db import engine as toep_engine
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
@@ -568,7 +569,7 @@ class EDisGo:
                 self,
                 fluctuating_generators_ts,
                 fluctuating_generators_names,
-                engine=kwargs.get("engine"),
+                engine=kwargs.get("engine", toep_engine()),
                 timeindex=kwargs.get("timeindex", None),
             )
         if dispatchable_generators_ts is not None:
@@ -583,7 +584,7 @@ class EDisGo:
                 loads_ts_df = timeseries_import.electricity_demand_oedb(
                     edisgo_obj=self,
                     scenario=kwargs.get("scenario"),
-                    engine=kwargs.get("engine"),
+                    engine=kwargs.get("engine", toep_engine()),
                     timeindex=kwargs.get("timeindex", None),
                     load_names=conventional_loads_names,
                 )
