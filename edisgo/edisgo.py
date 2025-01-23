@@ -31,6 +31,7 @@ from edisgo.io import (
     pypsa_io,
     timeseries_import,
 )
+from edisgo.io.db import engine as toep_engine
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
@@ -985,7 +986,7 @@ class EDisGo:
         else:
             generators_import.oedb(
                 edisgo_object=self,
-                engine=kwargs.get("engine"),
+                engine=kwargs.get("engine", toep_engine()),
                 scenario=generator_scenario,
             )
 
