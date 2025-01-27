@@ -149,6 +149,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             <= edisgo_object.config["grid_connection"]["upper_limit_voltage_level_4"],
         )
         df = pd.read_sql(query.statement, engine, index_col=None)
+        # Alternativ Code einfügen, falls Tabelle leer ist
         if not df.empty:
             # get geom of heat bus, weather_cell_id, district_heating_id and area_id
             srid_etrago_bus = db.get_srid_of_db_table(session, egon_etrago_bus.geom)

@@ -1,6 +1,5 @@
-import logging
 import copy
-import warnings
+import logging
 
 import pandas as pd
 
@@ -33,12 +32,13 @@ def operating_strategy(
     if heat_pump_names is None:
         heat_pump_names = edisgo_obj.heat_pump.cop_df.columns
 
-    # if heat_pump is not in topology -> exception
-    # heat_pumps_in_topology_check = heat_pump_names.isin(edisgo_obj.topology.loads_df.index)
-    # for x in range(len(heat_pump_names)):
-    #     if not heat_pumps_in_topology_check[x]:
-    #         warnings.warn(f"Warning: Heat pump {heat_pump_names[x]} has not been inserted into the grid topology.")
-    #         heat_pump_names = heat_pump_names.drop[heat_pump_names[x]]
+    missing = set(heat_pump_names) - set(edisgo_obj.topology.loads_df.index)
+    if missing:
+        logger.warning(
+            f"The following heat pumps are are in the heat pump class but not yet "
+            f"integrated into the topology class. Therefore, their maximum capacity "
+            f"cannot be considered in the operating strategies. {missing=}"
+        )
 
     if strategy == "uncontrolled":
         ts = (
@@ -46,23 +46,22 @@ def operating_strategy(
             / edisgo_obj.heat_pump.cop_df.loc[:, heat_pump_names]
         )
 
-        # clips heat pump load at maximum level
         ts_prev = copy.deepcopy(ts)
-        for heat_pump_name in heat_pump_names:
-          ts[heat_pump_name] = [min(x,edisgo_obj.topology.loads_df.p_set[heat_pump_name]) for x in ts[heat_pump_name]]
-          if not ts[heat_pump_name].equals(ts_prev[heat_pump_name]):
-                warnings.warn(
-                    # Extension possible: print heat pumps that were clipped
-                    f"Warning: Heat pump active power at {edisgo_obj.topology.loads_df.bus[heat_pump_name]} was limited to its maximum."
-                    f"Heat demand at bus {edisgo_obj.topology.loads_df.bus[heat_pump_name]} should be covered by additional heat sources."
-                )
 
-        if not ts.equals(ts_prev):
-            warnings.warn(
-                # Extension possible: print heat pumps that were clipped
-                          "Warning: Heat pump active power was clipped at maximum level." 
-                          "Heat demand at bus should be covered by additional heat sources."
-            )
+        # clips heat pump load at maximum level
+        in_topology = list(set(heat_pump_names) - set(missing))
+
+        ts_clipped = ts[in_topology].clip(
+            upper=edisgo_obj.topology.loads_df.p_set[in_topology].values
+        )
+        ts[in_topology] = ts_clipped[in_topology]
+
+        clipped = ts.eq(ts_prev).all()[lambda x: ~x].index
+        logger.warning(
+            f"Heat pump power at {clipped} was "
+            f"clipped at its maximum capacity. The heat demand at this bus "
+            f"should be covered by additional heat sources."
+        )
 
         edisgo_obj.timeseries.add_component_time_series(
             "loads_active_power",

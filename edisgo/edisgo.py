@@ -55,7 +55,6 @@ from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
 from edisgo.tools.spatial_complexity_reduction import spatial_complexity_reduction
 from edisgo.tools.tools import determine_grid_integration_voltage_level
-from edisgo.io.db import engine as toep_engine
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
