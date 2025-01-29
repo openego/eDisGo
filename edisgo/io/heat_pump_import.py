@@ -5,8 +5,6 @@ import random
 import numpy as np
 import pandas as pd
 
-from sqlalchemy import func
-
 from edisgo.io import db
 from edisgo.tools.config import Config
 from edisgo.tools.tools import (
@@ -97,7 +95,9 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         # e.g. for CTS and residential
         return df.drop_duplicates(subset=["building_id"])
 
-    def _get_central_heat_pump_or_resistive_heaters(carrier):
+    def _get_central_heat_pump_or_resistive_heaters(
+        carrier, egon_district_heating_areas
+    ):
         """
         Get heat pumps or resistive heaters in district heating from oedb.
 
@@ -150,45 +150,75 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         )
         df = pd.read_sql(query.statement, engine, index_col=None)
         if not df.empty:
-            # get geom of heat bus, weather_cell_id, district_heating_id and area_id
+            # Query for egon_etrago_bus
             srid_etrago_bus = db.get_srid_of_db_table(session, egon_etrago_bus.geom)
-            query = (
-                session.query(
-                    egon_etrago_bus.bus_id.label("bus1"),
-                    egon_etrago_bus.geom,
-                    egon_era5_weather_cells.w_id.label("weather_cell_id"),
-                    egon_district_heating_areas.id.label("district_heating_id"),
-                    egon_district_heating_areas.area_id,
-                )
-                .filter(
-                    egon_etrago_bus.scn_name == scenario,
-                    egon_district_heating_areas.scenario == scenario,
-                    egon_etrago_bus.bus_id.in_(df.bus1),
-                )
-                .outerjoin(  # join to obtain weather cell ID
-                    egon_era5_weather_cells,
-                    db.sql_within(
-                        egon_etrago_bus.geom,
-                        egon_era5_weather_cells.geom,
-                        mv_grid_geom_srid,
-                    ),
-                )
-                .outerjoin(  # join to obtain district heating ID
-                    egon_district_heating_areas,
-                    func.ST_Transform(
-                        func.ST_Centroid(egon_district_heating_areas.geom_polygon),
-                        srid_etrago_bus,
-                    )
-                    == egon_etrago_bus.geom,
-                )
+
+            query_etrago_bus = session.query(
+                egon_etrago_bus.bus_id.label("bus1"),
+                egon_etrago_bus.geom,
+                egon_etrago_bus.scn_name,
+            ).filter(
+                egon_etrago_bus.scn_name == scenario,
+                egon_etrago_bus.bus_id.in_(df.bus1),
             )
-            df_geom = gpd.read_postgis(
-                query.statement,
+            gdf_etrago_bus = gpd.read_postgis(
+                query_etrago_bus.statement,
                 engine,
                 index_col=None,
                 crs=f"EPSG:{srid_etrago_bus}",
             ).to_crs(mv_grid_geom_srid)
-            # merge dataframes
+
+            # Query for egon_era5_weather_cells
+            query_weather_cells = session.query(
+                egon_era5_weather_cells.w_id.label("weather_cell_id"),
+                egon_era5_weather_cells.geom,
+            )
+            gdf_weather_cells = gpd.read_postgis(
+                query_weather_cells.statement,
+                engine,
+                index_col=None,
+                crs=f"EPSG:{edisgo_object.topology.grid_district['srid']}",
+            ).to_crs(mv_grid_geom_srid)
+
+            # Query for egon_district_heating_areas
+            query_district_heating_areas = session.query(
+                egon_district_heating_areas.id.label("district_heating_id"),
+                egon_district_heating_areas.area_id,
+                egon_district_heating_areas.geom_polygon,
+                egon_district_heating_areas.scenario,
+            ).filter(egon_district_heating_areas.scenario == scenario)
+            gdf_district_heating_areas = gpd.read_postgis(
+                query_district_heating_areas.statement,
+                engine,
+                geom_col="geom_polygon",
+                index_col=None,
+                crs=f"EPSG:{db.get_srid_of_db_table(session, egon_district_heating_areas.geom_polygon)}",  # noqa: E501
+            ).to_crs(mv_grid_geom_srid)
+
+            # Perform spatial join with weather cells
+            gdf_combined = gpd.sjoin(
+                gdf_etrago_bus,
+                gdf_weather_cells,
+                how="left",
+                predicate="intersects",
+                rsuffix="weather",
+            )
+
+            # Calculate centroids for district heating areas
+            gdf_district_heating_areas["centroid"] = gdf_district_heating_areas.centroid
+            gdf_district_heating_areas = gdf_district_heating_areas.set_geometry(
+                "geom_polygon"
+            )
+
+            # Perform spatial join with district heating areas
+            df_geom = gpd.sjoin_nearest(
+                gdf_combined,
+                gdf_district_heating_areas,
+                how="left",
+                rsuffix="district_heating",
+                max_distance=1000,
+            )
+
             df_merge = pd.merge(
                 df_geom, df, how="right", right_on="bus1", left_on="bus1"
             )
@@ -204,9 +234,6 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             ).filter(
                 egon_district_heating.carrier == "CHP",
                 egon_district_heating.scenario == scenario,
-                egon_district_heating.district_heating_id.in_(
-                    df_geom.district_heating_id
-                ),
             )
             df_geom_chp = gpd.read_postgis(
                 query.statement,
@@ -214,6 +241,9 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
                 index_col=None,
                 crs=f"EPSG:{srid_dh_supply}",
             ).to_crs(mv_grid_geom_srid)
+            df_geom_chp = df_geom_chp.loc[
+                df_geom_chp.district_heating_id.isin(df_geom.district_heating_id), :
+            ]
 
             # set geolocation of central heat pump / resistive heater
             for idx in df_merge.index:
@@ -292,7 +322,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         "boundaries",
     )
     egon_etrago_bus, egon_etrago_link = config.import_tables_from_oep(
-        engine, ["egon_etrago_bus", "egon_etrago_link"], "grid"
+        engine, ["egon_etrago_bus", "egon_etrago_link"], "supply"
     )
 
     building_ids = edisgo_object.topology.loads_df.building_id.unique()
@@ -315,14 +345,14 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
 
         if "central_heat_pumps" in import_types:
             hp_central = _get_central_heat_pump_or_resistive_heaters(
-                "central_heat_pump"
+                "central_heat_pump", egon_district_heating_areas
             )
         else:
             hp_central = pd.DataFrame(columns=["p_set"])
 
         if "central_resistive_heaters" in import_types:
             resistive_heaters_central = _get_central_heat_pump_or_resistive_heaters(
-                "central_resistive_heater"
+                "central_resistive_heater", egon_district_heating_areas
             )
         else:
             resistive_heaters_central = pd.DataFrame(columns=["p_set"])
