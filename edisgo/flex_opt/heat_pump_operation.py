@@ -1,3 +1,4 @@
+import copy
 import logging
 
 import pandas as pd
@@ -31,11 +32,37 @@ def operating_strategy(
     if heat_pump_names is None:
         heat_pump_names = edisgo_obj.heat_pump.cop_df.columns
 
+    missing = set(heat_pump_names) - set(edisgo_obj.topology.loads_df.index)
+    if missing:
+        logger.warning(
+            f"The following heat pumps are are in the heat pump class but not yet "
+            f"integrated into the topology class. Therefore, their maximum capacity "
+            f"cannot be considered in the operating strategies. {missing=}"
+        )
+
     if strategy == "uncontrolled":
         ts = (
             edisgo_obj.heat_pump.heat_demand_df.loc[:, heat_pump_names]
             / edisgo_obj.heat_pump.cop_df.loc[:, heat_pump_names]
         )
+
+        ts_prev = copy.deepcopy(ts)
+
+        # clips heat pump load at maximum level
+        in_topology = list(set(heat_pump_names) - set(missing))
+
+        ts_clipped = ts[in_topology].clip(
+            upper=edisgo_obj.topology.loads_df.p_set[in_topology].values
+        )
+        ts[in_topology] = ts_clipped[in_topology]
+
+        clipped = ts.eq(ts_prev).all()[lambda x: ~x].index
+        logger.warning(
+            f"Heat pump power at {clipped} was "
+            f"clipped at its maximum capacity. The heat demand at this bus "
+            f"should be covered by additional heat sources."
+        )
+
         edisgo_obj.timeseries.add_component_time_series(
             "loads_active_power",
             ts,
