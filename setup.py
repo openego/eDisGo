@@ -39,6 +39,7 @@ requirements = [
     "geoalchemy2 < 0.7.0",
     "geopandas >= 0.12.0",
     "geopy >= 2.0.0",
+    "ipympl",
     "jupyterlab",
     "jupyter_dash",
     "matplotlib >= 3.3.0",
