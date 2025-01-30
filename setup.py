@@ -52,7 +52,7 @@ requirements = [
     "pygeos",
     "pypower",
     "pyproj >= 3.0.0",
-    "pypsa == 0.26.2",
+    "pypsa == 0.32.1",
     "pyyaml",
     "saio",
     "scikit-learn < 1.3.0",

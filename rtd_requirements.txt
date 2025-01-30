@@ -10,7 +10,7 @@ pandas >= 1.4.0
 plotly
 pypower
 pyproj >= 3.0.0
-pypsa == 0.26.2
+pypsa == 0.32.1
 pyyaml
 saio
 scikit-learn < 1.6 # Workaround: Pin scikit-learn to version 1.5 to fix failing doc check on GitHub
