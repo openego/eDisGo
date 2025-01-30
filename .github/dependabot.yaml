@@ -9,6 +9,12 @@ updates:
     labels:
       - "dependencies"
     rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "pandas"
+      - dependency-name: "plotly"
+      - dependency-name: "pypsa"
+      - dependency-name: "scikit-learn"
+      - dependency-name: "sqlalchemy"
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
@@ -18,3 +24,9 @@ updates:
     labels:
       - "dependencies"
     rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "pandas"
+      - dependency-name: "plotly"
+      - dependency-name: "pypsa"
+      - dependency-name: "scikit-learn"
+      - dependency-name: "sqlalchemy"
