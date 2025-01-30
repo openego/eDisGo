@@ -47,7 +47,7 @@ requirements = [
     # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
     # sqlalchemy leads to new errors.. should be fixed at some point
     "pandas >= 1.4.0, < 2.2.0",
-    "plotly",
+    "plotly < 6.0",
     "pydot",
     "pygeos",
     "pypower",
