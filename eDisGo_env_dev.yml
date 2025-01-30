@@ -6,16 +6,16 @@ dependencies:
   - python >= 3.9, <= 3.11
   - pip
   - pandas >= 1.4, < 2.2.0
-  - conda-forge::fiona < 1.11.0
-  - conda-forge::geopy < 2.3.0
-  - conda-forge::geopandas < 1.1.0
-  - conda-forge::pyproj < 3.4.0
-  - conda-forge::shapely < 2.1.0
-  - conda-forge::rasterio < 1.3.0
-  - conda-forge::geoalchemy2 < 0.7.0
-  - conda-forge::pygeos < 0.13.0
-  - conda-forge::contextily < 1.2.0
-  - conda-forge::descartes < 1.2.0
+  - conda-forge::fiona
+  - conda-forge::geopy
+  - conda-forge::geopandas
+  - conda-forge::pyproj
+  - conda-forge::shapely
+  - conda-forge::rasterio
+  - conda-forge::geoalchemy2
+  - conda-forge::pygeos
+  - conda-forge::contextily
+  - conda-forge::descartes
   - conda-forge::pypsa == 0.26.2
   - pip:
       - -e .[dev]
