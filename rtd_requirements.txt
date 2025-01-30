@@ -1,4 +1,4 @@
-dash < 2.9.0
+dash < 2.19.0
 demandlib
 egoio >= 0.4.7
 geopy >= 2.0.0
