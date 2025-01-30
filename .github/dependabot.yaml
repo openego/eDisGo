@@ -16,11 +16,3 @@ updates:
       - "joda9"
     labels:
       - "dependencies"
-  - package-ecosystem: "conda"
-    directory: "/"
-    schedule:
-      interval: "weekly"
-    reviewers:
-      - "joda9"
-    labels:
-      - "dependencies"
