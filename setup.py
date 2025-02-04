@@ -31,25 +31,27 @@ def read(fname):
 
 
 requirements = [
-    "contextily < 1.2.0",
+    "contextily < 1.7.0",
     "dash < 2.9.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
-    "egoio >= 0.4.7",
+    "egoio >= 0.4.7, < 0.5.0",
     "geoalchemy2 < 0.7.0",
     "geopandas >= 0.12.0, < 1.1.0",
-    "geopy >= 2.0.0, < 2.3.0",
-    "jupyter_dash < 0.5.0",
+    "geopy >= 2.0.0, < 2.5.0",
     "jupyterlab < 4.4.0",
+    "jupyter_dash < 0.5.0",
     "matplotlib >= 3.3.0, < 3.11.0",
     "multiprocess < 0.71.0",
     "networkx >= 2.5.0, < 3.5.0",
+    # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
+    # sqlalchemy leads to new errors.. should be fixed at some point
     "pandas >= 1.4.0, < 2.2.0",
-    "plotly < 5.25.0",
+    "plotly < 6.0",
     "pydot < 3.1.0",
-    "pygeos < 0.13.0",
+    "pygeos < 0.15.0",
     "pypower < 5.2.0",
-    "pyproj >= 3.0.0, < 3.4.0",
+    "pyproj >= 3.0.0, < 3.8.0",
     "pypsa == 0.26.2",
     "pyyaml < 6.1.0",
     "saio < 0.3.0",
@@ -71,9 +73,9 @@ dev_requirements = [
     "pytest-notebook < 0.11.0",
     "pyupgrade < 3.20.0",
     "sphinx < 8.2.0",
-    "sphinx_rtd_theme >= 0.5.2, < 3.1.0",
+    "sphinx_rtd_theme >=0.5.2, < 3.1.0",
     "sphinx-autodoc-typehints < 3.1.0",
-    "sphinx-autoapi < 3.4.0",
+    "sphinx-autoapi < 3.5.0",
 ]
 
 extras = {"dev": dev_requirements}
