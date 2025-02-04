@@ -57,7 +57,6 @@ class TestHeatPumpImport:
         )
         return hp_df
 
-    @pytest.mark.oedbtest
     def test_oedb(self, caplog):
         with caplog.at_level(logging.DEBUG):
             heat_pump_import.oedb(
