@@ -187,12 +187,17 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
                 egon_district_heating_areas.geom_polygon,
                 egon_district_heating_areas.scenario,
             ).filter(egon_district_heating_areas.scenario == scenario)
+
+            srid = db.get_srid_of_db_table(
+                session, egon_district_heating_areas.geom_polygon
+            )
+
             gdf_district_heating_areas = gpd.read_postgis(
                 query_district_heating_areas.statement,
                 engine,
                 geom_col="geom_polygon",
                 index_col=None,
-                crs=f"EPSG:{db.get_srid_of_db_table(session, egon_district_heating_areas.geom_polygon)}",  # noqa: E501
+                crs=f"EPSG:{srid}",
             ).to_crs(mv_grid_geom_srid)
 
             # Perform spatial join with weather cells
