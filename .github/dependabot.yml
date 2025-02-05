@@ -3,7 +3,7 @@ updates:
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "daily"
     reviewers:
       - "joda9"
     labels:
@@ -18,7 +18,22 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
+      interval: "daily"
+    reviewers:
+      - "joda9"
+    labels:
+      - "dependencies"
+    rebase-strategy: "auto"
+    ignore:
+      - dependency-name: "pandas"
+      - dependency-name: "plotly"
+      - dependency-name: "pypsa"
+      - dependency-name: "scikit-learn"
+      - dependency-name: "sqlalchemy"
+  - package-ecosystem: "conda"
+    directory: "/"
+    schedule:
+      interval: "daily"
     reviewers:
       - "joda9"
     labels:

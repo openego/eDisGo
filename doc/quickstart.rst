@@ -23,12 +23,12 @@ Installation using Windows
 
 For Windows users we recommend using Anaconda and to install the geo stack
 using the conda-forge channel prior to installing eDisGo. You may use the provided
-`eDisGo_env.yml file <https://github.com/openego/eDisGo/blob/dev/eDisGo_env.yml>`_
+`environment.yml file <https://github.com/openego/eDisGo/blob/dev/environment.yml>`_
 to do so. Download the file and create a virtual environment with:
 
 .. code-block:: bash
 
-    conda env create -f path/to/eDisGo_env.yml
+    conda env create -f path/to/environment.yml
 
 Activate the newly created environment with:
 
