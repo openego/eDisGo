@@ -38,6 +38,7 @@ from edisgo.io.electromobility_import import (
     import_electromobility_from_dir,
     import_electromobility_from_oedb,
     integrate_charging_parks,
+    import_electromobility_from_new_data,
 )
 from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.io.storage_import import home_batteries_oedb
@@ -1922,8 +1923,10 @@ class EDisGo:
         engine: Engine = None,
         charging_processes_dir: PurePath | str = None,
         potential_charging_points_dir: PurePath | str = None,
+        data_dir: PurePath | str = None,
         import_electromobility_data_kwds=None,
         allocate_charging_demand_kwds=None,
+        **kwargs,
     ):
         """
         Imports electromobility data and integrates charging points into grid.
@@ -2048,6 +2051,11 @@ class EDisGo:
                 potential_charging_points_dir,
                 **import_electromobility_data_kwds,
             )
+        elif data_source == "new_data":
+            import_electromobility_from_new_data(
+                self, 
+                data_dir,
+                **import_electromobility_data_kwds)
         else:
             raise ValueError(
                 "Invalid input for parameter 'data_source'. Possible options are "
@@ -2057,8 +2065,9 @@ class EDisGo:
         if allocate_charging_demand_kwds is None:
             allocate_charging_demand_kwds = {}
 
-        distribute_charging_demand(self, **allocate_charging_demand_kwds)
-
+        if data_source != "new_data":
+            distribute_charging_demand(self, **allocate_charging_demand_kwds)
+        
         integrate_charging_parks(self)
 
     def apply_charging_strategy(self, strategy="dumb", **kwargs):
