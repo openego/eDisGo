@@ -850,13 +850,14 @@ class PotentialChargingParks(BasicComponent):
             Total gross designated charging park capacity
 
         """
+        df_without_geometry = self.charging_processes_df[["charging_point_id", "nominal_charging_capacity_kW"]]
         return (
-            self.charging_processes_df.groupby("charging_point_id")
+            df_without_geometry.groupby("charging_point_id")
             .max()
             .nominal_charging_capacity_kW.sum()
             / self._edisgo_obj.electromobility.eta_charging_points
         )
-
+        
     @property
     def user_centric_weight(self):
         """

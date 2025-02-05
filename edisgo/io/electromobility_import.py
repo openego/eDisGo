@@ -3,13 +3,15 @@ from __future__ import annotations
 import json
 import logging
 import os
+import io
 
 from collections import Counter
 from pathlib import Path, PurePath
 from typing import TYPE_CHECKING
-
+import requests
 import numpy as np
 import pandas as pd
+import zipfile
 
 from numpy.random import default_rng
 from sklearn import preprocessing
@@ -101,6 +103,7 @@ USECASES = ["hpc", "public", "home", "work"]
 PRIVATE_DESTINATIONS = {
     "0_work": "work",
     "6_home": "home",
+    "home_apartment": "home",
 }
 
 
@@ -476,7 +479,7 @@ def assure_minimum_potential_charging_parks(
     potential_charging_parks_gdf = potential_charging_parks_gdf.sort_values(
         by=["use_case", "ags", "user_centric_weight"], ascending=[True, True, False]
     ).reset_index(drop=True)
-
+    potential_charging_parks_gdf['ags'] = potential_charging_parks_gdf['ags'].fillna(0)
     # in case of polygons use the centroid as potential charging parks point
     # and set crs to match edisgo object
     return (
@@ -1145,6 +1148,90 @@ def integrate_charging_parks(edisgo_obj):
         index=charging_park_ids,
     )
 
+def get_ags_from_geometry(gdf):
+    """
+    Get the AGS from a given geometry.
+
+    Parameters
+    ----------
+    geometry : :shapely:`shapely.geometry`
+        Geometry object
+
+    Returns
+    -------
+    :obj:`int`
+        AGS
+
+    """
+    url = "https://daten.gdz.bkg.bund.de/produkte/vg/vg250_ebenen_0101/aktuell/vg250_01-01.utm32s.gpkg.ebenen.zip"
+    r = requests.get(url)
+    z = zipfile.ZipFile(io.BytesIO(r.content))
+    z.extractall("/tmp/vg250_data")
+    vg250 = gpd.read_file("/tmp/vg250_data/vg250_01-01.utm32s.gpkg.ebenen/vg250_ebenen_0101/DE_VG250.gpkg", layer="vg250_gem")
+    vg250 = vg250.to_crs(gdf.crs)
+    gdf = gdf.to_crs(vg250.crs)
+    gdf = gpd.sjoin(gdf, vg250[['geometry', 'AGS']], how="left", predicate="intersects")
+    return gdf
+
+
+
+
+def import_electromobility_from_new_data(
+    edisgo_obj: EDisGo,
+    data_dir: str,
+    **kwargs,
+):
+    """
+    """
+    csv_files = [f for f in os.listdir(data_dir) if f.endswith('.csv')]
+    gpkg_files = [f for f in os.listdir(data_dir) if f.endswith('.gpkg')]
+
+    # Load CSV files into a dictionary
+    # csv_data = {f: pd.read_csv(os.path.join(data_dir, f)) for f in csv_files}
+
+    # Load GPKG files into a dictionary
+    gpkg_data = {f: gpd.read_file(os.path.join(data_dir, f)) for f in gpkg_files}
+    charging_processes_df = [gdf for key, gdf in gpkg_data.items() if 'charging-events' in key]
+    charging_processes_gdf = gpd.GeoDataFrame(pd.concat(charging_processes_df, ignore_index=True))
+    charging_processes_gdf = get_ags_from_geometry(charging_processes_gdf)
+    column_mapping = {
+        'energy': 'chargingdemand_kWh',
+        'use_case': 'use_case',
+        'id': 'car_id',
+        'station_charging_capacity': 'nominal_charging_capacity_kW',
+        'assigned_location': 'ags',
+        'charging_use_case': 'destination',
+        'assigned_location': 'charging_park_id',
+    }
+
+
+    charging_processes_gdf = charging_processes_gdf.rename(columns=column_mapping)
+    charging_processes_gdf['charging_point_id'] = charging_processes_gdf.charging_park_id
+    edisgo_obj.electromobility.charging_processes_df = charging_processes_gdf
+
+    charging_parks_gdfs = []
+    for key, gdf in gpkg_data.items():
+        if 'charging-locations' in key:
+            # Extrahiere den use_case aus dem Dateinamen
+            use_case = key.split('_')[1]
+            # Füge die Spalte 'use_case' hinzu
+            gdf['use_case'] = use_case
+            charging_parks_gdfs.append(gdf)
+    charging_parks_gdf = gpd.GeoDataFrame(pd.concat(charging_parks_gdfs, ignore_index=True))
+    charging_parks_gdf.geometry = charging_parks_gdf.geometry.centroid
+    mapping_charging_parks = {
+        'probability': 'user_centric_weight',
+        'required_points': 'ags',
+        'use_case': 'use_case',
+        'charging_park_id': 'id',
+    }
+    charging_parks_gdf = charging_parks_gdf.rename(columns=mapping_charging_parks)
+    edisgo_obj.electromobility.potential_charging_parks_gdf = assure_minimum_potential_charging_parks(
+        edisgo_obj=edisgo_obj,
+        potential_charging_parks_gdf=charging_parks_gdf,
+        )
+    # edisgo_obj.electromobility.potential_charging_parks = edisgo_obj.electromobility.potential_charging_parks_gdf
+
 
 def import_electromobility_from_oedb(
     edisgo_obj: EDisGo,
@@ -1235,6 +1322,7 @@ def simbev_config_from_oedb(
 def potential_charging_parks_from_oedb(
     edisgo_obj: EDisGo,
     engine: Engine,
+    **kwargs,
 ):
     """
     Gets :attr:`~.network.electromobility.Electromobility.potential_charging_parks_gdf`
