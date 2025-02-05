@@ -1351,7 +1351,6 @@ class TestEDisGo:
         )
         # fmt: on
 
-    @pytest.mark.oedbtest
     def test_import_heat_pumps(self):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
