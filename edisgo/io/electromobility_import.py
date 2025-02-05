@@ -1156,12 +1156,12 @@ def get_ags_from_geometry(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
     Parameters
     ----------
-    gdf : :geopandas:`geopandas.GeoDataFrame`
+    gdf : :geopandas:`geopandas.GeoDataFrame<GeoDataFrame>
         GeoDataFrame with geometry
 
     Returns
     -------
-    :geopandas:`geopandas.GeoDataFrame`
+    :geopandas:`geopandas.GeoDataFrame<GeoDataFrame>
         GeoDataFrame with geometry and AGS
 
     """
