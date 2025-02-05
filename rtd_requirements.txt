@@ -21,3 +21,4 @@ sphinx-autoapi
 sshtunnel
 urllib3 < 2.0.0
 workalendar
+astroid>=3
