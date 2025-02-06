@@ -67,7 +67,7 @@ jobs:
           python -m pip install pytest pytest-notebook
           python -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
         env:
-          TOEP_TOKEN: ${{ secrets.TOEP_TOKEN_KH }}
+          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
 
       - name: Run tests Windows
         if: runner.os == 'Windows'
@@ -75,7 +75,7 @@ jobs:
           python -m pip install pytest pytest-notebook
           python -m pytest --runslow --disable-warnings --color=yes -v
         env:
-          TOEP_TOKEN: ${{ secrets.TOEP_TOKEN_KH }}
+          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
 
       - name: Run tests, coverage and send to coveralls
         if: runner.os == 'Linux' && matrix.python-version == 3.9 && matrix.name-suffix == 'coverage'
@@ -84,5 +84,5 @@ jobs:
           coverage run --source=edisgo -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
           coveralls
         env:
-          TOEP_TOKEN: ${{ secrets.TOEP_TOKEN_KH }}
+          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
           COVERALLS_SERVICE_NAME: github
