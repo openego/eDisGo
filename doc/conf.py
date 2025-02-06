@@ -142,6 +142,7 @@ extlinks = {
 linkcheck_ignore = [
     r"https://stackoverflow.com*",
     r"https://support.gurobi.com/*",
+    r"https://www.gnu.org/licenses/",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
