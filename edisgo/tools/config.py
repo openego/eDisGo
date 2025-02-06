@@ -182,9 +182,6 @@ class Config:
             - schema_mapping: A dictionary mapping source schema names to target schema
                 names.
         """
-        # OEP_CONNECTION = "postgresql+oedialect://:@{platform}"
-        # platform = "toep.iks.cs.ovgu.de"
-        # conn_str = OEP_CONNECTION.format(platform=platform)
         engine = toep_engine()
         dictionary_schema_name = (
             "model_draft"  # Replace with the actual schema name if needed
