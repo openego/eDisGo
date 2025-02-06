@@ -1,4 +1,5 @@
 """Setup"""
+
 import os
 import sys
 
@@ -62,6 +63,7 @@ requirements = [
     "urllib3 < 2.0.0",
     "workalendar",
 ]
+
 
 dev_requirements = [
     "black",
