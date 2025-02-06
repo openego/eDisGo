@@ -180,7 +180,7 @@ def engine(path: Path | str = None, ssh: bool = False) -> Engine:
                 env_var = [""]
         database_url = "toep.iks.cs.ovgu.de"
         return create_engine(
-            f"postgresql+oedialect://{env_var}@{database_url}",
+            f"postgresql+oedialect://:{env_var}@{database_url}",
             echo=False,
         )
 
