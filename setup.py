@@ -1,4 +1,5 @@
 """Setup"""
+
 import os
 import sys
 
@@ -63,6 +64,7 @@ requirements = [
     "workalendar < 17.1.0",
     "astroid == 3.3.8",
 ]
+
 
 dev_requirements = [
     "black < 25.2.0",
