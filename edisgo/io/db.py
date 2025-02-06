@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from contextlib import contextmanager
 from pathlib import Path
@@ -169,9 +170,17 @@ def engine(path: Path | str = None, ssh: bool = False) -> Engine:
     """
 
     if not ssh:
+        if "TOEP_TOKEN_KH" in os.environ:
+            env_var = os.environ["TOEP_TOKEN_KH"]
+        else:
+            try:
+                with open("TOEP_TOKEN.txt") as file:
+                    env_var = file.read().strip()
+            except FileNotFoundError:
+                env_var = [""]
         database_url = "toep.iks.cs.ovgu.de"
         return create_engine(
-            "postgresql+oedialect://:@" f"{database_url}",
+            f"postgresql+oedialect://{env_var}@{database_url}",
             echo=False,
         )
 
