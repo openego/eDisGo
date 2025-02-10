@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
 from contextlib import contextmanager
 from pathlib import Path
@@ -150,7 +151,9 @@ def ssh_tunnel(cred: dict) -> str:
     return str(server.local_bind_port)
 
 
-def engine(path: Path | str = None, ssh: bool = False) -> Engine:
+def engine(
+    path: Path | str = None, ssh: bool = False, token: str = "TOEP_TOKEN.txt"
+) -> Engine:
     """
     Engine for local or remote database.
 
@@ -161,6 +164,8 @@ def engine(path: Path | str = None, ssh: bool = False) -> Engine:
     ssh : bool
         If True try to establish ssh tunnel from given information within the
         configuration YAML. If False try to connect to local database.
+    token : str
+        Token for database connection or path to text file containing token.
 
     Returns
     -------
@@ -170,14 +175,24 @@ def engine(path: Path | str = None, ssh: bool = False) -> Engine:
     """
 
     if not ssh:
+        # Github Actions KHs token
         if "TOEP_TOKEN_KH" in os.environ:
             env_var = os.environ["TOEP_TOKEN_KH"]
         else:
             try:
-                with open("TOEP_TOKEN.txt") as file:
+                with open(token) as file:
                     env_var = file.read().strip()
             except FileNotFoundError:
-                env_var = [""]
+                if ".txt" in token:
+                    raise FileNotFoundError(f"File {token} not found.")
+                else:
+                    env_var = token
+
+            # Check if the token format is valid
+            if not re.match(r"^[a-f0-9]{40}$", env_var):
+                raise ValueError(
+                    "Invalid token format. Expected a 40-character hexadecimal string."
+                )
         database_url = "toep.iks.cs.ovgu.de"
         return create_engine(
             f"postgresql+oedialect://:{env_var}@{database_url}",
