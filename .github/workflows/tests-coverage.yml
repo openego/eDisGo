@@ -85,4 +85,5 @@ jobs:
           coveralls
         env:
           TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github
