@@ -54,7 +54,7 @@ jobs:
 
       - name: Install packages (Windows)
         if: runner.os == 'Windows'
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3
         with:
           miniconda-version: "latest"
           activate-environment: edisgo_env
