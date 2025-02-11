@@ -168,7 +168,7 @@ def engine(path: Path | str = None, ssh: bool = False) -> Engine:
 
     """
 
-    if not ssh:
+    if path is None:
         database_url = "toep.iks.cs.ovgu.de"
         return create_engine(
             "postgresql+oedialect://:@" f"{database_url}",
@@ -176,7 +176,8 @@ def engine(path: Path | str = None, ssh: bool = False) -> Engine:
         )
 
     cred = credentials(path=path)
-    local_port = ssh_tunnel(cred)
+
+    local_port = ssh_tunnel(cred) if ssh else int(cred["--database-port"])
 
     return create_engine(
         f"postgresql+psycopg2://{cred['POSTGRES_USER']}:"
