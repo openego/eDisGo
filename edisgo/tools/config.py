@@ -241,7 +241,7 @@ class Config:
             saio.register_schema(schema_name, engine)
             tables = []
             for table in table_names:
-                module_name = f"saio.{schema}"
+                module_name = f"saio.{schema_name}"
                 tables.append(importlib.import_module(module_name).__getattr__(table))
             return tables
 
