@@ -1,4 +1,5 @@
 """Setup"""
+
 import os
 import sys
 
@@ -40,6 +41,7 @@ requirements = [
     "geopandas >= 0.12.0, < 1.1.0",
     "geopy >= 2.0.0, < 2.5.0",
     "jupyterlab < 4.4.0",
+    "jupyter-black",
     "jupyter_dash < 0.5.0",
     "matplotlib >= 3.3.0, < 3.11.0",
     "multiprocess < 0.71.0",

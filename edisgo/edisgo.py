@@ -1846,9 +1846,11 @@ class EDisGo:
                 [
                     pd.DataFrame(
                         {
-                            naming.format("_".join(k))
-                            if isinstance(k, tuple)
-                            else naming.format(k): getattr(self.timeseries, attribute)
+                            (
+                                naming.format("_".join(k))
+                                if isinstance(k, tuple)
+                                else naming.format(k)
+                            ): getattr(self.timeseries, attribute)
                             .loc[:, v]
                             .sum(axis=1)
                         }
@@ -2408,6 +2410,7 @@ class EDisGo:
             xlim=kwargs.get("xlim", None),
             ylim=kwargs.get("ylim", None),
             title=kwargs.get("title", ""),
+            **kwargs,
         )
 
     def plot_mv_voltages(self, **kwargs):
