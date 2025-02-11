@@ -228,14 +228,22 @@ class Config:
         list of sqlalchemy.Table
             A list of SQLAlchemy Table objects corresponding to the imported tables.
         """
-        schema = self.db_schema_mapping.get(schema_name)
-        saio.register_schema(schema, engine)
-        tables = []
-        for table in table_names:
-            table = self.db_table_mapping.get(table)
-            module_name = f"saio.{schema}"
-            tables.append(importlib.import_module(module_name).__getattr__(table))
-        return tables
+        if "toep" in engine.url.host:
+            schema = self.db_schema_mapping.get(schema_name)
+            saio.register_schema(schema, engine)
+            tables = []
+            for table in table_names:
+                table = self.db_table_mapping.get(table)
+                module_name = f"saio.{schema}"
+                tables.append(importlib.import_module(module_name).__getattr__(table))
+            return tables
+        else:
+            saio.register_schema(schema_name, engine)
+            tables = []
+            for table in table_names:
+                module_name = f"saio.{schema}"
+                tables.append(importlib.import_module(module_name).__getattr__(table))
+            return tables
 
     def from_cfg(self, config_path=None):
         """
