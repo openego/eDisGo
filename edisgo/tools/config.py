@@ -187,20 +187,16 @@ class Config:
             - schema_mapping: A dictionary mapping source schema names to target schema
                 names.
         """
-        OEP_CONNECTION = "postgresql+oedialect://:@{platform}"
-        platform = "toep.iks.cs.ovgu.de"
-        conn_str = OEP_CONNECTION.format(platform=platform)
-        engine = sa.create_engine(conn_str)
         dictionary_schema_name = (
             "model_draft"  # Replace with the actual schema name if needed
         )
         dictionary_module_name = f"saio.{dictionary_schema_name}"
-        register_schema(dictionary_schema_name, engine)
+        register_schema(dictionary_schema_name, self._engine)
         dictionary_table_name = "edut_00"
         dictionary_table = importlib.import_module(dictionary_module_name).__getattr__(
             dictionary_table_name
         )
-        with session_scope_egon_data(engine) as session:
+        with session_scope_egon_data(self._engine) as session:
             query = session.query(dictionary_table)
             dictionary_entries = query.all()
             name_mapping = {
