@@ -324,10 +324,12 @@ class Config:
             config_dict["demandlib"]["day_end"].minute,
         )
 
-        (
-            config_dict["db_tables_dict"],
-            config_dict["db_schema_dict"],
-        ) = self.get_database_alias_dictionaries()
+        if self._engine is not None and "toep.iks.cs.ovgu.de" in self._engine.url.host:
+            config_dict["db_tables_dict"], config_dict["db_schema_dict"] = (
+                self.get_database_alias_dictionaries()
+            )
+        else:
+            config_dict["db_tables_dict"] = config_dict["db_schema_dict"] = {}
 
         return config_dict
 
