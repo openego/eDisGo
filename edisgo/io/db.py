@@ -152,20 +152,23 @@ def ssh_tunnel(cred: dict) -> str:
 
 
 def engine(
-    path: Path | str = None, ssh: bool = False, token: str = "TOEP_TOKEN.txt"
+    path: Path | str = None, ssh: bool = False, token: Path | str = None
 ) -> Engine:
     """
     Engine for local or remote database.
 
     Parameters
     ----------
-    path : str
+    path : str or pathlib.Path, optional (default=None)
         Path to configuration YAML file of egon-data database.
-    ssh : bool
+    ssh : bool (default=False)
         If True try to establish ssh tunnel from given information within the
         configuration YAML. If False try to connect to local database.
-    token : str
+    token : str or pathlib.Path, optional (default=None)
         Token for database connection or path to text file containing token.
+        If empty the default token file in the config folder TOEP_TOKEN.txt
+        will be used. If the default token file is not found, no token
+        will be used and the connection will be established without token.
 
     Returns
     -------
@@ -177,25 +180,27 @@ def engine(
     if not ssh:
         # Github Actions KHs token
         if "TOEP_TOKEN_KH" in os.environ:
-            env_var = os.environ["TOEP_TOKEN_KH"]
+            token = os.environ["TOEP_TOKEN_KH"]
         else:
+            if token is None:
+                default_token_path = "../config/TOEP_TOKEN.txt"
+                token = os.path.join(os.path.dirname(__file__), default_token_path)
             try:
                 with open(token) as file:
-                    env_var = file.read().strip()
+                    token = file.read().strip()
             except FileNotFoundError:
-                if ".txt" in token:
-                    raise FileNotFoundError(f"File {token} not found.")
-                else:
-                    env_var = token
+                pass
 
-            # Check if the token format is valid
-            if not re.match(r"^[a-f0-9]{40}$", env_var):
-                raise ValueError(
-                    "Invalid token format. Expected a 40-character hexadecimal string."
-                )
+        # Check if the token format is valid
+        if not re.match(r"^[a-f0-9]{40}$", token):
+            token = ""
+            raise Warning(
+                "Invalid token format or token file not found. "
+                "Expected a 40-character hexadecimal string."
+            )
         database_url = "toep.iks.cs.ovgu.de"
         return create_engine(
-            f"postgresql+oedialect://:{env_var}@{database_url}",
+            f"postgresql+oedialect://:{token}@{database_url}",
             echo=False,
         )
 
