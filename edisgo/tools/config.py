@@ -130,6 +130,8 @@ class Config:
     """
 
     def __init__(self, **kwargs):
+        self._engine = kwargs.get("engine", None)
+
         if not kwargs.get("from_json", False):
             self._data = self.from_cfg(kwargs.get("config_path", "default"))
         else:
@@ -164,13 +166,17 @@ class Config:
         """
         Sets the database table and schema mappings by retrieving alias dictionaries.
         """
-        name_mapping, schema_mapping = self.get_database_alias_dictionaries()
+        if self._engine is not None and "toep.iks.cs.ovgu.de" in self._engine.url.host:
+            name_mapping, schema_mapping = self.get_database_alias_dictionaries()
+        else:
+            name_mapping = schema_mapping = {}
+
         self.db_table_mapping = name_mapping
         self.db_schema_mapping = schema_mapping
 
     def get_database_alias_dictionaries(self) -> tuple[dict[str, str], dict[str, str]]:
         """
-        Retrieves the database alias dictionaries for table and schema mappings.
+        Retrieves the OEP database alias dictionaries for table and schema mappings.
 
         Returns
         -------
