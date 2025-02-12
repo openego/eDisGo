@@ -28,4 +28,6 @@ Changes
 * Move function to assign feeder to Topology class and add methods to the Grid class to get information on the feeders `#360 <https://github.com/openego/eDisGo/pull/360>`_
 * Added a storage operation strategy where the storage is charged when PV feed-in is higher than electricity demand of the household and discharged when electricity demand exceeds PV generation `#386 <https://github.com/openego/eDisGo/pull/386>`_
 * Added an estimation of the voltage deviation over a cable when selecting a suitable cable to connect a new component `#411 <https://github.com/openego/eDisGo/pull/411>`_
-* Added clipping of heat pump electrical power at its maximum value #428 <https://github.com/openego/eDisGo/pull/428>
+* Added clipping of heat pump electrical power at its maximum value `#428 <https://github.com/openego/eDisGo/pull/428>`_
+* Made OEP database call optional in get_database_alias_dictionaries, allowing setup without OEP when using an alternative eGon-data database. `#451 <https://github.com/openego/eDisGo/pull/451>`_
+* Fixed database import issues by addressing table naming assumptions and added support for external SSH tunneling in eGon-data configurations. `#451 <https://github.com/openego/eDisGo/pull/451>`_
