@@ -228,22 +228,22 @@ class Config:
         list of sqlalchemy.Table
             A list of SQLAlchemy Table objects corresponding to the imported tables.
         """
+        tables = []
+
         if "toep" in engine.url.host:
             schema = self.db_schema_mapping.get(schema_name)
             saio.register_schema(schema, engine)
-            tables = []
             for table in table_names:
                 table = self.db_table_mapping.get(table)
                 module_name = f"saio.{schema}"
                 tables.append(importlib.import_module(module_name).__getattr__(table))
-            return tables
         else:
             saio.register_schema(schema_name, engine)
-            tables = []
             for table in table_names:
-                module_name = f"saio.{schema}"
+                module_name = f"saio.{schema_name}"
                 tables.append(importlib.import_module(module_name).__getattr__(table))
-            return tables
+
+        return tables
 
     def from_cfg(self, config_path=None):
         """
@@ -303,21 +303,26 @@ class Config:
         config_dict["demandlib"]["day_start"] = datetime.datetime.strptime(
             config_dict["demandlib"]["day_start"], "%H:%M"
         )
+
         config_dict["demandlib"]["day_start"] = datetime.time(
             config_dict["demandlib"]["day_start"].hour,
             config_dict["demandlib"]["day_start"].minute,
         )
+
         config_dict["demandlib"]["day_end"] = datetime.datetime.strptime(
             config_dict["demandlib"]["day_end"], "%H:%M"
         )
+
         config_dict["demandlib"]["day_end"] = datetime.time(
             config_dict["demandlib"]["day_end"].hour,
             config_dict["demandlib"]["day_end"].minute,
         )
+
         (
             config_dict["db_tables_dict"],
             config_dict["db_schema_dict"],
         ) = self.get_database_alias_dictionaries()
+
         return config_dict
 
     def to_json(self, directory, filename=None):
