@@ -591,13 +591,17 @@ class EDisGo:
 
             self.set_timeindex(timeindex)
 
+        logger.info(
+            f"Trying to set predefined timeseries for {self.timeseries.timeindex}"
+        )
+
         if fluctuating_generators_ts is not None:
             self.timeseries.predefined_fluctuating_generators_by_technology(
                 self,
                 fluctuating_generators_ts,
                 fluctuating_generators_names,
                 engine=kwargs.get("engine", toep_engine()),
-                timeindex=kwargs.get("timeindex", None),
+                timeindex=timeindex,
             )
         if dispatchable_generators_ts is not None:
             self.timeseries.predefined_dispatchable_generators_by_technology(
@@ -612,7 +616,7 @@ class EDisGo:
                     edisgo_obj=self,
                     scenario=kwargs.get("scenario"),
                     engine=kwargs.get("engine", toep_engine()),
-                    timeindex=kwargs.get("timeindex", None),
+                    timeindex=timeindex,
                     load_names=conventional_loads_names,
                 )
                 # concat new time series with existing ones and drop any duplicate
