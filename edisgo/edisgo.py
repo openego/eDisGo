@@ -557,21 +557,37 @@ class EDisGo:
             is indexed using a default year and set for the whole year.
 
         """
-        if self.timeseries.timeindex.empty:
+
+        timeindex = kwargs.get("timeindex", None)
+        set_timeindex = False
+
+        if (timeindex is not None) and not timeindex.equals(self.timeseries.timeindex):
+            logger.warning(
+                "The given timeindex is different from the EDisGo.TimeSeries.timeindex."
+                " Therefore the EDisGo.TimeSeries.timeindex will be overwritten by the "
+                "given timeindex."
+            )
+
+            set_timeindex = True
+
+        elif self.timeseries.timeindex.empty:
             logger.warning(
                 "The EDisGo.TimeSeries.timeindex is empty. By default, this function "
                 "will set the timeindex to the default year of the provided database "
-                "connection or, if specified, to the given timeindex. To ensure "
-                "expected behavior, consider setting the timeindex explicitly before "
-                "running this function using EDisGo.set_timeindex()."
+                "connection. To ensure expected behavior, consider setting the "
+                "timeindex explicitly before running this function using "
+                "EDisGo.set_timeindex()."
             )
 
-            timeindex = kwargs.get("timeindex", None)
+            set_timeindex = True
 
+        if set_timeindex:
             if timeindex is None:
                 timeindex, _ = _timeindex_helper_func(
                     self, timeindex, allow_leap_year=True
                 )
+
+            logger.warning(f"Setting EDisGo.TimeSeries.timeindex to {timeindex}.")
 
             self.set_timeindex(timeindex)
 
