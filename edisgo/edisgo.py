@@ -41,6 +41,7 @@ from edisgo.io.electromobility_import import (
 )
 from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.io.storage_import import home_batteries_oedb
+from edisgo.io.timeseries_import import _timeindex_helper_func
 from edisgo.network import timeseries
 from edisgo.network.dsm import DSM
 from edisgo.network.electromobility import Electromobility
@@ -558,12 +559,22 @@ class EDisGo:
         """
         if self.timeseries.timeindex.empty:
             logger.warning(
-                "When setting time series using predefined profiles it is better to "
-                "set a time index as all data in TimeSeries class is indexed by the"
-                "time index. You can set the time index upon initialisation of "
-                "the EDisGo object by providing the input parameter 'timeindex' or by "
-                "using the function EDisGo.set_timeindex()."
+                "The EDisGo.TimeSeries.timeindex is empty. By default, this function "
+                "will set the timeindex to the default year of the provided database "
+                "connection or, if specified, to the given timeindex. To ensure "
+                "expected behavior, consider setting the timeindex explicitly before "
+                "running this function using EDisGo.set_timeindex()."
             )
+
+            timeindex = kwargs.get("timeindex", None)
+
+            if timeindex is None:
+                timeindex, _ = _timeindex_helper_func(
+                    self, timeindex, allow_leap_year=True
+                )
+
+            self.set_timeindex(timeindex)
+
         if fluctuating_generators_ts is not None:
             self.timeseries.predefined_fluctuating_generators_by_technology(
                 self,
@@ -1846,9 +1857,11 @@ class EDisGo:
                 [
                     pd.DataFrame(
                         {
-                            naming.format("_".join(k))
-                            if isinstance(k, tuple)
-                            else naming.format(k): getattr(self.timeseries, attribute)
+                            (
+                                naming.format("_".join(k))
+                                if isinstance(k, tuple)
+                                else naming.format(k)
+                            ): getattr(self.timeseries, attribute)
                             .loc[:, v]
                             .sum(axis=1)
                         }
