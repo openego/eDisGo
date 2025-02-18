@@ -207,7 +207,7 @@ class TestEDisGo:
         # check warning
         self.edisgo.set_time_series_active_power_predefined()
         assert (
-            "When setting time series using predefined profiles it is better"
+            "The EDisGo.TimeSeries.timeindex is empty. By default, this function"
             in caplog.text
         )
 
