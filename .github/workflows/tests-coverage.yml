@@ -42,7 +42,7 @@ jobs:
 
       - name: Set up julia
         if: runner.os == 'Linux'
-        uses: julia-actions/setup-julia@v1
+        uses: julia-actions/setup-julia@v2
         with:
           version: "1.6"
 
