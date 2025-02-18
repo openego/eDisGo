@@ -76,7 +76,7 @@ dev_requirements = [
     "sphinx < 8.2.0",
     "sphinx_rtd_theme >=0.5.2, < 3.1.0",
     "sphinx-autodoc-typehints < 3.1.0",
-    "sphinx-autoapi < 3.6.0",
+    "sphinx-autoapi < 3.7.0",
     "astroid == 3.3.8",
 ]
 
