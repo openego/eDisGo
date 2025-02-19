@@ -1380,7 +1380,7 @@ class EDisGo:
 
         """
         if copy_grid:
-            edisgo_obj = copy.deepcopy(self)
+            edisgo_obj = self.copy()
         else:
             edisgo_obj = self
 
@@ -3153,7 +3153,7 @@ class EDisGo:
 
         """
         if copy_edisgo is True:
-            edisgo_obj = copy.deepcopy(self)
+            edisgo_obj = self.copy()
         else:
             edisgo_obj = self
         busmap_df, linemap_df = spatial_complexity_reduction(
@@ -3366,6 +3366,44 @@ class EDisGo:
         self.electromobility.resample(freq=freq)
         self.heat_pump.resample_timeseries(method=method, freq=freq)
         self.overlying_grid.resample(method=method, freq=freq)
+
+    def copy(self, deep=True):
+        """
+        Returns a copy of the object, with an option for a deep copy.
+
+        The SQLAlchemy engine is excluded from the copying process and restored
+        afterward.
+
+        Parameters
+        ----------
+        deep : bool
+            If True, performs a deep copy; otherwise, performs a shallow copy.
+
+        Returns
+        ---------
+        :class:`~.EDisGo`
+            Copied EDisGo object.
+
+        """
+        tmp_engine = (
+            getattr(self, "engine", None)
+            if isinstance(getattr(self, "engine", None), Engine)
+            else None
+        )
+
+        if tmp_engine:
+            logging.info("Temporarily removing the SQLAlchemy engine before copying.")
+            self.engine = self.config._engine = None
+
+        cpy = copy.deepcopy(self) if deep else copy.copy(self)
+
+        if tmp_engine:
+            logging.info("Restoring the SQLAlchemy engine after copying.")
+            self.engine = self.config._engine = cpy.engine = cpy.config._engine = (
+                tmp_engine
+            )
+
+        return cpy
 
 
 def import_edisgo_from_pickle(filename, path=""):
