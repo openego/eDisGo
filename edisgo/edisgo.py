@@ -72,6 +72,11 @@ class EDisGo:
     ----------
     ding0_grid : :obj:`str`
         Path to directory containing csv files of network to be loaded.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+        Database engine for connecting to the `OpenEnergy DataBase OEDB
+        <https://openenergyplatform.org/dataedit/schemas>`_ or other eGon-data
+        databases. Defaults to the OEDB engine. Can be set to None if no scenario is to
+        be loaded.
     generator_scenario : None or :obj:`str`, optional
         If None, the generator park of the imported grid is kept as is.
         Otherwise defines which scenario of future generator park to use
@@ -159,8 +164,10 @@ class EDisGo:
     """
 
     def __init__(self, **kwargs):
+        # Set database engine for future scenarios
+        self.engine: Engine | None = kwargs.pop("engine", toep_engine())
         # load configuration
-        self._config = Config(**kwargs)
+        self._config = Config(engine=self.engine, **kwargs)
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
@@ -419,12 +426,9 @@ class EDisGo:
                 Technology- and weather cell-specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_. See
-                :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
-
-                This option requires that the parameter `engine` is provided in case
-                new ding0 grids with geo-referenced LV grids are used. For further
-                settings, the parameter `timeindex` can also be provided.
+                <https://openenergyplatform.org/dataedit/schemas>`_ or other eGon-data
+                databases. See :func:`edisgo.io.timeseries_import.feedin_oedb` for more
+                information.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
 
@@ -537,9 +541,6 @@ class EDisGo:
 
         Other Parameters
         ------------------
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine. This parameter is only required in case
-            `conventional_loads_ts` or `fluctuating_generators_ts` is 'oedb'.
         scenario : str
             Scenario for which to retrieve demand data. Possible options are 'eGon2035'
             and 'eGon100RE'. This parameter is only required in case
@@ -600,7 +601,7 @@ class EDisGo:
                 self,
                 fluctuating_generators_ts,
                 fluctuating_generators_names,
-                engine=kwargs.get("engine", toep_engine()),
+                engine=self.engine,
                 timeindex=timeindex,
             )
         if dispatchable_generators_ts is not None:
@@ -615,7 +616,7 @@ class EDisGo:
                 loads_ts_df = timeseries_import.electricity_demand_oedb(
                     edisgo_obj=self,
                     scenario=kwargs.get("scenario"),
-                    engine=kwargs.get("engine", toep_engine()),
+                    engine=self.engine,
                     timeindex=timeindex,
                     load_names=conventional_loads_names,
                 )
@@ -1002,9 +1003,7 @@ class EDisGo:
         Other Parameters
         ----------------
         kwargs :
-            In case you are using new ding0 grids, where the LV is geo-referenced, a
-            database engine needs to be provided through keyword argument `engine`.
-            In case you are using old ding0 grids, where the LV is not geo-referenced,
+            If you are using old ding0 grids, where the LV is not geo-referenced,
             you can check :func:`edisgo.io.generators_import.oedb_legacy` for possible
             keyword arguments.
 
@@ -1016,7 +1015,7 @@ class EDisGo:
         else:
             generators_import.oedb(
                 edisgo_object=self,
-                engine=kwargs.get("engine", toep_engine()),
+                engine=self.engine,
                 scenario=generator_scenario,
             )
 
@@ -1950,9 +1949,8 @@ class EDisGo:
 
     def import_electromobility(
         self,
-        data_source: str,
+        data_source: str = "oedb",
         scenario: str = None,
-        engine: Engine = None,
         charging_processes_dir: PurePath | str = None,
         potential_charging_points_dir: PurePath | str = None,
         import_electromobility_data_kwds=None,
@@ -1994,10 +1992,8 @@ class EDisGo:
             * "oedb"
 
                 Electromobility data is obtained from the `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_.
-
-                This option requires that the parameters `scenario` and `engine` are
-                provided.
+                <https://openenergyplatform.org/dataedit/schemas>`_ or other eGon-data
+                databases depending on the provided Engine.
 
             * "directory"
 
@@ -2007,9 +2003,6 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve electromobility data in case `data_source` is
             set to "oedb". Possible options are "eGon2035" and "eGon100RE".
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine. Needs to be provided in case `data_source` is set to
-            "oedb".
         charging_processes_dir : str or pathlib.PurePath
             Directory holding data on charging processes (standing times, charging
             demand, etc. per vehicle), including metadata, from SimBEV.
@@ -2071,7 +2064,7 @@ class EDisGo:
             import_electromobility_from_oedb(
                 self,
                 scenario=scenario,
-                engine=engine,
+                engine=self.engine,
                 **import_electromobility_data_kwds,
             )
         elif data_source == "directory":
@@ -2164,10 +2157,11 @@ class EDisGo:
         """
         charging_strategy(self, strategy=strategy, **kwargs)
 
-    def import_heat_pumps(self, scenario, engine, timeindex=None, import_types=None):
+    def import_heat_pumps(self, scenario, timeindex=None, import_types=None):
         """
-        Gets heat pump data for specified scenario from oedb and integrates the heat
-        pumps into the grid.
+        Gets heat pump data for specified scenario from the OEDB or other eGon-data
+        databases depending on the provided Engine and integrates the heat pumps into
+        the grid.
 
         Besides heat pump capacity the heat pump's COP and heat demand to be served
         are as well retrieved.
@@ -2222,8 +2216,6 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve heat pump data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to set COP and heat demand data. Leap years
             can currently not be handled. In case the given
@@ -2264,7 +2256,7 @@ class EDisGo:
             year = tools.get_year_based_on_scenario(scenario)
             return self.import_heat_pumps(
                 scenario,
-                engine,
+                self.engine,
                 timeindex=pd.date_range(f"1/1/{year}", periods=8760, freq="H"),
                 import_types=import_types,
             )
@@ -2272,7 +2264,7 @@ class EDisGo:
         integrated_heat_pumps = import_heat_pumps_oedb(
             edisgo_object=self,
             scenario=scenario,
-            engine=engine,
+            engine=self.engine,
             import_types=import_types,
         )
         if len(integrated_heat_pumps) > 0:
@@ -2280,7 +2272,7 @@ class EDisGo:
                 self,
                 "oedb",
                 heat_pump_names=integrated_heat_pumps,
-                engine=engine,
+                engine=self.engine,
                 scenario=scenario,
                 timeindex=timeindex,
             )
@@ -2288,7 +2280,7 @@ class EDisGo:
                 self,
                 "oedb",
                 heat_pump_names=integrated_heat_pumps,
-                engine=engine,
+                engine=self.engine,
                 timeindex=timeindex,
             )
 
@@ -2336,7 +2328,7 @@ class EDisGo:
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
-    def import_dsm(self, scenario: str, engine: Engine, timeindex=None):
+    def import_dsm(self, scenario: str, timeindex=None):
         """
         Gets industrial and CTS DSM profiles from the
         `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
@@ -2355,8 +2347,6 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve DSM data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to get data. Leap years can currently not be
             handled. In case the given timeindex contains a leap year, the data will be
@@ -2369,7 +2359,7 @@ class EDisGo:
 
         """
         dsm_profiles = dsm_import.oedb(
-            edisgo_obj=self, scenario=scenario, engine=engine, timeindex=timeindex
+            edisgo_obj=self, scenario=scenario, engine=self.engine, timeindex=timeindex
         )
         self.dsm.p_min = dsm_profiles["p_min"]
         self.dsm.p_max = dsm_profiles["p_max"]
@@ -2379,7 +2369,6 @@ class EDisGo:
     def import_home_batteries(
         self,
         scenario: str,
-        engine: Engine,
     ):
         """
         Gets home battery data for specified scenario and integrates the batteries into
@@ -2390,7 +2379,8 @@ class EDisGo:
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
-        `open energy platform <https://openenergyplatform.org/>`_.
+        `open energy platform <https://openenergyplatform.org/>`_ or other eGon-data
+        databases depending on the given Engine.
 
         The batteries are integrated into the grid (added to
         :attr:`~.network.topology.Topology.storage_units_df`) based on their building
@@ -2407,14 +2397,12 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve home battery data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
 
         """
         home_batteries_oedb(
             edisgo_obj=self,
             scenario=scenario,
-            engine=engine,
+            engine=self.engine,
         )
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):

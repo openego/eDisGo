@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import importlib.util
 import logging
+import os
+import re
 
 from contextlib import contextmanager
 from pathlib import Path
@@ -149,17 +152,24 @@ def ssh_tunnel(cred: dict) -> str:
     return str(server.local_bind_port)
 
 
-def engine(path: Path | str = None, ssh: bool = False) -> Engine:
+def engine(
+    path: Path | str = None, ssh: bool = False, token: Path | str = None
+) -> Engine:
     """
     Engine for local or remote database.
 
     Parameters
     ----------
-    path : str
+    path : str or pathlib.Path, optional (default=None)
         Path to configuration YAML file of egon-data database.
-    ssh : bool
+    ssh : bool (default=False)
         If True try to establish ssh tunnel from given information within the
         configuration YAML. If False try to connect to local database.
+    token : str or pathlib.Path, optional (default=None)
+        Token for database connection or path to text file containing token.
+        If empty the default token file in the config folder TOEP_TOKEN.txt
+        will be used. If the default token file is not found, no token
+        will be used and the connection will be established without token.
 
     Returns
     -------
@@ -169,9 +179,50 @@ def engine(path: Path | str = None, ssh: bool = False) -> Engine:
     """
 
     if path is None:
+        # Github Actions KHs token
+        if "TOEP_TOKEN_KH" in os.environ:
+            token = os.environ["TOEP_TOKEN_KH"]
+
+            read = True
+        else:
+            read = False
+
+            if token is None:
+                spec = importlib.util.find_spec("edisgo")
+                token = Path(spec.origin).resolve().parent / "config" / "TOEP_TOKEN.txt"
+
+            if token.is_file():
+                logger.info(f"Getting OEP token from file {token}.")
+
+                with open(token) as file:
+                    token = file.read().strip()
+
+                read = True
+
         database_url = "toep.iks.cs.ovgu.de"
+
+        msg = ""
+
+        if not read:
+            msg = f"Token file {token} not found"
+            token = ""
+        # Check if the token format is valid
+        elif not re.match(r"^[a-f0-9]{40}$", token):
+            msg = (
+                f"Invalid token format for token {token}. A 40 character "
+                f"hexadecimal string was expected"
+            )
+            token = ""
+
+        if msg:
+            logger.warning(
+                f"{msg}. Connecting to {database_url} without a user token. This may "
+                f"cause connection errors due to connection limitations. Consider "
+                f"setting up an OEP account and providing your user token."
+            )
+
         return create_engine(
-            "postgresql+oedialect://:@" f"{database_url}",
+            f"postgresql+oedialect://:{token}@{database_url}",
             echo=False,
         )
 

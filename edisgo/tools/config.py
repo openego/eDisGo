@@ -130,6 +130,8 @@ class Config:
     """
 
     def __init__(self, **kwargs):
+        self._engine = kwargs.get("engine", None)
+
         if not kwargs.get("from_json", False):
             self._data = self.from_cfg(kwargs.get("config_path", "default"))
         else:
@@ -164,13 +166,17 @@ class Config:
         """
         Sets the database table and schema mappings by retrieving alias dictionaries.
         """
-        name_mapping, schema_mapping = self.get_database_alias_dictionaries()
+        if self._engine is not None and "toep.iks.cs.ovgu.de" in self._engine.url.host:
+            name_mapping, schema_mapping = self.get_database_alias_dictionaries()
+        else:
+            name_mapping = schema_mapping = {}
+
         self.db_table_mapping = name_mapping
         self.db_schema_mapping = schema_mapping
 
     def get_database_alias_dictionaries(self) -> tuple[dict[str, str], dict[str, str]]:
         """
-        Retrieves the database alias dictionaries for table and schema mappings.
+        Retrieves the OEP database alias dictionaries for table and schema mappings.
 
         Returns
         -------
@@ -181,20 +187,16 @@ class Config:
             - schema_mapping: A dictionary mapping source schema names to target schema
                 names.
         """
-        OEP_CONNECTION = "postgresql+oedialect://:@{platform}"
-        platform = "toep.iks.cs.ovgu.de"
-        conn_str = OEP_CONNECTION.format(platform=platform)
-        engine = sa.create_engine(conn_str)
         dictionary_schema_name = (
             "model_draft"  # Replace with the actual schema name if needed
         )
         dictionary_module_name = f"saio.{dictionary_schema_name}"
-        register_schema(dictionary_schema_name, engine)
+        register_schema(dictionary_schema_name, self._engine)
         dictionary_table_name = "edut_00"
         dictionary_table = importlib.import_module(dictionary_module_name).__getattr__(
             dictionary_table_name
         )
-        with session_scope_egon_data(engine) as session:
+        with session_scope_egon_data(self._engine) as session:
             query = session.query(dictionary_table)
             dictionary_entries = query.all()
             name_mapping = {
@@ -228,22 +230,22 @@ class Config:
         list of sqlalchemy.Table
             A list of SQLAlchemy Table objects corresponding to the imported tables.
         """
+        tables = []
+
         if "toep" in engine.url.host:
             schema = self.db_schema_mapping.get(schema_name)
             saio.register_schema(schema, engine)
-            tables = []
             for table in table_names:
                 table = self.db_table_mapping.get(table)
                 module_name = f"saio.{schema}"
                 tables.append(importlib.import_module(module_name).__getattr__(table))
-            return tables
         else:
             saio.register_schema(schema_name, engine)
-            tables = []
             for table in table_names:
                 module_name = f"saio.{schema_name}"
                 tables.append(importlib.import_module(module_name).__getattr__(table))
-            return tables
+
+        return tables
 
     def from_cfg(self, config_path=None):
         """
@@ -303,21 +305,28 @@ class Config:
         config_dict["demandlib"]["day_start"] = datetime.datetime.strptime(
             config_dict["demandlib"]["day_start"], "%H:%M"
         )
+
         config_dict["demandlib"]["day_start"] = datetime.time(
             config_dict["demandlib"]["day_start"].hour,
             config_dict["demandlib"]["day_start"].minute,
         )
+
         config_dict["demandlib"]["day_end"] = datetime.datetime.strptime(
             config_dict["demandlib"]["day_end"], "%H:%M"
         )
+
         config_dict["demandlib"]["day_end"] = datetime.time(
             config_dict["demandlib"]["day_end"].hour,
             config_dict["demandlib"]["day_end"].minute,
         )
-        (
-            config_dict["db_tables_dict"],
-            config_dict["db_schema_dict"],
-        ) = self.get_database_alias_dictionaries()
+
+        if self._engine is not None and "toep.iks.cs.ovgu.de" in self._engine.url.host:
+            config_dict["db_tables_dict"], config_dict["db_schema_dict"] = (
+                self.get_database_alias_dictionaries()
+            )
+        else:
+            config_dict["db_tables_dict"] = config_dict["db_schema_dict"] = {}
+
         return config_dict
 
     def to_json(self, directory, filename=None):
