@@ -207,7 +207,7 @@ class TestEDisGo:
         # check warning
         self.edisgo.set_time_series_active_power_predefined()
         assert (
-            "When setting time series using predefined profiles it is better"
+            "The EDisGo.TimeSeries.timeindex is empty. By default, this function"
             in caplog.text
         )
 
@@ -934,9 +934,9 @@ class TestEDisGo:
 
         # ##### test without any aggregation
 
-        self.edisgo.topology._loads_df.at[
-            "Load_residential_LVGrid_1_4", "bus"
-        ] = "Bus_BranchTee_LVGrid_1_10"
+        self.edisgo.topology._loads_df.at["Load_residential_LVGrid_1_4", "bus"] = (
+            "Bus_BranchTee_LVGrid_1_10"
+        )
 
         # save original values
         number_gens_before = len(self.edisgo.topology.generators_df)
@@ -1054,9 +1054,9 @@ class TestEDisGo:
         )
         # manipulate grid so that more than one load of the same sector is
         # connected at the same bus
-        self.edisgo.topology._loads_df.at[
-            "Load_residential_LVGrid_1_4", "bus"
-        ] = "Bus_BranchTee_LVGrid_1_10"
+        self.edisgo.topology._loads_df.at["Load_residential_LVGrid_1_4", "bus"] = (
+            "Bus_BranchTee_LVGrid_1_10"
+        )
 
         # save original values (only loads, as generators did not change)
         loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
@@ -1136,9 +1136,9 @@ class TestEDisGo:
 
         # manipulate grid so that two generators of different types are
         # connected at the same bus
-        self.edisgo.topology._generators_df.at[
-            "GeneratorFluctuating_13", "type"
-        ] = "misc"
+        self.edisgo.topology._generators_df.at["GeneratorFluctuating_13", "type"] = (
+            "misc"
+        )
 
         # save original values (values of loads were changed in previous aggregation)
         loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
