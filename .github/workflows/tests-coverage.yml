@@ -33,16 +33,16 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up julia
         if: runner.os == 'Linux'
-        uses: julia-actions/setup-julia@v1
+        uses: julia-actions/setup-julia@v2
         with:
           version: "1.6"
 
@@ -54,7 +54,7 @@ jobs:
 
       - name: Install packages (Windows)
         if: runner.os == 'Windows'
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3
         with:
           miniconda-version: "latest"
           activate-environment: edisgo_env
@@ -66,12 +66,16 @@ jobs:
         run: |
           python -m pip install pytest pytest-notebook
           python -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
+        env:
+          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
 
       - name: Run tests Windows
         if: runner.os == 'Windows'
         run: |
           python -m pip install pytest pytest-notebook
           python -m pytest --runslow --disable-warnings --color=yes -v
+        env:
+          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
 
       - name: Run tests, coverage and send to coveralls
         if: runner.os == 'Linux' && matrix.python-version == 3.9 && matrix.name-suffix == 'coverage'
@@ -80,5 +84,6 @@ jobs:
           coverage run --source=edisgo -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
           coveralls
         env:
+          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github
