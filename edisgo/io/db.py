@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 import re
@@ -181,24 +182,45 @@ def engine(
         # Github Actions KHs token
         if "TOEP_TOKEN_KH" in os.environ:
             token = os.environ["TOEP_TOKEN_KH"]
+
+            read = True
         else:
+            read = False
+
             if token is None:
-                default_token_path = "../config/TOEP_TOKEN.txt"
-                token = os.path.join(os.path.dirname(__file__), default_token_path)
-            try:
+                spec = importlib.util.find_spec("edisgo")
+                token = Path(spec.origin).resolve().parent / "config" / "TOEP_TOKEN.txt"
+
+            if token.is_file():
+                logger.info(f"Getting OEP token from file {token}.")
+
                 with open(token) as file:
                     token = file.read().strip()
-            except FileNotFoundError:
-                pass
 
-        # Check if the token format is valid
-        if not re.match(r"^[a-f0-9]{40}$", token):
-            token = ""
-            raise Warning(
-                "Invalid token format or token file not found. "
-                "Expected a 40-character hexadecimal string."
-            )
+                read = True
+
         database_url = "toep.iks.cs.ovgu.de"
+
+        msg = ""
+
+        if not read:
+            msg = f"Token file {token} not found"
+            token = ""
+        # Check if the token format is valid
+        elif not re.match(r"^[a-f0-9]{40}$", token):
+            msg = (
+                f"Invalid token format for token {token}. A 40 character "
+                f"hexadecimal string was expected"
+            )
+            token = ""
+
+        if msg:
+            logger.warning(
+                f"{msg}. Connecting to {database_url} without a user token. This may "
+                f"cause connection errors due to connection limitations. Consider "
+                f"setting up an OEP account and providing your user token."
+            )
+
         return create_engine(
             f"postgresql+oedialect://:{token}@{database_url}",
             echo=False,

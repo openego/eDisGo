@@ -25,3 +25,5 @@ eDisGo.egg-info/
 /edisgo/opf/opf_solutions/*.json
 /edisgo/opf/eDisGo_OPF.jl/.vscode
 .vscode/settings.json
+
+*TOEP_TOKEN.*
