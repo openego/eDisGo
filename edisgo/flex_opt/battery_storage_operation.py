@@ -253,3 +253,7 @@ def apply_reference_operation(
     )
 
     return soe_df
+
+
+def apply_reference_operation_for_charging_storage():
+    pass

@@ -37,8 +37,8 @@ from edisgo.io.electromobility_import import (
     distribute_charging_demand,
     import_electromobility_from_dir,
     import_electromobility_from_oedb,
+    import_electromobility_from_R4MU_data,
     integrate_charging_parks,
-    import_electromobility_from_new_data,
 )
 from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.io.storage_import import home_batteries_oedb
@@ -1847,9 +1847,11 @@ class EDisGo:
                 [
                     pd.DataFrame(
                         {
-                            naming.format("_".join(k))
-                            if isinstance(k, tuple)
-                            else naming.format(k): getattr(self.timeseries, attribute)
+                            (
+                                naming.format("_".join(k))
+                                if isinstance(k, tuple)
+                                else naming.format(k)
+                            ): getattr(self.timeseries, attribute)
                             .loc[:, v]
                             .sum(axis=1)
                         }
@@ -2051,11 +2053,10 @@ class EDisGo:
                 potential_charging_points_dir,
                 **import_electromobility_data_kwds,
             )
-        elif data_source == "new_data":
-            import_electromobility_from_new_data(
-                self, 
-                data_dir,
-                **import_electromobility_data_kwds)
+        elif data_source == "R4MU_data":
+            import_electromobility_from_R4MU_data(
+                self, data_dir, **import_electromobility_data_kwds
+            )
         else:
             raise ValueError(
                 "Invalid input for parameter 'data_source'. Possible options are "
@@ -2065,9 +2066,9 @@ class EDisGo:
         if allocate_charging_demand_kwds is None:
             allocate_charging_demand_kwds = {}
 
-        if data_source != "new_data":
+        if data_source != "R4MU_data":
             distribute_charging_demand(self, **allocate_charging_demand_kwds)
-        
+
         integrate_charging_parks(self)
 
     def apply_charging_strategy(self, strategy="dumb", **kwargs):
