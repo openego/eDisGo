@@ -1,4 +1,3 @@
-import copy
 import logging
 import os
 import shutil
@@ -39,7 +38,7 @@ class TestEDisGo:
         save_dir = os.path.join(os.getcwd(), "config_dir")
 
         # test default
-        config_orig = copy.deepcopy(self.edisgo.config)
+        config_orig = self.edisgo.copy().config
         self.edisgo.config = {}
         assert config_orig._data == self.edisgo.config._data
 
@@ -51,7 +50,7 @@ class TestEDisGo:
         # test json and config_path=None
         # save changed config to json
         self.edisgo.config["geo"]["srid"] = 2
-        config_json = copy.deepcopy(self.edisgo.config)
+        config_json = self.edisgo.copy().config
         self.edisgo.save(
             save_dir,
             save_topology=False,
@@ -533,7 +532,7 @@ class TestEDisGo:
             p_scaling_factor=50, q_scaling_factor=50
         )
 
-        edisgo_obj = copy.deepcopy(self.edisgo)
+        edisgo_obj = self.edisgo.copy()
         edisgo_obj = enhanced_reinforce_grid(
             edisgo_obj,
             activate_cost_results_disturbing_mode=True,
@@ -546,7 +545,7 @@ class TestEDisGo:
         assert len(results.equipment_changes) == 892
         assert results.v_res.shape == (4, 148)
 
-        edisgo_obj = copy.deepcopy(self.edisgo)
+        edisgo_obj = self.edisgo.copy()
         edisgo_obj = enhanced_reinforce_grid(
             edisgo_obj,
             reduced_analysis=True,
@@ -934,9 +933,9 @@ class TestEDisGo:
 
         # ##### test without any aggregation
 
-        self.edisgo.topology._loads_df.at[
-            "Load_residential_LVGrid_1_4", "bus"
-        ] = "Bus_BranchTee_LVGrid_1_10"
+        self.edisgo.topology._loads_df.at["Load_residential_LVGrid_1_4", "bus"] = (
+            "Bus_BranchTee_LVGrid_1_10"
+        )
 
         # save original values
         number_gens_before = len(self.edisgo.topology.generators_df)
@@ -1054,9 +1053,9 @@ class TestEDisGo:
         )
         # manipulate grid so that more than one load of the same sector is
         # connected at the same bus
-        self.edisgo.topology._loads_df.at[
-            "Load_residential_LVGrid_1_4", "bus"
-        ] = "Bus_BranchTee_LVGrid_1_10"
+        self.edisgo.topology._loads_df.at["Load_residential_LVGrid_1_4", "bus"] = (
+            "Bus_BranchTee_LVGrid_1_10"
+        )
 
         # save original values (only loads, as generators did not change)
         loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
@@ -1136,9 +1135,9 @@ class TestEDisGo:
 
         # manipulate grid so that two generators of different types are
         # connected at the same bus
-        self.edisgo.topology._generators_df.at[
-            "GeneratorFluctuating_13", "type"
-        ] = "misc"
+        self.edisgo.topology._generators_df.at["GeneratorFluctuating_13", "type"] = (
+            "misc"
+        )
 
         # save original values (values of loads were changed in previous aggregation)
         loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
@@ -1672,7 +1671,7 @@ class TestEDisGo:
         assert len(edisgo_obj.topology.lines_df) == 23
 
         # test without copying edisgo object
-        edisgo_orig = copy.deepcopy(self.edisgo)
+        edisgo_orig = self.edisgo.copy()
         (
             _,
             busmap_df,

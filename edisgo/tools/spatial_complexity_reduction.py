@@ -79,7 +79,7 @@ def find_buses_of_interest(edisgo_root: EDisGo) -> set:
     """
     logger.debug("Find buses of interest.")
 
-    edisgo_obj = copy.deepcopy(edisgo_root)
+    edisgo_obj = edisgo_root.copy()
     edisgo_obj.timeseries = timeseries.TimeSeries()
     edisgo_obj.timeseries.set_worst_case(edisgo_obj, ["feed-in_case", "load_case"])
     edisgo_obj.analyze()
@@ -501,9 +501,9 @@ def make_busmap_grid(
             for index, new_bus in zip(
                 partial_busmap_df.index, partial_busmap_df.new_bus
             ):
-                partial_busmap_df.loc[
-                    index, ["new_x", "new_y"]
-                ] = kmeans.cluster_centers_[new_bus]
+                partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
+                    kmeans.cluster_centers_[new_bus]
+                )
 
         elif mode == "kmeansdijkstra":
             # Use dijkstra to select clusters
@@ -760,9 +760,9 @@ def make_busmap_feeders(
             if n_clusters == 0:
                 for index in feeder_buses_df.index.tolist():
                     partial_busmap_df.loc[index, "new_bus"] = transformer_node
-                    partial_busmap_df.loc[
-                        index, ["new_x", "new_y"]
-                    ] = transformer_coordinates
+                    partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
+                        transformer_coordinates
+                    )
             else:
                 kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
                 kmeans.fit(
@@ -776,9 +776,9 @@ def make_busmap_feeders(
                         partial_busmap_df.loc[index, "new_bus"] = make_name(
                             kmeans.labels_[n] + 1
                         )
-                        partial_busmap_df.loc[
-                            index, ["new_x", "new_y"]
-                        ] = kmeans.cluster_centers_[kmeans.labels_[n]]
+                        partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
+                            kmeans.cluster_centers_[kmeans.labels_[n]]
+                        )
                         n = n + 1
                 elif mode == "kmeansdijkstra":
                     dist_to_cluster_center = pd.DataFrame(
@@ -815,11 +815,11 @@ def make_busmap_feeders(
                         partial_busmap_df.loc[index, "new_bus"] = make_name(
                             medoid_bus_name[feeder_buses_df.loc[index, "medoid"]] + 1
                         )
-                        partial_busmap_df.loc[
-                            index, ["new_x", "new_y"]
-                        ] = feeder_buses_df.loc[
-                            feeder_buses_df.loc[index, "medoid"], ["x", "y"]
-                        ].values
+                        partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
+                            feeder_buses_df.loc[
+                                feeder_buses_df.loc[index, "medoid"], ["x", "y"]
+                            ].values
+                        )
             number_of_feeder = number_of_feeder + 1
 
         if str(grid).split("_")[0] == "MVGrid":
@@ -1167,9 +1167,9 @@ def make_busmap_main_feeders(
                 if n_clusters == 0:
                     for index in feeder_buses_df.index.tolist():
                         partial_busmap_df.loc[index, "new_bus"] = transformer_node
-                        partial_busmap_df.loc[
-                            index, ["new_x", "new_y"]
-                        ] = transformer_coordinates
+                        partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
+                            transformer_coordinates
+                        )
                 else:
                     kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
                     kmeans.fit(
@@ -1183,9 +1183,9 @@ def make_busmap_main_feeders(
                             partial_busmap_df.loc[index, "new_bus"] = make_name(
                                 kmeans.labels_[n] + 1
                             )
-                            partial_busmap_df.loc[
-                                index, ["new_x", "new_y"]
-                            ] = kmeans.cluster_centers_[kmeans.labels_[n]]
+                            partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
+                                kmeans.cluster_centers_[kmeans.labels_[n]]
+                            )
                             n = n + 1
                     elif mode == "kmeansdijkstra":
                         dist_to_cluster_center = pd.DataFrame(
@@ -1223,11 +1223,11 @@ def make_busmap_main_feeders(
                                 medoid_bus_name[feeder_buses_df.loc[index, "medoid"]]
                                 + 1
                             )
-                            partial_busmap_df.loc[
-                                index, ["new_x", "new_y"]
-                            ] = feeder_buses_df.loc[
-                                feeder_buses_df.loc[index, "medoid"], ["x", "y"]
-                            ].values
+                            partial_busmap_df.loc[index, ["new_x", "new_y"]] = (
+                                feeder_buses_df.loc[
+                                    feeder_buses_df.loc[index, "medoid"], ["x", "y"]
+                                ].values
+                            )
 
         if mode != "aggregate_to_main_feeder":
             # Backmap

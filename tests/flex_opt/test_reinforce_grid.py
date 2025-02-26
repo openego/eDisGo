@@ -27,8 +27,7 @@ class TestReinforceGrid:
         modes = [None, "mv", "mvlv", "lv"]
 
         results_dict = {
-            mode: reinforce_grid(edisgo=copy.deepcopy(self.edisgo), mode=mode)
-            for mode in modes
+            mode: reinforce_grid(edisgo=self.edisgo.copy(), mode=mode) for mode in modes
         }
 
         for mode, result in results_dict.items():
@@ -57,14 +56,14 @@ class TestReinforceGrid:
                         )
         # test reduced analysis
         res_reduced = reinforce_grid(
-            edisgo=copy.deepcopy(self.edisgo),
+            edisgo=self.edisgo.copy(),
             reduced_analysis=True,
             num_steps_loading=2,
         )
         assert len(res_reduced.i_res) == 2
 
     def test_run_separate_lv_grids(self):
-        edisgo = copy.deepcopy(self.edisgo)
+        edisgo = self.edisgo.copy()
 
         edisgo.timeseries.scale_timeseries(p_scaling_factor=5, q_scaling_factor=5)
 

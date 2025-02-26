@@ -15,7 +15,7 @@ class TestReinforceMeasures:
 
         cls.edisgo.set_time_series_worst_case_analysis()
         cls.edisgo.analyze()
-        cls.edisgo_root = copy.deepcopy(cls.edisgo)
+        cls.edisgo_root = cls.edisgo.copy()
         cls.timesteps = pd.date_range("1/1/1970", periods=2, freq="H")
 
     def test_reinforce_mv_lv_station_overloading(self):
@@ -24,7 +24,7 @@ class TestReinforceMeasures:
         # create problems such that in LVGrid_1 existing transformer is
         # exchanged with standard transformer and in LVGrid_4 a third
         # transformer is added
-        self.edisgo = copy.deepcopy(self.edisgo_root)
+        self.edisgo = self.edisgo_root.copy()
         lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
         lv_grid_4 = self.edisgo.topology.get_lv_grid(4)
 
@@ -94,7 +94,7 @@ class TestReinforceMeasures:
         # implicitly checks function _station_overloading
 
         # check adding transformer of same MVA
-        self.edisgo = copy.deepcopy(self.edisgo_root)
+        self.edisgo = self.edisgo_root.copy()
 
         crit_mv_station = pd.DataFrame(
             {
@@ -158,7 +158,7 @@ class TestReinforceMeasures:
         )
 
     def test_reinforce_mv_lv_station_voltage_issues(self):
-        self.edisgo = copy.deepcopy(self.edisgo_root)
+        self.edisgo = self.edisgo_root.copy()
 
         crit_stations = pd.DataFrame(
             {
@@ -211,7 +211,7 @@ class TestReinforceMeasures:
         # * check problem in same feeder => Bus_BranchTee_MVGrid_1_10 (node
         #   has higher voltage issue than Bus_BranchTee_MVGrid_1_11, but
         #   Bus_BranchTee_MVGrid_1_10 is farther away from station)
-        self.edisgo = copy.deepcopy(self.edisgo_root)
+        self.edisgo = self.edisgo_root.copy()
 
         crit_nodes = pd.DataFrame(
             {
@@ -378,7 +378,7 @@ class TestReinforceMeasures:
         #   and Line_50000002
         # * check for replacement by parallel standard lines (MV and LV) =>
         #   problems at Line_10003 and Line_60000001
-        self.edisgo = copy.deepcopy(self.edisgo_root)
+        self.edisgo = self.edisgo_root.copy()
 
         # create crit_lines dataframe
         crit_lines = pd.DataFrame(
@@ -455,7 +455,7 @@ class TestReinforceMeasures:
         assert line.num_parallel == 1
 
     def test_separate_lv_grid(self):
-        self.edisgo = copy.deepcopy(self.edisgo_root)
+        self.edisgo = self.edisgo_root.copy()
 
         crit_lines_lv = check_tech_constraints.lv_line_max_relative_overload(
             self.edisgo

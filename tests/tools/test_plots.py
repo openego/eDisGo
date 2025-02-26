@@ -1,5 +1,3 @@
-import copy
-
 import pytest
 
 from edisgo import EDisGo
@@ -11,13 +9,13 @@ class TestPlots:
     def setup_class(cls):
         cls.edisgo_root = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         cls.edisgo_root.set_time_series_worst_case_analysis()
-        cls.edisgo_analyzed = copy.deepcopy(cls.edisgo_root)
-        cls.edisgo_reinforced = copy.deepcopy(cls.edisgo_root)
+        cls.edisgo_analyzed = cls.edisgo_root.copy()
+        cls.edisgo_reinforced = cls.edisgo_root.copy()
         cls.edisgo_analyzed.analyze()
         cls.edisgo_reinforced.reinforce()
-        cls.edisgo_reinforced.results.equipment_changes.loc[
-            "Line_10006", "change"
-        ] = "added"
+        cls.edisgo_reinforced.results.equipment_changes.loc["Line_10006", "change"] = (
+            "added"
+        )
 
     @pytest.mark.parametrize(
         "line_color,"

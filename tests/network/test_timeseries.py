@@ -1,4 +1,3 @@
-import copy
 import logging
 import os
 import shutil
@@ -739,9 +738,9 @@ class TestTimeSeries:
 
     def test_worst_case_conventional_load(self):
         # connect one load to MV
-        self.edisgo.topology._loads_df.at[
-            "Load_agricultural_LVGrid_1_1", "bus"
-        ] = "Bus_BranchTee_MVGrid_1_2"
+        self.edisgo.topology._loads_df.at["Load_agricultural_LVGrid_1_1", "bus"] = (
+            "Bus_BranchTee_MVGrid_1_2"
+        )
 
         # ######### check both feed-in and load case
         df = assign_voltage_level_to_component(
@@ -1491,9 +1490,9 @@ class TestTimeSeries:
 
         # ############# all generators (default), with "gas" and "other"
         # overwrite type of generator GeneratorFluctuating_2
-        self.edisgo.topology._generators_df.at[
-            "GeneratorFluctuating_2", "type"
-        ] = "coal"
+        self.edisgo.topology._generators_df.at["GeneratorFluctuating_2", "type"] = (
+            "coal"
+        )
         gens_p = pd.DataFrame(
             data={
                 "other": [5, 6],
@@ -1808,9 +1807,9 @@ class TestTimeSeries:
             == "The annual consumption of some loads is missing. Please provide"
         )
         # Restore the original 'annual_consumption' values
-        self.edisgo.topology.loads_df[
-            "annual_consumption"
-        ] = original_annual_consumption
+        self.edisgo.topology.loads_df["annual_consumption"] = (
+            original_annual_consumption
+        )
 
     def test_predefined_charging_points_by_use_case(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")
@@ -2477,7 +2476,7 @@ class TestTimeSeries:
 
     def test_scale_timeseries(self):
         self.edisgo.set_time_series_worst_case_analysis()
-        edisgo_scaled = copy.deepcopy(self.edisgo)
+        edisgo_scaled = self.edisgo.copy()
         edisgo_scaled.timeseries.scale_timeseries(
             p_scaling_factor=0.5, q_scaling_factor=0.4
         )

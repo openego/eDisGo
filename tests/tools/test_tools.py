@@ -1,5 +1,3 @@
-import copy
-
 import numpy as np
 import pandas as pd
 import pytest
@@ -460,7 +458,7 @@ class TestTools:
         assert self.edisgo.topology.lines_df.loc["Line_50000002", "b"] == 0
 
         # test mode no_b
-        edisgo_root = copy.deepcopy(self.edisgo)
+        edisgo_root = self.edisgo.copy()
         edisgo_root.topology.lines_df.loc["Line_10006", "b"] = 1
         edisgo_root.topology.lines_df.loc["Line_50000002", "b"] = 1
         edisgo_root = tools.add_line_susceptance(edisgo_root, mode="no_b")
@@ -468,7 +466,7 @@ class TestTools:
         assert edisgo_root.topology.lines_df.loc["Line_50000002", "b"] == 0
 
         # test mode mv_b
-        edisgo_root = copy.deepcopy(self.edisgo)
+        edisgo_root = self.edisgo.copy()
         edisgo_root.topology.lines_df.loc["Line_10006", "b"] = 1
         edisgo_root.topology.lines_df.loc["Line_50000002", "b"] = 1
         edisgo_root = tools.add_line_susceptance(edisgo_root, mode="mv_b")
@@ -478,7 +476,7 @@ class TestTools:
         assert edisgo_root.topology.lines_df.loc["Line_50000002", "b"] == 0
 
         # test mode all_b
-        edisgo_root = copy.deepcopy(self.edisgo)
+        edisgo_root = self.edisgo.copy()
         edisgo_root = tools.add_line_susceptance(edisgo_root, mode="all_b")
         assert edisgo_root.topology.lines_df.loc[
             "Line_10006", "b"

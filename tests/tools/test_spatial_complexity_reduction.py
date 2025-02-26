@@ -1,5 +1,3 @@
-import copy
-
 from contextlib import nullcontext as does_not_raise
 
 import numpy as np
@@ -245,9 +243,9 @@ class TestSpatialComplexityReduction:
         busmap_df = self.setup_busmap_df(test_edisgo_obj)
 
         # Add second line to test line reduction
-        test_edisgo_obj.topology.lines_df.loc[
-            "Line_10003_2"
-        ] = test_edisgo_obj.topology.lines_df.loc["Line_10003"]
+        test_edisgo_obj.topology.lines_df.loc["Line_10003_2"] = (
+            test_edisgo_obj.topology.lines_df.loc["Line_10003"]
+        )
 
         assert test_edisgo_obj.topology.buses_df.shape[0] == 142
         assert test_edisgo_obj.topology.lines_df.shape[0] == 132
@@ -315,7 +313,7 @@ class TestSpatialComplexityReduction:
         test_edisgo_obj.reinforce()
 
     def test_compare_voltage(self, test_edisgo_obj):
-        edisgo_reduced = copy.deepcopy(test_edisgo_obj)
+        edisgo_reduced = test_edisgo_obj.copy()
         (
             busmap_df,
             linemap_df,
@@ -334,7 +332,7 @@ class TestSpatialComplexityReduction:
         assert np.isclose(rms, 0.00766, atol=1e-5)
 
     def test_compare_apparent_power(self, test_edisgo_obj):
-        edisgo_reduced = copy.deepcopy(test_edisgo_obj)
+        edisgo_reduced = test_edisgo_obj.copy()
 
         (
             busmap_df,
@@ -354,7 +352,7 @@ class TestSpatialComplexityReduction:
         assert np.isclose(rms, 2.873394, atol=1e-5)
 
     def test_remove_short_end_lines(self, test_edisgo_obj):
-        edisgo_root = copy.deepcopy(test_edisgo_obj)
+        edisgo_root = test_edisgo_obj.copy()
 
         # change line length of line to switch to under 1 meter to check that it
         # is not deleted
@@ -382,7 +380,7 @@ class TestSpatialComplexityReduction:
         )
 
     # def test_remove_lines_under_one_meter(self, test_edisgo_obj, caplog):
-    #     edisgo_root = copy.deepcopy(test_edisgo_obj)
+    #     edisgo_root = test_edisgo_obj.copy()
     #     edisgo_root.topology.lines_df.at["Line_50000002", "length"] = 0.0006
     #     edisgo_root.topology.lines_df.at["Line_90000009", "length"] = 0.0007
     #     edisgo_root.topology.lines_df.at["Line_90000013", "length"] = 0.0008
