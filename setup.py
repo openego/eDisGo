@@ -66,7 +66,7 @@ requirements = [
 
 dev_requirements = [
     "black < 25.2.0",
-    "flake8 < 7.2.0",
+    "flake8 < 7.3.0",
     "isort < 6.1.0",
     "pre-commit < 4.3.0",
     "pylint < 3.4.0",
