@@ -76,6 +76,30 @@ def home_batteries_oedb(
     return _home_batteries_grid_integration(edisgo_obj, batteries_df)
 
 
+def buffer_batteries_R4MU(
+    edisgo_obj: EDisGo,
+):
+    """
+    add buffer batteries to the charging stations at retail locations
+    """
+    buffer_batteries = edisgo_obj.topology.charging_points_df[
+        edisgo_obj.topology.charging_points_df.index.str.contains("retail")
+    ]
+    batteries = []
+    for battery_name, buffer_battery in buffer_batteries.iterrows():
+        edisgo_obj.topology.add_storage_unit(
+            bus=buffer_battery.bus,
+            p_nom=50,
+            max_hours=50,
+            efficiency_store=0.9,
+            efficiency_dispatch=0.9,
+            control="PQ",
+            type="buffer_battery_R4MU",
+        )
+        batteries.append(battery_name)
+    return batteries
+
+
 def _home_batteries_grid_integration(edisgo_obj, batteries_df):
     """
     Integrates home batteries into the grid.

@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from edisgo import EDisGo
+from edisgo.edisgo import import_edisgo_from_pickle
 from edisgo.io import storage_import
 
 
@@ -61,6 +62,13 @@ class TestStorageImport:
         assert "2.03 MW of home batteries integrated." in caplog.text
         assert "do not have a generator with the same building ID." not in caplog.text
 
+    def test_buffer_batteries_R4MU(self, caplog):
+        edisgo_R4MU_data = import_edisgo_from_pickle(
+            "edisgo_ding0_loads_electromobility_included_R4MU_data.pkl"
+        )
+        storage_import.buffer_batteries_R4MU(edisgo_R4MU_data)
+        edisgo_R4MU_data.topology.storage_units_df
+
     def test__grid_integration(self, caplog):
         # ############### test without PV rooftop ###############
 
@@ -69,9 +77,9 @@ class TestStorageImport:
         bus_bat_voltage_level_5_building = loads_df[loads_df.building_id == 446933].bus[
             0
         ]
-        self.edisgo.topology.buses_df.at[
-            bus_bat_voltage_level_5_building, "v_nom"
-        ] = 20.0
+        self.edisgo.topology.buses_df.at[bus_bat_voltage_level_5_building, "v_nom"] = (
+            20.0
+        )
 
         with caplog.at_level(logging.DEBUG):
             integrated_bat_1 = storage_import._home_batteries_grid_integration(

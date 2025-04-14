@@ -2068,8 +2068,7 @@ class EDisGo:
 
         if data_source != "R4MU_data":
             distribute_charging_demand(self, **allocate_charging_demand_kwds)
-
-        integrate_charging_parks(self)
+            integrate_charging_parks(self)
 
     def apply_charging_strategy(self, strategy="dumb", **kwargs):
         """
