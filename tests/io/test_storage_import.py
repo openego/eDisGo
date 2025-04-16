@@ -64,7 +64,8 @@ class TestStorageImport:
 
     def test_buffer_batteries_R4MU(self, caplog):
         edisgo_R4MU_data = import_edisgo_from_pickle(
-            "edisgo_ding0_loads_electromobility_included_R4MU_data.pkl"
+            "edisgo_ding0_loads_electromobility_included_R4MU_data.pkl",
+            "/storage/masterarbeit_JD/data/pkl files",
         )
         storage_import.buffer_batteries_R4MU(edisgo_R4MU_data)
         edisgo_R4MU_data.topology.storage_units_df
