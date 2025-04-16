@@ -401,7 +401,9 @@ def read_gpkg_potential_charging_parks_from_R4MU_data(
     charging_parks_gdf = charging_parks_from_R4MU_data(
         gpkg_data=gpkg_data, edisgo_obj=edisgo_obj
     )
-    return charging_parks_gdf, charging_processes_gdf
+    return charging_parks_gdf.to_crs(
+        epsg=edisgo_obj.topology.grid_district["srid"]
+    ), charging_processes_gdf.to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
 
 
 def get_grid_charging_capacity(edisgo_obj, charging_processes_gdf):
@@ -1321,6 +1323,9 @@ def charging_parks_from_R4MU_data(
             # Füge die Spalte 'use_case' hinzu
             gdf["use_case"] = use_case
             charging_parks_gdfs.append(gdf)
+        # Ensure all GeoDataFrames have the same CRS before concatenation
+    target_crs = charging_parks_gdfs[0].crs  # Use the CRS of the first GeoDataFrame
+    charging_parks_gdfs = [gdf.to_crs(target_crs) for gdf in charging_parks_gdfs]
     charging_parks_gdf = gpd.GeoDataFrame(
         pd.concat(charging_parks_gdfs, ignore_index=True)
     )
@@ -1335,7 +1340,7 @@ def charging_parks_from_R4MU_data(
     charging_parks_gdf = charging_parks_gdf.to_crs(
         epsg=edisgo_obj.topology.grid_district["srid"]
     )
-    return charging_parks_gdf
+    return charging_parks_gdf.to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
 
 
 def charging_processes_from_R4MU_data(
@@ -1354,6 +1359,9 @@ def charging_processes_from_R4MU_data(
     charging_processes_df = [
         gdf for key, gdf in gpkg_data.items() if "charging-events" in key
     ]
+    # Ensure all GeoDataFrames have the same CRS before concatenation
+    target_crs = charging_processes_df[0].crs  # Use the CRS of the first GeoDataFrame
+    charging_processes_df = [gdf.to_crs(target_crs) for gdf in charging_processes_df]
     charging_processes_gdf = gpd.GeoDataFrame(
         pd.concat(charging_processes_df, ignore_index=True)
     )
@@ -1380,7 +1388,7 @@ def charging_processes_from_R4MU_data(
         edisgo_obj, charging_processes_gdf
     )
     charging_processes_gdf = charging_processes_gdf.rename(columns=column_mapping)
-    return charging_processes_gdf
+    return charging_processes_gdf.to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
 
 
 def distribute_charging_demand_from_R4MU_data(edisgo_obj: EDisGo, data_dir: str):
