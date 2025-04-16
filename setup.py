@@ -62,24 +62,24 @@ requirements = [
     "sshtunnel < 0.5.0",
     "urllib3 < 2.4.0",
     "workalendar < 17.1.0",
-    "astroid == 3.3.8",
+    "astroid == 3.3.9",
 ]
 
 
 dev_requirements = [
     "black < 25.2.0",
-    "flake8 < 7.2.0",
+    "flake8 < 7.3.0",
     "isort < 6.1.0",
-    "pre-commit < 4.2.0",
+    "pre-commit < 4.3.0",
     "pylint < 3.4.0",
     "pytest < 8.4.0",
     "pytest-notebook < 0.11.0",
     "pyupgrade < 3.20.0",
-    "sphinx < 8.2.0",
+    "sphinx < 8.3.0",
     "sphinx_rtd_theme >=0.5.2, < 3.1.0",
-    "sphinx-autodoc-typehints < 3.1.0",
+    "sphinx-autodoc-typehints < 3.2.0",
     "sphinx-autoapi < 3.7.0",
-    "astroid == 3.3.8",
+    "astroid == 3.3.9",
 ]
 
 extras = {"dev": dev_requirements}
