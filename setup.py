@@ -61,7 +61,7 @@ requirements = [
     "shapely >= 1.7.0, < 2.1.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel < 0.5.0",
-    "urllib3 < 2.4.0",
+    "urllib3 < 2.5.0",
     "workalendar < 17.1.0",
     "astroid == 3.3.9",
 ]
