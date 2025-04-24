@@ -962,7 +962,7 @@ class TimeSeries:
 
         # check that there is no invalid sector (only "home", "work", "public", and
         # "hpc" allowed)
-        use_cases = ["home", "work", "public", "hpc"]
+        use_cases = ["home", "work", "public", "hpc", "retail"]
         sectors = df.sector.unique()
         diff = list(set(sectors) - set(use_cases))
         if diff:
@@ -981,9 +981,9 @@ class TimeSeries:
         for s in sectors:
             for case in cases:
                 for voltage_level in ["mv", "lv"]:
-                    power_scaling.at[
-                        f"{case}_{voltage_level}", s
-                    ] = worst_case_scale_factors[f"{voltage_level}_{case}_cp_{s}"]
+                    power_scaling.at[f"{case}_{voltage_level}", s] = (
+                        worst_case_scale_factors[f"{voltage_level}_{case}_cp_{s}"]
+                    )
 
         # calculate active power of charging points
         active_power = pd.concat(
@@ -1375,9 +1375,11 @@ class TimeSeries:
 
         # scale time series by nominal power
         ts_scaled = generators_df.apply(
-            lambda x: ts_generators[x.type] * x.p_nom
-            if x.type in ts_generators.columns
-            else ts_generators["other"] * x.p_nom,
+            lambda x: (
+                ts_generators[x.type] * x.p_nom
+                if x.type in ts_generators.columns
+                else ts_generators["other"] * x.p_nom
+            ),
             axis=1,
         ).T
         if not ts_scaled.empty:
@@ -1435,9 +1437,9 @@ class TimeSeries:
 
         # write to TimeSeriesRaw
         for col in ts_loads:
-            self.time_series_raw.conventional_loads_active_power_by_sector[
-                col
-            ] = ts_loads[col]
+            self.time_series_raw.conventional_loads_active_power_by_sector[col] = (
+                ts_loads[col]
+            )
 
         # set load_names if None
         if load_names is None:
@@ -1494,9 +1496,9 @@ class TimeSeries:
 
         # write to TimeSeriesRaw
         for col in ts_loads:
-            self.time_series_raw.charging_points_active_power_by_use_case[
-                col
-            ] = ts_loads[col]
+            self.time_series_raw.charging_points_active_power_by_use_case[col] = (
+                ts_loads[col]
+            )
 
         # set load_names if None
         if load_names is None:
