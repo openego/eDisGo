@@ -40,7 +40,7 @@ requirements = [
     "geoalchemy2 < 0.7.0",
     "geopandas >= 0.12.0, < 1.1.0",
     "geopy >= 2.0.0, < 2.5.0",
-    "jupyterlab < 4.4.0",
+    "jupyterlab < 4.5.0",
     "jupyter_dash < 0.5.0",
     "matplotlib >= 3.3.0, < 3.11.0",
     "multiprocess < 0.71.0",
@@ -61,7 +61,7 @@ requirements = [
     "shapely >= 1.7.0, < 2.1.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel < 0.5.0",
-    "urllib3 < 2.4.0",
+    "urllib3 < 2.5.0",
     "workalendar < 17.1.0",
     "astroid == 3.3.9",
 ]
