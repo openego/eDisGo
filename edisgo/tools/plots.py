@@ -5,6 +5,7 @@ import os
 
 from typing import TYPE_CHECKING
 
+import dash
 import matplotlib
 import numpy as np
 import pandas as pd
@@ -12,7 +13,6 @@ import plotly.graph_objects as go
 
 from dash import dcc, html
 from dash.dependencies import Input, Output
-from jupyter_dash import JupyterDash
 from matplotlib import pyplot as plt
 from networkx import Graph
 from pyproj import Transformer
@@ -1513,9 +1513,9 @@ def plot_dash_app(
     edisgo_objects: EDisGo | dict[str, EDisGo],
     debug: bool = False,
     height: int = 500,
-) -> JupyterDash:
+) -> dash.Dash:
     """
-    Generates a jupyter dash app from given eDisGo object(s).
+    Generates a dash app from given eDisGo object(s).
 
     Parameters
     ----------
@@ -1538,8 +1538,8 @@ def plot_dash_app(
 
     Returns
     -------
-    JupyterDash
-        Jupyter dash app.
+    Dash
+        dash app.
 
     """
     if isinstance(edisgo_objects, dict):
@@ -1586,7 +1586,7 @@ def plot_dash_app(
 
     padding = 1
 
-    app = JupyterDash(__name__)
+    app = dash.Dash(__name__)
     # Workaround to use standard python logging with plotly dash
     if debug:
         app.logger.disabled = False
@@ -2216,7 +2216,7 @@ def plot_dash(
     height: int = 820,
 ):
     """
-    Shows the generated jupyter dash app from given eDisGo object(s).
+    Shows the generated dash app from given eDisGo object(s).
 
     Parameters
     ----------
@@ -2236,16 +2236,16 @@ def plot_dash(
             Plotting in own browser tab.
 
     debug : bool
-        If True, enables debugging of the jupyter dash app.
+        If True, enables debugging of the dash app.
 
     port : int
         Port which the app uses. Default: 8050.
 
     height : int
-        Height of the jupyter dash cell.
+        Height of the dash cell.
 
     """
     app = plot_dash_app(edisgo_objects, debug=debug, height=height - 300)
     log = logging.getLogger("werkzeug")
     log.setLevel(logging.ERROR)
-    app.run_server(mode=mode, debug=debug, height=height, port=port)
+    app.run(mode=mode, debug=debug, height=height, port=port)
