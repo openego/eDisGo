@@ -50,7 +50,7 @@ requirements = [
     "numpy ==1.26.4",
     "pandas >= 1.4.0, < 2.2.0",
     "plotly < 6.0",
-    "pydot < 3.1.0",
+    "pydot < 4.1.0",
     "pygeos < 0.15.0",
     "pypower < 5.2.0",
     "pyproj >= 3.0.0, < 3.8.0",
