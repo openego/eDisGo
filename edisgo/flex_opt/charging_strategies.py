@@ -277,11 +277,12 @@ def charging_strategy(
         ].itertuples():
             flex_band = residual_load[start : end + 1]
 
-            # get k time steps with the lowest residual load in the parking
-            # time
-            idx = np.argpartition(flex_band, k)[:k] + start
-
             try:
+                # ?????????
+                # get k time steps with the lowest residual load in the parking
+                # time
+                idx = np.argpartition(flex_band, k)[:k] + start
+
                 dummy_ts[cp_id].iloc[idx] += cap
 
                 residual_load[idx] += cap
@@ -290,8 +291,8 @@ def charging_strategy(
                 logger.warning(
                     f"Charging process with index {_} could not be "
                     f"respected. The charging takes place within the "
-                    f"time steps {idx}, while the time series consists of "
-                    f"{maximum_ts} time steps."
+                    f"time steps {flex_band}, while the time series consists of "
+                    f"{flex_band} time steps."
                 )
         edisgo_obj.timeseries.add_component_time_series(
             "loads_active_power",

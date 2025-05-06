@@ -20,7 +20,7 @@ catch e
 end
 
 
-
+println("Julia version: ", VERSION)
 PowerModels.logger_config!("debug")
 json_str = readline(stdin)
 ding0_grid = ARGS[1]

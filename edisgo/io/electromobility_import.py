@@ -394,13 +394,16 @@ def read_gpkg_potential_charging_parks_from_R4MU_data(
 
     gpkg_files = [f for f in os.listdir(data_dir) if f.endswith(".gpkg")]
     gpkg_data = {f: gpd.read_file(os.path.join(data_dir, f)) for f in gpkg_files}
-
-    charging_processes_gdf = charging_processes_from_R4MU_data(
-        edisgo_obj=edisgo_obj, gpkg_data=gpkg_data
-    )
     charging_parks_gdf = charging_parks_from_R4MU_data(
         gpkg_data=gpkg_data, edisgo_obj=edisgo_obj
     )
+
+    charging_processes_gdf = charging_processes_from_R4MU_data(
+        edisgo_obj=edisgo_obj,
+        gpkg_data=gpkg_data,
+        charging_parks_gdf=charging_parks_gdf,
+    )
+
     return charging_parks_gdf.to_crs(
         epsg=edisgo_obj.topology.grid_district["srid"]
     ), charging_processes_gdf.to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
@@ -411,10 +414,7 @@ def get_grid_charging_capacity(edisgo_obj, charging_processes_gdf):
 
 
 def get_park_end_timesteps(edisgo_obj, charging_processes_gdf):
-    return (
-        charging_processes_gdf.park_start_timesteps
-        + charging_processes_gdf.park_time_timesteps
-    )
+    return charging_processes_gdf.event_start + charging_processes_gdf.event_time
 
 
 def assure_minimum_potential_charging_parks(
@@ -1246,6 +1246,7 @@ def import_electromobility_from_R4MU_data(
         potential_charging_parks_gdf,
     )
     integrate_charging_parks_from_R4MU_data(edisgo_obj)
+    print(edisgo_obj.electromobility.charging_processes_df)
 
 
 def integrate_charging_parks_from_R4MU_data(edisgo_obj: EDisGo):
@@ -1265,7 +1266,7 @@ def integrate_charging_parks_from_R4MU_data(edisgo_obj: EDisGo):
     designated_charging_parks = [
         cp
         for cp in charging_parks
-        if (cp.designated_charging_point_capacity > 0) and cp.within_grid
+        # if (cp.designated_charging_point_capacity > 0) and cp.within_grid
     ]
 
     charging_park_ids = [_.id for _ in designated_charging_parks]
@@ -1279,9 +1280,13 @@ def integrate_charging_parks_from_R4MU_data(edisgo_obj: EDisGo):
             geolocation=cp.geometry,
             sector=cp.use_case,
             add_ts=False,
-            p_set=cp.grid_connection_capacity,
+            p_set=edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
+                cp.id
+            ].p_nom
+            / 1000,
         )
         for cp in designated_charging_parks
+        if edisgo_obj.electromobility.potential_charging_parks_gdf.loc[cp.id].p_nom > 0
     ]
 
     edisgo_obj.electromobility.integrated_charging_parks_df = pd.DataFrame(
@@ -1292,13 +1297,13 @@ def integrate_charging_parks_from_R4MU_data(edisgo_obj: EDisGo):
 
     # delete all charging processes from list whith charging parks not in edisgo
     # charging parks because they are outside the grid
-    edisgo_obj.electromobility.charging_processes_df = (
-        edisgo_obj.electromobility.charging_processes_df[
-            edisgo_obj.electromobility.charging_processes_df.charging_park_id.isin(
-                edisgo_obj.electromobility.integrated_charging_parks_df.index
-            )
-        ]
-    )
+    # edisgo_obj.electromobility.charging_processes_df = (
+    #     edisgo_obj.electromobility.charging_processes_df[
+    #         edisgo_obj.electromobility.charging_processes_df.charging_park_id.isin(
+    #             edisgo_obj.electromobility.integrated_charging_parks_df.index
+    #         )
+    #     ]
+    # )
 
 
 def charging_parks_from_R4MU_data(
@@ -1330,22 +1335,34 @@ def charging_parks_from_R4MU_data(
         pd.concat(charging_parks_gdfs, ignore_index=True)
     )
     charging_parks_gdf.geometry = charging_parks_gdf.geometry.centroid
-    mapping_charging_parks = {
-        "probability": "user_centric_weight",
-        "required_points": "ags",
-        "use_case": "use_case",
-        "charging_park_id": "id",
-    }
-    charging_parks_gdf = charging_parks_gdf.rename(columns=mapping_charging_parks)
     charging_parks_gdf = charging_parks_gdf.to_crs(
         epsg=edisgo_obj.topology.grid_district["srid"]
     )
-    return charging_parks_gdf.to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
+    charging_parks_gdf = charging_parks_gdf[
+        charging_parks_gdf.geometry.within(edisgo_obj.topology.grid_district["geom"])
+    ]
+    charging_parks_gdf = charging_parks_gdf.dropna(subset=["location_id"])
+    charging_parks_gdf = charging_parks_gdf[charging_parks_gdf["charging_points"] > 0]
+    mapping_charging_parks = {
+        "probability": "user_centric_weight",
+        "average_charging_capacity": "nominal_charging_capacity_kW",
+        "use_case": "use_case",
+        "charging_park_id": "id",
+        "location_id": "charging_park_id",
+    }
+    charging_parks_gdf = charging_parks_gdf.rename(columns=mapping_charging_parks)
+    charging_parks_gdf["p_nom"] = (
+        charging_parks_gdf["charging_points"]
+        * charging_parks_gdf["nominal_charging_capacity_kW"]
+    )
+    charging_parks_gdf = charging_parks_gdf.set_index("charging_park_id", drop=False)
+    return charging_parks_gdf
 
 
 def charging_processes_from_R4MU_data(
     edisgo_obj: EDisGo,
     gpkg_data: dict[str, gpd.GeoDataFrame],
+    charging_parks_gdf: gpd.GeoDataFrame,
 ):
     """
     Get charging processes from R4MU data.
@@ -1370,17 +1387,25 @@ def charging_processes_from_R4MU_data(
         "energy": "chargingdemand_kWh",
         "use_case": "use_case",
         "id": "car_id",
-        "station_charging_capacity": "nominal_charging_capacity_kW",
         "charging_use_case": "destination",
-        "assigned_location": "charging_park_id",
+        "location_id": "charging_park_id",
         "event_start": "park_start_timesteps",
         "event_time": "park_time_timesteps",
     }
 
-    charging_processes_gdf = charging_processes_gdf.rename(columns=column_mapping)
-    charging_processes_gdf["charging_point_id"] = (
-        charging_processes_gdf.charging_park_id
+    charging_capacity = dict(
+        zip(
+            charging_parks_gdf.charging_park_id.dropna(),
+            charging_parks_gdf.nominal_charging_capacity_kW.dropna(),
+        )
     )
+    charging_processes_gdf["nominal_charging_capacity_kW"] = charging_processes_gdf[
+        "location_id"
+    ]
+    charging_processes_gdf["nominal_charging_capacity_kW"] = (
+        charging_processes_gdf["location_id"].map(charging_capacity).dropna()
+    )
+    charging_processes_gdf["charging_point_id"] = charging_processes_gdf.location_id
     charging_processes_gdf["grid_charging_capacity_kW"] = get_grid_charging_capacity(
         edisgo_obj, charging_processes_gdf
     )
@@ -1388,37 +1413,57 @@ def charging_processes_from_R4MU_data(
         edisgo_obj, charging_processes_gdf
     )
     charging_processes_gdf = charging_processes_gdf.rename(columns=column_mapping)
+    use_case_mapping = {
+        1: "home",
+        2: "home",
+        3: "work",
+        4: "hpc",
+        5: "retail",
+        6: "street",
+        7: "depot",
+    }
+
+    charging_processes_gdf["use_case"] = (
+        charging_processes_gdf["charging_park_id"]
+        .astype(str)
+        .str[0]
+        .astype(int)
+        .map(use_case_mapping)
+    )
+    charging_processes_gdf = charging_processes_gdf.dropna(
+        subset=["nominal_charging_capacity_kW"]
+    )
     return charging_processes_gdf.to_crs(epsg=edisgo_obj.topology.grid_district["srid"])
 
 
-def distribute_charging_demand_from_R4MU_data(edisgo_obj: EDisGo, data_dir: str):
-    # Load all CSV files that end with "-events.csv"
-    events_files = [f for f in os.listdir(data_dir) if f.endswith("-events.csv")]
-    if not events_files:
-        raise FileNotFoundError(
-            "No files ending with '-events.csv' found in the directory."
-        )
+# def distribute_charging_demand_from_R4MU_data(edisgo_obj: EDisGo, data_dir: str):
+#     # Load all CSV files that end with "-events.csv"
+#     events_files = [f for f in os.listdir(data_dir) if f.endswith("-events.csv")]
+#     if not events_files:
+#         raise FileNotFoundError(
+#             "No files ending with '-events.csv' found in the directory."
+#         )
 
-    # Process each events file and concatenate them into a single DataFrame
-    events_dfs = []
-    for events_file in events_files:
-        events_df = pd.read_csv(os.path.join(data_dir, events_file))
-        # events_df = get_ags_from_geometry(events_df)
-        column_mapping = {
-            "energy": "chargingdemand_kWh",
-            "use_case": "use_case",
-            "id": "car_id",
-            "station_charging_capacity": "nominal_charging_capacity_kW",
-            "charging_use_case": "destination",
-            "assigned_location": "charging_park_id",
-        }
-        events_df = events_df.rename(columns=column_mapping)
-        events_df["charging_point_id"] = events_df.charging_park_id
-        events_dfs.append(events_df)
+#     # Process each events file and concatenate them into a single DataFrame
+#     events_dfs = []
+#     for events_file in events_files:
+#         events_df = pd.read_csv(os.path.join(data_dir, events_file))
+#         # events_df = get_ags_from_geometry(events_df)
+#         column_mapping = {
+#             "energy": "chargingdemand_kWh",
+#             "use_case": "use_case",
+#             "id": "car_id",
+#             "station_charging_capacity": "nominal_charging_capacity_kW",
+#             "charging_use_case": "destination",
+#             "assigned_location": "charging_park_id",
+#         }
+#         events_df = events_df.rename(columns=column_mapping)
+#         events_df["charging_point_id"] = events_df.charging_park_id
+#         events_dfs.append(events_df)
 
-    # Concatenate all DataFrames into one
-    all_events_df = pd.concat(events_dfs, ignore_index=True)
-    edisgo_obj.electromobility.charging_processes_df = all_events_df
+#     # Concatenate all DataFrames into one
+#     all_events_df = pd.concat(events_dfs, ignore_index=True)
+#     edisgo_obj.electromobility.charging_processes_df = all_events_df
 
 
 def import_electromobility_from_oedb(
