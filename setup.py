@@ -63,7 +63,7 @@ requirements = [
     "sshtunnel < 0.5.0",
     "urllib3 < 2.5.0",
     "workalendar < 17.1.0",
-    "astroid == 3.3.9",
+    "astroid == 3.3.10",
 ]
 
 dev_requirements = [
@@ -79,7 +79,7 @@ dev_requirements = [
     "sphinx_rtd_theme >=0.5.2, < 3.1.0",
     "sphinx-autodoc-typehints < 3.2.0",
     "sphinx-autoapi < 3.7.0",
-    "astroid == 3.3.9",
+    "astroid == 3.3.10",
 ]
 
 extras = {"dev": dev_requirements}
