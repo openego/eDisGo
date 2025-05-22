@@ -78,25 +78,78 @@ def home_batteries_oedb(
 
 def buffer_batteries_R4MU(
     edisgo_obj: EDisGo,
+    ts: pd.DataFrame,
 ):
     """
-    add buffer batteries to the charging stations at retail locations
+    Add buffer batteries to the charging stations at retail locations,
+    assigning timeseries data if provided.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    ts : :pandas:`pandas.DataFrame<DataFrame>`
+        Timeseries data for the buffer batteries. Index should match the storage names.
+
+    Returns
+    -------
+    list(str)
+        List of names of integrated buffer batteries.
     """
+
     buffer_batteries = edisgo_obj.topology.charging_points_df[
         edisgo_obj.topology.charging_points_df.index.str.contains("retail")
     ]
+
+    edisgo_ids = buffer_batteries.index
+
+    # Get valid integrated charging parks with those edisgo_ids
+    valid_parks_df = edisgo_obj.electromobility.integrated_charging_parks_df
+    valid_ids = valid_parks_df[valid_parks_df.edisgo_id.isin(edisgo_ids)].index
+
+    # Filter GeoDataFrame
+    buffer_batteries_gdf = edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
+        valid_ids
+    ]
+
+    # Set the index of buffer_batteries_gdf to edisgo_id so it matches buffer_batteries
+    buffer_batteries_gdf = buffer_batteries_gdf.set_index(
+        valid_parks_df.loc[valid_ids, "edisgo_id"]
+    )
+
+    # Now join on edisgo_id
+    buffer_batteries = buffer_batteries.join(
+        buffer_batteries_gdf, how="left", rsuffix="_gdf"
+    )
     batteries = []
+    max_hours = (
+        100
+        * buffer_batteries.charging_points
+        / buffer_batteries.nominal_charging_capacity_kW
+    )
+
     for battery_name, buffer_battery in buffer_batteries.iterrows():
-        edisgo_obj.topology.add_storage_unit(
+        storage_name = edisgo_obj.topology.add_storage_unit(
             bus=buffer_battery.bus,
-            p_nom=50,
-            max_hours=50,
+            p_nom=buffer_battery.p_nom,
+            max_hours=max_hours[battery_name],
+            # add_ts=ts*100,
             efficiency_store=0.9,
             efficiency_dispatch=0.9,
             control="PQ",
             type="buffer_battery_R4MU",
         )
-        batteries.append(battery_name)
+        # Add timeseries data if provided
+        ts_storage_units = pd.DataFrame(index=ts.index)
+        ts_storage_units[storage_name] = ts
+        edisgo_obj.timeseries.set_active_power_manual(
+            edisgo_object=edisgo_obj, ts_storage_units=ts_storage_units * 100
+        )
+        edisgo_obj.timeseries.set_reactive_power_manual(
+            edisgo_object=edisgo_obj,
+            ts_storage_units=ts_storage_units * 0,
+        )
+
+        batteries.append(storage_name)
     return batteries
 
 
