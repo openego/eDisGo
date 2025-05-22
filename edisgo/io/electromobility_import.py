@@ -305,16 +305,18 @@ def read_simbev_config_df(
 
 
 def simbev_config_for_R4MU_data(edisgo_obj):
+    start_time = edisgo_obj.timeseries.timeindex[0]
+    end_time = edisgo_obj.timeseries.timeindex[-1]
     data = {
         "scenario": ["eGon2035"],
         "eta_cp": [1.0],
         "stepsize": [15],
-        "start_date": [pd.to_datetime("2020-01-01")],
-        "end_date": [pd.to_datetime("2020-12-31")],
+        "start_date": [pd.to_datetime(start_time)],
+        "end_date": [pd.to_datetime(end_time)],
         "soc_min": [0.2],
         "grid_timeseries": [True],
         "grid_timeseries_by_usecase": [True],
-        "days": [365],
+        "days": [np.ceil((end_time - start_time).total_seconds() / 60 / 60 / 24)],
     }
     return pd.DataFrame(data=data, index=[0])
 
@@ -1246,7 +1248,6 @@ def import_electromobility_from_R4MU_data(
         potential_charging_parks_gdf,
     )
     integrate_charging_parks_from_R4MU_data(edisgo_obj)
-    print(edisgo_obj.electromobility.charging_processes_df)
 
 
 def integrate_charging_parks_from_R4MU_data(edisgo_obj: EDisGo):
@@ -1378,10 +1379,20 @@ def charging_processes_from_R4MU_data(
     ]
     # Ensure all GeoDataFrames have the same CRS before concatenation
     target_crs = charging_processes_df[0].crs  # Use the CRS of the first GeoDataFrame
+    days = edisgo_obj.electromobility.simbev_config_df["days"].values[0]
+    stepsize = edisgo_obj.electromobility.simbev_config_df["stepsize"].values[0]
+    allowed_timesteps = days * 24 * 60 / stepsize
     charging_processes_df = [gdf.to_crs(target_crs) for gdf in charging_processes_df]
     charging_processes_gdf = gpd.GeoDataFrame(
         pd.concat(charging_processes_df, ignore_index=True)
     )
+    charging_processes_gdf = charging_processes_gdf.loc[
+        (charging_processes_gdf["event_start"] < allowed_timesteps)
+        & (
+            charging_processes_gdf["event_start"] + charging_processes_gdf["event_time"]
+            < allowed_timesteps
+        )
+    ].copy()
     charging_processes_gdf = get_ags_from_geometry(charging_processes_gdf)
     column_mapping = {
         "energy": "chargingdemand_kWh",
