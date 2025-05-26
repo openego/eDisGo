@@ -930,7 +930,9 @@ class EDisGo:
 
         return self.topology.to_graph()
 
-    def import_generators(self, generator_scenario=None, **kwargs):
+    def import_generators(
+        self, generator_scenario: str | None = None, **kwargs
+    ) -> None:
         """
         Gets generator park for specified scenario and integrates generators into grid.
 

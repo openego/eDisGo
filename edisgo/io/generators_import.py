@@ -764,7 +764,7 @@ def _update_grids(
 
 def oedb(
     edisgo_object: EDisGo,
-    scenario: str,
+    scenario: str | None,
     engine: Engine,
     max_capacity=20,
 ):
@@ -1052,15 +1052,15 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
         suffixes=("_old", ""),
     ).set_index("gen_name")
     # add building id
-    edisgo_object.topology.generators_df.loc[
-        gens_existing.index, "building_id"
-    ] = gens_existing.building_id
+    edisgo_object.topology.generators_df.loc[gens_existing.index, "building_id"] = (
+        gens_existing.building_id
+    )
     # update plants where capacity decreased
     gens_decreased_cap = gens_existing.query("p_nom < p_nom_old")
     if len(gens_decreased_cap) > 0:
-        edisgo_object.topology.generators_df.loc[
-            gens_decreased_cap.index, "p_nom"
-        ] = gens_decreased_cap.p_nom
+        edisgo_object.topology.generators_df.loc[gens_decreased_cap.index, "p_nom"] = (
+            gens_decreased_cap.p_nom
+        )
     # update plants where capacity increased
     gens_increased_cap = gens_existing.query("p_nom > p_nom_old")
     for gen in gens_increased_cap.index:
@@ -1073,9 +1073,9 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
         if voltage_level_new >= voltage_level_old:
             # simply update p_nom if plant doesn't need to be connected to higher
             # voltage level
-            edisgo_object.topology.generators_df.at[
-                gen, "p_nom"
-            ] = gens_increased_cap.at[gen, "p_nom"]
+            edisgo_object.topology.generators_df.at[gen, "p_nom"] = (
+                gens_increased_cap.at[gen, "p_nom"]
+            )
         else:
             # if plant needs to be connected to higher voltage level, remove existing
             # plant and integrate new component based on geolocation
@@ -1183,10 +1183,10 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
 
     # add voltage level
     for gen in pv_rooftop_df.index:
-        pv_rooftop_df.at[
-            gen, "voltage_level"
-        ] = determine_grid_integration_voltage_level(
-            edisgo_object, pv_rooftop_df.at[gen, "p_nom"]
+        pv_rooftop_df.at[gen, "voltage_level"] = (
+            determine_grid_integration_voltage_level(
+                edisgo_object, pv_rooftop_df.at[gen, "p_nom"]
+            )
         )
 
     # check for duplicated generator names and choose random name for duplicates
@@ -1404,9 +1404,9 @@ def _integrate_power_and_chp_plants(edisgo_object, power_plants_gdf, chp_gdf):
             if voltage_level_new >= voltage_level_old:
                 # simply update p_nom if plant doesn't need to be connected to higher
                 # voltage level
-                edisgo_object.topology.generators_df.at[
-                    gen, "p_nom"
-                ] = gens_increased_cap.at[gen, "p_nom"]
+                edisgo_object.topology.generators_df.at[gen, "p_nom"] = (
+                    gens_increased_cap.at[gen, "p_nom"]
+                )
             else:
                 # if plant needs to be connected to higher voltage level, remove
                 # existing plant and integrate new component based on geolocation
