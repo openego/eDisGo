@@ -194,7 +194,19 @@ function variable_battery_storage_power_imaginary(pm::AbstractPowerModel; nw::In
     report && PowerModels.sol_component_value(pm, nw, :storage, :qs, PowerModels.ids(pm, nw, :storage), qs)
 end
 
+function variable_storage_size(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    storage_size = PowerModels.var(pm, nw)[:storage_size] = JuMP.@variable(
+        pm.model,
+        [i in PowerModels.ids(pm, nw, :storage)],
+        base_name="$(nw)_storage_size",
+        lower_bound = 0.0, # Mindestgröße
+        upper_bound = 1000.0, # Maximale Größe (ggf. anpassen!)
+        start = comp_start_value(PowerModels.ref(pm, nw, :storage, i), "storage_size_start", 500.0)
+    )
 
+    report && PowerModels.sol_component_value(pm, nw, :storage, :storage_size, PowerModels.ids(pm, nw, :storage), storage_size)
+    # Optional: Setze Startwerte oder weitere Bounds
+end
 ### Additional Flexibility Variables (DSM, HS, HP, CP)
 
 "variables for modeling dsm storage units, includes grid injection and internal variables"

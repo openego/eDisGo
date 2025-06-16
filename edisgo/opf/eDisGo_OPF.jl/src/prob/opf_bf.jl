@@ -30,6 +30,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             eDisGo_OPF.variable_cp_power(pm, nw=n)  #  Eq. (3.27), (3.28)
             eDisGo_OPF.variable_dsm_storage_power(pm, nw=n)  # Eq. (3.34), (3.35)
             eDisGo_OPF.variable_slack_gen(pm, nw=n)  # keine Bounds für Slack Generator
+            eDisGo_OPF.variable_storage_size(pm, nw=n)
 
             if PowerModels.ref(pm, 1, :opf_version) in(3, 4) # Nicht Teil der MA
                 eDisGo_OPF.variable_slack_HV_requirements(pm, nw=n)

@@ -85,37 +85,59 @@ end
 
 # Funktion zur Minimierung der maximalen Linienbelastung kombiniert mit Leitungsverlusten
 function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
-    # Erhalte alle Netzwerk-IDs
     nws = PowerModels.nw_ids(pm)
-
-    # Erstelle Dictionary für die :ccm-Variablen
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
-
-    # Erstelle Dictionary für Widerstände der Branches
     r = Dict(n => Dict(i => get(branch, "br_r", 1.0) for (i, branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
-
-    # Variable für die aktuelle oder maximale Linienbelastung (ll)
     ll = PowerModels.var(pm, 1, :ll)
-
-    # Erstelle Dictionaries für die Länge und Kosten der Leitungen
     l = Dict(n => Dict(i => get(branch, "length", 1.0) for (i, branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
     c = Dict(n => Dict(i => get(branch, "cost", 1.0) for (i, branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
 
-    # Erstelle ein Dictionary für den Speicherparameter jeder Branch (wird zur Filterung genutzt)
-    storage = Dict(i => get(branch, "storage", 1.0) for (i, branch) in PowerModels.ref(pm, 1, :branch))
-
-    # Gewichtungsfaktor für den Linienbelastungsterm
+    # --- Speichergröße als Variable ---
+    storage_size = PowerModels.var(pm, 1, :storage_size)
+    storage_cost_per_kwh = Dict(i => get(storage, "storage_cost_per_kwh", -1.000) for (i, storage) in PowerModels.ref(pm, 1, :storage))
+    println("Storage cost per kWh: ", storage_cost_per_kwh)
     factor_ll = 0.1
+    factor_storage = 0.9
 
-    # Definiere das Ziel:
-    # - Der erste Term minimiert die Leitungsverluste.
-    # - Der zweite Term minimiert die Abweichung der Linienbelastung von 1 (also (ll - 1)),
-    #   gewichtet mit Kosten und Länge der jeweiligen Leitung, jedoch nur für Leitungen ohne Speicher.
     return JuMP.@objective(pm.model, Min,
         (1 - factor_ll) * sum(sum(ccm[n][b] * r[n][b] for (b, i, j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)
-        + factor_ll * sum((ll[(b, i, j)] - 1) * c[1][b] * l[1][b] for (b, i, j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)
+        + factor_ll * sum(
+            (ll[(b, i, j)] - 1) * c[1][b] * l[1][b]
+            for (b, i, j) in PowerModels.ref(pm, 1, :arcs_from)
+            if get(PowerModels.ref(pm, 1, :branch, b), "storage", 0.0) == 0
+        )
+        + factor_storage * sum(storage_size[i] * storage_cost_per_kwh[i] for i in PowerModels.ids(pm, 1, :storage))
     )
 end
+
+# function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
+#     nws = PowerModels.nw_ids(pm)
+#     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
+#     r = Dict(n => Dict(i => get(branch, "br_r", 1.0) for (i, branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
+#     ll = PowerModels.var(pm, 1, :ll)
+#     l = Dict(n => Dict(i => get(branch, "length", 1.0) for (i, branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
+
+#     storage_size = PowerModels.var(pm, 1, :storage_size)
+#     storage_cost_per_kwh = Dict(i => get(storage, "storage_cost_per_kwh", 5.000) for (i, storage) in PowerModels.ref(pm, 1, :storage))
+
+#     # Parameteranpassung
+#     factor_ll = 0.7  # Höhere Gewichtung der Leitungsbelastung
+#     loss_penalty = 0.3  # Niedrigere Gewichtung der Verluste
+#     factor_storage = 0.5  # Gewichtung des Speichers
+
+#     return JuMP.@objective(pm.model, Min,
+#         (1 - factor_ll) * sum(sum(ccm[n][b] * r[n][b] for (b, i, j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)
+#         + factor_ll * sum(
+#             (ll[(b, i, j)] - 1) * c[1][b] * l[1][b]
+#             for (b, i, j) in PowerModels.ref(pm, 1, :arcs_from)
+#             if get(PowerModels.ref(pm, 1, :branch, b), "storage", 0.0) == 0
+#         )
+#         + factor_storage * sum(storage_size[i] * storage_cost_per_kwh[i] for i in PowerModels.ids(pm, 1, :storage))
+#     )
+# end
+
+
+
 
 # Funktion zur Minimierung von Leitungsverlusten, Slack-Strafen und zusätzlichen Hochspannungsanforderungen (Overlying Grid, OG)
 function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
