@@ -19,19 +19,7 @@ catch e
     using Gurobi
 end
 
-
-println("Julia version: ", VERSION)
-PowerModels.logger_config!("debug")
-json_str = readline(stdin)
-ding0_grid = ARGS[1]
-results_path = ARGS[2]
-method = ARGS[3]
-silence_moi = ARGS[4].=="True"
-warm_start = ARGS[5].=="True"
-
-# Set solver attributes
-const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>1e-6)
-function optimize_edisgo()
+function optimize_edisgo(; file::Bool=false)
   # read in data and create multinetwork
   gurobi = optimizer_with_attributes(Gurobi.Optimizer, MOI.Silent() => silence_moi, "FeasibilityTol"=>1e-4, "BarQCPConvTol"=>1e-4, "BarConvTol"=>1e-4, "BarHomogeneous"=>1)
   data_edisgo = eDisGo_OPF.parse_json(json_str)
@@ -66,7 +54,7 @@ function optimize_edisgo()
       data_edisgo_mn["solve_time"] = result_soc["solve_time"]
       data_edisgo_mn["status"] = result_soc["termination_status"]
       data_edisgo_mn["solver"] = "Gurobi"
-      if soc_tight & warm_start
+      if soc_tight && warm_start
         println("Starting warm-start non-convex AC-OPF with IPOPT.")
         set_ac_bf_start_values!(data_edisgo_mn["nw"]["1"])
         result_nc_ws, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, NCBFPowerModelEdisgo, ipopt)
@@ -87,9 +75,41 @@ function optimize_edisgo()
   end
 
   # Update network data with optimization results and print to stdout
-  print(JSON.json(data_edisgo_mn))
+  if file
+    open(joinpath(results_path, ding0_grid * "_opf_result.json"), "w") do f
+      write(f, JSON.json(data_edisgo_mn))
+    end
+  else
+    print(JSON.json(data_edisgo_mn))
+  end
+
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
+  println("Julia version: ", VERSION)
+  PowerModels.logger_config!("debug")
+  json_str = readline(stdin)
+  ding0_grid = ARGS[1]
+  results_path = ARGS[2]
+  method = ARGS[3]
+  silence_moi = ARGS[4].=="True"
+  warm_start = ARGS[5].=="True"
+  # Set solver attributes
+  const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>1e-6)
   optimize_edisgo()
+else
+  println("Julia version: ", VERSION)
+  PowerModels.logger_config!("debug")
+  ding0_grid = "ding0"
+  filepath = "/home/jonas/Documents/eDisGo/edisgo/opf/opf_solutions/ding0_35762_t_24_input.json"
+  json_file = open(filepath, "r")
+  json_str = read(json_file, String)
+  close(json_file)
+  results_path = "/home/jonas/Documents/eDisGo/edisgo/opf/opf_solutions/"
+  method = "soc"
+  silence_moi = false
+  warm_start = false
+  # Set solver attributes
+  const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>1e-6)
+  optimize_edisgo(file=true)
 end
