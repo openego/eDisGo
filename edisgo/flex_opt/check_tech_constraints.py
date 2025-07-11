@@ -1083,7 +1083,11 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         voltage_base = pd.DataFrame()
         for grid in lv_grids:
             transformers_df = grid.transformers_df
-            primary_side = transformers_df.iloc[0].bus0
+            try:
+                primary_side = transformers_df.iloc[0].bus0
+            except Exception as e:
+                print(e)
+                pass
             secondary_side = transformers_df.iloc[0].bus1
             if primary_side in buses_in_pfa:
                 voltage_base[secondary_side] = voltages_pfa.loc[:, primary_side]

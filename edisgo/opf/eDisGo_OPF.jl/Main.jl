@@ -101,7 +101,7 @@ else
   println("Julia version: ", VERSION)
   PowerModels.logger_config!("debug")
   ding0_grid = "ding0"
-  filepath = "/home/jonas/Documents/eDisGo/edisgo/opf/opf_solutions/ding0_35762_t_24_input.json"
+  filepath = "/storage/masterarbeit_JD/eDisGo/edisgo/opf/opf_solutions/ding0_35762_t_24_input.json"
   json_file = open(filepath, "r")
   json_str = read(json_file, String)
   close(json_file)

@@ -144,7 +144,10 @@ def pm_optimize(
         text=True,
         stdout=subprocess.PIPE,
     )
+
     julia_process.stdin.write(json_str)
+    with open(os.path.join(solution_dir, f"{pm['name']}_input.json"), "w") as f:
+        f.write(json_str)
     julia_process.stdin.close()
     while True:
         out = julia_process.stdout.readline()

@@ -97,7 +97,8 @@ def buffer_batteries_R4MU(
     """
 
     buffer_batteries = edisgo_obj.topology.charging_points_df[
-        edisgo_obj.topology.charging_points_df.index.str.contains("retail")
+        edisgo_obj.topology.charging_points_df.use_case.str.contains("retail")
+        | edisgo_obj.topology.charging_points_df.use_case.str.contains("hpc")
     ]
 
     edisgo_ids = buffer_batteries.index
@@ -128,15 +129,19 @@ def buffer_batteries_R4MU(
     )
 
     for battery_name, buffer_battery in buffer_batteries.iterrows():
+        battery_key = str(battery_name)
+        max_hour_value = max_hours.loc[battery_key]
         storage_name = edisgo_obj.topology.add_storage_unit(
             bus=buffer_battery.bus,
             p_nom=buffer_battery.p_nom,
-            max_hours=max_hours[battery_name],
+            max_hours=max_hour_value,
             # add_ts=ts*100,
-            efficiency_store=0.9,
-            efficiency_dispatch=0.9,
+            efficiency_store=1,
+            efficiency_dispatch=1,
             control="PQ",
             type="buffer_battery_R4MU",
+            charging_points=buffer_battery.charging_points,
+            nominal_charging_capacity=buffer_battery.nominal_charging_capacity_kW,
         )
         # Add timeseries data if provided
         ts_storage_units = pd.DataFrame(index=ts.index)

@@ -250,10 +250,10 @@ def from_powermodels(
         Base value of apparent power for per unit system.
         Default: 1 MVA.
     """
-    if type(pm_results) == str:
+    if type(pm_results) is str:
         with open(pm_results) as f:
             pm = json.loads(json.load(f))
-    elif type(pm_results) == dict:
+    elif type(pm_results) is dict:
         pm = pm_results
     else:
         raise ValueError(
@@ -296,6 +296,27 @@ def from_powermodels(
                 ]
                 for t in timesteps
             ]
+
+            # Speicherkapazität auslesen
+            storage_sizes = {
+                pm["nw"]["1"][flex][flex_comp]["name"]: pm["nw"]["1"][flex][flex_comp][
+                    "e_cap"
+                ]
+                * s_base
+                for flex_comp in pm["nw"]["1"][flex]
+            }
+
+            # Kapazitäten im eDisGo-Objekt speichern
+            for name, size in storage_sizes.items():
+                # Calculate max_hours as size (in kWh) divided by p_nom (in kW)
+                p_nom = edisgo_object.topology.storage_units_df.loc[name, "p_nom"]
+                if p_nom > 0:
+                    max_hours = size / p_nom
+                else:
+                    max_hours = 0
+                edisgo_object.topology.storage_units_df.loc[name, "max_hours"] = (
+                    max_hours
+                )
         else:
             data = [
                 [
@@ -363,9 +384,11 @@ def from_powermodels(
         for flex in df2.columns:
             abs_error = abs(df2[flex].values - hv_flex_dict[flex])
             rel_error = [
-                abs_error[i] / hv_flex_dict[flex][i]
-                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex][i] != 0))
-                else 0
+                (
+                    abs_error[i] / hv_flex_dict[flex][i]
+                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex][i] != 0))
+                    else 0
+                )
                 for i in range(len(abs_error))
             ]
             df2[flex] = rel_error
@@ -568,9 +591,9 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
     v_max = [min(val, 1.1) for val in psa_net.buses["v_mag_pu_max"].values]
     v_min = [max(val, 0.9) for val in psa_net.buses["v_mag_pu_min"].values]
     for bus_i in np.arange(len(psa_net.buses.index)):
-        control_value = psa_net.buses["control"].iloc[bus_i]      # updated
-        v_max_value   = psa_net.buses["v_mag_pu_max"].iloc[bus_i]   # updated
-        v_min_value   = psa_net.buses["v_mag_pu_min"].iloc[bus_i]   # updated
+        # control_value = psa_net.buses["control"].iloc[bus_i]  # updated
+        # v_max_value = psa_net.buses["v_mag_pu_max"].iloc[bus_i]  # updated
+        # v_min_value = psa_net.buses["v_mag_pu_min"].iloc[bus_i]  # updated
         pm["bus"][str(bus_i + 1)] = {
             "index": bus_i + 1,
             "bus_i": bus_i + 1,
@@ -1137,19 +1160,19 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
     if (flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]).any().any():
         logger.warning(
             "Upper energy level is smaller than lower energy level for "
-            "charging parks {}! Charging Parks will be changed into inflexible "
-            "loads.".format(
-                flexible_cps[
-                    (
-                        flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]
-                    ).any()[0]
-                ]
-            )
+            # "charging parks {}! Charging Parks will be changed into inflexible "
+            # "loads.".format(
+            #     flexible_cps[
+            #         (
+            #             flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]
+            #         ).any()[0]
+            #     ]
+            # )
         )
         flexible_cps = flexible_cps[
             ~(flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]).any()
         ]
-    emob_df = psa_net.loads.loc[flexible_cps]
+    emob_df = psa_net.loads.loc[np.ravel(flexible_cps)]
     for cp_i in np.arange(len(emob_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, emob_df.bus.iloc[cp_i])
         # retrieve power factor and sign from config

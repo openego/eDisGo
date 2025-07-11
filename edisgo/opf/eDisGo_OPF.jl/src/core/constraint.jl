@@ -1,14 +1,30 @@
 """ Creates constraints for storage operations (battery, heat, DSM)"""
+const C_RATE         = 0.5      # max. Lade‑/Entlade‑C‑Rate  (0.5 C → 2 h Vollzyklus)
+const HV_SLACK_COST  = 1e4      # €/kW Strafkosten bei Nichterfüllung der HV‑Vorgabe
 
 function constraint_store_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int, energy, charge_eff, discharge_eff, time_elapsed, kind, p_loss)
     if kind == "storage"
         ps_1 = PowerModels.var(pm, n, :ps, i)
-        se = PowerModels.var(pm, n, :se, i)
-        se_end = PowerModels.var(pm, length(PowerModels.nw_ids(pm)), :se, i)
-        soc_initial = PowerModels.ref(pm, n, :storage)[i]["soc_initial"]
-        soc_end = PowerModels.ref(pm, n, :storage)[i]["soc_end"]
-        JuMP.@constraint(pm.model, se - soc_initial == - time_elapsed * ps_1)  # Eq. (3.10) i.V.m. Eq. (3.9) für t = 1 bzw. = 0
-        JuMP.@constraint(pm.model, se_end == soc_end)  # Eq. (3.9) für t = tau
+        se_1 = PowerModels.var(pm, n, :se, i)
+        se_T = PowerModels.var(pm, length(PowerModels.nw_ids(pm)), :se, i)
+        e_cap = PowerModels.var(pm, n, :e_cap, i)
+
+        # C‑Rate‑Begrenzung für den ersten Zeitschritt
+        @constraint(pm.model,  ps_1 <=  C_RATE * e_cap)
+        @constraint(pm.model, -ps_1 <=  C_RATE * e_cap)
+
+        # Start-SoC = 50 % der gekauften Kapazität
+        @constraint(pm.model, se_1 == 0.5 * e_cap)
+
+        # End-SoC = Start-SoC (zyklische Bedingung)
+        @constraint(pm.model, se_T == se_1)
+
+        # SOC darf nie die variable Kapazität überschreiten
+        @constraint(pm.model, se_1 <= e_cap)
+        @constraint(pm.model, se_1 >= 0.0)
+
+        # ENTFERNEN Sie die redundante Bilanz-Constraint hier
+        # Die zeitliche Bilanz wird in constraint_store_state gehandhabt
     elseif kind == "heat_storage"
         phs_1 = PowerModels.var(pm, n, :phs, i)
         hse = PowerModels.var(pm, n, :hse, i)
@@ -26,14 +42,43 @@ function constraint_store_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::In
     end
 end
 
+function _get_charging_point_lines(pm::AbstractBFModelEdisgo, nw::Int)
+    line_indices = Int[]
+    branches = PowerModels.ref(pm, nw, :branch)
+    for (i, branch) in branches
+        if startswith(branch["name"], "Line_bus_charging_point_")
+            push!(line_indices, i)
+        end
+    end
+    return line_indices
+end
+
+
+function constraint_charging_point_line_flow(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default)
+    line_indices = _get_charging_point_lines(pm, nw)
+    max_power_kw = 11000 # Maximum allowed power flow in kW
+
+    for i in line_indices
+        pf = PowerModels.var(pm, nw, :pf, i)  # Active power flow variable
+        JuMP.@constraint(pm.model, pf <= max_power_kw)   # Upper bound
+        JuMP.@constraint(pm.model, pf >= -max_power_kw)  # Lower bound
+    end
+end
+
 
 function constraint_store_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i::Int, charge_eff, discharge_eff, time_elapsed, kind, p_loss)
     if kind == "storage"
         ps_2 = PowerModels.var(pm, n_2, :ps, i)
         se_2 = PowerModels.var(pm, n_2, :se, i)
         se_1 = PowerModels.var(pm, n_1, :se, i)
+        e_cap = PowerModels.var(pm, n_2, :e_cap, i)  # Variable Kapazität
 
-        JuMP.@constraint(pm.model, se_2 - se_1 == - time_elapsed*ps_2)  # Eq. (3.10)
+        # Energiebilanz zwischen Zeitschritten
+        @constraint(pm.model, se_2 - se_1 == -time_elapsed * ps_2)
+
+        # WICHTIG: SOC darf variable Kapazität nie überschreiten
+        @constraint(pm.model, se_2 <= e_cap)
+        @constraint(pm.model, se_2 >= 0.0)
     elseif kind == "heat_storage"
         phs_2 = PowerModels.var(pm, n_2, :phs, i)
         hse_2 = PowerModels.var(pm, n_2, :hse, i)
@@ -102,27 +147,31 @@ end
 
 """ Creates constraints for high voltage grid requirements"""
 
-function constraint_HV_requirements(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
-    hv_req = PowerModels.ref(pm, nw, :HV_requirements, i)
-    phvs = PowerModels.var(pm, nw, :phvs, i)
+# function constraint_HV_requirements(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
+#     hv_req = PowerModels.ref(pm, nw, :HV_requirements, i)
+#     phvs = PowerModels.var(pm, nw, :phvs, i)
 
-    if hv_req["name"] == "dsm"
-        pflex = PowerModels.var(pm, nw, :pdsm)
-    elseif hv_req["name"] == "curt"
-        pflex = PowerModels.var(pm, nw, :pgc)
-    elseif hv_req["name"] == "storage"  # ToDo: virtual branch p variable instead of ps
-        # branch = PowerModels.ref(pm, nw, :branch)
-        # for (i, b) in branch
-        #     if b["storage"]
-        #         Hier die pf Variablen (negativ!) aufsummieren
-        #     end
-        # end
-        pflex = PowerModels.var(pm, nw, :ps)
-    elseif hv_req["name"] == "hp"
-        pflex = PowerModels.var(pm, nw, :php)
-    elseif hv_req["name"] == "cp"
-        pflex = PowerModels.var(pm, nw, :pcp)
-    end
-    JuMP.@constraint(pm.model, sum(pflex) + phvs == hv_req["P"])
+#     if hv_req["name"] == "dsm"
+#         pflex = PowerModels.var(pm, nw, :pdsm)
+#     elseif hv_req["name"] == "curt"
+#         pflex = PowerModels.var(pm, nw, :pgc)
+#     # elseif hv_req["name"] == "storage"  # ToDo: virtual branch p variable instead of ps
+#     #     # branch = PowerModels.ref(pm, nw, :branch)
+#     #     # for (i, b) in branch
+#     #     #     if b["storage"]
+#     #     #         Hier die pf Variablen (negativ!) aufsummieren
+#     #     #     end
+#     #     # end
+#     #     pflex = PowerModels.var(pm, nw, :ps)
+#     elseif hv_req["name"] == "hp"
+#         pflex = PowerModels.var(pm, nw, :php)
+#     elseif hv_req["name"] == "cp"
+#         pflex = PowerModels.var(pm, nw, :pcp)
+#     end
 
-end
+#     # weiche Gleichung mit beidseitigem Slack
+#     @variable(pm.model, hv_slack_pos[i] >= 0)   # i = Index des Anforderungsknotens
+#     @variable(pm.model, hv_slack_neg[i] >= 0)
+#     @constraint(pm.model, sum(pflex) + phvs + hv_slack_pos[i] - hv_slack_neg[i] == hv_req["P"])
+
+# end

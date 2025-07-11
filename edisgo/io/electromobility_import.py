@@ -20,6 +20,7 @@ from sqlalchemy.engine.base import Engine
 
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
 from edisgo.tools.config import Config
+from edisgo.tools.geo import find_nearest_bus
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -305,8 +306,10 @@ def read_simbev_config_df(
 
 
 def simbev_config_for_R4MU_data(edisgo_obj):
-    start_time = edisgo_obj.timeseries.timeindex[0]
-    end_time = edisgo_obj.timeseries.timeindex[-1]
+    ti = edisgo_obj.timeseries.timeindex
+    start_time = ti[0]
+    end_time = ti[-1]
+
     data = {
         "scenario": ["eGon2035"],
         "eta_cp": [1.0],
@@ -1270,25 +1273,76 @@ def integrate_charging_parks_from_R4MU_data(edisgo_obj: EDisGo):
         # if (cp.designated_charging_point_capacity > 0) and cp.within_grid
     ]
 
-    charging_park_ids = [_.id for _ in designated_charging_parks]
+    charging_park_ids = []
 
-    comp_type = "charging_point"
+    # comp_type = "charging_point"
 
     # integrate ChargingPoints and save the names of the eDisGo ID
-    edisgo_ids = [
-        edisgo_obj.integrate_component_based_on_geolocation(
-            comp_type=comp_type,
-            geolocation=cp.geometry,
-            sector=cp.use_case,
-            add_ts=False,
-            p_set=edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
-                cp.id
-            ].p_nom
-            / 1000,
-        )
-        for cp in designated_charging_parks
-        if edisgo_obj.electromobility.potential_charging_parks_gdf.loc[cp.id].p_nom > 0
-    ]
+    buses = []
+    edisgo_ids = []
+    for cp in designated_charging_parks:
+        if (
+            edisgo_obj.electromobility.potential_charging_parks_gdf.loc[cp.id].p_nom
+            > 0.0
+        ):
+            charging_park_ids.append(cp.id)
+            bus_name = f"bus_charging_point_{cp.use_case}_{cp.id}"
+            v_nom = 0.4
+            x = cp.geometry.x
+            y = cp.geometry.y
+            lv_grid_id = cp.nearest_substation["lv_grid_id"]
+            in_building = False
+            bus1, length = find_nearest_bus(cp.geometry, edisgo_obj.topology.buses_df)
+            bus0 = edisgo_obj.topology.add_bus(
+                v_nom=v_nom,
+                bus_name=bus_name,
+                x=x,
+                y=y,
+                lv_grid_id=lv_grid_id,
+                in_building=in_building,
+            )
+            buses.append(bus0)
+            edisgo_obj.add_component(
+                comp_type="line",
+                bus0=bus0,
+                bus1=bus1,
+                length=max(length, 0.001),
+                type_info="NAYY 4x1x300",
+            )
+            edisgo_id = edisgo_obj.topology.add_load(
+                bus=bus0,
+                p_set=edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
+                    cp.id
+                ].p_nom
+                / 1000,
+                type="charging_point",
+                sector=edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
+                    cp.id
+                ].use_case,
+                use_case=edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
+                    cp.id
+                ].use_case,
+                voltage_level="lv",
+            )
+            edisgo_ids.append(edisgo_id)
+
+    # edisgo_ids = [
+    #     edisgo_obj.integrate_component_based_on_geolocation(
+    #         comp_type=comp_type,
+    #         geolocation=cp.geometry,
+    #         sector=cp.use_case,
+    #         add_ts=False,
+    #         p_set=edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
+    #             cp.id
+    #         ].p_nom
+    #         / 1000,
+    #         use_case=edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
+    #                 cp.id
+    #             ].use_case,
+    #     )
+    #     for cp in designated_charging_parks
+    #     if edisgo_obj.electromobility.potential_charging_parks_gdf.loc[cp.id].p_nom > 0 # noqa: E501
+    # ]
 
     edisgo_obj.electromobility.integrated_charging_parks_df = pd.DataFrame(
         columns=COLUMNS["integrated_charging_parks_df"],

@@ -396,7 +396,7 @@ class Electromobility:
         start_date = self.simbev_config_df.start_date.values[0]
         # end date from SimBEV includes to the specified day, wherefore 1 day needs
         # to be added to have the day included in the time index
-        end_date = self.simbev_config_df.end_date.values[0] + pd.Timedelta(1, "day")
+        end_date = self.simbev_config_df.end_date.values[0]
         stepsize = self.stepsize
         flex_band_index = pd.date_range(
             start=start_date, end=end_date, freq=f"{stepsize}min", inclusive="left"
@@ -436,7 +436,7 @@ class Electromobility:
 
                 start = charging_process.park_start_timesteps
                 end = charging_process.park_end_timesteps
-                power = charging_process.nominal_charging_capacity_kW
+                power = charging_process.station_charging_capacity
 
                 # charging power
                 upper_power.loc[start:end, cp] += (

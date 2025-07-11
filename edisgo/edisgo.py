@@ -1713,10 +1713,12 @@ class EDisGo:
 
         # Connect in MV
         if voltage_level in [4, 5]:
+            kwargs["p"] = kwargs["p"] / 100  # TODO
             comp_name = self.topology.connect_to_mv(self, kwargs, comp_type)
 
         # Connect in LV
         else:
+            kwargs["p"] = kwargs["p"] / 100  # TODO
             # check if LV is geo-referenced or not
             lv_buses = self.topology.buses_df.drop(self.topology.mv_grid.buses_df.index)
             lv_buses_dropna = lv_buses.dropna(axis=0, subset=["x", "y"])
