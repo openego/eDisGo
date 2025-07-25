@@ -74,7 +74,7 @@ dev_requirements = [
     "pylint < 3.4.0",
     "pytest < 8.5.0",
     "pytest-notebook < 0.11.0",
-    "pyupgrade < 3.20.0",
+    "pyupgrade < 3.21.0",
     "sphinx < 8.3.0",
     "sphinx_rtd_theme >=0.5.2, < 3.1.0",
     "sphinx-autodoc-typehints < 3.2.0",
