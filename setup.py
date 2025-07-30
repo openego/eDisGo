@@ -69,13 +69,13 @@ requirements = [
 
 dev_requirements = [
     "black < 25.2.0",
-    "flake8 < 7.3.0",
+    "flake8 < 7.4.0",
     "isort < 6.1.0",
     "pre-commit < 4.3.0",
     "pylint < 3.4.0",
-    "pytest < 8.4.0",
+    "pytest < 8.5.0",
     "pytest-notebook < 0.11.0",
-    "pyupgrade < 3.20.0",
+    "pyupgrade < 3.21.0",
     "sphinx < 8.3.0",
     "sphinx_rtd_theme >=0.5.2, < 3.1.0",
     "sphinx-autodoc-typehints < 3.2.0",
