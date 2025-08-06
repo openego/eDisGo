@@ -906,8 +906,10 @@ def plot_plotly(
     node_result_selection: str = "max",
     selected_timesteps: pd.Timestamp | list | None = None,
     plot_map: bool = False,
+    map_style: str = "open-street-map",
     pseudo_coordinates: bool = False,
     node_selection: list | bool = False,
+    plot_storage: bool = False,
     height: int = 500,
 ) -> BaseFigure:
     """
@@ -978,6 +980,45 @@ def plot_plotly(
 
     node_selection : bool or list(str)
         Only plot selected nodes. Default: False.
+
+    plot_storage : bool
+        Enable the plotting of storage units as green circles. Storage units will be
+        plotted with size proportional to their nominal power capacity. Default: False.
+
+    map_style : str
+        Style of the background map when plot_map is True. Available options:
+
+        'open-street-map' (default) - OpenStreetMap style with full street details.
+
+        'white-bg' - Simple white background without map tiles.
+
+        'carto-voyager' - CartoDB Voyager style with detailed streets and labels.
+
+        'carto-positron' - Light-colored CartoDB map style with minimal details.
+
+        'carto-darkmatter' - Dark-colored CartoDB map style.
+
+        'stamen-terrain' - Terrain-focused map with topographical features (*).
+
+        'stamen-toner' - High-contrast black and white map (*).
+
+        'stamen-watercolor' - Artistic watercolor-style map (*).
+
+        'satellite' - Satellite imagery (*).
+
+        'satellite-streets' - Satellite imagery with street overlays (*).
+
+        'outdoors' - Outdoor-focused map style (*).
+
+        'light' - Light Mapbox style (*).
+
+        'dark' - Dark Mapbox style (*).
+
+        'streets' - Mapbox streets style (*).
+
+        ('*' indicates that these styles require a Mapbox access token).
+
+        Note: Mapbox styles require a valid Mapbox access token to be configured.
 
     height : int
         Height of the plotly plot in pixels.
@@ -1381,6 +1422,9 @@ def plot_plotly(
                 text += "<br>" + str(index) + " = " + str(value)
 
             node_text.append(text)
+        # Create node scatter plots
+        node_scatter_plots = []
+
         if plot_map:
             node_scatter = go.Scattermapbox(
                 lon=node_x,
@@ -1415,13 +1459,210 @@ def plot_plotly(
                 ),
             )
 
-        return [node_scatter]
+        node_scatter_plots.append(node_scatter)
 
-    fig = go.Figure(
-        data=plot_lines() + plot_buses() + plot_line_text(),
-        layout=go.Layout(
+        # Add separate colorbar for nodes in mapbox plots
+        if plot_map and node_color and showscale:
+            if plot_map:
+                node_colorbar_scatter = go.Scattermapbox(
+                    mode="markers",
+                    lon=[None],
+                    lat=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=colorbar["title"] if colorbar else "Node values",
+                            xanchor="left",
+                            titleside="right",
+                            x=1.12,  # Position it next to line colorbar
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        color=[0, 1],  # Dummy values for colorbar range
+                        cmax=max(node_colors) if isinstance(node_colors, list) else 1,
+                        cmin=min(node_colors) if isinstance(node_colors, list) else 0,
+                        cmid=cmid,
+                        showscale=True,
+                        opacity=0,  # Make invisible
+                    ),
+                    showlegend=False,
+                )
+                node_scatter_plots.append(node_colorbar_scatter)
+
+        return node_scatter_plots
+
+    def plot_storage_units():
+        """Plot storage units as green circles."""
+        storage_scatter_plots = []
+
+        # Check if there are any storage units
+        if edisgo_obj.topology.storage_units_df.empty:
+            return storage_scatter_plots
+
+        # Get storage units that are in the selected grid
+        storage_buses = edisgo_obj.topology.storage_units_df.bus.values
+        storage_in_grid = [bus for bus in storage_buses if bus in G.nodes()]
+
+        if not storage_in_grid:
+            return storage_scatter_plots
+
+        # Get coordinates and data for storage units
+        storage_x = []
+        storage_y = []
+        storage_text = []
+        storage_sizes = []
+
+        for bus in storage_in_grid:
+            x, y = G.nodes[bus]["pos"]
+            storage_x.append(x - x_root)
+            storage_y.append(y - y_root)
+
+            # Get storage data for this bus
+            storage_at_bus = edisgo_obj.topology.storage_units_df[
+                edisgo_obj.topology.storage_units_df.bus == bus
+            ]
+
+            # Create hover text
+            total_p_nom = storage_at_bus.p_nom.sum()
+            text = f"Storage at {bus}<br>"
+            text += f"Total P_nom: {total_p_nom:.2f} MW<br>"
+            text += f"Number of units: {len(storage_at_bus)}"
+
+            # Add individual storage unit details
+            for idx, storage in storage_at_bus.iterrows():
+                text += f"<br>Unit {idx}: {storage.p_nom:.2f} MW"
+                if hasattr(storage, "max_hours") and pd.notna(storage.max_hours):
+                    text += f" ({storage.max_hours:.1f}h)"
+
+            storage_text.append(text)
+
+            # Size proportional to total capacity (scale for visibility)
+            # Use a minimum size of 8 and scale by capacity
+            size = max(8, min(50, 8 + total_p_nom * 10))
+            storage_sizes.append(size)
+
+        # Create scatter plot for storage units with halo effect
+        if plot_map:
+            # Create main storage markers
+            storage_scatter = go.Scattermapbox(
+                lon=storage_x,
+                lat=storage_y,
+                mode="markers",
+                hoverinfo="text",
+                text=storage_text,
+                marker=dict(
+                    color="lightgreen",
+                    size=storage_sizes,
+                    opacity=0.9,
+                    symbol="circle",
+                ),
+                name="Storage Units",
+                showlegend=True,
+            )
+
+            # Create halo effect with larger, more transparent circles
+            storage_halo = go.Scattermapbox(
+                lon=storage_x,
+                lat=storage_y,
+                mode="markers",
+                hoverinfo="skip",
+                marker=dict(
+                    color="green",
+                    size=[s * 1.5 for s in storage_sizes],  # 50% larger
+                    opacity=0.3,
+                    symbol="circle",
+                ),
+                showlegend=False,
+            )
+            storage_scatter_plots.extend([storage_halo, storage_scatter])
+        else:
+            # For non-map plots, use diamond shape with border
+            storage_scatter = go.Scatter(
+                x=storage_x,
+                y=storage_y,
+                mode="markers",
+                hoverinfo="text",
+                text=storage_text,
+                marker=dict(
+                    color="lightgreen",
+                    size=storage_sizes,
+                    opacity=0.9,
+                    symbol="diamond",
+                    line=dict(width=3, color="darkgreen"),
+                ),
+                name="Storage Units",
+                showlegend=True,
+            )
+            storage_scatter_plots.append(storage_scatter)
+        return storage_scatter_plots
+
+    # Calculate optimal zoom level for map based on network extent
+    def calculate_zoom_level():
+        if not plot_map:
+            return 11  # Default zoom for non-map plots
+
+        # Get all node coordinates
+        lats = []
+        lons = []
+        for node in G.nodes():
+            x, y = G.nodes[node]["pos"]
+            lons.append(x)
+            lats.append(y)
+
+        if not lats or not lons:
+            return 11  # Default if no coordinates
+
+        # Calculate bounds
+        lat_min, lat_max = min(lats), max(lats)
+        lon_min, lon_max = min(lons), max(lons)
+
+        # Calculate the extent in degrees
+        lat_range = lat_max - lat_min
+        lon_range = lon_max - lon_min
+        max_range = max(lat_range, lon_range)
+
+        # Simple zoom level calculation based on coordinate range
+        # These values are empirically determined for good fit
+        if max_range > 0.5:
+            zoom = 9
+        elif max_range > 0.2:
+            zoom = 10
+        elif max_range > 0.1:
+            zoom = 11
+        elif max_range > 0.05:
+            zoom = 12
+        elif max_range > 0.02:
+            zoom = 13
+        elif max_range > 0.01:
+            zoom = 14
+        elif max_range > 0.005:
+            zoom = 15
+        else:
+            zoom = 16
+
+        return min(zoom, 18)  # Cap at maximum zoom level
+
+    zoom_level = calculate_zoom_level()
+
+    # Create layout based on whether map is enabled
+    if plot_map:
+        layout = go.Layout(
             height=height,
-            showlegend=False,
+            showlegend=plot_storage,  # Show legend when storage is plotted
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            mapbox=dict(
+                center=dict(
+                    lat=y_center,
+                    lon=x_center,
+                ),
+                zoom=zoom_level,
+                style=map_style,
+            ),
+        )
+    else:
+        layout = go.Layout(
+            height=height,
+            showlegend=plot_storage,  # Show legend when storage is plotted
             hovermode="closest",
             margin=dict(b=20, l=5, r=5, t=40),
             xaxis=dict(
@@ -1436,17 +1677,18 @@ def plot_plotly(
                 scaleanchor="x",
                 scaleratio=1,
             ),
-            mapbox=dict(
-                # bearing=0,
-                center=dict(
-                    lat=y_center,
-                    lon=x_center,
-                ),
-                # pitch=0,
-                zoom=11,
-                style="open-street-map",
-            ),
-        ),
+        )
+
+    # Prepare plot data
+    plot_data = plot_lines() + plot_buses() + plot_line_text()
+
+    # Add storage plots if requested
+    if plot_storage:
+        plot_data.extend(plot_storage_units())
+
+    fig = go.Figure(
+        data=plot_data,
+        layout=layout,
     )
     if warning_message:
         fig.add_annotation(
