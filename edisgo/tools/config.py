@@ -25,6 +25,8 @@ import json
 import logging
 import os
 import shutil
+from sqlalchemy import Table, MetaData
+from sqlalchemy.ext.declarative import declarative_base
 
 from glob import glob
 from zipfile import ZipFile
@@ -36,6 +38,7 @@ import sqlalchemy as sa
 from saio import register_schema
 
 import edisgo
+import pandas as pd
 
 from edisgo.io.db import engine as toep_engine
 from edisgo.io.db import session_scope_egon_data
@@ -239,12 +242,25 @@ class Config:
                 tables.append(importlib.import_module(module_name).__getattr__(table))
             return tables
         else:
-            tables = []
-            for table in table_names:
-                module_name = f"oedialect.{schema_name}"
-                table = importlib.import_module(module_name).__getattr__(table)
-                tables.append(table)
-            return tables
+            # --- Local egon_data DB case ---
+            Base = declarative_base()
+            metadata = MetaData(schema=schema_name)
+            metadata.reflect(bind=engine, only=table_names)
+
+            orm_classes = []
+            for table_name in table_names:
+                table = Table(table_name, metadata, autoload_with=engine, schema=schema_name)
+
+                # dynamisch eine ORM-Klasse erzeugen
+                orm_class = type(
+                    table_name, (Base,), {
+                        "__tablename__": table_name,
+                        "__table__": table
+                    }
+                )
+                orm_classes.append(orm_class)
+
+            return orm_classes
 
 
     def from_cfg(self, config_path=None):
