@@ -619,7 +619,7 @@ def make_busmap_feeders(
     References
     ----------
     In parts based on `PyPSA spatial complexity reduction <https://docs.pypsa.org
-    /v.035.1/examples/spatial-clustering.html>`_.
+    /v0.35.1/examples/spatial-clustering.html>`_.
 
     """
 
@@ -877,7 +877,7 @@ def make_busmap_main_feeders(
     References
     ----------
     In parts based on `PyPSA spatial complexity reduction <https://docs.pypsa.org
-    /v.035.1/examples/spatial-clustering.html>`_.
+    /v0.35.1/examples/spatial-clustering.html>`_.
 
     """
 
@@ -1415,7 +1415,7 @@ def apply_busmap(
     References
     ----------
     In parts based on `PyPSA spatial complexity reduction <https://docs.pypsa.org
-    /v.035.1/examples/spatial-clustering.html>`_.
+    /v0.35.1/examples/spatial-clustering.html>`_.
 
     """
 
