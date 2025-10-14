@@ -1006,7 +1006,7 @@ class EDisGo:
         Conducts a static, non-linear power flow analysis.
 
         Conducts a static, non-linear power flow analysis using
-        `PyPSA <https://pypsa.readthedocs.io/v0.35.1/user-guide/power-flow.html#\
+        `PyPSA <https://docs.pypsa.org/v0.35.1/user-guide/power-flow.html#\
         non-linear-power-flow>`_
         and writes results (active, reactive and apparent power as well as
         current on lines and voltages at buses) to :class:`~.network.results.Results`
@@ -1111,7 +1111,7 @@ class EDisGo:
 
         References
         --------
-        [1] https://pypsa.readthedocs.io/v0.35.1/troubleshooting.html
+        [1] https://docs.pypsa.org/v0.35.1/troubleshooting.html
 
         """
 
