@@ -6,7 +6,7 @@ Release date: July 26, 2021
 This release comes with some major refactoring. The internal data structure
 of the network topologies was changed from a networkx graph structure to
 a pandas dataframe structure based on the
-`PyPSA <https://pypsa.readthedocs.io/en/latest/>`_ data structure. This comes
+`PyPSA <https://pypsa.readthedocs.io/v0.35.1/>`_ data structure. This comes
 along with major API changes.
 Not all functionality of the previous eDisGo release 0.0.10 is yet refactored
 (e.g. the heuristics for grid supportive storage integration and generator
