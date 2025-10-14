@@ -362,7 +362,7 @@ def set_seed(edisgo_obj, pypsa_network):
     """
     Set initial guess for the Newton-Raphson algorithm.
 
-    In `PyPSA <https://pypsa.readthedocs.io/v0.35.1/>`_ an
+    In `PyPSA <https://docs.pypsa.org/v0.35.1/>`_ an
     initial guess for the Newton-Raphson algorithm used in the power flow
     analysis can be provided to speed up calculations.
     For PQ buses, which besides the slack bus, is the only bus type in

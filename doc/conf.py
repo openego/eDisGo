@@ -127,7 +127,7 @@ extlinks = {
     ),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "ding0.%s"),
     "pypsa": (
-        "https://pypsa.readthedocs.io/v0.35.1/user-guide/components.html#%s",
+        "https://docs.pypsa.org/v0.35.1/user-guide/components.html#%s",
         "pypsa.%s",
     ),
     "plotly": (
