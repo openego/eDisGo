@@ -39,7 +39,6 @@ from sqlalchemy.ext.declarative import declarative_base
 import edisgo
 
 from edisgo.io.db import engine as Engine
-from edisgo.io.db import engine as egon_engine
 from edisgo.io.db import session_scope_egon_data
 
 logger = logging.getLogger(__name__)
@@ -176,18 +175,6 @@ class Config:
         self.db_table_mapping = name_mapping
         self.db_schema_mapping = schema_mapping
 
-    def _set_db_mappings(self) -> None:
-        """
-        Sets the database table and schema mappings by retrieving alias dictionaries.
-        """
-        if self._engine is not None and "toep.iks.cs.ovgu.de" in self._engine.url.host:
-            name_mapping, schema_mapping = self.get_database_alias_dictionaries()
-        else:
-            name_mapping = schema_mapping = {}
-
-        self.db_table_mapping = name_mapping
-        self.db_schema_mapping = schema_mapping
-
     def get_database_alias_dictionaries(self) -> tuple[dict[str, str], dict[str, str]]:
         """
         Retrieves the OEP database alias dictionaries for table and schema mappings.
@@ -202,7 +189,7 @@ class Config:
                 names.
         """
         engine = Engine()
-        dictionary_schema_name = "data"
+        dictionary_schema_name = "dataset"
         dictionary_table = self._get_module_attr(
             self._get_saio_module(dictionary_schema_name, engine),
             "edut_00",
@@ -215,7 +202,7 @@ class Config:
                 entry.source_name: entry.target_name for entry in dictionary_entries
             }
             schema_mapping = {
-                entry.source_schema: getattr(entry, "target_schema", "data")
+                entry.source_schema: getattr(entry, "target_schema", "dataset")
                 for entry in dictionary_entries
             }
 
@@ -283,8 +270,6 @@ class Config:
         list of sqlalchemy.Table
             A list of SQLAlchemy Table objects corresponding to the imported tables.
         """
-        if engine is None:
-            engine = egon_engine()
         if "toep" in str(engine.url):
             self._ensure_db_mappings_loaded()
             schema = self.db_schema_mapping.get(schema_name)

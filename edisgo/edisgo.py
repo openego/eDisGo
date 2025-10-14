@@ -560,7 +560,7 @@ class EDisGo:
         """
         timeindex = kwargs.get("timeindex", None)
         engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
-        if self.timeseries.timeindex.empty:
+        if timeindex is not None and not self.timeseries.timeindex.empty:
             logger.warning(
                 "The given timeindex is different from the EDisGo.TimeSeries.timeindex."
                 " Therefore the EDisGo.TimeSeries.timeindex will be overwritten by the "
@@ -579,6 +579,9 @@ class EDisGo:
             )
 
             set_timeindex = True
+
+        else:
+            set_timeindex = False
 
         if set_timeindex:
             if timeindex is None:
