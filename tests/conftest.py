@@ -38,8 +38,8 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "local: mark test as local to run")
 
-    # if config.getoption("--runlocal"):
-    #     pytest.engine_local = engine(path=pytest.egon_data_config_yml, ssh=False)
+    if config.getoption("--runlocal"):
+        pytest.engine_local = engine(path=pytest.egon_data_config_yml, ssh=False)
 
 
 def pytest_addoption(parser):
