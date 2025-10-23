@@ -187,7 +187,7 @@ class Config:
                 names.
         """
         engine = Engine()
-        dictionary_schema_name = "dataset"
+        dictionary_schema_name = "data"
         dictionary_table = self._get_module_attr(
             self._get_saio_module(dictionary_schema_name, engine),
             "edut_00",
