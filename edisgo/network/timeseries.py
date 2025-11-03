@@ -14,6 +14,7 @@ from edisgo.flex_opt import q_control
 from edisgo.io import timeseries_import
 from edisgo.tools.tools import assign_voltage_level_to_component, resample
 
+from edisgo.io.db import engine as egon_engine
 if TYPE_CHECKING:
     from edisgo import EDisGo
 
@@ -1250,6 +1251,10 @@ class TimeSeries:
             are used.
 
         """
+        if not engine:
+            engine = egon_engine()
+        
+
         # in case time series from oedb are used, retrieve oedb time series
         if isinstance(ts_generators, str) and ts_generators == "oedb":
             if edisgo_object.legacy_grids is True:
@@ -1519,6 +1524,76 @@ class TimeSeries:
             axis=1,
         ).T
         self.add_component_time_series("loads_active_power", ts_scaled)
+
+    def active_power_p_max_pu(
+        self, edisgo_object, ts_generators_p_max_pu, generator_names=None
+    ):
+        """
+        Set active power feed-in time series for generators using p_max_pu time series.
+
+        This function reads generator-specific p_max_pu time series (normalized to
+        nominal capacity) and scales them by the nominal power (p_nom) of each
+        generator to obtain absolute active power time series.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        ts_generators_p_max_pu : :pandas:`pandas.DataFrame<DataFrame>`
+            DataFrame with generator-specific p_max_pu time series normalized to
+            a nominal capacity of 1. Each column represents a specific generator
+            and should match the generator names in the network.
+            Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+            Column names should correspond to generator names in
+            :attr:`~.network.topology.Topology.generators_df`.
+        generator_names : list(str), optional
+            Defines for which generators to set p_max_pu time series. If None,
+            all generators for which p_max_pu time series are provided in
+            `ts_generators_p_max_pu` are used. Default: None.
+
+        Notes
+        -----
+        This function is useful when you have generator-specific capacity factors
+        or availability profiles that differ from technology-wide profiles.
+
+        """
+        if not isinstance(ts_generators_p_max_pu, pd.DataFrame):
+            raise ValueError(
+                "Parameter 'ts_generators_p_max_pu' must be a pandas DataFrame."
+            )
+        elif ts_generators_p_max_pu.empty:
+            logger.warning("Provided time series dataframe is empty.")
+            return
+
+        # set generator_names if None
+        if generator_names is None:
+            generator_names = ts_generators_p_max_pu.columns.tolist()
+        
+        generator_names = self._check_if_components_exist(
+            edisgo_object, generator_names, "generators"
+        )
+        
+        # Filter to only include generators that have time series provided
+        generators_with_ts = [
+            gen for gen in generator_names if gen in ts_generators_p_max_pu.columns
+        ]
+        
+        if not generators_with_ts:
+            logger.warning(
+                "None of the specified generators have time series in "
+                "ts_generators_p_max_pu."
+            )
+            return
+        
+        generators_df = edisgo_object.topology.generators_df.loc[generators_with_ts, :]
+
+        # scale time series by nominal power
+        ts_scaled = generators_df.apply(
+            lambda x: ts_generators_p_max_pu[x.name] * x.p_nom,
+            axis=1,
+        ).T
+        
+        if not ts_scaled.empty:
+            self.add_component_time_series("generators_active_power", ts_scaled)
 
     def fixed_cosphi(
         self,
