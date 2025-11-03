@@ -200,7 +200,7 @@ class Config:
                 entry.source_name: entry.target_name for entry in dictionary_entries
             }
             schema_mapping = {
-                entry.source_schema: getattr(entry, "target_schema", "dataset")
+                entry.source_schema: getattr(entry, "target_schema", "data")
                 for entry in dictionary_entries
             }
 
