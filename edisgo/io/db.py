@@ -178,7 +178,7 @@ def engine(
 
     """
 
-    if not ssh:
+    if path is None:
         # Github Actions KHs token
         if "TOEP_TOKEN_KH" in os.environ:
             token = os.environ["TOEP_TOKEN_KH"]
@@ -227,7 +227,8 @@ def engine(
         )
 
     cred = credentials(path=path)
-    local_port = ssh_tunnel(cred)
+
+    local_port = ssh_tunnel(cred) if ssh else int(cred["--database-port"])
 
     return create_engine(
         f"postgresql+psycopg2://{cred['POSTGRES_USER']}:"

@@ -519,7 +519,8 @@ def reinforce_grid(
             )
             raise exceptions.MaximumIterationError(
                 "Over-voltage issues for the following nodes in LV grids "
-                f"could not be solved: {crit_nodes}"
+                f"could not be solved within {max_while_iterations} iterations: "
+                f"{crit_nodes}"
             )
         else:
             logger.info(

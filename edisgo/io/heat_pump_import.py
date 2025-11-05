@@ -327,7 +327,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         "boundaries",
     )
     egon_etrago_bus, egon_etrago_link = config.import_tables_from_oep(
-        engine, ["egon_etrago_bus", "egon_etrago_link"], "supply"
+        engine, ["egon_etrago_bus", "egon_etrago_link"], "grid"
     )
 
     building_ids = edisgo_object.topology.loads_df.building_id.unique()
