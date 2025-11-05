@@ -39,6 +39,7 @@ from sqlalchemy.ext.declarative import declarative_base
 import edisgo
 
 from edisgo.io.db import engine as Engine
+from edisgo.io.db import engine as egon_engine
 from edisgo.io.db import session_scope_egon_data
 
 logger = logging.getLogger(__name__)
@@ -172,6 +173,9 @@ class Config:
             return
 
         name_mapping, schema_mapping = self.get_database_alias_dictionaries()
+        self.db_table_mapping = name_mapping
+        self.db_schema_mapping = schema_mapping
+
     def _set_db_mappings(self) -> None:
         """
         Sets the database table and schema mappings by retrieving alias dictionaries.
@@ -279,6 +283,8 @@ class Config:
         list of sqlalchemy.Table
             A list of SQLAlchemy Table objects corresponding to the imported tables.
         """
+        if engine is None:
+            engine = egon_engine()
         if "toep" in str(engine.url):
             self._ensure_db_mappings_loaded()
             schema = self.db_schema_mapping.get(schema_name)

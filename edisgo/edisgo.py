@@ -165,7 +165,7 @@ class EDisGo:
 
     def __init__(self, **kwargs):
         # Set database engine for future scenarios
-        self.engine: Engine | None = kwargs.pop("engine", toep_engine())
+        self.engine: Engine | None = kwargs.pop("engine", egon_engine())
         # load configuration
         self._config = Config(engine=self.engine, **kwargs)
 
@@ -558,6 +558,7 @@ class EDisGo:
             is indexed using a default year and set for the whole year.
 
         """
+        timeindex = kwargs.get("timeindex", None)
         engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
         if self.timeseries.timeindex.empty:
             logger.warning(

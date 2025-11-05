@@ -15,6 +15,7 @@ from numpy.random import default_rng
 from sklearn import preprocessing
 from sqlalchemy.engine.base import Engine
 
+from edisgo.io.db import engine as egon_engine
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
 from edisgo.tools.config import Config
 
@@ -1077,11 +1078,11 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
                 idx, "charging_point_id"
             ] = charging_point_id
 
-            available_charging_points_df.loc[
-                charging_point_id
-            ] = edisgo_obj.electromobility.charging_processes_df.loc[
-                idx, available_charging_points_df.columns
-            ].tolist()
+            available_charging_points_df.loc[charging_point_id] = (
+                edisgo_obj.electromobility.charging_processes_df.loc[
+                    idx, available_charging_points_df.columns
+                ].tolist()
+            )
 
             designated_charging_point_capacity_df.at[
                 charging_park_id, "designated_charging_point_capacity"
@@ -1312,6 +1313,9 @@ def charging_processes_from_oedb(
         more information.
 
     """
+    if not engine:
+        engine = egon_engine()
+
     config = Config()
     egon_ev_mv_grid_district, egon_ev_trip = config.import_tables_from_oep(
         engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
