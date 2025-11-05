@@ -31,7 +31,7 @@ from edisgo.io import (
     pypsa_io,
     timeseries_import,
 )
-from edisgo.io.db import engine as toep_engine
+from edisgo.io.db import engine as egon_engine
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
@@ -558,11 +558,8 @@ class EDisGo:
             is indexed using a default year and set for the whole year.
 
         """
-
-        timeindex = kwargs.get("timeindex", None)
-        set_timeindex = False
-
-        if (timeindex is not None) and not timeindex.equals(self.timeseries.timeindex):
+        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
+        if self.timeseries.timeindex.empty:
             logger.warning(
                 "The given timeindex is different from the EDisGo.TimeSeries.timeindex."
                 " Therefore the EDisGo.TimeSeries.timeindex will be overwritten by the "
@@ -601,8 +598,8 @@ class EDisGo:
                 self,
                 fluctuating_generators_ts,
                 fluctuating_generators_names,
-                engine=self.engine,
-                timeindex=timeindex,
+                engine=engine,
+                timeindex=kwargs.get("timeindex", None),
             )
         if dispatchable_generators_ts is not None:
             self.timeseries.predefined_dispatchable_generators_by_technology(
@@ -616,8 +613,8 @@ class EDisGo:
                 loads_ts_df = timeseries_import.electricity_demand_oedb(
                     edisgo_obj=self,
                     scenario=kwargs.get("scenario"),
-                    engine=self.engine,
-                    timeindex=timeindex,
+                    engine=engine,
+                    timeindex=kwargs.get("timeindex", None),
                     load_names=conventional_loads_names,
                 )
                 # concat new time series with existing ones and drop any duplicate
@@ -1008,6 +1005,7 @@ class EDisGo:
             keyword arguments.
 
         """
+        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
         if self.legacy_grids is True:
             generators_import.oedb_legacy(
                 edisgo_object=self, generator_scenario=generator_scenario, **kwargs
@@ -1015,7 +1013,7 @@ class EDisGo:
         else:
             generators_import.oedb(
                 edisgo_object=self,
-                engine=self.engine,
+                engine=engine,
                 scenario=generator_scenario,
             )
 
@@ -1034,7 +1032,7 @@ class EDisGo:
         Conducts a static, non-linear power flow analysis.
 
         Conducts a static, non-linear power flow analysis using
-        `PyPSA <https://pypsa.readthedocs.io/en/latest/user-guide/power-flow.html#\
+        `PyPSA <https://docs.pypsa.org/v0.35.1/user-guide/power-flow.html#\
         non-linear-power-flow>`_
         and writes results (active, reactive and apparent power as well as
         current on lines and voltages at buses) to :class:`~.network.results.Results`
@@ -1139,7 +1137,7 @@ class EDisGo:
 
         References
         --------
-        [1] https://pypsa.readthedocs.io/en/latest/troubleshooting.html
+        [1] https://docs.pypsa.org/v0.35.1/troubleshooting.html
 
         """
 

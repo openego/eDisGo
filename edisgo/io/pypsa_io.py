@@ -362,7 +362,7 @@ def set_seed(edisgo_obj, pypsa_network):
     """
     Set initial guess for the Newton-Raphson algorithm.
 
-    In `PyPSA <https://pypsa.readthedocs.io/en/latest/>`_ an
+    In `PyPSA <https://docs.pypsa.org/v0.35.1/>`_ an
     initial guess for the Newton-Raphson algorithm used in the power flow
     analysis can be provided to speed up calculations.
     For PQ buses, which besides the slack bus, is the only bus type in
@@ -613,9 +613,9 @@ def _append_lv_components(
                         ),
                     ]
                 )
-                aggregated_elements[
-                    lv_grid_name + "_fluctuating"
-                ] = comps_fluct.index.values
+                aggregated_elements[lv_grid_name + "_fluctuating"] = (
+                    comps_fluct.index.values
+                )
 
             if len(comps_disp) > 0:
                 comps_aggr = pd.concat(
@@ -632,9 +632,9 @@ def _append_lv_components(
                         ),
                     ]
                 )
-                aggregated_elements[
-                    lv_grid_name + "_dispatchable"
-                ] = comps_disp.index.values
+                aggregated_elements[lv_grid_name + "_dispatchable"] = (
+                    comps_disp.index.values
+                )
         elif aggregate_generators == "all":
             comps_aggr = pd.DataFrame(
                 {
@@ -642,11 +642,11 @@ def _append_lv_components(
                     "control": ["PQ"],
                     "p_nom": [sum(comps.p_nom)],
                     "fluctuating": [
-                        True
-                        if (comps.type.isin(flucts)).all()
-                        else False
-                        if ~comps.type.isin(flucts).any()
-                        else "Mixed"
+                        (
+                            True
+                            if (comps.type.isin(flucts)).all()
+                            else False if ~comps.type.isin(flucts).any() else "Mixed"
+                        )
                     ],
                 },
                 index=[lv_grid_name + "_generators"],
