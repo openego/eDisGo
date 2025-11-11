@@ -601,8 +601,8 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
             "vm": 1,
             "storage": True,
             "name": psa_net.buses.index[idx_bus - 1] + "_bss",
-            "base_kv": psa_net.buses.v_nom[idx_bus - 1],
-            "grid_level": grid_level[psa_net.buses.v_nom[idx_bus - 1]],
+            "base_kv": psa_net.buses.v_nom.iloc[idx_bus - 1],
+            "grid_level": grid_level[psa_net.buses.v_nom.iloc[idx_bus - 1]],
         }
 
 
@@ -841,7 +841,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
 
         pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
-            "br_r": (0.017 * s_base / (psa_net.buses.v_nom[idx_bus - 1] ** 2)).round(
+            "br_r": (0.017 * s_base / (psa_net.buses.v_nom.iloc[idx_bus - 1] ** 2)).round(
                 10
             ),
             "r": 0.017,

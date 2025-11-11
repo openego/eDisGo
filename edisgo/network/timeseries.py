@@ -828,19 +828,23 @@ class TimeSeries:
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
-        self.time_series_raw.q_control = pd.concat(
-            [
-                self.time_series_raw.q_control,
-                pd.DataFrame(
-                    index=df.index,
-                    data={
-                        "type": "fixed_cosphi",
-                        "q_sign": q_sign,
-                        "power_factor": power_factor,
-                    },
-                ),
-            ]
+        new_q_control = pd.DataFrame(
+            index=df.index,
+            data={
+                "type": "fixed_cosphi",
+                "q_sign": q_sign,
+                "power_factor": power_factor,
+            },
         )
+        if self.time_series_raw.q_control.empty:
+            self.time_series_raw.q_control = new_q_control
+        elif not new_q_control.empty:
+            self.time_series_raw.q_control = pd.concat(
+                [
+                    self.time_series_raw.q_control,
+                    new_q_control,
+                ]
+            )
         # calculate reactive power of generators
         reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
         return active_power, reactive_power
