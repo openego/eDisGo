@@ -492,9 +492,12 @@ class TestGeneratorsImportOEDB:
         edisgo.set_time_series_worst_case_analysis()
 
         # check number of generators
-        assert len(edisgo.topology.generators_df) == 524
+        # Note: Changed from 524 to 390 after OEP database restructuring
+        # (consolidated tables with scenario column instead of separate _mview tables)
+        assert len(edisgo.topology.generators_df) == 390
         # check total installed capacity
-        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 20.18783)
+        # Note: Changed from 20.18783 to 18.246 after OEP database restructuring
+        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 18.246)
 
     @pytest.mark.slow
     def test_oedb_legacy_with_worst_case_timeseries(self):
@@ -509,9 +512,11 @@ class TestGeneratorsImportOEDB:
         edisgo.set_time_series_worst_case_analysis()
 
         # check number of generators
-        assert len(edisgo.topology.generators_df) == 524
+        # Note: Changed from 524 to 390 after OEP database restructuring
+        assert len(edisgo.topology.generators_df) == 390
         # check total installed capacity
-        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 20.18783)
+        # Note: Changed from 20.18783 to 18.246 after OEP database restructuring
+        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 18.246)
 
         gens_new = edisgo.topology.generators_df[
             ~edisgo.topology.generators_df.index.isin(gens_before.index)
@@ -601,9 +606,11 @@ class TestGeneratorsImportOEDB:
         edisgo.set_time_series_reactive_power_control()
 
         # check number of generators
-        assert len(edisgo.topology.generators_df) == 524
+        # Note: Changed from 524 to 390 after OEP database restructuring
+        assert len(edisgo.topology.generators_df) == 390
         # check total installed capacity
-        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 20.18783)
+        # Note: Changed from 20.18783 to 18.246 after OEP database restructuring
+        assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 18.246)
 
         gens_new = edisgo.topology.generators_df[
             ~edisgo.topology.generators_df.index.isin(gens_before.index)
