@@ -979,12 +979,12 @@ class EDisGo:
             keyword arguments.
 
         """
-        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
         if self.legacy_grids is True:
             generators_import.oedb_legacy(
                 edisgo_object=self, generator_scenario=generator_scenario, **kwargs
             )
         else:
+            engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
             generators_import.oedb(
                 edisgo_object=self,
                 engine=engine,
