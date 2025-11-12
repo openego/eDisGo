@@ -37,6 +37,9 @@ def pytest_configure(config):
 
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "local: mark test as local to run")
+    config.addinivalue_line(
+        "markers", "old_oep: mark test as requiring old OEP database structure"
+    )
 
     if config.getoption("--runlocal"):
         pytest.engine_local = engine(path=pytest.egon_data_config_yml, ssh=False)
@@ -58,6 +61,12 @@ def pytest_addoption(parser):
         default=False,
         help="run tests that only work locally",
     )
+    parser.addoption(
+        "--runoldoep",
+        action="store_true",
+        default=False,
+        help="run tests that require old OEP database structure",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
@@ -76,3 +85,8 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "runonlinux" in item.keywords:
                 item.add_marker(skip_windows)
+    if not config.getoption("--runoldoep"):
+        skip_old_oep = pytest.mark.skip(reason="need --runoldoep option to run")
+        for item in items:
+            if "old_oep" in item.keywords:
+                item.add_marker(skip_old_oep)

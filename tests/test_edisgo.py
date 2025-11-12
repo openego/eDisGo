@@ -381,10 +381,18 @@ class TestEDisGo:
         )
 
     @pytest.mark.slow
+    @pytest.mark.old_oep
     def test_generator_import(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.import_generators("nep2035")
         assert len(edisgo.topology.generators_df) == 524
+
+    @pytest.mark.slow
+    def test_generator_import_new(self):
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        edisgo.import_generators("nep2035")
+        # Note: Changed from 524 to 390 after OEP database restructuring
+        assert len(edisgo.topology.generators_df) == 390
 
     def test_analyze(self, caplog):
         self.setup_worst_case_time_series()
@@ -934,9 +942,9 @@ class TestEDisGo:
 
         # ##### test without any aggregation
 
-        self.edisgo.topology._loads_df.at[
-            "Load_residential_LVGrid_1_4", "bus"
-        ] = "Bus_BranchTee_LVGrid_1_10"
+        self.edisgo.topology._loads_df.at["Load_residential_LVGrid_1_4", "bus"] = (
+            "Bus_BranchTee_LVGrid_1_10"
+        )
 
         # save original values
         number_gens_before = len(self.edisgo.topology.generators_df)
@@ -1054,9 +1062,9 @@ class TestEDisGo:
         )
         # manipulate grid so that more than one load of the same sector is
         # connected at the same bus
-        self.edisgo.topology._loads_df.at[
-            "Load_residential_LVGrid_1_4", "bus"
-        ] = "Bus_BranchTee_LVGrid_1_10"
+        self.edisgo.topology._loads_df.at["Load_residential_LVGrid_1_4", "bus"] = (
+            "Bus_BranchTee_LVGrid_1_10"
+        )
 
         # save original values (only loads, as generators did not change)
         loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
@@ -1136,9 +1144,9 @@ class TestEDisGo:
 
         # manipulate grid so that two generators of different types are
         # connected at the same bus
-        self.edisgo.topology._generators_df.at[
-            "GeneratorFluctuating_13", "type"
-        ] = "misc"
+        self.edisgo.topology._generators_df.at["GeneratorFluctuating_13", "type"] = (
+            "misc"
+        )
 
         # save original values (values of loads were changed in previous aggregation)
         loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
