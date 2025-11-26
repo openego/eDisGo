@@ -1453,15 +1453,15 @@ class TimeSeries:
         load_names = self._check_if_components_exist(edisgo_object, load_names, "loads")
         loads_df = edisgo_object.topology.loads_df.loc[load_names, :]
 
-        # check if loads contain annual demand
-        if not all(loads_df.annual_consumption.notnull()):
+        # check if loads contain nominal power
+        if not all(loads_df.p_set.notnull()):
             raise AttributeError(
-                "The annual consumption of some loads is missing. Please provide"
+                "The nominal power 'p_set' of some loads is missing. Please provide it."
             )
 
-        # scale time series by annual consumption
+        # scale time series by nominal power (consistent with generators)
         ts_scaled = loads_df.apply(
-            lambda x: ts_loads[x.sector] * x.annual_consumption,
+            lambda x: ts_loads[x.sector] * x.p_set,
             axis=1,
         ).T
         self.add_component_time_series("loads_active_power", ts_scaled)
