@@ -846,7 +846,8 @@ def distribute_private_charging_demand(edisgo_obj):
     designated_charging_point_capacity_df = pd.DataFrame(
         index=user_centric_weights_df.index,
         columns=["designated_charging_point_capacity"],
-        data=0,
+        data=0.0,
+        dtype=float,
     )
 
     for destination in private_charging_df.destination.sort_values().unique():
@@ -986,7 +987,8 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
     designated_charging_point_capacity_df = pd.DataFrame(
         index=grid_and_user_centric_weights_df.index,
         columns=["designated_charging_point_capacity"],
-        data=0,
+        data=0.0,
+        dtype=float,
     )
 
     columns = [

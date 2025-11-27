@@ -31,6 +31,10 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             eDisGo_OPF.variable_dsm_storage_power(pm, nw=n)  # Eq. (3.34), (3.35)
             eDisGo_OPF.variable_slack_gen(pm, nw=n)  # keine Bounds für Slack Generator
 
+            # §14a tracking variables to measure curtailment amount (for cost calculation)
+            eDisGo_OPF.variable_cp_14a_curtailment(pm, nw=n)
+            eDisGo_OPF.variable_hp_14a_curtailment(pm, nw=n)
+
             if PowerModels.ref(pm, 1, :opf_version) in(3, 4) # Nicht Teil der MA
                 eDisGo_OPF.variable_slack_HV_requirements(pm, nw=n)
                 if PowerModels.ref(pm, 1, :opf_version) in(3)
@@ -57,6 +61,9 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         for i in PowerModels.ids(pm, :heatpumps, nw=n)
             eDisGo_OPF.constraint_hp_operation(pm, i, n) # Eq. (3.19)
         end
+
+        # §14a EnWG curtailment constraint
+        eDisGo_OPF.constraint_curtailment_14a!(pm, n)
 
     end
 

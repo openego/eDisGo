@@ -28,7 +28,17 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     phps = Dict(n => PowerModels.var(pm, n, :phps) for n in nws)
     phps2 = Dict(n => PowerModels.var(pm, n, :phps2) for n in nws)
     phss = Dict(n => PowerModels.var(pm, n, :phss) for n in nws)
+    pcp_14a_curt = Dict(n => PowerModels.var(pm, n, :pcp_14a_curt) for n in nws)
+    php_14a_curt = Dict(n => PowerModels.var(pm, n, :php_14a_curt) for n in nws)
+
+    # Cost factors:
+    # - Normal flexibility (storage, redispatch): 0.6
+    # - §14a curtailment: 100 (expensive! use as last resort before grid violations)
+    # - Grid violations (voltage/current): 10,000 (most expensive)
+
     factor_slacks = 0.6
+    factor_14a = 100
+
     return JuMP.@objective(pm.model, Min,
         (1-factor_slacks) * sum(sum(ccm[n][b] * r[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from) ) for n in nws) # minimize line losses incl. storage losses
         + factor_slacks  * sum(sum(pgc[n][i] for i in keys(PowerModels.ref(pm,1 , :gen_nd))) for n in nws) # minimize non-dispatchable curtailment
@@ -36,6 +46,8 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
         + factor_slacks  * sum(sum(pds[n][i] for i in keys(PowerModels.ref(pm,1 , :load))) for n in nws) # minimize load shedding
         + factor_slacks  * sum(sum(pcps[n][i] for i in keys(PowerModels.ref(pm,1 , :electromobility))) for n in nws) # minimize cp load sheddin
         + factor_slacks * sum(sum(phps[n][i] for i in keys(PowerModels.ref(pm,1 , :heatpumps))) for n in nws) # minimize hp load shedding
+        + factor_14a * sum(sum(pcp_14a_curt[n][i] for i in keys(PowerModels.ref(pm, 1, :electromobility))) for n in nws) # minimize §14a CP curtailment (expensive!)
+        + factor_14a * sum(sum(php_14a_curt[n][i] for i in keys(PowerModels.ref(pm, 1, :heatpumps))) for n in nws) # minimize §14a HP curtailment (expensive!)
         + 1e4 * sum(sum(phss[n][i] + phps2[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws)
     )
 end
@@ -69,12 +81,18 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
     phps2 = Dict(n => PowerModels.var(pm, n, :phps2) for n in nws)
     phss = Dict(n => PowerModels.var(pm, n, :phss) for n in nws)
     phvs = Dict(n => PowerModels.var(pm, n, :phvs) for n in nws)
+    pcp_14a_curt = Dict(n => PowerModels.var(pm, n, :pcp_14a_curt) for n in nws)
+    php_14a_curt = Dict(n => PowerModels.var(pm, n, :php_14a_curt) for n in nws)
+
     parameters = [r[1][i] for i in keys(r[1])]
     parameters = parameters[parameters .>0]
     #factor_hv_slacks = length(nws) * exp10(floor(log10(maximum(parameters)))+2)
     factor_hv_slacks = exp10(floor(log10(maximum(parameters)))+1)
     #println(factor_hv_slacks)
     factor_slacks = 0.6
+    factor_14a = 100
+
+
     return JuMP.@objective(pm.model, Min,
         (1-factor_slacks) * sum(sum(ccm[n][b]*r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
         + factor_slacks  * sum(sum(pgc[n][i] for i in keys(PowerModels.ref(pm,1 , :gen_nd))) for n in nws) # minimize non-dispatchable curtailment
@@ -82,6 +100,8 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
         + factor_slacks  * sum(sum(pds[n][i] for i in keys(PowerModels.ref(pm,1 , :load))) for n in nws) # minimize load shedding
         + factor_slacks  * sum(sum(pcps[n][i] for i in keys(PowerModels.ref(pm,1 , :electromobility))) for n in nws) # minimize cp load shedding
         + factor_slacks * sum(sum(phps[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws) # minimize hp load shedding
+        + factor_14a * sum(sum(pcp_14a_curt[n][i] for i in keys(PowerModels.ref(pm, 1, :electromobility))) for n in nws) # minimize §14a CP curtailment (expensive!)
+        + factor_14a * sum(sum(php_14a_curt[n][i] for i in keys(PowerModels.ref(pm, 1, :heatpumps))) for n in nws) # minimize §14a HP curtailment (expensive!)
         + factor_hv_slacks * sum(sum(phvs[n][i]^2 * flex["count"] for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]!= "dsm") for n in nws)  #
         + factor_hv_slacks * 1e-1 * sum(sum(phvs[n][i]^2 * flex["count"] for (i, flex) in PowerModels.ref(pm, n, :HV_requirements) if flex["name"]== "dsm") for n in nws) #
         + 1e4 * sum(sum(phss[n][i] + phps2[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws)

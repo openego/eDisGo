@@ -26,6 +26,7 @@ def pm_optimize(
     method: str = "soc",
     warm_start: bool = False,
     silence_moi: bool = False,
+    curtailment_14a: Optional[dict] = None,
 ) -> None:
     """
     Run OPF for edisgo object in julia subprocess and write results of OPF to edisgo
@@ -93,6 +94,13 @@ def pm_optimize(
         hence there will be no logging coming from julia subprocess in python
         process.
         Default: False.
+    curtailment_14a : dict or None
+        Dictionary with §14a EnWG curtailment settings. If provided, curtailment
+        constraints will be added to the OPF for charging points and heat pumps.
+        Dictionary should contain:
+        - 'max_power_mw': Maximum power in MW (default: 0.0042 for 4.2 kW)
+        - 'components': List of component names to apply curtailment to
+        Default: None (no curtailment constraints).
     save_heat_storage : bool
         Indicates whether to save results of heat storage variables from the
         optimization to eDisGo object.
@@ -118,6 +126,7 @@ def pm_optimize(
         flexible_loads=flexible_loads,
         flexible_storage_units=flexible_storage_units,
         opf_version=opf_version,
+        curtailment_14a=curtailment_14a,
     )
 
     def _convert(o):
@@ -163,6 +172,14 @@ def pm_optimize(
                 hv_flex_dict=hv_flex_dict,
                 s_base=s_base,
             )
+            # Fix dtypes after writing OPF results to prevent scipy sparse matrix errors
+            for ts_df_name in ['loads_active_power', 'loads_reactive_power', 
+                                'generators_active_power', 'generators_reactive_power',
+                                'storage_units_active_power', 'storage_units_reactive_power']:
+                ts_df = getattr(edisgo_obj.timeseries, ts_df_name, None)
+                if ts_df is not None and not ts_df.empty:
+                    for col in ts_df.columns:
+                        ts_df[col] = ts_df[col].astype('float64')
         elif out.rstrip().startswith("Set parameter") or out.rstrip().startswith(
             "Academic"
         ):

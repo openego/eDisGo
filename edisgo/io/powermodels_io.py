@@ -31,6 +31,7 @@ def to_powermodels(
     flexible_loads=None,
     flexible_storage_units=None,
     opf_version=1,
+    curtailment_14a=None,
 ):
     """
     Convert eDisGo representation of the network topology and timeseries to
@@ -58,6 +59,12 @@ def to_powermodels(
         Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
         For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
         Default: 1.
+    curtailment_14a : dict or None
+        Dictionary with §14a EnWG curtailment settings. If provided, curtailment
+        constraints will be added to the OPF. Dictionary should contain:
+        - 'max_power_mw': Maximum power in MW (e.g., 0.0042 for 4.2 kW)
+        - 'components': List of component names to curtail (CPs and/or HPs)
+        Default: None (no curtailment).
 
     Returns
     -------
@@ -209,6 +216,17 @@ def to_powermodels(
             opf_version = 2
 
     pm["opf_version"] = opf_version
+
+    # Add §14a EnWG curtailment settings if provided
+    if curtailment_14a is not None:
+        logger.info("Adding §14a EnWG curtailment constraints to PowerModels dict.")
+        pm["curtailment_14a"] = {
+            "max_power_mw": curtailment_14a.get("max_power_mw", 0.0042),
+            "components": curtailment_14a.get("components", []),
+        }
+    else:
+        pm["curtailment_14a"] = None
+
     logger.info(
         "Transforming components timeseries into PowerModels dictionary format."
     )
@@ -250,10 +268,10 @@ def from_powermodels(
         Base value of apparent power for per unit system.
         Default: 1 MVA.
     """
-    if type(pm_results) == str:
+    if isinstance(pm_results, str):
         with open(pm_results) as f:
             pm = json.loads(json.load(f))
-    elif type(pm_results) == dict:
+    elif isinstance(pm_results, dict):
         pm = pm_results
     else:
         raise ValueError(
@@ -363,9 +381,11 @@ def from_powermodels(
         for flex in df2.columns:
             abs_error = abs(df2[flex].values - hv_flex_dict[flex])
             rel_error = [
-                abs_error[i] / hv_flex_dict[flex][i]
-                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex][i] != 0))
-                else 0
+                (
+                    abs_error[i] / hv_flex_dict[flex][i]
+                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex][i] != 0))
+                    else 0
+                )
                 for i in range(len(abs_error))
             ]
             df2[flex] = rel_error
@@ -478,6 +498,70 @@ def from_powermodels(
                     edisgo_object.opf_results.grid_slacks_t.hp_load_shedding = df
                 elif var == "phps2":
                     edisgo_object.opf_results.grid_slacks_t.hp_operation_slack = df
+    
+    # Extract and log §14a EnWG curtailment results
+    try:
+        cp_curtailment_14a = _result_df(
+            pm,
+            "electromobility",
+            "pcp_14a_curt",
+            timesteps,
+            edisgo_object.timeseries.timeindex,
+            s_base,
+        )
+        # Save §14a curtailment to opf_results
+        edisgo_object.opf_results.curtailment_14a_cp = cp_curtailment_14a
+        
+        # Log §14a curtailment statistics for charging points
+        if not cp_curtailment_14a.empty:
+            total_cp_curt = cp_curtailment_14a.sum().sum()
+            if total_cp_curt > 0:
+                logger.info(
+                    f"§14a Charging Point Curtailment: {total_cp_curt:.4f} MWh total across "
+                    f"{len(cp_curtailment_14a.columns)} components"
+                )
+                # Find components with curtailment
+                cp_with_curt = cp_curtailment_14a.sum()[cp_curtailment_14a.sum() > 0]
+                if not cp_with_curt.empty:
+                    logger.info(
+                        f"  Components curtailed: {', '.join(cp_with_curt.index.tolist())}"
+                    )
+                    for comp in cp_with_curt.index:
+                        logger.info(
+                            f"    {comp}: {cp_with_curt[comp]:.4f} MWh "
+                            f"(max: {cp_curtailment_14a[comp].max():.4f} MW)"
+                        )
+            else:
+                logger.info("§14a Charging Point Curtailment: NOT used (0 MWh)")
+    except (KeyError, IndexError) as e:
+        logger.debug(f"No §14a charging point curtailment data found: {e}")
+        edisgo_object.opf_results.curtailment_14a_cp = pd.DataFrame()
+    
+    try:
+        hp_curtailment_14a = _result_df(
+            pm,
+            "heatpumps",
+            "php_14a_curt",
+            timesteps,
+            edisgo_object.timeseries.timeindex,
+            s_base,
+        )
+        # Save §14a curtailment to opf_results
+        edisgo_object.opf_results.curtailment_14a_hp = hp_curtailment_14a
+        
+        # Log §14a curtailment statistics for heat pumps
+        if not hp_curtailment_14a.empty:
+            total_hp_curt = hp_curtailment_14a.sum().sum()
+            if total_hp_curt > 0:
+                logger.info(
+                    f"§14a Heat Pump Curtailment: {total_hp_curt:.4f} MWh total across "
+                    f"{len(hp_curtailment_14a.columns)} components"
+                )
+            else:
+                logger.info("§14a Heat Pump Curtailment: NOT used (0 MWh)")
+    except (KeyError, IndexError) as e:
+        logger.debug(f"No §14a heat pump curtailment data found: {e}")
+        edisgo_object.opf_results.curtailment_14a_hp = pd.DataFrame()
 
     # save line flows and currents to edisgo object
     for variable in ["pf", "qf", "ccm"]:
@@ -664,19 +748,19 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             idx_bus = _mapping(
                 psa_net,
                 edisgo_obj,
-                gen.bus[gen_i],
+                gen.bus.iloc[gen_i],
                 flexible_storage_units=flexible_storage_units,
             )
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "generator")
             q = [
-                sign * np.tan(np.arccos(pf)) * gen.p_nom[gen_i],
-                sign * np.tan(np.arccos(pf)) * gen.p_nom_min[gen_i],
+                sign * np.tan(np.arccos(pf)) * gen.p_nom.iloc[gen_i],
+                sign * np.tan(np.arccos(pf)) * gen.p_nom_min.iloc[gen_i],
             ]
             pm[text][str(gen_i + 1)] = {
-                "pg": psa_net.generators_t.p_set[gen.index[gen_i]][0] / s_base,
-                "qg": psa_net.generators_t.q_set[gen.index[gen_i]][0] / s_base,
-                "pmax": gen.p_nom[gen_i].round(20) / s_base,
-                "pmin": gen.p_nom_min[gen_i].round(20) / s_base,
+                "pg": psa_net.generators_t.p_set[gen.index[gen_i]].iloc[0] / s_base,
+                "qg": psa_net.generators_t.q_set[gen.index[gen_i]].iloc[0] / s_base,
+                "pmax": gen.p_nom.iloc[gen_i].round(20) / s_base,
+                "pmin": gen.p_nom_min.iloc[gen_i].round(20) / s_base,
                 "qmax": max(q).round(20) / s_base,
                 "qmin": min(q).round(20) / s_base,
                 "P": 0,
@@ -684,7 +768,7 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
                 "vg": 1,
                 "pf": pf,
                 "sign": sign,
-                "mbase": gen.p_nom[gen_i] / s_base,
+                "mbase": gen.p_nom.iloc[gen_i] / s_base,
                 "gen_bus": idx_bus,
                 "gen_status": 1,
                 "name": gen.index[gen_i],
@@ -707,13 +791,13 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_g = max(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0],
+                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]].iloc[0],
                     0.0,
                 ]
             )
             q_g = min(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0],
+                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]].iloc[0],
                     0.0,
                 ]
             )
@@ -793,38 +877,38 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
         idx_f_bus = _mapping(
             psa_net,
             edisgo_obj,
-            branches.bus0[branch_i],
+            branches.bus0.iloc[branch_i],
             flexible_storage_units=flexible_storage_units,
         )
         idx_t_bus = _mapping(
             psa_net,
             edisgo_obj,
-            branches.bus1[branch_i],
+            branches.bus1.iloc[branch_i],
             flexible_storage_units=flexible_storage_units,
         )
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
-            "br_r": branches.r_pu[branch_i] * s_base,
-            "r": branches.r[branch_i],
-            "br_x": branches.x_pu[branch_i] * s_base,
+            "br_r": branches.r_pu.iloc[branch_i] * s_base,
+            "r": branches.r.iloc[branch_i],
+            "br_x": branches.x_pu.iloc[branch_i] * s_base,
             "f_bus": idx_f_bus,
             "t_bus": idx_t_bus,
-            "g_to": branches.g_pu[branch_i] / 2 * s_base,
-            "g_fr": branches.g_pu[branch_i] / 2 * s_base,
-            "b_to": branches.b_pu[branch_i] / 2 * s_base,
-            "b_fr": branches.b_pu[branch_i] / 2 * s_base,
-            "shift": shift[branch_i],
+            "g_to": branches.g_pu.iloc[branch_i] / 2 * s_base,
+            "g_fr": branches.g_pu.iloc[branch_i] / 2 * s_base,
+            "b_to": branches.b_pu.iloc[branch_i] / 2 * s_base,
+            "b_fr": branches.b_pu.iloc[branch_i] / 2 * s_base,
+            "shift": shift.iloc[branch_i],
             "br_status": 1.0,
-            "rate_a": branches.s_nom[branch_i].real / s_base,
+            "rate_a": branches.s_nom.iloc[branch_i].real / s_base,
             "rate_b": 250 / s_base,
             "rate_c": 250 / s_base,
             "angmin": -np.pi / 6,
             "angmax": np.pi / 6,
-            "transformer": bool(transformer[branch_i]),
+            "transformer": bool(transformer.iloc[branch_i]),
             "storage": False,
-            "tap": tap[branch_i],
-            "length": branches.length.fillna(1)[branch_i].round(20),
-            "cost": branches.capital_cost[branch_i].round(20),
+            "tap": tap.iloc[branch_i],
+            "length": branches.length.fillna(1).iloc[branch_i].round(20),
+            "cost": branches.capital_cost.iloc[branch_i].round(20),
             "storage_pf": 0,
             "index": branch_i + 1,
         }
@@ -912,7 +996,7 @@ def _build_load(
         idx_bus = _mapping(
             psa_net,
             edisgo_obj,
-            loads_df.bus[load_i],
+            loads_df.bus.iloc[load_i],
             flexible_storage_units=flexible_storage_units,
         )
         if (
@@ -938,8 +1022,8 @@ def _build_load(
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
         q_d = psa_net.loads_t.q_set[loads_df.index[load_i]]
         pm["load"][str(load_i + 1)] = {
-            "pd": p_d[0].round(20) / s_base,
-            "qd": q_d[0].round(20) / s_base,
+            "pd": round(p_d.iloc[0], 20) / s_base,
+            "qd": round(q_d.iloc[0], 20) / s_base,
             "load_bus": idx_bus,
             "status": True,
             "pf": pf,
@@ -958,19 +1042,19 @@ def _build_load(
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_d = -min(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0],
+                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]].iloc[0],
                     np.float64(0.0),
                 ]
             )
             q_d = -max(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0],
+                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]].iloc[0],
                     np.float64(0.0),
                 ]
             )
             pm["load"][str(stor_i + len(loads_df.index) + 1)] = {
-                "pd": p_d.round(20) / s_base,
-                "qd": q_d.round(20) / s_base,
+                "pd": round(p_d, 20) / s_base,
+                "qd": round(q_d, 20) / s_base,
                 "load_bus": idx_bus,
                 "status": True,
                 "pf": pf,
@@ -1216,20 +1300,20 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
             )
         )
     for hp_i in np.arange(len(heat_df.index)):
-        idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus[hp_i])
+        idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus.iloc[hp_i])
         # retrieve power factor and sign from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "heat_pump")
-        q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
+        q = sign * np.tan(np.arccos(pf)) * heat_df.p_set.iloc[hp_i]
         p_d = heat_df2[heat_df.index[hp_i]]
         pm["heatpumps"][str(hp_i + 1)] = {
-            "pd": p_d[0].round(20) / s_base,  # heat demand
+            "pd": p_d.iloc[0].round(20) / s_base,  # heat demand
             "pf": pf,
             "sign": sign,
             "p_min": 0,
-            "p_max": heat_df.p_set[hp_i].round(20) / s_base,
+            "p_max": heat_df.p_set.iloc[hp_i].round(20) / s_base,
             "q_min": min(q, 0).round(20) / s_base,
             "q_max": max(q, 0).round(20) / s_base,
-            "cop": hp_cop[heat_df.index[hp_i]][0].round(20),
+            "cop": hp_cop[heat_df.index[hp_i]].iloc[0].round(20),
             "hp_bus": idx_bus,
             "name": heat_df.index[hp_i],
             "index": hp_i + 1,
@@ -1325,7 +1409,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
     heat_storage_df = heat_storage_df.loc[flexible_hps]
     for stor_i in np.arange(len(flexible_hps)):
         idx_bus = _mapping(
-            psa_net, edisgo_obj, psa_net.loads.loc[flexible_hps].bus[stor_i]
+            psa_net, edisgo_obj, psa_net.loads.loc[flexible_hps].bus.iloc[stor_i]
         )
         if (
             edisgo_obj.topology.loads_df.loc[heat_storage_df.index[stor_i]].sector
@@ -1338,9 +1422,9 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
             "ps": 0,
             "p_loss": p_loss,  # 4% of SOC per day
             "energy": 0,
-            "capacity": heat_storage_df.capacity[stor_i].round(20) / s_base,
-            "charge_efficiency": heat_storage_df.efficiency[stor_i].round(20),
-            "discharge_efficiency": heat_storage_df.efficiency[stor_i].round(20),
+            "capacity": heat_storage_df.capacity.iloc[stor_i].round(20) / s_base,
+            "charge_efficiency": heat_storage_df.efficiency.iloc[stor_i].round(20),
+            "discharge_efficiency": heat_storage_df.efficiency.iloc[stor_i].round(20),
             "storage_bus": idx_bus,
             "name": heat_storage_df.index[stor_i],
             "soc_initial": (

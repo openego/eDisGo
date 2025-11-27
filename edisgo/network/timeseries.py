@@ -1804,19 +1804,21 @@ class TimeSeries:
                 ],
                 inplace=True,
             )
-            self.time_series_raw.q_control = pd.concat(
-                [
-                    self.time_series_raw.q_control,
-                    pd.DataFrame(
-                        index=components_names,
-                        data={
-                            "type": "fixed_cosphi",
-                            "q_sign": q_sign,
-                            "power_factor": power_factor,
-                        },
-                    ),
-                ]
+            new_data = pd.DataFrame(
+                index=components_names,
+                data={
+                    "type": "fixed_cosphi",
+                    "q_sign": q_sign,
+                    "power_factor": power_factor,
+                },
             )
+            frames_to_concat = [
+                df for df in [self.time_series_raw.q_control, new_data] if not df.empty
+            ]
+            if frames_to_concat:
+                self.time_series_raw.q_control = pd.concat(frames_to_concat)
+            elif not new_data.empty:
+                self.time_series_raw.q_control = new_data
             return q_sign, power_factor
 
         # set reactive power for generators

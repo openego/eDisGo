@@ -17,6 +17,11 @@ from sqlalchemy.engine.base import Engine
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.check_tech_constraints import lines_relative_load
+from edisgo.flex_opt.curtailment_14a import (
+    apply_curtailment_14a,
+    check_curtailment_effect,
+    identify_components_for_curtailment,
+)
 from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
 )
@@ -828,6 +833,7 @@ class EDisGo:
         flexible_loads=None,
         flexible_storage_units=None,
         opf_version=1,
+        curtailment_14a=None,
     ):
         """
         Convert eDisGo representation of the network topology and timeseries to
@@ -854,6 +860,11 @@ class EDisGo:
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: 1.
+        curtailment_14a : dict or None
+            Configuration for §14a EnWG curtailment of heat pumps and charging points.
+            Dictionary should contain keys 'apply_curtailment' (bool), 'max_power_mw'
+            (float), and 'components' (list of component names).
+            Default: None.
 
         Returns
         -------
@@ -870,6 +881,7 @@ class EDisGo:
             flexible_loads=flexible_loads,
             flexible_storage_units=flexible_storage_units,
             opf_version=opf_version,
+            curtailment_14a=curtailment_14a,
         )
 
     def pm_optimize(
@@ -886,6 +898,7 @@ class EDisGo:
         save_heat_storage=True,
         save_slack_gen=True,
         save_slacks=True,
+        curtailment_14a=None,
     ):
         """
         Run OPF in julia subprocess and write results of OPF back to edisgo object.
@@ -933,6 +946,11 @@ class EDisGo:
             hence there will be no logging coming from julia subprocess in python
             process.
             Default: False.
+        curtailment_14a : dict or None
+            Configuration for §14a EnWG curtailment of heat pumps and charging points.
+            Dictionary should contain keys 'apply_curtailment' (bool), 'max_power_mw'
+            (float), and 'components' (list of component names).
+            Default: None.
         """
         return powermodels_opf.pm_optimize(
             self,
@@ -945,6 +963,7 @@ class EDisGo:
             method=method,
             warm_start=warm_start,
             silence_moi=silence_moi,
+            curtailment_14a=curtailment_14a,
         )
 
     def to_graph(self):
@@ -2329,6 +2348,165 @@ class EDisGo:
 
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
+
+    def apply_curtailment_14a_enwg(
+        self,
+        components: list[str] | None = None,
+        max_power_kw: float = 4.2,
+        components_type: str | None = None,
+    ) -> dict[str, float]:
+        """
+        Apply §14a EnWG curtailment to heat pumps and/or charging points.
+
+        §14a EnWG (Netzausbaugebiet) allows network operators to temporarily curtail
+        controllable consumption devices (especially heat pumps and charging points)
+        to a maximum power of 4.2 kW instead of performing grid expansion.
+        This can be used as a cost-effective alternative to grid reinforcement measures.
+
+        The curtailment is applied to the existing time series data in
+        :attr:`~.network.timeseries.TimeSeries.loads_active_power` and
+        :attr:`~.network.timeseries.TimeSeries.loads_reactive_power`.
+
+        Parameters
+        ----------
+        components : list of str or None
+            List of component names (heat pumps and/or charging points) to apply
+            curtailment to. If None, all heat pumps and charging points in the network
+            are curtailed. Default: None.
+        max_power_kw : float
+            Maximum allowed power in kW after curtailment. According to §14a EnWG,
+            this is typically 4.2 kW. Default: 4.2.
+        components_type : str or None
+            Type of components to curtail. Can be 'heat_pump', 'charging_point',
+            or None. If None, both heat pumps and charging points are considered.
+            Only used if `components` is None. Default: None.
+
+        Returns
+        -------
+        dict of str to float
+            Dictionary with component names as keys and the curtailed energy
+            (in MWh) as values. This shows how much energy was curtailed for
+            each component.
+
+        Notes
+        -----
+        The curtailment is applied by limiting the active power time series
+        to the specified maximum power. The reactive power is adjusted
+        proportionally based on the power factor.
+
+        The function returns information about curtailed energy which can be
+        used for cost-benefit analysis when comparing grid expansion costs
+        with curtailment compensation.
+
+        Examples
+        --------
+        >>> # Apply curtailment to all heat pumps and charging points
+        >>> curtailed = edisgo.apply_curtailment_14a_enwg()
+        >>>
+        >>> # Apply curtailment only to heat pumps
+        >>> curtailed = edisgo.apply_curtailment_14a_enwg(
+        ...     components_type='heat_pump'
+        ... )
+        >>>
+        >>> # Apply curtailment to specific components with different limit
+        >>> curtailed = edisgo.apply_curtailment_14a_enwg(
+        ...     components=['Heat_pump_LVGrid_1_1', 'ChargingPoint_MVGrid_1_home_1'],
+        ...     max_power_kw=3.0
+        ... )
+
+        """
+        return apply_curtailment_14a(
+            self,
+            components=components,
+            max_power_kw=max_power_kw,
+            components_type=components_type,
+        )
+
+    def check_curtailment_14a_effect(
+        self,
+        components: list[str],
+        max_power_kw: float = 4.2,
+    ) -> dict[str, float]:
+        """
+        Check the effect of §14a EnWG curtailment without applying it.
+
+        This function analyzes what the effect of curtailing specified components
+        according to §14a EnWG would be, without modifying the time series data.
+        This is useful for planning and cost-benefit analysis.
+
+        Parameters
+        ----------
+        components : list of str
+            List of component names (heat pumps and/or charging points) to check
+            curtailment effect for.
+        max_power_kw : float
+            Maximum allowed power in kW after curtailment. Default: 4.2.
+
+        Returns
+        -------
+        dict of str to float
+            Dictionary with the following keys:
+            - 'total_curtailed_energy_mwh': Total energy that would be curtailed
+            - 'max_simultaneous_curtailment_mw': Maximum simultaneous curtailed power
+            - 'avg_curtailed_power_mw': Average curtailed power across all time steps
+            - 'hours_with_curtailment': Number of hours with active curtailment
+
+        Examples
+        --------
+        >>> # Check effect before applying
+        >>> effect = edisgo.check_curtailment_14a_effect(
+        ...     components=['Heat_pump_LVGrid_1_1']
+        ... )
+        >>> print(f"Would curtail {effect['total_curtailed_energy_mwh']:.2f} MWh")
+
+        """
+        return check_curtailment_effect(
+            self,
+            components=components,
+            max_power_kw=max_power_kw,
+        )
+
+    def identify_components_for_curtailment_14a(
+        self,
+        critical_components: list[str] | None = None,
+        curtailment_priority: str = "p_set",
+    ) -> list[str]:
+        """
+        Identify which components should be curtailed according to §14a EnWG.
+
+        This function can be used as part of the grid reinforcement optimization
+        to identify which components should be curtailed instead of performing
+        grid expansion.
+
+        Parameters
+        ----------
+        critical_components : list of str or None
+            List of components that are causing grid issues (overloading or
+            voltage violations). If None, all curtailable components are considered.
+            Default: None.
+        curtailment_priority : str
+            Defines how to prioritize components for curtailment. Options:
+            'p_set' (largest nominal power first), 'random', 'grid_level'
+            (start with LV, then MV). Default: 'p_set'.
+
+        Returns
+        -------
+        list of str
+            Sorted list of component names to curtail, ordered by priority.
+
+        Examples
+        --------
+        >>> # Identify components to curtail, prioritizing largest ones
+        >>> components = edisgo.identify_components_for_curtailment_14a(
+        ...     curtailment_priority='p_set'
+        ... )
+
+        """
+        return identify_components_for_curtailment(
+            self,
+            critical_components=critical_components,
+            curtailment_priority=curtailment_priority,
+        )
 
     def import_dsm(self, scenario: str, timeindex=None):
         """

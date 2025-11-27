@@ -11,6 +11,7 @@ import pandas as pd
 from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import exceptions, reinforce_measures
 from edisgo.flex_opt.costs import grid_expansion_costs
+from edisgo.flex_opt.curtailment_14a import apply_curtailment_during_reinforcement
 from edisgo.flex_opt.reinforce_measures import separate_lv_grid
 from edisgo.tools import tools
 from edisgo.tools.temporal_complexity_reduction import get_most_critical_time_steps
@@ -87,6 +88,10 @@ def reinforce_grid(
         If True, MV is not reinforced, even if `mode` is "mv", "mvlv" or None.
         This is used in case worst-case grid reinforcement is conducted in order to
         reinforce MV/LV stations for LV worst-cases.
+        Default: False.
+    skip_curtailment_14a : bool
+        If True, §14a EnWG curtailment is not applied even if enabled in the config.
+        This can be used to compare scenarios with and without curtailment.
         Default: False.
     num_steps_loading : int
         In case `reduced_analysis` is set to True, this parameter can be used
@@ -202,6 +207,36 @@ def reinforce_grid(
         lv_grid_id=lv_grid_id,
         scale_timeseries=scale_timeseries,
     )
+
+    # CHECK IF §14a EnWG CURTAILMENT SHOULD BE APPLIED
+    # This allows curtailing heat pumps and charging points to 4.2 kW
+    # instead of performing grid expansion
+    # curtailment_applied = False
+    if edisgo.config["curtailment_14a_enwg"]["enable_curtailment"] and not kwargs.get(
+        "skip_curtailment_14a", False
+    ):
+        logger.info("==> Checking if §14a EnWG curtailment can be applied.")
+        try:
+            curtailed_energy = apply_curtailment_during_reinforcement(edisgo)
+            if curtailed_energy:
+                logger.info(
+                    f"==> §14a curtailment applied to {len(curtailed_energy)} "
+                    f"components. Total curtailed energy: "
+                    f"{sum(curtailed_energy.values()):.2f} MWh"
+                )
+                # Re-run power flow analysis with curtailed time series
+                edisgo.analyze(
+                    mode=analyze_mode,
+                    timesteps=timesteps_pfa,
+                    lv_grid_id=lv_grid_id,
+                    scale_timeseries=scale_timeseries,
+                )
+            else:
+                logger.info("==> No components available for §14a curtailment.")
+        except Exception as e:
+            logger.warning(
+                f"==> §14a curtailment failed: {e}. Proceeding with grid expansion."
+            )
 
     # REINFORCE OVERLOADED TRANSFORMERS AND LINES
     logger.debug("==> Check station load.")

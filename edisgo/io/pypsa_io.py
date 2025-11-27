@@ -355,6 +355,18 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
     if kwargs.get("use_seed", False) and pypsa_network.mode == "mv":
         set_seed(edisgo_object, pypsa_network)
 
+    # Ensure all time-varying data has float64 dtype to prevent scipy sparse errors
+    for component_type in ['loads_t', 'generators_t', 'storage_units_t']:
+        component_t = getattr(pypsa_network, component_type, None)
+        if component_t is not None:
+            for attr in ['p', 'q', 'p_set', 'q_set']:
+                if hasattr(component_t, attr):
+                    df = getattr(component_t, attr)
+                    if df is not None and isinstance(df, pd.DataFrame) and not df.empty:
+                        # Convert all columns to float64
+                        for col in df.columns:
+                            df[col] = df[col].astype('float64', errors='ignore')
+
     return pypsa_network
 
 

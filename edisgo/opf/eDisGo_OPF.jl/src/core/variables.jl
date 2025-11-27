@@ -485,6 +485,32 @@ function variable_ev_slack(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bou
     report && PowerModels.sol_component_value(pm, nw, :electromobility, :pcps, PowerModels.ids(pm, nw, :electromobility), pcps)
 end
 
+"Charging point §14a curtailment tracking variable"
+function variable_cp_14a_curtailment(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    # Upper bound is p_max (maximum possible curtailment when pcp = 0)
+    # This prevents unbounded maximization with negative cost factors
+    pcp_14a_curt = PowerModels.var(pm, nw)[:pcp_14a_curt] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :electromobility)], base_name="$(nw)_pcp_14a_curt",
+        lower_bound = 0.0,
+        upper_bound = PowerModels.ref(pm, nw, :electromobility, i)["p_max"]
+    )
+
+    report && PowerModels.sol_component_value(pm, nw, :electromobility, :pcp_14a_curt, PowerModels.ids(pm, nw, :electromobility), pcp_14a_curt)
+end
+
+"Heat pump §14a curtailment tracking variable"
+function variable_hp_14a_curtailment(pm::AbstractBFModelEdisgo; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    # Upper bound is p_max (maximum possible curtailment when php = 0)
+    # This prevents unbounded maximization with negative cost factors
+    php_14a_curt = PowerModels.var(pm, nw)[:php_14a_curt] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :heatpumps)], base_name="$(nw)_php_14a_curt",
+        lower_bound = 0.0,
+        upper_bound = PowerModels.ref(pm, nw, :heatpumps, i)["p_max"]
+    )
+
+    report && PowerModels.sol_component_value(pm, nw, :heatpumps, :php_14a_curt, PowerModels.ids(pm, nw, :heatpumps), php_14a_curt)
+end
+
 "slack generator variables"
 function variable_slack_gen(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_slack_gen_real(pm; kwargs...)
@@ -533,5 +559,10 @@ function variable_slack_HV_requirements_imaginary(pm::AbstractPowerModel; nw::In
     report && PowerModels.sol_component_value(pm, nw, :HV_requirements, :qhvs, PowerModels.ids(pm, nw, :HV_requirements), qhvs)
 
 end
+
+# Note: §14a EnWG slack variables have been removed!
+# §14a is now implemented as HARD constraint - no violations allowed.
+# If grid cannot handle minimum 4.2 kW, grid violations (voltage/current) occur instead.
+# This ensures the 4.2 kW minimum is ALWAYS respected when §14a is active.
 
 ""
