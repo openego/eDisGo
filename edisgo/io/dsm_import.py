@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 def oedb(
     edisgo_obj: EDisGo,
     scenario: str,
-    engine: Engine,
     timeindex=None,
 ):
     """
@@ -39,8 +38,6 @@ def oedb(
     scenario : str
         Scenario for which to retrieve DSM data. Possible options
         are 'eGon2035' and 'eGon100RE'.
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
         Specifies time steps for which to return data. Leap years can currently
         not be handled. In case the given timeindex contains a leap year, the data will
@@ -62,13 +59,13 @@ def oedb(
 
     """
     # get CTS and industrial DSM profiles
-    dsm_cts = get_profile_cts(edisgo_obj, scenario, engine)
+    dsm_cts = get_profile_cts(edisgo_obj, scenario)
     ind_loads = edisgo_obj.topology.loads_df[
         (edisgo_obj.topology.loads_df.type == "conventional_load")
         & (edisgo_obj.topology.loads_df.sector == "industrial")
     ]
     dsm_ind = get_profiles_per_industrial_load(
-        ind_loads.building_id.unique(), scenario, engine
+        ind_loads.building_id.unique(), scenario, edisgo_obj.engine
     )
 
     # rename industrial DSM profiles, join with CTS profiles and set time index
@@ -202,7 +199,6 @@ def get_profiles_per_industrial_load(
 def get_profile_cts(
     edisgo_obj: EDisGo,
     scenario: str,
-    engine: Engine,
 ):
     """
     Gets CTS DSM profiles for all CTS loads in the MV grid.
@@ -213,8 +209,6 @@ def get_profile_cts(
     scenario : str
         Scenario for which to retrieve DSM data. Possible options
         are 'eGon2035' and 'eGon100RE'.
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
 
     Returns
     --------
@@ -237,13 +231,13 @@ def get_profile_cts(
     """
     config = Config()
     (egon_etrago_electricity_cts_dsm_timeseries,) = config.import_tables_from_oep(
-        engine, ["egon_etrago_electricity_cts_dsm_timeseries"], "demand"
+        edisgo_obj.engine, ["egon_etrago_electricity_cts_dsm_timeseries"], "demand"
     )
 
     # get data
     dsm_dict = {}
 
-    with session_scope_egon_data(engine) as session:
+    with session_scope_egon_data(edisgo_obj.engine) as session:
         query = session.query(
             egon_etrago_electricity_cts_dsm_timeseries.bus.label("site_id"),
             egon_etrago_electricity_cts_dsm_timeseries.p_min,
@@ -254,7 +248,7 @@ def get_profile_cts(
             egon_etrago_electricity_cts_dsm_timeseries.scn_name == scenario,
             egon_etrago_electricity_cts_dsm_timeseries.bus == edisgo_obj.topology.id,
         )
-        df = pd.read_sql(sql=query.statement, con=engine)
+        df = pd.read_sql(sql=query.statement, con=edisgo_obj.engine)
     # add time step column
     df["time_step"] = len(df) * [np.arange(0, 8760)]
     # un-nest time series data and pivot so that time_step becomes index and

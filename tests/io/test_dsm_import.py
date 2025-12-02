@@ -8,10 +8,10 @@ class TestDSMImport:
     def test_oedb(self):
         # test without industrial load
         edisgo_object = EDisGo(
-            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False, engine=pytest.engine
         )
         dsm_profiles = dsm_import.oedb(
-            edisgo_object, scenario="eGon2035", engine=pytest.engine
+            edisgo_object, scenario="eGon2035"
         )
         for dsm_profile in ["e_max", "e_min", "p_max", "p_min"]:
             assert dsm_profiles[dsm_profile].shape == (8760, 87)
@@ -29,7 +29,7 @@ class TestDSMImport:
         edisgo_object.topology.loads_df.at[dsm_load, "building_id"] = 1
 
         dsm_profiles = dsm_import.oedb(
-            edisgo_object, scenario="eGon2035", engine=pytest.engine
+            edisgo_object, scenario="eGon2035"
         )
         for dsm_profile in ["e_max", "e_min", "p_max", "p_min"]:
             assert dsm_profiles[dsm_profile].shape == (8760, 87)
@@ -58,10 +58,10 @@ class TestDSMImport:
 
     def test_get_profile_cts(self):
         edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False, engine=pytest.engine
         )
         dsm_profiles = dsm_import.get_profile_cts(
-            edisgo_obj=edisgo, scenario="eGon2035", engine=pytest.engine
+            edisgo_obj=edisgo, scenario="eGon2035"
         )
         for dsm_profile in ["e_max", "e_min", "p_max", "p_min"]:
             assert dsm_profiles[dsm_profile].shape == (8760, 85)

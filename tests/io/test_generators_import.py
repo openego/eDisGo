@@ -21,7 +21,7 @@ class TestGeneratorsImport:
 
     @pytest.yield_fixture(autouse=True)
     def setup_class(self):
-        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path, engine=pytest.engine)
         self.edisgo.set_time_series_worst_case_analysis()
 
     def test_update_grids(self):
@@ -714,5 +714,5 @@ class TestGeneratorsImportOEDB:
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
-        edisgo.import_generators(generator_scenario="eGon2035", engine=pytest.engine)
+        edisgo.import_generators(generator_scenario="eGon2035")
         assert len(edisgo.topology.generators_df) == 677

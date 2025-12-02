@@ -25,7 +25,6 @@ logger = logging.getLogger(__name__)
 def home_batteries_oedb(
     edisgo_obj: EDisGo,
     scenario: str,
-    engine: Engine,
 ):
     """
     Gets home battery data from oedb and integrates them into the grid.
@@ -38,8 +37,6 @@ def home_batteries_oedb(
     scenario : str
         Scenario for which to retrieve home battery data. Possible options
         are "eGon2035" and "eGon100RE".
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
 
     Returns
     --------
@@ -51,10 +48,10 @@ def home_batteries_oedb(
     """
     config = Config()
     (egon_home_batteries,) = config.import_tables_from_oep(
-        engine, ["egon_home_batteries"], "supply"
+        edisgo_obj.engine, ["egon_home_batteries"], "supply"
     )
 
-    with session_scope_egon_data(engine) as session:
+    with session_scope_egon_data(edisgo_obj.engine) as session:
         query = (
             session.query(
                 egon_home_batteries.building_id,
@@ -71,7 +68,7 @@ def home_batteries_oedb(
             )
             .order_by(egon_home_batteries.index)
         )
-        batteries_df = pd.read_sql(sql=query.statement, con=engine, index_col=None)
+        batteries_df = pd.read_sql(sql=query.statement, con=edisgo_obj.engine, index_col=None)
 
     return _home_batteries_grid_integration(edisgo_obj, batteries_df)
 

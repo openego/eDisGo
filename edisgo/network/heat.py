@@ -166,8 +166,7 @@ class HeatPump:
                 information, a random existing weather cell is used to fill missing
                 information.
 
-                This option requires that the parameter `engine` is provided as keyword
-                argument. For further settings, the parameters `timeindex` and
+                For further settings, the parameters `timeindex` and
                 `heat_pump_names` can also be provided as keyword arguments.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
@@ -177,8 +176,6 @@ class HeatPump:
 
         Other Parameters
         ------------------
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine. This parameter is required in case `ts_cop` is 'oedb'.
         heat_pump_names : list(str) or None
             Defines for which heat pumps to set COP time series in case `ts_cop` is
             'oedb'. If None, all heat pumps in
@@ -246,7 +243,6 @@ class HeatPump:
                 # get COP per weather cell
                 ts_cop_per_weather_cell = timeseries_import.cop_oedb(
                     edisgo_object=edisgo_object,
-                    engine=kwargs.get("engine", None),
                     weather_cell_ids=weather_cells,
                     timeindex=kwargs.get("timeindex", None),
                 )
@@ -275,7 +271,7 @@ class HeatPump:
                 # get efficiencies of resistive heaters
                 eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
                     scenario="eGon2035",  # currently only possible scenario
-                    engine=kwargs.get("engine", None),
+                    edisgo_object=edisgo_object,
                 )
                 # determine timeindex to use
                 if not cop_df.empty:
@@ -341,8 +337,8 @@ class HeatPump:
                 information).
                 Time series are only obtained for heat pumps that are already integrated
                 into the grid.
-                This option requires that the parameters `engine` and `scenario` are
-                provided as keyword arguments. For further settings, the parameters
+                This parameter requires that the parameter `scenario` is
+                provided as keyword argument. For further settings, the parameters
                 `timeindex` and `heat_pump_names` can also be provided as keyword
                 arguments.
 
@@ -358,9 +354,6 @@ class HeatPump:
             Scenario for which to retrieve heat demand data. This parameter is required
             in case `ts_heat_demand` is 'oedb'.  Possible options are 'eGon2035' and
             'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine. This parameter is required in case `ts_heat_demand` is
-            'oedb'.
         heat_pump_names : list(str) or None
             Defines for which heat pumps to get heat demand time series for in
             case `ts_heat_demand` is 'oedb'. If None, all heat pumps in
@@ -392,7 +385,6 @@ class HeatPump:
                 heat_demand_df = timeseries_import.heat_demand_oedb(
                     edisgo_object,
                     scenario=kwargs.get("scenario", ""),
-                    engine=kwargs.get("engine", None),
                     timeindex=kwargs.get("timeindex", None),
                 )
                 heat_pump_names_select = [

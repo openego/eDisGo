@@ -765,7 +765,6 @@ def _update_grids(
 def oedb(
     edisgo_object: EDisGo,
     scenario: str,
-    engine: Engine,
     max_capacity=20,
 ):
     """
@@ -810,11 +809,10 @@ def oedb(
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
+        The eDisGo API object.
     scenario : str
         Scenario for which to retrieve generator data. Possible options
         are "eGon2035" and "eGon100RE".
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
     max_capacity : float
         Maximum capacity in MW of power plants to retrieve from database. In general,
         the generators that are retrieved from the database are selected based on the
@@ -834,7 +832,7 @@ def oedb(
     """
 
     def _get_egon_power_plants():
-        with session_scope_egon_data(engine) as session:
+        with session_scope_egon_data(edisgo_object.engine) as session:
             srid_table = get_srid_of_db_table(session, egon_power_plants.geom)
             query = (
                 session.query(
@@ -854,7 +852,7 @@ def oedb(
                 .order_by(egon_power_plants.id)
             )
             power_plants_gdf = gpd.read_postgis(
-                sql=query.statement, con=engine, crs=f"EPSG:{srid_table}"
+                sql=query.statement, con=edisgo_object.engine, crs=f"EPSG:{srid_table}"
             ).to_crs(srid_edisgo)
         # rename wind_onshore to wind
         power_plants_gdf["type"] = power_plants_gdf["type"].str.replace("_onshore", "")
@@ -885,7 +883,7 @@ def oedb(
         # mapped to the MV grid they lie within and sometimes to the MV grid the zensus
         # cell is mapped to
         building_ids = edisgo_object.topology.loads_df.building_id.unique()
-        with session_scope_egon_data(engine) as session:
+        with session_scope_egon_data(edisgo_object.engine) as session:
             query = (
                 session.query(
                     egon_power_plants_pv_roof_building.index.label("generator_id"),
@@ -902,7 +900,7 @@ def oedb(
                 )
                 .order_by(egon_power_plants_pv_roof_building.index)
             )
-            pv_roof_df = pd.read_sql(sql=query.statement, con=engine)
+            pv_roof_df = pd.read_sql(sql=query.statement, con=edisgo_object.engine)
         # add type and subtype
         pv_roof_df = pv_roof_df.assign(
             type="solar",
@@ -911,7 +909,7 @@ def oedb(
         return pv_roof_df
 
     def _get_egon_chp_plants():
-        with session_scope_egon_data(engine) as session:
+        with session_scope_egon_data(edisgo_object.engine) as session:
             srid_table = get_srid_of_db_table(session, egon_chp_plants.geom)
             query = (
                 session.query(
@@ -943,7 +941,7 @@ def oedb(
         egon_power_plants,
         egon_power_plants_pv_roof_building,
     ) = config.import_tables_from_oep(
-        engine,
+        edisgo_object.engine,
         ["egon_chp_plants", "egon_power_plants", "egon_power_plants_pv_roof_building"],
         "supply",
     )

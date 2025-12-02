@@ -205,7 +205,7 @@ class TestElectromobilityImport:
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         potential_parks_df = electromobility_import.potential_charging_parks_from_oedb(
-            edisgo_obj=edisgo_obj, engine=pytest.engine
+            edisgo_obj=edisgo_obj
         )
         assert len(potential_parks_df) == 1083
         # check for random charging points if they are within MV grid district
@@ -218,7 +218,7 @@ class TestElectromobilityImport:
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         charging_processes_df = electromobility_import.charging_processes_from_oedb(
-            edisgo_obj=edisgo_obj, engine=pytest.engine, scenario="eGon2035"
+            edisgo_obj=edisgo_obj, scenario="eGon2035"
         )
         assert len(charging_processes_df.car_id.unique()) == 1604
         assert len(charging_processes_df) == 324117

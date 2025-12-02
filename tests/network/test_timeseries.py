@@ -1412,7 +1412,7 @@ class TestTimeSeries:
 
         # ############# oedb, all generators (default)
         edisgo_object.timeseries.predefined_fluctuating_generators_by_technology(
-            edisgo_object, "oedb", engine=pytest.engine
+            edisgo_object, "oedb"
         )
 
         # check shape

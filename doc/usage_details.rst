@@ -32,6 +32,10 @@ Results data holding results e.g. from the power flow analysis and grid
 expansion is stored in the :class:`~.network.results.Results` class.
 Configuration data from the config files (see :ref:`default_configs`) is stored
 in the :class:`~.tools.config.Config` class.
+The database engine for accessing the OpenEnergy DataBase (OEDB) is stored as
+:attr:`~.edisgo.EDisGo.engine`. By default, this is the TOEP (The Open Energy Platform)
+engine, but can be customized by providing an `engine` parameter when initializing
+the :class:`~.EDisGo` object.
 All these can be accessed through the :class:`~.EDisGo` object. In the following
 code examples `edisgo` constitues an :class:`~.EDisGo` object.
 
@@ -55,6 +59,9 @@ code examples `edisgo` constitues an :class:`~.EDisGo` object.
 
     # Access configuration data container object
     edisgo.config
+
+    # Access database engine (TOEP by default)
+    edisgo.engine
 
 Grid data is stored in :pandas:`pandas.DataFrames<DataFrame>`
 in the :class:`~.network.topology.Topology` object.

@@ -1183,7 +1183,6 @@ class TimeSeries:
         ts_generators,
         generator_names=None,
         timeindex=None,
-        engine=None,
     ):
         """
         Set active power feed-in time series for fluctuating generators by technology.
@@ -1207,9 +1206,7 @@ class TimeSeries:
                 <https://openenergyplatform.org/dataedit/schemas>`_. See
                 :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
 
-                This option requires that the parameter `engine` is provided in case
-                new ding0 grids with geo-referenced LV grids are used. For further
-                settings, the parameter `timeindex` can also be provided.
+                For further settings, the parameter `timeindex` can also be provided.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
 
@@ -1244,10 +1241,6 @@ class TimeSeries:
             Specifies time steps for which to set feed-in time series. This parameter
             is only used in case `ts_generators` is 'oedb'. See parameter `timeindex`
             in :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine. This parameter is only required in case
-            `ts_generators` is 'oedb' and new ding0 grids with geo-referenced LV grids
-            are used.
 
         """
         # in case time series from oedb are used, retrieve oedb time series
@@ -1258,7 +1251,7 @@ class TimeSeries:
                 )
             else:
                 ts_generators = timeseries_import.feedin_oedb(
-                    edisgo_object, engine=engine, timeindex=timeindex
+                    edisgo_object, timeindex=timeindex
                 )
         elif not isinstance(ts_generators, pd.DataFrame):
             raise ValueError(

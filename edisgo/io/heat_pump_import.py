@@ -20,7 +20,7 @@ if "READTHEDOCS" not in os.environ:
 logger = logging.getLogger(__name__)
 
 
-def oedb(edisgo_object, scenario, engine, import_types=None):
+def oedb(edisgo_object, scenario, import_types=None):
     """
     Gets heat pumps for specified scenario from oedb and integrates them into the grid.
 
@@ -32,8 +32,6 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
     scenario : str
         Scenario for which to retrieve heat pump data. Possible options
         are "eGon2035" and "eGon100RE".
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
     import_types : list(str) or None
         Specifies which technologies to import. Possible options are
         "individual_heat_pumps", "central_heat_pumps" and "central_resistive_heaters".
@@ -88,7 +86,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             )
         )
 
-        df = pd.read_sql(query.statement, engine, index_col=None)
+        df = pd.read_sql(query.statement, edisgo_object.engine, index_col=None)
 
         # drop duplicated building IDs that exist because
         # egon_map_zensus_mvgd_buildings can contain several entries per building,
@@ -148,7 +146,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             egon_etrago_link.p_nom
             <= edisgo_object.config["grid_connection"]["upper_limit_voltage_level_4"],
         )
-        df = pd.read_sql(query.statement, engine, index_col=None)
+        df = pd.read_sql(query.statement, edisgo_object.engine, index_col=None)
         if not df.empty:
             # Query for egon_etrago_bus
             srid_etrago_bus = db.get_srid_of_db_table(session, egon_etrago_bus.geom)
@@ -163,7 +161,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             )
             gdf_etrago_bus = gpd.read_postgis(
                 query_etrago_bus.statement,
-                engine,
+                edisgo_object.engine,
                 index_col=None,
                 crs=f"EPSG:{srid_etrago_bus}",
             ).to_crs(mv_grid_geom_srid)
@@ -175,7 +173,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             )
             gdf_weather_cells = gpd.read_postgis(
                 query_weather_cells.statement,
-                engine,
+                edisgo_object.engine,
                 index_col=None,
                 crs=f"EPSG:{edisgo_object.topology.grid_district['srid']}",
             ).to_crs(mv_grid_geom_srid)
@@ -194,7 +192,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
 
             gdf_district_heating_areas = gpd.read_postgis(
                 query_district_heating_areas.statement,
-                engine,
+                edisgo_object.engine,
                 geom_col="geom_polygon",
                 index_col=None,
                 crs=f"EPSG:{srid}",
@@ -242,7 +240,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             )
             df_geom_chp = gpd.read_postgis(
                 query.statement,
-                engine,
+                edisgo_object.engine,
                 index_col=None,
                 crs=f"EPSG:{srid_dh_supply}",
             ).to_crs(mv_grid_geom_srid)
@@ -307,14 +305,14 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         egon_district_heating_areas,
         egon_hp_capacity_buildings,
     ) = config.import_tables_from_oep(
-        engine, ["egon_district_heating_areas", "egon_hp_capacity_buildings"], "demand"
+        edisgo_object.engine, ["egon_district_heating_areas", "egon_hp_capacity_buildings"], "demand"
     )
     (
         egon_district_heating,
         egon_era5_weather_cells,
         egon_individual_heating,
     ) = config.import_tables_from_oep(
-        engine,
+        edisgo_object.engine,
         ["egon_district_heating", "egon_era5_weather_cells", "egon_individual_heating"],
         "supply",
     )
@@ -322,12 +320,12 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         egon_map_zensus_mvgd_buildings,
         egon_map_zensus_weather_cell,
     ) = config.import_tables_from_oep(
-        engine,
+        edisgo_object.engine,
         ["egon_map_zensus_mvgd_buildings", "egon_map_zensus_weather_cell"],
         "boundaries",
     )
     egon_etrago_bus, egon_etrago_link = config.import_tables_from_oep(
-        engine, ["egon_etrago_bus", "egon_etrago_link"], "supply"
+        edisgo_object.engine, ["egon_etrago_bus", "egon_etrago_link"], "supply"
     )
 
     building_ids = edisgo_object.topology.loads_df.building_id.unique()
@@ -342,7 +340,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
 
     # get individual and district heating heat pumps, as well as resistive heaters
     # in district heating
-    with db.session_scope_egon_data(engine) as session:
+    with db.session_scope_egon_data(edisgo_object.engine) as session:
         if "individual_heat_pumps" in import_types:
             hp_individual = _get_individual_heat_pumps()
         else:
@@ -363,7 +361,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
             resistive_heaters_central = pd.DataFrame(columns=["p_set"])
 
     # sanity check
-    with db.session_scope_egon_data(engine) as session:
+    with db.session_scope_egon_data(edisgo_object.engine) as session:
         hp_individual_cap = _get_individual_heat_pump_capacity()
     if not np.isclose(hp_individual_cap, hp_individual.p_set.sum(), atol=1e-3):
         logger.warning(
@@ -624,7 +622,7 @@ def _grid_integration(
     return integrated_hps
 
 
-def efficiency_resistive_heaters_oedb(scenario, engine):
+def efficiency_resistive_heaters_oedb(scenario, edisgo_object):
     """
     Get efficiency of resistive heaters from the
     `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
@@ -634,8 +632,8 @@ def efficiency_resistive_heaters_oedb(scenario, engine):
     scenario : str
         Scenario for which to retrieve efficiency data. Possible options
         are "eGon2035" and "eGon100RE".
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
+    edisgo_object : :class:`~.EDisGo`
+        The eDisGo API object.
 
     Returns
     -------
@@ -650,11 +648,11 @@ def efficiency_resistive_heaters_oedb(scenario, engine):
     """
     config = Config()
     (egon_scenario_parameters,) = config.import_tables_from_oep(
-        engine, ["egon_scenario_parameters"], "scenario"
+        edisgo_object.engine, ["egon_scenario_parameters"], "scenario"
     )
 
     # get cop from database
-    with db.session_scope_egon_data(engine) as session:
+    with db.session_scope_egon_data(edisgo_object.engine) as session:
         query = session.query(
             egon_scenario_parameters.heat_parameters,
         ).filter(egon_scenario_parameters.name == scenario)

@@ -12,7 +12,7 @@ class TestStorageImport:
     @pytest.fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False, engine=pytest.engine
         )
 
     def setup_home_batteries_data(self):
@@ -30,7 +30,7 @@ class TestStorageImport:
         # test without new PV rooftop plants
         with caplog.at_level(logging.DEBUG):
             integrated_storages = storage_import.home_batteries_oedb(
-                self.edisgo, scenario="eGon2035", engine=pytest.engine
+                self.edisgo, scenario="eGon2035"
             )
         storage_df = self.edisgo.topology.storage_units_df
         assert len(integrated_storages) == 666
@@ -48,11 +48,11 @@ class TestStorageImport:
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         self.edisgo.import_generators(
-            generator_scenario="eGon2035", engine=pytest.engine
+            generator_scenario="eGon2035"
         )
         with caplog.at_level(logging.DEBUG):
             integrated_storages = storage_import.home_batteries_oedb(
-                self.edisgo, scenario="eGon2035", engine=pytest.engine
+                self.edisgo, scenario="eGon2035"
             )
         storage_df = self.edisgo.topology.storage_units_df
         assert len(integrated_storages) == 666

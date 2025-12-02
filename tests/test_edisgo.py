@@ -267,7 +267,6 @@ class TestEDisGo:
             conventional_loads_ts="oedb",
             fluctuating_generators_ts="oedb",
             scenario="eGon2035",
-            engine=pytest.engine,
             timeindex=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
             conventional_loads_names=[
                 "Load_mvgd_33535_lvgd_1164210000_244_residential"
@@ -1305,7 +1304,7 @@ class TestEDisGo:
 
         # test with default parameters
         self.edisgo.import_electromobility(
-            data_source="oedb", scenario="eGon2035", engine=pytest.engine
+            data_source="oedb", scenario="eGon2035"
         )
 
         assert len(self.edisgo.electromobility.charging_processes_df) == 324117
@@ -1361,13 +1360,11 @@ class TestEDisGo:
         with pytest.raises(ValueError):
             edisgo_object.import_heat_pumps(
                 scenario="eGon",
-                engine=pytest.engine,
             )
 
         # ################# test with leap year #############
         edisgo_object.import_heat_pumps(
             scenario="eGon2035",
-            engine=pytest.engine,
             timeindex=pd.date_range("1/1/2020", periods=2, freq="H"),
             import_types=["individual_heat_pumps", "central_heat_pumps"],
         )

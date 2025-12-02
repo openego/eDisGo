@@ -722,6 +722,7 @@ def get_weather_cells_intersecting_with_grid_district(
     edisgo_obj : :class:`~.EDisGo`
     engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine. Only needed when using new egon_data data.
+        Deprecated - will be removed in a future version. Use edisgo_obj.engine instead.
 
     Returns
     -------
@@ -729,6 +730,10 @@ def get_weather_cells_intersecting_with_grid_district(
         Set with weather cell IDs.
 
     """
+    # Use engine from edisgo_obj if not provided (for backwards compatibility)
+    if engine is None:
+        engine = edisgo_obj.engine
+    
     # Download geometries of weather cells
     sql_geom = sql_grid_geom(edisgo_obj)
     srid = edisgo_obj.topology.grid_district["srid"]

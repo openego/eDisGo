@@ -1149,7 +1149,6 @@ def integrate_charging_parks(edisgo_obj):
 def import_electromobility_from_oedb(
     edisgo_obj: EDisGo,
     scenario: str,
-    engine: Engine,
     **kwargs,
 ):
     """
@@ -1164,8 +1163,6 @@ def import_electromobility_from_oedb(
     scenario : str
         Scenario for which to retrieve electromobility data. Possible options
         are 'eGon2035' and 'eGon100RE'.
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
 
     Other Parameters
     ----------------
@@ -1177,13 +1174,13 @@ def import_electromobility_from_oedb(
 
     """
     edisgo_obj.electromobility.charging_processes_df = charging_processes_from_oedb(
-        edisgo_obj=edisgo_obj, engine=engine, scenario=scenario, **kwargs
+        edisgo_obj=edisgo_obj, scenario=scenario, **kwargs
     )
     edisgo_obj.electromobility.simbev_config_df = simbev_config_from_oedb(
-        scenario=scenario, engine=engine
+        scenario=scenario, engine=edisgo_obj.engine
     )
     potential_charging_parks_gdf = potential_charging_parks_from_oedb(
-        edisgo_obj=edisgo_obj, engine=engine, **kwargs
+        edisgo_obj=edisgo_obj, **kwargs
     )
     edisgo_obj.electromobility.potential_charging_parks_gdf = (
         assure_minimum_potential_charging_parks(
@@ -1234,7 +1231,6 @@ def simbev_config_from_oedb(
 
 def potential_charging_parks_from_oedb(
     edisgo_obj: EDisGo,
-    engine: Engine,
 ):
     """
     Gets :attr:`~.network.electromobility.Electromobility.potential_charging_parks_gdf`
@@ -1243,8 +1239,6 @@ def potential_charging_parks_from_oedb(
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
 
     Returns
     --------
@@ -1256,12 +1250,12 @@ def potential_charging_parks_from_oedb(
     """
     config = Config()
     (egon_emob_charging_infrastructure,) = config.import_tables_from_oep(
-        engine, ["egon_emob_charging_infrastructure"], "grid"
+        edisgo_obj.engine, ["egon_emob_charging_infrastructure"], "grid"
     )
 
     crs = edisgo_obj.topology.grid_district["srid"]
 
-    with session_scope_egon_data(engine) as session:
+    with session_scope_egon_data(edisgo_obj.engine) as session:
         srid = get_srid_of_db_table(session, egon_emob_charging_infrastructure.geometry)
 
         query = session.query(
@@ -1283,7 +1277,7 @@ def potential_charging_parks_from_oedb(
 
 
 def charging_processes_from_oedb(
-    edisgo_obj: EDisGo, engine: Engine, scenario: str, **kwargs
+    edisgo_obj: EDisGo, scenario: str, **kwargs
 ):
     """
     Gets :attr:`~.network.electromobility.Electromobility.charging_processes_df` data
@@ -1292,7 +1286,6 @@ def charging_processes_from_oedb(
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
         Database engine.
     scenario : str
         Scenario for which to retrieve data. Possible options are 'eGon2035' and
@@ -1314,22 +1307,22 @@ def charging_processes_from_oedb(
     """
     config = Config()
     egon_ev_mv_grid_district, egon_ev_trip = config.import_tables_from_oep(
-        engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
+        edisgo_obj.engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
     )
 
     # get EV pool in grid
     scenario_variation = {"eGon2035": "NEP C 2035", "eGon100RE": "Reference 2050"}
-    with session_scope_egon_data(engine) as session:
+    with session_scope_egon_data(edisgo_obj.engine) as session:
         query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
             egon_ev_mv_grid_district.scenario == scenario,
             egon_ev_mv_grid_district.scenario_variation == scenario_variation[scenario],
             egon_ev_mv_grid_district.bus_id == edisgo_obj.topology.id,
         )
 
-        pool = Counter(pd.read_sql(sql=query.statement, con=engine).egon_ev_pool_ev_id)
+        pool = Counter(pd.read_sql(sql=query.statement, con=edisgo_obj.engine).egon_ev_pool_ev_id)
 
     # get charging processes for each EV ID
-    with session_scope_egon_data(engine) as session:
+    with session_scope_egon_data(edisgo_obj.engine) as session:
         query = session.query(
             egon_ev_trip.egon_ev_pool_ev_id.label("car_id"),
             egon_ev_trip.use_case,
@@ -1347,7 +1340,7 @@ def charging_processes_from_oedb(
         )
         if kwargs.get("mode_parking_times", "frugal") == "frugal":
             query = query.filter(egon_ev_trip.charging_demand > 0)
-        ev_trips_df = pd.read_sql(sql=query.statement, con=engine)
+        ev_trips_df = pd.read_sql(sql=query.statement, con=edisgo_obj.engine)
 
     # duplicate EVs that were chosen more than once from EV pool
     df_list = []

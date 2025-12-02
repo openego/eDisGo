@@ -80,7 +80,6 @@ class TestTimeseriesImport:
         edisgo_object.set_timeindex(timeindex)
         feedin_df = timeseries_import.feedin_oedb(
             edisgo_object,
-            engine=pytest.engine,
         )
         assert feedin_df.shape == (6, 4)
         assert_index_equal(feedin_df.index, timeindex)
@@ -105,7 +104,7 @@ class TestTimeseriesImport:
     def test_cop_oedb(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         cop_df = timeseries_import.cop_oedb(
-            edisgo_object=edisgo, engine=pytest.engine, weather_cell_ids=[11051, 11052]
+            edisgo_object=edisgo, weather_cell_ids=[11051, 11052]
         )
         assert cop_df.shape == (8760, 2)
         assert (cop_df > 1.0).all().all()

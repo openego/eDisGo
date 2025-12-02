@@ -15,7 +15,7 @@ class TestHeatPumpImport:
     @pytest.fixture(autouse=True)
     def setup_class(self):
         self.edisgo = EDisGo(
-            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False, engine=pytest.engine
         )
 
     def setup_heat_pump_data_individual_heating(self):
@@ -60,7 +60,7 @@ class TestHeatPumpImport:
     def test_oedb(self, caplog):
         with caplog.at_level(logging.DEBUG):
             heat_pump_import.oedb(
-                self.edisgo, scenario="eGon2035", engine=pytest.engine
+                self.edisgo, scenario="eGon2035"
             )
         loads_df = self.edisgo.topology.loads_df
         hp_df = loads_df[loads_df.type == "heat_pump"]
@@ -87,7 +87,6 @@ class TestHeatPumpImport:
         heat_pump_import.oedb(
             self.edisgo,
             scenario="eGon2035",
-            engine=pytest.engine,
             import_types=["central_heat_pumps"],
         )
         loads_df = self.edisgo.topology.loads_df
@@ -197,7 +196,7 @@ class TestHeatPumpImport:
 
     def test_efficiency_resistive_heaters_oedb(self):
         eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
-            scenario="eGon2035", engine=pytest.engine
+            scenario="eGon2035", edisgo_object=self.edisgo
         )
         assert eta_dict["central_resistive_heater"] == 0.99
         assert eta_dict["rural_resistive_heater"] == 0.9

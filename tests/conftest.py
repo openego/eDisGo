@@ -33,7 +33,7 @@ def pytest_configure(config):
         "/home/jonas/.ssh/egon-data.configuration.yaml",
     )
 
-    pytest.engine = engine()
+    pytest.engine = engine(path=pytest.egon_data_config_yml, ssh=True)
 
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "local: mark test as local to run")

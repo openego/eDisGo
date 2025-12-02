@@ -153,7 +153,6 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None):
 
 def feedin_oedb(
     edisgo_object,
-    engine: Engine,
     timeindex=None,
 ):
     """
@@ -162,9 +161,8 @@ def feedin_oedb(
 
     Parameters
     ----------
-    edisgo_obj : :class:`~.EDisGo`
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
+    edisgo_object : :class:`~.EDisGo`
+        The eDisGo API object.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
         Specifies time steps for which to return feed-in data. Leap years can currently
         not be handled. In case the given timeindex contains a leap year, the data will
@@ -184,15 +182,15 @@ def feedin_oedb(
     """
     # get weather cell IDs in grid
     weather_cell_ids = tools.get_weather_cells_intersecting_with_grid_district(
-        edisgo_object, engine=engine
+        edisgo_object
     )
 
     config = Config()
     (egon_era5_renewable_feedin,) = config.import_tables_from_oep(
-        engine, ["egon_era5_renewable_feedin"], "supply"
+        edisgo_object.engine, ["egon_era5_renewable_feedin"], "supply"
     )
 
-    with session_scope_egon_data(engine) as session:
+    with session_scope_egon_data(edisgo_object.engine) as session:
         query = (
             session.query(
                 egon_era5_renewable_feedin.w_id.label("weather_cell_id"),
@@ -207,7 +205,7 @@ def feedin_oedb(
                 egon_era5_renewable_feedin.w_id, egon_era5_renewable_feedin.carrier
             )
         )
-        feedin_df = pd.read_sql(sql=query.statement, con=engine)
+        feedin_df = pd.read_sql(sql=query.statement, con=edisgo_object.engine)
 
     # rename pv to solar and wind_onshore to wind
     feedin_df.carrier = feedin_df.carrier.str.replace("pv", "solar").str.replace(
@@ -322,7 +320,7 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
     return elec_demand.loc[timeindex]
 
 
-def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
+def cop_oedb(edisgo_object, weather_cell_ids, timeindex=None):
     """
     Get COP (coefficient of performance) time series data from the
     `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
@@ -330,8 +328,7 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
+        The eDisGo API object.
     weather_cell_ids : list(int) or list(float)
         List (or array) of weather cell IDs to obtain COP data for.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
@@ -358,11 +355,11 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
 
     config = Config()
     (egon_era5_renewable_feedin,) = config.import_tables_from_oep(
-        engine, ["egon_era5_renewable_feedin"], "supply"
+        edisgo_object.engine, ["egon_era5_renewable_feedin"], "supply"
     )
 
     # get cop from database
-    with session_scope_egon_data(engine) as session:
+    with session_scope_egon_data(edisgo_object.engine) as session:
         query = (
             session.query(
                 egon_era5_renewable_feedin.w_id,
@@ -372,7 +369,7 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
             .filter(egon_era5_renewable_feedin.w_id.in_(weather_cell_ids))
         )
 
-        cop = pd.read_sql(query.statement, engine, index_col="w_id")
+        cop = pd.read_sql(query.statement, edisgo_object.engine, index_col="w_id")
 
     # convert dataframe to have weather cell ID as column name and time index
     cop = pd.DataFrame(
@@ -382,7 +379,7 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
     return cop.loc[timeindex, :]
 
 
-def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
+def heat_demand_oedb(edisgo_obj, scenario, timeindex=None):
     """
     Get heat demand profiles for heat pumps from the
     `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
@@ -397,11 +394,10 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object.
     scenario : str
         Scenario for which to retrieve demand data. Possible options
         are 'eGon2035' and 'eGon100RE'.
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
         Specifies time steps for which to return data. Leap years can currently
         not be handled. In case the given timeindex contains a leap year, the data will
@@ -447,10 +443,10 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
     building_ids = pth_ind_df.building_id.dropna().unique()
     if len(building_ids) > 0:
         residential_profiles_df = get_residential_heat_profiles_per_building(
-            building_ids, scenario, engine
+            building_ids, scenario, edisgo_obj.engine
         )
         cts_profiles_df = get_cts_profiles_per_building(
-            edisgo_obj, scenario, "heat", engine
+            edisgo_obj, scenario, "heat"
         )
         # drop CTS profiles for buildings without a heat pump
         buildings_no_hp = [_ for _ in cts_profiles_df.columns if _ not in building_ids]
@@ -484,7 +480,7 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
         dh_ids = []
     if len(dh_ids) > 0:
         dh_profile_df = get_district_heating_heat_demand_profiles(
-            dh_ids, scenario, engine
+            dh_ids, scenario, edisgo_obj.engine
         )
         # set column names to be heat pump names instead of district heating IDs
         dh_profile_df = pd.DataFrame(
@@ -502,7 +498,7 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
 
 
 def electricity_demand_oedb(
-    edisgo_obj, scenario, engine, timeindex=None, load_names=None
+    edisgo_obj, scenario, timeindex=None, load_names=None
 ):
     """
     Get electricity demand profiles for all conventional loads from the
@@ -518,11 +514,10 @@ def electricity_demand_oedb(
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object.
     scenario : str
         Scenario for which to retrieve demand data. Possible options
         are 'eGon2035' and 'eGon100RE'.
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
     timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
         Specifies time steps for which to return data. Leap years can currently
         not be handled. In case the given timeindex contains a leap year, the data will
@@ -573,7 +568,7 @@ def electricity_demand_oedb(
     res_building_ids = residential_loads.building_id.dropna().unique()
     if len(res_building_ids) > 0:
         residential_profiles_df = get_residential_electricity_profiles_per_building(
-            res_building_ids, scenario, engine
+            res_building_ids, scenario, edisgo_obj.engine
         )
         rename_series = (
             residential_loads.loc[:, ["building_id"]]
@@ -592,7 +587,7 @@ def electricity_demand_oedb(
     cts_building_ids = cts_loads.building_id.dropna().unique()
     if len(cts_building_ids) > 0:
         cts_profiles_df = get_cts_profiles_per_building(
-            edisgo_obj, scenario, "electricity", engine
+            edisgo_obj, scenario, "electricity"
         )
         drop_buildings = [
             _ for _ in cts_profiles_df.columns if _ not in cts_building_ids
@@ -616,7 +611,7 @@ def electricity_demand_oedb(
     ind_building_ids = ind_loads.building_id.dropna().unique()
     if len(ind_building_ids) > 0:
         ind_profiles_df = get_industrial_electricity_profiles_per_site(
-            ind_building_ids, scenario, engine
+            ind_building_ids, scenario, edisgo_obj.engine
         )
         # set column names to be load names instead of building IDs
         rename_series = (
@@ -962,7 +957,7 @@ def get_district_heating_heat_demand_profiles(district_heating_ids, scenario, en
     return df.astype("float")
 
 
-def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
+def get_cts_profiles_per_building(edisgo_obj, scenario, sector):
     """
     Gets CTS heat demand profiles per CTS building for all CTS buildings in MV grid.
 
@@ -979,13 +974,12 @@ def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+        The eDisGo API object.
     scenario : str
         Scenario for which to retrieve demand data. Possible options
         are 'eGon2035' and 'eGon100RE'.
     sector : str
-        Demand sector for which profile is calculated: "electricity" or "heat"
-    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine.
+        Demand sector for which profile is calculated: "electricity" or "heat".
 
     Returns
     -------
@@ -997,7 +991,7 @@ def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
     """
     config = Config()
     (egon_map_zensus_mvgd_buildings,) = config.import_tables_from_oep(
-        engine, ["egon_map_zensus_mvgd_buildings"], "boundaries"
+        edisgo_obj.engine, ["egon_map_zensus_mvgd_buildings"], "boundaries"
     )
 
     # get MV grid IDs of CTS loads
@@ -1006,20 +1000,20 @@ def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
         & (edisgo_obj.topology.loads_df.sector == "cts")
     ]
     cts_building_ids = cts_loads.building_id.dropna().unique()
-    with session_scope_egon_data(engine) as session:
+    with session_scope_egon_data(edisgo_obj.engine) as session:
         query = session.query(
             egon_map_zensus_mvgd_buildings.building_id,
             egon_map_zensus_mvgd_buildings.bus_id,
         ).filter(
             egon_map_zensus_mvgd_buildings.building_id.in_(cts_building_ids),
         )
-        df = pd.read_sql(query.statement, engine, index_col="building_id")
+        df = pd.read_sql(query.statement, edisgo_obj.engine, index_col="building_id")
 
     # iterate over grid IDs
     profiles_df = pd.DataFrame()
     for bus_id in df.bus_id.unique():
         profiles_grid_df = get_cts_profiles_per_grid(
-            bus_id=bus_id, scenario=scenario, sector=sector, engine=engine
+            bus_id=bus_id, scenario=scenario, sector=sector, engine=edisgo_obj.engine
         )
         profiles_df = pd.concat([profiles_df, profiles_grid_df], axis=1)
 
