@@ -579,8 +579,8 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
             "vm": 1,
             "storage": False,
             "name": psa_net.buses.index[bus_i],
-            "base_kv": psa_net.buses.v_nom[bus_i],
-            "grid_level": grid_level[psa_net.buses.v_nom[bus_i]],
+            "base_kv": psa_net.buses.v_nom.iloc[bus_i],
+            "grid_level": grid_level[psa_net.buses.v_nom.iloc[bus_i]],
         }
     # add virtual busses for storage units
     for stor_i in np.arange(len(flexible_storage_units)):
@@ -664,19 +664,19 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             idx_bus = _mapping(
                 psa_net,
                 edisgo_obj,
-                gen.bus[gen_i],
+                gen.bus.iloc[gen_i],
                 flexible_storage_units=flexible_storage_units,
             )
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "generator")
             q = [
-                sign * np.tan(np.arccos(pf)) * gen.p_nom[gen_i],
-                sign * np.tan(np.arccos(pf)) * gen.p_nom_min[gen_i],
+                sign * np.tan(np.arccos(pf)) * gen.p_nom.iloc[gen_i],
+                sign * np.tan(np.arccos(pf)) * gen.p_nom_min.iloc[gen_i],
             ]
             pm[text][str(gen_i + 1)] = {
-                "pg": psa_net.generators_t.p_set[gen.index[gen_i]][0] / s_base,
-                "qg": psa_net.generators_t.q_set[gen.index[gen_i]][0] / s_base,
-                "pmax": gen.p_nom[gen_i].round(20) / s_base,
-                "pmin": gen.p_nom_min[gen_i].round(20) / s_base,
+                "pg": psa_net.generators_t.p_set[gen.index[gen_i]].iloc[0] / s_base,
+                "qg": psa_net.generators_t.q_set[gen.index[gen_i]].iloc[0] / s_base,
+                "pmax": gen.p_nom.iloc[gen_i].round(20) / s_base,
+                "pmin": gen.p_nom_min.iloc[gen_i].round(20) / s_base,
                 "qmax": max(q).round(20) / s_base,
                 "qmin": min(q).round(20) / s_base,
                 "P": 0,
@@ -684,7 +684,7 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
                 "vg": 1,
                 "pf": pf,
                 "sign": sign,
-                "mbase": gen.p_nom[gen_i] / s_base,
+                "mbase": gen.p_nom.iloc[gen_i] / s_base,
                 "gen_bus": idx_bus,
                 "gen_status": 1,
                 "name": gen.index[gen_i],
@@ -707,13 +707,13 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_g = max(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0],
+                    psa_net.storage_units_t.p_set[inflexible_storage_units.iloc[stor_i]][0],
                     0.0,
                 ]
             )
             q_g = min(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0],
+                    psa_net.storage_units_t.q_set[inflexible_storage_units.iloc[stor_i]][0],
                     0.0,
                 ]
             )
@@ -793,38 +793,38 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
         idx_f_bus = _mapping(
             psa_net,
             edisgo_obj,
-            branches.bus0[branch_i],
+            branches.bus0.iloc[branch_i],
             flexible_storage_units=flexible_storage_units,
         )
         idx_t_bus = _mapping(
             psa_net,
             edisgo_obj,
-            branches.bus1[branch_i],
+            branches.bus1.iloc[branch_i],
             flexible_storage_units=flexible_storage_units,
         )
         pm["branch"][str(branch_i + 1)] = {
             "name": branches.index[branch_i],
-            "br_r": branches.r_pu[branch_i] * s_base,
-            "r": branches.r[branch_i],
-            "br_x": branches.x_pu[branch_i] * s_base,
+            "br_r": branches.r_pu.iloc[branch_i] * s_base,
+            "r": branches.r.iloc[branch_i],
+            "br_x": branches.x_pu.iloc[branch_i] * s_base,
             "f_bus": idx_f_bus,
             "t_bus": idx_t_bus,
-            "g_to": branches.g_pu[branch_i] / 2 * s_base,
-            "g_fr": branches.g_pu[branch_i] / 2 * s_base,
-            "b_to": branches.b_pu[branch_i] / 2 * s_base,
-            "b_fr": branches.b_pu[branch_i] / 2 * s_base,
-            "shift": shift[branch_i],
+            "g_to": branches.g_pu.iloc[branch_i] / 2 * s_base,
+            "g_fr": branches.g_pu.iloc[branch_i] / 2 * s_base,
+            "b_to": branches.b_pu.iloc[branch_i] / 2 * s_base,
+            "b_fr": branches.b_pu.iloc[branch_i] / 2 * s_base,
+            "shift": shift.iloc[branch_i],
             "br_status": 1.0,
-            "rate_a": branches.s_nom[branch_i].real / s_base,
+            "rate_a": branches.s_nom.iloc[branch_i].real / s_base,
             "rate_b": 250 / s_base,
             "rate_c": 250 / s_base,
             "angmin": -np.pi / 6,
             "angmax": np.pi / 6,
-            "transformer": bool(transformer[branch_i]),
+            "transformer": bool(transformer.iloc[branch_i]),
             "storage": False,
-            "tap": tap[branch_i],
-            "length": branches.length.fillna(1)[branch_i].round(20),
-            "cost": branches.capital_cost[branch_i].round(20),
+            "tap": tap.iloc[branch_i],
+            "length": branches.length.fillna(1).iloc[branch_i].round(20),
+            "cost": branches.capital_cost.iloc[branch_i].round(20),
             "storage_pf": 0,
             "index": branch_i + 1,
         }
@@ -912,7 +912,7 @@ def _build_load(
         idx_bus = _mapping(
             psa_net,
             edisgo_obj,
-            loads_df.bus[load_i],
+            loads_df.bus.iloc[load_i],
             flexible_storage_units=flexible_storage_units,
         )
         if (
@@ -938,8 +938,8 @@ def _build_load(
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
         q_d = psa_net.loads_t.q_set[loads_df.index[load_i]]
         pm["load"][str(load_i + 1)] = {
-            "pd": p_d[0].round(20) / s_base,
-            "qd": q_d[0].round(20) / s_base,
+            "pd": p_d.iloc[0].round(20) / s_base,
+            "qd": q_d.iloc[0].round(20) / s_base,
             "load_bus": idx_bus,
             "status": True,
             "pf": pf,
@@ -958,13 +958,13 @@ def _build_load(
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_d = -min(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]][0],
+                    psa_net.storage_units_t.p_set[inflexible_storage_units.iloc[stor_i]][0],
                     np.float64(0.0),
                 ]
             )
             q_d = -max(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]][0],
+                    psa_net.storage_units_t.q_set[inflexible_storage_units.iloc[stor_i]][0],
                     np.float64(0.0),
                 ]
             )
@@ -1049,9 +1049,9 @@ def _build_battery_storage(
             "pf": pf,
             "sign": sign,
             "virtual_branch": str(stor_i + len(branches.index) + 1),
-            "ps": psa_net.storage_units.p_set[flexible_storage_units[stor_i]].round(20)
+            "ps": psa_net.storage_units.p_set[flexible_storage_units.iloc[stor_i]].round(20)
             / s_base,
-            "qs": psa_net.storage_units.q_set[flexible_storage_units[stor_i]].round(20)
+            "qs": psa_net.storage_units.q_set[flexible_storage_units[.ilocstor_i]].round(20)
             / s_base,
             "pmax": psa_net.storage_units.p_nom.loc[
                 flexible_storage_units[stor_i]
@@ -1145,7 +1145,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         ]
     emob_df = psa_net.loads.loc[flexible_cps]
     for cp_i in np.arange(len(emob_df.index)):
-        idx_bus = _mapping(psa_net, edisgo_obj, emob_df.bus[cp_i])
+        idx_bus = _mapping(psa_net, edisgo_obj, emob_df.bus.iloc[cp_i])
         # retrieve power factor and sign from config
         try:
             eta = edisgo_obj.electromobility.simbev_config_df.eta_cp.values[0]
@@ -1216,17 +1216,17 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
             )
         )
     for hp_i in np.arange(len(heat_df.index)):
-        idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus[hp_i])
+        idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus.iloc[hp_i])
         # retrieve power factor and sign from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "heat_pump")
-        q = sign * np.tan(np.arccos(pf)) * heat_df.p_set[hp_i]
+        q = sign * np.tan(np.arccos(pf)) * heat_df.p_set.iloc[hp_i]
         p_d = heat_df2[heat_df.index[hp_i]]
         pm["heatpumps"][str(hp_i + 1)] = {
-            "pd": p_d[0].round(20) / s_base,  # heat demand
+            "pd": p_d.iloc[0].round(20) / s_base,  # heat demand
             "pf": pf,
             "sign": sign,
             "p_min": 0,
-            "p_max": heat_df.p_set[hp_i].round(20) / s_base,
+            "p_max": heat_df.p_set.iloc[hp_i].round(20) / s_base,
             "q_min": min(q, 0).round(20) / s_base,
             "q_max": max(q, 0).round(20) / s_base,
             "cop": hp_cop[heat_df.index[hp_i]][0].round(20),
@@ -1325,7 +1325,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
     heat_storage_df = heat_storage_df.loc[flexible_hps]
     for stor_i in np.arange(len(flexible_hps)):
         idx_bus = _mapping(
-            psa_net, edisgo_obj, psa_net.loads.loc[flexible_hps].bus[stor_i]
+            psa_net, edisgo_obj, psa_net.loads.loc[flexible_hps].bus.iloc[stor_i]
         )
         if (
             edisgo_obj.topology.loads_df.loc[heat_storage_df.index[stor_i]].sector
@@ -1444,7 +1444,7 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
         ]
     dsm_df = psa_net.loads.loc[flexible_loads]
     for dsm_i in np.arange(len(dsm_df.index)):
-        idx_bus = _mapping(psa_net, edisgo_obj, dsm_df.bus[dsm_i])
+        idx_bus = _mapping(psa_net, edisgo_obj, dsm_df.bus.iloc[dsm_i])
         # retrieve power factor and sign from config
         pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "conventional_load")
         p_max = edisgo_obj.dsm.p_max[dsm_df.index[dsm_i]]
