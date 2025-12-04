@@ -1,4 +1,5 @@
 """Setup"""
+
 import os
 import sys
 
@@ -31,51 +32,54 @@ def read(fname):
 
 
 requirements = [
-    "contextily",
+    "contextily < 1.7.0",
     "dash < 2.9.0",
-    "demandlib",
-    "descartes",
-    "egoio >= 0.4.7",
+    "demandlib < 0.3.0",
+    "descartes < 1.2.0",
+    "egoio >= 0.4.7, < 0.5.0",
     "geoalchemy2 < 0.7.0",
-    "geopandas >= 0.12.0",
-    "geopy >= 2.0.0",
-    "jupyterlab",
-    "jupyter_dash",
-    "matplotlib >= 3.3.0",
-    "multiprocess",
-    "networkx >= 2.5.0",
+    "geopandas >= 0.12.0, < 1.1.0",
+    "geopy >= 2.0.0, < 2.5.0",
+    "jupyterlab < 4.5.0",
+    "jupyter_dash < 0.5.0",
+    "matplotlib >= 3.3.0, < 3.11.0",
+    "multiprocess < 0.71.0",
+    "networkx >= 2.5.0, < 3.5.0",
     # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
     # sqlalchemy leads to new errors.. should be fixed at some point
+    "numpy ==1.26.4",
     "pandas >= 1.4.0, < 2.2.0",
     "plotly < 6.0",
-    "pydot",
-    "pygeos",
-    "pypower",
-    "pyproj >= 3.0.0",
+    "pydot < 4.1.0",
+    "pygeos < 0.15.0",
+    "pypower < 5.2.0",
+    "pyproj >= 3.0.0, < 3.8.0",
     "pypsa == 0.26.2",
-    "pyyaml",
-    "saio",
+    "pyyaml < 6.1.0",
+    "saio < 0.3.0",
     "scikit-learn < 1.3.0",
-    "shapely >= 1.7.0",
+    "shapely >= 1.7.0, < 2.1.0",
     "sqlalchemy < 1.4.0",
-    "sshtunnel",
-    "urllib3 < 2.0.0",
-    "workalendar",
+    "sshtunnel < 0.5.0",
+    "urllib3 < 2.6.0",
+    "workalendar < 17.1.0",
+    "astroid == 3.3.11",
 ]
 
 dev_requirements = [
-    "black",
-    "flake8",
-    "isort",
-    "pre-commit",
-    "pylint",
-    "pytest",
-    "pytest-notebook",
-    "pyupgrade",
-    "sphinx",
-    "sphinx_rtd_theme >=0.5.2",
-    "sphinx-autodoc-typehints",
-    "sphinx-autoapi",
+    "black < 25.2.0",
+    "flake8 < 7.4.0",
+    "isort < 6.1.0",
+    "pre-commit < 4.3.0",
+    "pylint < 3.4.0",
+    "pytest < 8.5.0",
+    "pytest-notebook < 0.11.0",
+    "pyupgrade < 3.21.0",
+    "sphinx < 8.3.0",
+    "sphinx_rtd_theme >=0.5.2, < 3.1.0",
+    "sphinx-autodoc-typehints < 3.2.0",
+    "sphinx-autoapi < 3.7.0",
+    "astroid == 3.3.11",
 ]
 
 extras = {"dev": dev_requirements}
