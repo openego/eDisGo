@@ -422,7 +422,7 @@ References
     *dena-Verteilnetzstudie: Ausbau- und Innovationsbedarf der Stromverteilnetze in Deutschland bis 2030*. 2012.
 
 .. [PyPSA] `PyPSA - Spatial Clustering Documentation
-            <https://pypsa.readthedocs.io/en/latest/examples/spatial-clustering.html>`_
+            <https://docs.pypsa.org/v0.35.1/examples/spatial-clustering.html>`_
 
 .. [SCR]    `Master Thesis - Malte Jahn - Analysis of the effects of spatial complexity reduction on Distribution
             network expansion planning with flexibilities (written in German)
@@ -430,4 +430,4 @@ References
 
 .. [HoerschBrown]   `Jonas Hörsch, Tom Brown: The role of spatial scale in joint optimisations of
                     generation and transmission for European highly renewable scenarios
-                    <https://arxiv.org/pdf/1705.07617.pdf>`_
+                    <https://arxiv.org/abs/1705.07617>`_
