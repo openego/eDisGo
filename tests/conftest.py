@@ -29,17 +29,17 @@ def pytest_configure(config):
         os.path.realpath(os.path.dirname(__file__)), "data/tracbev_example_scenario"
     )
 
-    # pytest.egon_data_config_yml = os.path.join(
-    #     "path/to/ssh/config.yml",
-    # )
+    pytest.egon_data_config_yml = os.path.join(
+        "/home/jonas/.ssh/egon-data.configuration.yaml",
+    )
 
     pytest.engine = engine()
 
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "local: mark test as local to run")
 
-    # if config.getoption("--runlocal"):
-    #     pytest.engine_local = engine(path=pytest.egon_data_config_yml, ssh=False)
+    if config.getoption("--runlocal"):
+        pytest.engine_local = engine(path=pytest.egon_data_config_yml, ssh=False)
 
 
 def pytest_addoption(parser):

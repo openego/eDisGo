@@ -167,6 +167,125 @@ of the whole topology or each single grid can be retrieved as follows:
 The returned graph is a :networkx:`networkx.Graph<>`, where lines are represented
 by edges in the graph, and buses and transformers are represented by nodes.
 
+Database Connection for Loading Data from egon-data
+---------------------------------------------------
+
+This section describes how to connect to and load data from **egon-data**.
+There are two supported connection methods:
+
+1. Using the TOEP database (standard)
+2. Using a custom PostgreSQL database
+
+
+TOEP Database (Standard)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The TOEP database provides the egon-data interface and is the default data source.
+
+Example
+^^^^^^^
+
+.. code-block:: python
+
+    from edisgo.io.timeseries import set_time_series_active_power_predefined
+
+    edisgo_obj.set_time_series_active_power_predefined(
+        fluctuating_generators_ts="oedb"  # use "oedb" to load data from TOEP,
+    )
+
+TOEP Token Setup
+^^^^^^^^^^^^^^^^
+
+To authenticate with TOEP, place a file named ``TOEP_TOKEN.txt`` in the directory ``edisgo/config/``.
+The file should contain your personal TOEP access token.
+
+A token can be requested at:
+
+    https://toep.iks.cs.ovgu.de/
+
+Using a TOEP token is optional but recommended to avoid issues related to connection limits for anonymous users.
+
+
+Using a Custom PostgreSQL Database
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It is possible to connect to a custom PostgreSQL database instead of TOEP.
+This requires a configuration file and database engine initialization.
+
+Step 1: Create a Database Configuration File
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Create a YAML configuration file (for example: ``database_config.yaml``) with your connection parameters:
+
+.. code-block:: yaml
+
+    egon-data:
+      database-host: mydb.example.org
+      database-port: 5432
+      database-name: egon_data
+      database-user: my_user
+      database-password: my_password
+
+    ssh-tunnel:
+      ssh-host: my.ssh.server
+      ssh-user: ubuntu
+      ssh-pkey: ~/.ssh/id_rsa
+      pgres-host: localhost
+
+If no SSH tunnel is required, the ``ssh-tunnel`` block can be left empty or removed.
+
+Step 2: Initialize the Database Engine
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The database engine can be initialized using the :func:`~edisgo.io.db.engine` function:
+
+.. code-block:: python
+
+    from edisgo.io.db import engine
+
+    # Path to your YAML configuration file
+    config_path = "path/to/database_config.yaml"
+
+    # Create the database engine
+    eng = engine(path=config_path, ssh=False)
+
+Step 3: Load Data from the Custom Database
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Once the engine is initialized, data can be loaded using the same functions as for TOEP.
+Pass the ``engine`` argument to specify your connection.
+
+.. code-block:: python
+
+    from edisgo.io.timeseries import set_time_series_active_power_predefined
+
+    edisgo_obj.set_time_series_active_power_predefined(
+        fluctuating_generators_ts="oedb",
+        engine=eng
+    )
+
+This will retrieve time series or other data directly from your configured database.
+
+
+Summary
+~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 45 30
+
+   * - **Access Type**
+     - **Description**
+     - **Authentication**
+   * - TOEP
+     - Load official egon-data source
+     - TOEP token (recommended)
+   * - Custom PostgreSQL database
+     - Connect to user-defined database
+     - YAML config file with credentials
+
+
+
 Component time series
 ------------------------
 
@@ -176,7 +295,7 @@ reactive power time series.
 You can also check out the :ref:`edisgo-mwe` section to get a quick start.
 
 Active power time series
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------------------------
 
 There are various options how to set active time series:
 
@@ -189,7 +308,7 @@ There are various options how to set active time series:
 .. _active_power_manual:
 
 Manual
-.......
+~~~~~~~
 
 Use this mode to provide your own time series for specific components.
 It can be invoked as follows:
@@ -204,8 +323,9 @@ When using this mode make sure to previously set the time index. This can either
 upon initialisation of the EDisGo object by providing the input parameter 'timeindex' or
 by using the function :attr:`~.edisgo.EDisGo.set_timeindex`.
 
+
 Worst-case
-...........
+~~~~~~~~~~
 
 Use this mode to set feed-in and load in heavy load flow case (here called "load_case")
 and/or reverse power flow case (here called "feed-in_case") using simultaneity factors
@@ -227,7 +347,7 @@ to which case check out:
     edisgo.timeseries.timeindex_worst_cases
 
 Predefined
-.............
+~~~~~~~~~~
 
 Use this mode if you want to set time series by component type.
 You may either provide your own time series or use ones provided through the
@@ -254,8 +374,9 @@ When using this mode make sure to previously set the time index. This can either
 upon initialisation of the EDisGo object by providing the input parameter 'timeindex' or
 by using the function :attr:`~.edisgo.EDisGo.set_timeindex`.
 
+
 Optimised
-..........
+~~~~~~~~~
 
 Use this mode to optimise flexibilities, e.g. charging of electric vehicles or
 dispatch of heat pumps with thermal storage units.
@@ -263,7 +384,7 @@ dispatch of heat pumps with thermal storage units.
 .. todo:: Add more details once the optimisation is merged.
 
 Heuristic
-..........
+~~~~~~~~~
 
 Use this mode to use heuristics to set time series. So far, only heuristics for
 electric vehicle charging are implemented.
@@ -273,7 +394,7 @@ The charging strategies can be invoked as follows:
 
     edisgo.apply_charging_strategy()
 
-See function docstring of :attr:`~.edisgo.EDisGo.apply_charging_strategy` or
+See function docstring of :meth:`~edisgo.EDisGo.apply_charging_strategy` or
 documentation section :ref:`charging_strategies-label` for more information.
 
 Further, there is currently one operating strategy for heat pumps implemented where
@@ -289,7 +410,7 @@ See function docstring of :attr:`~.edisgo.EDisGo.apply_heat_pump_operating_strat
 for more information.
 
 Reactive power time series
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+------------------------------------------------
 
 There are so far two options how to set reactive power time series:
 
@@ -300,12 +421,12 @@ It is perspectively planned to also provide reactive power controls Q(U) and
 :math:`cos\varphi(P)`.
 
 Manual
-.......
+~~~~~~~
 
 See active power :ref:`active_power_manual` mode documentation.
 
 Fixed :math:`cos\varphi`
-................................
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 Use this mode to set reactive power time series using fixed power factors.
 It can be invoked as follows:
@@ -666,14 +787,14 @@ and can be accessed the following way:
 
     edisgo.results
 
-Get voltages at nodes from :meth:`~.network.results.Results.v_res`
-and line loading from :meth:`~.network.results.Results.s_res` or
-:attr:`~.network.results.Results.i_res`.
-:attr:`~.network.results.Results.equipment_changes` holds details about measures
+Get voltages at nodes from :attr:`~edisgo.network.results.Results.v_res`
+and line loading from :attr:`~edisgo.network.results.Results.s_res` or
+:attr:`~edisgo.network.results.Results.i_res`.
+:attr:`~edisgo.network.results.Results.equipment_changes` holds details about measures
 performed during grid expansion. Associated costs can be obtained through
-:attr:`~.network.results.Results.grid_expansion_costs`.
+:attr:`~edisgo.network.results.Results.grid_expansion_costs`.
 Flexibility measures may not entirely resolve all issues.
-These unresolved issues are listed in :attr:`~.network.results.Results.unresolved_issues`.
+These unresolved issues are listed in :attr:`~edisgo.network.results.Results.unresolved_issues`.
 
 Results can be saved to csv files with:
 
