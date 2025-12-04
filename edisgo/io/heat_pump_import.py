@@ -627,7 +627,7 @@ def _grid_integration(
 def efficiency_resistive_heaters_oedb(scenario, engine):
     """
     Get efficiency of resistive heaters from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Parameters
     ----------

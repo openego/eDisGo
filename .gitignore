@@ -17,6 +17,7 @@
 
 # exclude locally built docs
 doc/_html
+/doc/_build/
 
 # exclude egg-info
 eDisGo.egg-info/
