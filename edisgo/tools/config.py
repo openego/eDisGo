@@ -30,14 +30,15 @@ from glob import glob
 from zipfile import ZipFile
 
 import oedialect  # noqa: F401
-import saio
 import sqlalchemy as sa
 
 from saio import register_schema
+from sqlalchemy import MetaData, Table
+from sqlalchemy.ext.declarative import declarative_base
 
 import edisgo
 
-from edisgo.io.db import engine as toep_engine
+from edisgo.io.db import engine as Engine
 from edisgo.io.db import session_scope_egon_data
 
 logger = logging.getLogger(__name__)
@@ -144,7 +145,7 @@ class Config:
     @property
     def db_table_mapping(self):
         if not self._config_dict.get("db_table_mapping"):
-            self._set_db_mappings()
+            self._ensure_db_mappings_loaded()
         return self._config_dict.get("db_table_mapping", {})
 
     @db_table_mapping.setter
@@ -154,17 +155,20 @@ class Config:
     @property
     def db_schema_mapping(self):
         if not self._config_dict.get("db_schema_mapping"):
-            self._set_db_mappings()
+            self._ensure_db_mappings_loaded()
         return self._config_dict.get("db_schema_mapping", {})
 
     @db_schema_mapping.setter
     def db_schema_mapping(self, value):
         self._config_dict["db_schema_mapping"] = value
 
-    def _set_db_mappings(self) -> None:
-        """
-        Sets the database table and schema mappings by retrieving alias dictionaries.
-        """
+    def _ensure_db_mappings_loaded(self) -> None:
+        """Lazy-loads DB mappings only when needed for remote OEP access."""
+        if self._config_dict.get("db_table_mapping") and self._config_dict.get(
+            "db_schema_mapping"
+        ):
+            return
+
         name_mapping, schema_mapping = self.get_database_alias_dictionaries()
         self.db_table_mapping = name_mapping
         self.db_schema_mapping = schema_mapping
@@ -182,15 +186,12 @@ class Config:
             - schema_mapping: A dictionary mapping source schema names to target schema
                 names.
         """
-        engine = toep_engine()
-        dictionary_schema_name = (
-            "model_draft"  # Replace with the actual schema name if needed
-        )
-        dictionary_module_name = f"saio.{dictionary_schema_name}"
-        register_schema(dictionary_schema_name, engine)
-        dictionary_table_name = "edut_00"
-        dictionary_table = importlib.import_module(dictionary_module_name).__getattr__(
-            dictionary_table_name
+        engine = Engine()
+        dictionary_schema_name = "data"
+        dictionary_table = self._get_module_attr(
+            self._get_saio_module(dictionary_schema_name, engine),
+            "edut_00",
+            f"saio.{dictionary_schema_name}",
         )
         with session_scope_egon_data(engine) as session:
             query = session.query(dictionary_table)
@@ -199,11 +200,52 @@ class Config:
                 entry.source_name: entry.target_name for entry in dictionary_entries
             }
             schema_mapping = {
-                entry.source_schema: getattr(entry, "target_schema", "model_draft")
+                entry.source_schema: getattr(entry, "target_schema", "dataset")
                 for entry in dictionary_entries
             }
 
         return name_mapping, schema_mapping
+
+    @staticmethod
+    def _get_module_attr(module, attribute: str, module_name: str):
+        try:
+            return getattr(module, attribute)
+        except AttributeError as exc:
+            raise AttributeError(
+                f"Module '{module_name}' has no attribute '{attribute}'. "
+                "Check the table mapping configuration."
+            ) from exc
+
+    def _get_saio_module(self, schema: str, engine: sa.engine.Engine):
+        register_schema(schema, engine)
+        module_name = f"saio.{schema}"
+        try:
+            return importlib.import_module(module_name)
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                f"Could not import module '{module_name}'. "
+                "Verify schema registration and saio package availability."
+            ) from exc
+
+    @staticmethod
+    def _parse_time(value):
+        if isinstance(value, datetime.time):
+            return value
+        for time_format in ("%H:%M:%S", "%H:%M"):
+            try:
+                parsed = datetime.datetime.strptime(value, time_format)
+                return datetime.time(parsed.hour, parsed.minute)
+            except (TypeError, ValueError):
+                continue
+        raise ValueError(f"Unsupported time format for value '{value}'")
+
+    def _normalize_demandlib_times(self, config_dict: dict) -> None:
+        if "demandlib" not in config_dict:
+            return
+        demandlib = config_dict["demandlib"]
+        for key in ("day_start", "day_end"):
+            if key in demandlib:
+                demandlib[key] = self._parse_time(demandlib[key])
 
     def import_tables_from_oep(
         self, engine: sa.engine.Engine, table_names: list[str], schema_name: str
@@ -226,14 +268,51 @@ class Config:
         list of sqlalchemy.Table
             A list of SQLAlchemy Table objects corresponding to the imported tables.
         """
-        schema = self.db_schema_mapping.get(schema_name)
-        saio.register_schema(schema, engine)
-        tables = []
-        for table in table_names:
-            table = self.db_table_mapping.get(table)
-            module_name = f"saio.{schema}"
-            tables.append(importlib.import_module(module_name).__getattr__(table))
-        return tables
+        if "toep" in str(engine.url):
+            self._ensure_db_mappings_loaded()
+            schema = self.db_schema_mapping.get(schema_name)
+            if not schema:
+                raise KeyError(
+                    f"No schema mapping found for '{schema_name}'. "
+                    "Ensure database alias dictionaries are available."
+                )
+
+            module = self._get_saio_module(schema, engine)
+
+            tables: list[sa.Table] = []
+            for table in table_names:
+                mapped_table = self.db_table_mapping.get(table)
+                if not mapped_table:
+                    raise KeyError(
+                        f"No table mapping found for '{table}'. "
+                        "Update the database alias dictionaries."
+                    )
+                tables.append(
+                    self._get_module_attr(module, mapped_table, module.__name__)
+                )
+
+            return tables
+        else:
+            # --- Local egon_data DB case ---
+            Base = declarative_base()
+            metadata = MetaData(schema=schema_name)
+            metadata.reflect(bind=engine, only=table_names)
+
+            orm_classes = []
+            for table_name in table_names:
+                table = Table(
+                    table_name, metadata, autoload_with=engine, schema=schema_name
+                )
+
+                # dynamisch eine ORM-Klasse erzeugen
+                orm_class = type(
+                    table_name,
+                    (Base,),
+                    {"__tablename__": table_name, "__table__": table},
+                )
+                orm_classes.append(orm_class)
+
+            return orm_classes
 
     def from_cfg(self, config_path=None):
         """
@@ -289,25 +368,7 @@ class Config:
                 except Exception:
                     pass
 
-        # convert to time object
-        config_dict["demandlib"]["day_start"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_start"], "%H:%M"
-        )
-        config_dict["demandlib"]["day_start"] = datetime.time(
-            config_dict["demandlib"]["day_start"].hour,
-            config_dict["demandlib"]["day_start"].minute,
-        )
-        config_dict["demandlib"]["day_end"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_end"], "%H:%M"
-        )
-        config_dict["demandlib"]["day_end"] = datetime.time(
-            config_dict["demandlib"]["day_end"].hour,
-            config_dict["demandlib"]["day_end"].minute,
-        )
-        (
-            config_dict["db_tables_dict"],
-            config_dict["db_schema_dict"],
-        ) = self.get_database_alias_dictionaries()
+        self._normalize_demandlib_times(config_dict)
         return config_dict
 
     def to_json(self, directory, filename=None):
@@ -368,20 +429,7 @@ class Config:
 
         config_dict = json.loads(data)
 
-        config_dict["demandlib"]["day_start"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_start"], "%H:%M:%S"
-        )
-        config_dict["demandlib"]["day_start"] = datetime.time(
-            config_dict["demandlib"]["day_start"].hour,
-            config_dict["demandlib"]["day_start"].minute,
-        )
-        config_dict["demandlib"]["day_end"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_end"], "%H:%M:%S"
-        )
-        config_dict["demandlib"]["day_end"] = datetime.time(
-            config_dict["demandlib"]["day_end"].hour,
-            config_dict["demandlib"]["day_end"].minute,
-        )
+        self._normalize_demandlib_times(config_dict)
 
         return config_dict
 
@@ -483,16 +531,12 @@ def get(section, key):
     """
     if not _loaded:
         pass
-    try:
-        return cfg.getfloat(section, key)
-    except Exception:
+    for accessor in (cfg.getfloat, cfg.getint, cfg.getboolean):
         try:
-            return cfg.getint(section, key)
+            return accessor(section, key)
         except Exception:
-            try:
-                return cfg.getboolean(section, key)
-            except Exception:
-                return cfg.get(section, key)
+            continue
+    return cfg.get(section, key)
 
 
 def get_default_config_path():
