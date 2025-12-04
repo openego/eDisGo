@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 from edisgo import EDisGo
-from edisgo.flex_opt import reinforce_measures
+from edisgo.flex_opt import check_tech_constraints, reinforce_measures
 
 
 class TestReinforceMeasures:
@@ -25,13 +25,16 @@ class TestReinforceMeasures:
         # exchanged with standard transformer and in LVGrid_4 a third
         # transformer is added
         self.edisgo = copy.deepcopy(self.edisgo_root)
+        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
+        lv_grid_4 = self.edisgo.topology.get_lv_grid(4)
 
         crit_lv_stations = pd.DataFrame(
             {
                 "s_missing": [0.17, 0.04],
                 "time_index": [self.timesteps[1]] * 2,
+                "grid": [lv_grid_1, lv_grid_4],
             },
-            index=["LVGrid_1", "LVGrid_4"],
+            index=[lv_grid_1.station_name, lv_grid_4.station_name],
         )
         transformer_changes = reinforce_measures.reinforce_mv_lv_station_overloading(
             self.edisgo, crit_lv_stations
@@ -42,14 +45,15 @@ class TestReinforceMeasures:
         assert len(transformer_changes["removed"].keys()) == 1
 
         assert (
-            transformer_changes["added"]["LVGrid_1"][0]
+            transformer_changes["added"]["LVGrid_1_station"][0]
             == "LVStation_1_transformer_reinforced_1"
         )
         assert (
-            transformer_changes["removed"]["LVGrid_1"][0] == "LVStation_1_transformer_1"
+            transformer_changes["removed"]["LVGrid_1_station"][0]
+            == "LVStation_1_transformer_1"
         )
         assert (
-            transformer_changes["added"]["LVGrid_4"][0]
+            transformer_changes["added"]["LVGrid_4_station"][0]
             == "LVStation_4_transformer_reinforced_3"
         )
 
@@ -93,13 +97,17 @@ class TestReinforceMeasures:
         self.edisgo = copy.deepcopy(self.edisgo_root)
 
         crit_mv_station = pd.DataFrame(
-            {"s_missing": [19], "time_index": [self.timesteps[1]]},
-            index=["MVGrid_1"],
+            {
+                "s_missing": [19],
+                "time_index": [self.timesteps[1]],
+                "grid": self.edisgo.topology.mv_grid,
+            },
+            index=["MVGrid_1_station"],
         )
         transformer_changes = reinforce_measures.reinforce_hv_mv_station_overloading(
             self.edisgo, crit_mv_station
         )
-        assert len(transformer_changes["added"]["MVGrid_1"]) == 1
+        assert len(transformer_changes["added"]["MVGrid_1_station"]) == 1
         assert len(transformer_changes["removed"]) == 0
 
         trafo_new = self.edisgo.topology.transformers_hvmv_df.loc[
@@ -121,14 +129,18 @@ class TestReinforceMeasures:
         # check replacing current transformers and replacing them with three
         # standard transformers
         crit_mv_station = pd.DataFrame(
-            {"s_missing": [50], "time_index": [self.timesteps[1]]},
-            index=["MVGrid_1"],
+            {
+                "s_missing": [50],
+                "time_index": [self.timesteps[1]],
+                "grid": self.edisgo.topology.mv_grid,
+            },
+            index=["MVGrid_1_station"],
         )
         transformer_changes = reinforce_measures.reinforce_hv_mv_station_overloading(
             self.edisgo, crit_mv_station
         )
-        assert len(transformer_changes["added"]["MVGrid_1"]) == 3
-        assert len(transformer_changes["removed"]["MVGrid_1"]) == 1
+        assert len(transformer_changes["added"]["MVGrid_1_station"]) == 3
+        assert len(transformer_changes["removed"]["MVGrid_1_station"]) == 1
 
         trafos = self.edisgo.topology.transformers_hvmv_df
         assert (trafos.bus0 == "Bus_primary_MVStation_1").all()
@@ -137,7 +149,7 @@ class TestReinforceMeasures:
         assert (trafos.type_info == "40 MVA").all()
         assert (
             "MVStation_1_transformer_reinforced_2"
-            in transformer_changes["added"]["MVGrid_1"]
+            in transformer_changes["added"]["MVGrid_1_station"]
         )
         # check that removed transformer is removed from topology
         assert (
@@ -148,11 +160,14 @@ class TestReinforceMeasures:
     def test_reinforce_mv_lv_station_voltage_issues(self):
         self.edisgo = copy.deepcopy(self.edisgo_root)
 
-        station_9 = pd.DataFrame(
-            {"v_diff_max": [0.03], "time_index": [self.timesteps[0]]},
+        crit_stations = pd.DataFrame(
+            {
+                "abs_max_voltage_dev": [0.03],
+                "time_index": [self.timesteps[0]],
+                "lv_grid_id": 9.0,
+            },
             index=["Bus_secondary_LVStation_9"],
         )
-        crit_stations = {"LVGrid_9": station_9}
 
         trafos_pre = self.edisgo.topology.transformers_df
 
@@ -200,7 +215,7 @@ class TestReinforceMeasures:
 
         crit_nodes = pd.DataFrame(
             {
-                "v_diff_max": [0.08, 0.06, 0.05, 0.04],
+                "abs_max_voltage_dev": [0.08, 0.06, 0.05, 0.04],
                 "time_index": [
                     self.timesteps[0],
                     self.timesteps[0],
@@ -294,7 +309,7 @@ class TestReinforceMeasures:
 
         crit_nodes = pd.DataFrame(
             {
-                "v_diff_max": [0.08, 0.05],
+                "abs_max_voltage_dev": [0.08, 0.05],
                 "time_index": [self.timesteps[0], self.timesteps[0]],
             },
             index=["Bus_BranchTee_LVGrid_5_2", "Bus_BranchTee_LVGrid_5_5"],
@@ -438,3 +453,67 @@ class TestReinforceMeasures:
         assert np.isclose(line.x, 0.256 * 2 * np.pi * 50 / 1e3 * line.length)
         assert np.isclose(line.s_nom, 0.275 * 0.4 * np.sqrt(3))
         assert line.num_parallel == 1
+
+    def test_separate_lv_grid(self):
+        self.edisgo = copy.deepcopy(self.edisgo_root)
+
+        crit_lines_lv = check_tech_constraints.lv_line_max_relative_overload(
+            self.edisgo
+        )
+
+        all_lv_grid_ids = [
+            lv_grid.id for lv_grid in self.edisgo.topology.mv_grid.lv_grids
+        ]
+
+        lv_grid_ids = (
+            self.edisgo.topology.buses_df.loc[
+                self.edisgo.topology.lines_df.loc[crit_lines_lv.index].bus0
+            ]
+            .lv_grid_id.unique()
+            .astype(int)
+        )
+
+        lv_grids = [
+            lv_grid
+            for lv_grid in self.edisgo.topology.mv_grid.lv_grids
+            if lv_grid.id in lv_grid_ids
+        ]
+
+        for lv_grid in lv_grids:
+            orig_g = copy.deepcopy(lv_grid)
+            grid_id = orig_g.id
+
+            reinforce_measures.separate_lv_grid(self.edisgo, lv_grid)
+
+            new_g_0 = [
+                g for g in self.edisgo.topology.mv_grid.lv_grids if g.id == grid_id
+            ][0]
+
+            try:
+                new_g_1 = [
+                    g
+                    for g in self.edisgo.topology.mv_grid.lv_grids
+                    if g.id not in all_lv_grid_ids
+                ][0]
+
+                all_lv_grid_ids.append(new_g_1.id)
+            except IndexError:
+                continue
+
+            assert np.isclose(
+                orig_g.charging_points_df.p_set.sum(),
+                new_g_0.charging_points_df.p_set.sum()
+                + new_g_1.charging_points_df.p_set.sum(),
+            )
+
+            assert np.isclose(
+                orig_g.generators_df.p_nom.sum(),
+                new_g_0.generators_df.p_nom.sum() + new_g_1.generators_df.p_nom.sum(),
+            )
+
+            assert np.isclose(
+                orig_g.loads_df.p_set.sum(),
+                new_g_0.loads_df.p_set.sum() + new_g_1.loads_df.p_set.sum(),
+            )
+
+            assert len(orig_g.lines_df) == len(new_g_0.lines_df) + len(new_g_1.lines_df)

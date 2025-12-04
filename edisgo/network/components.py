@@ -89,7 +89,7 @@ class BasicComponent(ABC):
 
         Returns
         --------
-        :class:`~.network.components.Grid`
+        :class:`~.network.grids.Grid`
             Grid component is in.
 
         """
@@ -147,7 +147,7 @@ class Component(BasicComponent):
 
         Returns
         --------
-        :class:`~.network.components.Grid`
+        :class:`~.network.grids.Grid`
             Grid object the component is in.
 
         """
@@ -163,7 +163,7 @@ class Component(BasicComponent):
     @property
     def geom(self):
         """
-        Geo location of component.
+        Geolocation of component.
 
         Returns
         --------
@@ -200,7 +200,7 @@ class Load(Component):
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See :attr:`~.network.topology.Topology.loads_df` for more information.
 
         """
@@ -257,7 +257,7 @@ class Load(Component):
 
         The sector is e.g. used to assign load time series to a load using the
         demandlib. The following four sectors are considered:
-        'agricultural', 'retail', 'residential', 'industrial'.
+        'agricultural', 'cts', 'residential', 'industrial'.
 
         Parameters
         -----------
@@ -330,7 +330,7 @@ class Generator(Component):
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See :attr:`~.network.topology.Topology.generators_df` for more
             information.
 
@@ -486,7 +486,7 @@ class Storage(Component):
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See :attr:`~.network.topology.Topology.storage_units_df` for more
             information.
 
@@ -544,6 +544,19 @@ class Storage(Component):
         """
         return self.edisgo_obj.timeseries.storage_units_reactive_power.loc[:, self.id]
 
+    @property
+    def state_of_charge_timeseries(self):
+        """
+        State of charge time series of storage unit in MWh.
+
+        Returns
+        --------
+        :pandas:`pandas.Series<Series>`
+            State of charge time series of storage unit in MWh.
+
+        """
+        return self.edisgo_obj.timeseries.storage_units_state_of_charge.loc[:, self.id]
+
     def _set_bus(self, bus):
         # check if bus is valid
         if bus in self.topology.buses_df.index:
@@ -583,7 +596,7 @@ class Switch(BasicComponent):
 
         Returns
         --------
-        :pandas:`pandas.DataFrame<dataframe>`
+        :pandas:`pandas.DataFrame<DataFrame>`
             See :attr:`~.network.topology.Topology.switches_df` for more
             information.
 
@@ -690,7 +703,7 @@ class Switch(BasicComponent):
 
         Returns
         --------
-        :class:`~.topology.components.Grid`
+        :class:`~.topology.grids.Grid`
             Grid switch is in.
 
         """
@@ -778,7 +791,7 @@ class PotentialChargingParks(BasicComponent):
 
         Returns
         --------
-        :class:`~.network.components.Grid`
+        :class:`~.network.grids.Grid`
             Grid component is in.
 
         """
@@ -827,7 +840,7 @@ class PotentialChargingParks(BasicComponent):
     @property
     def designated_charging_point_capacity(self):
         """
-        Total gross designated charging park capacity.
+        Total gross designated charging park capacity in kW.
 
         This is not necessarily equal to the connection rating.
 
@@ -837,12 +850,11 @@ class PotentialChargingParks(BasicComponent):
             Total gross designated charging park capacity
 
         """
-        return round(
+        return (
             self.charging_processes_df.groupby("charging_point_id")
             .max()
             .nominal_charging_capacity_kW.sum()
-            / self._edisgo_obj.electromobility.eta_charging_points,
-            1,
+            / self._edisgo_obj.electromobility.eta_charging_points
         )
 
     @property
@@ -895,8 +907,6 @@ class PotentialChargingParks(BasicComponent):
         """
         substations = self._topology.buses_df.loc[self._topology.transformers_df.bus1]
 
-        if self.geometry.y > 90:
-            print("break")
         nearest_substation, distance = find_nearest_bus(self.geometry, substations)
 
         lv_grid_id = int(self._topology.buses_df.at[nearest_substation, "lv_grid_id"])

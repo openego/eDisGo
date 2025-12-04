@@ -27,7 +27,7 @@ def translate_df_to_graph(
 
     Returns
     -------
-    :networkx:`networkx.Graph<network.Graph>`
+    :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
             where lines are represented by edges in the graph, and buses and
             transformers are represented by nodes.

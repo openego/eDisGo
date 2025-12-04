@@ -23,7 +23,11 @@ class TestChargingStrategy:
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         cls.edisgo_obj.set_timeindex(timeindex)
 
-        cls.edisgo_obj.import_electromobility(cls.simbev_path, cls.tracbev_path)
+        cls.edisgo_obj.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=cls.simbev_path,
+            potential_charging_points_dir=cls.tracbev_path,
+        )
 
     def test_charging_strategy(self, caplog):
         charging_demand_lst = []
@@ -50,7 +54,10 @@ class TestChargingStrategy:
         )
 
         # Check if resampling warning is raised
-        assert "The frequency of the time series data of the edisgo object differs" in caplog.text
+        assert (
+            "The frequency of the time series data of the edisgo object differs"
+            in caplog.text
+        )
 
         # Check if all charging points have a valid chargingdemand_kWh > 0
         df = ts.charging_points_active_power(self.edisgo_obj).loc[
@@ -87,7 +94,5 @@ class TestChargingStrategy:
         # change time index to quarter-hourly
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="0.25H")
         self.edisgo_obj.set_timeindex(timeindex)
-        charging_strategy(
-            self.edisgo_obj, strategy="dumb"
-        )
+        charging_strategy(self.edisgo_obj, strategy="dumb")
         assert ts._loads_active_power.index.freqstr == "15T"

@@ -104,6 +104,7 @@ def setup_logger(
 
     reset_loggers : bool
         If True the handlers of all loggers are cleared before configuring the loggers.
+        Only use if you know what you do, it could be dangerous.
 
     Examples
     --------
@@ -118,7 +119,7 @@ def setup_logger(
 
     def create_dir(dir_path):
         if not os.path.isdir(dir_path):
-            os.mkdir(dir_path)
+            os.makedirs(dir_path)
 
     def get_default_root_dir():
         dir_path = str(cfg_edisgo.get("user_dirs", "root_dir"))
@@ -139,9 +140,9 @@ def setup_logger(
         log_dir = os.path.join(
             get_default_root_dir(), cfg_edisgo.get("user_dirs", "log_dir")
         )
-        create_dir(log_dir)
 
     if log_dir is not None:
+        create_dir(log_dir)
         file_name = os.path.join(log_dir, file_name)
 
     if reset_loggers:
@@ -151,7 +152,11 @@ def setup_logger(
         ]
 
         for logger in existing_loggers:
-            logger.handlers.clear()
+            for handler in logger.handlers:
+                if not isinstance(handler, logging.NullHandler):
+                    if debug_message:
+                        print(f"Removed {handler} of Logger: {logger}")
+                    logger.removeHandler(handler)
 
     loglevel_dict = {
         "debug": logging.DEBUG,
@@ -183,6 +188,9 @@ def setup_logger(
         else:
             logger = logging.getLogger(logger_name)
             logger.propagate = False
+
+        # clear existing handlers for the logger
+        logger.handlers.clear()
 
         if logger_file_level < logger_stream_level:
             logger.setLevel(logger_file_level)

@@ -17,10 +17,14 @@
 
 # exclude locally built docs
 doc/_html
+/doc/_build/
 
 # exclude egg-info
 eDisGo.egg-info/
 
 # exclude .json files in opf
-/edisgo/opf/edisgo_scenario_data/*.json
 /edisgo/opf/opf_solutions/*.json
+/edisgo/opf/eDisGo_OPF.jl/.vscode
+.vscode/settings.json
+
+*TOEP_TOKEN.*
