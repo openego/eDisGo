@@ -131,7 +131,7 @@ class HeatPump:
         Write COP time series for heat pumps to py:attr:`~cop_df`.
 
         COP time series can either be given to this function or be obtained from the
-        `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+        `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
         In case they are obtained from the OpenEnergy DataBase the heat pumps need to
         already be integrated into the grid, i.e. given in
         :attr:`~.network.topology.Topology.loads_df`.
@@ -150,7 +150,7 @@ class HeatPump:
             * 'oedb'
 
                 COP / efficiency data are obtained from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_.
+                <https://openenergyplatform.org/dataedit/schemas>`_.
                 In case of heat pumps weather cell specific hourly COP time series
                 are obtained (see :func:`edisgo.io.timeseries_import.cop_oedb` for more
                 information). Using information on which weather cell each heat pump
@@ -317,7 +317,7 @@ class HeatPump:
         Write heat demand time series of heat pumps to py:attr:`~heat_demand_df`.
 
         Heat demand time series can either be given to this function or be obtained from
-        the `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+        the `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
         In case they are obtained from the OpenEnergy DataBase the heat pumps need to
         already be integrated into the grid, i.e. given in
         :attr:`~.network.topology.Topology.loads_df`.
@@ -336,7 +336,7 @@ class HeatPump:
             * 'oedb'
 
                 Heat demand time series are obtained from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_ (see
+                <https://openenergyplatform.org/dataedit/schemas>`_ (see
                 :func:`edisgo.io.timeseries_import.heat_demand_oedb` for more
                 information).
                 Time series are only obtained for heat pumps that are already integrated

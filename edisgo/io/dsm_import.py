@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-import saio
 
 from sqlalchemy.engine.base import Engine
 
 from edisgo.io.db import session_scope_egon_data
 from edisgo.io.timeseries_import import _timeindex_helper_func
 from edisgo.tools import tools
+from edisgo.tools.config import Config
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -28,7 +28,7 @@ def oedb(
 ):
     """
     Gets industrial and CTS DSM profiles from the
-    `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Profiles comprise minimum and maximum load increase in MW as well as maximum energy
     pre- and postponing in MWh.
@@ -65,7 +65,7 @@ def oedb(
     dsm_cts = get_profile_cts(edisgo_obj, scenario, engine)
     ind_loads = edisgo_obj.topology.loads_df[
         (edisgo_obj.topology.loads_df.type == "conventional_load")
-        & (edisgo_obj.topology.loads_df.sector == "industry")
+        & (edisgo_obj.topology.loads_df.sector == "industrial")
     ]
     dsm_ind = get_profiles_per_industrial_load(
         ind_loads.building_id.unique(), scenario, engine
@@ -124,17 +124,27 @@ def get_profiles_per_industrial_load(
         column names are site ID as integer.
 
     """
-    saio.register_schema("demand", engine)
-    from saio.demand import (
-        egon_demandregio_sites_ind_electricity_dsm_timeseries as sites_ind_dsm_ts,
-    )
-    from saio.demand import (
+
+    config = Config()
+    (
+        sites_ind_dsm_ts,
         egon_osm_ind_load_curves_individual_dsm_timeseries,
         egon_sites_ind_load_curves_individual_dsm_timeseries,
+    ) = config.import_tables_from_oep(
+        engine,
+        [
+            "egon_demandregio_sites_ind_electricity_dsm_timeseries",
+            "egon_osm_ind_load_curves_individual_dsm_timeseries",
+            "egon_sites_ind_load_curves_individual_dsm_timeseries",
+        ],
+        "demand",
     )
 
     dsm_dict = {}
-
+    if len(load_ids) == 0:
+        for dsm_profile in ["e_min", "e_max", "p_min", "p_max"]:
+            dsm_dict[dsm_profile] = pd.DataFrame()
+        return dsm_dict
     with session_scope_egon_data(engine) as session:
         query = session.query(
             egon_sites_ind_load_curves_individual_dsm_timeseries.site_id,
@@ -160,7 +170,6 @@ def get_profiles_per_industrial_load(
             sites_ind_dsm_ts.scn_name == scenario,
             sites_ind_dsm_ts.industrial_sites_id.in_(load_ids),
         )
-
         df_sites_2 = pd.read_sql(sql=query.statement, con=engine)
 
     with session_scope_egon_data(engine) as session:
@@ -226,8 +235,10 @@ def get_profile_cts(
     egon_data and ding0.
 
     """
-    saio.register_schema("demand", engine)
-    from saio.demand import egon_etrago_electricity_cts_dsm_timeseries
+    config = Config()
+    (egon_etrago_electricity_cts_dsm_timeseries,) = config.import_tables_from_oep(
+        engine, ["egon_etrago_electricity_cts_dsm_timeseries"], "demand"
+    )
 
     # get data
     dsm_dict = {}

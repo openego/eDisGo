@@ -257,7 +257,6 @@ class TestEDisGo:
         assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 0)
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
 
-    @pytest.mark.local
     def test_set_time_series_active_power_predefined_oedb(self):
         # test conventional_loads_ts="oedb" for all loads in grid
         edisgo_object = EDisGo(
@@ -382,6 +381,7 @@ class TestEDisGo:
         )
 
     @pytest.mark.slow
+    @pytest.mark.skip(reason="deprecated - should not be tested right now")
     def test_generator_import(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.import_generators("nep2035")
@@ -1295,7 +1295,6 @@ class TestEDisGo:
         )
         # fmt: on
 
-    @pytest.mark.local
     def test_import_electromobility_oedb(self):
         """
         Test import from oedb.
@@ -1353,7 +1352,6 @@ class TestEDisGo:
         )
         # fmt: on
 
-    @pytest.mark.local
     def test_import_heat_pumps(self):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False

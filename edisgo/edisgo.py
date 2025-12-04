@@ -31,6 +31,7 @@ from edisgo.io import (
     pypsa_io,
     timeseries_import,
 )
+from edisgo.io.db import engine as egon_engine
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
@@ -417,7 +418,7 @@ class EDisGo:
                 Technology- and weather cell-specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_. See
+                <https://openenergyplatform.org/dataedit/schemas>`_. See
                 :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
 
                 This option requires that the parameter `engine` is provided in case
@@ -478,7 +479,7 @@ class EDisGo:
 
                 Sets active power demand time series using individual hourly electricity
                 load time series for one year obtained from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_.
+                <https://openenergyplatform.org/dataedit/schemas>`_.
 
                 This option requires that the parameters `engine` and `scenario` are
                 provided. For further settings, the parameter `timeindex` can also be
@@ -555,6 +556,7 @@ class EDisGo:
             is indexed using a default year and set for the whole year.
 
         """
+        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
         if self.timeseries.timeindex.empty:
             logger.warning(
                 "When setting time series using predefined profiles it is better to "
@@ -568,7 +570,7 @@ class EDisGo:
                 self,
                 fluctuating_generators_ts,
                 fluctuating_generators_names,
-                engine=kwargs.get("engine"),
+                engine=engine,
                 timeindex=kwargs.get("timeindex", None),
             )
         if dispatchable_generators_ts is not None:
@@ -583,7 +585,7 @@ class EDisGo:
                 loads_ts_df = timeseries_import.electricity_demand_oedb(
                     edisgo_obj=self,
                     scenario=kwargs.get("scenario"),
-                    engine=kwargs.get("engine"),
+                    engine=engine,
                     timeindex=kwargs.get("timeindex", None),
                     load_names=conventional_loads_names,
                 )
@@ -933,13 +935,13 @@ class EDisGo:
         Gets generator park for specified scenario and integrates generators into grid.
 
         The generator data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_. Decommissioned
+        `open energy platform <https://openenergyplatform.org/>`_. Decommissioned
         generators are removed from the grid, generators with changed capacity
         updated and new generators newly integrated into the grid.
 
         In case you are using new ding0 grids, where the LV is geo-referenced, the
         supported data source is scenario data generated in the research project
-        `eGo^n <https://ego-n.org/>`_. You can choose between two scenarios:
+        `eGo^n <https://rego-n.org/>`_. You can choose between two scenarios:
         'eGon2035' and 'eGon100RE'. For more information on database tables used and
         how generator park is adapted see :func:`~.io.generators_import.oedb`.
 
@@ -977,6 +979,7 @@ class EDisGo:
             keyword arguments.
 
         """
+        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
         if self.legacy_grids is True:
             generators_import.oedb_legacy(
                 edisgo_object=self, generator_scenario=generator_scenario, **kwargs
@@ -984,7 +987,7 @@ class EDisGo:
         else:
             generators_import.oedb(
                 edisgo_object=self,
-                engine=kwargs.get("engine"),
+                engine=engine,
                 scenario=generator_scenario,
             )
 
@@ -1003,8 +1006,8 @@ class EDisGo:
         Conducts a static, non-linear power flow analysis.
 
         Conducts a static, non-linear power flow analysis using
-        `PyPSA <https://pypsa.readthedocs.io/en/latest/power_flow.html#\
-        full-non-linear-power-flow>`_
+        `PyPSA <https://docs.pypsa.org/v0.35.1/user-guide/power-flow.html#\
+        non-linear-power-flow>`_
         and writes results (active, reactive and apparent power as well as
         current on lines and voltages at buses) to :class:`~.network.results.Results`
         (e.g. :attr:`~.network.results.Results.v_res` for voltages).
@@ -1108,7 +1111,7 @@ class EDisGo:
 
         References
         --------
-        [1] https://pypsa.readthedocs.io/en/latest/troubleshooting.html
+        [1] https://docs.pypsa.org/v0.35.1/troubleshooting.html
 
         """
 
@@ -1845,9 +1848,11 @@ class EDisGo:
                 [
                     pd.DataFrame(
                         {
-                            naming.format("_".join(k))
-                            if isinstance(k, tuple)
-                            else naming.format(k): getattr(self.timeseries, attribute)
+                            (
+                                naming.format("_".join(k))
+                                if isinstance(k, tuple)
+                                else naming.format(k)
+                            ): getattr(self.timeseries, attribute)
                             .loc[:, v]
                             .sum(axis=1)
                         }
@@ -1928,7 +1933,7 @@ class EDisGo:
         Imports electromobility data and integrates charging points into grid.
 
         Electromobility data can be obtained from the `OpenEnergy DataBase
-        <https://openenergy-platform.org/dataedit/schemas>`_ or from self-provided
+        <https://openenergyplatform.org/dataedit/schemas>`_ or from self-provided
         data. In case you want to use self-provided data, it needs to be generated
         using the tools
         `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
@@ -1960,7 +1965,7 @@ class EDisGo:
             * "oedb"
 
                 Electromobility data is obtained from the `OpenEnergy DataBase
-                <https://openenergy-platform.org/dataedit/schemas>`_.
+                <https://openenergyplatform.org/dataedit/schemas>`_.
 
                 This option requires that the parameters `scenario` and `engine` are
                 provided.
@@ -2143,7 +2148,7 @@ class EDisGo:
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_.
+        `open energy platform <https://openenergyplatform.org/>`_.
 
         # ToDo Add information on scenarios and from which tables data is retrieved.
 
@@ -2305,14 +2310,14 @@ class EDisGo:
     def import_dsm(self, scenario: str, engine: Engine, timeindex=None):
         """
         Gets industrial and CTS DSM profiles from the
-        `OpenEnergy DataBase <https://openenergy-platform.org/dataedit/schemas>`_.
+        `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
 
         Profiles comprise minimum and maximum load increase in MW as well as maximum
         energy pre- and postponing in MWh. The data is written to the
         :class:`~.network.dsm.DSM` object.
 
         Currently, the only supported data source is scenario data generated
-        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        in the research project `eGo^n <https://rego-n.org/>`_. You can choose
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         Parameters
@@ -2352,11 +2357,11 @@ class EDisGo:
         the grid.
 
         Currently, the only supported data source is scenario data generated
-        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        in the research project `eGo^n <https://rego-n.org/>`_. You can choose
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_.
+        `open energy platform <https://openenergyplatform.org/>`_.
 
         The batteries are integrated into the grid (added to
         :attr:`~.network.topology.Topology.storage_units_df`) based on their building
