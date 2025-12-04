@@ -114,7 +114,7 @@ extlinks = {
         "networkx.%s",
     ),
     "sqlalchemy": (
-        "https://docs.sqlalchemy.org/en/latest/core/connections.html#%s",
+        "https://docs.sqlalchemy.org/en/20/core/connections.html#%s",
         "sqlalchemy.%s",
     ),
     "numpy": (
@@ -127,7 +127,7 @@ extlinks = {
     ),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "ding0.%s"),
     "pypsa": (
-        "https://pypsa.readthedocs.io/en/latest/user-guide/components.html#%s",
+        "https://docs.pypsa.org/v0.35.1/user-guide/components.html#%s",
         "pypsa.%s",
     ),
     "plotly": (
@@ -142,6 +142,8 @@ extlinks = {
 linkcheck_ignore = [
     r"https://stackoverflow.com*",
     r"https://support.gurobi.com/*",
+    r"https://www.gnu.org/licenses/",
+    r"https://www.mdpi.com/*",
 ]
 
 # Add any paths that contain templates here, relative to this directory.

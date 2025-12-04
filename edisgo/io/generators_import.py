@@ -8,13 +8,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-import saio
 
 from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
 from edisgo.tools import session_scope
+from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus, proj2equidistant
 from edisgo.tools.tools import (
     determine_bus_voltage_level,
@@ -42,10 +42,10 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     The importer uses SQLAlchemy ORM objects. These are defined in
     `ego.io <https://github.com/openego/ego.io/tree/dev/egoio/db_tables/>`_.
     The data is imported from the tables
-    `conventional power plants <https://openenergyplatform.org/dataedit/\
-    view/supply/ego_dp_conv_powerplant>`_ and
-    `renewable power plants <https://openenergyplatform.org/dataedit/\
-    view/supply/ego_dp_res_powerplant>`_.
+    `conventional power plants <https://openenergyplatform.org/database/\
+    tables/ego_dp_conv_powerplant>`_ and
+    `renewable power plants <https://openenergyplatform.org/database/\
+    tables/ego_dp_res_powerplant>`_.
 
     When the generator data is retrieved, the following steps are conducted:
 
@@ -937,11 +937,15 @@ def oedb(
             ).to_crs(srid_edisgo)
         return chp_gdf
 
-    saio.register_schema("supply", engine)
-    from saio.supply import (
+    config = Config()
+    (
         egon_chp_plants,
         egon_power_plants,
         egon_power_plants_pv_roof_building,
+    ) = config.import_tables_from_oep(
+        engine,
+        ["egon_chp_plants", "egon_power_plants", "egon_power_plants_pv_roof_building"],
+        "supply",
     )
 
     # get generator data from database
