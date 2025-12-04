@@ -50,7 +50,7 @@ requirements = [
     "numpy ==1.26.4",
     "pandas >= 1.4.0, < 2.2.0",
     "plotly < 6.0",
-    "pydot < 3.1.0",
+    "pydot < 4.1.0",
     "pygeos < 0.15.0",
     "pypower < 5.2.0",
     "pyproj >= 3.0.0, < 3.8.0",
@@ -61,25 +61,25 @@ requirements = [
     "shapely >= 1.7.0, < 2.1.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel < 0.5.0",
-    "urllib3 < 2.5.0",
+    "urllib3 < 2.6.0",
     "workalendar < 17.1.0",
-    "astroid == 3.3.9",
+    "astroid == 3.3.11",
 ]
 
 dev_requirements = [
     "black < 25.2.0",
-    "flake8 < 7.3.0",
+    "flake8 < 7.4.0",
     "isort < 6.1.0",
     "pre-commit < 4.3.0",
     "pylint < 3.4.0",
-    "pytest < 8.4.0",
+    "pytest < 8.5.0",
     "pytest-notebook < 0.11.0",
-    "pyupgrade < 3.20.0",
+    "pyupgrade < 3.21.0",
     "sphinx < 8.3.0",
     "sphinx_rtd_theme >=0.5.2, < 3.1.0",
     "sphinx-autodoc-typehints < 3.2.0",
     "sphinx-autoapi < 3.7.0",
-    "astroid == 3.3.9",
+    "astroid == 3.3.11",
 ]
 
 extras = {"dev": dev_requirements}
