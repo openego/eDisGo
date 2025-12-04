@@ -74,7 +74,7 @@ def _timeindex_helper_func(
 def feedin_oedb_legacy(edisgo_object, timeindex=None):
     """
     Import feed-in time series data for wind and solar power plants from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Parameters
     ----------
@@ -158,7 +158,7 @@ def feedin_oedb(
 ):
     """
     Import feed-in time series data for wind and solar power plants from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Parameters
     ----------
@@ -325,7 +325,7 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
 def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
     """
     Get COP (coefficient of performance) time series data from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Parameters
     ----------
@@ -385,7 +385,7 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
 def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
     """
     Get heat demand profiles for heat pumps from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Heat demand data is returned for all heat pumps in the grid.
     For more information on how individual heat demand profiles are obtained see
@@ -506,7 +506,7 @@ def electricity_demand_oedb(
 ):
     """
     Get electricity demand profiles for all conventional loads from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Conventional loads comprise conventional electricity applications in the
     residential, CTS and industrial sector.

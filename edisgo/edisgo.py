@@ -941,7 +941,7 @@ class EDisGo:
 
         In case you are using new ding0 grids, where the LV is geo-referenced, the
         supported data source is scenario data generated in the research project
-        `eGo^n <https://ego-n.org/>`_. You can choose between two scenarios:
+        `eGo^n <https://rego-n.org/>`_. You can choose between two scenarios:
         'eGon2035' and 'eGon100RE'. For more information on database tables used and
         how generator park is adapted see :func:`~.io.generators_import.oedb`.
 
@@ -2317,7 +2317,7 @@ class EDisGo:
         :class:`~.network.dsm.DSM` object.
 
         Currently, the only supported data source is scenario data generated
-        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        in the research project `eGo^n <https://rego-n.org/>`_. You can choose
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         Parameters
@@ -2357,7 +2357,7 @@ class EDisGo:
         the grid.
 
         Currently, the only supported data source is scenario data generated
-        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        in the research project `eGo^n <https://rego-n.org/>`_. You can choose
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
