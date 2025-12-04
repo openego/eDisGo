@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 import networkx as nx
 import numpy as np
 import pandas as pd
-import saio
 
 from sqlalchemy.engine.base import Engine
 
-from edisgo.flex_opt import exceptions
+from edisgo.flex_opt import exceptions, q_control
 from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
 from edisgo.tools import session_scope
+from edisgo.tools.config import Config
 
 if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import climate
@@ -193,13 +193,157 @@ def drop_duplicated_columns(df, keep="last"):
     return df.loc[:, ~df.columns.duplicated(keep=keep)]
 
 
-def select_cable(edisgo_obj, level, apparent_power):
+def calculate_voltage_diff_pu_per_line(
+    s_max: float | np.ndarray,
+    r_total: float | np.ndarray,
+    x_total: float | np.ndarray,
+    v_nom: float | np.ndarray,
+    q_sign: int,
+    power_factor: float,
+) -> float | np.ndarray:
     """
-    Selects suitable cable type and quantity using given apparent power.
+    Calculate the voltage difference across a line in p.u..
 
-    Cable is selected to be able to carry the given `apparent_power`, no load
-    factor is considered. Overhead lines are not considered in choosing a
-    suitable cable.
+    Parameters
+    ----------
+    s_max : float or array-like
+        Apparent power the cable must carry in MVA.
+    r_total : float or array-like
+        Total resistance of the line in Ohms.
+    x_total : float or array-like
+        Total reactance of the line in Ohms.
+    v_nom : float or array-like
+        Nominal voltage of the line in kV.
+    q_sign : int
+        `q_sign` defines whether the reactive power is positive or
+        negative and must either be -1 or +1. In case of generators and storage units,
+        inductive reactive power is negative. In case of loads, inductive reactive
+        power is positive.
+    power_factor : :pandas:`pandas.Series<Series>` or float
+        Ratio of real to apparent power.
+
+    Returns
+    -------
+    float or array-like
+        Voltage difference in p.u.. If positive, the voltage difference behaves like
+        expected, it rises for generators and drops for loads. If negative,
+        the voltage difference behaves counterintuitively, it drops for generators
+        and rises for loads.
+
+    """
+    sin_phi = np.sqrt(1 - power_factor**2)
+    # Calculate the voltage difference using the formula from VDE-AR-N 4105
+    voltage_diff = (s_max / (v_nom**2)) * (
+        r_total * power_factor + q_sign * x_total * sin_phi
+    )
+    return voltage_diff  # in pu
+
+
+def calculate_voltage_diff_pu_per_line_from_type(
+    edisgo_obj: EDisGo,
+    cable_names: str | np.ndarray,
+    length: float,
+    num_parallel: int,
+    v_nom: float | np.ndarray,
+    s_max: float | np.ndarray,
+    component_type: str,
+) -> float | np.ndarray:
+    """
+    Calculate the voltage difference across a line in p.u. depending on line type
+    and component type.
+
+    This function serves as a helper function for function
+    :py:func:`calculate_voltage_diff_pu_per_line`, as it automatically obtains the
+    equipment data per line type from the provided equipment data and default reactive
+    power data per component type from the configuration files.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    cable_names : str or array-like
+        Resistance per kilometer of the cable in ohm/km.
+    length : float
+        Length of the cable in km.
+    num_parallel : int
+        Number of parallel cables.
+    v_nom : int
+        Nominal voltage of the cable(s) in kV.
+    s_max : float
+        Apparent power the cable must carry in MVA.
+    component_type : str, optional
+        Type of the component to be connected, used to obtain the default reactive power
+        mode and power factor from the configuration file. If this is given,
+        `reactive_power_mode` and `power_factor` are not considered.
+        Possible options are "generator", "conventional_load", "charging_point",
+        "heat_pump" and "storage_unit".
+
+    Returns
+    -------
+    float or array-like
+        Voltage difference in p.u.. If positive, the voltage difference behaves like
+        expected, it rises for generators and drops for loads. If negative,
+        the voltage difference behaves counterintuitively, it drops for generators
+        and rises for loads.
+
+    """
+    # calculate total resistance and reactance for the given length and
+    # number of parallel cables for given cable types
+    config_type = "mv_cables" if v_nom > 1.0 else "lv_cables"
+    cable_data = edisgo_obj.topology.equipment_data[config_type]
+    r_total = calculate_line_resistance(
+        cable_data.loc[cable_names, "R_per_km"], length, num_parallel
+    )
+    x_total = calculate_line_reactance(
+        cable_data.loc[cable_names, "L_per_km"], length, num_parallel
+    )
+
+    # get sign of reactive power based on component type
+    config_type = f"mv_{component_type}" if v_nom > 1.0 else f"lv_{component_type}"
+    if component_type in ["generator", "storage_unit"]:
+        q_sign = q_control.get_q_sign_generator(
+            edisgo_obj.config["reactive_power_mode"][config_type]
+        )
+    elif component_type in ["conventional_load", "heat_pump", "charging_point"]:
+        q_sign = q_control.get_q_sign_load(
+            edisgo_obj.config["reactive_power_mode"][config_type]
+        )
+    else:
+        raise ValueError(
+            "Specified component type is not valid. "
+            "Must either be 'generator', 'conventional_load', 'charging_point', "
+            "'heat_pump' or 'storage_unit'."
+        )
+
+    # get power factor based on component type
+    power_factor = edisgo_obj.config["reactive_power_factor"][config_type]
+
+    # Calculate the voltage drop or increase
+    return calculate_voltage_diff_pu_per_line(
+        s_max,
+        r_total,
+        x_total,
+        v_nom,
+        q_sign,
+        power_factor,
+    )
+
+
+def select_cable(
+    edisgo_obj: EDisGo,
+    level: str,
+    apparent_power: float,
+    component_type: str | None = None,
+    length: float = 0.0,
+    max_voltage_diff: float | None = None,
+    max_cables: int = 7,
+) -> tuple[pd.Series, int]:
+    """
+    Selects suitable cable type and quantity based on apparent power and
+    voltage deviation.
+
+    The cable is selected to carry the given `apparent_power` and to ensure
+    acceptable voltage deviation over the cable.
+    Overhead lines are not considered in choosing a suitable cable.
 
     Parameters
     ----------
@@ -209,49 +353,96 @@ def select_cable(edisgo_obj, level, apparent_power):
         'lv'.
     apparent_power : float
         Apparent power the cable must carry in MVA.
+    component_type : str
+        Type of the component to be connected. Possible options are "generator",
+        "conventional_load", "charging_point", "heat_pump" or "storage_unit".
+        Only needed in case a cable length is given and thus the voltage difference over
+        the cable can be taken into account for selecting a suitable cable. In that case
+        it is used to obtain the default power factor and reactive power mode from the
+        configuration files in sections `reactive_power_factor` and
+        `reactive_power_mode`.
+        Default: None.
+    length : float
+        Length of the cable in km. Default: 0.
+    max_voltage_diff : float
+        Maximum allowed voltage difference in p.u..
+        If None, it defaults to the value specified in the configuration file
+        under the `grid_connection` section for the respective voltage level
+        (lv_max_voltage_deviation for LV and mv_max_voltage_deviation for MV).
+        Default: None.
+    max_cables : int
+        Maximum number of cables to consider. Default: 7.
 
     Returns
     -------
-    :pandas:`pandas.Series<Series>`
-        Series with attributes of selected cable as in equipment data and
-        cable type as series name.
-    int
-        Number of necessary parallel cables.
+    tuple[:pandas:`pandas.Series<Series>`, int]
+        A tuple containing information on the selected cable type and the quantity
+        needed.
 
     """
-
-    cable_count = 1
-
     if level == "mv":
         cable_data = edisgo_obj.topology.equipment_data["mv_cables"]
         available_cables = cable_data[
             cable_data["U_n"] == edisgo_obj.topology.mv_grid.nominal_voltage
         ]
+        if not max_voltage_diff:
+            max_voltage_diff = edisgo_obj.config["grid_connection"][
+                "mv_max_voltage_deviation"
+            ]
     elif level == "lv":
         available_cables = edisgo_obj.topology.equipment_data["lv_cables"]
+        if not max_voltage_diff:
+            max_voltage_diff = edisgo_obj.config["grid_connection"][
+                "lv_max_voltage_deviation"
+            ]
     else:
         raise ValueError(
             "Specified voltage level is not valid. Must either be 'mv' or 'lv'."
         )
 
+    cable_count = 1
     suitable_cables = available_cables[
         calculate_apparent_power(
             available_cables["U_n"], available_cables["I_max_th"], cable_count
         )
         > apparent_power
     ]
+    if length != 0:
+        suitable_cables = suitable_cables[
+            calculate_voltage_diff_pu_per_line_from_type(
+                edisgo_obj=edisgo_obj,
+                cable_names=suitable_cables.index,
+                length=length,
+                num_parallel=cable_count,
+                v_nom=available_cables["U_n"].values[0],
+                s_max=apparent_power,
+                component_type=component_type,
+            )
+            < max_voltage_diff
+        ]
 
     # increase cable count until appropriate cable type is found
-    while suitable_cables.empty and cable_count < 7:
+    while suitable_cables.empty and cable_count < max_cables:  # parameter
         cable_count += 1
         suitable_cables = available_cables[
             calculate_apparent_power(
-                available_cables["U_n"],
-                available_cables["I_max_th"],
-                cable_count,
+                available_cables["U_n"], available_cables["I_max_th"], cable_count
             )
             > apparent_power
         ]
+        if length != 0:
+            suitable_cables = suitable_cables[
+                calculate_voltage_diff_pu_per_line_from_type(
+                    edisgo_obj=edisgo_obj,
+                    cable_names=available_cables.index,
+                    length=length,
+                    num_parallel=cable_count,
+                    v_nom=available_cables["U_n"].values[0],
+                    s_max=apparent_power,
+                    component_type=component_type,
+                )
+                < max_voltage_diff
+            ]
     if suitable_cables.empty:
         raise exceptions.MaximumIterationError(
             "Could not find a suitable cable for apparent power of "
@@ -550,8 +741,10 @@ def get_weather_cells_intersecting_with_grid_district(
             ).filter(sql_intersects(table.geom, sql_geom, srid))
             weather_cells = pd.read_sql(sql=query.statement, con=query.session.bind).gid
     else:
-        saio.register_schema("supply", engine)
-        from saio.supply import egon_era5_weather_cells
+        config = Config()
+        (egon_era5_weather_cells,) = config.import_tables_from_oep(
+            engine, ["egon_era5_weather_cells"], "supply"
+        )
 
         with session_scope_egon_data(engine=engine) as session:
             query = session.query(

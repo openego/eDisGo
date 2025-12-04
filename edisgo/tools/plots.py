@@ -6,7 +6,6 @@ import os
 from typing import TYPE_CHECKING
 
 import matplotlib
-import matplotlib.cm as cm
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -604,7 +603,7 @@ def mv_grid_topology(
         bus_sizes, bus_colors = nodes_by_costs(
             pypsa_plot.buses.index, grid_expansion_costs, edisgo_obj
         )
-        bus_cmap = plt.cm.get_cmap(lines_cmap)
+        bus_cmap = matplotlib.pyplot.colormaps.get_cmap(lines_cmap)
     elif node_color == "curtailment":
         bus_sizes = nodes_curtailment(pypsa_plot.buses.index, curtailment_df)
         bus_colors = "orangered"
@@ -681,7 +680,8 @@ def mv_grid_topology(
         line_width = pypsa_plot.lines.s_nom * scaling_factor_line_width
     else:
         line_width = 2
-    cmap = plt.cm.get_cmap(lines_cmap)
+    cmap = matplotlib.pyplot.colormaps.get_cmap(lines_cmap)
+
     ll = pypsa_plot.plot(
         line_colors=line_colors,
         line_cmap=cmap,
@@ -888,7 +888,7 @@ def color_map_color(
     """
     norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
     if isinstance(cmap_name, str):
-        cmap = cm.get_cmap(cmap_name)
+        cmap = matplotlib.pyplot.colormaps.get_cmap(cmap_name)
     else:
         cmap = matplotlib.colors.LinearSegmentedColormap.from_list("mycmap", cmap_name)
     rgb = cmap(norm(abs(value)))[:3]
@@ -1258,6 +1258,7 @@ def plot_plotly(
 
             data_line_plot.append(edge_scatter)
 
+        # Add colorbar for line colors (works for both map and non-map plots)
         if line_color:
             line_color_title = {
                 "loading": "Loading in MVA",
@@ -1265,24 +1266,47 @@ def plot_plotly(
                 "reinforce": "Reinforce",
             }
 
-            colorbar_edge_scatter = go.Scatter(
-                mode="markers",
-                x=[None],
-                y=[None],
-                marker=dict(
-                    colorbar=dict(
-                        title=line_color_title[line_color],
-                        xanchor="left",
-                        titleside="right",
-                        x=1.19,
-                        thickness=15,
+            # Create invisible scatter plot for colorbar
+            if plot_map:
+                colorbar_edge_scatter = go.Scattermapbox(
+                    mode="markers",
+                    lon=[None],
+                    lat=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=line_color_title[line_color],
+                            xanchor="left",
+                            titleside="right",
+                            x=1.02,
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        cmax=color_max,
+                        cmin=color_min,
+                        showscale=showscale,
+                        opacity=0,  # Make invisible
                     ),
-                    colorscale=colorscale,
-                    cmax=color_max,
-                    cmin=color_min,
-                    showscale=showscale,
-                ),
-            )
+                    showlegend=False,
+                )
+            else:
+                colorbar_edge_scatter = go.Scatter(
+                    mode="markers",
+                    x=[None],
+                    y=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=line_color_title[line_color],
+                            xanchor="left",
+                            titleside="right",
+                            x=1.19,
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        cmax=color_max,
+                        cmin=color_min,
+                        showscale=showscale,
+                    ),
+                )
 
             if line_color == "reinforce":
                 colorbar_edge_scatter.marker.colorbar.tickmode = "array"
@@ -1381,6 +1405,9 @@ def plot_plotly(
                 text += "<br>" + str(index) + " = " + str(value)
 
             node_text.append(text)
+        # Create node scatter plots
+        node_scatter_plots = []
+
         if plot_map:
             node_scatter = go.Scattermapbox(
                 lon=node_x,
@@ -1389,12 +1416,11 @@ def plot_plotly(
                 hoverinfo="text",
                 text=node_text,
                 marker=dict(
-                    showscale=showscale,
+                    showscale=False,  # Disable colorbar for mapbox, added it separately
                     colorscale=colorscale,
                     color=node_colors,
                     size=8,
                     cmid=cmid,
-                    colorbar=colorbar,
                 ),
             )
         else:
@@ -1415,11 +1441,103 @@ def plot_plotly(
                 ),
             )
 
-        return [node_scatter]
+        node_scatter_plots.append(node_scatter)
 
-    fig = go.Figure(
-        data=plot_lines() + plot_buses() + plot_line_text(),
-        layout=go.Layout(
+        # Add separate colorbar for nodes in mapbox plots
+        if plot_map and node_color and showscale:
+            if plot_map:
+                node_colorbar_scatter = go.Scattermapbox(
+                    mode="markers",
+                    lon=[None],
+                    lat=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=colorbar["title"] if colorbar else "Node values",
+                            xanchor="left",
+                            titleside="right",
+                            x=1.12,  # Position it next to line colorbar
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        color=[0, 1],  # Dummy values for colorbar range
+                        cmax=max(node_colors) if isinstance(node_colors, list) else 1,
+                        cmin=min(node_colors) if isinstance(node_colors, list) else 0,
+                        cmid=cmid,
+                        showscale=True,
+                        opacity=0,  # Make invisible
+                    ),
+                    showlegend=False,
+                )
+                node_scatter_plots.append(node_colorbar_scatter)
+
+        return node_scatter_plots
+
+    # Calculate optimal zoom level for map based on network extent
+    def calculate_zoom_level():
+        if not plot_map:
+            return 11  # Default zoom for non-map plots
+
+        # Get all node coordinates
+        lats = []
+        lons = []
+        for node in G.nodes():
+            x, y = G.nodes[node]["pos"]
+            lons.append(x)
+            lats.append(y)
+
+        if not lats or not lons:
+            return 11  # Default if no coordinates
+
+        # Calculate bounds
+        lat_min, lat_max = min(lats), max(lats)
+        lon_min, lon_max = min(lons), max(lons)
+
+        # Calculate the extent in degrees
+        lat_range = lat_max - lat_min
+        lon_range = lon_max - lon_min
+        max_range = max(lat_range, lon_range)
+
+        # Simple zoom level calculation based on coordinate range
+        # These values are empirically determined for good fit
+        if max_range > 0.5:
+            zoom = 9
+        elif max_range > 0.2:
+            zoom = 10
+        elif max_range > 0.1:
+            zoom = 11
+        elif max_range > 0.05:
+            zoom = 12
+        elif max_range > 0.02:
+            zoom = 13
+        elif max_range > 0.01:
+            zoom = 14
+        elif max_range > 0.005:
+            zoom = 15
+        else:
+            zoom = 16
+
+        return min(zoom, 18)  # Cap at maximum zoom level
+
+    zoom_level = calculate_zoom_level()
+
+    # Create layout based on whether map is enabled
+    if plot_map:
+        layout = go.Layout(
+            height=height,
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            mapbox=dict(
+                center=dict(
+                    lat=y_center,
+                    lon=x_center,
+                ),
+                zoom=zoom_level,
+                style="open-street-map",
+            ),
+        )
+    else:
+        layout = go.Layout(
             height=height,
             showlegend=False,
             hovermode="closest",
@@ -1436,17 +1554,11 @@ def plot_plotly(
                 scaleanchor="x",
                 scaleratio=1,
             ),
-            mapbox=dict(
-                # bearing=0,
-                center=dict(
-                    lat=y_center,
-                    lon=x_center,
-                ),
-                # pitch=0,
-                zoom=11,
-                style="open-street-map",
-            ),
-        ),
+        )
+
+    fig = go.Figure(
+        data=plot_lines() + plot_buses() + plot_line_text(),
+        layout=layout,
     )
     if warning_message:
         fig.add_annotation(

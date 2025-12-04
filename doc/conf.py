@@ -71,8 +71,6 @@ autoapi_options = [
 ]
 # Files to ignore when building api documentation
 autoapi_ignore = [
-    "*/flex_opt/curtailment.py",
-    "*/flex_opt/storage_positioning.py",
     "*/opf/timeseries_reduction.py",
     "*/opf/opf_solutions/*",
 ]
@@ -116,7 +114,7 @@ extlinks = {
         "networkx.%s",
     ),
     "sqlalchemy": (
-        "https://docs.sqlalchemy.org/en/latest/core/connections.html#%s",
+        "https://docs.sqlalchemy.org/en/20/core/connections.html#%s",
         "sqlalchemy.%s",
     ),
     "numpy": (
@@ -128,16 +126,25 @@ extlinks = {
         "shapely.%s",
     ),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "ding0.%s"),
-    "pypsa": ("https://pypsa.readthedocs.io/en/latest/components.html#%s", "pypsa.%s"),
+    "pypsa": (
+        "https://docs.pypsa.org/v0.35.1/user-guide/components.html#%s",
+        "pypsa.%s",
+    ),
     "plotly": (
         "https://plotly.com/python-api-reference/generated/%s.html",
         "plotly.%s",
     ),
 }
 # ignore the following external links when checking the links
-# stackoverflow is listed here because for some reason the link check fails for these
+# stackoverflow and gurobi is listed here because for some reason
+# the link check fails for these
 # in the github action, even though the link is correct
-linkcheck_ignore = [r"https://stackoverflow.com*"]
+linkcheck_ignore = [
+    r"https://stackoverflow.com*",
+    r"https://support.gurobi.com/*",
+    r"https://www.gnu.org/licenses/",
+    r"https://www.mdpi.com/*",
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
