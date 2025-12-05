@@ -4,20 +4,17 @@ name: "Tests & Coverage"
 
 on: [push]
 
-# Global concurrency lock:
-# Ensures that only one workflow run (across all branches) can run at a time.
-# This prevents simultaneous test runs that might compete for shared resources (e.g., databases).
-concurrency:
-  group: tests-database-access
-  cancel-in-progress: false
-
 jobs:
 
   queue:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for global execution slot
-        run: echo "Queue position acquired for branch ${{ github.ref }}"
+      - name: Turnstyle
+        uses: softprops/turnstyle@v3
+        with:
+          same-branch-only: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     name: "${{ matrix.name-suffix }} at py${{ matrix.python-version }} on ${{ matrix.os }}"
