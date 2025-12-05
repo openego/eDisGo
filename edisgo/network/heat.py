@@ -131,7 +131,7 @@ class HeatPump:
         Write COP time series for heat pumps to py:attr:`~cop_df`.
 
         COP time series can either be given to this function or be obtained from the
-        `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+        `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
         In case they are obtained from the OpenEnergy DataBase the heat pumps need to
         already be integrated into the grid, i.e. given in
         :attr:`~.network.topology.Topology.loads_df`.

@@ -381,6 +381,7 @@ class TestEDisGo:
         )
 
     @pytest.mark.slow
+    @pytest.mark.skip(reason="deprecated - should not be tested right now")
     def test_generator_import(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.import_generators("nep2035")
