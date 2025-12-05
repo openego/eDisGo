@@ -13,16 +13,9 @@ concurrency:
 
 jobs:
 
-  queue:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Wait for global execution slot
-        run: echo "Queue position acquired for branch ${{ github.ref }}"
-
   build:
     name: "${{ matrix.name-suffix }} at py${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
-    needs: queue
 
     strategy:
       fail-fast: false
