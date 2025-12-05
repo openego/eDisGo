@@ -4,29 +4,16 @@ name: "Tests & Coverage"
 
 on: [push]
 
-# Concurrency control to prevent database conflicts:
-# - New pushes on same branch cancel old runs on that branch
-# - Only one workflow at a time can access the database (across all branches)
-# - Different branches queue and wait their turn without being cancelled
+# Cancel jobs on new push
 concurrency:
-  group: ${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
-  # This job enforces the global database lock across all branches
-  queue:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: tests-database-access
-      cancel-in-progress: false
-    steps:
-      - name: Wait for database access
-        run: echo "Queue position acquired for ${{ github.ref }}"
-  
   build:
     name: "${{ matrix.name-suffix }} at py${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
-    needs: queue
+
     strategy:
       fail-fast: false
       matrix:
