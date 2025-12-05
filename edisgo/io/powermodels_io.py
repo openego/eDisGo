@@ -167,7 +167,7 @@ def to_powermodels(
     else:
         logger.warning("No loads found in network.")
     if (opf_version == 3) | (opf_version == 4):
-        if edisgo_object.overlying_grid.heat_pump_central_active_power.isna()[0]:
+        if edisgo_object.overlying_grid.heat_pump_central_active_power.isna().iloc[0]:
             edisgo_object.overlying_grid.heat_pump_central_active_power[:] = 0
         hv_flex_dict = {
             "curt": edisgo_object.overlying_grid.renewables_curtailment.round(20)
@@ -361,10 +361,10 @@ def from_powermodels(
         # calculate relative error
         df2 = deepcopy(df)
         for flex in df2.columns:
-            abs_error = abs(df2[flex].values - hv_flex_dict[flex])
+            abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
             rel_error = [
-                abs_error[i] / hv_flex_dict[flex][i]
-                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex][i] != 0))
+                abs_error[i] / hv_flex_dict[flex].iloc[i]
+                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
                 else 0
                 for i in range(len(abs_error))
             ]
@@ -1049,9 +1049,9 @@ def _build_battery_storage(
             "pf": pf,
             "sign": sign,
             "virtual_branch": str(stor_i + len(branches.index) + 1),
-            "ps": psa_net.storage_units.p_set.iloc[flexible_storage_units[stor_i]].round(20)
+            "ps": psa_net.storage_units.p_set.loc[flexible_storage_units[stor_i]].round(20)
             / s_base,
-            "qs": psa_net.storage_units.q_set.iloc[flexible_storage_units[stor_i]].round(20)
+            "qs": psa_net.storage_units.q_set.loc[flexible_storage_units[stor_i]].round(20)
             / s_base,
             "pmax": psa_net.storage_units.p_nom.loc[
                 flexible_storage_units[stor_i]
@@ -1155,7 +1155,7 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         q = (
             sign
             * np.tan(np.arccos(pf))
-            * flex_bands_df["upper_power"][emob_df.index[cp_i]][0]
+            * flex_bands_df["upper_power"][emob_df.index[cp_i]].iloc[0]
         )
         p_max = flex_bands_df["upper_power"][emob_df.index[cp_i]]
         e_min = flex_bands_df["lower_energy"][emob_df.index[cp_i]]
@@ -1163,18 +1163,18 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         try:
             soc_initial = edisgo_obj.electromobility.initial_soc_df[emob_df.index[cp_i]]
         except AttributeError:
-            soc_initial = 1 / 2 * (e_min[0] + e_max[0])
+            soc_initial = 1 / 2 * (e_min.iloc[0] + e_max.iloc[0])
         pm["electromobility"][str(cp_i + 1)] = {
             "pd": 0,
             "qd": 0,
             "pf": pf,
             "sign": sign,
             "p_min": 0,
-            "p_max": p_max[0].round(20) / s_base,
+            "p_max": p_max.iloc[0].round(20) / s_base,
             "q_min": min(q, 0).round(20) / s_base,
             "q_max": max(q, 0).round(20) / s_base,
-            "e_min": e_min[0].round(20) / s_base,
-            "e_max": e_max[0].round(20) / s_base,
+            "e_min": e_min.iloc[0].round(20) / s_base,
+            "e_max": e_max.iloc[0].round(20) / s_base,
             "energy": soc_initial.round(20),
             "eta": eta,
             "cp_bus": idx_bus,
@@ -1229,7 +1229,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
             "p_max": heat_df.p_set.iloc[hp_i].round(20) / s_base,
             "q_min": min(q, 0).round(20) / s_base,
             "q_max": max(q, 0).round(20) / s_base,
-            "cop": hp_cop[heat_df.index[hp_i]][0].round(20),
+            "cop": hp_cop[heat_df.index[hp_i]].iloc[0].round(20),
             "hp_bus": idx_bus,
             "name": heat_df.index[hp_i],
             "index": hp_i + 1,
@@ -1338,9 +1338,9 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
             "ps": 0,
             "p_loss": p_loss,  # 4% of SOC per day
             "energy": 0,
-            "capacity": heat_storage_df.capacity[stor_i].round(20) / s_base,
-            "charge_efficiency": heat_storage_df.efficiency[stor_i].round(20),
-            "discharge_efficiency": heat_storage_df.efficiency[stor_i].round(20),
+            "capacity": heat_storage_df.capacity.iloc[stor_i].round(20) / s_base,
+            "charge_efficiency": heat_storage_df.efficiency.iloc[stor_i].round(20),
+            "discharge_efficiency": heat_storage_df.efficiency.iloc[stor_i].round(20),
             "storage_bus": idx_bus,
             "name": heat_storage_df.index[stor_i],
             "soc_initial": (
@@ -1452,8 +1452,8 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
         e_min = edisgo_obj.dsm.e_min[dsm_df.index[dsm_i]]
         e_max = edisgo_obj.dsm.e_max[dsm_df.index[dsm_i]]
         q = [
-            sign * np.tan(np.arccos(pf)) * p_max[0],
-            sign * np.tan(np.arccos(pf)) * p_min[0],
+            sign * np.tan(np.arccos(pf)) * p_max.iloc[0],
+            sign * np.tan(np.arccos(pf)) * p_min.iloc[0],
         ]
         pm["dsm"][str(dsm_i + 1)] = {
             "pd": 0,
@@ -1461,12 +1461,12 @@ def _build_dsm(edisgo_obj, psa_net, pm, s_base, flexible_loads):
             "pf": pf,
             "sign": sign,
             "energy": 0 / s_base,
-            "p_min": p_min[0].round(20) / s_base,
-            "p_max": p_max[0].round(20) / s_base,
+            "p_min": p_min.iloc[0].round(20) / s_base,
+            "p_max": p_max.iloc[0].round(20) / s_base,
             "q_max": max(q).round(20) / s_base,
             "q_min": min(q).round(20) / s_base,
-            "e_min": e_min[0].round(20) / s_base,
-            "e_max": e_max[0].round(20) / s_base,
+            "e_min": e_min.iloc[0].round(20) / s_base,
+            "e_max": e_max.iloc[0].round(20) / s_base,
             "charge_efficiency": 1,
             "discharge_efficiency": 1,
             "dsm_bus": idx_bus,
@@ -1581,7 +1581,7 @@ def _build_hv_requirements(
 
     for i in np.arange(len(opf_flex)):
         pm["HV_requirements"][str(i + 1)] = {
-            "P": hv_flex_dict[opf_flex[i]][0],
+            "P": hv_flex_dict[opf_flex[i]].iloc[0],
             "name": opf_flex[i],
             "count": count,
         }
