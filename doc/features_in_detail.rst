@@ -430,4 +430,4 @@ References
 
 .. [HoerschBrown]   `Jonas Hörsch, Tom Brown: The role of spatial scale in joint optimisations of
                     generation and transmission for European highly renewable scenarios
-                    <https://arxiv.org/pdf/1705.07617.pdf>`_
+                    <https://arxiv.org/abs/1705.07617>`_
