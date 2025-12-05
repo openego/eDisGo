@@ -4,29 +4,29 @@ name: "Tests & Coverage"
 
 on: [push]
 
-# Two-level concurrency control:
-# 1. Global lock prevents concurrent tests across different branches (database protection)
-# 2. Per-branch cancellation allows new pushes to cancel old runs on same branch
+# Concurrency control to prevent database conflicts:
+# - New pushes on same branch cancel old runs on that branch
+# - Only one workflow at a time can access the database (across all branches)
+# - Different branches queue and wait their turn without being cancelled
 concurrency:
   group: ${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  # Global lock to prevent concurrent database access across branches
-  database-lock:
+  # This job enforces the global database lock across all branches
+  queue:
     runs-on: ubuntu-latest
     concurrency:
       group: tests-database-access
       cancel-in-progress: false
     steps:
-      - name: Acquire database lock
-        run: echo "Database lock acquired for ${{ github.ref }}"
+      - name: Wait for database access
+        run: echo "Queue position acquired for ${{ github.ref }}"
   
   build:
     name: "${{ matrix.name-suffix }} at py${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
-    needs: database-lock
-
+    needs: queue
     strategy:
       fail-fast: false
       matrix:
