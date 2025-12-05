@@ -105,3 +105,19 @@ jobs:
           TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github
+
+  # Status check job - always runs and fails if tests didn't complete
+  # This ensures cancelled/skipped workflows show as failed, not success
+  tests-complete:
+    name: "All Tests Complete"
+    runs-on: ubuntu-latest
+    needs: build
+    if: always()
+    steps:
+      - name: Check test completion
+        run: |
+          if [ "${{ needs.build.result }}" != "success" ]; then
+            echo "Tests did not complete successfully: ${{ needs.build.result }}"
+            exit 1
+          fi
+          echo "All tests completed successfully"
