@@ -522,7 +522,7 @@ def _most_critical_time_interval(
     # intervals with a sum greater than zero are considered, as zero values mean, that
     # there is no grid issue in the respective time interval
     time_intervals = [
-        pd.date_range(end=timestep, periods=int(time_steps_per_time_interval), freq="h")
+        pd.date_range(end=timestep, periods=int(time_steps_per_time_interval), freq="H")
         for timestep in crit_timesteps.index
         if crit_timesteps[timestep] != 0.0
     ]
