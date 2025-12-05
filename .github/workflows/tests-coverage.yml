@@ -4,48 +4,50 @@ name: "Tests & Coverage"
 
 on: [push]
 
-# Concurrency control to prevent database conflicts:
-# - New pushes on same branch cancel old runs on that branch
-# - Only one workflow at a time can access the database (across all branches)
-# - Different branches queue and wait their turn without being cancelled
+# Global concurrency lock:
+# Ensures that only one workflow run (across all branches) can run at a time.
+# This prevents simultaneous test runs that might compete for shared resources (e.g., databases).
 concurrency:
-  group: ${{ github.ref }}
-  cancel-in-progress: true
+  group: tests-database-access
+  cancel-in-progress: false
 
 jobs:
-  # This job enforces the global database lock across all branches
+
   queue:
     runs-on: ubuntu-latest
-    concurrency:
-      group: tests-database-access
-      cancel-in-progress: false
     steps:
-      - name: Wait for database access
-        run: echo "Queue position acquired for ${{ github.ref }}"
-  
+      - name: Wait for global execution slot
+        run: echo "Queue position acquired for branch ${{ github.ref }}"
+
   build:
     name: "${{ matrix.name-suffix }} at py${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
     needs: queue
+
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Coverage job (Linux only)
           - name-suffix: "coverage"
             os: ubuntu-latest
             python-version: 3.9
+
+          # Basic test matrix
           - name-suffix: "basic"
             os: ubuntu-latest
             python-version: "3.10"
+
           - name-suffix: "basic"
             os: ubuntu-latest
             python-version: 3.11
+
           - name-suffix: "basic"
             os: windows-latest
             python-version: 3.9
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -53,19 +55,22 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Set up julia
+      # Julia is only needed on Linux
+      - name: Set up Julia
         if: runner.os == 'Linux'
         uses: julia-actions/setup-julia@v2
         with:
           version: "1.6"
 
-      - name: Install packages (Linux)
+      # Linux package installation (classic pip install)
+      - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           pip install --upgrade pip wheel setuptools
           pip install -e "."
 
-      - name: Install packages (Windows)
+      # Windows package installation via Conda environment file
+      - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -74,7 +79,8 @@ jobs:
           environment-file: eDisGo_env_dev.yml
           python-version: ${{ matrix.python-version }}
 
-      - name: Run tests Linux
+      # Run standard tests on Linux
+      - name: Run tests (Linux)
         if: runner.os == 'Linux' && matrix.name-suffix != 'coverage'
         run: |
           python -m pip install pytest pytest-notebook
@@ -82,7 +88,8 @@ jobs:
         env:
           TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
 
-      - name: Run tests Windows
+      # Run standard tests on Windows
+      - name: Run tests (Windows)
         if: runner.os == 'Windows'
         run: |
           python -m pip install pytest pytest-notebook
@@ -90,7 +97,8 @@ jobs:
         env:
           TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
 
-      - name: Run tests, coverage and send to coveralls
+      # Run coverage job and upload to Coveralls (only on Linux, Python 3.9)
+      - name: Run tests with coverage and submit to Coveralls
         if: runner.os == 'Linux' && matrix.python-version == 3.9 && matrix.name-suffix == 'coverage'
         run: |
           pip install pytest pytest-notebook coveralls
