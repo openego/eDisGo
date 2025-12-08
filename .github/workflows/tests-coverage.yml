@@ -48,10 +48,6 @@ jobs:
             python-version: 3.13
 
           - name-suffix: "basic"
-            os: ubuntu-latest
-            python-version: "3.14"
-
-          - name-suffix: "basic"
             os: windows-latest
             python-version: 3.9
 
