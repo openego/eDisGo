@@ -45,8 +45,10 @@ requirements = [
     "matplotlib >= 3.3.0, < 3.11.0",
     "multiprocess < 0.71.0",
     "networkx >= 2.5.0, < 3.5.0",
-    # For Python 3.12 and earlier: numpy 1.26.4 works
-    # For Python 3.13+: numpy 2.1.0+ is required
+    # NumPy version constraint allows compatibility across Python versions:
+    # - Python 3.9-3.12: NumPy 1.26.4 or 2.x both work
+    # - Python 3.13+: NumPy 2.1.0+ is required
+    # pip will resolve to an appropriate version based on Python version
     "numpy >= 1.26.4",
     "pandas >= 1.4.0, < 2.2.0",
     "plotly < 6.0",
