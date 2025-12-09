@@ -67,7 +67,7 @@ requirements = [
 ]
 
 dev_requirements = [
-    "black < 25.2.0",
+    "black < 25.10.0",
     "flake8 < 7.4.0",
     "isort < 6.1.0",
     "pre-commit < 4.4.0",
