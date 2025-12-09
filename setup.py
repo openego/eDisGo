@@ -33,12 +33,12 @@ def read(fname):
 
 requirements = [
     "contextily < 1.7.0",
-    "dash < 2.9.0",
+    "dash < 3.1.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
     "egoio >= 0.4.7, < 0.5.0",
     "geoalchemy2 < 0.7.0",
-    "geopandas >= 0.12.0, < 1.1.0",
+    "geopandas >= 0.12.0, < 1.2.0",
     "geopy >= 2.0.0, < 2.5.0",
     "jupyterlab < 4.5.0",
     "jupyter_dash < 0.5.0",
@@ -67,12 +67,12 @@ requirements = [
 ]
 
 dev_requirements = [
-    "black < 25.2.0",
+    "black < 25.10.0",
     "flake8 < 7.4.0",
     "isort < 6.1.0",
-    "pre-commit < 4.3.0",
+    "pre-commit < 4.4.0",
     "pylint < 3.4.0",
-    "pytest < 8.5.0",
+    "pytest < 9.1.0",
     "pytest-notebook < 0.11.0",
     "pyupgrade < 3.21.0",
     "sphinx < 8.3.0",

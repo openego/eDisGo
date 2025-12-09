@@ -588,7 +588,7 @@ def _grid_integration(
                         comp_type="load",
                         type="heat_pump",
                         sector="district_heating_resistive_heater",
-                        bus=tmp.bus[0],
+                        bus=tmp.bus.iloc[0],
                         p_set=resistive_heaters_central.at[rh, "p_set"],
                         weather_cell_id=resistive_heaters_central.at[
                             rh, "weather_cell_id"

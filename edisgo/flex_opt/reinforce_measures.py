@@ -1069,7 +1069,7 @@ def separate_lv_grid(
 
         # Add MV and LV bus
         v_nom_lv = edisgo_obj.topology.buses_df.at[
-            grid.transformers_df.bus1[0],
+            grid.transformers_df.bus1.iloc[0],
             "v_nom",
         ]
 

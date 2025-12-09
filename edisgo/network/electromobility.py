@@ -914,7 +914,7 @@ class Electromobility:
 
                 try:
                     df = gpd.GeoDataFrame(
-                        df, geometry="geometry", crs={"init": f"epsg:{epsg}"}
+                        df, geometry="geometry", crs=f"epsg:{epsg}"
                     )
 
                 except Exception:
@@ -924,7 +924,7 @@ class Electromobility:
                     )
 
                     df = gpd.GeoDataFrame(
-                        df, geometry="geometry", crs={"init": "epsg:4326"}
+                        df, geometry="geometry", crs="epsg:4326"
                     )
 
             if attr == "simbev_config_df":
