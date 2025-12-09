@@ -4,66 +4,104 @@ name: "Tests & Coverage"
 
 on: [push]
 
-# Cancel jobs on new push
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
+
+  queue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Turnstyle
+        uses: softprops/turnstyle@v3
+        with:
+          same-branch-only: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     name: "${{ matrix.name-suffix }} at py${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
+    needs: queue
 
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Coverage job (Linux only)
           - name-suffix: "coverage"
             os: ubuntu-latest
-            python-version: 3.8
+            python-version: 3.9
+
+          # Basic test matrix
           - name-suffix: "basic"
             os: ubuntu-latest
-            python-version: 3.9
+            python-version: "3.10"
+
+          - name-suffix: "basic"
+            os: ubuntu-latest
+            python-version: 3.11
+
           - name-suffix: "basic"
             os: windows-latest
-            python-version: 3.8
+            python-version: 3.9
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install packages (Linux)
+      # Julia is only needed on Linux
+      - name: Set up Julia
+        if: runner.os == 'Linux'
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: "1.6"
+
+      # Linux package installation (classic pip install)
+      - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           pip install --upgrade pip wheel setuptools
           pip install -e "."
 
-      - name: Install packages (Windows)
+      # Windows package installation via Conda environment file
+      - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3
         with:
           miniconda-version: "latest"
           activate-environment: edisgo_env
           environment-file: eDisGo_env_dev.yml
           python-version: ${{ matrix.python-version }}
 
-      - name: Run tests
-        if: ${{ !(runner.os == 'Linux' && matrix.python-version == 3.8 && matrix.name-suffix == 'coverage') }}
+      # Run standard tests on Linux
+      - name: Run tests (Linux)
+        if: runner.os == 'Linux' && matrix.name-suffix != 'coverage'
+        run: |
+          python -m pip install pytest pytest-notebook
+          python -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
+        env:
+          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
+
+      # Run standard tests on Windows
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
         run: |
           python -m pip install pytest pytest-notebook
           python -m pytest --runslow --disable-warnings --color=yes -v
+        env:
+          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
 
-      - name: Run tests, coverage and send to coveralls
-        if: runner.os == 'Linux' && matrix.python-version == 3.8 && matrix.name-suffix == 'coverage'
+      # Run coverage job and upload to Coveralls (only on Linux, Python 3.9)
+      - name: Run tests with coverage and submit to Coveralls
+        if: runner.os == 'Linux' && matrix.python-version == 3.9 && matrix.name-suffix == 'coverage'
         run: |
           pip install pytest pytest-notebook coveralls
-          coverage run --source=edisgo -m pytest --runslow --disable-warnings --color=yes -v
+          coverage run --source=edisgo -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
           coveralls
         env:
+          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github

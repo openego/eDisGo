@@ -580,7 +580,7 @@ def _build_load(psa_net, ppc):
     # istime = False
     # print("network has timeseries for load: {}".format(istime))
 
-    for (load_idx, bus_idx) in enumerate(load_buses):
+    for load_idx, bus_idx in enumerate(load_buses):
         # if istime:
         #     # if timeseries take maximal value of load_bus for static information of
         #     # the network
@@ -617,7 +617,7 @@ def _build_load_dict(psa_net, ppc):
     load_dict["time_horizon"] = time_horizon
     for t in range(time_horizon):
         load_dict["load_data"][str(t + 1)] = dict()
-        for (load_idx, bus_idx) in enumerate(load_buses):
+        for load_idx, bus_idx in enumerate(load_buses):
             # p_d = psa_net.loads_t["p_set"].values[t,load_idx]
             # qd = psa_net.loads_t["q_set"].values[t,load_idx]
             p_d = psa_net.loads_t["p_set"][psa_net.loads.index[load_idx]][t]
@@ -646,7 +646,7 @@ def _build_generator_dict(psa_net, ppc):
     ]
     for t in range(time_horizon):
         generator_dict["gen_data"][str(t + 1)] = dict()
-        for (gen_idx, bus_idx) in enumerate(gen_buses):
+        for gen_idx, bus_idx in enumerate(gen_buses):
             # pg = psa_net.generators_t["p_set"].values[t, gen_idx]
             # qg = psa_net.generators_t["q_set"].values[t, gen_idx]
             pg = psa_net.generators_t["p_set"][psa_net.generators.index[gen_idx]][t]

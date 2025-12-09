@@ -18,10 +18,7 @@ Installation using Linux
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 To set up a source installation using linux simply use a virtual environment and install
-the source code with pip. If you want you can also use the
-`install_edisgo_dev.sh <https://github.com/openego/eDisGo/blob/dev/install_edisgo_dev.sh>`_
-script. Make sure to use python3.7 or higher (recommended
-python3.8). **After** setting up your virtual environment and activating it run the
+the source code with pip. Make sure to use python3.9 or higher. **After** setting up your virtual environment and activating it run the
 following commands within your eDisGo directory:
 
 .. code-block:: bash
@@ -72,22 +69,21 @@ Code standards
 Documentation
 -------------
 
-Build the docs locally by first setting up the sphinx environment with (executed
-from top-level folder)
+You can build the docs locally as follows (executed from top-level eDisGo directory):
 
 .. code-block:: bash
 
-    sphinx-apidoc -f -o doc/api edisgo
+    sphinx-build -E -a -b html ./doc/ <outputdir>
 
-And then you build the html docs on your computer with
-
-.. code-block:: bash
-
-    sphinx-build -E -a doc/ doc/_html
-
-To manually check if external links in the documentation work, change into the doc
-repository and run the following command (internal links are not checked by this):
+To manually check if external links in the documentation work, you can run the following command (internal links are not checked by this):
 
 .. code-block:: bash
 
-   sphinx-build . -b linkcheck -d _build/doctrees _build/html
+   sphinx-build ./doc/ -b linkcheck -d _build/doctrees _build/html
+
+Internal links can be checked adding -n option when building the documentation. This will
+also raise warnings for type hinting, so it is a bit confusing, but can still be helpful.
+
+.. code-block:: bash
+
+    sphinx-build -n -E -a -b html ./doc/ <outputdir>

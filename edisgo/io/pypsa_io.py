@@ -90,7 +90,6 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
 
     # define buses_df, slack_df and components for each use case
     if mode is None:
-
         pypsa_network.mode = "mv"
 
         buses_df = edisgo_object.topology.buses_df.loc[:, ["v_nom"]]
@@ -102,7 +101,7 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
                 :, ["bus", "control", "p_nom"]
             ],
             "StorageUnit": edisgo_object.topology.storage_units_df.loc[
-                :, ["bus", "control"]
+                :, ["bus", "control", "p_nom", "max_hours"]
             ],
             "Line": edisgo_object.topology.lines_df.loc[
                 :,
@@ -114,7 +113,6 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         }
 
     elif "mv" in mode:
-
         pypsa_network.mode = "mv"
 
         grid_object = edisgo_object.topology.mv_grid
@@ -191,13 +189,12 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
                 )
 
     elif mode == "lv":
-
         pypsa_network.mode = "lv"
 
         lv_grid_id = kwargs.get("lv_grid_id", None)
-        if not lv_grid_id:
+        if lv_grid_id is None:
             raise ValueError(
-                "For exporting LV grids, ID or name of LV grid has to be provided"
+                "For exporting LV grids, ID or name of LV grid has to be provided "
                 "using parameter `lv_grid_id`."
             )
         grid_object = edisgo_object.topology.get_lv_grid(lv_grid_id)
@@ -257,12 +254,18 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         else:
             generators_timeseries_active = (
                 edisgo_object.timeseries.generators_active_power.loc[
-                    timesteps, components["Generator"].index
+                    timesteps,
+                    edisgo_object.timeseries.generators_active_power.columns.isin(
+                        components["Generator"].index
+                    ),
                 ]
             )
             generators_timeseries_reactive = (
                 edisgo_object.timeseries.generators_reactive_power.loc[
-                    timesteps, components["Generator"].index
+                    timesteps,
+                    edisgo_object.timeseries.generators_reactive_power.columns.isin(
+                        components["Generator"].index
+                    ),
                 ]
             )
 
@@ -287,11 +290,17 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
             )
         else:
             loads_timeseries_active = edisgo_object.timeseries.loads_active_power.loc[
-                timesteps, components["Load"].index
+                timesteps,
+                edisgo_object.timeseries.loads_active_power.columns.isin(
+                    components["Load"].index
+                ),
             ]
             loads_timeseries_reactive = (
                 edisgo_object.timeseries.loads_reactive_power.loc[
-                    timesteps, components["Load"].index
+                    timesteps,
+                    edisgo_object.timeseries.loads_reactive_power.columns.isin(
+                        components["Load"].index
+                    ),
                 ]
             )
         import_series_from_dataframe(
@@ -316,12 +325,18 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         else:
             storages_timeseries_active = (
                 edisgo_object.timeseries.storage_units_active_power.loc[
-                    timesteps, components["StorageUnit"].index
+                    timesteps,
+                    edisgo_object.timeseries.storage_units_active_power.columns.isin(
+                        components["StorageUnit"].index
+                    ),
                 ]
             )
             storages_timeseries_reactive = (
                 edisgo_object.timeseries.storage_units_reactive_power.loc[
-                    timesteps, components["StorageUnit"].index
+                    timesteps,
+                    edisgo_object.timeseries.storage_units_reactive_power.columns.isin(
+                        components["StorageUnit"].index
+                    ),
                 ]
             )
         import_series_from_dataframe(
@@ -347,7 +362,7 @@ def set_seed(edisgo_obj, pypsa_network):
     """
     Set initial guess for the Newton-Raphson algorithm.
 
-    In `PyPSA <https://pypsa.readthedocs.io/en/latest/>`_ an
+    In `PyPSA <https://docs.pypsa.org/v0.35.1/>`_ an
     initial guess for the Newton-Raphson algorithm used in the power flow
     analysis can be provided to speed up calculations.
     For PQ buses, which besides the slack bus, is the only bus type in
@@ -455,7 +470,9 @@ def _get_grid_component_dict(grid_object):
     components = {
         "Load": grid_object.loads_df.loc[:, ["bus", "p_set"]],
         "Generator": grid_object.generators_df.loc[:, ["bus", "control", "p_nom"]],
-        "StorageUnit": grid_object.storage_units_df.loc[:, ["bus", "control"]],
+        "StorageUnit": grid_object.storage_units_df.loc[
+            :, ["bus", "control", "p_nom", "max_hours"]
+        ],
         "Line": grid_object.lines_df.loc[
             :,
             ["bus0", "bus1", "x", "r", "s_nom", "num_parallel", "length"],
@@ -520,7 +537,7 @@ def _append_lv_components(
         components aggregated in that respective key component.
         An example could look as follows:
         {'LVGrid_1_loads':
-            ['Load_agricultural_LVGrid_1_1', 'Load_retail_LVGrid_1_2']}
+            ['Load_agricultural_LVGrid_1_1', 'Load_cts_LVGrid_1_2']}
 
     """
     aggregated_elements = {}
@@ -596,9 +613,9 @@ def _append_lv_components(
                         ),
                     ]
                 )
-                aggregated_elements[
-                    lv_grid_name + "_fluctuating"
-                ] = comps_fluct.index.values
+                aggregated_elements[lv_grid_name + "_fluctuating"] = (
+                    comps_fluct.index.values
+                )
 
             if len(comps_disp) > 0:
                 comps_aggr = pd.concat(
@@ -615,9 +632,9 @@ def _append_lv_components(
                         ),
                     ]
                 )
-                aggregated_elements[
-                    lv_grid_name + "_dispatchable"
-                ] = comps_disp.index.values
+                aggregated_elements[lv_grid_name + "_dispatchable"] = (
+                    comps_disp.index.values
+                )
         elif aggregate_generators == "all":
             comps_aggr = pd.DataFrame(
                 {
@@ -625,11 +642,11 @@ def _append_lv_components(
                     "control": ["PQ"],
                     "p_nom": [sum(comps.p_nom)],
                     "fluctuating": [
-                        True
-                        if (comps.type.isin(flucts)).all()
-                        else False
-                        if ~comps.type.isin(flucts).any()
-                        else "Mixed"
+                        (
+                            True
+                            if (comps.type.isin(flucts)).all()
+                            else False if ~comps.type.isin(flucts).any() else "Mixed"
+                        )
                     ],
                 },
                 index=[lv_grid_name + "_generators"],
@@ -828,49 +845,52 @@ def process_pfa_results(edisgo, pypsa, timesteps, dtype="float"):
     """
     # get the absolute losses in the system (in MW and Mvar)
     # subtracting total generation (including slack) from total load
-    # ToDo include storage units
     grid_losses = {
         "p": (
-            abs(pypsa.generators_t["p"].sum(axis=1) - pypsa.loads_t["p"].sum(axis=1))
+            abs(
+                pypsa.generators_t["p"].sum(axis=1)
+                + pypsa.storage_units_t["p"].sum(axis=1)
+                - pypsa.loads_t["p"].sum(axis=1)
+            )
         ),
         "q": (
-            abs(pypsa.generators_t["q"].sum(axis=1) - pypsa.loads_t["q"].sum(axis=1))
+            abs(
+                pypsa.generators_t["q"].sum(axis=1)
+                + pypsa.storage_units_t["q"].sum(axis=1)
+                - pypsa.loads_t["q"].sum(axis=1)
+            )
         ),
     }
-    edisgo.results.grid_losses = pd.DataFrame(grid_losses, dtype=dtype).reindex(
-        index=timesteps
-    )
+    edisgo.results.grid_losses = pd.DataFrame(grid_losses, dtype=dtype)
 
     # get slack results in MW and Mvar
     pfa_slack = {
         "p": (pypsa.generators_t["p"]["Generator_slack"]),
         "q": (pypsa.generators_t["q"]["Generator_slack"]),
     }
-    edisgo.results.pfa_slack = pd.DataFrame(pfa_slack, dtype=dtype).reindex(
-        index=timesteps
-    )
+    edisgo.results.pfa_slack = pd.DataFrame(pfa_slack, dtype=dtype)
 
     # get P and Q of lines and transformers in MW and Mvar
     q0 = pd.concat(
         [np.abs(pypsa.lines_t["q0"]), np.abs(pypsa.transformers_t["q0"])],
         axis=1,
         sort=False,
-    ).reindex(index=timesteps)
+    )
     q1 = pd.concat(
         [np.abs(pypsa.lines_t["q1"]), np.abs(pypsa.transformers_t["q1"])],
         axis=1,
         sort=False,
-    ).reindex(index=timesteps)
+    )
     p0 = pd.concat(
         [np.abs(pypsa.lines_t["p0"]), np.abs(pypsa.transformers_t["p0"])],
         axis=1,
         sort=False,
-    ).reindex(index=timesteps)
+    )
     p1 = pd.concat(
         [np.abs(pypsa.lines_t["p1"]), np.abs(pypsa.transformers_t["p1"])],
         axis=1,
         sort=False,
-    ).reindex(index=timesteps)
+    )
     # determine apparent power at line endings/transformer sides
     s0 = np.hypot(p0, q0)
     s1 = np.hypot(p1, q1)
@@ -878,19 +898,24 @@ def process_pfa_results(edisgo, pypsa, timesteps, dtype="float"):
     edisgo.results.pfa_p = p0.where(s0 > s1, p1).astype(dtype)
     edisgo.results.pfa_q = q0.where(s0 > s1, q1).astype(dtype)
 
-    # calculate line currents in kA
-    lines_bus0 = pypsa.lines["bus0"].to_dict()
-    bus0_v_mag_pu = pypsa.buses_t["v_mag_pu"].T.loc[list(lines_bus0.values()), :].copy()
-    bus0_v_mag_pu.index = list(lines_bus0.keys())
-    current = np.hypot(pypsa.lines_t["p0"], pypsa.lines_t["q0"]).truediv(
-        pypsa.lines["v_nom"] * bus0_v_mag_pu.T, axis="columns"
+    # calculate line and transformer currents in kA
+    lines_bus0 = pypsa.lines["bus0"]
+    bus0_v_mag_pu = pypsa.buses_t["v_mag_pu"].loc[:, lines_bus0.values].copy()
+    bus0_v_mag_pu.columns = lines_bus0.index
+    current_lines = np.hypot(pypsa.lines_t["p0"], pypsa.lines_t["q0"]).truediv(
+        pypsa.lines["v_nom"] * bus0_v_mag_pu, axis="columns"
     ) / sqrt(3)
-    edisgo.results._i_res = current.reindex(index=timesteps)
+    transformers_bus0 = pypsa.transformers["bus0"]
+    bus0_v_mag_pu = pypsa.buses_t["v_mag_pu"].loc[:, transformers_bus0.values].copy()
+    bus0_v_mag_abs = pypsa.buses["v_nom"].loc[transformers_bus0.values] * bus0_v_mag_pu
+    bus0_v_mag_abs.columns = transformers_bus0.index
+    current_transformers = np.hypot(
+        pypsa.transformers_t["p0"], pypsa.transformers_t["q0"]
+    ).truediv(bus0_v_mag_abs, axis="columns") / sqrt(3)
+    edisgo.results._i_res = pd.concat([current_lines, current_transformers], axis=1)
 
     # get voltage results in kV
-    edisgo.results._v_res = (
-        pypsa.buses_t["v_mag_pu"].reindex(index=timesteps).astype(dtype)
-    )
+    edisgo.results._v_res = pypsa.buses_t["v_mag_pu"].astype(dtype)
 
     # save seeds
     edisgo.results.pfa_v_mag_pu_seed = pd.concat(

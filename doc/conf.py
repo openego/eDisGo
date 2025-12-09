@@ -46,6 +46,7 @@ sys.path.insert(0, os.path.abspath("../"))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    "autoapi.extension",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
@@ -55,7 +56,35 @@ extensions = [
     "sphinx.ext.napoleon",  # enable Napoleon Sphinx v>1.3
     "sphinx.ext.extlinks",  # enables external links with a key
     "sphinx_autodoc_typehints",
+    "sphinx.ext.inheritance_diagram",
 ]
+# Autoapi settings
+autoapi_type = "python"
+autoapi_dirs = ["../edisgo"]
+autoapi_options = [
+    "members",
+    "undoc-members",
+    "show-inheritance",
+    "show-inheritance-diagram",
+    "show-module-summary",
+    "special-members",
+]
+# Files to ignore when building api documentation
+autoapi_ignore = [
+    "*/opf/timeseries_reduction.py",
+    "*/opf/opf_solutions/*",
+]
+
+
+def skip_autoapi_parts(app, what, name, obj, skip, options):
+    if obj.type == "data":
+        skip = True
+    return skip
+
+
+def setup(sphinx):
+    sphinx.connect("autoapi-skip-member", skip_autoapi_parts)
+
 
 # Napoleon settings
 napoleon_google_docstring = True
@@ -85,20 +114,38 @@ extlinks = {
         "networkx.%s",
     ),
     "sqlalchemy": (
-        "http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s",
+        "https://docs.sqlalchemy.org/en/20/core/connections.html#%s",
         "sqlalchemy.%s",
+    ),
+    "numpy": (
+        "https://numpy.org/doc/stable/reference/generated/numpy.%s.html",
+        "numpy.%s",
     ),
     "shapely": (
         "https://shapely.readthedocs.io/en/latest/manual.html#%s",
         "shapely.%s",
     ),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "ding0.%s"),
-    "pypsa": ("https://pypsa.readthedocs.io/en/latest/components.html#%s", "pypsa.%s"),
+    "pypsa": (
+        "https://docs.pypsa.org/v0.35.1/user-guide/components.html#%s",
+        "pypsa.%s",
+    ),
     "plotly": (
         "https://plotly.com/python-api-reference/generated/%s.html",
         "plotly.%s",
     ),
 }
+# ignore the following external links when checking the links
+# stackoverflow and gurobi is listed here because for some reason
+# the link check fails for these
+# in the github action, even though the link is correct
+linkcheck_ignore = [
+    r"https://stackoverflow.com*",
+    r"https://support.gurobi.com/*",
+    r"https://www.gnu.org/licenses/",
+    r"https://www.mdpi.com/*",
+]
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
@@ -123,7 +170,7 @@ author = "open_eGo-Team"
 # built documents.
 #
 # The short X.Y version.
-version = "0.2.0"
+version = "0.2.1"
 # The full version, including alpha/beta/rc tags.
 release = version
 

@@ -5,21 +5,21 @@ import os
 
 from typing import TYPE_CHECKING
 
+import dash
 import matplotlib
-import matplotlib.cm as cm
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
 from dash import dcc, html
 from dash.dependencies import Input, Output
-from jupyter_dash import JupyterDash
 from matplotlib import pyplot as plt
 from networkx import Graph
 from pyproj import Transformer
 from pypsa import Network as PyPSANetwork
 
-from edisgo.tools import session_scope, tools
+from edisgo.flex_opt.check_tech_constraints import lines_relative_load
+from edisgo.tools import session_scope
 from edisgo.tools.pseudo_coordinates import make_pseudo_coordinates_graph
 
 if TYPE_CHECKING:
@@ -31,7 +31,6 @@ if TYPE_CHECKING:
     from edisgo.network.grids import Grid
 
 if "READTHEDOCS" not in os.environ:
-
     import geopandas as gpd
 
     from egoio.db_tables.grid import EgoDpMvGriddistrict
@@ -172,7 +171,7 @@ def add_basemap(ax, zoom=12):
     Adds map to a plot.
 
     """
-    url = ctx.providers.Stamen.TonerLite
+    url = ctx.providers.CartoDB.Positron
     xmin, xmax, ymin, ymax = ax.axis()
     basemap, extent = ctx.bounds2img(xmin, ymin, xmax, ymax, zoom=zoom, source=url)
     ax.imshow(basemap, extent=extent, interpolation="bilinear")
@@ -188,7 +187,6 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
     with session_scope() as session:
         # get polygon from versioned schema
         if config["data_source"]["oedb_data_source"] == "versioned":
-
             version = config["versioned"]["version"]
             query = session.query(
                 EgoDpMvGriddistrict.subst_id, EgoDpMvGriddistrict.geom
@@ -213,7 +211,7 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
                 ).all()
             ]
 
-    crs = {"init": "epsg:3035"}
+    crs = "epsg:3035"
     region = gpd.GeoDataFrame(Regions, columns=["subst_id", "geometry"], crs=crs)
     region = region.to_crs(epsg=projection)
 
@@ -225,13 +223,11 @@ def mv_grid_topology(
     timestep=None,
     line_color=None,
     node_color=None,
-    line_load=None,
     grid_expansion_costs=None,
     filename=None,
     arrows=False,
     grid_district_geom=True,
     background_map=True,
-    voltage=None,
     limits_cb_lines=None,
     limits_cb_nodes=None,
     xlim=None,
@@ -279,13 +275,12 @@ def mv_grid_topology(
           Node color as well as size is set according to type of node
           (generator, MV station, etc.).
         * 'voltage'
-          Node color is set according to maximum voltage at each node.
-          Voltages of nodes in MV network must be provided by parameter
-          `voltage`.
+          Node color is set according to voltage at each node. In case several
+          time steps are selected the maximum voltage is shown.
         * 'voltage_deviation'
-          Node color is set according to voltage deviation from 1 p.u..
-          Voltages of nodes in MV network must be provided by parameter
-          `voltage`.
+          Node color is set according to voltage deviation from 1 p.u.. In case several
+          time steps are selected the maximum absolute voltage deviation from 1 p.u.
+          is shown.
         * 'storage_integration'
           Only storage units are plotted. Size of node corresponds to size of
           storage.
@@ -324,11 +319,6 @@ def mv_grid_topology(
     background_map : :obj:`Boolean`
         If True map is drawn in the background. This also requires the
         contextily package to be installed. Default: True.
-    voltage : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with voltage results from power flow analysis in p.u.. Index
-        of the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
-        columns are the bus representatives. Only needs to be provided when
-        parameter `node_color` is set to 'voltage'. Default: None.
     limits_cb_lines : :obj:`tuple`
         Tuple with limits for colorbar of line color. First entry is the
         minimum and second entry the maximum value. Only needs to be provided
@@ -455,15 +445,12 @@ def mv_grid_topology(
         return bus_sizes, bus_colors
 
     def nodes_by_voltage(buses, voltages):
-        # ToDo: Right now maximum voltage is used. Check if this should be
-        #  changed
         bus_colors_dict = {}
         bus_sizes_dict = {}
         if timestep is not None:
             bus_colors_dict.update({bus: voltages.loc[timestep, bus] for bus in buses})
         else:
             bus_colors_dict.update({bus: max(voltages.loc[:, bus]) for bus in buses})
-
         bus_sizes_dict.update({bus: 100000 ^ 2 for bus in buses})
         return bus_sizes_dict, bus_colors_dict
 
@@ -472,7 +459,7 @@ def mv_grid_topology(
         bus_sizes_dict = {}
         if timestep is not None:
             bus_colors_dict.update(
-                {bus: 100 * abs(1 - voltages.loc[timestep, bus]) for bus in buses}
+                {bus: 100 * (voltages.loc[timestep, bus] - 1) for bus in buses}
             )
         else:
             bus_colors_dict.update(
@@ -574,15 +561,16 @@ def mv_grid_topology(
     pypsa_plot.buses = pypsa_plot.buses[~pypsa_plot.buses.index.str.contains("agg")]
     pypsa_plot.lines = edisgo_obj.topology.lines_df[
         edisgo_obj.topology.lines_df.bus0.isin(pypsa_plot.buses.index)
-    ][edisgo_obj.topology.lines_df.bus1.isin(pypsa_plot.buses.index)].loc[
-        :, ["bus0", "bus1"]
-    ]
+        & edisgo_obj.topology.lines_df.bus1.isin(pypsa_plot.buses.index)
+    ].loc[:, ["bus0", "bus1"]]
 
     # line colors
     if line_color == "loading":
-        line_colors = tools.calculate_relative_line_load(
-            edisgo_obj, pypsa_plot.lines.index, timestep
-        ).max()
+        line_colors = lines_relative_load(edisgo_obj, pypsa_plot.lines.index)
+        if timestep is None:
+            line_colors = line_colors.max()
+        else:
+            line_colors = line_colors.loc[timestep, :]
     elif line_color == "expansion_costs":
         node_color = "expansion_costs"
         line_costs = pypsa_plot.lines.join(
@@ -597,11 +585,13 @@ def mv_grid_topology(
         bus_sizes, bus_colors = nodes_by_technology(pypsa_plot.buses.index, edisgo_obj)
         bus_cmap = None
     elif node_color == "voltage":
-        bus_sizes, bus_colors = nodes_by_voltage(pypsa_plot.buses.index, voltage)
+        bus_sizes, bus_colors = nodes_by_voltage(
+            pypsa_plot.buses.index, edisgo_obj.results.v_res
+        )
         bus_cmap = plt.cm.Blues
     elif node_color == "voltage_deviation":
         bus_sizes, bus_colors = nodes_by_voltage_deviation(
-            pypsa_plot.buses.index, voltage
+            pypsa_plot.buses.index, edisgo_obj.results.v_res
         )
         bus_cmap = plt.cm.Blues
     elif node_color == "storage_integration":
@@ -612,7 +602,7 @@ def mv_grid_topology(
         bus_sizes, bus_colors = nodes_by_costs(
             pypsa_plot.buses.index, grid_expansion_costs, edisgo_obj
         )
-        bus_cmap = plt.cm.get_cmap(lines_cmap)
+        bus_cmap = matplotlib.pyplot.colormaps.get_cmap(lines_cmap)
     elif node_color == "curtailment":
         bus_sizes = nodes_curtailment(pypsa_plot.buses.index, curtailment_df)
         bus_colors = "orangered"
@@ -628,7 +618,7 @@ def mv_grid_topology(
         if kwargs.get("bus_colors", None):
             bus_colors = pd.Series(kwargs.get("bus_colors")).loc[pypsa_plot.buses]
         else:
-            logging.warning(
+            logger.warning(
                 "Choice for `node_color` is not valid. Default bus colors are "
                 "used instead."
             )
@@ -636,7 +626,7 @@ def mv_grid_topology(
         if kwargs.get("bus_sizes", None):
             bus_sizes = pd.Series(kwargs.get("bus_sizes")).loc[pypsa_plot.buses]
         else:
-            logging.warning(
+            logger.warning(
                 "Choice for `node_color` is not valid. Default bus sizes are "
                 "used instead."
             )
@@ -644,7 +634,7 @@ def mv_grid_topology(
         if kwargs.get("bus_cmap", None):
             bus_cmap = kwargs.get("bus_cmap", None)
         else:
-            logging.warning(
+            logger.warning(
                 "Choice for `node_color` is not valid. Default bus colormap "
                 "is used instead."
             )
@@ -668,9 +658,7 @@ def mv_grid_topology(
     if grid_district_geom:
         try:
             projection = 3857 if contextily and background_map else 4326
-            crs = {
-                "init": "epsg:{}".format(int(edisgo_obj.topology.grid_district["srid"]))
-            }
+            crs = "epsg:{}".format(int(edisgo_obj.topology.grid_district["srid"]))
             region = gpd.GeoDataFrame(
                 {"geometry": [edisgo_obj.topology.grid_district["geom"]]},
                 crs=crs,
@@ -679,7 +667,7 @@ def mv_grid_topology(
                 region = region.to_crs(epsg=projection)
             region.plot(ax=ax, color="white", alpha=0.2, edgecolor="red", linewidth=2)
         except Exception as e:
-            logging.warning(
+            logger.warning(
                 "Grid district geometry could not be plotted due "
                 "to the following error: {}".format(e)
             )
@@ -689,7 +677,8 @@ def mv_grid_topology(
         line_width = pypsa_plot.lines.s_nom * scaling_factor_line_width
     else:
         line_width = 2
-    cmap = plt.cm.get_cmap(lines_cmap)
+    cmap = matplotlib.pyplot.colormaps.get_cmap(lines_cmap)
+
     ll = pypsa_plot.plot(
         line_colors=line_colors,
         line_cmap=cmap,
@@ -742,9 +731,15 @@ def mv_grid_topology(
         cb_voltage.norm.vmin = limits_cb_nodes[0]
         cb_voltage.norm.vmax = limits_cb_nodes[1]
         if node_color == "voltage":
-            cb_voltage.set_label("Maximum voltage in p.u.")
+            if timestep is not None:
+                cb_voltage.set_label("Voltage in p.u.")
+            else:
+                cb_voltage.set_label("Maximum voltage in p.u.")
         else:
-            cb_voltage.set_label("Voltage deviation in %")
+            if timestep is not None:
+                cb_voltage.set_label("Voltage deviation from 1 p.u.")
+            else:
+                cb_voltage.set_label("Maximum absolute voltage deviation from 1 p.u.")
 
     # storage_units
     if node_color == "expansion_costs":
@@ -850,7 +845,7 @@ def mv_grid_topology(
         try:
             add_basemap(ax, zoom=12)
         except Exception as e:
-            logging.warning(
+            logger.warning(
                 "Background map could not be plotted due to the "
                 "following error: {}".format(e)
             )
@@ -890,7 +885,7 @@ def color_map_color(
     """
     norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
     if isinstance(cmap_name, str):
-        cmap = cm.get_cmap(cmap_name)
+        cmap = matplotlib.pyplot.colormaps.get_cmap(cmap_name)
     else:
         cmap = matplotlib.colors.LinearSegmentedColormap.from_list("mycmap", cmap_name)
     rgb = cmap(norm(abs(value)))[:3]
@@ -907,9 +902,10 @@ def plot_plotly(
     line_result_selection: str = "max",
     node_result_selection: str = "max",
     selected_timesteps: pd.Timestamp | list | None = None,
-    center_coordinates: bool = False,
+    plot_map: bool = False,
     pseudo_coordinates: bool = False,
     node_selection: list | bool = False,
+    height: int = 500,
 ) -> BaseFigure:
     """
     Draws a plotly html figure.
@@ -971,16 +967,17 @@ def plot_plotly(
             :pandas:`pandas.Timestamp<Timestamp>`
           Selected time steps are used.
 
-    center_coordinates : bool
-        Enables the centering of the coordinates. If True the transformer node is set
-        to the coordinates x=0 and y=0. Else, the coordinates from the HV/MV-station
-        of the MV grid are used. Default: False.
+    plot_map : bool
+        Enable the plotting of a background map.
 
     pseudo_coordinates : bool
         Enable pseudo coordinates for the plotted grid. Default: False.
 
     node_selection : bool or list(str)
         Only plot selected nodes. Default: False.
+
+    height : int
+        Height of the plotly plot in pixels.
 
     Returns
     -------
@@ -1046,17 +1043,15 @@ def plot_plotly(
         logger.warning("No power flow results to show. -> Run power flow.")
         node_color = None
 
-    if center_coordinates:
-        # Center transformer coordinates on (0,0).
-        if hasattr(grid, "transformers_df"):
-            node_root = grid.transformers_df.bus1.iat[0]
-            x_root, y_root = G.nodes[node_root]["pos"]
-        else:
-            node_root = edisgo_obj.topology.transformers_hvmv_df.bus1.iat[0]
-            x_root, y_root = G.nodes[node_root]["pos"]
+    if hasattr(grid, "transformers_df"):
+        node_root = grid.transformers_df.bus1.iat[0]
+        x_center, y_center = G.nodes[node_root]["pos"]
     else:
-        x_root = 0
-        y_root = 0
+        node_root = edisgo_obj.topology.transformers_hvmv_df.bus1.iat[0]
+        x_center, y_center = G.nodes[node_root]["pos"]
+
+    x_root = 0
+    y_root = 0
 
     if pseudo_coordinates:
         G = make_pseudo_coordinates_graph(
@@ -1096,21 +1091,10 @@ def plot_plotly(
                 f"node_result_selection needs to be one of {result_selection_options}"
             )
 
-    # initialization coordinate transformation
-    transformer_4326_to_3035 = Transformer.from_crs(
-        "EPSG:4326",
-        "EPSG:3035",
-        always_xy=True,
-    )
-
     def get_coordinates_for_edge(edge):
         x0, y0 = G.nodes[edge[0]]["pos"]
         x1, y1 = G.nodes[edge[1]]["pos"]
-        x0, y0 = transformer_4326_to_3035.transform(x0, y0)
-        x1, y1 = transformer_4326_to_3035.transform(x1, y1)
         return x0, y0, x1, y1
-
-    x_root, y_root = transformer_4326_to_3035.transform(x_root, y_root)
 
     def plot_line_text():
         middle_node_x = []
@@ -1129,28 +1113,43 @@ def plot_plotly(
                 text += "<br>" + "Loading = " + str(s_res.loc[branch_name])
 
             line_parameters = edisgo_obj.topology.lines_df.loc[branch_name, :]
-            for index, value in line_parameters.iteritems():
+            for index, value in line_parameters.items():
                 text += "<br>" + str(index) + " = " + str(value)
 
             middle_node_text.append(text)
 
-        middle_node_scatter = go.Scatter(
-            x=middle_node_x,
-            y=middle_node_y,
-            text=middle_node_text,
-            mode="markers",
-            hoverinfo="text",
-            marker=dict(
-                opacity=0.0,
-                size=10,
-                color="white",
-            ),
-            showlegend=False,
-        )
+        if plot_map:
+            middle_node_scatter = go.Scattermapbox(
+                lon=middle_node_x,
+                lat=middle_node_y,
+                text=middle_node_text,
+                mode="markers",
+                hoverinfo="text",
+                marker=dict(
+                    opacity=0.0,
+                    size=10,
+                    color="white",
+                ),
+                showlegend=False,
+            )
+        else:
+            middle_node_scatter = go.Scatter(
+                x=middle_node_x,
+                y=middle_node_y,
+                text=middle_node_text,
+                mode="markers",
+                hoverinfo="text",
+                marker=dict(
+                    opacity=0.0,
+                    size=10,
+                    color="white",
+                ),
+                showlegend=False,
+            )
+
         return [middle_node_scatter]
 
     def plot_lines():
-
         showscale = True
 
         if line_color == "loading":
@@ -1176,7 +1175,6 @@ def plot_plotly(
 
         data_line_plot = []
         for edge in G.edges(data=True):
-
             x0, y0, x1, y1 = get_coordinates_for_edge(edge)
             edge_x = [x0 - x_root, x1 - x_root, None]
             edge_y = [y0 - y_root, y1 - y_root, None]
@@ -1202,7 +1200,6 @@ def plot_plotly(
                     .isin([branch_name])
                     .any()
                 ):
-
                     color = "red"
                 else:
                     color = "black"
@@ -1229,21 +1226,36 @@ def plot_plotly(
                     color = "indigo"
             else:
                 color = "grey"
+            if plot_map:
+                edge_scatter = go.Scattermapbox(
+                    mode="lines",
+                    lon=edge_x,
+                    lat=edge_y,
+                    hoverinfo="none",
+                    opacity=0.8,
+                    showlegend=False,
+                    line=dict(
+                        width=3.5,
+                        color=color,
+                    ),
+                )
+            else:
+                edge_scatter = go.Scatter(
+                    mode="lines",
+                    x=edge_x,
+                    y=edge_y,
+                    hoverinfo="none",
+                    opacity=0.8,
+                    showlegend=False,
+                    line=dict(
+                        width=2,
+                        color=color,
+                    ),
+                )
 
-            edge_scatter = go.Scatter(
-                mode="lines",
-                x=edge_x,
-                y=edge_y,
-                hoverinfo="none",
-                opacity=0.8,
-                showlegend=False,
-                line=dict(
-                    width=2,
-                    color=color,
-                ),
-            )
             data_line_plot.append(edge_scatter)
 
+        # Add colorbar for line colors (works for both map and non-map plots)
         if line_color:
             line_color_title = {
                 "loading": "Loading in MVA",
@@ -1251,24 +1263,47 @@ def plot_plotly(
                 "reinforce": "Reinforce",
             }
 
-            colorbar_edge_scatter = go.Scatter(
-                mode="markers",
-                x=[None],
-                y=[None],
-                marker=dict(
-                    colorbar=dict(
-                        title=line_color_title[line_color],
-                        xanchor="left",
-                        titleside="right",
-                        x=1.19,
-                        thickness=15,
+            # Create invisible scatter plot for colorbar
+            if plot_map:
+                colorbar_edge_scatter = go.Scattermapbox(
+                    mode="markers",
+                    lon=[None],
+                    lat=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=line_color_title[line_color],
+                            xanchor="left",
+                            titleside="right",
+                            x=1.02,
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        cmax=color_max,
+                        cmin=color_min,
+                        showscale=showscale,
+                        opacity=0,  # Make invisible
                     ),
-                    colorscale=colorscale,
-                    cmax=color_max,
-                    cmin=color_min,
-                    showscale=showscale,
-                ),
-            )
+                    showlegend=False,
+                )
+            else:
+                colorbar_edge_scatter = go.Scatter(
+                    mode="markers",
+                    x=[None],
+                    y=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=line_color_title[line_color],
+                            xanchor="left",
+                            titleside="right",
+                            x=1.19,
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        cmax=color_max,
+                        cmin=color_min,
+                        showscale=showscale,
+                    ),
+                )
 
             if line_color == "reinforce":
                 colorbar_edge_scatter.marker.colorbar.tickmode = "array"
@@ -1304,7 +1339,6 @@ def plot_plotly(
 
         for node in G.nodes():
             x, y = G.nodes[node]["pos"]
-            x, y = transformer_4326_to_3035.transform(x, y)
             node_x.append(x - x_root)
             node_y.append(y - y_root)
 
@@ -1364,33 +1398,144 @@ def plot_plotly(
             text = text + "<br>" + "Neighbors = " + str(G.degree(node))
 
             node_parameters = edisgo_obj.topology.buses_df.loc[node]
-            for index, value in node_parameters.iteritems():
+            for index, value in node_parameters.items():
                 text += "<br>" + str(index) + " = " + str(value)
 
             node_text.append(text)
+        # Create node scatter plots
+        node_scatter_plots = []
 
-        node_scatter = go.Scatter(
-            x=node_x,
-            y=node_y,
-            mode="markers",
-            hoverinfo="text",
-            text=node_text,
-            marker=dict(
-                showscale=showscale,
-                colorscale=colorscale,
-                color=node_colors,
-                size=8,
-                cmid=cmid,
-                line_width=2,
-                colorbar=colorbar,
+        if plot_map:
+            node_scatter = go.Scattermapbox(
+                lon=node_x,
+                lat=node_y,
+                mode="markers",
+                hoverinfo="text",
+                text=node_text,
+                marker=dict(
+                    showscale=False,  # Disable colorbar for mapbox, added it separately
+                    colorscale=colorscale,
+                    color=node_colors,
+                    size=8,
+                    cmid=cmid,
+                ),
+            )
+        else:
+            node_scatter = go.Scatter(
+                x=node_x,
+                y=node_y,
+                mode="markers",
+                hoverinfo="text",
+                text=node_text,
+                marker=dict(
+                    showscale=showscale,
+                    colorscale=colorscale,
+                    color=node_colors,
+                    size=8,
+                    cmid=cmid,
+                    line_width=2,
+                    colorbar=colorbar,
+                ),
+            )
+
+        node_scatter_plots.append(node_scatter)
+
+        # Add separate colorbar for nodes in mapbox plots
+        if plot_map and node_color and showscale:
+            if plot_map:
+                node_colorbar_scatter = go.Scattermapbox(
+                    mode="markers",
+                    lon=[None],
+                    lat=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=colorbar["title"] if colorbar else "Node values",
+                            xanchor="left",
+                            titleside="right",
+                            x=1.12,  # Position it next to line colorbar
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        color=[0, 1],  # Dummy values for colorbar range
+                        cmax=max(node_colors) if isinstance(node_colors, list) else 1,
+                        cmin=min(node_colors) if isinstance(node_colors, list) else 0,
+                        cmid=cmid,
+                        showscale=True,
+                        opacity=0,  # Make invisible
+                    ),
+                    showlegend=False,
+                )
+                node_scatter_plots.append(node_colorbar_scatter)
+
+        return node_scatter_plots
+
+    # Calculate optimal zoom level for map based on network extent
+    def calculate_zoom_level():
+        if not plot_map:
+            return 11  # Default zoom for non-map plots
+
+        # Get all node coordinates
+        lats = []
+        lons = []
+        for node in G.nodes():
+            x, y = G.nodes[node]["pos"]
+            lons.append(x)
+            lats.append(y)
+
+        if not lats or not lons:
+            return 11  # Default if no coordinates
+
+        # Calculate bounds
+        lat_min, lat_max = min(lats), max(lats)
+        lon_min, lon_max = min(lons), max(lons)
+
+        # Calculate the extent in degrees
+        lat_range = lat_max - lat_min
+        lon_range = lon_max - lon_min
+        max_range = max(lat_range, lon_range)
+
+        # Simple zoom level calculation based on coordinate range
+        # These values are empirically determined for good fit
+        if max_range > 0.5:
+            zoom = 9
+        elif max_range > 0.2:
+            zoom = 10
+        elif max_range > 0.1:
+            zoom = 11
+        elif max_range > 0.05:
+            zoom = 12
+        elif max_range > 0.02:
+            zoom = 13
+        elif max_range > 0.01:
+            zoom = 14
+        elif max_range > 0.005:
+            zoom = 15
+        else:
+            zoom = 16
+
+        return min(zoom, 18)  # Cap at maximum zoom level
+
+    zoom_level = calculate_zoom_level()
+
+    # Create layout based on whether map is enabled
+    if plot_map:
+        layout = go.Layout(
+            height=height,
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            mapbox=dict(
+                center=dict(
+                    lat=y_center,
+                    lon=x_center,
+                ),
+                zoom=zoom_level,
+                style="open-street-map",
             ),
         )
-        return [node_scatter]
-
-    fig = go.Figure(
-        data=plot_line_text() + plot_lines() + plot_buses(),
-        layout=go.Layout(
-            height=500,
+    else:
+        layout = go.Layout(
+            height=height,
             showlegend=False,
             hovermode="closest",
             margin=dict(b=20, l=5, r=5, t=40),
@@ -1406,7 +1551,11 @@ def plot_plotly(
                 scaleanchor="x",
                 scaleratio=1,
             ),
-        ),
+        )
+
+    fig = go.Figure(
+        data=plot_lines() + plot_buses() + plot_line_text(),
+        layout=layout,
     )
     if warning_message:
         fig.add_annotation(
@@ -1470,10 +1619,12 @@ def chosen_graph(
 
 
 def plot_dash_app(
-    edisgo_objects: EDisGo | dict[str, EDisGo], debug: bool = False
-) -> JupyterDash:
+    edisgo_objects: EDisGo | dict[str, EDisGo],
+    debug: bool = False,
+    height: int = 500,
+) -> dash.Dash:
     """
-    Generates a jupyter dash app from given eDisGo object(s).
+    Generates a dash app from given eDisGo object(s).
 
     Parameters
     ----------
@@ -1481,6 +1632,9 @@ def plot_dash_app(
         eDisGo objects to show in plotly dash app. In the case of multiple edisgo
         objects pass a dictionary with the eDisGo objects as values and the respective
         eDisGo object names as keys.
+
+    height : int
+        Height of the plotly plot in pixels.
 
     debug : bool
         Debugging for the dash app:
@@ -1493,8 +1647,8 @@ def plot_dash_app(
 
     Returns
     -------
-    JupyterDash
-        Jupyter dash app.
+    Dash
+        dash app.
 
     """
     if isinstance(edisgo_objects, dict):
@@ -1541,11 +1695,13 @@ def plot_dash_app(
 
     padding = 1
 
-    app = JupyterDash(__name__)
+    app = dash.Dash(__name__)
     # Workaround to use standard python logging with plotly dash
     if debug:
         app.logger.disabled = False
         app.logger.setLevel(logging.DEBUG)
+    else:
+        app.logger.disabled = True
 
     if isinstance(edisgo_objects, dict) and len(edisgo_objects) > 1:
         app.layout = html.Div(
@@ -1661,17 +1817,41 @@ def plot_dash_app(
                     [
                         html.Div(
                             [
-                                html.Label("Pseudo coordinates"),
-                                dcc.RadioItems(
-                                    id="radioitems_pseudo_coordinates",
-                                    options=[
-                                        {"label": "False", "value": False},
-                                        {"label": "True", "value": True},
+                                html.Div(
+                                    [
+                                        html.Label("Pseudo coordinates"),
+                                        dcc.RadioItems(
+                                            id="radioitems_pseudo_coordinates",
+                                            options=[
+                                                {"label": "False", "value": False},
+                                                {"label": "True", "value": True},
+                                            ],
+                                            value=False,
+                                        ),
                                     ],
-                                    value=False,
+                                    style={"padding": padding, "flex": 1},
+                                ),
+                                html.Div(
+                                    [
+                                        html.Label("Plot map"),
+                                        dcc.RadioItems(
+                                            id="radioitems_plot_map",
+                                            options=[
+                                                {"label": "False", "value": False},
+                                                {"label": "True", "value": True},
+                                            ],
+                                            value=False,
+                                        ),
+                                    ],
+                                    style={"padding": padding, "flex": 1},
                                 ),
                             ],
-                            style={"padding": padding, "flex": 1},
+                            style={
+                                "display": "flex",
+                                "flex-direction": "row",
+                                "padding": 0,
+                                "flex": 1,
+                            },
                         ),
                         html.Div(
                             [
@@ -1793,6 +1973,7 @@ def plot_dash_app(
             Input("dropdown_line_plot_mode", "value"),
             Input("dropdown_node_plot_mode", "value"),
             Input("radioitems_pseudo_coordinates", "value"),
+            Input("radioitems_plot_map", "value"),
             Input("line_result_selection", "value"),
             Input("node_result_selection", "value"),
             Input("timestep_mode_radio", "value"),
@@ -1807,6 +1988,7 @@ def plot_dash_app(
             selected_line_plot_mode,
             selected_node_plot_mode,
             pseudo_coordinates,
+            plot_map,
             line_result_selection,
             node_result_selection,
             timestep_mode,
@@ -1847,7 +2029,8 @@ def plot_dash_app(
                 node_result_selection=node_result_selection,
                 selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
-                center_coordinates=True,
+                plot_map=plot_map,
+                height=height,
             )
 
             edisgo_obj = edisgo_objects[selected_edisgo_object_2]
@@ -1862,7 +2045,8 @@ def plot_dash_app(
                 node_result_selection=node_result_selection,
                 selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
-                center_coordinates=True,
+                plot_map=plot_map,
+                height=height,
             )
 
             return fig_1, fig_2
@@ -1925,17 +2109,41 @@ def plot_dash_app(
                     [
                         html.Div(
                             [
-                                html.Label("Pseudo coordinates"),
-                                dcc.RadioItems(
-                                    id="radioitems_pseudo_coordinates",
-                                    options=[
-                                        {"label": "False", "value": False},
-                                        {"label": "True", "value": True},
+                                html.Div(
+                                    [
+                                        html.Label("Pseudo coordinates"),
+                                        dcc.RadioItems(
+                                            id="radioitems_pseudo_coordinates",
+                                            options=[
+                                                {"label": "False", "value": False},
+                                                {"label": "True", "value": True},
+                                            ],
+                                            value=False,
+                                        ),
                                     ],
-                                    value=False,
+                                    style={"padding": padding, "flex": 1},
+                                ),
+                                html.Div(
+                                    [
+                                        html.Label("Plot map"),
+                                        dcc.RadioItems(
+                                            id="radioitems_plot_map",
+                                            options=[
+                                                {"label": "False", "value": False},
+                                                {"label": "True", "value": True},
+                                            ],
+                                            value=False,
+                                        ),
+                                    ],
+                                    style={"padding": padding, "flex": 1},
                                 ),
                             ],
-                            style={"padding": padding, "flex": 1},
+                            style={
+                                "display": "flex",
+                                "flex-direction": "row",
+                                "padding": 0,
+                                "flex": 1,
+                            },
                         ),
                         html.Div(
                             [
@@ -2048,6 +2256,7 @@ def plot_dash_app(
             Input("dropdown_line_plot_mode", "value"),
             Input("dropdown_node_plot_mode", "value"),
             Input("radioitems_pseudo_coordinates", "value"),
+            Input("radioitems_plot_map", "value"),
             Input("line_result_selection", "value"),
             Input("node_result_selection", "value"),
             Input("timestep_mode_radio", "value"),
@@ -2060,6 +2269,7 @@ def plot_dash_app(
             selected_line_plot_mode,
             selected_node_plot_mode,
             pseudo_coordinates,
+            plot_map,
             line_result_selection,
             node_result_selection,
             timestep_mode,
@@ -2098,7 +2308,8 @@ def plot_dash_app(
                 node_result_selection=node_result_selection,
                 selected_timesteps=selected_timesteps,
                 pseudo_coordinates=pseudo_coordinates,
-                center_coordinates=True,
+                plot_map=plot_map,
+                height=height,
             )
 
             return fig
@@ -2111,9 +2322,10 @@ def plot_dash(
     mode: str = "inline",
     debug: bool = False,
     port: int = 8050,
+    height: int = 820,
 ):
     """
-    Shows the generated jupyter dash app from given eDisGo object(s).
+    Shows the generated dash app from given eDisGo object(s).
 
     Parameters
     ----------
@@ -2133,13 +2345,16 @@ def plot_dash(
             Plotting in own browser tab.
 
     debug : bool
-        If True, enables debugging of the jupyter dash app.
+        If True, enables debugging of the dash app.
 
     port : int
         Port which the app uses. Default: 8050.
 
+    height : int
+        Height of the dash cell.
+
     """
-    app = plot_dash_app(edisgo_objects, debug=debug)
+    app = plot_dash_app(edisgo_objects, debug=debug, height=height - 300)
     log = logging.getLogger("werkzeug")
     log.setLevel(logging.ERROR)
-    app.run_server(mode=mode, debug=debug, height=820, port=port)
+    app.run(mode=mode, debug=debug, height=height, port=port)

@@ -3,25 +3,26 @@ from __future__ import annotations
 import logging
 import os
 
+from hashlib import md5
 from math import pi, sqrt
+from typing import TYPE_CHECKING
 
 import networkx as nx
 import numpy as np
 import pandas as pd
 
-from sqlalchemy import func
+from sqlalchemy.engine.base import Engine
 
-from edisgo.flex_opt import check_tech_constraints, exceptions
+from edisgo.flex_opt import exceptions, q_control
+from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
 from edisgo.tools import session_scope
+from edisgo.tools.config import Config
 
 if "READTHEDOCS" not in os.environ:
-
-    import geopandas as gpd
-
     from egoio.db_tables import climate
-    from shapely.geometry.multipolygon import MultiPolygon
-    from shapely.wkt import loads as wkt_loads
 
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -60,55 +61,6 @@ def select_worstcase_snapshots(edisgo_obj):
     }
 
     return timestamp
-
-
-def calculate_relative_line_load(edisgo_obj, lines=None, timesteps=None):
-    """
-    Calculates relative line loading for specified lines and time steps.
-
-    Line loading is calculated by dividing the current at the given time step
-    by the allowed current.
-
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    lines : list(str) or None, optional
-        Line names/representatives of lines to calculate line loading for. If
-        None, line loading is calculated for all lines in the network.
-        Default: None.
-    timesteps : :pandas:`pandas.Timestamp<Timestamp>` or \
-        list(:pandas:`pandas.Timestamp<Timestamp>`) or None, optional
-        Specifies time steps to calculate line loading for. If timesteps is
-        None, all time steps power flow analysis was conducted for are used.
-        Default: None.
-
-    Returns
-    --------
-    :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with relative line loading (unitless). Index of
-        the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
-        columns are the line representatives.
-
-    """
-    if timesteps is None:
-        timesteps = edisgo_obj.results.i_res.index
-    # check if timesteps is array-like, otherwise convert to list
-    if not hasattr(timesteps, "__len__"):
-        timesteps = [timesteps]
-
-    if lines is not None:
-        line_indices = lines
-    else:
-        line_indices = edisgo_obj.topology.lines_df.index
-
-    mv_lines_allowed_load = check_tech_constraints.lines_allowed_load(edisgo_obj, "mv")
-    lv_lines_allowed_load = check_tech_constraints.lines_allowed_load(edisgo_obj, "lv")
-    lines_allowed_load = pd.concat(
-        [mv_lines_allowed_load, lv_lines_allowed_load], axis=1, sort=False
-    ).loc[timesteps, line_indices]
-
-    return check_tech_constraints.lines_relative_load(edisgo_obj, lines_allowed_load)
 
 
 def calculate_line_reactance(line_inductance_per_km, line_length, num_parallel):
@@ -199,46 +151,199 @@ def calculate_apparent_power(nominal_voltage, current, num_parallel):
     return sqrt(3) * nominal_voltage * current * num_parallel
 
 
-def drop_duplicated_indices(dataframe, keep="first"):
+def drop_duplicated_indices(dataframe, keep="last"):
     """
     Drop rows of duplicate indices in dataframe.
 
+    Be aware that this function changes the dataframe inplace. To avoid this behavior
+    provide a copy of the dataframe to this function.
+
     Parameters
     ----------
-    dataframe::pandas:`pandas.DataFrame<DataFrame>`
-        handled dataframe
-    keep: str
-        indicator of row to be kept, 'first', 'last' or False,
-        see pandas.DataFrame.drop_duplicates() method
+    dataframe : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe to drop indices from.
+    keep : str
+        Indicator of whether to keep first ("first"), last ("last") or
+        none (False) of the duplicated indices.
+        See :pandas:`pandas.DataFrame.duplicated<DataFrame.duplicated>` for more
+        information. Default: "last".
+
     """
     return dataframe[~dataframe.index.duplicated(keep=keep)]
 
 
-def drop_duplicated_columns(df, keep="first"):
+def drop_duplicated_columns(df, keep="last"):
     """
     Drop columns of dataframe that appear more than once.
+
+    Be aware that this function changes the dataframe inplace. To avoid this behavior
+    provide a copy of the dataframe to this function.
 
     Parameters
     ----------
     df : :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe of which columns are dropped.
+        Dataframe to drop columns from.
     keep : str
-        Indicator of whether to keep first ('first'), last ('last') or
+        Indicator of whether to keep first ("first"), last ("last") or
         none (False) of the duplicated columns.
-        See `drop_duplicates()` method of
-        :pandas:`pandas.DataFrame<DataFrame>`.
+        See :pandas:`pandas.DataFrame.duplicated<DataFrame.duplicated>` for more
+        information. Default: "last".
 
     """
     return df.loc[:, ~df.columns.duplicated(keep=keep)]
 
 
-def select_cable(edisgo_obj, level, apparent_power):
+def calculate_voltage_diff_pu_per_line(
+    s_max: float | np.ndarray,
+    r_total: float | np.ndarray,
+    x_total: float | np.ndarray,
+    v_nom: float | np.ndarray,
+    q_sign: int,
+    power_factor: float,
+) -> float | np.ndarray:
     """
-    Selects suitable cable type and quantity using given apparent power.
+    Calculate the voltage difference across a line in p.u..
 
-    Cable is selected to be able to carry the given `apparent_power`, no load
-    factor is considered. Overhead lines are not considered in choosing a
-    suitable cable.
+    Parameters
+    ----------
+    s_max : float or array-like
+        Apparent power the cable must carry in MVA.
+    r_total : float or array-like
+        Total resistance of the line in Ohms.
+    x_total : float or array-like
+        Total reactance of the line in Ohms.
+    v_nom : float or array-like
+        Nominal voltage of the line in kV.
+    q_sign : int
+        `q_sign` defines whether the reactive power is positive or
+        negative and must either be -1 or +1. In case of generators and storage units,
+        inductive reactive power is negative. In case of loads, inductive reactive
+        power is positive.
+    power_factor : :pandas:`pandas.Series<Series>` or float
+        Ratio of real to apparent power.
+
+    Returns
+    -------
+    float or array-like
+        Voltage difference in p.u.. If positive, the voltage difference behaves like
+        expected, it rises for generators and drops for loads. If negative,
+        the voltage difference behaves counterintuitively, it drops for generators
+        and rises for loads.
+
+    """
+    sin_phi = np.sqrt(1 - power_factor**2)
+    # Calculate the voltage difference using the formula from VDE-AR-N 4105
+    voltage_diff = (s_max / (v_nom**2)) * (
+        r_total * power_factor + q_sign * x_total * sin_phi
+    )
+    return voltage_diff  # in pu
+
+
+def calculate_voltage_diff_pu_per_line_from_type(
+    edisgo_obj: EDisGo,
+    cable_names: str | np.ndarray,
+    length: float,
+    num_parallel: int,
+    v_nom: float | np.ndarray,
+    s_max: float | np.ndarray,
+    component_type: str,
+) -> float | np.ndarray:
+    """
+    Calculate the voltage difference across a line in p.u. depending on line type
+    and component type.
+
+    This function serves as a helper function for function
+    :py:func:`calculate_voltage_diff_pu_per_line`, as it automatically obtains the
+    equipment data per line type from the provided equipment data and default reactive
+    power data per component type from the configuration files.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    cable_names : str or array-like
+        Resistance per kilometer of the cable in ohm/km.
+    length : float
+        Length of the cable in km.
+    num_parallel : int
+        Number of parallel cables.
+    v_nom : int
+        Nominal voltage of the cable(s) in kV.
+    s_max : float
+        Apparent power the cable must carry in MVA.
+    component_type : str, optional
+        Type of the component to be connected, used to obtain the default reactive power
+        mode and power factor from the configuration file. If this is given,
+        `reactive_power_mode` and `power_factor` are not considered.
+        Possible options are "generator", "conventional_load", "charging_point",
+        "heat_pump" and "storage_unit".
+
+    Returns
+    -------
+    float or array-like
+        Voltage difference in p.u.. If positive, the voltage difference behaves like
+        expected, it rises for generators and drops for loads. If negative,
+        the voltage difference behaves counterintuitively, it drops for generators
+        and rises for loads.
+
+    """
+    # calculate total resistance and reactance for the given length and
+    # number of parallel cables for given cable types
+    config_type = "mv_cables" if v_nom > 1.0 else "lv_cables"
+    cable_data = edisgo_obj.topology.equipment_data[config_type]
+    r_total = calculate_line_resistance(
+        cable_data.loc[cable_names, "R_per_km"], length, num_parallel
+    )
+    x_total = calculate_line_reactance(
+        cable_data.loc[cable_names, "L_per_km"], length, num_parallel
+    )
+
+    # get sign of reactive power based on component type
+    config_type = f"mv_{component_type}" if v_nom > 1.0 else f"lv_{component_type}"
+    if component_type in ["generator", "storage_unit"]:
+        q_sign = q_control.get_q_sign_generator(
+            edisgo_obj.config["reactive_power_mode"][config_type]
+        )
+    elif component_type in ["conventional_load", "heat_pump", "charging_point"]:
+        q_sign = q_control.get_q_sign_load(
+            edisgo_obj.config["reactive_power_mode"][config_type]
+        )
+    else:
+        raise ValueError(
+            "Specified component type is not valid. "
+            "Must either be 'generator', 'conventional_load', 'charging_point', "
+            "'heat_pump' or 'storage_unit'."
+        )
+
+    # get power factor based on component type
+    power_factor = edisgo_obj.config["reactive_power_factor"][config_type]
+
+    # Calculate the voltage drop or increase
+    return calculate_voltage_diff_pu_per_line(
+        s_max,
+        r_total,
+        x_total,
+        v_nom,
+        q_sign,
+        power_factor,
+    )
+
+
+def select_cable(
+    edisgo_obj: EDisGo,
+    level: str,
+    apparent_power: float,
+    component_type: str | None = None,
+    length: float = 0.0,
+    max_voltage_diff: float | None = None,
+    max_cables: int = 7,
+) -> tuple[pd.Series, int]:
+    """
+    Selects suitable cable type and quantity based on apparent power and
+    voltage deviation.
+
+    The cable is selected to carry the given `apparent_power` and to ensure
+    acceptable voltage deviation over the cable.
+    Overhead lines are not considered in choosing a suitable cable.
 
     Parameters
     ----------
@@ -248,49 +353,96 @@ def select_cable(edisgo_obj, level, apparent_power):
         'lv'.
     apparent_power : float
         Apparent power the cable must carry in MVA.
+    component_type : str
+        Type of the component to be connected. Possible options are "generator",
+        "conventional_load", "charging_point", "heat_pump" or "storage_unit".
+        Only needed in case a cable length is given and thus the voltage difference over
+        the cable can be taken into account for selecting a suitable cable. In that case
+        it is used to obtain the default power factor and reactive power mode from the
+        configuration files in sections `reactive_power_factor` and
+        `reactive_power_mode`.
+        Default: None.
+    length : float
+        Length of the cable in km. Default: 0.
+    max_voltage_diff : float
+        Maximum allowed voltage difference in p.u..
+        If None, it defaults to the value specified in the configuration file
+        under the `grid_connection` section for the respective voltage level
+        (lv_max_voltage_deviation for LV and mv_max_voltage_deviation for MV).
+        Default: None.
+    max_cables : int
+        Maximum number of cables to consider. Default: 7.
 
     Returns
     -------
-    :pandas:`pandas.Series<Series>`
-        Series with attributes of selected cable as in equipment data and
-        cable type as series name.
-    int
-        Number of necessary parallel cables.
+    tuple[:pandas:`pandas.Series<Series>`, int]
+        A tuple containing information on the selected cable type and the quantity
+        needed.
 
     """
-
-    cable_count = 1
-
     if level == "mv":
         cable_data = edisgo_obj.topology.equipment_data["mv_cables"]
         available_cables = cable_data[
             cable_data["U_n"] == edisgo_obj.topology.mv_grid.nominal_voltage
         ]
+        if not max_voltage_diff:
+            max_voltage_diff = edisgo_obj.config["grid_connection"][
+                "mv_max_voltage_deviation"
+            ]
     elif level == "lv":
         available_cables = edisgo_obj.topology.equipment_data["lv_cables"]
+        if not max_voltage_diff:
+            max_voltage_diff = edisgo_obj.config["grid_connection"][
+                "lv_max_voltage_deviation"
+            ]
     else:
         raise ValueError(
             "Specified voltage level is not valid. Must either be 'mv' or 'lv'."
         )
 
+    cable_count = 1
     suitable_cables = available_cables[
         calculate_apparent_power(
             available_cables["U_n"], available_cables["I_max_th"], cable_count
         )
         > apparent_power
     ]
+    if length != 0:
+        suitable_cables = suitable_cables[
+            calculate_voltage_diff_pu_per_line_from_type(
+                edisgo_obj=edisgo_obj,
+                cable_names=suitable_cables.index,
+                length=length,
+                num_parallel=cable_count,
+                v_nom=available_cables["U_n"].values[0],
+                s_max=apparent_power,
+                component_type=component_type,
+            )
+            < max_voltage_diff
+        ]
 
     # increase cable count until appropriate cable type is found
-    while suitable_cables.empty and cable_count < 7:
+    while suitable_cables.empty and cable_count < max_cables:  # parameter
         cable_count += 1
         suitable_cables = available_cables[
             calculate_apparent_power(
-                available_cables["U_n"],
-                available_cables["I_max_th"],
-                cable_count,
+                available_cables["U_n"], available_cables["I_max_th"], cable_count
             )
             > apparent_power
         ]
+        if length != 0:
+            suitable_cables = suitable_cables[
+                calculate_voltage_diff_pu_per_line_from_type(
+                    edisgo_obj=edisgo_obj,
+                    cable_names=available_cables.index,
+                    length=length,
+                    num_parallel=cable_count,
+                    v_nom=available_cables["U_n"].values[0],
+                    s_max=apparent_power,
+                    component_type=component_type,
+                )
+                < max_voltage_diff
+            ]
     if suitable_cables.empty:
         raise exceptions.MaximumIterationError(
             "Could not find a suitable cable for apparent power of "
@@ -300,83 +452,6 @@ def select_cable(edisgo_obj, level, apparent_power):
     cable_type = suitable_cables.loc[suitable_cables["I_max_th"].idxmin()]
 
     return cable_type, cable_count
-
-
-def assign_feeder(edisgo_obj, mode="mv_feeder"):
-    """
-    Assigns MV or LV feeder to each bus and line, depending on the `mode`.
-
-    The feeder name is written to a new column `mv_feeder` or `lv_feeder`
-    in :class:`~.network.topology.Topology`'s
-    :attr:`~.network.topology.Topology.buses_df` and
-    :attr:`~.network.topology.Topology.lines_df`. The MV respectively LV feeder
-    name corresponds to the name of the first bus in the respective feeder.
-
-    Parameters
-    -----------
-    edisgo_obj : :class:`~.EDisGo`
-    mode : str
-        Specifies whether to assign MV or LV feeder. Valid options are
-        'mv_feeder' or 'lv_feeder'. Default: 'mv_feeder'.
-
-    """
-
-    def _assign_to_busses(graph, station):
-        # get all buses in network and remove station to get separate subgraphs
-        graph_nodes = list(graph.nodes())
-        graph_nodes.remove(station)
-        subgraph = graph.subgraph(graph_nodes)
-
-        for neighbor in graph.neighbors(station):
-            # get all nodes in that feeder by doing a DFS in the disconnected
-            # subgraph starting from the node adjacent to the station
-            # `neighbor`
-            subgraph_neighbor = nx.dfs_tree(subgraph, source=neighbor)
-            for node in subgraph_neighbor.nodes():
-
-                edisgo_obj.topology.buses_df.at[node, mode] = neighbor
-
-                # in case of an LV station, assign feeder to all nodes in that
-                # LV network (only applies when mode is 'mv_feeder'
-                if node.split("_")[0] == "BusBar" and node.split("_")[-1] == "MV":
-                    lvgrid = edisgo_obj.topology.get_lv_grid(int(node.split("_")[-2]))
-                    edisgo_obj.topology.buses_df.loc[
-                        lvgrid.buses_df.index, mode
-                    ] = neighbor
-
-    def _assign_to_lines(lines):
-        edisgo_obj.topology.lines_df.loc[
-            lines, mode
-        ] = edisgo_obj.topology.lines_df.loc[lines].apply(
-            lambda _: edisgo_obj.topology.buses_df.at[_.bus0, mode], axis=1
-        )
-        tmp = edisgo_obj.topology.lines_df.loc[lines]
-        lines_nan = tmp[tmp.loc[lines, mode].isna()].index
-        edisgo_obj.topology.lines_df.loc[
-            lines_nan, mode
-        ] = edisgo_obj.topology.lines_df.loc[lines_nan].apply(
-            lambda _: edisgo_obj.topology.buses_df.at[_.bus1, mode], axis=1
-        )
-
-    if mode == "mv_feeder":
-        graph = edisgo_obj.topology.mv_grid.graph
-        station = edisgo_obj.topology.mv_grid.station.index[0]
-        _assign_to_busses(graph, station)
-        lines = edisgo_obj.topology.lines_df.index
-        _assign_to_lines(lines)
-
-    elif mode == "lv_feeder":
-        for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
-            graph = lv_grid.graph
-            station = lv_grid.station.index[0]
-            _assign_to_busses(graph, station)
-            lines = lv_grid.lines_df.index
-            _assign_to_lines(lines)
-
-    else:
-        raise ValueError(
-            "Invalid mode. Mode must either be 'mv_feeder' or 'lv_feeder'."
-        )
 
 
 def get_path_length_to_station(edisgo_obj):
@@ -439,7 +514,7 @@ def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
     -------
     list(str)
         List of buses (as in index of :attr:`~.network.topology.Topology.buses_df`)
-        downstream of the given component.
+        downstream of the given component incl. the initial bus.
 
     """
     graph = edisgo_obj.topology.to_graph()
@@ -459,17 +534,22 @@ def get_downstream_buses(edisgo_obj, comp_name, comp_type="bus"):
         bus = bus0 if len(path_to_station_bus0) > len(path_to_station_bus1) else bus1
         bus_upstream = bus0 if bus == bus1 else bus1
     else:
-        return None
+        raise ValueError(
+            f"Component type needs to be either 'bus' or 'line'. Given {comp_type=} is "
+            f"not valid."
+        )
 
     # remove edge between bus and next bus upstream
     graph.remove_edge(bus, bus_upstream)
 
     # get subgraph containing relevant bus
-    subgraphs = list(graph.subgraph(c) for c in nx.connected_components(graph))
+    subgraphs = [graph.subgraph(c) for c in nx.connected_components(graph)]
+
     for subgraph in subgraphs:
         if bus in subgraph.nodes():
             return list(subgraph.nodes())
-    return None
+
+    return [bus]
 
 
 def assign_voltage_level_to_component(df, buses_df):
@@ -499,6 +579,7 @@ def assign_voltage_level_to_component(df, buses_df):
         (either 'mv' or 'lv').
 
     """
+    df = df.copy()
     df["voltage_level"] = df.apply(
         lambda _: "lv" if buses_df.at[_.bus, "v_nom"] < 1 else "mv",
         axis=1,
@@ -506,55 +587,175 @@ def assign_voltage_level_to_component(df, buses_df):
     return df
 
 
-def get_weather_cells_intersecting_with_grid_district(edisgo_obj):
+def determine_grid_integration_voltage_level(edisgo_object, power):
+    """
+    Gives voltage level component should be integrated into based on its nominal power.
+
+    The voltage level is specified through an integer value from 4 to 7 with
+    4 = MV busbar, 5 = MV grid, 6 = LV busbar and 7 = LV grid.
+
+    The voltage level is determined using upper limits up to which capacity a component
+    is integrated into a certain voltage level. These upper limits are set in the
+    config section `grid_connection` through the parameters
+    'upper_limit_voltage_level_{4:7}'.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    power : float
+        Nominal power of component in MW.
+
+    Returns
+    --------
+    int
+        Voltage level component should be integrated into. Possible options are
+        4 (MV busbar), 5 (MV grid), 6 (LV busbar) or 7 (LV grid).
+
+    """
+    cfg_max_p_nom = edisgo_object.config["grid_connection"]
+    if (
+        cfg_max_p_nom["upper_limit_voltage_level_5"]
+        < power
+        <= cfg_max_p_nom["upper_limit_voltage_level_4"]
+    ):
+        voltage_level = 4
+    elif (
+        cfg_max_p_nom["upper_limit_voltage_level_6"]
+        < power
+        <= cfg_max_p_nom["upper_limit_voltage_level_5"]
+    ):
+        voltage_level = 5
+    elif (
+        cfg_max_p_nom["upper_limit_voltage_level_7"]
+        < power
+        <= cfg_max_p_nom["upper_limit_voltage_level_6"]
+    ):
+        voltage_level = 6
+    elif 0 < power <= cfg_max_p_nom["upper_limit_voltage_level_7"]:
+        voltage_level = 7
+    else:
+        raise ValueError("Unsupported voltage level")
+    return voltage_level
+
+
+def determine_bus_voltage_level(edisgo_object, bus_name):
+    """
+    Gives voltage level as integer from 4 to 7 of given bus.
+
+    The voltage level is specified through an integer value from 4 to 7 with
+    4 = MV busbar, 5 = MV grid, 6 = LV busbar and 7 = LV grid.
+
+    Buses that are directly connected to a station and not part of a longer feeder
+    or half-ring, i.e. they are only part of one line, are as well considered as voltage
+    level 4 or 6, depending on if they are connected to an HV/MV station or MV/LV
+    station.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+    bus_name : str
+        Name of bus as in index of :attr:`~.network.topology.Topology.buses_df`.
+
+    Returns
+    --------
+    int
+        Voltage level of bus. Possible options are 4 (MV busbar), 5 (MV grid),
+        6 (LV busbar) or 7 (LV grid).
+
+    """
+    v_nom = edisgo_object.topology.buses_df.at[bus_name, "v_nom"]
+    if v_nom < 1:
+        station_buses = edisgo_object.topology.transformers_df.bus1.values
+        if bus_name in station_buses:
+            voltage_level = 6
+        else:
+            # check if bus is directly connected to a station via a line that is not
+            # connected to any other line - if that is the case it is considered as
+            # voltage level 6
+            connected_lines_df = edisgo_object.topology.get_connected_lines_from_bus(
+                bus_name
+            )
+            if len(connected_lines_df) > 1:
+                voltage_level = 7
+            else:
+                connected_line = connected_lines_df.iloc[0, :]
+                if (
+                    connected_line.at["bus0"] in station_buses
+                    or connected_line.at["bus1"] in station_buses
+                ):
+                    voltage_level = 6
+                else:
+                    voltage_level = 7
+    else:
+        station_buses = edisgo_object.topology.transformers_hvmv_df.bus1.values
+        if bus_name in station_buses:
+            voltage_level = 4
+        else:
+            # check if bus is directly connected to a station via a line that is not
+            # connected to any other line - if that is the case it is considered as
+            # voltage level 4
+            connected_lines_df = edisgo_object.topology.get_connected_lines_from_bus(
+                bus_name
+            )
+            if len(connected_lines_df) > 1:
+                voltage_level = 5
+            else:
+                connected_line = connected_lines_df.iloc[0, :]
+                if (
+                    connected_line.at["bus0"] in station_buses
+                    or connected_line.at["bus1"] in station_buses
+                ):
+                    voltage_level = 4
+                else:
+                    voltage_level = 5
+    return voltage_level
+
+
+def get_weather_cells_intersecting_with_grid_district(
+    edisgo_obj: EDisGo,
+    engine: Engine | None = None,
+) -> set:
     """
     Get all weather cells that intersect with the grid district.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine. Only needed when using new egon_data data.
 
     Returns
     -------
-    set
-        Set with weather cell IDs
+    set(int)
+        Set with weather cell IDs.
 
     """
-
     # Download geometries of weather cells
+    sql_geom = sql_grid_geom(edisgo_obj)
     srid = edisgo_obj.topology.grid_district["srid"]
-    table = climate.Cosmoclmgrid
-    with session_scope() as session:
-        query = session.query(
-            table.gid,
-            func.ST_AsText(func.ST_Transform(table.geom, srid)).label("geometry"),
-        )
-    geom_data = pd.read_sql_query(query.statement, query.session.bind)
-    geom_data.geometry = geom_data.apply(lambda _: wkt_loads(_.geometry), axis=1)
-    geom_data = gpd.GeoDataFrame(geom_data, crs=f"EPSG:{srid}")
 
-    # Make sure MV Geometry is MultiPolygon
-    mv_geom = edisgo_obj.topology.grid_district["geom"]
-    if mv_geom.geom_type == "Polygon":
-        # Transform Polygon to MultiPolygon and overwrite geometry
-        p = wkt_loads(str(mv_geom))
-        m = MultiPolygon([p])
-        edisgo_obj.topology.grid_district["geom"] = m
-    elif mv_geom.geom_type == "MultiPolygon":
-        m = mv_geom
+    if edisgo_obj.legacy_grids is True:
+        table = climate.Cosmoclmgrid
+        with session_scope() as session:
+            query = session.query(
+                table.gid,
+            ).filter(sql_intersects(table.geom, sql_geom, srid))
+            weather_cells = pd.read_sql(sql=query.statement, con=query.session.bind).gid
     else:
-        raise ValueError(
-            f"Grid district geometry is of type {type(mv_geom)}."
-            " Only Shapely Polygon or MultiPolygon are accepted."
+        config = Config()
+        (egon_era5_weather_cells,) = config.import_tables_from_oep(
+            engine, ["egon_era5_weather_cells"], "supply"
         )
-    mv_geom_gdf = gpd.GeoDataFrame(data={"geometry": [m]}, crs=f"EPSG:{srid}")
 
+        with session_scope_egon_data(engine=engine) as session:
+            query = session.query(
+                egon_era5_weather_cells.w_id,
+            ).filter(sql_intersects(egon_era5_weather_cells.geom, sql_geom, srid))
+            weather_cells = pd.read_sql(sql=query.statement, con=engine).w_id
     return set(
         np.append(
-            gpd.sjoin(
-                geom_data, mv_geom_gdf, how="right", op="intersects"
-            ).gid.unique(),
-            edisgo_obj.topology.generators_df.weather_cell_id.dropna().unique(),
+            weather_cells,
+            edisgo_obj.topology.generators_df.weather_cell_id.dropna(),
         )
     )
 
@@ -617,6 +818,54 @@ def get_files_recursive(path, files=None):
             files.append(file)
 
     return files
+
+
+def calculate_impedance_for_parallel_components(parallel_components, pu=False):
+    """
+    Method to calculate parallel impedance and power of parallel elements.
+
+    """
+    if pu:
+        raise NotImplementedError(
+            "Calculation in pu for parallel components not implemented yet."
+        )
+    else:
+        if not (parallel_components.diff().dropna() < 1e-6).all().all():
+            parallel_impedance = 1 / sum(
+                1 / complex(comp.r, comp.x)
+                for name, comp in parallel_components.iterrows()
+            )
+            # apply current devider and use minimum
+            s_parallel = min(
+                abs(
+                    comp.s_nom
+                    / (
+                        1
+                        / complex(comp.r, comp.x)
+                        / sum(
+                            1 / complex(comp.r, comp.x)
+                            for name, comp in parallel_components.iterrows()
+                        )
+                    )
+                )
+                for name, comp in parallel_components.iterrows()
+            )
+            return pd.Series(
+                {
+                    "r": parallel_impedance.real,
+                    "x": parallel_impedance.imag,
+                    "s_nom": s_parallel,
+                }
+            )
+        else:
+            nr_components = len(parallel_components)
+        return pd.Series(
+            {
+                "r": parallel_components.iloc[0].r / nr_components,
+                "x": parallel_components.iloc[0].x / nr_components,
+                "s_nom": parallel_components.iloc[0].s_nom * nr_components,
+            }
+        )
 
 
 def add_line_susceptance(
@@ -692,15 +941,305 @@ def add_line_susceptance(
     return edisgo_obj
 
 
-def resample(
-    object, freq_orig, method: str = "ffill", freq: str | pd.Timedelta = "15min"
+def aggregate_district_heating_components(edisgo_obj, feedin_district_heating=None):
+    """
+    Aggregate PtH components that feed into the same district heating network.
+
+    Besides aggregating PtH components, feed-in from other heat supply sources can
+    be specified, which is subtracted from the heat demand in the district heating
+    network in order to determine the heat demand that needs to be covered by the PtH
+    units.
+
+    Concerning the aggregated components, rated power of the single components is added
+    up and COP for combined component is calculated from COP of all components weighed
+    with their rated power. If active and reactive power time series were previously
+    set for the PtH units they are overwritten.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+    feedin_district_heating : :pandas:`pandas.DataFrame<DataFrame>`
+        Other thermal feed-in into district heating per district heating area (in
+        columns) and time step (in index) in MW.
+
+    """
+    if feedin_district_heating is None:
+        feedin_district_heating = pd.DataFrame()
+
+    if "district_heating_id" in edisgo_obj.topology.loads_df.columns:
+        for (
+            district
+        ) in edisgo_obj.topology.loads_df.district_heating_id.dropna().unique():
+            # get PtH units in district heating network
+            district_hps = edisgo_obj.topology.loads_df[
+                edisgo_obj.topology.loads_df.district_heating_id == district
+            ]
+            # in case there is more than 1 PtH unit, get name of heat pump, otherwise
+            # get name of single PtH unit
+            if len(district_hps) > 1:
+                # district heat pump component
+                district_hp = district_hps[
+                    district_hps.sector == "district_heating"
+                ].index[0]
+            else:
+                district_hp = district_hps.index[0]
+
+            # reduce demand by feedin from other sources (e.g. solarthermal, geothermal)
+            if not feedin_district_heating.empty:
+                if str(int(district)) in feedin_district_heating.columns:
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp] = (
+                        edisgo_obj.heat_pump.heat_demand_df[district_hp]
+                        - feedin_district_heating[str(int(district))]
+                    )
+                else:
+                    logger.info(
+                        f"There are no other heat supply sources in district heating "
+                        f"grid {district}."
+                    )
+
+            if len(district_hps) > 1:
+                # get name of resistive heater component
+                district_rh = district_hps[
+                    district_hps.sector == "district_heating_resistive_heater"
+                ].index[0]
+                # calculate rated power of aggregated component
+                new_p_set = edisgo_obj.topology.loads_df.loc[
+                    district_hps.index
+                ].p_set.sum()
+                el_demand = (
+                    edisgo_obj.heat_pump.heat_demand_df[district_hp]
+                    / edisgo_obj.heat_pump.cop_df[district_hp]
+                ).clip(lower=0)
+                hp_p_set = edisgo_obj.topology.loads_df.at[district_hp, "p_set"]
+                if (el_demand > hp_p_set).any():
+                    # calculate COP by weighted COP of single components
+                    # (weighted by their contribution to cover heat demand)
+                    # determine percentage of contribution per component
+                    df = pd.concat(
+                        [
+                            (el_demand.clip(upper=hp_p_set) / el_demand)
+                            .fillna(1)
+                            .to_frame(district_hp),
+                            ((el_demand - el_demand.clip(upper=hp_p_set)) / el_demand)
+                            .fillna(0)
+                            .to_frame(district_rh),
+                        ],
+                        axis=1,
+                    )
+                    new_cop = (
+                        edisgo_obj.heat_pump.cop_df[district_hps.index] * df
+                    ).sum(axis=1)
+                else:
+                    new_cop = edisgo_obj.heat_pump.cop_df[district_hp]
+                # delete COP timeseries and heat demand timeseries of resistive heater
+                for attr in ["cop_df", "heat_demand_df"]:
+                    setattr(
+                        edisgo_obj.heat_pump,
+                        attr,
+                        getattr(edisgo_obj.heat_pump, attr).drop(columns=[district_rh]),
+                    )
+                # delete resistive heater component in loads_df
+                edisgo_obj.topology.loads_df = edisgo_obj.topology.loads_df.drop(
+                    district_rh
+                )
+                # delete active and reactive power timeseries of resistive heater
+                edisgo_obj.timeseries.drop_component_time_series(
+                    "loads_active_power", district_rh
+                )
+                edisgo_obj.timeseries.drop_component_time_series(
+                    "loads_reactive_power", district_rh
+                )
+
+                # add COP timeseries of aggregated component
+                edisgo_obj.heat_pump.cop_df[district_hp] = new_cop
+                # add aggregated component to loads_df
+                edisgo_obj.topology.loads_df.at[district_hp, "p_set"] = new_p_set
+                # check if storage was assigned to resistive heater and if so
+                # assign to heat pump
+                if district_rh in edisgo_obj.heat_pump.thermal_storage_units_df.index:
+                    edisgo_obj.heat_pump.thermal_storage_units_df.rename(
+                        index={district_rh: district_hp}, inplace=True
+                    )
+
+            # if time series was previously set, overwrite time series in case
+            # components were aggregated components or heat demand reduced by feed-in
+            # from other components
+            if district_hp in edisgo_obj.timeseries.loads_active_power.columns:
+                edisgo_obj.apply_heat_pump_operating_strategy(
+                    heat_pump_names=[district_hp]
+                )
+
+
+def reduce_timeseries_data_to_given_timeindex(
+    edisgo_obj,
+    timeindex,
+    freq="1H",
+    timeseries=True,
+    electromobility=True,
+    save_ev_soc_initial=True,
+    heat_pump=True,
+    dsm=True,
+    overlying_grid=True,
 ):
     """
-    Resamples all time series data in given object to a desired resolution.
+    Reduces timeseries data in EDisGo object to given time index.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time index to set.
+    freq : str or :pandas:`pandas.Timedelta<Timedelta>`, optional
+        Frequency of time series data. This is only needed if it cannot be inferred from
+        the given `timeindex` and if electromobility data and/or overlying grid data is
+        reduced, as the initial SoC is tried to be set using the time step before the
+        first time step in the given `timeindex`. Offset aliases can be found here:
+        https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases.
+        Default: '1H'.
+    timeseries : bool
+        Indicates whether timeseries in :class:`~.network.timeseries.TimeSeries`
+        are reduced to given time index. Default: True.
+    electromobility : bool
+        Indicates whether timeseries in
+        :class:`~.network.electromobility.Electromobility` are reduced to given time
+        index. Default: True.
+    save_ev_soc_initial : bool
+        Indicates whether to save initial EV SOC from timestep before first timestep of
+        given time index. Default: True.
+    heat_pump : bool
+        Indicates whether timeseries in :class:`~.network.heat.HeatPump`
+        are reduced to given time index. Default: True.
+    dsm : bool
+        Indicates whether timeseries in :class:`~.network.dsm.DSM`
+        are reduced to given time index. Default: True.
+    overlying_grid : bool
+        Indicates whether timeseries in :class:`~.network.overlying_grid.OverlyingGrid`
+        are reduced to given time index. Default: True.
+
+    """
+    # get frequency from time index data or default frequency
+    try:
+        frequency = timeindex[1] - timeindex[0]
+    except KeyError:
+        frequency = freq
+    if not isinstance(frequency, pd.Timedelta):
+        frequency = pd.Timedelta(frequency)
+
+    # generators, loads and storage units timeseries
+    if timeseries:
+        attributes = edisgo_obj.timeseries._attributes
+        edisgo_obj.timeseries.timeindex = timeindex
+        for attr in attributes:
+            if not getattr(edisgo_obj.timeseries, attr).empty:
+                setattr(
+                    edisgo_obj.timeseries,
+                    attr,
+                    getattr(edisgo_obj.timeseries, attr).loc[timeindex],
+                )
+    # Battery electric vehicle timeseries
+    if electromobility:
+        if save_ev_soc_initial:
+            # timestep EV SOC from timestep before if possible
+            ts_before = timeindex[0] - frequency
+            if not edisgo_obj.electromobility.flexibility_bands["upper_energy"].empty:
+                try:
+                    initial_soc_cp = (
+                        1
+                        / 2
+                        * (
+                            edisgo_obj.electromobility.flexibility_bands[
+                                "upper_energy"
+                            ].loc[ts_before]
+                            + edisgo_obj.electromobility.flexibility_bands[
+                                "lower_energy"
+                            ].loc[ts_before]
+                        )
+                    )
+                except KeyError:
+                    initial_soc_cp = (
+                        1
+                        / 2
+                        * (
+                            edisgo_obj.electromobility.flexibility_bands[
+                                "upper_energy"
+                            ].loc[timeindex[0]]
+                            + edisgo_obj.electromobility.flexibility_bands[
+                                "lower_energy"
+                            ].loc[timeindex[0]]
+                        )
+                    )
+                edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
+        for key, df in edisgo_obj.electromobility.flexibility_bands.items():
+            if not df.empty:
+                df = df.loc[timeindex]
+                edisgo_obj.electromobility.flexibility_bands.update({key: df})
+    # Heat pumps timeseries
+    if heat_pump:
+        for attr in ["cop_df", "heat_demand_df"]:
+            if not getattr(edisgo_obj.heat_pump, attr).empty:
+                setattr(
+                    edisgo_obj.heat_pump,
+                    attr,
+                    getattr(edisgo_obj.heat_pump, attr).loc[timeindex],
+                )
+    # Demand Side Management timeseries
+    if dsm:
+        for attr in edisgo_obj.dsm._attributes:
+            if not getattr(edisgo_obj.dsm, attr).empty:
+                setattr(
+                    edisgo_obj.dsm,
+                    attr,
+                    getattr(edisgo_obj.dsm, attr).loc[timeindex],
+                )
+    # Overlying grid timeseries
+    if overlying_grid:
+        for attr in edisgo_obj.overlying_grid._attributes:
+            if not getattr(edisgo_obj.overlying_grid, attr).empty:
+                if attr in [
+                    "thermal_storage_units_central_soc",
+                    "thermal_storage_units_decentral_soc",
+                    "storage_units_soc",
+                ]:
+                    try:
+                        setattr(
+                            edisgo_obj.overlying_grid,
+                            attr,
+                            getattr(edisgo_obj.overlying_grid, attr).loc[
+                                pd.Index(timeindex).append(
+                                    pd.Index([timeindex[-1] + frequency])
+                                )
+                            ],
+                        )
+                    except KeyError:
+                        setattr(
+                            edisgo_obj.overlying_grid,
+                            attr,
+                            getattr(edisgo_obj.overlying_grid, attr).loc[timeindex],
+                        )
+                else:
+                    setattr(
+                        edisgo_obj.overlying_grid,
+                        attr,
+                        getattr(edisgo_obj.overlying_grid, attr).loc[timeindex],
+                    )
+
+
+def resample(
+    object,
+    freq_orig,
+    method: str = "ffill",
+    freq: str | pd.Timedelta = "15min",
+    attr_to_resample=None,
+):
+    """
+    Resamples time series data to a desired resolution.
+
+    Both up- and down-sampling methods are possible.
 
     Parameters
     ----------
-    object : :class:`~.network.timeseries.TimeSeries`
+    object : :class:`~.network.timeseries.TimeSeries` or \
+        :class:`~.network.heat.HeatPump`
         Object of which to resample time series data.
     freq_orig : :pandas:`pandas.Timedelta<Timedelta>`
         Frequency of original time series data.
@@ -710,13 +1249,18 @@ def resample(
     freq : str, optional
         See `freq` parameter in :attr:`~.EDisGo.resample_timeseries` for more
         information.
+    attr_to_resample : list(str), optional
+        List of attributes to resample. Per default, all attributes specified in
+        respective object's `_attributes` are resampled.
 
     """
+    if attr_to_resample is None:
+        attr_to_resample = object._attributes
 
     # add time step at the end of the time series in case of up-sampling so that
     # last time interval in the original time series is still included
     df_dict = {}
-    for attr in object._attributes:
+    for attr in attr_to_resample:
         if not getattr(object, attr).empty:
             df_dict[attr] = getattr(object, attr)
             if pd.Timedelta(freq) < freq_orig:  # up-sampling
@@ -761,3 +1305,132 @@ def resample(
                 attr,
                 df_dict[attr].resample(freq).mean(),
             )
+
+
+def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.DataFrame:
+    """
+    Function to automatically check if columns of a pandas DataFrame can
+    be reduced to a smaller data type.
+
+    Source:
+    https://mikulskibartosz.name/how-to-reduce-memory-usage-in-pandas
+
+    Parameters
+    ----------
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame to reduce memory usage for.
+    show_reduction : bool
+        If True, print amount of memory reduced.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with decreased memory usage.
+
+    """
+    start_mem = df.memory_usage().sum() / 1024**2
+
+    for col in df.columns:
+        col_type = df[col].dtype
+
+        if col_type != object and str(col_type) != "category":
+            c_min = df[col].min()
+            c_max = df[col].max()
+
+            if str(col_type)[:3] == "int":
+                if c_min > np.iinfo(np.int16).min and c_max < np.iinfo(np.int16).max:
+                    df[col] = df[col].astype("int16")
+                elif c_min > np.iinfo(np.int32).min and c_max < np.iinfo(np.int32).max:
+                    df[col] = df[col].astype("int32")
+                else:
+                    df[col] = df[col].astype("int64")
+            else:
+                if (
+                    c_min > np.finfo(np.float32).min
+                    and c_max < np.finfo(np.float32).max
+                ):
+                    df[col] = df[col].astype("float32")
+                else:
+                    df[col] = df[col].astype("float64")
+
+        else:
+            df[col] = df[col].astype("category")
+
+    end_mem = df.memory_usage().sum() / 1024**2
+
+    if show_reduction is True:
+        print(
+            "Reduced memory usage of DataFrame by "
+            f"{(1 - end_mem/start_mem) * 100:.2f} %."
+        )
+
+    return df
+
+
+def get_year_based_on_timeindex(edisgo_obj):
+    """
+    Checks if :py:attr:`~.network.timeseries.TimeSeries.timeindex` is already set and
+    if so, returns the year of the time index.
+
+    Parameters
+    ----------
+    edisgo_object : :class:`~.EDisGo`
+
+    Returns
+    --------
+    int or None
+        If a time index is available returns the year of the time index,
+        otherwise it returns None.
+
+    """
+    year = edisgo_obj.timeseries.timeindex.year
+    if len(year) == 0:
+        return None
+    else:
+        return year[0]
+
+
+def get_year_based_on_scenario(scenario):
+    """
+    Returns the year the given scenario was set up for.
+
+    Parameters
+    ----------
+    scenario : str
+        Scenario for which to set year. Possible options are 'eGon2035' and 'eGon100RE'.
+
+    Returns
+    --------
+    int or None
+        Returns the year of the scenario (2035 in case of the 'eGon2035' scenario
+        and 2045 in case of the 'eGon100RE' scenario). If another scenario name is
+        provided it returns None.
+
+    """
+    if scenario == "eGon2035":
+        return 2035
+    elif scenario == "eGon100RE":
+        return 2045
+    else:
+        return None
+
+
+def hash_dataframe(df: pd.DataFrame) -> str:
+    """
+    Get hash of dataframe.
+
+    Can be used to check if dataframes have the same content.
+
+    Parameters
+    -----------
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame to hash.
+
+    Returns
+    --------
+    str
+        Hash of dataframe as string.
+
+    """
+    s = df.to_json()
+    return md5(s.encode()).hexdigest()

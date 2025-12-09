@@ -23,7 +23,11 @@ class TestChargingStrategy:
         timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         cls.edisgo_obj.set_timeindex(timeindex)
 
-        cls.edisgo_obj.import_electromobility(cls.simbev_path, cls.tracbev_path)
+        cls.edisgo_obj.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=cls.simbev_path,
+            potential_charging_points_dir=cls.tracbev_path,
+        )
 
     def test_charging_strategy(self, caplog):
         charging_demand_lst = []
