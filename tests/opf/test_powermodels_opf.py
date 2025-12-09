@@ -232,7 +232,7 @@ class TestPowerModelsOPF:
         )
 
         assert np.isclose(
-            np.round(self.edisgo.opf_results.slack_generator_t.pg[-1], 3),
+            np.round(self.edisgo.opf_results.slack_generator_t.pg.iloc[-1], 3),
             -20.683,
             atol=1e-3,
         )
@@ -240,7 +240,7 @@ class TestPowerModelsOPF:
             np.round(
                 self.edisgo.opf_results.heat_storage_t.p[
                     "Heat_Pump_LVGrid_3_individual_heating_1"
-                ][-1],
+                ].iloc[-1],
                 3,
             ),
             0,
@@ -248,7 +248,7 @@ class TestPowerModelsOPF:
         )
         assert np.isclose(
             np.round(
-                self.edisgo.timeseries.loads_active_power.Charging_Point_LVGrid_6_1[-1],
+                self.edisgo.timeseries.loads_active_power.Charging_Point_LVGrid_6_1.iloc[-1],
                 3,
             ),
             0.761,
@@ -258,7 +258,7 @@ class TestPowerModelsOPF:
             np.round(
                 self.edisgo.timeseries.loads_active_power[
                     "Heat_Pump_LVGrid_5_individual_heating_1"
-                ][-1],
+                ].iloc[-1],
                 3,
             ),
             0.375,
@@ -266,7 +266,7 @@ class TestPowerModelsOPF:
         )
         assert np.isclose(
             np.round(
-                self.edisgo.timeseries.storage_units_active_power.Storage_1[-1], 3
+                self.edisgo.timeseries.storage_units_active_power.Storage_1.iloc[-1], 3
             ),
             0.16,
             atol=1e-3,
@@ -275,7 +275,7 @@ class TestPowerModelsOPF:
             np.round(
                 self.edisgo.timeseries.loads_active_power[
                     "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"
-                ][-1],
+                ].iloc[-1],
                 3,
             ),
             0.031 + 0.193,

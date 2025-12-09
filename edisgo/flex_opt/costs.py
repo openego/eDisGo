@@ -162,7 +162,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         ]["quantity"].to_frame()
         lines_added_unique = lines_added.index.unique()
         lines_added = (
-            lines_added.groupby(axis=0, level=0)
+            lines_added.groupby(level=0)
             .sum()
             .loc[lines_added_unique, ["quantity"]]
         )
