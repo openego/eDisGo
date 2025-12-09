@@ -211,7 +211,7 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
                 ).all()
             ]
 
-    crs = {"init": "epsg:3035"}
+    crs = "epsg:3035"
     region = gpd.GeoDataFrame(Regions, columns=["subst_id", "geometry"], crs=crs)
     region = region.to_crs(epsg=projection)
 
@@ -561,9 +561,8 @@ def mv_grid_topology(
     pypsa_plot.buses = pypsa_plot.buses[~pypsa_plot.buses.index.str.contains("agg")]
     pypsa_plot.lines = edisgo_obj.topology.lines_df[
         edisgo_obj.topology.lines_df.bus0.isin(pypsa_plot.buses.index)
-    ][edisgo_obj.topology.lines_df.bus1.isin(pypsa_plot.buses.index)].loc[
-        :, ["bus0", "bus1"]
-    ]
+        & edisgo_obj.topology.lines_df.bus1.isin(pypsa_plot.buses.index)
+    ].loc[:, ["bus0", "bus1"]]
 
     # line colors
     if line_color == "loading":
@@ -659,9 +658,7 @@ def mv_grid_topology(
     if grid_district_geom:
         try:
             projection = 3857 if contextily and background_map else 4326
-            crs = {
-                "init": "epsg:{}".format(int(edisgo_obj.topology.grid_district["srid"]))
-            }
+            crs = "epsg:{}".format(int(edisgo_obj.topology.grid_district["srid"]))
             region = gpd.GeoDataFrame(
                 {"geometry": [edisgo_obj.topology.grid_district["geom"]]},
                 crs=crs,

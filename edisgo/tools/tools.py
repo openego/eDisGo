@@ -579,6 +579,7 @@ def assign_voltage_level_to_component(df, buses_df):
         (either 'mv' or 'lv').
 
     """
+    df = df.copy()
     df["voltage_level"] = df.apply(
         lambda _: "lv" if buses_df.at[_.bus, "v_nom"] < 1 else "mv",
         axis=1,
