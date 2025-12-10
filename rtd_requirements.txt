@@ -1,4 +1,4 @@
-dash < 2.9.0
+dash < 3.1.0
 demandlib < 0.3.0
 egoio >= 0.4.7, < 0.5.0
 geopy >= 2.0.0, < 2.5.0
@@ -19,6 +19,6 @@ sphinx_rtd_theme >= 0.5.2, < 3.1.0
 sphinx-autodoc-typehints < 3.2.0
 sphinx-autoapi < 3.7.0
 sshtunnel < 0.5.0
-urllib3 < 2.6.0
+urllib3 < 2.7.0
 workalendar < 17.1.0
 astroid == 3.3.11
