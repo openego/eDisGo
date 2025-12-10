@@ -60,7 +60,7 @@ requirements = [
     "shapely >= 1.7.0, < 2.1.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel < 0.5.0",
-    "urllib3 < 2.6.0",
+    "urllib3 < 2.7.0",
     "workalendar < 17.1.0",
     "astroid == 3.3.11",
 ]
@@ -68,7 +68,7 @@ requirements = [
 dev_requirements = [
     "black < 25.10.0",
     "flake8 < 7.4.0",
-    "isort < 6.1.0",
+    "isort < 7.1.0",
     "pre-commit < 4.4.0",
     "pylint < 3.4.0",
     "pytest < 9.1.0",
