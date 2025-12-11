@@ -70,7 +70,7 @@ dev_requirements = [
     "black < 25.10.0",
     "flake8 < 7.4.0",
     "isort < 7.1.0",
-    "pre-commit < 4.4.0",
+    "pre-commit < 4.6.0",
     "pylint < 3.4.0",
     "pytest < 9.1.0",
     "pytest-notebook < 0.11.0",
