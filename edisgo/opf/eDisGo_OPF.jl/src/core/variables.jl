@@ -395,6 +395,37 @@ function variable_cp_energy(pm::AbstractPowerModel; nw::Int=nw_id_default, bound
     report && PowerModels.sol_component_value(pm, nw, :electromobility, :cpe, PowerModels.ids(pm, nw, :electromobility), cpe)
 end
 
+"§14a virtual generator continuous variables for curtailment support power"
+function variable_gen_hp_14a_power(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    p_hp14a = PowerModels.var(pm, nw)[:p_hp14a] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :gen_hp_14a)], 
+        base_name="$(nw)_p_hp14a",
+        lower_bound = 0.0
+    )
+    
+    if bounded
+        for (i, gen) in PowerModels.ref(pm, nw, :gen_hp_14a)
+            JuMP.set_upper_bound(p_hp14a[i], gen["pmax"])
+        end
+    end
+    
+    if report
+        println("  🔍 JULIA: Reporting gen_hp_14a power for nw=$nw, ids=$(PowerModels.ids(pm, nw, :gen_hp_14a))")
+        PowerModels.sol_component_value(pm, nw, :gen_hp_14a, :p, PowerModels.ids(pm, nw, :gen_hp_14a), p_hp14a)
+    end
+end
+
+"§14a virtual generator binary variables for time budget tracking"
+function variable_gen_hp_14a_binary(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    z_hp14a = PowerModels.var(pm, nw)[:z_hp14a] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :gen_hp_14a)], 
+        base_name="$(nw)_z_hp14a",
+        binary = true
+    )
+    
+    report && PowerModels.sol_component_value(pm, nw, :gen_hp_14a, :z, PowerModels.ids(pm, nw, :gen_hp_14a), z_hp14a)
+end
+
 "slack variables for grid restrictions"
 function variable_slack_grid_restrictions(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_hp_slack(pm; kwargs...)

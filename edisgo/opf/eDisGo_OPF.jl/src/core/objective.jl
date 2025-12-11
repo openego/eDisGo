@@ -28,7 +28,13 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     phps = Dict(n => PowerModels.var(pm, n, :phps) for n in nws)
     phps2 = Dict(n => PowerModels.var(pm, n, :phps2) for n in nws)
     phss = Dict(n => PowerModels.var(pm, n, :phss) for n in nws)
+    
+    # §14a virtual generators
+    p_hp14a = Dict(n => get(PowerModels.var(pm, n), :p_hp14a, Dict()) for n in nws)
+    
     factor_slacks = 0.6
+    factor_14a = 0.5  # Weight for §14a curtailment (between slacks and losses)
+    
     return JuMP.@objective(pm.model, Min,
         (1-factor_slacks) * sum(sum(ccm[n][b] * r[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from) ) for n in nws) # minimize line losses incl. storage losses
         + factor_slacks  * sum(sum(pgc[n][i] for i in keys(PowerModels.ref(pm,1 , :gen_nd))) for n in nws) # minimize non-dispatchable curtailment
@@ -37,6 +43,7 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
         + factor_slacks  * sum(sum(pcps[n][i] for i in keys(PowerModels.ref(pm,1 , :electromobility))) for n in nws) # minimize cp load sheddin
         + factor_slacks * sum(sum(phps[n][i] for i in keys(PowerModels.ref(pm,1 , :heatpumps))) for n in nws) # minimize hp load shedding
         + 1e4 * sum(sum(phss[n][i] + phps2[n][i] for i in keys(PowerModels.ref(pm, 1 , :heatpumps))) for n in nws)
+        + factor_14a * sum(sum(p_hp14a[n][i] for i in keys(p_hp14a[n])) for n in nws)  # minimize §14a curtailment support
     )
 end
 
@@ -48,10 +55,17 @@ function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
     l = Dict(n => Dict(i => get(branch, "length", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
     c = Dict(n => Dict(i => get(branch, "cost", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch)) for n in nws)
     storage = Dict(i => get(branch, "storage", 1.0) for (i,branch) in PowerModels.ref(pm, 1, :branch))
+    
+    # §14a virtual generators
+    p_hp14a = Dict(n => get(PowerModels.var(pm, n), :p_hp14a, Dict()) for n in nws)
+    
     factor_ll = 0.1
+    factor_14a = 0.05  # Small penalty for §14a usage in line loading optimization
+    
     return JuMP.@objective(pm.model, Min,
         (1-factor_ll) * sum(sum(ccm[n][b] * r[n][b]  for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws) # minimize line losses
         + factor_ll * sum((ll[(b,i,j)]-1) * c[1][b] * l[1][b]  for (b,i,j) in PowerModels.ref(pm, 1, :arcs_from) if storage[b] == 0)  # minimize max line loading
+        + factor_14a * sum(sum(p_hp14a[n][i] for i in keys(p_hp14a[n])) for n in nws)  # minimize §14a curtailment support
     )
 end
 

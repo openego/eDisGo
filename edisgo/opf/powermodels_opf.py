@@ -26,6 +26,7 @@ def pm_optimize(
     method: str = "soc",
     warm_start: bool = False,
     silence_moi: bool = False,
+    curtailment_14a: bool = False,
 ) -> None:
     """
     Run OPF for edisgo object in julia subprocess and write results of OPF to edisgo
@@ -93,6 +94,11 @@ def pm_optimize(
         hence there will be no logging coming from julia subprocess in python
         process.
         Default: False.
+    curtailment_14a : bool
+        If True, enables §14a EnWG curtailment for heat pumps with virtual
+        generators. Heat pumps can be curtailed down to 4.2 kW with time budget
+        constraints.
+        Default: False.
     save_heat_storage : bool
         Indicates whether to save results of heat storage variables from the
         optimization to eDisGo object.
@@ -118,6 +124,7 @@ def pm_optimize(
         flexible_loads=flexible_loads,
         flexible_storage_units=flexible_storage_units,
         opf_version=opf_version,
+        curtailment_14a=curtailment_14a,
     )
 
     def _convert(o):

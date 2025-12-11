@@ -828,6 +828,7 @@ class EDisGo:
         flexible_loads=None,
         flexible_storage_units=None,
         opf_version=1,
+        curtailment_14a=False,
     ):
         """
         Convert eDisGo representation of the network topology and timeseries to
@@ -854,6 +855,11 @@ class EDisGo:
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: 1.
+        curtailment_14a : bool
+            If True, enables §14a EnWG curtailment for heat pumps with virtual
+            generators. Heat pumps can be curtailed down to 4.2 kW with time budget
+            constraints.
+            Default: False.
 
         Returns
         -------
@@ -870,6 +876,7 @@ class EDisGo:
             flexible_loads=flexible_loads,
             flexible_storage_units=flexible_storage_units,
             opf_version=opf_version,
+            curtailment_14a=curtailment_14a,
         )
 
     def pm_optimize(
@@ -886,6 +893,7 @@ class EDisGo:
         save_heat_storage=True,
         save_slack_gen=True,
         save_slacks=True,
+        curtailment_14a=False,
     ):
         """
         Run OPF in julia subprocess and write results of OPF back to edisgo object.
@@ -933,6 +941,11 @@ class EDisGo:
             hence there will be no logging coming from julia subprocess in python
             process.
             Default: False.
+        curtailment_14a : bool
+            If True, enables §14a EnWG curtailment for heat pumps with virtual
+            generators. Heat pumps can be curtailed down to 4.2 kW with time budget
+            constraints.
+            Default: False.
         """
         return powermodels_opf.pm_optimize(
             self,
@@ -945,6 +958,7 @@ class EDisGo:
             method=method,
             warm_start=warm_start,
             silence_moi=silence_moi,
+            curtailment_14a=curtailment_14a,
         )
 
     def to_graph(self):
