@@ -42,10 +42,32 @@ stays above the §14a minimum power level (typically 4.2 kW = 0.0042 MW).
 function constraint_cp_14a_min_net_load(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
     gen_cp14a = PowerModels.ref(pm, nw, :gen_cp_14a, i)
     cp_idx = gen_cp14a["cp_index"]
-    cp = PowerModels.ref(pm, nw, :electromobility, cp_idx)
     
-    # Electrical power demand of charging point (direct charging power, no COP needed)
-    p_cp_load = cp["pcp"]  # Charging power variable
+    # Check if CP is flexible (in electromobility dict) or simple load
+    p_cp_load = nothing
+    if haskey(PowerModels.ref(pm, nw), :electromobility) && haskey(PowerModels.ref(pm, nw, :electromobility), cp_idx)
+        # Flexible CP: use electromobility variable
+        cp = PowerModels.ref(pm, nw, :electromobility, cp_idx)
+        p_cp_load = cp["pcp"]  # Charging power variable (optimization variable)
+    else
+        # Non-flexible CP: use fixed load timeseries
+        # Find the load by CP name
+        cp_name = gen_cp14a["cp_name"]
+        # Search for load with matching name
+        load_found = false
+        for (load_id, load) in PowerModels.ref(pm, nw, :load)
+            if haskey(load, "name") && load["name"] == cp_name
+                p_cp_load = load["pd"]  # Fixed load value (parameter, not variable)
+                load_found = true
+                break
+            end
+        end
+        
+        if !load_found
+            @warn "Could not find load for charging point $(cp_name), skipping constraint"
+            return
+        end
+    end
     
     # Virtual generator support
     p_cp14a = PowerModels.var(pm, nw, :p_cp14a, i)
@@ -63,7 +85,7 @@ function constraint_cp_14a_min_net_load(pm::AbstractBFModelEdisgo, i::Int, nw::I
     # 
     # Special cases:
     # - If p_max_support ≈ 0 (CP too small), force virtual gen to zero
-    # - If CP is off (p_hp_load ≈ 0), no support needed
+    # - If CP is off (p_cp_load ≈ 0), no support needed
     if p_max_support < 1e-6
         # Charging point too small for §14a curtailment, disable virtual generator
         JuMP.@constraint(pm.model, p_cp14a == 0.0)
@@ -71,7 +93,7 @@ function constraint_cp_14a_min_net_load(pm::AbstractBFModelEdisgo, i::Int, nw::I
         # Normal case: enforce minimum net load
         # Net load cannot go below current load or §14a minimum, whichever is lower
         p_min_net = min(p_cp_load, p_min_14a)
-        JuMP.@constraint(pm.model, p_cp_load - p_cp14a >= p_min_net)
+        JuMP.@constraint(pm.model, p_cp14a <= p_cp_load - p_min_net)
     else
         # Charging point is off, no support needed
         JuMP.@constraint(pm.model, p_cp14a == 0.0)

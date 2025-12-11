@@ -1465,6 +1465,13 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
     max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours
     specific_components = curtailment_14a.get("components", [])
     
+    # DEBUG: Print all CPs in topology
+    all_cps_in_topology = edisgo_obj.topology.charging_points_df
+    logger.info(f"DEBUG: Found {len(all_cps_in_topology)} charging points in topology.charging_points_df")
+    logger.info(f"DEBUG: all_cps parameter has {len(all_cps)} entries")
+    if len(all_cps_in_topology) > 0:
+        logger.info(f"DEBUG: Sample CP names: {list(all_cps_in_topology.index[:3])}")
+    
     # Filter charging points if specific components are defined
     if len(specific_components) > 0:
         cps_14a = np.intersect1d(all_cps, specific_components)
@@ -1476,6 +1483,7 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
         return
     
     cp_df = edisgo_obj.topology.charging_points_df.loc[cps_14a]
+    logger.info(f"DEBUG: After filtering, cp_df has {len(cp_df)} charging points")
     cp_p_nom = cp_df.p_set  # Nominal charging power in MW
     
     # Filter out CPs with nominal power <= §14a minimum
@@ -1493,34 +1501,15 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
         logger.warning("No charging points eligible for §14a curtailment after filtering by minimum power.")
         return
     
-    # NOTE: §14a curtailment can only work for CPs that are in pm["electromobility"]
-    # These are the flexible CPs. Check which eligible CPs are actually flexible.
-    flexible_cp_indices = list(pm["electromobility"].keys()) if "electromobility" in pm and len(pm["electromobility"]) > 0 else []
+    # §14a curtailment works for ALL CPs (like HPs), not just flexible ones
+    # The virtual generator reduces the load, independent of flexibility optimization
+    cps_final = cps_eligible
     
-    if len(flexible_cp_indices) == 0:
-        logger.warning("No flexible charging points in PowerModels dict - §14a curtailment cannot be applied to CPs.")
-        logger.warning("CPs must be flexible (have electromobility optimization) to support §14a curtailment.")
-        return
+    logger.info(f"Creating §14a support for {len(cps_final)} charging points.")
     
-    # Get the CP names from electromobility dict to create proper index mapping
-    flexible_cp_names = [pm["electromobility"][idx]["name"] for idx in flexible_cp_indices]
-    cp_name_to_index = {cp_name: int(idx) for idx, cp_dict in pm["electromobility"].items() 
-                       if (cp_name := cp_dict["name"])}
-    
-    # Only use CPs that are both eligible for §14a AND flexible
-    cps_final = [cp for cp in cps_eligible if cp in cp_name_to_index]
-    
-    if len(cps_final) < len(cps_eligible):
-        non_flexible = set(cps_eligible) - set(cps_final)
-        logger.warning(
-            f"{len(non_flexible)} eligible CP(s) are not flexible and cannot use §14a: {non_flexible}"
-        )
-    
-    if len(cps_final) == 0:
-        logger.warning("No flexible CPs available for §14a curtailment.")
-        return
-    
-    logger.info(f"Creating §14a support for {len(cps_final)} flexible charging points.")
+    # Create a simple index mapping for CPs (needed by Julia constraints)
+    # For non-flexible CPs, we create a sequential index starting from 1
+    cp_name_to_index = {cp_name: idx + 1 for idx, cp_name in enumerate(cps_final)}
     
     for cp_i, cp_name in enumerate(cps_final):
         # Bus of the charging point
@@ -1544,7 +1533,7 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
             "sign": 1,
             "gen_status": 1,
             "cp_name": cp_name,  # Reference to charging point
-            "cp_index": cp_name_to_index[cp_name],  # Correct index in electromobility dict
+            "cp_index": cp_name_to_index[cp_name],  # Sequential index for Julia
             "p_min_14a": p_min_14a / s_base,  # §14a minimum power
             "max_hours_per_day": max_hours_per_day,  # Time budget
             "index": cp_i + 1,
