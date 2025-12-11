@@ -37,6 +37,12 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
                 eDisGo_OPF.variable_gen_hp_14a_binary(pm, nw=n)
             end
 
+            # §14a EnWG virtual generators for charging point support
+            if haskey(PowerModels.ref(pm, n), :gen_cp_14a) && !isempty(PowerModels.ref(pm, n, :gen_cp_14a))
+                eDisGo_OPF.variable_gen_cp_14a_power(pm, nw=n)
+                eDisGo_OPF.variable_gen_cp_14a_binary(pm, nw=n)
+            end
+
             if PowerModels.ref(pm, 1, :opf_version) in(3, 4) # Nicht Teil der MA
                 eDisGo_OPF.variable_slack_HV_requirements(pm, nw=n)
                 if PowerModels.ref(pm, 1, :opf_version) in(3)
@@ -69,6 +75,14 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
             for i in PowerModels.ids(pm, :gen_hp_14a, nw=n)
                 eDisGo_OPF.constraint_hp_14a_binary_coupling(pm, i, n)
                 eDisGo_OPF.constraint_hp_14a_min_net_load(pm, i, n)
+            end
+        end
+
+        # §14a EnWG constraints for charging point virtual generators
+        if haskey(PowerModels.ref(pm, n), :gen_cp_14a) && !isempty(PowerModels.ref(pm, n, :gen_cp_14a))
+            for i in PowerModels.ids(pm, :gen_cp_14a, nw=n)
+                eDisGo_OPF.constraint_cp_14a_binary_coupling(pm, i, n)
+                eDisGo_OPF.constraint_cp_14a_min_net_load(pm, i, n)
             end
         end
 
@@ -142,6 +156,45 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         end
     else
         println("\n⚠ JULIA DEBUG: No gen_hp_14a found or empty!\n")
+    end
+
+    # §14a EnWG daily time budget constraints for charging points
+    if haskey(PowerModels.ref(pm, 1), :gen_cp_14a) && !isempty(PowerModels.ref(pm, 1, :gen_cp_14a))
+        println("\n" * "="^80)
+        println("🔍 JULIA DEBUG: §14a Charging Point Generators")
+        println("="^80)
+        
+        gen_cp_14a_dict = PowerModels.ref(pm, 1, :gen_cp_14a)
+        println("Number of gen_cp_14a entries: ", length(gen_cp_14a_dict))
+        
+        # Show first 5 generators
+        count = 0
+        for (idx, gen) in gen_cp_14a_dict
+            count += 1
+            if count <= 5
+                println("  [$idx]: cp_name=$(get(gen, "cp_name", "N/A")), cp_index=$(get(gen, "cp_index", "N/A")), pmax=$(get(gen, "pmax", "N/A"))")
+            end
+        end
+        println("="^80 * "\n")
+        
+        # Determine timesteps per day based on time_elapsed (in hours)
+        n_first = network_ids[1]
+        time_elapsed = PowerModels.ref(pm, n_first, :time_elapsed)
+        timesteps_per_day = Int(round(24.0 / time_elapsed))
+        
+        # Group network_ids into days
+        for day_start_idx in 1:timesteps_per_day:length(network_ids)
+            day_end_idx = min(day_start_idx + timesteps_per_day - 1, length(network_ids))
+            day_network_ids = network_ids[day_start_idx:day_end_idx]
+            
+            # Apply daily time budget constraint for each §14a generator
+            for i in PowerModels.ids(pm, :gen_cp_14a, nw=network_ids[1])
+                # Call with correct argument order: (pm, day_start, day_end, i)
+                eDisGo_OPF.constraint_cp_14a_time_budget_daily(pm, day_network_ids[1], day_network_ids[end], i)
+            end
+        end
+    else
+        println("\n⚠ JULIA DEBUG: No gen_cp_14a found or empty!\n")
     end
 
     # OBJECTIVE FUNCTION

@@ -426,6 +426,37 @@ function variable_gen_hp_14a_binary(pm::AbstractPowerModel; nw::Int=nw_id_defaul
     report && PowerModels.sol_component_value(pm, nw, :gen_hp_14a, :z, PowerModels.ids(pm, nw, :gen_hp_14a), z_hp14a)
 end
 
+"§14a virtual generator power variables for charging points"
+function variable_gen_cp_14a_power(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    p_cp14a = PowerModels.var(pm, nw)[:p_cp14a] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :gen_cp_14a)], 
+        base_name="$(nw)_p_cp14a",
+        lower_bound = 0.0
+    )
+    
+    if bounded
+        for (i, gen) in PowerModels.ref(pm, nw, :gen_cp_14a)
+            JuMP.set_upper_bound(p_cp14a[i], gen["pmax"])
+        end
+    end
+    
+    if report
+        println("  🔍 JULIA: Reporting gen_cp_14a power for nw=$nw, ids=$(PowerModels.ids(pm, nw, :gen_cp_14a))")
+        PowerModels.sol_component_value(pm, nw, :gen_cp_14a, :p, PowerModels.ids(pm, nw, :gen_cp_14a), p_cp14a)
+    end
+end
+
+"§14a virtual generator binary variables for charging point time budget tracking"
+function variable_gen_cp_14a_binary(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    z_cp14a = PowerModels.var(pm, nw)[:z_cp14a] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :gen_cp_14a)], 
+        base_name="$(nw)_z_cp14a",
+        binary = true
+    )
+    
+    report && PowerModels.sol_component_value(pm, nw, :gen_cp_14a, :z, PowerModels.ids(pm, nw, :gen_cp_14a), z_cp14a)
+end
+
 "slack variables for grid restrictions"
 function variable_slack_grid_restrictions(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_hp_slack(pm; kwargs...)
