@@ -135,6 +135,12 @@ def to_powermodels(
         if len(all_hps) > 0:
             logger.info("§14a heat pump curtailment will be optimized.")
             opf_flex.append("hp_14a")
+        
+        # Check for charging points
+        all_cps = edisgo_object.topology.charging_points_df
+        if len(all_cps) > 0:
+            logger.info("§14a charging point curtailment will be optimized.")
+            opf_flex.append("cp_14a")
     
     pm["flexibilities"] = opf_flex
     logger.info("Transforming busses into PowerModels dictionary format.")
@@ -196,6 +202,16 @@ def to_powermodels(
             _build_gen_hp_14a_support(
                 psa_net, pm, edisgo_object, s_base, all_hps, curtailment_14a_config
             )
+        
+        # Build §14a support for charging points
+        # Use ALL charging points for §14a, not just flexible ones
+        all_cps = edisgo_object.topology.charging_points_df.index.to_numpy()
+        if len(all_cps) > 0:
+            logger.info(f"Creating virtual generators for §14a charging point support ({len(all_cps)} CPs).")
+            _build_gen_cp_14a_support(
+                psa_net, pm, edisgo_object, s_base, all_cps, curtailment_14a_config
+            )
+    
     if len(flexible_loads) > 0:
         logger.info("Transforming DSM loads into PowerModels dictionary format.")
         flexible_loads = _build_dsm(edisgo_object, psa_net, pm, s_base, flexible_loads)
@@ -318,6 +334,7 @@ def from_powermodels(
         "storage": ["storage", "pf"],
         "dsm": ["dsm", "pdsm"],
         "hp_14a": ["gen_hp_14a", "p"],  # §14a virtual generators (uses "p" not "php14a")
+        "cp_14a": ["gen_cp_14a", "p"],  # §14a virtual generators for charging points
     }
 
     timesteps = pd.Series([int(k) for k in pm["nw"].keys()]).sort_values().values
@@ -387,6 +404,15 @@ def from_powermodels(
         elif flex == "gen_hp_14a":
             # §14a virtual generators: write as positive generation
             print(f"    → Writing {len(names)} gen_hp_14a generators to generators_active_power")
+            print(f"    → Sample values: {results.iloc[0, :3].to_dict()}")
+            edisgo_object.timeseries._generators_active_power.loc[:, names] = results[
+                names
+            ].values
+            print(f"    ✓ Written successfully!")
+        
+        elif flex == "gen_cp_14a":
+            # §14a virtual generators for CPs: write as positive generation
+            print(f"    → Writing {len(names)} gen_cp_14a generators to generators_active_power")
             print(f"    → Sample values: {results.iloc[0, :3].to_dict()}")
             edisgo_object.timeseries._generators_active_power.loc[:, names] = results[
                 names
@@ -606,6 +632,7 @@ def _init_pm():
         "dsm": dict(),
         "HV_requirements": dict(),
         "gen_hp_14a": dict(),  # Virtual generators for §14a heat pump support
+        "gen_cp_14a": dict(),  # Virtual generators for §14a charging point support
         "baseMVA": 1,
         "source_version": 2,
         "shunt": dict(),
@@ -621,6 +648,7 @@ def _init_pm():
             "dsm": dict(),
             "HV_requirements": dict(),
             "gen_hp_14a": dict(),  # Timeseries for virtual HP support generators
+            "gen_cp_14a": dict(),  # Timeseries for virtual CP support generators
             "num_steps": int,
         },
     }
@@ -1406,6 +1434,120 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
             "p_min_14a": p_min_14a / s_base,  # §14a minimum power
             "max_hours_per_day": max_hours_per_day,  # Time budget
             "index": hp_i + 1,
+        }
+
+
+def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailment_14a):
+    """
+    Build virtual generator dictionary for §14a charging point support and add it to 
+    PowerModels dictionary 'pm'.
+    
+    Creates one virtual generator per charging point at the same bus. The generator
+    can reduce the net electrical load to simulate §14a curtailment.
+
+    Parameters
+    ----------
+    psa_net : :pypsa:`PyPSA.Network<network>`
+        :pypsa:`PyPSA.Network<network>` representation of network.
+    pm : dict
+        (PowerModels) dictionary.
+    edisgo_obj : :class:`~.EDisGo`
+    s_base : int
+        Base value of apparent power for per unit system.
+    all_cps : :numpy:`numpy.ndarray<ndarray>` or list
+        Array containing all charging points in the grid (for §14a curtailment).
+    curtailment_14a : dict
+        Dictionary with §14a EnWG curtailment settings.
+        
+    """
+    # Extract curtailment settings
+    p_min_14a = curtailment_14a.get("max_power_mw", 0.0042)  # MW (same as HPs)
+    max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours
+    specific_components = curtailment_14a.get("components", [])
+    
+    # Filter charging points if specific components are defined
+    if len(specific_components) > 0:
+        cps_14a = np.intersect1d(all_cps, specific_components)
+    else:
+        cps_14a = all_cps
+    
+    if len(cps_14a) == 0:
+        logger.warning("No charging points selected for §14a curtailment.")
+        return
+    
+    cp_df = edisgo_obj.topology.charging_points_df.loc[cps_14a]
+    cp_p_nom = cp_df.p_set  # Nominal charging power in MW
+    
+    # Filter out CPs with nominal power <= §14a minimum
+    # These cannot be curtailed to the minimum and would make constraints infeasible
+    cps_eligible = [cp for cp in cps_14a if cp_p_nom[cp] > p_min_14a]
+    
+    if len(cps_eligible) < len(cps_14a):
+        excluded_cps = set(cps_14a) - set(cps_eligible)
+        logger.warning(
+            f"Excluded {len(excluded_cps)} charging point(s) from §14a curtailment due to "
+            f"nominal power <= {p_min_14a*1000:.1f} kW: {excluded_cps}"
+        )
+    
+    if len(cps_eligible) == 0:
+        logger.warning("No charging points eligible for §14a curtailment after filtering by minimum power.")
+        return
+    
+    # NOTE: §14a curtailment can only work for CPs that are in pm["electromobility"]
+    # These are the flexible CPs. Check which eligible CPs are actually flexible.
+    flexible_cp_indices = list(pm["electromobility"].keys()) if "electromobility" in pm and len(pm["electromobility"]) > 0 else []
+    
+    if len(flexible_cp_indices) == 0:
+        logger.warning("No flexible charging points in PowerModels dict - §14a curtailment cannot be applied to CPs.")
+        logger.warning("CPs must be flexible (have electromobility optimization) to support §14a curtailment.")
+        return
+    
+    # Get the CP names from electromobility dict to create proper index mapping
+    flexible_cp_names = [pm["electromobility"][idx]["name"] for idx in flexible_cp_indices]
+    cp_name_to_index = {cp_name: int(idx) for idx, cp_dict in pm["electromobility"].items() 
+                       if (cp_name := cp_dict["name"])}
+    
+    # Only use CPs that are both eligible for §14a AND flexible
+    cps_final = [cp for cp in cps_eligible if cp in cp_name_to_index]
+    
+    if len(cps_final) < len(cps_eligible):
+        non_flexible = set(cps_eligible) - set(cps_final)
+        logger.warning(
+            f"{len(non_flexible)} eligible CP(s) are not flexible and cannot use §14a: {non_flexible}"
+        )
+    
+    if len(cps_final) == 0:
+        logger.warning("No flexible CPs available for §14a curtailment.")
+        return
+    
+    logger.info(f"Creating §14a support for {len(cps_final)} flexible charging points.")
+    
+    for cp_i, cp_name in enumerate(cps_final):
+        # Bus of the charging point
+        idx_bus = _mapping(psa_net, edisgo_obj, cp_df.loc[cp_name, 'bus'])
+        
+        # Nominal power of CP
+        p_nominal = cp_p_nom[cp_name]  # MW
+        
+        # Maximum support = difference between nominal and §14a limit
+        # This is how much the load can be virtually reduced
+        p_max_support = p_nominal - p_min_14a  # Now guaranteed > 0
+        
+        pm["gen_cp_14a"][str(cp_i + 1)] = {
+            "name": f"cp_14a_support_{cp_name}",
+            "gen_bus": idx_bus,
+            "pmin": 0.0,
+            "pmax": p_max_support / s_base,
+            "qmin": 0.0,
+            "qmax": 0.0,
+            "pf": 1.0,
+            "sign": 1,
+            "gen_status": 1,
+            "cp_name": cp_name,  # Reference to charging point
+            "cp_index": cp_name_to_index[cp_name],  # Correct index in electromobility dict
+            "p_min_14a": p_min_14a / s_base,  # §14a minimum power
+            "max_hours_per_day": max_hours_per_day,  # Time budget
+            "index": cp_i + 1,
         }
 
 
