@@ -1,3 +1,4 @@
+# OPF Version 1: Minimize line losses and maximal line loading
 function objective_min_losses(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
@@ -17,6 +18,7 @@ function objective_min_losses(pm::AbstractBFModelEdisgo)
     )
 end
 
+# OPF Version 2: Minimize line losses and grid related slacks
 function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
@@ -49,6 +51,7 @@ function objective_min_losses_slacks(pm::AbstractBFModelEdisgo)
     )
 end
 
+# OPF Version 3: Minimize line losses, maximal line loading and HV slacks
 function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
@@ -74,7 +77,7 @@ function objective_min_line_loading_max(pm::AbstractBFModelEdisgo)
 end
 
 
-# OPF with overlying grid
+# OPF Version 4: Minimize line losses, HV slacks and grid related slacks (with overlying grid)
 function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
@@ -106,6 +109,7 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
     )
 end
 
+# OPF Version 3 (alternative): Minimize line losses, maximal line loading and HV slacks (with overlying grid)
 function objective_min_line_loading_max_OG(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
