@@ -116,9 +116,9 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
             columns={"r": "r_pu", "x": "x_pu"}
         )
     )
-    edisgo_obj.topology.switches_df = pd.read_csv(
-        os.path.join(path, "switches.csv"), index_col=[0]
-    )
+    # edisgo_obj.topology.switches_df = pd.read_csv(
+    #     os.path.join(path, "switches.csv"), index_col=[0]
+    # )
 
     edisgo_obj.topology.grid_district = {
         "population": grid.mv_grid_district_population,

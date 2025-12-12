@@ -73,7 +73,13 @@ def home_batteries_oedb(
         )
         batteries_df = pd.read_sql(sql=query.statement, con=engine, index_col=None)
 
-    return _home_batteries_grid_integration(edisgo_obj, batteries_df)
+    names = _home_batteries_grid_integration(edisgo_obj, batteries_df)
+
+    edisgo_obj.topology.storage_units_df.building_id = (
+        edisgo_obj.topology.storage_units_df.building_id.astype(int)
+    )
+
+    return names
 
 
 def _home_batteries_grid_integration(edisgo_obj, batteries_df):

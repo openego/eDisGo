@@ -12,6 +12,8 @@ import numpy as np
 import pandas as pd
 
 from sqlalchemy.engine.base import Engine
+from edisgo.io.db import engine as egon_engine
+
 
 from edisgo.flex_opt import exceptions, q_control
 from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
@@ -730,6 +732,8 @@ def get_weather_cells_intersecting_with_grid_district(
         Set with weather cell IDs.
 
     """
+    if engine is None:
+        engine = egon_engine()
     # Download geometries of weather cells
     sql_geom = sql_grid_geom(edisgo_obj)
     srid = edisgo_obj.topology.grid_district["srid"]

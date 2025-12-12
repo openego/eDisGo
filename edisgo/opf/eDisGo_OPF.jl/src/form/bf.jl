@@ -135,7 +135,7 @@ function constraint_max_line_loading(pm::AbstractNCBFModelEdisgo, n::Int)
 end
 
 
-function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens, bus_gens_nd, bus_gens_slack, bus_loads, bus_arcs_to, bus_arcs_from, bus_lines_to, bus_storage, bus_pg, bus_qg, bus_pg_nd, bus_qg_nd, bus_pd, bus_qd, branch_r, branch_x, bus_dsm, bus_hps, bus_cps, bus_storage_pf, bus_dsm_pf, bus_hps_pf, bus_cps_pf, bus_gen_nd_pf, bus_gen_d_pf, bus_loads_pf, branch_strg_pf)
+function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens, bus_gens_nd, bus_gens_slack, bus_loads, bus_arcs_to, bus_arcs_from, bus_lines_to, bus_storage, bus_pg, bus_qg, bus_pg_nd, bus_qg_nd, bus_pd, bus_qd, branch_r, branch_x, bus_dsm, bus_hps, bus_cps, bus_gen_hp_14a, bus_storage_pf, bus_dsm_pf, bus_hps_pf, bus_cps_pf, bus_gen_nd_pf, bus_gen_d_pf, bus_loads_pf, branch_strg_pf)
     pt   = get(PowerModels.var(pm, n),  :p, Dict()); PowerModels._check_var_keys(pt, bus_arcs_to, "active power", "branch")
     qt   = get(PowerModels.var(pm, n),  :q, Dict()); PowerModels._check_var_keys(qt, bus_arcs_to, "reactive power", "branch")
     pf   = get(PowerModels.var(pm, n),  :p, Dict()); PowerModels._check_var_keys(pf, bus_arcs_from, "active power", "branch")
@@ -147,6 +147,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
     pdsm  = get(PowerModels.var(pm, n),  :pdsm, Dict()); PowerModels._check_var_keys(pdsm, bus_dsm, "active power", "dsm")
     php  = get(PowerModels.var(pm, n),  :php, Dict()); PowerModels._check_var_keys(php, bus_hps, "active power", "heatpumps")
     pcp  = get(PowerModels.var(pm, n),  :pcp, Dict()); PowerModels._check_var_keys(pcp, bus_cps, "active power", "electromobility")
+    p_hp14a = get(PowerModels.var(pm, n), :p_hp14a, Dict())  # §14a virtual generators
 
     if PowerModels.ref(pm, 1, :opf_version) in(2, 4)  # Eq. (3.3iii), (3.4iii)
         pgens  = get(PowerModels.var(pm, n),  :pgens, Dict()); PowerModels._check_var_keys(pgens, bus_gens, "active power slack", "curtailment")
@@ -171,6 +172,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum(pdsm[dsm] for dsm in bus_dsm)
             + sum(php[hp] - phps[hp] for hp in bus_hps)
             + sum(pcp[cp] - pcps[cp] for cp in bus_cps)
+            - sum(p_hp14a[g] for g in bus_gen_hp_14a)  # Virtual generators reduce net load
         )
         cstr_q = JuMP.@constraint(pm.model,
             sum(qt[a] for a in bus_arcs_to)
@@ -187,7 +189,8 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum(pgens[g] * bus_gen_d_pf[g] for g in bus_gens)
             + sum(pdsm[dsm] * bus_dsm_pf[dsm] for dsm in bus_dsm)
             + sum((php[hp] - phps[hp]) * bus_hps_pf[hp] for hp in bus_hps)
-            + sum((pcp[cp] - pcps[cp]) * bus_cps_pf[cp] for cp in bus_cps)
+            + sum((pcp[cp] - pcps[cp]) * bus_cps_pf[cp] for hp in bus_cps)
+            # §14a generators have pf=1, q=0
         )
     else  # Eq. (3.3ii), (3.4ii)
         cstr_p = JuMP.@constraint(pm.model,
@@ -203,6 +206,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum(pdsm[dsm] for dsm in bus_dsm)
             + sum(php[hp] for hp in bus_hps)
             + sum(pcp[cp] for cp in bus_cps)
+            - sum(p_hp14a[g] for g in bus_gen_hp_14a)  # Virtual generators reduce net load
         )
         cstr_q = JuMP.@constraint(pm.model,
             sum(qt[a] for a in bus_arcs_to)
@@ -217,6 +221,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum(pdsm[dsm] * bus_dsm_pf[dsm] for dsm in bus_dsm)
             + sum(php[hp] * bus_hps_pf[hp] for hp in bus_hps)
             + sum(pcp[cp] * bus_cps_pf[cp] for cp in bus_cps)
+            # §14a generators have pf=1, q=0
         )
     end
 
