@@ -28,27 +28,27 @@ jobs:
           # Coverage job (Linux only)
           - name-suffix: "coverage"
             os: ubuntu-latest
-            python-version: 3.9
+            python-version: 3.12
 
           # Basic test matrix
-          - name-suffix: "basic"
-            os: ubuntu-latest
-            python-version: "3.10"
-
           - name-suffix: "basic"
             os: ubuntu-latest
             python-version: 3.11
 
           - name-suffix: "basic"
+            os: ubuntu-latest
+            python-version: "3.10"
+
+          - name-suffix: "basic"
             os: windows-latest
-            python-version: 3.9
+            python-version: "3.10"
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -96,7 +96,7 @@ jobs:
 
       # Run coverage job and upload to Coveralls (only on Linux, Python 3.9)
       - name: Run tests with coverage and submit to Coveralls
-        if: runner.os == 'Linux' && matrix.python-version == 3.9 && matrix.name-suffix == 'coverage'
+        if: runner.os == 'Linux' && matrix.python-version == 3.12 && matrix.name-suffix == 'coverage'
         run: |
           pip install pytest pytest-notebook coveralls
           coverage run --source=edisgo -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
