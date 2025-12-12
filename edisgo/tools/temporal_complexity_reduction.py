@@ -514,7 +514,7 @@ def _most_critical_time_interval(
     crit_timesteps = (
         crit_timesteps.iloc[int(time_steps_per_time_interval) - 1 :]
         .iloc[time_step_day_start::time_steps_per_day]
-        .sort_values(ascending=False)
+        .sort_values(ascending=False, kind='stable')
     )
     # get time steps in each time interval - these are set up setting the given time
     # step to be the end of the respective time interval, as rolling() function gives
