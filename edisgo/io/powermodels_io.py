@@ -30,8 +30,11 @@ def to_powermodels(
     flexible_hps=None,
     flexible_loads=None,
     flexible_storage_units=None,
-    opf_version=1,
     curtailment_14a=None,
+    curtailment_14a_heatpumps=False,
+    curtailment_14a_charging_points=False,
+    curtailment_14a_loads=False,
+    objective_config=None,
 ):
     """
     Convert eDisGo representation of the network topology and timeseries to
@@ -60,11 +63,23 @@ def to_powermodels(
         For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
         Default: 1.
     curtailment_14a : dict or None
-        Dictionary with §14a EnWG curtailment settings. Keys:
-        - 'max_power_mw': float, minimum power in MW (default 0.0042)
-        - 'components': list, heat pump names to apply curtailment to (empty = all)
-        - 'max_hours_per_day': float, maximum curtailment hours per day (default 2.0)
+        Legacy parameter. Dictionary with §14a EnWG curtailment settings or boolean.
+        Use specific curtailment_14a_* parameters instead.
         Default: None (no §14a curtailment).
+    curtailment_14a_heatpumps : bool
+        Enable §14a curtailment for heat pumps.
+        Default: False.
+    curtailment_14a_charging_points : bool
+        Enable §14a curtailment for charging points.
+        Default: False.
+    curtailment_14a_loads : bool
+        Enable §14a curtailment for loads.
+        Default: False.
+    objective_config : dict or None
+        Optional dictionary to configure objective function directly.
+        Keys: minimize_losses, minimize_line_loading, minimize_slacks,
+              minimize_hv_slacks, minimize_14a_curtailment, and corresponding weights.
+        Default: None.
 
     Returns
     -------
@@ -75,10 +90,13 @@ def to_powermodels(
         reduced by non-flexible components.
 
     """
-    if opf_version in [2, 3, 4]:
-        opf_flex = ["curt"]
-    else:
-        opf_flex = []
+    # Handle legacy curtailment_14a parameter
+    if curtailment_14a is not None and curtailment_14a is not False:
+        curtailment_14a_heatpumps = True
+        curtailment_14a_charging_points = True
+        curtailment_14a_loads = True
+    
+    opf_flex = []
     if flexible_cps is None:
         flexible_cps = np.array([])
     if flexible_hps is None:
@@ -128,19 +146,31 @@ def to_powermodels(
     pm["source_version"] = 2
     
     # Add §14a curtailment flexibility if enabled (must be BEFORE pm["flexibilities"] assignment)
-    if curtailment_14a is not None and curtailment_14a is not False:
+    if curtailment_14a_heatpumps:
         all_hps = edisgo_object.topology.loads_df[
             edisgo_object.topology.loads_df['type'] == 'heat_pump'
         ]
         if len(all_hps) > 0:
             logger.info("§14a heat pump curtailment will be optimized.")
             opf_flex.append("hp_14a")
-        
+    
+    if curtailment_14a_charging_points:
         # Check for charging points
         all_cps = edisgo_object.topology.charging_points_df
         if len(all_cps) > 0:
             logger.info("§14a charging point curtailment will be optimized.")
             opf_flex.append("cp_14a")
+    
+    if curtailment_14a_loads:
+        # Check for loads that can be curtailed
+        eligible_loads = edisgo_object.topology.loads_df[
+            (edisgo_object.topology.loads_df['type'] != 'heat_pump') &
+            (edisgo_object.topology.loads_df['type'] != 'charging_point') &
+            (edisgo_object.topology.loads_df['p_set'] > 0.0042)
+        ]
+        if len(eligible_loads) > 0:
+            logger.info("§14a load curtailment will be optimized.")
+            opf_flex.append("load_14a")
     
     pm["flexibilities"] = opf_flex
     logger.info("Transforming busses into PowerModels dictionary format.")
@@ -154,7 +184,7 @@ def to_powermodels(
     if len(flexible_storage_units) > 0:
         logger.info("Transforming storage units into PowerModels dictionary format.")
         _build_battery_storage(
-            edisgo_object, psa_net, pm, flexible_storage_units, s_base, opf_version
+            edisgo_object, psa_net, pm, flexible_storage_units, s_base
         )
     if len(flexible_cps) > 0:
         logger.info("Transforming charging points into PowerModels dictionary format.")
@@ -185,32 +215,48 @@ def to_powermodels(
             "Transforming heat storage units into PowerModels dictionary format."
         )
         _build_heat_storage(
-            psa_net, pm, edisgo_object, s_base, hps_for_pm, opf_version
+            psa_net, pm, edisgo_object, s_base, hps_for_pm
         )
     
     # Create virtual generators for §14a curtailment if enabled
     # This applies to ALL heat pumps, not just flexible ones
-    if curtailment_14a is not None and curtailment_14a is not False:
-        # Convert bool to dict if needed
-        if curtailment_14a is True:
-            curtailment_14a_config = {}
-        else:
-            curtailment_14a_config = curtailment_14a
+    if curtailment_14a_heatpumps or curtailment_14a_charging_points or curtailment_14a_loads:
+        # Convert bool to dict if needed (for legacy support)
+        curtailment_14a_config = curtailment_14a if isinstance(curtailment_14a, dict) else {}
         
-        if len(all_hps) > 0:
+        if curtailment_14a_heatpumps and len(all_hps) > 0:
             logger.info(f"Creating virtual generators for §14a heat pump support ({len(all_hps)} heat pumps).")
             _build_gen_hp_14a_support(
                 psa_net, pm, edisgo_object, s_base, all_hps, curtailment_14a_config
             )
         
         # Build §14a support for charging points
-        # Use ALL charging points for §14a, not just flexible ones
-        all_cps = edisgo_object.topology.charging_points_df.index.to_numpy()
-        if len(all_cps) > 0:
-            logger.info(f"Creating virtual generators for §14a charging point support ({len(all_cps)} CPs).")
-            _build_gen_cp_14a_support(
-                psa_net, pm, edisgo_object, s_base, all_cps, curtailment_14a_config
-            )
+        if curtailment_14a_charging_points:
+            # Use ALL charging points for §14a, not just flexible ones
+            all_cps = edisgo_object.topology.charging_points_df.index.to_numpy()
+            if len(all_cps) > 0:
+                logger.info(f"Creating virtual generators for §14a charging point support ({len(all_cps)} CPs).")
+                _build_gen_cp_14a_support(
+                    psa_net, pm, edisgo_object, s_base, all_cps, curtailment_14a_config
+                )
+        
+        # Build §14a support for loads
+        if curtailment_14a_loads:
+            eligible_loads = edisgo_object.topology.loads_df[
+                (edisgo_object.topology.loads_df['type'] != 'heat_pump') &
+                (edisgo_object.topology.loads_df['type'] != 'charging_point') &
+                (edisgo_object.topology.loads_df['p_set'] > 0.0042)
+            ].index.to_numpy()
+            if len(eligible_loads) > 0:
+                logger.warning(
+                    f"§14a load curtailment is enabled but not yet fully implemented. "
+                    f"Skipping {len(eligible_loads)} eligible loads."
+                )
+                # TODO: Implement _build_gen_load_14a_support if needed
+                # For now, remove load_14a from opf_flex to avoid errors
+                if "load_14a" in opf_flex:
+                    opf_flex.remove("load_14a")
+                pass
     
     if len(flexible_loads) > 0:
         logger.info("Transforming DSM loads into PowerModels dictionary format.")
@@ -228,7 +274,14 @@ def to_powermodels(
         )
     else:
         logger.warning("No loads found in network.")
-    if (opf_version == 3) | (opf_version == 4):
+    
+    # Check if HV requirements (overlying grid) should be included
+    # This is determined by minimize_hv_slacks in objective_config
+    include_hv_requirements = False
+    if objective_config is not None and objective_config.get('minimize_hv_slacks', False):
+        include_hv_requirements = True
+    
+    if include_hv_requirements:
         if edisgo_object.overlying_grid.heat_pump_central_active_power.isna()[0]:
             edisgo_object.overlying_grid.heat_pump_central_active_power[:] = 0
         hv_flex_dict = {
@@ -265,12 +318,17 @@ def to_powermodels(
         except IndexError:
             logger.warning(
                 "Overlying grid component of eDisGo object has no entries."
-                " Changing optimization version to '2' (without high voltage"
-                " requirements)."
+                " HV requirements will not be included."
             )
-            opf_version = 2
-
-    pm["opf_version"] = opf_version
+    
+    # Store opf_version for backward compatibility (default to 2 for §14a optimization)
+    pm["opf_version"] = 2
+    
+    # Store objective configuration if provided
+    if objective_config is not None:
+        pm["objective_config"] = objective_config
+        logger.info(f"Custom objective configuration: {objective_config}")
+    
     logger.info(
         "Transforming components timeseries into PowerModels dictionary format."
     )
@@ -335,6 +393,7 @@ def from_powermodels(
         "dsm": ["dsm", "pdsm"],
         "hp_14a": ["gen_hp_14a", "p"],  # §14a virtual generators (uses "p" not "php14a")
         "cp_14a": ["gen_cp_14a", "p"],  # §14a virtual generators for charging points
+        "load_14a": ["gen_load_14a", "p"],  # §14a virtual generators for loads (not yet implemented)
     }
 
     timesteps = pd.Series([int(k) for k in pm["nw"].keys()]).sort_values().values
@@ -1093,7 +1152,7 @@ def _build_load(
 
 
 def _build_battery_storage(
-    edisgo_obj, psa_net, pm, flexible_storage_units, s_base, opf_version
+    edisgo_obj, psa_net, pm, flexible_storage_units, s_base
 ):
     """
     Build battery storage dictionary in PowerModels network data format and add
@@ -1540,7 +1599,7 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
         }
 
 
-def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_version):
+def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     """
     Build heat storage dictionary and add it to PowerModels dictionary 'pm'.
 

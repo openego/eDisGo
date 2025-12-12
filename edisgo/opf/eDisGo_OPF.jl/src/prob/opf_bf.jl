@@ -6,18 +6,30 @@ end
 
 "Build multinetwork branch flow OPF with multiple flexibilities"
 function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
+    # Check if line loading variable is needed (opf_version or objective_config)
+    needs_line_loading = false
     if PowerModels.ref(pm, 1, :opf_version) in(1, 3)
-        eDisGo_OPF.variable_max_line_loading(pm, nw=1) # Eq. (3.41) (nur für Version 1 und 3)
+        needs_line_loading = true
+    elseif haskey(PowerModels.ref(pm, 1), :objective_config)
+        obj_config = PowerModels.ref(pm, 1, :objective_config)
+        needs_line_loading = get(obj_config, "minimize_line_loading", false)
     end
+    
+    if needs_line_loading
+        eDisGo_OPF.variable_max_line_loading(pm, nw=1) # Eq. (3.41)
+    end
+    
     for (n, network) in PowerModels.nws(pm)
         # VARIABLES
         if PowerModels.ref(pm, 1, :opf_version) in(1, 2, 3, 4)
             eDisGo_OPF.variable_branch_power_radial(pm, nw=n, bounded=false) # keine Begrenzung für Leistung auf Leitungen/Trafos (Strombegrenzung stattdessen)
-            if PowerModels.ref(pm, 1, :opf_version) in(1, 3) # nur für Version 1 und 3 (ohne Netzrestriktionen)
+            if PowerModels.ref(pm, 1, :opf_version) in(1, 3) || needs_line_loading # Version 1/3 oder wenn minimize_line_loading aktiv
                 eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false) # keine Eq. (3.7)!
                 eDisGo_OPF.variable_bus_voltage(pm, nw=n, bounded=false) # keine Eq. (3.8)!
-                eDisGo_OPF.constraint_max_line_loading(pm, n)  # Eq. (3.40)
-            else # nur für Version 2 und 4 (mit Netzrestriktionen)
+                if needs_line_loading
+                    eDisGo_OPF.constraint_max_line_loading(pm, n)  # Eq. (3.40)
+                end
+            elseif PowerModels.ref(pm, 1, :opf_version) in(2, 4) # Version 2 und 4 (mit Netzrestriktionen)
                 eDisGo_OPF.variable_branch_current(pm, nw=n)  # Eq. (3.7) und (3.7i)
                 eDisGo_OPF.variable_gen_power_curt(pm, nw=n)  # Eq. (3.44) für non-dispatchable Generators
                 eDisGo_OPF.variable_slack_grid_restrictions(pm, nw=n) # Eq. (3.44)-(3.47)
@@ -198,14 +210,42 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
     end
 
     # OBJECTIVE FUNCTION
-    if PowerModels.ref(pm, 1, :opf_version) == 1
-        #eDisGo_OPF.objective_min_losses(pm)
-        eDisGo_OPF.objective_min_line_loading_max(pm) # Eq. (3.2 ii)
-    elseif (PowerModels.ref(pm, 1, :opf_version) == 3) # Nicht Teil der MA
-        eDisGo_OPF.objective_min_line_loading_max_OG(pm)
-    elseif PowerModels.ref(pm, 1, :opf_version) == 2
-        eDisGo_OPF.objective_min_losses_slacks(pm)  # Eq. (3.2 iii)
-    elseif PowerModels.ref(pm, 1, :opf_version) == 4
-        eDisGo_OPF.objective_min_losses_slacks_OG(pm)  # Nicht Teil der MA
+    # Check if custom objective configuration is provided
+    if haskey(PowerModels.ref(pm, 1), :objective_config)
+        obj_config = PowerModels.ref(pm, 1, :objective_config)
+        println("\n✓ JULIA DEBUG: Using custom objective_config: ", obj_config)
+        
+        # Extract configuration with defaults
+        minimize_losses = get(obj_config, "minimize_losses", true)
+        minimize_line_loading = get(obj_config, "minimize_line_loading", false)
+        minimize_slacks = get(obj_config, "minimize_slacks", false)
+        minimize_hv_slacks = get(obj_config, "minimize_hv_slacks", false)
+        minimize_14a_curtailment = get(obj_config, "minimize_14a_curtailment", false)
+        
+        # Extract weights (will be auto-calculated in objective_edisgo if not provided)
+        weight_losses = get(obj_config, "weight_losses", nothing)
+        weight_line_loading = get(obj_config, "weight_line_loading", nothing)
+        weight_slacks = get(obj_config, "weight_slacks", 0.6)
+        weight_hv_slacks = get(obj_config, "weight_hv_slacks", nothing)
+        weight_14a = get(obj_config, "weight_14a", 0.5)
+        
+        # Call unified objective with custom configuration
+        eDisGo_OPF.objective_edisgo(pm,
+            minimize_losses=minimize_losses,
+            minimize_line_loading=minimize_line_loading,
+            minimize_slacks=minimize_slacks,
+            minimize_hv_slacks=minimize_hv_slacks,
+            minimize_14a_curtailment=minimize_14a_curtailment,
+            weight_losses=weight_losses,
+            weight_line_loading=weight_line_loading,
+            weight_slacks=weight_slacks,
+            weight_hv_slacks=weight_hv_slacks,
+            weight_14a=weight_14a
+        )
+    else
+        # Use backward compatible version mapping
+        opf_version = PowerModels.ref(pm, 1, :opf_version)
+        println("\n✓ JULIA DEBUG: Using opf_version: ", opf_version)
+        eDisGo_OPF.objective_by_version(pm, opf_version)
     end
 end

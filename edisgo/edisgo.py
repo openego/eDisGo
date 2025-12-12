@@ -827,8 +827,11 @@ class EDisGo:
         flexible_hps=None,
         flexible_loads=None,
         flexible_storage_units=None,
-        opf_version=1,
         curtailment_14a=False,
+        curtailment_14a_heatpumps=False,
+        curtailment_14a_charging_points=False,
+        curtailment_14a_loads=False,
+        objective_config=None,
     ):
         """
         Convert eDisGo representation of the network topology and timeseries to
@@ -856,10 +859,22 @@ class EDisGo:
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: 1.
         curtailment_14a : bool
-            If True, enables §14a EnWG curtailment for heat pumps with virtual
-            generators. Heat pumps can be curtailed down to 4.2 kW with time budget
-            constraints.
+            If True, enables §14a EnWG curtailment. Legacy parameter, use specific
+            curtailment_14a_* parameters instead.
             Default: False.
+        curtailment_14a_heatpumps : bool
+            If True, enables §14a EnWG curtailment for heat pumps.
+            Default: False.
+        curtailment_14a_charging_points : bool
+            If True, enables §14a EnWG curtailment for charging points.
+            Default: False.
+        curtailment_14a_loads : bool
+            If True, enables §14a EnWG curtailment for loads.
+            Default: False.
+        objective_config : dict or None
+            Optional dictionary to configure objective function. See
+            :func:`edisgo.opf.powermodels_opf.pm_optimize` for details.
+            Default: None.
 
         Returns
         -------
@@ -875,8 +890,11 @@ class EDisGo:
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
             flexible_storage_units=flexible_storage_units,
-            opf_version=opf_version,
             curtailment_14a=curtailment_14a,
+            curtailment_14a_heatpumps=curtailment_14a_heatpumps,
+            curtailment_14a_charging_points=curtailment_14a_charging_points,
+            curtailment_14a_loads=curtailment_14a_loads,
+            objective_config=objective_config,
         )
 
     def pm_optimize(
@@ -886,14 +904,27 @@ class EDisGo:
         flexible_hps=None,
         flexible_loads=None,
         flexible_storage_units=None,
-        opf_version=1,
         method="soc",
         warm_start=False,
         silence_moi=False,
         save_heat_storage=True,
         save_slack_gen=True,
         save_slacks=True,
-        curtailment_14a=False,
+        curtailment_14a_heatpumps=False,
+        curtailment_14a_charging_points=False,
+        curtailment_14a_loads=False,
+        minimize_losses=True,
+        minimize_line_loading=False,
+        minimize_slacks=True,
+        minimize_hv_slacks=False,
+        minimize_14a_curtailment=True,
+        weight_losses=None,
+        weight_line_loading=None,
+        weight_slacks=0.6,
+        weight_hv_slacks=None,
+        weight_14a=0.5,
+        weight_heat_storage_violation=1e4,
+        objective_config=None,
     ):
         """
         Run OPF in julia subprocess and write results of OPF back to edisgo object.
@@ -920,10 +951,6 @@ class EDisGo:
             Array containing all flexible storages. Non-flexible storages operate to
             optimize self consumption.
             Default: None.
-        opf_version : int
-            Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
-            For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
-            Default: 1.
         method : str
             Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
             (Non Convex). For more information see
@@ -941,11 +968,40 @@ class EDisGo:
             hence there will be no logging coming from julia subprocess in python
             process.
             Default: False.
-        curtailment_14a : bool
-            If True, enables §14a EnWG curtailment for heat pumps with virtual
-            generators. Heat pumps can be curtailed down to 4.2 kW with time budget
-            constraints.
+        curtailment_14a_heatpumps : bool
+            If True, enables §14a EnWG curtailment for heat pumps.
             Default: False.
+        curtailment_14a_charging_points : bool
+            If True, enables §14a EnWG curtailment for charging points.
+            Default: False.
+        curtailment_14a_loads : bool
+            If True, enables §14a EnWG curtailment for loads.
+            Default: False.
+        minimize_losses : bool
+            Minimize line losses. Default: True.
+        minimize_line_loading : bool
+            Minimize maximum line loading. Default: False.
+        minimize_slacks : bool
+            Minimize grid slacks. Default: True.
+        minimize_hv_slacks : bool
+            Minimize HV slacks. Default: False.
+        minimize_14a_curtailment : bool
+            Minimize §14a curtailment. Default: True.
+        weight_losses : float or None
+            Weight for line losses. Default: None (auto-calculated).
+        weight_line_loading : float or None
+            Weight for line loading. Default: None (auto-calculated).
+        weight_slacks : float
+            Weight for slacks. Default: 0.6.
+        weight_hv_slacks : float or None
+            Weight for HV slacks. Default: None (auto-calculated).
+        weight_14a : float
+            Weight for §14a curtailment. Default: 0.5.
+        weight_heat_storage_violation : float
+            Weight for heat storage violations. Default: 1e4.
+        objective_config : dict or None
+            Optional dictionary to override all objective parameters.
+            Default: None.
         """
         return powermodels_opf.pm_optimize(
             self,
@@ -954,11 +1010,24 @@ class EDisGo:
             flexible_hps=flexible_hps,
             flexible_loads=flexible_loads,
             flexible_storage_units=flexible_storage_units,
-            opf_version=opf_version,
             method=method,
             warm_start=warm_start,
             silence_moi=silence_moi,
-            curtailment_14a=curtailment_14a,
+            curtailment_14a_heatpumps=curtailment_14a_heatpumps,
+            curtailment_14a_charging_points=curtailment_14a_charging_points,
+            curtailment_14a_loads=curtailment_14a_loads,
+            minimize_losses=minimize_losses,
+            minimize_line_loading=minimize_line_loading,
+            minimize_slacks=minimize_slacks,
+            minimize_hv_slacks=minimize_hv_slacks,
+            minimize_14a_curtailment=minimize_14a_curtailment,
+            weight_losses=weight_losses,
+            weight_line_loading=weight_line_loading,
+            weight_slacks=weight_slacks,
+            weight_hv_slacks=weight_hv_slacks,
+            weight_14a=weight_14a,
+            weight_heat_storage_violation=weight_heat_storage_violation,
+            objective_config=objective_config,
         )
 
     def to_graph(self):

@@ -22,11 +22,24 @@ def pm_optimize(
     flexible_hps: Optional[np.ndarray] = None,
     flexible_loads: Optional[np.ndarray] = None,
     flexible_storage_units: Optional[np.ndarray] = None,
-    opf_version: int = 1,
     method: str = "soc",
     warm_start: bool = False,
     silence_moi: bool = False,
-    curtailment_14a: bool = False,
+    curtailment_14a_heatpumps: bool = False,
+    curtailment_14a_charging_points: bool = False,
+    curtailment_14a_loads: bool = False,
+    minimize_losses: bool = True,
+    minimize_line_loading: bool = False,
+    minimize_slacks: bool = True,
+    minimize_hv_slacks: bool = False,
+    minimize_14a_curtailment: bool = True,
+    weight_losses: Optional[float] = None,
+    weight_line_loading: Optional[float] = None,
+    weight_slacks: float = 0.6,
+    weight_hv_slacks: Optional[float] = None,
+    weight_14a: float = 0.5,
+    weight_heat_storage_violation: float = 1e4,
+    objective_config: Optional[dict] = None,
 ) -> None:
     """
     Run OPF for edisgo object in julia subprocess and write results of OPF to edisgo
@@ -53,27 +66,6 @@ def pm_optimize(
         Array containing all flexible storage units. Non-flexible storage units operate
         to optimize self consumption.
         Default: None
-    opf_version : int
-        Version of optimization models to choose from. The grid model is a radial branch
-        flow model (BFM). Optimization versions differ in lifted or additional
-        constraints and the objective function.
-        Implemented versions are:
-
-        * 1
-            * Lifted constraints: grid restrictions
-            * Objective: minimize line losses and maximal line loading
-        * 2
-            * Objective: minimize line losses and grid related slacks
-        * 3
-            * Additional constraints: high voltage requirements
-            * Lifted constraints: grid restrictions
-            * Objective: minimize line losses, maximal line loading and HV slacks
-        * 4
-            * Additional constraints: high voltage requirements
-            * Objective: minimize line losses, HV slacks and grid related slacks
-
-        Must be one of [1, 2, 3, 4].
-        Default: 1.
     method : str
         Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
         (Non Convex).
@@ -94,11 +86,63 @@ def pm_optimize(
         hence there will be no logging coming from julia subprocess in python
         process.
         Default: False.
-    curtailment_14a : bool
+    curtailment_14a_heatpumps : bool
         If True, enables §14a EnWG curtailment for heat pumps with virtual
         generators. Heat pumps can be curtailed down to 4.2 kW with time budget
         constraints.
         Default: False.
+    curtailment_14a_charging_points : bool
+        If True, enables §14a EnWG curtailment for charging points with virtual
+        generators. Charging points can be curtailed down to 4.2 kW with time budget
+        constraints.
+        Default: False.
+    curtailment_14a_loads : bool
+        If True, enables §14a EnWG curtailment for loads with virtual
+        generators. Loads can be curtailed down to 4.2 kW with time budget
+        constraints.
+        Default: False.
+    minimize_losses : bool
+        Minimize line losses in objective function.
+        Default: True.
+    minimize_line_loading : bool
+        Minimize maximum line loading in objective function.
+        Default: False.
+    minimize_slacks : bool
+        Minimize grid constraint violation slacks in objective function.
+        Default: True.
+    minimize_hv_slacks : bool
+        Minimize high voltage requirement slacks in objective function.
+        Default: False.
+    minimize_14a_curtailment : bool
+        Minimize §14a curtailment in objective function.
+        Default: True.
+    weight_losses : float or None
+        Weight for line losses in objective function. Auto-calculated if None.
+        Default: None.
+    weight_line_loading : float or None
+        Weight for line loading in objective function. Auto-calculated if None.
+        Default: None.
+    weight_slacks : float
+        Weight for slacks in objective function.
+        Default: 0.6.
+    weight_hv_slacks : float or None
+        Weight for HV slacks in objective function. Auto-calculated if None.
+        Default: None.
+    weight_14a : float
+        Weight for §14a curtailment in objective function. Lower values allow more
+        curtailment, higher values minimize curtailment use.
+        Default: 0.5.
+    weight_heat_storage_violation : float
+        Large penalty weight for heat storage constraint violations.
+        Default: 1e4.
+    objective_config : dict or None
+        Optional dictionary to override all objective configuration parameters.
+        If provided, individual objective parameters are ignored.
+        Keys: minimize_losses, minimize_line_loading, minimize_slacks,
+              minimize_hv_slacks, minimize_14a_curtailment, weight_losses,
+              weight_line_loading, weight_slacks, weight_hv_slacks, weight_14a,
+              weight_heat_storage_violation.
+        Default: None (uses individual parameters).
     save_heat_storage : bool
         Indicates whether to save results of heat storage variables from the
         optimization to eDisGo object.
@@ -117,14 +161,83 @@ def pm_optimize(
     Topology.find_meshes(edisgo_obj)
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
+    
+    # Validate: Components cannot be both flexible AND §14a curtailable
+    validation_errors = []
+    
+    if curtailment_14a_heatpumps and flexible_hps is not None and len(flexible_hps) > 0:
+        validation_errors.append(
+            "Heat pumps cannot be both flexible (flexible_hps) and §14a curtailable "
+            "(curtailment_14a_heatpumps). Please choose one approach."
+        )
+    
+    if curtailment_14a_charging_points and flexible_cps is not None and len(flexible_cps) > 0:
+        validation_errors.append(
+            "Charging points cannot be both flexible (flexible_cps) and §14a curtailable "
+            "(curtailment_14a_charging_points). Please choose one approach."
+        )
+    
+    if curtailment_14a_loads and flexible_loads is not None and len(flexible_loads) > 0:
+        validation_errors.append(
+            "Loads cannot be both flexible (flexible_loads) and §14a curtailable "
+            "(curtailment_14a_loads). Please choose one approach."
+        )
+    
+    if validation_errors:
+        error_message = "\n".join([
+            "❌ Configuration Error: Conflicting flexibility definitions detected!",
+            "",
+            "The following conflicts were found:",
+            ""
+        ] + ["  • " + err for err in validation_errors] + [
+            "",
+            "Note: §14a curtailment and flexible operation are mutually exclusive approaches.",
+            "      - §14a: Simple power curtailment with minimum power constraints",
+            "      - Flexible: Advanced optimization with storage, scheduling, etc.",
+            "",
+            "Please set either the flexible_* parameter OR the curtailment_14a_* parameter,",
+            "but not both for the same component type."
+        ])
+        raise ValueError(error_message)
+    
+    # Build objective_config from individual parameters if not provided
+    if objective_config is None:
+        objective_config = {
+            'minimize_losses': minimize_losses,
+            'minimize_line_loading': minimize_line_loading,
+            'minimize_slacks': minimize_slacks,
+            'minimize_hv_slacks': minimize_hv_slacks,
+            'minimize_14a_curtailment': minimize_14a_curtailment,
+            'weight_slacks': weight_slacks,
+            'weight_14a': weight_14a,
+            'weight_heat_storage_violation': weight_heat_storage_violation,
+        }
+        # Add optional weights only if provided
+        if weight_losses is not None:
+            objective_config['weight_losses'] = weight_losses
+        if weight_line_loading is not None:
+            objective_config['weight_line_loading'] = weight_line_loading
+        if weight_hv_slacks is not None:
+            objective_config['weight_hv_slacks'] = weight_hv_slacks
+    
+    # Determine curtailment_14a flag for to_powermodels
+    curtailment_14a = (
+        curtailment_14a_heatpumps or 
+        curtailment_14a_charging_points or 
+        curtailment_14a_loads
+    )
+    
     pm, hv_flex_dict = edisgo_obj.to_powermodels(
         s_base=s_base,
         flexible_cps=flexible_cps,
         flexible_hps=flexible_hps,
         flexible_loads=flexible_loads,
         flexible_storage_units=flexible_storage_units,
-        opf_version=opf_version,
         curtailment_14a=curtailment_14a,
+        curtailment_14a_heatpumps=curtailment_14a_heatpumps,
+        curtailment_14a_charging_points=curtailment_14a_charging_points,
+        curtailment_14a_loads=curtailment_14a_loads,
+        objective_config=objective_config,
     )
 
     def _convert(o):
