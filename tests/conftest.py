@@ -2,6 +2,10 @@ import os
 
 import pytest
 
+# Set matplotlib backend to non-interactive for tests (prevents TclError on Windows CI)
+import matplotlib
+matplotlib.use('Agg')
+
 from edisgo.io.db import engine
 
 
