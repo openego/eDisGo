@@ -38,9 +38,9 @@ requirements = [
     "descartes < 1.2.0",
     "egoio >= 0.4.7, < 0.5.0",
     "geoalchemy2 == 0.11.1",
-    "geopandas >= 0.12.0, < 1.1.0",
+    "geopandas >= 0.12.0, < 1.2.0",
     "geopy >= 2.0.0, < 2.5.0",
-    "jupyterlab < 4.5.0",
+    "jupyterlab < 4.6.0",
     "jupyter_dash < 0.5.0",
     "matplotlib >= 3.3.0, < 3.11.0",
     "multiprocess < 0.71.0",
@@ -51,7 +51,6 @@ requirements = [
     "pandas >= 1.4.0, < 2.2.0",
     "plotly < 6.0",
     "pydot < 4.1.0",
-    "pygeos < 0.15.0",
     "pypower < 5.2.0",
     "pyproj >= 3.0.0, < 3.8.0",
     "pypsa == 0.26.2",
@@ -61,16 +60,16 @@ requirements = [
     "shapely >= 1.7.0, < 2.1.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel < 0.5.0",
-    "urllib3 < 2.6.0",
+    "urllib3 < 2.7.0",
     "workalendar < 17.1.0",
-    "astroid == 3.3.11",
+    "astroid == 4.0.2",
 ]
 
 dev_requirements = [
-    "black < 25.10.0",
+    "black < 25.13.0",
     "flake8 < 7.4.0",
-    "isort < 6.1.0",
-    "pre-commit < 4.4.0",
+    "isort < 7.1.0",
+    "pre-commit < 4.6.0",
     "pylint < 3.4.0",
     "pytest < 9.1.0",
     "pytest-notebook < 0.11.0",
@@ -79,7 +78,7 @@ dev_requirements = [
     "sphinx_rtd_theme >=0.5.2, < 3.1.0",
     "sphinx-autodoc-typehints < 3.2.0",
     "sphinx-autoapi < 3.7.0",
-    "astroid == 3.3.11",
+    "astroid == 4.0.2",
 ]
 
 extras = {"dev": dev_requirements}
