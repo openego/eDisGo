@@ -57,7 +57,7 @@ requirements = [
     "pyyaml < 6.1.0",
     "saio < 0.3.0",
     "scikit-learn < 1.3.0",
-    "shapely >= 1.7.0, < 2.1.0",
+    "shapely >= 1.7.0, < 2.2.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel < 0.5.0",
     "urllib3 < 2.7.0",
