@@ -1,6 +1,6 @@
-cd(dirname(@__FILE__))
+cd(@__DIR__)
 using Pkg
-Pkg.activate("")
+Pkg.activate(@__DIR__)
 Pkg.instantiate()
 try
     using eDisGo_OPF
@@ -48,8 +48,10 @@ function optimize_edisgo()
       # else
       JuMP.compute_conflict!(pm.model)
       if MOI.get(pm.model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
-        iis_model, _ = copy_conflict(pm.model)
-        print(iis_model)
+        # copy_conflict might not be available in newer JuMP versions
+        # iis_model, _ = copy_conflict(pm.model)
+        # print(iis_model)
+        println("Conflict detected in optimization model")
       end
       #end
     elseif result_soc["termination_status"] == MOI.OPTIMAL
