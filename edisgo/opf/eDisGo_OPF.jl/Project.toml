@@ -17,5 +17,5 @@ Memento = "f28f55f0-a522-5efc-85c2-fe41dfb9b2d9"
 PowerModels = "c36e90e8-916a-50a6-bd94-075b64ef4655"
 
 [compat]
-PowerModels = "0.19.6, 0.20, 0.21"
+PowerModels = ">=0.19.6"
 julia = "1.6, 1.7, 1.8, 1.9, 1.10, 1.11"

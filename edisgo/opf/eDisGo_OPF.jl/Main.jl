@@ -1,4 +1,20 @@
 cd(@__DIR__)
+# Early prints to help diagnose which Julia binary / packages are used
+try
+  println("[eDisGo_OPF Main] Julia ", VERSION)
+  pm_path = Base.find_package("PowerModels")
+  if pm_path !== nothing
+    println("[eDisGo_OPF Main] PowerModels found at ", pm_path)
+  else
+    println("[eDisGo_OPF Main] PowerModels not found on LOAD_PATH")
+  end
+catch e
+  # best effort, do not fail on diagnostics
+  try
+    @warn("eDisGo_OPF Main: could not print diagnostics: $e")
+  catch
+  end
+end
 using Pkg
 Pkg.activate(@__DIR__)
 Pkg.instantiate()

@@ -223,7 +223,7 @@ class TestPowerModelsOPF:
         pm_optimize(
             self.edisgo,
             opf_version=2,
-            silence_moi=True,
+            silence_moi=False,
             method="nc",
             flexible_cps=np.array(["Charging_Point_LVGrid_6_1"]),
             flexible_hps=self.edisgo.heat_pump.thermal_storage_units_df.index.values,
@@ -288,7 +288,7 @@ class TestPowerModelsOPF:
         pm_optimize(
             self.edisgo,
             opf_version=4,
-            silence_moi=True,
+            silence_moi=False,
             method="nc",
             flexible_cps=np.array(["Charging_Point_LVGrid_6_1"]),
             flexible_hps=self.edisgo.heat_pump.thermal_storage_units_df.index.values,

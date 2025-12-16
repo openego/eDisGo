@@ -209,7 +209,24 @@ function ref_add_core!(ref::Dict{Symbol,Any})
 
         ### aggregate info for pairs of connected buses ###
         if !haskey(nw_ref, :buspairs)
-            nw_ref[:buspairs] = calc_buspair_parameters(nw_ref[:bus], nw_ref[:branch], nw_ref[:conductor_ids], haskey(nw_ref, :conductors))
+            # calc_buspair_parameters signature changed across PowerModels versions.
+            # Try the old signature first (with conductor info), fall back to the newer
+            # signature if MethodError occurs.
+            try
+                nw_ref[:buspairs] = calc_buspair_parameters(
+                    nw_ref[:bus], nw_ref[:branch], nw_ref[:conductor_ids], haskey(nw_ref, :conductors)
+                )
+            catch e
+                if isa(e, MethodError)
+                    try
+                        nw_ref[:buspairs] = calc_buspair_parameters(nw_ref[:bus], nw_ref[:branch])
+                    catch e2
+                        rethrow(e)
+                    end
+                else
+                    rethrow(e)
+                end
+            end
         end
     end
 end
