@@ -44,7 +44,7 @@ requirements = [
     "jupyter_dash < 0.5.0",
     "matplotlib >= 3.3.0, < 3.11.0",
     "multiprocess < 0.71.0",
-    "networkx >= 2.5.0, < 3.5.0",
+    "networkx >= 2.5.0, < 3.7.0",
     # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
     # sqlalchemy leads to new errors.. should be fixed at some point
     "numpy ==1.26.4",
@@ -57,7 +57,7 @@ requirements = [
     "pyyaml < 6.1.0",
     "saio < 0.3.0",
     "scikit-learn < 1.3.0",
-    "shapely >= 1.7.0, < 2.1.0",
+    "shapely >= 1.7.0, < 2.2.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel < 0.5.0",
     "urllib3 < 2.7.0",
