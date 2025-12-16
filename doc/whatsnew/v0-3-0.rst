@@ -29,3 +29,15 @@ Changes
 * Added a storage operation strategy where the storage is charged when PV feed-in is higher than electricity demand of the household and discharged when electricity demand exceeds PV generation `#386 <https://github.com/openego/eDisGo/pull/386>`_
 * Added an estimation of the voltage deviation over a cable when selecting a suitable cable to connect a new component `#411 <https://github.com/openego/eDisGo/pull/411>`_
 * Added clipping of heat pump electrical power at its maximum value #428 <https://github.com/openego/eDisGo/pull/428>
+* Updated CI to use Julia 1.11 and improved Julia OPF integration:
+  - Set GitHub Actions Julia setup to use `1.11`.
+  - Added early startup diagnostics in the Julia launcher (`Main.jl`) and
+    runtime `__init__()` prints in the `eDisGo_OPF` Julia package to
+    explicitly report the Julia version and detected PowerModels version.
+  - Avoided `Pkg` calls at package precompile time and implemented safe,
+    filesystem-based PowerModels version detection to prevent precompilation
+    errors across Julia versions.
+  - Made the Python OPF launcher use the resolved absolute Julia binary
+    path (prefers `julia1.11`) to avoid manifest/activation mismatches.
+  These changes improve compatibility with Julia 1.11 and recent
+  PowerModels releases. See `#570 <https://github.com/openego/eDisGo/pull/570>`_.
