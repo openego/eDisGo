@@ -1,6 +1,12 @@
+
 # Tests with pytest the package and monitors the covarage and sends it to coveralls.io
 # Coverage is only send to coveralls.io when no pytest tests fail
 name: "Tests & Coverage"
+
+# Abbrechen laufender Workflows bei neuem Push auf denselben Branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 on: [push]
 
