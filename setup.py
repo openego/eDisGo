@@ -70,7 +70,7 @@ dev_requirements = [
     "flake8 < 7.4.0",
     "isort < 7.1.0",
     "pre-commit < 4.6.0",
-    "pylint < 3.4.0",
+    "pylint < 4.1.0",
     "pytest < 9.1.0",
     "pytest-notebook < 0.11.0",
     "pyupgrade < 3.22.0",
