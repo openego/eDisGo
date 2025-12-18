@@ -89,7 +89,7 @@ jobs:
           python -m pip install pytest pytest-notebook
           python -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
         env:
-          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
+          OEP_TOKEN_KH: ${{ secrets.OEP_TOKEN_KH }}
 
       # Run standard tests on Windows
       - name: Run tests (Windows)
@@ -98,7 +98,7 @@ jobs:
           python -m pip install pytest pytest-notebook
           python -m pytest --runslow --disable-warnings --color=yes -v
         env:
-          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
+          OEP_TOKEN_KH: ${{ secrets.OEP_TOKEN_KH }}
 
       # Run coverage job and upload to Coveralls (only on Linux, Python 3.9)
       - name: Run tests with coverage and submit to Coveralls
@@ -108,6 +108,6 @@ jobs:
           coverage run --source=edisgo -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
           coveralls
         env:
-          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
+          OEP_TOKEN_KH: ${{ secrets.OEP_TOKEN_KH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github
