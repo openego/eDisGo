@@ -303,10 +303,10 @@ Für ein Netz mit: - 150 Busse - 200 Leitungen/Trafos - 50 Generatoren -
 5 Batteriespeicher - 20 Wärmepumpen - 10 Ladepunkte - 8760 Zeitschritte
 (1 Jahr, 1h-Auflösung)
 
-**Anzahl Variablen (grob):** - Spannungen: 150 Busse × 8760 Zeitschritte
-= **1,314,000 Variablen** - Leitungsflüsse: 200 × 2 (p,q) × 8760 =
-**3,504,000 Variablen** - Generatoren: 50 × 2 (p,q) × 8760 = **876,000
-Variablen** - Speicher: 5 × 2 (Leistung + SOC) × 8760 = **87,600
+**Anzahl Variablen (grob):** - Spannungen: 150 Busse x 8760 Zeitschritte
+= **1,314,000 Variablen** - Leitungsflüsse: 200 x 2 (p,q) x 8760 =
+**3,504,000 Variablen** - Generatoren: 50 x 2 (p,q) x 8760 = **876,000
+Variablen** - Speicher: 5 x 2 (Leistung + SOC) x 8760 = **87,600
 Variablen** - …
 
 → **Mehrere Millionen Variablen** für Jahressimulation!
@@ -333,7 +333,7 @@ Bestimmte Constraints koppeln die Zeitschritte:
            # SOC in t+1 hängt von SOC in t und Leistung in t ab
            @constraint(pm.model,
                var(pm, n+1, :se, s) ==
-               var(pm, n, :se, s) + var(pm, n, :ps, s) × Δt × η
+               var(pm, n, :se, s) + var(pm, n, :ps, s) x Δt x η
            )
        end
    end
@@ -440,7 +440,7 @@ Batteriespeicher-Variablen (Battery Storage Variables)
 +---------------+-----------------+-------------+---------------------+
 
 **Constraints:** - SOC-Kopplung zwischen Zeitschritten:
-``se[t+1] = se[t] + ps[t] × Δt × η`` - Kapazitätsgrenzen:
+``se[t+1] = se[t] + ps[t] x Δt x η`` - Kapazitätsgrenzen:
 ``se_min ≤ se[t] ≤ se_max`` - Leistungsgrenzen:
 ``ps_min ≤ ps[t] ≤ ps_max``
 
@@ -494,7 +494,7 @@ Ladepunkt-Variablen (Charging Point / EV Variables)
 +----------------+----------------+-------------+---------------------+
 
 **Constraints:** - Energiekopplung:
-``cpe[t+1] = cpe[t] + pcp[t] × Δt × η`` - Kapazität:
+``cpe[t+1] = cpe[t] + pcp[t] x Δt x η`` - Kapazität:
 ``cpe_min ≤ cpe[t] ≤ cpe_max`` - Ladeleistung: ``0 ≤ pcp[t] ≤ pcp_max``
 
 --------------
@@ -970,7 +970,7 @@ Phase 1: Problemaufbau (build_mn_opf_bf_flex)
        # §14a Constraints pro Zeitschritt
        if curtailment_14a
            for h in ids(pm, :gen_hp_14a, nw=n)
-               constraint_hp_14a_binary_coupling(pm, h, n)  # p_hp14a ≤ pmax × z
+               constraint_hp_14a_binary_coupling(pm, h, n)  # p_hp14a ≤ pmax x z
                constraint_hp_14a_min_net_load(pm, h, n)     # Nettolast ≥ min(Last, 4.2kW)
            end
            for c in ids(pm, :gen_cp_14a, nw=n)
@@ -988,21 +988,21 @@ Phase 2: Inter-Zeitschritt Constraints
    # Speicher-Energiekopplung zwischen Zeitschritten
    for s in ids(pm, :storage)
        for t in 1:(T-1)
-           se[t+1] == se[t] + ps[t] × Δt × η
+           se[t+1] == se[t] + ps[t] x Δt x η
        end
    end
 
    # Wärmespeicher-Kopplung
    for h in ids(pm, :heat_pump)
        for t in 1:(T-1)
-           hse[t+1] == hse[t] + phs[t] × Δt × η
+           hse[t+1] == hse[t] + phs[t] x Δt x η
        end
    end
 
    # EV-Batterie-Kopplung
    for c in ids(pm, :charging_point)
        for t in 1:(T-1)
-           cpe[t+1] == cpe[t] + pcp[t] × Δt × η
+           cpe[t+1] == cpe[t] + pcp[t] x Δt x η
        end
    end
 
@@ -1028,25 +1028,25 @@ Phase 3: Zielfunktion
 
 .. code:: julia
 
-   minimize: 0.9 × sum(Verluste) + 0.1 × max(ll) + 0.05 × sum(p_hp14a) + 0.05 × sum(p_cp14a)
+   minimize: 0.9 x sum(Verluste) + 0.1 x max(ll) + 0.05 x sum(p_hp14a) + 0.05 x sum(p_cp14a)
 
 **OPF Version 2** (mit Netzrestriktionen, mit Slacks):
 
 .. code:: julia
 
-   minimize: 0.4 × sum(Verluste) + 0.6 × sum(Slacks) + 0.5 × sum(p_hp14a) + 0.5 × sum(p_cp14a)
+   minimize: 0.4 x sum(Verluste) + 0.6 x sum(Slacks) + 0.5 x sum(p_hp14a) + 0.5 x sum(p_cp14a)
 
 **OPF Version 3** (mit HV-Anforderungen, geliftete Restriktionen):
 
 .. code:: julia
 
-   minimize: 0.9 × sum(Verluste) + 0.1 × max(ll) + 50 × sum(phvs) + 0.05 × sum(p_hp14a) + 0.05 × sum(p_cp14a)
+   minimize: 0.9 x sum(Verluste) + 0.1 x max(ll) + 50 x sum(phvs) + 0.05 x sum(p_hp14a) + 0.05 x sum(p_cp14a)
 
 **OPF Version 4** (mit HV-Anforderungen und Restriktionen):
 
 .. code:: julia
 
-   minimize: 0.4 × sum(Verluste) + 0.6 × sum(Slacks) + 50 × sum(phvs) + 0.5 × sum(p_hp14a) + 0.5 × sum(p_cp14a)
+   minimize: 0.4 x sum(Verluste) + 0.6 x sum(Slacks) + 50 x sum(phvs) + 0.5 x sum(p_hp14a) + 0.5 x sum(p_cp14a)
 
 **Wichtig:** - §14a-Terme haben moderate Gewichte → Abregelung wird
 genutzt, aber minimiert - Slack-Variablen haben hohe implizite Kosten →
@@ -1785,7 +1785,7 @@ Standard-Optimierung (OHNE §14a):
 -  **E-Autos:** Ladesteuerung innerhalb Flexibilitätsband
 -  **Inflexible WP/CP:** Können NICHT abgeregelt werden
 
-§14a-Optimierung (MIT §14a):
+§14a-Optimierung:
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 -  **ALLE Wärmepumpen > 4,2 kW:** Können bis auf 4,2 kW abgeregelt
@@ -1842,7 +1842,7 @@ Constraints
 
 .. code:: julia
 
-   @constraint(model, p_hp14a[h,t] <= pmax[h] × z_hp14a[h,t])
+   @constraint(model, p_hp14a[h,t] <= pmax[h] x z_hp14a[h,t])
 
 **Bedeutung:** - Wenn ``z_hp14a[h,t] = 0`` (keine Abregelung):
 ``p_hp14a[h,t] = 0`` - Wenn ``z_hp14a[h,t] = 1`` (Abregelung aktiv):
@@ -1928,10 +1928,10 @@ aufgenommen:
 .. code:: julia
 
    minimize:
-       0.4 × sum(line_losses[t] for t in timesteps)
-     + 0.6 × sum(all_slacks[t] for t in timesteps)
-     + 0.5 × sum(p_hp14a[h,t] for h,t)
-     + 0.5 × sum(p_cp14a[c,t] for c,t)
+       0.4 x sum(line_losses[t] for t in timesteps)
+     + 0.6 x sum(all_slacks[t] for t in timesteps)
+     + 0.5 x sum(p_hp14a[h,t] for h,t)
+     + 0.5 x sum(p_cp14a[c,t] for c,t)
 
 **Interpretation der Gewichte:** - ``0.4`` für Verluste: Basiskosten
 Netzbetrieb - ``0.6`` für Slacks: Hohe Priorität Netzrestriktionen
@@ -1945,10 +1945,10 @@ zeitliche Verschiebung) - Wenn andere Flexibilitäten nicht ausreichen:
 .. code:: julia
 
    minimize:
-       0.9 × sum(line_losses[t] for t in timesteps)
-     + 0.1 × max(line_loading[l,t] for l,t)
-     + 0.05 × sum(p_hp14a[h,t] for h,t)
-     + 0.05 × sum(p_cp14a[c,t] for c,t)
+       0.9 x sum(line_losses[t] for t in timesteps)
+     + 0.1 x max(line_loading[l,t] for l,t)
+     + 0.05 x sum(p_hp14a[h,t] for h,t)
+     + 0.05 x sum(p_cp14a[c,t] for c,t)
 
 **Niedrigeres Gewicht (0.05):** §14a wird bevorzugt gegenüber hoher
 Leitungsauslastung.
@@ -2097,7 +2097,7 @@ Julia: Constraints implementieren
        nw::Int=nw_id_default
    )
        """
-       Binäre Kopplung: p_hp14a <= pmax × z_hp14a
+       Binäre Kopplung: p_hp14a <= pmax x z_hp14a
        """
        p_hp14a = PowerModels.var(pm, nw, :p_hp14a, i)
        z_hp14a = PowerModels.var(pm, nw, :z_hp14a, i)
