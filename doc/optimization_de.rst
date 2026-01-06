@@ -128,45 +128,42 @@ Index-Variablen
 PowerModels-Funktionen
 ~~~~~~~~~~~~~~~~~~~~~~
 
-+--------------+--------------------+--------------------+--------------+
-| Funktion     | Rückgabewert       | Beschreibung       | Beispiel     |
-+==============+====================+====================+==============+
-| ``ids(pm, :  | ``Array{Int}``     | Gibt alle Bus-IDs  | ``[1, 2, 3,  |
-| bus, nw=n)`` |                    | für Zeitschritt n  |  ..., 150]`` |
-|              |                    | zurück             |              |
-+--------------+--------------------+--------------------+--------------+
-| ``           | ``Array{Int}``     | Gibt alle          | ``[1, 2, 3,  |
-| ids(pm, :bra |                    | Branch-IDs         |  ..., 200]`` |
-| nch, nw=n)`` |                    | (Leitungen/Trafos) |              |
-|              |                    | zurück             |              |
-+--------------+--------------------+--------------------+--------------+
-| ``ids(pm, :  | ``Array{Int}``     | Gibt alle          | ``[1, 2, 3   |
-| gen, nw=n)`` |                    | Generator-IDs      | , ..., 50]`` |
-|              |                    | zurück             |              |
-+--------------+--------------------+--------------------+--------------+
-| ``i          | ``Array{Int}``     | Gibt alle          | `            |
-| ds(pm, :stor |                    | Storage-IDs zurück | `[1, 2, 3]`` |
-| age, nw=n)`` |                    |                    |              |
-+--------------+--------------------+--------------------+--------------+
-| ``ref(pm, nw | ``Dict``           | Gibt Daten für Bus | ``{"vmin":   |
-| , :bus, i)`` |                    | i in Zeitschritt   | 0.9, "vmax": |
-|              |                    | nw                 |  1.1, ...}`` |
-+--------------+--------------------+--------------------+--------------+
-| ``r          | ``Dict``           | Gibt Daten für     | ``           |
-| ef(pm, nw, : |                    | Branch l in        | {"rate_a": 0 |
-| branch, l)`` |                    | Zeitschritt nw     | .5, "br_r":  |
-|              |                    |                    | 0.01, ...}`` |
-+--------------+--------------------+--------------------+--------------+
-| ``var(pm,    | ``JuMP.Variable``  | Gibt               | JuMP-Var     |
-| nw, :p, l)`` |                    | Wir                | iable-Objekt |
-|              |                    | kleistungsvariable |              |
-|              |                    | für Branch l       |              |
-|              |                    | zurück             |              |
-+--------------+--------------------+--------------------+--------------+
-| ``var(pm,    | ``JuMP.Variable``  | Gibt               | JuMP-Var     |
-| nw, :w, i)`` |                    | Spannungsvariable  | iable-Objekt |
-|              |                    | für Bus i zurück   |              |
-+--------------+--------------------+--------------------+--------------+
++---------------------------+--------------------+--------------------+----------------------+
+| Funktion                  | Rückgabewert       | Beschreibung       | Beispiel             |
++===========================+====================+====================+======================+
+| ``ids(pm, :bus, nw=n)``   | ``Array{Int}``     | Gibt alle Bus-IDs  | ``[1, 2, 3, ...]``   |
+|                           |                    | für Zeitschritt n  |                      |
+|                           |                    | zurück             |                      |
++---------------------------+--------------------+--------------------+----------------------+
+| ``ids(pm, :branch,``      | ``Array{Int}``     | Gibt alle          | ``[1, 2, 3, ...]``   |
+| ``nw=n)``                 |                    | Branch-IDs         |                      |
+|                           |                    | (Leitungen/Trafos) |                      |
+|                           |                    | zurück             |                      |
++---------------------------+--------------------+--------------------+----------------------+
+| ``ids(pm, :gen, nw=n)``   | ``Array{Int}``     | Gibt alle          | ``[1, 2, 3, ...]``   |
+|                           |                    | Generator-IDs      |                      |
+|                           |                    | zurück             |                      |
++---------------------------+--------------------+--------------------+----------------------+
+| ``ids(pm, :storage,``     | ``Array{Int}``     | Gibt alle          | ``[1, 2, 3]``        |
+| ``nw=n)``                 |                    | Storage-IDs zurück |                      |
++---------------------------+--------------------+--------------------+----------------------+
+| ``ref(pm, nw, :bus, i)``  | ``Dict``           | Gibt Daten für Bus | ``{"vmin": 0.9,``    |
+|                           |                    | i in Zeitschritt   | ``"vmax": 1.1}``     |
+|                           |                    | nw                 |                      |
++---------------------------+--------------------+--------------------+----------------------+
+| ``ref(pm, nw, :branch,``  | ``Dict``           | Gibt Daten für     | ``{"rate_a": 0.5,``  |
+| ``l)``                    |                    | Branch l in        | ``"br_r": 0.01}``    |
+|                           |                    | Zeitschritt nw     |                      |
++---------------------------+--------------------+--------------------+----------------------+
+| ``var(pm, nw, :p, l)``    | ``JuMP.Variable``  | Gibt               | JuMP-Variable-Objekt |
+|                           |                    | Wirkleistungs-     |                      |
+|                           |                    | variable für       |                      |
+|                           |                    | Branch l zurück    |                      |
++---------------------------+--------------------+--------------------+----------------------+
+| ``var(pm, nw, :w, i)``    | ``JuMP.Variable``  | Gibt Spannungs-    | JuMP-Variable-Objekt |
+|                           |                    | variable für       |                      |
+|                           |                    | Bus i zurück       |                      |
++---------------------------+--------------------+--------------------+----------------------+
 
 Typische Code-Muster
 ~~~~~~~~~~~~~~~~~~~~
@@ -253,11 +250,12 @@ Optimierung:
 
 **WICHTIG: Das Netz existiert T-mal!**
 
-Für einen Optimierungshorizont von **8760 Stunden** (1 Jahr) bedeutet
-das: - Das gesamte Netz wird **8760-mal dupliziert** - Jeder Zeitschritt
-hat seine eigene vollständige Netz-Kopie - Alle Busse, Leitungen,
-Trafos, Generatoren, Lasten existieren **8760-mal** - Jeder Zeitschritt
-hat **eigene Optimierungsvariablen**
+Für einen Optimierungshorizont von **8760 Stunden** (1 Jahr) bedeutet das:
+
+- Das gesamte Netz wird **8760-mal dupliziert**
+- Jeder Zeitschritt hat seine eigene vollständige Netz-Kopie
+- Alle Busse, Leitungen, Trafos, Generatoren, Lasten existieren **8760-mal**
+- Jeder Zeitschritt hat **eigene Optimierungsvariablen**
 
 **Was unterscheidet die Zeitschritte?**
 
@@ -288,26 +286,35 @@ hat **eigene Optimierungsvariablen**
 
 **Beispiel: Wirkleistungsvariable p[l,i,j]**
 
-Für eine Leitung ``l=5`` zwischen Bus ``i=10`` und ``j=11``: -
-``var(pm, 0, :p)[(5,10,11)]`` = Wirkleistung in Zeitschritt 0 (00:00
-Uhr) - ``var(pm, 1, :p)[(5,10,11)]`` = Wirkleistung in Zeitschritt 1
-(01:00 Uhr) - ``var(pm, 2, :p)[(5,10,11)]`` = Wirkleistung in
-Zeitschritt 2 (02:00 Uhr) - … - ``var(pm, 8759, :p)[(5,10,11)]`` =
-Wirkleistung in Zeitschritt 8759 (23:00 Uhr)
+Für eine Leitung ``l=5`` zwischen Bus ``i=10`` und ``j=11``:
+
+- ``var(pm, 0, :p)[(5,10,11)]`` = Wirkleistung in Zeitschritt 0 (00:00 Uhr)
+- ``var(pm, 1, :p)[(5,10,11)]`` = Wirkleistung in Zeitschritt 1 (01:00 Uhr)
+- ``var(pm, 2, :p)[(5,10,11)]`` = Wirkleistung in Zeitschritt 2 (02:00 Uhr)
+- …
+- ``var(pm, 8759, :p)[(5,10,11)]`` = Wirkleistung in Zeitschritt 8759 (23:00 Uhr)
 
 → **8760 verschiedene Variablen** für dieselbe Leitung!
 
 **Optimierungsproblem-Größe:**
 
-Für ein Netz mit: - 150 Busse - 200 Leitungen/Trafos - 50 Generatoren -
-5 Batteriespeicher - 20 Wärmepumpen - 10 Ladepunkte - 8760 Zeitschritte
-(1 Jahr, 1h-Auflösung)
+Für ein Netz mit:
 
-**Anzahl Variablen (grob):** - Spannungen: 150 Busse x 8760 Zeitschritte
-= **1,314,000 Variablen** - Leitungsflüsse: 200 x 2 (p,q) x 8760 =
-**3,504,000 Variablen** - Generatoren: 50 x 2 (p,q) x 8760 = **876,000
-Variablen** - Speicher: 5 x 2 (Leistung + SOC) x 8760 = **87,600
-Variablen** - …
+- 150 Busse
+- 200 Leitungen/Trafos
+- 50 Generatoren
+- 5 Batteriespeicher
+- 20 Wärmepumpen
+- 10 Ladepunkte
+- 8760 Zeitschritte (1 Jahr, 1h-Auflösung)
+
+**Anzahl Variablen (grob):**
+
+- Spannungen: 150 Busse x 8760 Zeitschritte = **1,314,000 Variablen**
+- Leitungsflüsse: 200 x 2 (p,q) x 8760 = **3,504,000 Variablen**
+- Generatoren: 50 x 2 (p,q) x 8760 = **876,000 Variablen**
+- Speicher: 5 x 2 (Leistung + SOC) x 8760 = **87,600 Variablen**
+- …
 
 → **Mehrere Millionen Variablen** für Jahressimulation!
 
@@ -709,11 +716,11 @@ Probleme
    └─────────────────────────────────────────────────────────────────────┘
                                  ↓
    ┌─────────────────────────────────────────────────────────────────────┐
-   │ 5. NETZAUSBAU MIT OPTIMIERTEN ZEITREIHEN (ZWINGEND!)               │
+   │ 5. NETZAUSBAU MIT OPTIMIERTEN ZEITREIHEN             │
    ├─────────────────────────────────────────────────────────────────────┤
    │ edisgo.reinforce()                                                  │
    │                                                                     │
-   │ WICHTIG: Dieser Schritt ist ZWINGEND erforderlich!                 │
+   │ WICHTIG: Dieser Schritt ist in der Regel erforderlich!                 │
    │                                                                     │
    │ Warum?                                                              │
    │ - Optimierung nutzt Flexibilität, kann aber nicht alle Probleme    │
@@ -749,78 +756,72 @@ Workflow-Varianten im Vergleich
 Die folgende Tabelle zeigt die wichtigsten Workflow-Varianten und deren
 Anwendungsfälle:
 
-+--------------+--------------+------------------------+--------------+
-| Workflow     | Schritte     | Wann sinnvoll?         | Ergebnis     |
-+==============+==============+========================+==============+
-| **A: Nur     | 1. Netz      | - Keine Flexibilitäten | Hohe         |
-| Netzausbau   | laden2.      | vorhanden- Schnelle    | Ne           |
-| (ohne        | Komponenten  | konservative Planung-  | tzausbaukost |
-| Op           | hinzufügen3. | Referenzszenario       | enFlexibilit |
-| timierung)** | ``r          |                        | ätspotenzial |
-|              | einforce()`` |                        | ungenutzt    |
-+--------------+--------------+------------------------+--------------+
-| **B: Mit     | 1. Netz      | - Flexibilitäten       | Minimale     |
-| Optimierung  | laden2.      | vorhanden (Speicher,   | Netzausbauko |
-| (            | Optional:    | WP, CP)- §14a-Nutzung  | stenOptimale |
-| EMPFOHLEN)** | ``r          | gewünscht- Minimierung | Flexibilität |
-|              | einforce()`` | Netzausbaukosten       | snutzungBetr |
-|              | auf          |                        | iebssicheres |
-|              | Basisnetz3.  |                        | Netz         |
-|              | Komponenten  |                        |              |
-|              | hinzufügen4. |                        |              |
-|              | ``pm_opti    |                        |              |
-|              | mize()``\ 5. |                        |              |
-|              | *            |                        |              |
-|              | *Zwingend:** |                        |              |
-|              | ``r          |                        |              |
-|              | einforce()`` |                        |              |
-+--------------+--------------+------------------------+--------------+
-| **C:         | 1. Netz      | - Kostenvergleich      | Kostent      |
-| Basisn       | laden        | mit/ohne neue          | ransparenzAt |
-| etz-Referenz | (            | Komponenten- Analyse   | tributierung |
-| +            | Basisnetz)2. | Zusatzkosten durch     | auf neue     |
-| O            | ``r          | WP/CP- Bewertung       | Ko           |
-| ptimierung** | einforce()`` | §14a-Nutzen            | mponentenQua |
-|              | → Kosten₁3.  |                        | ntifizierung |
-|              | Neue         |                        | Flexibi      |
-|              | Komponenten  |                        | litätsnutzen |
-|              | hinzufügen4. |                        |              |
-|              | ``pm_opti    |                        |              |
-|              | mize()``\ 5. |                        |              |
-|              | ``r          |                        |              |
-|              | einforce()`` |                        |              |
-|              | → Kosten₂6.  |                        |              |
-|              | Vergleich:   |                        |              |
-|              | Kosten₂ -    |                        |              |
-|              | Kosten₁      |                        |              |
-+--------------+--------------+------------------------+--------------+
-| **D: Mehrere | 1. Netz      | - Bewertung            | V            |
-| Optimierung  | laden +      | verschiedener          | ollständiger |
-| sszenarien** | Komponenten  | Flexibilitätsoptionen- | S            |
-|              | h            | Kosten-Nutzen-Analyse  | zenariovergl |
-|              | inzufügen2a. | §14a-                  | eichOptimale |
-|              | ``r          | Sensitivitätsanalyse   | Strategiew   |
-|              | einforce()`` |                        | ahlFundierte |
-|              | →            |                        | Entscheidu   |
-|              | Referenz2b.  |                        | ngsgrundlage |
-|              | ``           |                        |              |
-|              | pm_optimize( |                        |              |
-|              | 14a=False)`` |                        |              |
-|              | +            |                        |              |
-|              | ``reinfo     |                        |              |
-|              | rce()``\ 2c. |                        |              |
-|              | `            |                        |              |
-|              | `pm_optimize |                        |              |
-|              | (14a=True)`` |                        |              |
-|              | +            |                        |              |
-|              | ``reinf      |                        |              |
-|              | orce()``\ 3. |                        |              |
-|              | Vergleich    |                        |              |
-+--------------+--------------+------------------------+--------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 25 30 25
+
+   * - Workflow
+     - Schritte
+     - Wann sinnvoll?
+     - Ergebnis
+   * - **A: Nur Netzausbau (ohne Optimierung)**
+     - 1. Netz laden
+
+       2. Komponenten hinzufügen
+
+       3. ``reinforce()``
+     - - Keine Flexibilitäten vorhanden
+       - Schnelle konservative Planung
+       - Referenzszenario
+     - Hohe Netzausbaukosten, Flexibilitätspotenzial ungenutzt
+   * - **B: Mit Optimierung (EMPFOHLEN)**
+     - 1. Netz laden
+
+       2. Optional: ``reinforce()`` auf Basisnetz
+
+       3. Komponenten hinzufügen
+
+       4. ``pm_optimize()``
+
+       5. **Zwingend:** ``reinforce()``
+     - - Flexibilitäten vorhanden (Speicher, WP, CP)
+       - §14a-Nutzung gewünscht
+       - Minimierung Netzausbaukosten
+     - Minimale Netzausbaukosten, optimale Flexibilitätsnutzung, betriebssicheres Netz
+   * - **C: Basisnetz-Referenz + Optimierung**
+     - 1. Netz laden (Basisnetz)
+
+       2. ``reinforce()`` → Kosten₁
+
+       3. Neue Komponenten hinzufügen
+
+       4. ``pm_optimize()``
+
+       5. ``reinforce()`` → Kosten₂
+
+       6. Vergleich: Kosten₂ - Kosten₁
+     - - Kostenvergleich mit/ohne neue Komponenten
+       - Analyse Zusatzkosten durch WP/CP
+       - Bewertung §14a-Nutzen
+     - Kostentransparenz, Attributierung auf neue Komponenten, Quantifizierung Flexibilitätsnutzen
+   * - **D: Mehrere Optimierungsszenarien**
+     - 1. Netz laden + Komponenten hinzufügen
+
+       2a. ``reinforce()`` → Referenz
+
+       2b. ``pm_optimize(14a=False)`` + ``reinforce()``
+
+       2c. ``pm_optimize(14a=True)`` + ``reinforce()``
+
+       3. Vergleich
+     - - Bewertung verschiedener Flexibilitätsoptionen
+       - Kosten-Nutzen-Analyse §14a
+       - Sensitivitätsanalyse
+     - Vollständiger Szenariovergleich, optimale Strategiewahl, fundierte Entscheidungsgrundlage
 
 **Wichtige Erkenntnisse:**
 
-1. **Reinforce VOR Optimierung macht NUR Sinn für:**
+1. **Reinforce vor Optimierung macht nur Sinn für:**
 
    -  Basisnetz ohne neue Komponenten (Referenzszenario)
    -  Dokumentation des Ausgangszustands
@@ -829,11 +830,10 @@ Anwendungsfälle:
       Flexibilitätseinsatz untersucht werden soll** → Würde
       Flexibilitätspotenzial zunichtemachen
 
-2. **Reinforce NACH Optimierung ist ZWINGEND:**
+2. **Reinforce nach Optimierung ist in der Regel sinnvoll:**
 
    -  Optimierung reduziert Netzausbau, löst aber nicht alle Probleme
    -  Slack-Variablen zeigen verbleibende Verletzungen
-   -  Ohne finales ``reinforce()`` ist das Netz **NICHT betriebssicher**
 
 3. **Beispielhafte Kostenreduktion:**
 
@@ -1352,45 +1352,42 @@ Spannungsverletzungen) und **führt Verstärkungsmaßnahmen** durch:
 Parameter
 ~~~~~~~~~
 
-+----------------+--------+----------------+--------------------------+
-| Parameter      | Typ    | Default        | Beschreibung             |
-+================+========+================+==========================+
-| ``t            | ``     | ``'snapsh      | ``'snapshot_analysis'``  |
-| imesteps_pfa`` | str \| | ot_analysis'`` | = 2                      |
-|                |  Datet |                | Worst-Case-Zeitschritte, |
-|                | imeInd |                | ``DatetimeIndex`` =      |
-|                | ex \|  |                | benutzerdefiniert,       |
-|                | None`` |                | ``None`` = alle          |
-|                |        |                | Zeitschritte             |
-+----------------+--------+----------------+--------------------------+
-| ``redu         | ``     | ``False``      | Nutzt nur die            |
-| ced_analysis`` | bool`` |                | kritischsten             |
-|                |        |                | Zeitschritte (höchste    |
-|                |        |                | Überlast oder            |
-|                |        |                | Spannungsabweichung)     |
-+----------------+--------+----------------+--------------------------+
-| ``max_whil     | `      | ``20``         | Maximale Anzahl der      |
-| e_iterations`` | `int`` |                | Verstärkungsiterationen  |
-+----------------+--------+----------------+--------------------------+
-| ``split_       | ``     | ``True``       | Getrennte                |
-| voltage_band`` | bool`` |                | Spannungsbänder für      |
-|                |        |                | NS/MS (z.B. NS ±3 %, MS  |
-|                |        |                | ±7 %)                    |
-+----------------+--------+----------------+--------------------------+
-| ``mode``       | ``s    | ``None``       | Netzebene: ``'mv'``,     |
-|                | tr \|  |                | ``'mvlv'``, ``'lv'``     |
-|                | None`` |                | oder ``None`` (=         |
-|                |        |                | automatisch)             |
-+----------------+--------+----------------+--------------------------+
-| ``without_gene | ``     | ``False``      | Ignoriert                |
-| rator_import`` | bool`` |                | Generatoreinspeisung     |
-|                |        |                | (nur für                 |
-|                |        |                | Planungsanalysen         |
-|                |        |                | sinnvoll)                |
-+----------------+--------+----------------+--------------------------+
-| `              | ``     | ``False``      | Berücksichtigt das       |
-| `n_minus_one`` | bool`` |                | (n-1)-Kriterium          |
-+----------------+--------+----------------+--------------------------+
+.. list-table::
+   :header-rows: 1
+   :widths: 25 20 20 35
+
+   * - Parameter
+     - Typ
+     - Default
+     - Beschreibung
+   * - ``timesteps_pfa``
+     - ``str | DatetimeIndex | None``
+     - ``'snapshot_analysis'``
+     - ``'snapshot_analysis'`` = 2 Worst-Case-Zeitschritte, ``DatetimeIndex`` = benutzerdefiniert, ``None`` = alle Zeitschritte
+   * - ``reduced_analysis``
+     - ``bool``
+     - ``False``
+     - Nutzt nur die kritischsten Zeitschritte (höchste Überlast oder Spannungsabweichung)
+   * - ``max_while_iterations``
+     - ``int``
+     - ``20``
+     - Maximale Anzahl der Verstärkungsiterationen
+   * - ``split_voltage_band``
+     - ``bool``
+     - ``True``
+     - Getrennte Spannungsbänder für NS/MS (z.B. NS ±3 %, MS ±7 %)
+   * - ``mode``
+     - ``str | None``
+     - ``None``
+     - Netzebene: ``'mv'``, ``'mvlv'``, ``'lv'`` oder ``None`` (= automatisch)
+   * - ``without_generator_import``
+     - ``bool``
+     - ``False``
+     - Ignoriert Generatoreinspeisung (nur für Planungsanalysen sinnvoll)
+   * - ``n_minus_one``
+     - ``bool``
+     - ``False``
+     - Berücksichtigt das (n-1)-Kriterium
 
 .. _zeitreihen-nutzung-1:
 
@@ -1741,13 +1738,13 @@ Wann wird reinforce aufgerufen?
       # Szenario 2: Mit Optimierung aber ohne §14a
       edisgo_opt = edisgo.copy()
       edisgo_opt.pm_optimize(opf_version=2, curtailment_14a=False)
-      edisgo_opt.reinforce()  
+      edisgo_opt.reinforce()
       costs_opt = edisgo_opt.results.grid_expansion_costs
 
       # Szenario 3: Mit Optimierung und §14a
       edisgo_14a = edisgo.copy()
       edisgo_14a.pm_optimize(opf_version=2, curtailment_14a=True)
-      edisgo_14a.reinforce()  
+      edisgo_14a.reinforce()
       costs_14a = edisgo_14a.results.grid_expansion_costs
 
       # Vergleich
@@ -1848,7 +1845,6 @@ Constraints
 ``p_hp14a[h,t] = 0`` - Wenn ``z_hp14a[h,t] = 1`` (Abregelung aktiv):
 ``0 ≤ p_hp14a[h,t] ≤ pmax[h]``
 
-**Zweck:** Verhindert “Teilabregelung” ohne binäre Aktivierung
 
 2. Mindest-Nettolast (Minimum Net Load)
 '''''''''''''''''''''''''''''''''''''''
@@ -2896,13 +2892,14 @@ Python-Dateien
 | OPF**           | o/opf/powermo | JSON-Kommunikation                 |
 |                 | dels_opf.py`` |                                    |
 +-----------------+---------------+------------------------------------+
-| **Reinforce     | ``edisgo/fl   | Verstärkungsalgorithmus            |
-| I               | ex_opt/reinfo |                                    |
-| mplementation** | rce_grid.py`` |                                    |
+| **Reinforce     | ``edisgo/     | Verstärkungsalgorithmus            |
+| I               | flex_opt/     |                                    |
+| mplementation** | reinforce_    |                                    |
+|                 | grid.py``     |                                    |
 +-----------------+---------------+------------------------------------+
-| **Reinforce     | ``            | Leitungs-/Trafo-Verstärkung        |
-| Measures**      | edisgo/flex_o |                                    |
-|                 | pt/reinforce_ |                                    |
+| **Reinforce     | ``edisgo/     | Leitungs-/Trafo-Verstärkung        |
+| Measures**      | flex_opt/     |                                    |
+|                 | reinforce_    |                                    |
 |                 | measures.py`` |                                    |
 +-----------------+---------------+------------------------------------+
 | **Timeseries**  | ``edisg       | Zeitreihen-Verwaltung              |
@@ -3003,5 +3000,3 @@ Konfigurationsdateien
 | Data**          | onfig/equipme | Daten                              |
 |                 | nt_data.csv`` |                                    |
 +-----------------+---------------+------------------------------------+
-
---------------
