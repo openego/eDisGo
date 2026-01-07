@@ -65,6 +65,7 @@ Contents
    quickstart
    usage_details
    features_in_detail
+   optimization_de
    dev_notes
    definitions_and_units
    configs
