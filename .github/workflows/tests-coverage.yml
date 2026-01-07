@@ -15,12 +15,39 @@ jobs:
   queue:
     runs-on: ubuntu-latest
     steps:
-      - name: Turnstyle
-        uses: softprops/turnstyle@v3
-        with:
-          same-branch-only: false
+      - name: Wait for available slot (max 4 branches)
+        run: |
+          MAX_CONCURRENT=4
+          WORKFLOW_NAME="${{ github.workflow }}"
+          CURRENT_RUN_ID="${{ github.run_id }}"
+
+          echo "Waiting for available slot (max $MAX_CONCURRENT concurrent branches)..."
+
+          while true; do
+            # Hole alle laufenden Workflows für diesen Workflow-Namen
+            RUNNING_WORKFLOWS=$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "/repos/${{ github.repository }}/actions/runs?status=in_progress&per_page=100" \
+              --jq ".workflow_runs[] | select(.name == \"$WORKFLOW_NAME\" and .id != $CURRENT_RUN_ID) | .head_branch" | sort -u)
+
+            RUNNING_COUNT=$(echo "$RUNNING_WORKFLOWS" | grep -c . || echo 0)
+
+            echo "Currently running branches: $RUNNING_COUNT"
+            if [ -n "$RUNNING_WORKFLOWS" ]; then
+              echo "$RUNNING_WORKFLOWS" | sed 's/^/  - /'
+            fi
+
+            if [ "$RUNNING_COUNT" -lt "$MAX_CONCURRENT" ]; then
+              echo "Slot available! Starting build for branch: ${{ github.ref_name }}"
+              break
+            fi
+
+            echo "All $MAX_CONCURRENT slots occupied. Waiting 30 seconds..."
+            sleep 30
+          done
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     name: "${{ matrix.name-suffix }} at py${{ matrix.python-version }} on ${{ matrix.os }}"
