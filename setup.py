@@ -32,8 +32,8 @@ def read(fname):
 
 
 requirements = [
-    "contextily < 1.7.0",
-    "dash < 3.1.0",
+    "contextily < 1.8.0",
+    "dash < 3.4.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
     "egoio >= 0.4.7, < 0.5.0",
@@ -44,7 +44,7 @@ requirements = [
     "jupyter_dash < 0.5.0",
     "matplotlib >= 3.3.0, < 3.11.0",
     "multiprocess < 0.71.0",
-    "networkx >= 2.5.0, < 3.5.0",
+    "networkx >= 2.5.0, < 3.7.0",
     # newer pandas versions don't work with specified sqlalchemy versions, but upgrading
     # sqlalchemy leads to new errors.. should be fixed at some point
     "numpy ==1.26.4",
@@ -57,28 +57,28 @@ requirements = [
     "pyyaml < 6.1.0",
     "saio < 0.3.0",
     "scikit-learn < 1.3.0",
-    "shapely >= 1.7.0, < 2.1.0",
+    "shapely >= 1.7.0, < 2.2.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel < 0.5.0",
     "urllib3 < 2.7.0",
     "workalendar < 17.1.0",
-    "astroid == 3.3.11",
+    "astroid == 4.0.2",
 ]
 
 dev_requirements = [
     "black < 25.13.0",
     "flake8 < 7.4.0",
     "isort < 7.1.0",
-    "pre-commit < 4.4.0",
-    "pylint < 3.4.0",
+    "pre-commit < 4.6.0",
+    "pylint < 4.1.0",
     "pytest < 9.1.0",
     "pytest-notebook < 0.11.0",
-    "pyupgrade < 3.21.0",
-    "sphinx < 8.3.0",
+    "pyupgrade < 3.22.0",
+    "sphinx < 9.1.0",
     "sphinx_rtd_theme >=0.5.2, < 3.1.0",
-    "sphinx-autodoc-typehints < 3.2.0",
+    "sphinx-autodoc-typehints < 3.7.0",
     "sphinx-autoapi < 3.7.0",
-    "astroid == 3.3.11",
+    "astroid == 4.0.2",
 ]
 
 extras = {"dev": dev_requirements}
