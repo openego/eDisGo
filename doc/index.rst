@@ -66,6 +66,7 @@ Contents
    usage_details
    features_in_detail
    optimization_de
+   optimization
    dev_notes
    definitions_and_units
    configs
