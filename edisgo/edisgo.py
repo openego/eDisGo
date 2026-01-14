@@ -2595,6 +2595,225 @@ class EDisGo:
             title = None
         plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
 
+    def plot_voltage_over_dist(self, mv_id, lv_id, other, save_as=False, split_branches=False):
+        """
+        Plot LV voltage over distance to the MV/LV transformer for one LV grid,
+        comparing this EDisGo object ("base") with another EDisGo object ("other").
+
+        Parameters
+        ----------
+        mv_id : kept for API compatibility (currently unused)
+        lv_id : int or str identifying LV grid (int = index in mv_grid.lv_grids)
+        other : EDisGo
+        save_as : bool or str
+            If True -> writes default html. If str -> file path (.html or .png).
+        split_branches : kept for API compatibility (currently unused)
+        """
+        # Local imports to avoid import overhead
+        from edisgo.tools.voltage_over_distance import (
+            _get_v_res_df,
+            _infer_load_and_feedin_timesteps,
+            _series_at_t,
+            _shortest_distances_km,
+            make_voltage_over_distance_figure,
+        )
+
+        # Require results on both
+        v_a = _get_v_res_df(self)
+        v_b = _get_v_res_df(other)
+        if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
+            raise RuntimeError(
+                "Voltage results (results.v_res) are empty. "
+                "Run analyze() with timesteps/snapshots so voltage results are generated."
+            )
+        # Resolve LV grids (index-based resolution)
+        lv_grids_a = list(self.topology.mv_grid.lv_grids)
+        lv_grids_b = list(other.topology.mv_grid.lv_grids)
+
+        if isinstance(lv_id, int):
+            try:
+                lv_grid_a = lv_grids_a[lv_id]
+                lv_grid_b = lv_grids_b[lv_id]
+            except IndexError as e:
+                raise ValueError(f"lv_id={lv_id} out of range. base has {len(lv_grids_a)} LV grids.") from e
+        else:
+            # String matching fallback
+            target = str(lv_id)
+            def _match(lvs):
+                for g in lvs:
+                    for cand in (getattr(g, "id", None), getattr(g, "name", None), str(g)):
+                        if cand is not None and str(cand) == target:
+                            return g
+                return None
+            lv_grid_a = _match(lv_grids_a)
+            lv_grid_b = _match(lv_grids_b)
+            if lv_grid_a is None or lv_grid_b is None:
+                raise ValueError(f"Could not resolve lv_id='{lv_id}' in one of the EDisGo objects.")
+
+        # Determine LV transformer (source) bus
+        # Prefer station-like attributes; fallback to first bus if not found.
+        def _lv_source_bus(lv_grid):
+            for attr in ("station", "mv_lv_station", "lv_station"):
+                st = getattr(lv_grid, attr, None)
+                if st is not None:
+                    bus = getattr(st, "bus", None)
+                    if bus is not None:
+                        return str(bus)
+            # fallback: take first bus in lv_grid
+            return str(lv_grid.buses_df.index[0])
+
+        source_a = _lv_source_bus(lv_grid_a)
+        source_b = _lv_source_bus(lv_grid_b)
+
+        # Distances (Dijkstra)
+        # Edge weight attribute commonly is 'length' in eDisGo graphs; adjust if your graph uses 'length_km'
+        dist_a = _shortest_distances_km(lv_grid_a.graph, source_bus=source_a, weight="length")
+        dist_b = _shortest_distances_km(lv_grid_b.graph, source_bus=source_b, weight="length")
+
+        # Worst-case timesteps
+        t_load_a, t_feed_a = _infer_load_and_feedin_timesteps(self, v_a)
+        t_load_b, t_feed_b = _infer_load_and_feedin_timesteps(other, v_b)
+
+        # Voltages at those timesteps
+        v_a_load = _series_at_t(v_a, t_load_a)
+        v_a_feed = _series_at_t(v_a, t_feed_a)
+        v_b_load = _series_at_t(v_b, t_load_b)
+        v_b_feed = _series_at_t(v_b, t_feed_b)
+
+        # Buses to plot: intersection
+        buses = pd.Index([str(b) for b in lv_grid_a.buses_df.index]).intersection(
+            pd.Index([str(b) for b in lv_grid_b.buses_df.index])
+        )
+        if len(buses) == 0:
+            raise RuntimeError("No overlapping LV buses found between base and other object.")
+
+        fig = make_voltage_over_distance_figure(
+            title=f"LV voltage over distance (lv_id={lv_id})",
+            buses=buses,
+            dist_a=dist_a,
+            v_a_load=v_a_load,
+            v_a_feed=v_a_feed,
+            dist_b=dist_b,
+            v_b_load=v_b_load,
+            v_b_feed=v_b_feed,
+            band_low=0.90,
+            band_high=1.10,
+        )
+
+        if save_as:
+            if isinstance(save_as, str):
+                if save_as.lower().endswith(".html"):
+                    fig.write_html(save_as)
+                elif save_as.lower().endswith(".png"):
+                    fig.write_image(save_as)
+                else:
+                    fig.write_html(save_as)
+            else:
+                fig.write_html("voltage_over_distance_lv.html")
+
+        return fig
+
+    def plot_voltage_over_dist_mv(self, mv_id, other, save_as=False):
+        """
+        Plot MV voltage over distance to the HV/MV transformer, comparing two EDisGo objects.
+
+        Parameters
+        ----------
+        mv_id : kept for API compatibility (currently unused)
+        other : EDisGo
+        save_as : bool or str
+            If True -> writes default html. If str -> file path (.html or .png).
+        """
+        from edisgo.tools.voltage_over_distance import (
+            _get_v_res_df,
+            _infer_load_and_feedin_timesteps,
+            _series_at_t,
+            _shortest_distances_km,
+            make_voltage_over_distance_figure,
+        )
+
+        v_a = _get_v_res_df(self)
+        v_b = _get_v_res_df(other)
+        if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
+            raise RuntimeError(
+                "Voltage results (results.v_res) are empty. "
+                "Run analyze() with timesteps/snapshots so voltage results are generated."
+            )
+        mv_a = self.topology.mv_grid
+        mv_b = other.topology.mv_grid
+
+        # HV/MV transformer (source) bus:
+        # Use first MV bus as fallback if no explicit station bus is available.
+        def _mv_source_bus(edisgo_obj):
+            mv = edisgo_obj.topology.mv_grid
+            G = mv.graph
+
+            # 1) Try transformer buses, but only accept if they exist in graph nodes
+            trafos = getattr(edisgo_obj.topology, "transformers_hvmv_df", None)
+            if trafos is not None and hasattr(trafos, "columns") and {"bus0", "bus1"}.issubset(trafos.columns):
+                for col in ("bus0", "bus1"):
+                    b = str(trafos.iloc[0][col])
+                    if b in G:
+                        return b
+
+            # 2) Try common station bus attributes (if present)
+            for attr in ("station", "hvmv_station", "mv_station"):
+                st = getattr(mv, attr, None)
+                if st is not None:
+                    bus = getattr(st, "bus", None)
+                    if bus is not None and str(bus) in G:
+                        return str(bus)
+
+            # 3) Fallback: pick the first graph node (guaranteed to exist)
+            return str(next(iter(G.nodes)))
+
+
+        source_a = _mv_source_bus(self)
+        source_b = _mv_source_bus(other)
+
+        dist_a = _shortest_distances_km(mv_a.graph, source_bus=source_a, weight="length")
+        dist_b = _shortest_distances_km(mv_b.graph, source_bus=source_b, weight="length")
+
+        t_load_a, t_feed_a = _infer_load_and_feedin_timesteps(self, v_a)
+        t_load_b, t_feed_b = _infer_load_and_feedin_timesteps(other, v_b)
+
+        v_a_load = _series_at_t(v_a, t_load_a)
+        v_a_feed = _series_at_t(v_a, t_feed_a)
+        v_b_load = _series_at_t(v_b, t_load_b)
+        v_b_feed = _series_at_t(v_b, t_feed_b)
+
+        buses = pd.Index([str(b) for b in mv_a.buses_df.index]).intersection(
+            pd.Index([str(b) for b in mv_b.buses_df.index])
+        )
+        if len(buses) == 0:
+            raise RuntimeError("No overlapping MV buses found between base and other object.")
+
+        fig = make_voltage_over_distance_figure(
+            title="MV voltage over distance",
+            buses=buses,
+            dist_a=dist_a,
+            v_a_load=v_a_load,
+            v_a_feed=v_a_feed,
+            dist_b=dist_b,
+            v_b_load=v_b_load,
+            v_b_feed=v_b_feed,
+            band_low=0.96,
+            band_high=1.06,
+        )
+
+        if save_as:
+            if isinstance(save_as, str):
+                if save_as.lower().endswith(".html"):
+                    fig.write_html(save_as)
+                elif save_as.lower().endswith(".png"):
+                    fig.write_image(save_as)
+                else:
+                    fig.write_html(save_as)
+            else:
+                fig.write_html("voltage_over_distance_mv.html")
+
+        return fig
+
     def histogram_relative_line_load(
         self, timestep=None, title=True, voltage_level="mv_lv", **kwargs
     ):

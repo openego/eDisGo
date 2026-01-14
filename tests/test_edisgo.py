@@ -1411,6 +1411,39 @@ class TestEDisGo:
         self.edisgo.plot_mv_grid_topology()
         plt.close("all")
 
+    def test_plot_voltage_over_dist(self):
+        # needs analysis results
+        self.edisgo.analyze()
+        v_res = self.edisgo.results.v_res() if callable(self.edisgo.results.v_res) else self.edisgo.results.v_res
+        if getattr(v_res, "empty", True):
+            import pytest
+            pytest.skip("No voltage results (v_res empty) in this test fixture; skipping voltage-over-distance plot test.")
+        # create a second object by deepcopy (simple compare object)
+        import copy
+        other = copy.deepcopy(self.edisgo)
+        other.analyze()
+
+        fig = self.edisgo.plot_voltage_over_dist(mv_id=None, lv_id=0, other=other)
+        assert fig is not None
+
+    def test_plot_voltage_over_dist_mv(self):
+        self.edisgo.analyze()
+        v_res = self.edisgo.results.v_res() if callable(self.edisgo.results.v_res) else self.edisgo.results.v_res
+        if getattr(v_res, "empty", True):
+            import pytest
+            pytest.skip(
+                "No voltage results (v_res empty) in this test fixture; skipping voltage-over-distance plot test."
+            )
+        import copy
+        other = copy.deepcopy(self.edisgo)
+        other.analyze()
+        v_res = self.edisgo.results.v_res() if callable(self.edisgo.results.v_res) else self.edisgo.results.v_res
+        if getattr(v_res, "empty", True):
+            import pytest
+            pytest.skip("No voltage results (v_res empty) in this test fixture; skipping voltage-over-distance plot test.")
+        fig = self.edisgo.plot_voltage_over_dist_mv(mv_id=None, other=other)
+        assert fig is not None
+
     def test_plot_mv_voltages(self):
         self.setup_worst_case_time_series()
         plt.ion()
