@@ -385,6 +385,16 @@ def distribute_overlying_grid_requirements(edisgo_obj):
             scaling_df_min = (
                 edisgo_obj.dsm.p_min.transpose() / edisgo_obj.dsm.p_min.sum(axis=1)
             )
+            # in case p_max/p_min of all DSM loads is zero in an hour but there is
+            # positive/negative DSM from the overlying grid, this is not correctly
+            # distributed and may lead to large errors in the time series with the
+            # distributed DSM
+            # in the following this is corrected by assuming an equal distribution
+            # during those hours
+            equal_dist_factor = 1 / len(dsm_loads)
+            scaling_df_max.fillna(equal_dist_factor, inplace=True)
+            scaling_df_min.fillna(equal_dist_factor, inplace=True)
+
             edisgo_copy.timeseries._loads_active_power.loc[:, dsm_loads] = (
                 edisgo_obj.timeseries._loads_active_power.loc[:, dsm_loads]
                 + (

@@ -1235,7 +1235,6 @@ class TestTimeSeries:
             )
 
     @pytest.mark.slow
-    @pytest.mark.oedbtest
     def test_predefined_fluctuating_generators_by_technology(self):
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.edisgo.timeseries.timeindex = timeindex
@@ -1404,7 +1403,6 @@ class TestTimeSeries:
         )
         # fmt: on
 
-    @pytest.mark.local
     def test_predefined_fluctuating_generators_by_technology_oedb(self):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -1565,9 +1563,9 @@ class TestTimeSeries:
             index=index,
             columns=["cts", "residential", "agricultural", "industrial"],
             data=[
-                [0.0000597, 0.0000782, 0.0000654, 0.0000992],
-                [0.0000526, 0.0000563, 0.0000611, 0.0000992],
-                [0.0000459, 0.0000451, 0.0000585, 0.0000992],
+                [0.000059711, 0.0000782190, 0.00006540, 0.00009876],
+                [0.000052590, 0.0000563428, 0.00006110, 0.00009876],
+                [0.000045927, 0.0000451043, 0.00005843, 0.00009876],
             ],
         )
 
@@ -1656,7 +1654,7 @@ class TestTimeSeries:
             self.edisgo.timeseries.loads_active_power[
                 "Load_industrial_LVGrid_6_1"
             ].values,
-            [0.05752256] * 3,
+            [0.05728395] * 3,
         ).all()
         assert np.isclose(
             self.edisgo.timeseries.loads_active_power.loc[

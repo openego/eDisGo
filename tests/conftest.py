@@ -2,6 +2,10 @@ import os
 
 import pytest
 
+# Set matplotlib backend to non-interactive for tests (prevents TclError on Windows CI)
+import matplotlib
+matplotlib.use('Agg')
+
 from edisgo.io.db import engine
 
 
@@ -30,15 +34,17 @@ def pytest_configure(config):
     )
 
     pytest.egon_data_config_yml = os.path.join(
-        os.path.realpath(os.path.dirname(os.path.dirname(__file__))),
-        "egon-data.configuration.yaml",
+        "/home/jonas/.ssh/egon-data.configuration.yaml",
     )
+
+    pytest.engine = engine()
 
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "local: mark test as local to run")
+    config.addinivalue_line("markers", "runonlinux: mark test to run only on linux")
 
     if config.getoption("--runlocal"):
-        pytest.engine = engine(path=pytest.egon_data_config_yml, ssh=True)
+        pytest.engine_local = engine(path=pytest.egon_data_config_yml, ssh=False)
 
 
 def pytest_addoption(parser):
@@ -56,9 +62,6 @@ def pytest_addoption(parser):
         action="store_true",
         default=False,
         help="run tests that only work locally",
-    )
-    parser.addoption(
-        "--runoedbtest", action="store_true", default=False, help="Run OEDB tests"
     )
 
 
@@ -78,8 +81,3 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "runonlinux" in item.keywords:
                 item.add_marker(skip_windows)
-    if not config.getoption("--runoedbtest"):
-        skip_oedbtest = pytest.mark.skip(reason="need --runoedbtest option to run")
-        for item in items:
-            if "oedbtest" in item.keywords:
-                item.add_marker(skip_oedbtest)

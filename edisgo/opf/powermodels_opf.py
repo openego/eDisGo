@@ -4,26 +4,29 @@ import os
 import subprocess
 import sys
 
+from typing import Optional
+
 import numpy as np
 
 from edisgo.flex_opt import exceptions
 from edisgo.io.powermodels_io import from_powermodels
+from edisgo.network.topology import Topology
 
 logger = logging.getLogger(__name__)
 
 
 def pm_optimize(
     edisgo_obj,
-    s_base=1,
-    flexible_cps=None,
-    flexible_hps=None,
-    flexible_loads=None,
-    flexible_storage_units=None,
-    opf_version=1,
-    method="soc",
-    warm_start=False,
-    silence_moi=False,
-):
+    s_base: int = 1,
+    flexible_cps: Optional[np.ndarray] = None,
+    flexible_hps: Optional[np.ndarray] = None,
+    flexible_loads: Optional[np.ndarray] = None,
+    flexible_storage_units: Optional[np.ndarray] = None,
+    opf_version: int = 1,
+    method: str = "soc",
+    warm_start: bool = False,
+    silence_moi: bool = False,
+) -> None:
     """
     Run OPF for edisgo object in julia subprocess and write results of OPF to edisgo
     object. Results of OPF are time series of operation schedules of flexibilities.
@@ -105,6 +108,7 @@ def pm_optimize(
         Default: True.
 
     """
+    Topology.find_meshes(edisgo_obj)
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
     pm, hv_flex_dict = edisgo_obj.to_powermodels(

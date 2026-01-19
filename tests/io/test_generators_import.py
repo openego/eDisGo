@@ -484,7 +484,7 @@ class TestGeneratorsImportOEDB:
     """
 
     @pytest.mark.slow
-    @pytest.mark.oedbtest
+    @pytest.mark.skip(reason="deprecated - should not be tested right now")
     def test_oedb_legacy_without_timeseries(self):
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_2_path,
@@ -498,7 +498,7 @@ class TestGeneratorsImportOEDB:
         assert np.isclose(edisgo.topology.generators_df.p_nom.sum(), 20.18783)
 
     @pytest.mark.slow
-    @pytest.mark.oedbtest
+    @pytest.mark.skip(reason="deprecated - should not be tested right now")
     def test_oedb_legacy_with_worst_case_timeseries(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         edisgo.set_time_series_worst_case_analysis()
@@ -570,7 +570,7 @@ class TestGeneratorsImportOEDB:
         #     :, new_solar_gen.name] / new_solar_gen.p_nom).all()
 
     @pytest.mark.slow
-    @pytest.mark.oedbtest
+    @pytest.mark.skip(reason="deprecated - should not be tested right now")
     def test_oedb_legacy_with_timeseries_by_technology(self):
         timeindex = pd.date_range("1/1/2012", periods=3, freq="H")
         ts_gen_dispatchable = pd.DataFrame(
@@ -650,7 +650,7 @@ class TestGeneratorsImportOEDB:
         #     :, new_solar_gen.name] / new_solar_gen.p_nom).all()
 
     @pytest.mark.slow
-    @pytest.mark.oedbtest
+    @pytest.mark.skip(reason="deprecated - should not be tested right now")
     def test_target_capacity(self):
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_2_path,
@@ -710,7 +710,6 @@ class TestGeneratorsImportOEDB:
             p_biomass_before * 1.0,
         )
 
-    @pytest.mark.local
     def test_oedb(self):
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False

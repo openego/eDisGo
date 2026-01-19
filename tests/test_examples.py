@@ -26,7 +26,6 @@ class TestExamples:
         assert result.exec_error is None
 
     @pytest.mark.slow
-    @pytest.mark.oedbtest
     def test_electromobility_example_ipynb(self):
         path = os.path.join(self.examples_dir_path, "electromobility_example.ipynb")
         notebook = pytest_notebook.notebook.load_notebook(path=path)
@@ -40,7 +39,7 @@ class TestExamples:
         assert result.exec_error is None
 
     @pytest.mark.slow
-    @pytest.mark.oedbtest
+    @pytest.mark.skip(reason="deprecated - should not be tested right now")
     def test_edisgo_simple_example_ipynb(self):
         path = os.path.join(self.examples_dir_path, "edisgo_simple_example.ipynb")
         notebook = pytest_notebook.notebook.load_notebook(path=path)

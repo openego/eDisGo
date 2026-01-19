@@ -821,26 +821,30 @@ class TimeSeries:
         # reactive power
         # get worst case configurations for each generator
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "generators", configs
+            df, "generator", configs
         )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "generators", configs
+            df, "generator", configs
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
-        self.time_series_raw.q_control = pd.concat(
-            [
-                self.time_series_raw.q_control,
-                pd.DataFrame(
-                    index=df.index,
-                    data={
-                        "type": "fixed_cosphi",
-                        "q_sign": q_sign,
-                        "power_factor": power_factor,
-                    },
-                ),
-            ]
+        new_q_control = pd.DataFrame(
+            index=df.index,
+            data={
+                "type": "fixed_cosphi",
+                "q_sign": q_sign,
+                "power_factor": power_factor,
+            },
         )
+        if self.time_series_raw.q_control.empty:
+            self.time_series_raw.q_control = new_q_control
+        elif not new_q_control.empty:
+            self.time_series_raw.q_control = pd.concat(
+                [
+                    self.time_series_raw.q_control,
+                    new_q_control,
+                ]
+            )
         # calculate reactive power of generators
         reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
         return active_power, reactive_power
@@ -899,10 +903,10 @@ class TimeSeries:
         # reactive power
         # get worst case configurations for each load
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "conventional_loads", configs
+            df, "conventional_load", configs
         )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "conventional_loads", configs
+            df, "conventional_load", configs
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
@@ -999,10 +1003,10 @@ class TimeSeries:
         # reactive power
         # get worst case configurations for each charging point
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "charging_points", configs
+            df, "charging_point", configs
         )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "charging_points", configs
+            df, "charging_point", configs
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
@@ -1077,10 +1081,10 @@ class TimeSeries:
         # reactive power
         # get worst case configurations for each heat pump
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "heat_pumps", configs
+            df, "heat_pump", configs
         )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "heat_pumps", configs
+            df, "heat_pump", configs
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
@@ -1153,10 +1157,10 @@ class TimeSeries:
         # reactive power
         # get worst case configurations for each load
         power_factor = q_control._fixed_cosphi_default_power_factor(
-            df, "storage_units", configs
+            df, "storage_unit", configs
         )
         q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-            df, "storage_units", configs
+            df, "storage_unit", configs
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
@@ -1606,7 +1610,7 @@ class TimeSeries:
                                 q_sign,
                                 q_control._fixed_cosphi_default_reactive_power_sign(
                                     df[df["type"] == load_type],
-                                    f"{load_type}s",
+                                    load_type,
                                     edisgo_object.config,
                                 ),
                             ]
@@ -1616,17 +1620,17 @@ class TimeSeries:
                                 power_factor,
                                 q_control._fixed_cosphi_default_power_factor(
                                     df[df["type"] == load_type],
-                                    f"{load_type}s",
+                                    load_type,
                                     edisgo_object.config,
                                 ),
                             ]
                         )
                 else:
                     q_sign = q_control._fixed_cosphi_default_reactive_power_sign(
-                        df, type, edisgo_object.config
+                        df, type[:-1], edisgo_object.config
                     )
                     power_factor = q_control._fixed_cosphi_default_power_factor(
-                        df, type, edisgo_object.config
+                        df, type[:-1], edisgo_object.config
                     )
             elif isinstance(parametrisation, pd.DataFrame):
                 # check if all given components exist in network and only use existing
@@ -1659,7 +1663,7 @@ class TimeSeries:
                                             q_sign,
                                             default_func(
                                                 df[df["type"] == load_type],
-                                                f"{load_type}s",
+                                                load_type,
                                                 edisgo_object.config,
                                             ),
                                         ]
@@ -1668,7 +1672,9 @@ class TimeSeries:
                                 q_sign = pd.concat(
                                     [
                                         q_sign,
-                                        default_func(df, type, edisgo_object.config),
+                                        default_func(
+                                            df, type[:-1], edisgo_object.config
+                                        ),
                                     ]
                                 )
                         else:
@@ -1692,7 +1698,7 @@ class TimeSeries:
                                             power_factor,
                                             default_func(
                                                 df[df["type"] == load_type],
-                                                f"{load_type}s",
+                                                load_type,
                                                 edisgo_object.config,
                                             ),
                                         ]
@@ -1701,7 +1707,9 @@ class TimeSeries:
                                 power_factor = pd.concat(
                                     [
                                         power_factor,
-                                        default_func(df, type, edisgo_object.config),
+                                        default_func(
+                                            df, type[:-1], edisgo_object.config
+                                        ),
                                     ]
                                 )
                         else:
@@ -1725,19 +1733,21 @@ class TimeSeries:
                 ],
                 inplace=True,
             )
-            self.time_series_raw.q_control = pd.concat(
-                [
-                    self.time_series_raw.q_control,
-                    pd.DataFrame(
-                        index=components_names,
-                        data={
-                            "type": "fixed_cosphi",
-                            "q_sign": q_sign,
-                            "power_factor": power_factor,
-                        },
-                    ),
-                ]
+            new_data = pd.DataFrame(
+                index=components_names,
+                data={
+                    "type": "fixed_cosphi",
+                    "q_sign": q_sign,
+                    "power_factor": power_factor,
+                },
             )
+            frames_to_concat = [
+                df for df in [self.time_series_raw.q_control, new_data] if not df.empty
+            ]
+            if frames_to_concat:
+                self.time_series_raw.q_control = pd.concat(frames_to_concat)
+            elif not new_data.empty:
+                self.time_series_raw.q_control = new_data
             return q_sign, power_factor
 
         # set reactive power for generators

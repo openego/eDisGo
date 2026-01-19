@@ -5,6 +5,7 @@ import os
 
 from typing import TYPE_CHECKING
 
+import dash
 import matplotlib
 import numpy as np
 import pandas as pd
@@ -12,7 +13,6 @@ import plotly.graph_objects as go
 
 from dash import dcc, html
 from dash.dependencies import Input, Output
-from jupyter_dash import JupyterDash
 from matplotlib import pyplot as plt
 from networkx import Graph
 from pyproj import Transformer
@@ -211,7 +211,7 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
                 ).all()
             ]
 
-    crs = {"init": "epsg:3035"}
+    crs = "epsg:3035"
     region = gpd.GeoDataFrame(Regions, columns=["subst_id", "geometry"], crs=crs)
     region = region.to_crs(epsg=projection)
 
@@ -561,9 +561,8 @@ def mv_grid_topology(
     pypsa_plot.buses = pypsa_plot.buses[~pypsa_plot.buses.index.str.contains("agg")]
     pypsa_plot.lines = edisgo_obj.topology.lines_df[
         edisgo_obj.topology.lines_df.bus0.isin(pypsa_plot.buses.index)
-    ][edisgo_obj.topology.lines_df.bus1.isin(pypsa_plot.buses.index)].loc[
-        :, ["bus0", "bus1"]
-    ]
+        & edisgo_obj.topology.lines_df.bus1.isin(pypsa_plot.buses.index)
+    ].loc[:, ["bus0", "bus1"]]
 
     # line colors
     if line_color == "loading":
@@ -659,9 +658,7 @@ def mv_grid_topology(
     if grid_district_geom:
         try:
             projection = 3857 if contextily and background_map else 4326
-            crs = {
-                "init": "epsg:{}".format(int(edisgo_obj.topology.grid_district["srid"]))
-            }
+            crs = "epsg:{}".format(int(edisgo_obj.topology.grid_district["srid"]))
             region = gpd.GeoDataFrame(
                 {"geometry": [edisgo_obj.topology.grid_district["geom"]]},
                 crs=crs,
@@ -1258,6 +1255,7 @@ def plot_plotly(
 
             data_line_plot.append(edge_scatter)
 
+        # Add colorbar for line colors (works for both map and non-map plots)
         if line_color:
             line_color_title = {
                 "loading": "Loading in MVA",
@@ -1265,24 +1263,47 @@ def plot_plotly(
                 "reinforce": "Reinforce",
             }
 
-            colorbar_edge_scatter = go.Scatter(
-                mode="markers",
-                x=[None],
-                y=[None],
-                marker=dict(
-                    colorbar=dict(
-                        title=line_color_title[line_color],
-                        xanchor="left",
-                        titleside="right",
-                        x=1.19,
-                        thickness=15,
+            # Create invisible scatter plot for colorbar
+            if plot_map:
+                colorbar_edge_scatter = go.Scattermapbox(
+                    mode="markers",
+                    lon=[None],
+                    lat=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=line_color_title[line_color],
+                            xanchor="left",
+                            titleside="right",
+                            x=1.02,
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        cmax=color_max,
+                        cmin=color_min,
+                        showscale=showscale,
+                        opacity=0,  # Make invisible
                     ),
-                    colorscale=colorscale,
-                    cmax=color_max,
-                    cmin=color_min,
-                    showscale=showscale,
-                ),
-            )
+                    showlegend=False,
+                )
+            else:
+                colorbar_edge_scatter = go.Scatter(
+                    mode="markers",
+                    x=[None],
+                    y=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=line_color_title[line_color],
+                            xanchor="left",
+                            titleside="right",
+                            x=1.19,
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        cmax=color_max,
+                        cmin=color_min,
+                        showscale=showscale,
+                    ),
+                )
 
             if line_color == "reinforce":
                 colorbar_edge_scatter.marker.colorbar.tickmode = "array"
@@ -1381,6 +1402,9 @@ def plot_plotly(
                 text += "<br>" + str(index) + " = " + str(value)
 
             node_text.append(text)
+        # Create node scatter plots
+        node_scatter_plots = []
+
         if plot_map:
             node_scatter = go.Scattermapbox(
                 lon=node_x,
@@ -1389,12 +1413,11 @@ def plot_plotly(
                 hoverinfo="text",
                 text=node_text,
                 marker=dict(
-                    showscale=showscale,
+                    showscale=False,  # Disable colorbar for mapbox, added it separately
                     colorscale=colorscale,
                     color=node_colors,
                     size=8,
                     cmid=cmid,
-                    colorbar=colorbar,
                 ),
             )
         else:
@@ -1415,11 +1438,103 @@ def plot_plotly(
                 ),
             )
 
-        return [node_scatter]
+        node_scatter_plots.append(node_scatter)
 
-    fig = go.Figure(
-        data=plot_lines() + plot_buses() + plot_line_text(),
-        layout=go.Layout(
+        # Add separate colorbar for nodes in mapbox plots
+        if plot_map and node_color and showscale:
+            if plot_map:
+                node_colorbar_scatter = go.Scattermapbox(
+                    mode="markers",
+                    lon=[None],
+                    lat=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=colorbar["title"] if colorbar else "Node values",
+                            xanchor="left",
+                            titleside="right",
+                            x=1.12,  # Position it next to line colorbar
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        color=[0, 1],  # Dummy values for colorbar range
+                        cmax=max(node_colors) if isinstance(node_colors, list) else 1,
+                        cmin=min(node_colors) if isinstance(node_colors, list) else 0,
+                        cmid=cmid,
+                        showscale=True,
+                        opacity=0,  # Make invisible
+                    ),
+                    showlegend=False,
+                )
+                node_scatter_plots.append(node_colorbar_scatter)
+
+        return node_scatter_plots
+
+    # Calculate optimal zoom level for map based on network extent
+    def calculate_zoom_level():
+        if not plot_map:
+            return 11  # Default zoom for non-map plots
+
+        # Get all node coordinates
+        lats = []
+        lons = []
+        for node in G.nodes():
+            x, y = G.nodes[node]["pos"]
+            lons.append(x)
+            lats.append(y)
+
+        if not lats or not lons:
+            return 11  # Default if no coordinates
+
+        # Calculate bounds
+        lat_min, lat_max = min(lats), max(lats)
+        lon_min, lon_max = min(lons), max(lons)
+
+        # Calculate the extent in degrees
+        lat_range = lat_max - lat_min
+        lon_range = lon_max - lon_min
+        max_range = max(lat_range, lon_range)
+
+        # Simple zoom level calculation based on coordinate range
+        # These values are empirically determined for good fit
+        if max_range > 0.5:
+            zoom = 9
+        elif max_range > 0.2:
+            zoom = 10
+        elif max_range > 0.1:
+            zoom = 11
+        elif max_range > 0.05:
+            zoom = 12
+        elif max_range > 0.02:
+            zoom = 13
+        elif max_range > 0.01:
+            zoom = 14
+        elif max_range > 0.005:
+            zoom = 15
+        else:
+            zoom = 16
+
+        return min(zoom, 18)  # Cap at maximum zoom level
+
+    zoom_level = calculate_zoom_level()
+
+    # Create layout based on whether map is enabled
+    if plot_map:
+        layout = go.Layout(
+            height=height,
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            mapbox=dict(
+                center=dict(
+                    lat=y_center,
+                    lon=x_center,
+                ),
+                zoom=zoom_level,
+                style="open-street-map",
+            ),
+        )
+    else:
+        layout = go.Layout(
             height=height,
             showlegend=False,
             hovermode="closest",
@@ -1436,17 +1551,11 @@ def plot_plotly(
                 scaleanchor="x",
                 scaleratio=1,
             ),
-            mapbox=dict(
-                # bearing=0,
-                center=dict(
-                    lat=y_center,
-                    lon=x_center,
-                ),
-                # pitch=0,
-                zoom=11,
-                style="open-street-map",
-            ),
-        ),
+        )
+
+    fig = go.Figure(
+        data=plot_lines() + plot_buses() + plot_line_text(),
+        layout=layout,
     )
     if warning_message:
         fig.add_annotation(
@@ -1513,9 +1622,9 @@ def plot_dash_app(
     edisgo_objects: EDisGo | dict[str, EDisGo],
     debug: bool = False,
     height: int = 500,
-) -> JupyterDash:
+) -> dash.Dash:
     """
-    Generates a jupyter dash app from given eDisGo object(s).
+    Generates a dash app from given eDisGo object(s).
 
     Parameters
     ----------
@@ -1538,8 +1647,8 @@ def plot_dash_app(
 
     Returns
     -------
-    JupyterDash
-        Jupyter dash app.
+    Dash
+        dash app.
 
     """
     if isinstance(edisgo_objects, dict):
@@ -1586,7 +1695,7 @@ def plot_dash_app(
 
     padding = 1
 
-    app = JupyterDash(__name__)
+    app = dash.Dash(__name__)
     # Workaround to use standard python logging with plotly dash
     if debug:
         app.logger.disabled = False
@@ -2216,7 +2325,7 @@ def plot_dash(
     height: int = 820,
 ):
     """
-    Shows the generated jupyter dash app from given eDisGo object(s).
+    Shows the generated dash app from given eDisGo object(s).
 
     Parameters
     ----------
@@ -2236,16 +2345,16 @@ def plot_dash(
             Plotting in own browser tab.
 
     debug : bool
-        If True, enables debugging of the jupyter dash app.
+        If True, enables debugging of the dash app.
 
     port : int
         Port which the app uses. Default: 8050.
 
     height : int
-        Height of the jupyter dash cell.
+        Height of the dash cell.
 
     """
     app = plot_dash_app(edisgo_objects, debug=debug, height=height - 300)
     log = logging.getLogger("werkzeug")
     log.setLevel(logging.ERROR)
-    app.run_server(mode=mode, debug=debug, height=height, port=port)
+    app.run(mode=mode, debug=debug, height=height, port=port)
