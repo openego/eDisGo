@@ -97,7 +97,7 @@ def to_powermodels(
         if (flex not in opf_flex) & (len(loads) != 0):
             logger.info("{} will be optimized.".format(text))
             opf_flex.append(flex)
-    
+
     hv_flex_dict = dict()
     # Sorts buses such that bus0 is always the upstream bus
     edisgo_object.topology.sort_buses()
@@ -126,22 +126,23 @@ def to_powermodels(
     )  # length of timesteps in hours
     pm["baseMVA"] = s_base
     pm["source_version"] = 2
-    
-    # Add §14a curtailment flexibility if enabled (must be BEFORE pm["flexibilities"] assignment)
+
+    # Add §14a curtailment flexibility if enabled
+    # (must be BEFORE pm["flexibilities"] assignment)
     if curtailment_14a is not None and curtailment_14a is not False:
         all_hps = edisgo_object.topology.loads_df[
-            edisgo_object.topology.loads_df['type'] == 'heat_pump'
+            edisgo_object.topology.loads_df["type"] == "heat_pump"
         ]
         if len(all_hps) > 0:
             logger.info("§14a heat pump curtailment will be optimized.")
             opf_flex.append("hp_14a")
-        
+
         # Check for charging points
         all_cps = edisgo_object.topology.charging_points_df
         if len(all_cps) > 0:
             logger.info("§14a charging point curtailment will be optimized.")
             opf_flex.append("cp_14a")
-    
+
     pm["flexibilities"] = opf_flex
     logger.info("Transforming busses into PowerModels dictionary format.")
     _build_bus(psa_net, edisgo_object, pm, flexible_storage_units)
@@ -165,29 +166,31 @@ def to_powermodels(
             s_base,
             flexible_cps,
         )
-    
+
     # Get all heat pumps for §14a support (needed before flexible_hps check)
     all_hps = edisgo_object.topology.loads_df[
-        edisgo_object.topology.loads_df['type'] == 'heat_pump'
+        edisgo_object.topology.loads_df["type"] == "heat_pump"
     ].index.to_numpy()
-    
+
     # Determine which heat pumps need to be in PowerModels dict
     # Either flexible_hps OR §14a curtailment requires heatpump dict
     hps_for_pm = flexible_hps if len(flexible_hps) > 0 else []
-    if curtailment_14a is not None and curtailment_14a is not False and len(all_hps) > 0:
+    if (
+        curtailment_14a is not None
+        and curtailment_14a is not False
+        and len(all_hps) > 0
+    ):
         # For §14a, we need ALL heat pumps in the PM dict
         hps_for_pm = all_hps
-    
+
     if len(hps_for_pm) > 0:
         logger.info("Transforming heatpumps into PowerModels dictionary format.")
         _build_heatpump(psa_net, pm, edisgo_object, s_base, hps_for_pm)
         logger.info(
             "Transforming heat storage units into PowerModels dictionary format."
         )
-        _build_heat_storage(
-            psa_net, pm, edisgo_object, s_base, hps_for_pm, opf_version
-        )
-    
+        _build_heat_storage(psa_net, pm, edisgo_object, s_base, hps_for_pm, opf_version)
+
     # Create virtual generators for §14a curtailment if enabled
     # This applies to ALL heat pumps, not just flexible ones
     if curtailment_14a is not None and curtailment_14a is not False:
@@ -196,22 +199,28 @@ def to_powermodels(
             curtailment_14a_config = {}
         else:
             curtailment_14a_config = curtailment_14a
-        
+
         if len(all_hps) > 0:
-            logger.info(f"Creating virtual generators for §14a heat pump support ({len(all_hps)} heat pumps).")
+            logger.info(
+                f"Creating virtual generators for §14a heat pump support "
+                f"({len(all_hps)} heat pumps)."
+            )
             _build_gen_hp_14a_support(
                 psa_net, pm, edisgo_object, s_base, all_hps, curtailment_14a_config
             )
-        
+
         # Build §14a support for charging points
         # Use ALL charging points for §14a, not just flexible ones
         all_cps = edisgo_object.topology.charging_points_df.index.to_numpy()
         if len(all_cps) > 0:
-            logger.info(f"Creating virtual generators for §14a charging point support ({len(all_cps)} CPs).")
+            logger.info(
+                f"Creating virtual generators for §14a charging point support "
+                f"({len(all_cps)} CPs)."
+            )
             _build_gen_cp_14a_support(
                 psa_net, pm, edisgo_object, s_base, all_cps, curtailment_14a_config
             )
-    
+
     if len(flexible_loads) > 0:
         logger.info("Transforming DSM loads into PowerModels dictionary format.")
         flexible_loads = _build_dsm(edisgo_object, psa_net, pm, s_base, flexible_loads)
@@ -312,10 +321,10 @@ def from_powermodels(
         Base value of apparent power for per unit system.
         Default: 1 MVA.
     """
-    if type(pm_results) == str:
+    if isinstance(pm_results, str):
         with open(pm_results) as f:
             pm = json.loads(json.load(f))
-    elif type(pm_results) == dict:
+    elif isinstance(pm_results, dict):
         pm = pm_results
     else:
         raise ValueError(
@@ -333,44 +342,51 @@ def from_powermodels(
         "cp": ["electromobility", "pcp"],
         "storage": ["storage", "pf"],
         "dsm": ["dsm", "pdsm"],
-        "hp_14a": ["gen_hp_14a", "p"],  # §14a virtual generators (uses "p" not "php14a")
-        "cp_14a": ["gen_cp_14a", "p"],  # §14a virtual generators for charging points
+        "hp_14a": [
+            "gen_hp_14a",
+            "p",
+        ],  # §14a virtual generators (uses "p" not "php14a")
+        # §14a virtual generators for charging points
+        "cp_14a": ["gen_cp_14a", "p"],
     }
 
     timesteps = pd.Series([int(k) for k in pm["nw"].keys()]).sort_values().values
     logger.info("Writing OPF results to eDisGo object.")
-    
-    print("\n" + "="*80)
+
+    print("\n" + "=" * 80)
     print("🔍 PYTHON DEBUG: Processing OPF Results")
-    print("="*80)
+    print("=" * 80)
     print(f"Flexibilities in results: {pm_results['nw']['1']['flexibilities']}")
-    print("="*80 + "\n")
-    
+    print("=" * 80 + "\n")
+
     # write active power OPF results to edisgo object
     for flexibility in pm_results["nw"]["1"]["flexibilities"]:
         print(f"  → Processing flexibility: {flexibility}")
         flex, variable = flex_dicts[flexibility]
         print(f"    flex={flex}, variable={variable}")
-        
+
         # Check if flex exists in network
         if flex not in pm["nw"]["1"]:
             print(f"    ⚠ WARNING: '{flex}' not found in pm['nw']['1']!")
             continue
-            
+
         names = [
             pm["nw"]["1"][flex][flex_comp]["name"]
             for flex_comp in list(pm["nw"]["1"][flex].keys())
         ]
         print(f"    Found {len(names)} components: {names[:5]}...")  # Show first 5
-        
+
         # Check if results exist in pm_results
         if flex not in pm_results["nw"]["1"]:
             print(f"    ⚠ WARNING: '{flex}' not found in pm_results['nw']['1']!")
-            print(f"    Available keys in pm_results['nw']['1']: {list(pm_results['nw']['1'].keys())}")
+            print(
+                f"    Available keys in pm_results['nw']['1']: "
+                f"{list(pm_results['nw']['1'].keys())}"
+            )
             continue
-        
+
         print(f"    ✓ '{flex}' found in pm_results, extracting data...")
-        
+
         # replace storage power values by branch power values of virtual branch to
         # account for losses
         if flex == "storage":
@@ -393,7 +409,7 @@ def from_powermodels(
                 ]
                 for t in timesteps
             ]
-        
+
         print(f"    ✓ Extracted {len(data)} timesteps x {len(data[0])} components")
         results = pd.DataFrame(index=timesteps, columns=names, data=data)
         if (flex == "gen_nd") & (pm["nw"]["1"]["opf_version"] in [3, 4]):
@@ -403,21 +419,27 @@ def from_powermodels(
             )
         elif flex == "gen_hp_14a":
             # §14a virtual generators: write as positive generation
-            print(f"    → Writing {len(names)} gen_hp_14a generators to generators_active_power")
+            print(
+                f"    → Writing {len(names)} gen_hp_14a generators to "
+                f"generators_active_power"
+            )
             print(f"    → Sample values: {results.iloc[0, :3].to_dict()}")
             edisgo_object.timeseries._generators_active_power.loc[:, names] = results[
                 names
             ].values
-            print(f"    ✓ Written successfully!")
-        
+            print("    ✓ Written successfully!")
+
         elif flex == "gen_cp_14a":
             # §14a virtual generators for CPs: write as positive generation
-            print(f"    → Writing {len(names)} gen_cp_14a generators to generators_active_power")
+            print(
+                f"    → Writing {len(names)} gen_cp_14a generators to "
+                f"generators_active_power"
+            )
             print(f"    → Sample values: {results.iloc[0, :3].to_dict()}")
             edisgo_object.timeseries._generators_active_power.loc[:, names] = results[
                 names
             ].values
-            print(f"    ✓ Written successfully!")
+            print("    ✓ Written successfully!")
         elif flex in ["heatpumps", "electromobility"]:
             edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
                 names
@@ -471,9 +493,11 @@ def from_powermodels(
         for flex in df2.columns:
             abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
             rel_error = [
-                abs_error[i] / hv_flex_dict[flex].iloc[i]
-                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
-                else 0
+                (
+                    abs_error[i] / hv_flex_dict[flex].iloc[i]
+                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
+                    else 0
+                )
                 for i in range(len(abs_error))
             ]
             df2[flex] = rel_error
@@ -784,9 +808,20 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
                 sign * np.tan(np.arccos(pf)) * gen.p_nom.iloc[gen_i],
                 sign * np.tan(np.arccos(pf)) * gen.p_nom_min.iloc[gen_i],
             ]
+            gen_name = gen.index[gen_i]
+            # Debug: log available columns and requested generator name
+            if gen_name not in psa_net.generators_t.p_set.columns:
+                logger.error(
+                    f"Generator '{gen_name}' not found in "
+                    f"psa_net.generators_t.p_set columns!"
+                )
+                logger.error(
+                    f"Available generator columns: "
+                    f"{list(psa_net.generators_t.p_set.columns)}"
+                )
             pm[text][str(gen_i + 1)] = {
-                "pg": psa_net.generators_t.p_set[gen.index[gen_i]].iloc[0] / s_base,
-                "qg": psa_net.generators_t.q_set[gen.index[gen_i]].iloc[0] / s_base,
+                "pg": psa_net.generators_t.p_set[gen_name].iloc[0] / s_base,
+                "qg": psa_net.generators_t.q_set[gen_name].iloc[0] / s_base,
                 "pmax": gen.p_nom.iloc[gen_i].round(20) / s_base,
                 "pmin": gen.p_nom_min.iloc[gen_i].round(20) / s_base,
                 "qmax": max(q).round(20) / s_base,
@@ -799,7 +834,7 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
                 "mbase": gen.p_nom.iloc[gen_i] / s_base,
                 "gen_bus": idx_bus,
                 "gen_status": 1,
-                "name": gen.index[gen_i],
+                "name": gen_name,
                 "index": gen_i + 1,
             }
     # add active power generation of inflexible storage units to gen dict
@@ -819,13 +854,17 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_g = max(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.p_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     0.0,
                 ]
             )
             q_g = min(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.q_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     0.0,
                 ]
             )
@@ -953,9 +992,9 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
 
         pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
-            "br_r": (0.017 * s_base / (psa_net.buses.v_nom.iloc[idx_bus - 1] ** 2)).round(
-                10
-            ),
+            "br_r": (
+                0.017 * s_base / (psa_net.buses.v_nom.iloc[idx_bus - 1] ** 2)
+            ).round(10),
             "r": 0.017,
             "br_x": 0,
             "f_bus": idx_bus,
@@ -1070,13 +1109,17 @@ def _build_load(
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_d = -min(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.p_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     np.float64(0.0),
                 ]
             )
             q_d = -max(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.q_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     np.float64(0.0),
                 ]
             )
@@ -1161,9 +1204,13 @@ def _build_battery_storage(
             "pf": pf,
             "sign": sign,
             "virtual_branch": str(stor_i + len(branches.index) + 1),
-            "ps": psa_net.storage_units.p_set.loc[flexible_storage_units[stor_i]].round(20)
+            "ps": psa_net.storage_units.p_set.loc[flexible_storage_units[stor_i]].round(
+                20
+            )
             / s_base,
-            "qs": psa_net.storage_units.q_set.loc[flexible_storage_units[stor_i]].round(20)
+            "qs": psa_net.storage_units.q_set.loc[flexible_storage_units[stor_i]].round(
+                20
+            )
             / s_base,
             "pmax": psa_net.storage_units.p_nom.loc[
                 flexible_storage_units[stor_i]
@@ -1348,11 +1395,13 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         }
 
 
-def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, curtailment_14a):
+def _build_gen_hp_14a_support(
+    psa_net, pm, edisgo_obj, s_base, flexible_hps, curtailment_14a
+):
     """
-    Build virtual generator dictionary for §14a heat pump support and add it to 
+    Build virtual generator dictionary for §14a heat pump support and add it to
     PowerModels dictionary 'pm'.
-    
+
     Creates one virtual generator per heat pump at the same bus. The generator
     can reduce the net electrical load to simulate §14a curtailment.
 
@@ -1369,56 +1418,60 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
         Array containing all heat pumps that allow for flexible operation.
     curtailment_14a : dict
         Dictionary with §14a EnWG curtailment settings.
-        
+
     """
     # Extract curtailment settings
     p_min_14a = curtailment_14a.get("max_power_mw", 0.0042)  # MW
     max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours
     specific_components = curtailment_14a.get("components", [])
-    
+
     # Filter heat pumps if specific components are defined
     if len(specific_components) > 0:
         hps_14a = np.intersect1d(flexible_hps, specific_components)
     else:
         hps_14a = flexible_hps
-    
+
     if len(hps_14a) == 0:
         logger.warning("No heat pumps selected for §14a curtailment.")
         return
-    
+
     heat_df = psa_net.loads.loc[hps_14a]
     hp_p_nom = edisgo_obj.topology.loads_df.p_set[hps_14a]
-    
+
     # Filter out heat pumps with nominal power <= §14a minimum
     # These cannot be curtailed to the minimum and would make constraints infeasible
     hps_eligible = [hp for hp in hps_14a if hp_p_nom[hp] > p_min_14a]
-    
+
     if len(hps_eligible) < len(hps_14a):
         excluded_hps = set(hps_14a) - set(hps_eligible)
         logger.warning(
             f"Excluded {len(excluded_hps)} heat pump(s) from §14a curtailment due to "
             f"nominal power <= {p_min_14a*1000:.1f} kW: {excluded_hps}"
         )
-    
+
     if len(hps_eligible) == 0:
-        logger.warning("No heat pumps eligible for §14a curtailment after filtering by minimum power.")
+        logger.warning(
+            "No heat pumps eligible for §14a curtailment after filtering by "
+            "minimum power."
+        )
         return
-    
+
     # Create mapping from HP name to its index in pm["heatpumps"]
-    # The heatpumps dict is built by iterating over flexible_hps with indices 1, 2, 3, ...
+    # The heatpumps dict is built by iterating over flexible_hps with
+    # indices 1, 2, 3, ...
     hp_name_to_index = {hp_name: i + 1 for i, hp_name in enumerate(flexible_hps)}
-    
+
     for hp_i, hp_name in enumerate(hps_eligible):
         # Bus of the heat pump
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus[hp_name])
-        
+
         # Nominal power of HP
         p_nominal = hp_p_nom[hp_name]  # MW
-        
+
         # Maximum support = difference between nominal and §14a limit
         # This is how much the load can be virtually reduced
         p_max_support = p_nominal - p_min_14a  # Now guaranteed > 0
-        
+
         pm["gen_hp_14a"][str(hp_i + 1)] = {
             "name": f"hp_14a_support_{hp_name}",
             "gen_bus": idx_bus,
@@ -1437,11 +1490,13 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
         }
 
 
-def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailment_14a):
+def _build_gen_cp_14a_support(
+    psa_net, pm, edisgo_obj, s_base, all_cps, curtailment_14a
+):
     """
-    Build virtual generator dictionary for §14a charging point support and add it to 
+    Build virtual generator dictionary for §14a charging point support and add it to
     PowerModels dictionary 'pm'.
-    
+
     Creates one virtual generator per charging point at the same bus. The generator
     can reduce the net electrical load to simulate §14a curtailment.
 
@@ -1458,70 +1513,77 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
         Array containing all charging points in the grid (for §14a curtailment).
     curtailment_14a : dict
         Dictionary with §14a EnWG curtailment settings.
-        
+
     """
     # Extract curtailment settings
     p_min_14a = curtailment_14a.get("max_power_mw", 0.0042)  # MW (same as HPs)
     max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours
     specific_components = curtailment_14a.get("components", [])
-    
+
     # DEBUG: Print all CPs in topology
     all_cps_in_topology = edisgo_obj.topology.charging_points_df
-    logger.info(f"DEBUG: Found {len(all_cps_in_topology)} charging points in topology.charging_points_df")
+    logger.info(
+        f"DEBUG: Found {len(all_cps_in_topology)} charging points in "
+        f"topology.charging_points_df"
+    )
     logger.info(f"DEBUG: all_cps parameter has {len(all_cps)} entries")
     if len(all_cps_in_topology) > 0:
         logger.info(f"DEBUG: Sample CP names: {list(all_cps_in_topology.index[:3])}")
-    
+
     # Filter charging points if specific components are defined
     if len(specific_components) > 0:
         cps_14a = np.intersect1d(all_cps, specific_components)
     else:
         cps_14a = all_cps
-    
+
     if len(cps_14a) == 0:
         logger.warning("No charging points selected for §14a curtailment.")
         return
-    
+
     cp_df = edisgo_obj.topology.charging_points_df.loc[cps_14a]
     logger.info(f"DEBUG: After filtering, cp_df has {len(cp_df)} charging points")
     cp_p_nom = cp_df.p_set  # Nominal charging power in MW
-    
+
     # Filter out CPs with nominal power <= §14a minimum
     # These cannot be curtailed to the minimum and would make constraints infeasible
     cps_eligible = [cp for cp in cps_14a if cp_p_nom[cp] > p_min_14a]
-    
+
     if len(cps_eligible) < len(cps_14a):
         excluded_cps = set(cps_14a) - set(cps_eligible)
         logger.warning(
-            f"Excluded {len(excluded_cps)} charging point(s) from §14a curtailment due to "
-            f"nominal power <= {p_min_14a*1000:.1f} kW: {excluded_cps}"
+            f"Excluded {len(excluded_cps)} charging point(s) from §14a "
+            f"curtailment due to nominal power <= {p_min_14a*1000:.1f} kW: "
+            f"{excluded_cps}"
         )
-    
+
     if len(cps_eligible) == 0:
-        logger.warning("No charging points eligible for §14a curtailment after filtering by minimum power.")
+        logger.warning(
+            "No charging points eligible for §14a curtailment after filtering "
+            "by minimum power."
+        )
         return
-    
+
     # §14a curtailment works for ALL CPs (like HPs), not just flexible ones
     # The virtual generator reduces the load, independent of flexibility optimization
     cps_final = cps_eligible
-    
+
     logger.info(f"Creating §14a support for {len(cps_final)} charging points.")
-    
+
     # Create a simple index mapping for CPs (needed by Julia constraints)
     # For non-flexible CPs, we create a sequential index starting from 1
     cp_name_to_index = {cp_name: idx + 1 for idx, cp_name in enumerate(cps_final)}
-    
+
     for cp_i, cp_name in enumerate(cps_final):
         # Bus of the charging point
-        idx_bus = _mapping(psa_net, edisgo_obj, cp_df.loc[cp_name, 'bus'])
-        
+        idx_bus = _mapping(psa_net, edisgo_obj, cp_df.loc[cp_name, "bus"])
+
         # Nominal power of CP
         p_nominal = cp_p_nom[cp_name]  # MW
-        
+
         # Maximum support = difference between nominal and §14a limit
         # This is how much the load can be virtually reduced
         p_max_support = p_nominal - p_min_14a  # Now guaranteed > 0
-        
+
         pm["gen_cp_14a"][str(cp_i + 1)] = {
             "name": f"cp_14a_support_{cp_name}",
             "gen_bus": idx_bus,

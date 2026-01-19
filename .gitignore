@@ -28,3 +28,4 @@ eDisGo.egg-info/
 .vscode/settings.json
 
 *OEP_TOKEN.*
+logs/*
