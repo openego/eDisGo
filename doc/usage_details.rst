@@ -173,14 +173,14 @@ Database Connection for Loading Data from egon-data
 This section describes how to connect to and load data from **egon-data**.
 There are two supported connection methods:
 
-1. Using the TOEP database (standard)
+1. Using the OEP database (standard)
 2. Using a custom PostgreSQL database
 
 
-TOEP Database (Standard)
+OEP Database (Standard)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The TOEP database provides the egon-data interface and is the default data source.
+The OEP database provides the egon-data interface and is the default data source.
 
 Example
 ^^^^^^^
@@ -190,26 +190,26 @@ Example
     from edisgo.io.timeseries import set_time_series_active_power_predefined
 
     edisgo_obj.set_time_series_active_power_predefined(
-        fluctuating_generators_ts="oedb"  # use "oedb" to load data from TOEP,
+        fluctuating_generators_ts="oedb"  # use "oedb" to load data from OEP,
     )
 
-TOEP Token Setup
+OEP Token Setup
 ^^^^^^^^^^^^^^^^
 
-To authenticate with TOEP, place a file named ``TOEP_TOKEN.txt`` in the directory ``edisgo/config/``.
-The file should contain your personal TOEP access token.
+To authenticate with OEP, place a file named ``OEP_TOKEN.txt`` in the directory ``edisgo/config/``.
+The file should contain your personal OEP access token.
 
 A token can be requested at:
 
-    https://toep.iks.cs.ovgu.de/
+    https://openenergyplatform.org/
 
-Using a TOEP token is optional but recommended to avoid issues related to connection limits for anonymous users.
+Using a OEP token is optional but recommended to avoid issues related to connection limits for anonymous users.
 
 
 Using a Custom PostgreSQL Database
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-It is possible to connect to a custom PostgreSQL database instead of TOEP.
+It is possible to connect to a custom PostgreSQL database instead of OEP.
 This requires a configuration file and database engine initialization.
 
 Step 1: Create a Database Configuration File
@@ -252,7 +252,7 @@ The database engine can be initialized using the :func:`~edisgo.io.db.engine` fu
 Step 3: Load Data from the Custom Database
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Once the engine is initialized, data can be loaded using the same functions as for TOEP.
+Once the engine is initialized, data can be loaded using the same functions as for OEP.
 Pass the ``engine`` argument to specify your connection.
 
 .. code-block:: python
@@ -277,9 +277,9 @@ Summary
    * - **Access Type**
      - **Description**
      - **Authentication**
-   * - TOEP
+   * - OEP
      - Load official egon-data source
-     - TOEP token (recommended)
+     - OEP token (recommended)
    * - Custom PostgreSQL database
      - Connect to user-defined database
      - YAML config file with credentials

@@ -590,7 +590,7 @@ def _grid_integration(
                         comp_type="load",
                         type="heat_pump",
                         sector="district_heating_resistive_heater",
-                        bus=tmp.bus[0],
+                        bus=tmp.bus.iloc[0],
                         p_set=resistive_heaters_central.at[rh, "p_set"],
                         weather_cell_id=resistive_heaters_central.at[
                             rh, "weather_cell_id"
@@ -627,7 +627,7 @@ def _grid_integration(
 def efficiency_resistive_heaters_oedb(scenario, engine):
     """
     Get efficiency of resistive heaters from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Parameters
     ----------

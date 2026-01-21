@@ -480,7 +480,7 @@ def make_busmap_grid(
 
         buses_df = grid.buses_df
         graph = grid.graph
-        transformer_bus = grid.transformers_df.bus1[0]
+        transformer_bus = grid.transformers_df.bus1.iloc[0]
 
         buses_df = buses_df.apply(transform_coordinates, axis="columns")
         buses_df = buses_df.apply(calculate_weighting, axis="columns")
@@ -1642,7 +1642,7 @@ def apply_busmap(
     transformers_df = edisgo_obj.topology.transformers_df.copy()
     switches_df = edisgo_obj.topology.switches_df.copy()
 
-    slack_bus = edisgo_obj.topology.transformers_hvmv_df.bus1[0]
+    slack_bus = edisgo_obj.topology.transformers_hvmv_df.bus1.iloc[0]
 
     # Manipulate buses_df
     buses_df = buses_df.apply(apply_busmap_on_buses_df, axis="columns")

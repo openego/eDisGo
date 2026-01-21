@@ -1,58 +1,157 @@
+
 # Tests with pytest the package and monitors the covarage and sends it to coveralls.io
 # Coverage is only send to coveralls.io when no pytest tests fail
 name: "Tests & Coverage"
 
-on: [push]
-
-# Cancel jobs on new push
+# Abbrechen laufender Workflows bei neuem Push auf denselben Branch
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+on: [push]
+
 jobs:
+
+  queue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for available slot (max 4 branches)
+        run: |
+          # ============================================================================
+          # WORKFLOW QUEUE SYSTEM - Limits parallel branch tests to MAX_CONCURRENT
+          # ============================================================================
+          # WHY: The OEP API has a rate limit of 20 requests. Each branch runs 4 tests,
+          # resulting in ~16 API calls when 4 branches run concurrently. This limit
+          # ensures we stay within the OEP API quota.
+          #
+          # HOW: This job acts as a gatekeeper. Only workflows that have passed this
+          # queue job and are actually building are counted. Workflows still waiting
+          # in this queue are NOT counted to avoid mutual blocking.
+          # ============================================================================
+
+          MAX_CONCURRENT=4
+          WORKFLOW_NAME="${{ github.workflow }}"
+          CURRENT_RUN_ID="${{ github.run_id }}"
+
+          echo "Waiting for available slot (max $MAX_CONCURRENT concurrent branches)..."
+
+          while true; do
+            # Step 1: Get all running workflows (excluding the current one)
+            # Returns JSON with: {id: run_id, branch: branch_name}
+            RUNNING_RUNS=$(gh api \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "/repos/${{ github.repository }}/actions/runs?status=in_progress&per_page=100" \
+              --jq ".workflow_runs[] | select(.name == \"$WORKFLOW_NAME\" and .id != $CURRENT_RUN_ID) | {id: .id, branch: .head_branch} | @json")
+
+            # Array for branches that are actually building (not just waiting in queue)
+            declare -a BUILDING_BRANCHES
+
+            # Step 2: For each running workflow, check if it's actually building
+            while IFS= read -r run_json; do
+              if [ -z "$run_json" ]; then
+                continue
+              fi
+
+              RUN_ID=$(echo "$run_json" | jq -r '.id')
+              BRANCH=$(echo "$run_json" | jq -r '.branch')
+
+              # Step 3: Get the status of the "queue" job for this workflow run
+              # Possible statuses: "queued", "in_progress", "completed"
+              QUEUE_STATUS=$(gh api \
+                "/repos/${{ github.repository }}/actions/runs/$RUN_ID/jobs" \
+                --jq '.jobs[] | select(.name == "queue") | .status' 2>/dev/null | head -n1)
+
+              # Step 4: Only count as "building" if queue job has completed
+              # This means the workflow has passed the queue and is now running the build job.
+              # Workflows still waiting in the queue job (status="in_progress") are NOT counted,
+              # preventing workflows from blocking each other.
+              # Legacy fallback: If no queue job is found, count it anyway (old runs without queue).
+              if [ "$QUEUE_STATUS" = "completed" ] || [ -z "$QUEUE_STATUS" ]; then
+                BUILDING_BRANCHES+=("$BRANCH")
+              fi
+            done <<< "$RUNNING_RUNS"
+
+            # Step 5: Remove duplicates and count unique branches
+            # (A branch could theoretically have multiple runs)
+            if [ ${#BUILDING_BRANCHES[@]} -gt 0 ]; then
+              UNIQUE_BUILDING_BRANCHES=($(printf '%s\n' "${BUILDING_BRANCHES[@]}" | sort -u))
+              RUNNING_COUNT=${#UNIQUE_BUILDING_BRANCHES[@]}
+            else
+              RUNNING_COUNT=0
+            fi
+
+            # Step 6: Output for better traceability
+            echo "Currently building branches (queue passed): $RUNNING_COUNT"
+            if [ ${#BUILDING_BRANCHES[@]} -gt 0 ]; then
+              printf '%s\n' "${UNIQUE_BUILDING_BRANCHES[@]}" | sed 's/^/  - /'
+            fi
+
+            # Step 7: Check if a slot is available
+            if [ "$RUNNING_COUNT" -lt "$MAX_CONCURRENT" ]; then
+              echo "Slot available! Starting build for branch: ${{ github.ref_name }}"
+              break
+            fi
+
+            # No slot available yet - wait and check again
+            echo "All $MAX_CONCURRENT slots occupied. Waiting 30 seconds..."
+            sleep 30
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build:
     name: "${{ matrix.name-suffix }} at py${{ matrix.python-version }} on ${{ matrix.os }}"
     runs-on: ${{ matrix.os }}
+    needs: queue
 
     strategy:
       fail-fast: false
       matrix:
         include:
+          # Coverage job (Linux only)
           - name-suffix: "coverage"
             os: ubuntu-latest
-            python-version: 3.9
-          - name-suffix: "basic"
-            os: ubuntu-latest
-            python-version: "3.10"
+            python-version: 3.12
+
+          # Basic test matrix
           - name-suffix: "basic"
             os: ubuntu-latest
             python-version: 3.11
+
+          - name-suffix: "basic"
+            os: ubuntu-latest
+            python-version: "3.10"
+
           - name-suffix: "basic"
             os: windows-latest
-            python-version: 3.9
+            python-version: "3.10"
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Set up julia
+      # Julia is only needed on Linux
+      - name: Set up Julia
         if: runner.os == 'Linux'
         uses: julia-actions/setup-julia@v2
         with:
           version: "1.6"
 
-      - name: Install packages (Linux)
+      # Linux package installation (classic pip install)
+      - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           pip install --upgrade pip wheel setuptools
           pip install -e "."
 
-      - name: Install packages (Windows)
+      # Windows package installation via Conda environment file
+      - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
         uses: conda-incubator/setup-miniconda@v3
         with:
@@ -61,29 +160,32 @@ jobs:
           environment-file: eDisGo_env_dev.yml
           python-version: ${{ matrix.python-version }}
 
-      - name: Run tests Linux
+      # Run standard tests on Linux
+      - name: Run tests (Linux)
         if: runner.os == 'Linux' && matrix.name-suffix != 'coverage'
         run: |
           python -m pip install pytest pytest-notebook
           python -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
         env:
-          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
+          OEP_TOKEN_KH: ${{ secrets.OEP_TOKEN_KH }}
 
-      - name: Run tests Windows
+      # Run standard tests on Windows
+      - name: Run tests (Windows)
         if: runner.os == 'Windows'
         run: |
           python -m pip install pytest pytest-notebook
           python -m pytest --runslow --disable-warnings --color=yes -v
         env:
-          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
+          OEP_TOKEN_KH: ${{ secrets.OEP_TOKEN_KH }}
 
-      - name: Run tests, coverage and send to coveralls
-        if: runner.os == 'Linux' && matrix.python-version == 3.9 && matrix.name-suffix == 'coverage'
+      # Run coverage job and upload to Coveralls (only on Linux, Python 3.9)
+      - name: Run tests with coverage and submit to Coveralls
+        if: runner.os == 'Linux' && matrix.python-version == 3.12 && matrix.name-suffix == 'coverage'
         run: |
           pip install pytest pytest-notebook coveralls
           coverage run --source=edisgo -m pytest --runslow --runonlinux --disable-warnings --color=yes -v
           coveralls
         env:
-          TOEP_TOKEN_KH: ${{ secrets.TOEP_TOKEN_KH }}
+          OEP_TOKEN_KH: ${{ secrets.OEP_TOKEN_KH }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github

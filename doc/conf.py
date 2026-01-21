@@ -30,8 +30,6 @@ __author__ = "nesnoj, gplssm"
 import os
 import sys
 
-from unittest.mock import MagicMock
-
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
@@ -74,6 +72,8 @@ autoapi_ignore = [
     "*/opf/timeseries_reduction.py",
     "*/opf/opf_solutions/*",
 ]
+# Don't add autoapi to toctree if no modules were successfully parsed
+autoapi_add_toctree_entry = False
 
 
 def skip_autoapi_parts(app, what, name, obj, skip, options):
@@ -85,6 +85,70 @@ def skip_autoapi_parts(app, what, name, obj, skip, options):
 def setup(sphinx):
     sphinx.connect("autoapi-skip-member", skip_autoapi_parts)
 
+
+# Autodoc mock imports - Mock all heavy dependencies that cause import issues
+# This prevents AutoAPI from failing when modules execute code on import
+autodoc_mock_imports = [
+    # Core scientific computing
+    "numpy",
+    "pandas",
+    "scipy",
+    # Geospatial libraries
+    "geopandas",
+    "shapely",
+    "shapely.geometry",
+    "shapely.wkt",
+    "shapely.wkb",
+    "shapely.ops",
+    "pyproj",
+    "geopy",
+    # Network analysis
+    "networkx",
+    # Energy system modeling
+    "pypsa",
+    "pypower",
+    "pypower.idx_brch",
+    "pypower.idx_bus",
+    "pypower.idx_gen",
+    # Database and I/O
+    "sqlalchemy",
+    "sqlalchemy.engine",
+    "sqlalchemy.engine.base",
+    "sqlalchemy.orm",
+    "egoio",
+    "egoio.tools",
+    "egoio.tools.db",
+    "saio",
+    # Machine learning
+    "sklearn",
+    "sklearn.cluster",
+    "sklearn.metrics",
+    "sklearn.preprocessing",
+    # Visualization
+    "plotly",
+    "plotly.graph_objects",
+    "plotly.graph_objs",
+    "matplotlib",
+    "matplotlib.pyplot",
+    # Grid data
+    "ding0",
+    "ding0.core",
+    "ding0.core.network",
+    "ding0.core.network.grids",
+    "ding0.core.network.stations",
+    "ding0.tools",
+    "ding0.results",
+    # Demand modeling
+    "demandlib",
+    "demandlib.bdew",
+    "demandlib.particular_profiles",
+    # Other dependencies
+    "dash",
+    "jupyter_dash",
+    "multiprocess",
+    "sshtunnel",
+    "workalendar",
+]
 
 # Napoleon settings
 napoleon_google_docstring = True
@@ -114,7 +178,7 @@ extlinks = {
         "networkx.%s",
     ),
     "sqlalchemy": (
-        "https://docs.sqlalchemy.org/en/latest/core/connections.html#%s",
+        "https://docs.sqlalchemy.org/en/20/core/connections.html#%s",
         "sqlalchemy.%s",
     ),
     "numpy": (
@@ -143,6 +207,7 @@ linkcheck_ignore = [
     r"https://stackoverflow.com*",
     r"https://support.gurobi.com/*",
     r"https://www.gnu.org/licenses/",
+    r"https://www.mdpi.com/*",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -217,19 +282,11 @@ pygments_style = "sphinx"
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
 
-
-# Fix import error of modules which depend on C modules (mock out the imports for these
-# modules) see http://read-the-docs.readthedocs.io/en/latest/
-#  faq.html#i-get-import-errors-on-libraries-that-depend-on-c-modules
-if "READTHEDOCS" in os.environ:
-
-    class Mock(MagicMock):
-        @classmethod
-        def __getattr__(cls, name):
-            return MagicMock()
-
-    MOCK_MODULES = ["ding0", "ding0.results", "shapely", "shapely.wkt", "shapely.wkb"]
-    sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+# Suppress warnings from AutoAPI when modules cannot be imported
+# This prevents the build from failing when some modules have import issues
+suppress_warnings = [
+    "autoapi.python_import_resolution",
+]
 
 
 # -- Options for HTML output ----------------------------------------------
@@ -238,9 +295,6 @@ if "READTHEDOCS" in os.environ:
 # a list of builtin themes.
 # html_theme = 'alabaster'
 
-import sphinx_rtd_theme  # noqa: E402
-
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 html_theme = "sphinx_rtd_theme"
 
 # Theme options are theme-specific and customize the look and feel of a theme
@@ -423,3 +477,7 @@ intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
 numfig = True
 
 autodoc_member_order = "bysource"
+
+# Autodoc settings for better compatibility
+autodoc_typehints = "description"
+autodoc_typehints_description_target = "documented"

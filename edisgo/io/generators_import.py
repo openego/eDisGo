@@ -42,10 +42,10 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     The importer uses SQLAlchemy ORM objects. These are defined in
     `ego.io <https://github.com/openego/ego.io/tree/dev/egoio/db_tables/>`_.
     The data is imported from the tables
-    `conventional power plants <https://openenergyplatform.org/dataedit/\
-    view/supply/ego_dp_conv_powerplant>`_ and
-    `renewable power plants <https://openenergyplatform.org/dataedit/\
-    view/supply/ego_dp_res_powerplant>`_.
+    `conventional power plants <https://openenergyplatform.org/database/\
+    tables/ego_dp_conv_powerplant>`_ and
+    `renewable power plants <https://openenergyplatform.org/database/\
+    tables/ego_dp_res_powerplant>`_.
 
     When the generator data is retrieved, the following steps are conducted:
 
@@ -341,12 +341,14 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
         generators_conv_mv = _import_conv_generators(session)
         generators_res_mv, generators_res_lv = _import_res_generators(session)
 
-    generators_mv = pd.concat(
-        [
-            generators_conv_mv,
-            generators_res_mv,
-        ]
-    )
+    # Filter out empty DataFrames before concatenation to avoid FutureWarning
+    dfs_to_concat = [
+        df for df in [generators_conv_mv, generators_res_mv] if not df.empty
+    ]
+    if dfs_to_concat:
+        generators_mv = pd.concat(dfs_to_concat)
+    else:
+        generators_mv = pd.DataFrame()
 
     # validate that imported generators are located inside the grid district
     _validate_sample_geno_location()
@@ -465,14 +467,20 @@ def _update_grids(
     cap_diff_threshold = 10**-4
 
     # get all imported generators
-    imported_gens = pd.concat(
-        [imported_generators_lv, imported_generators_mv], sort=True
-    )
+    # Filter out empty DataFrames before concatenation to avoid FutureWarning
+    dfs_to_concat = [
+        df for df in [imported_generators_lv, imported_generators_mv] if not df.empty
+    ]
+    if dfs_to_concat:
+        imported_gens = pd.concat(dfs_to_concat, sort=True)
+    else:
+        imported_gens = pd.DataFrame()
 
     logger.debug(f"{len(imported_gens)} generators imported.")
 
-    # get existing generators and append ID column
-    existing_gens = edisgo_object.topology.generators_df
+    # get existing generators and append ID column (make copy to avoid
+    # SettingWithCopyWarning)
+    existing_gens = edisgo_object.topology.generators_df.copy()
     existing_gens["id"] = list(
         map(lambda _: int(_.split("_")[-1]), existing_gens.index)
     )
@@ -1052,15 +1060,15 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
         suffixes=("_old", ""),
     ).set_index("gen_name")
     # add building id
-    edisgo_object.topology.generators_df.loc[
-        gens_existing.index, "building_id"
-    ] = gens_existing.building_id
+    edisgo_object.topology.generators_df.loc[gens_existing.index, "building_id"] = (
+        gens_existing.building_id
+    )
     # update plants where capacity decreased
     gens_decreased_cap = gens_existing.query("p_nom < p_nom_old")
     if len(gens_decreased_cap) > 0:
-        edisgo_object.topology.generators_df.loc[
-            gens_decreased_cap.index, "p_nom"
-        ] = gens_decreased_cap.p_nom
+        edisgo_object.topology.generators_df.loc[gens_decreased_cap.index, "p_nom"] = (
+            gens_decreased_cap.p_nom
+        )
     # update plants where capacity increased
     gens_increased_cap = gens_existing.query("p_nom > p_nom_old")
     for gen in gens_increased_cap.index:
@@ -1073,9 +1081,9 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
         if voltage_level_new >= voltage_level_old:
             # simply update p_nom if plant doesn't need to be connected to higher
             # voltage level
-            edisgo_object.topology.generators_df.at[
-                gen, "p_nom"
-            ] = gens_increased_cap.at[gen, "p_nom"]
+            edisgo_object.topology.generators_df.at[gen, "p_nom"] = (
+                gens_increased_cap.at[gen, "p_nom"]
+            )
         else:
             # if plant needs to be connected to higher voltage level, remove existing
             # plant and integrate new component based on geolocation
@@ -1183,10 +1191,10 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
 
     # add voltage level
     for gen in pv_rooftop_df.index:
-        pv_rooftop_df.at[
-            gen, "voltage_level"
-        ] = determine_grid_integration_voltage_level(
-            edisgo_object, pv_rooftop_df.at[gen, "p_nom"]
+        pv_rooftop_df.at[gen, "voltage_level"] = (
+            determine_grid_integration_voltage_level(
+                edisgo_object, pv_rooftop_df.at[gen, "p_nom"]
+            )
         )
 
     # check for duplicated generator names and choose random name for duplicates
@@ -1404,9 +1412,9 @@ def _integrate_power_and_chp_plants(edisgo_object, power_plants_gdf, chp_gdf):
             if voltage_level_new >= voltage_level_old:
                 # simply update p_nom if plant doesn't need to be connected to higher
                 # voltage level
-                edisgo_object.topology.generators_df.at[
-                    gen, "p_nom"
-                ] = gens_increased_cap.at[gen, "p_nom"]
+                edisgo_object.topology.generators_df.at[gen, "p_nom"] = (
+                    gens_increased_cap.at[gen, "p_nom"]
+                )
             else:
                 # if plant needs to be connected to higher voltage level, remove
                 # existing plant and integrate new component based on geolocation

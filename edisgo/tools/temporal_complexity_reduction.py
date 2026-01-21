@@ -71,7 +71,7 @@ def _scored_most_critical_loading(
         crit_lines_score.dropna(how="all").dropna(how="all", axis=1).fillna(0)
     )
     # sort sum in descending order
-    return crit_lines_score.sum(axis=1).sort_values(ascending=False)
+    return crit_lines_score.sum(axis=1).sort_values(ascending=False, kind='stable')
 
 
 def _scored_most_critical_voltage_issues(
@@ -143,7 +143,7 @@ def _scored_most_critical_voltage_issues(
     # drop components and time steps without violations
     voltage_diff = voltage_diff.dropna(how="all").dropna(how="all", axis=1).fillna(0)
     # sort sum in descending order
-    return voltage_diff.sum(axis=1).sort_values(ascending=False)
+    return voltage_diff.sum(axis=1).sort_values(ascending=False, kind='stable')
 
 
 def _scored_most_critical_loading_time_interval(
@@ -514,7 +514,7 @@ def _most_critical_time_interval(
     crit_timesteps = (
         crit_timesteps.iloc[int(time_steps_per_time_interval) - 1 :]
         .iloc[time_step_day_start::time_steps_per_day]
-        .sort_values(ascending=False)
+        .sort_values(ascending=False, kind='stable')
     )
     # get time steps in each time interval - these are set up setting the given time
     # step to be the end of the respective time interval, as rolling() function gives
@@ -522,7 +522,7 @@ def _most_critical_time_interval(
     # intervals with a sum greater than zero are considered, as zero values mean, that
     # there is no grid issue in the respective time interval
     time_intervals = [
-        pd.date_range(end=timestep, periods=int(time_steps_per_time_interval), freq="h")
+        pd.date_range(end=timestep, periods=int(time_steps_per_time_interval), freq="H")
         for timestep in crit_timesteps.index
         if crit_timesteps[timestep] != 0.0
     ]

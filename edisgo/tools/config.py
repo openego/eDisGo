@@ -286,6 +286,7 @@ class Config:
         if engine is None:
             engine = egon_engine()
         if "toep" in str(engine.url):
+        if "openenergyplatform" in str(engine.url):
             self._ensure_db_mappings_loaded()
             schema = self.db_schema_mapping.get(schema_name)
             if not schema:

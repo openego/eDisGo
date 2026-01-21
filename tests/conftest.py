@@ -2,6 +2,10 @@ import os
 
 import pytest
 
+# Set matplotlib backend to non-interactive for tests (prevents TclError on Windows CI)
+import matplotlib
+matplotlib.use('Agg')
+
 from edisgo.io.db import engine
 
 
@@ -37,6 +41,7 @@ def pytest_configure(config):
 
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "local: mark test as local to run")
+    config.addinivalue_line("markers", "runonlinux: mark test to run only on linux")
 
     if config.getoption("--runlocal"):
         pytest.engine_local = engine(path=pytest.egon_data_config_yml, ssh=False)
