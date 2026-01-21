@@ -5,6 +5,7 @@ import os
 
 from typing import TYPE_CHECKING
 
+import dash
 import matplotlib
 import numpy as np
 import pandas as pd
@@ -12,7 +13,6 @@ import plotly.graph_objects as go
 
 from dash import dcc, html
 from dash.dependencies import Input, Output
-from jupyter_dash import JupyterDash
 from matplotlib import pyplot as plt
 from networkx import Graph
 from pyproj import Transformer
@@ -211,7 +211,7 @@ def get_grid_district_polygon(config, subst_id=None, projection=4326):
                 ).all()
             ]
 
-    crs = {"init": "epsg:3035"}
+    crs = "epsg:3035"
     region = gpd.GeoDataFrame(Regions, columns=["subst_id", "geometry"], crs=crs)
     region = region.to_crs(epsg=projection)
 
@@ -562,9 +562,8 @@ def mv_grid_topology(
     pypsa_plot.buses = pypsa_plot.buses[~pypsa_plot.buses.index.str.contains("agg")]
     pypsa_plot.lines = edisgo_obj.topology.lines_df[
         edisgo_obj.topology.lines_df.bus0.isin(pypsa_plot.buses.index)
-    ][edisgo_obj.topology.lines_df.bus1.isin(pypsa_plot.buses.index)].loc[
-        :, ["bus0", "bus1"]
-    ]
+        & edisgo_obj.topology.lines_df.bus1.isin(pypsa_plot.buses.index)
+    ].loc[:, ["bus0", "bus1"]]
 
     # line colors
     if line_color == "loading":
@@ -662,9 +661,7 @@ def mv_grid_topology(
     if grid_district_geom:
         try:
             projection = 3857 if contextily and background_map else 4326
-            crs = {
-                "init": "epsg:{}".format(int(edisgo_obj.topology.grid_district["srid"]))
-            }
+            crs = "epsg:{}".format(int(edisgo_obj.topology.grid_district["srid"]))
             region = gpd.GeoDataFrame(
                 {"geometry": [edisgo_obj.topology.grid_district["geom"]]},
                 crs=crs,
@@ -1628,9 +1625,9 @@ def plot_dash_app(
     edisgo_objects: EDisGo | dict[str, EDisGo],
     debug: bool = False,
     height: int = 500,
-) -> JupyterDash:
+) -> dash.Dash:
     """
-    Generates a jupyter dash app from given eDisGo object(s).
+    Generates a dash app from given eDisGo object(s).
 
     Parameters
     ----------
@@ -1653,8 +1650,8 @@ def plot_dash_app(
 
     Returns
     -------
-    JupyterDash
-        Jupyter dash app.
+    Dash
+        dash app.
 
     """
     if isinstance(edisgo_objects, dict):
@@ -1701,7 +1698,7 @@ def plot_dash_app(
 
     padding = 1
 
-    app = JupyterDash(__name__)
+    app = dash.Dash(__name__)
     # Workaround to use standard python logging with plotly dash
     if debug:
         app.logger.disabled = False
@@ -2331,7 +2328,7 @@ def plot_dash(
     height: int = 820,
 ):
     """
-    Shows the generated jupyter dash app from given eDisGo object(s).
+    Shows the generated dash app from given eDisGo object(s).
 
     Parameters
     ----------
@@ -2351,16 +2348,16 @@ def plot_dash(
             Plotting in own browser tab.
 
     debug : bool
-        If True, enables debugging of the jupyter dash app.
+        If True, enables debugging of the dash app.
 
     port : int
         Port which the app uses. Default: 8050.
 
     height : int
-        Height of the jupyter dash cell.
+        Height of the dash cell.
 
     """
     app = plot_dash_app(edisgo_objects, debug=debug, height=height - 300)
     log = logging.getLogger("werkzeug")
     log.setLevel(logging.ERROR)
-    app.run_server(mode=mode, debug=debug, height=height, port=port)
+    app.run(mode=mode, debug=debug, height=height, port=port)

@@ -69,7 +69,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
         slack_bus_mv = psa_network.buses.loc[psa_network.buses.control == "Slack"]
     else:
         slack_bus_mv = psa_network.buses.loc[
-            psa_network.generators.loc[gen_slack_loc].bus[0]
+            psa_network.generators.loc[gen_slack_loc].bus.iloc[0]
         ]
 
     # get trafo type from pypsa
@@ -167,7 +167,7 @@ def aggregate_fluct_generators(psa_network):
                     continue
                 gen_aggr_df = pd.DataFrame(
                     {
-                        "bus": [gens_to_aggr.bus[0]],
+                        "bus": [gens_to_aggr.bus.iloc[0]],
                         "control": ["PQ"],
                         "p_set": gens_to_aggr["p_set"].iloc[0],
                         "q_set": gens_to_aggr["q_set"].iloc[0],
