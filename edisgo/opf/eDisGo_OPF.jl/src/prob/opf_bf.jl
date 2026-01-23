@@ -122,7 +122,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
     # §14a EnWG daily time budget constraints
     if haskey(PowerModels.ref(pm, 1), :gen_hp_14a) && !isempty(PowerModels.ref(pm, 1, :gen_hp_14a))
         println("\n" * "="^80)
-        println("🔍 JULIA DEBUG: §14a Generators")
+        println(" JULIA DEBUG: §14a Generators")
         println("="^80)
         
         gen_hp_14a_dict = PowerModels.ref(pm, 1, :gen_hp_14a)
@@ -161,7 +161,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
     # §14a EnWG daily time budget constraints for charging points
     if haskey(PowerModels.ref(pm, 1), :gen_cp_14a) && !isempty(PowerModels.ref(pm, 1, :gen_cp_14a))
         println("\n" * "="^80)
-        println("🔍 JULIA DEBUG: §14a Charging Point Generators")
+        println(" JULIA DEBUG: §14a Charging Point Generators")
         println("="^80)
         
         gen_cp_14a_dict = PowerModels.ref(pm, 1, :gen_cp_14a)
