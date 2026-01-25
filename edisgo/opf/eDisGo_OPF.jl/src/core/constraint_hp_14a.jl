@@ -56,6 +56,22 @@ function constraint_hp_14a_min_net_load(pm::AbstractBFModelEdisgo, i::Int, nw::I
     # Maximum support capacity (matches Python field name "pmax")
     p_max_support = gen_hp14a["pmax"]
     
+    # --- DEBUG PRINT START ---
+    # Ändere die '12' in die ID, die du genauer prüfen möchtest
+    if i == 12 
+        println("  [DEBUG NW $nw HP $i]")
+        println("    > p_hp_load:     $(round(p_hp_load, digits=6))")
+        println("    > p_hp14a (Var): $(p_hp14a)") # Zeigt die JuMP-Variable
+        println("    > p_min_14a:     $(round(p_min_14a, digits=6))")
+        println("    > p_max_support: $(round(p_max_support, digits=6))")
+        
+        # Hilfswert für die Logik unten berechnen
+        p_min_net_debug = min(p_hp_load, p_min_14a)
+        println("    > p_min_net:     $(round(p_min_net_debug, digits=6))")
+        println("    " * "-"^20)
+    end
+    # --- DEBUG PRINT ENDE ---
+    
     # Net load must stay ≥ minimum net load allowed
     # The minimum is the LOWER of: current load or §14a limit
     # This handles cases where HP draws less than 4.2 kW (e.g., 3 kW due to low thermal demand)
