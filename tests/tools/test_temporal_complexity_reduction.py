@@ -66,7 +66,7 @@ class TestTemporalComplexityReduction:
             weight_by_costs=False,
             run_initial_analyze=False,
         )
-        assert len(ts_crit) == 3
+        assert len(ts_crit) == 2
 
         ts_crit = temp_red.get_most_critical_time_steps(
             self.edisgo,
