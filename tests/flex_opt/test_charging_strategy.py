@@ -102,9 +102,12 @@ class TestChargingStrategy:
         Charging strategies can be applied to different subsets of charging parks
         without overwriting each other's results.
         """
+        #edisgo = self.edisgo_obj
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
         edisgo = self.edisgo_obj
-        ts = edisgo.timeseries
+        edisgo.set_timeindex(timeindex)
 
+        ts = edisgo.timeseries
         # Baseline: apply a strategy to all integrated charging parks
         # so that we have non-zero time series for all of them.
         edisgo.apply_charging_strategy(strategy="dumb")
