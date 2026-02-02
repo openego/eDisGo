@@ -2065,7 +2065,7 @@ class EDisGo:
 
         integrate_charging_parks(self)
 
-    def apply_charging_strategy(self, strategy="dumb", **kwargs):
+    def apply_charging_strategy(self, strategy: str = "dumb", charging_park_ids: list[int] | None = None, **kwargs):
         """
         Applies charging strategy to set EV charging time series at charging parks.
 
@@ -2133,7 +2133,7 @@ class EDisGo:
         series resampled back to the original frequency.
 
         """
-        charging_strategy(self, strategy=strategy, **kwargs)
+        charging_strategy(self, strategy=strategy, charging_park_ids=charging_park_ids, **kwargs)
 
     def import_heat_pumps(self, scenario, engine, timeindex=None, import_types=None):
         """
