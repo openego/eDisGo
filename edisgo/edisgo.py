@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from sqlalchemy.engine.base import Engine
+from edisgo.tools.tools import get_path_length_to_station
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.check_tech_constraints import lines_relative_load
@@ -2614,7 +2615,6 @@ class EDisGo:
             _get_v_res_df,
             _infer_load_and_feedin_timesteps,
             _series_at_t,
-            _shortest_distances_km,
             make_voltage_over_distance_figure,
         )
 
@@ -2667,8 +2667,21 @@ class EDisGo:
 
         # Distances (Dijkstra)
         # Edge weight attribute commonly is 'length' in eDisGo graphs; adjust if your graph uses 'length_km'
-        dist_a = _shortest_distances_km(lv_grid_a.graph, source_bus=source_a, weight="length")
-        dist_b = _shortest_distances_km(lv_grid_b.graph, source_bus=source_b, weight="length")
+        pl_a = get_path_length_to_station(self)
+        pl_b = get_path_length_to_station(other)
+
+        # restrict to LV buses and shift so LV station bus is at 0
+        lv_buses_a = pd.Index([str(b) for b in lv_grid_a.buses_df.index])
+        lv_buses_b = pd.Index([str(b) for b in lv_grid_b.buses_df.index])
+
+        dist_a = pl_a.reindex(lv_buses_a).astype(float)
+        dist_b = pl_b.reindex(lv_buses_b).astype(float)
+
+        # Shift to LV station reference (station bus distance -> 0)
+        if str(source_a) in pl_a.index:
+            dist_a = dist_a - float(pl_a.loc[str(source_a)])
+        if str(source_b) in pl_b.index:
+            dist_b = dist_b - float(pl_b.loc[str(source_b)])
 
         # Worst-case timesteps
         t_load_a, t_feed_a = _infer_load_and_feedin_timesteps(self, v_a)
@@ -2713,7 +2726,7 @@ class EDisGo:
 
         return fig
 
-    def plot_voltage_over_dist_mv(self, mv_id, other, save_as=False):
+    def plot_voltage_over_dist_mv(self, mv_id, other,save_as=False):
         """
         Plot MV voltage over distance to the HV/MV transformer, comparing two EDisGo objects.
 
@@ -2728,7 +2741,6 @@ class EDisGo:
             _get_v_res_df,
             _infer_load_and_feedin_timesteps,
             _series_at_t,
-            _shortest_distances_km,
             make_voltage_over_distance_figure,
         )
 
@@ -2763,16 +2775,22 @@ class EDisGo:
                     bus = getattr(st, "bus", None)
                     if bus is not None and str(bus) in G:
                         return str(bus)
-
-            # 3) Fallback: pick the first graph node (guaranteed to exist)
+                 # Fallback: first graph node (guaranteed)
             return str(next(iter(G.nodes)))
 
 
         source_a = _mv_source_bus(self)
         source_b = _mv_source_bus(other)
 
-        dist_a = _shortest_distances_km(mv_a.graph, source_bus=source_a, weight="length")
-        dist_b = _shortest_distances_km(mv_b.graph, source_bus=source_b, weight="length")
+        # Path length to station (topological distance, not km)
+        pl_a = get_path_length_to_station(self)
+        pl_b = get_path_length_to_station(other)
+
+        mv_buses_a = pd.Index([str(b) for b in mv_a.buses_df.index])
+        mv_buses_b = pd.Index([str(b) for b in mv_b.buses_df.index])
+
+        dist_a = pl_a.reindex(mv_buses_a).astype(float)
+        dist_b = pl_b.reindex(mv_buses_b).astype(float)
 
         t_load_a, t_feed_a = _infer_load_and_feedin_timesteps(self, v_a)
         t_load_b, t_feed_b = _infer_load_and_feedin_timesteps(other, v_b)
