@@ -2596,27 +2596,33 @@ class EDisGo:
             title = None
         plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
 
-    def plot_voltage_over_dist(self, mv_id, lv_id, other, save_as=False, split_branches=False):
+    def plot_voltage_over_dist(self, mv_id, lv_id, save_as=False, split_branches=False, return_data=False, other=None):
+
         """
         Plot LV voltage over distance to the MV/LV transformer for one LV grid,
-        comparing this EDisGo object ("base") with another EDisGo object ("other").
 
         Parameters
         ----------
         mv_id : kept for API compatibility (currently unused)
         lv_id : int or str identifying LV grid (int = index in mv_grid.lv_grids)
-        other : EDisGo
         save_as : bool or str
             If True -> writes default html. If str -> file path (.html or .png).
         split_branches : kept for API compatibility (currently unused)
+        other : EDisGo object, optional
+            Another EDisGo object to compare voltage data. If None, only self is used.
         """
         # Local imports to avoid import overhead
         from edisgo.tools.voltage_over_distance import (
             _get_v_res_df,
             _infer_load_and_feedin_timesteps,
             _series_at_t,
+            build_voltage_over_distance_df,
             make_voltage_over_distance_figure,
         )
+
+        # If other is None, use self for comparison
+        if other is None:
+            other = self
 
         # Require results on both
         v_a = _get_v_res_df(self)
@@ -2665,6 +2671,7 @@ class EDisGo:
         source_a = _lv_source_bus(lv_grid_a)
         source_b = _lv_source_bus(lv_grid_b)
 
+
         # Distances (Dijkstra)
         # Edge weight attribute commonly is 'length' in eDisGo graphs; adjust if your graph uses 'length_km'
         pl_a = get_path_length_to_station(self)
@@ -2677,11 +2684,53 @@ class EDisGo:
         dist_a = pl_a.reindex(lv_buses_a).astype(float)
         dist_b = pl_b.reindex(lv_buses_b).astype(float)
 
+        # Import networkx once
+        import networkx as nx
+        
+        # If LV station bus is not in pl_a (external bus), set its distance to 0 and compute other buses relative to it
+        if str(source_a) in dist_a.index and pd.isna(dist_a.loc[str(source_a)]):
+            # Use LV grid graph to compute path lengths
+            try:
+                lv_graph = lv_grid_a.graph
+                lv_station = str(lv_grid_a.station.index[0])  if hasattr(lv_grid_a, 'station') else str(source_a)
+                
+                # Compute all path lengths from station at once using BFS
+                try:
+                    path_lengths = nx.single_source_shortest_path_length(lv_graph, source=lv_station)
+                    for bus in lv_buses_a:
+                        dist_a.loc[bus] = path_lengths.get(bus, 0)
+                except (nx.NetworkXError, nx.NodeNotFound):
+                    # If computation fails, set all to 0
+                    dist_a.loc[:] = 0
+            except Exception:
+                # Fallback: set all LV buses to 0
+                dist_a.loc[:] = 0
+        
+        if str(source_b) in dist_b.index and pd.isna(dist_b.loc[str(source_b)]):
+            # Use LV grid graph to compute path lengths
+            try:
+                lv_graph = lv_grid_b.graph
+                lv_station = str(lv_grid_b.station.index[0]) if hasattr(lv_grid_b, 'station') else str(source_b)
+                
+                # Compute all path lengths from station at once using BFS
+                try:
+                    path_lengths = nx.single_source_shortest_path_length(lv_graph, source=lv_station)
+                    for bus in lv_buses_b:
+                        dist_b.loc[bus] = path_lengths.get(bus, 0)
+                except (nx.NetworkXError, nx.NodeNotFound):
+                    # If computation fails, set all to 0
+                    dist_b.loc[:] = 0
+            except Exception:
+                # Fallback: set all LV buses to 0
+                dist_b.loc[:] = 0
+ 
         # Shift to LV station reference (station bus distance -> 0)
-        if str(source_a) in pl_a.index:
+        if str(source_a) in pl_a.index and not pd.isna(pl_a.loc[str(source_a)]):
             dist_a = dist_a - float(pl_a.loc[str(source_a)])
-        if str(source_b) in pl_b.index:
+        if str(source_b) in pl_b.index and not pd.isna(pl_b.loc[str(source_b)]):
             dist_b = dist_b - float(pl_b.loc[str(source_b)])
+
+
 
         # Worst-case timesteps
         t_load_a, t_feed_a = _infer_load_and_feedin_timesteps(self, v_a)
@@ -2693,25 +2742,30 @@ class EDisGo:
         v_b_load = _series_at_t(v_b, t_load_b)
         v_b_feed = _series_at_t(v_b, t_feed_b)
 
-        # Buses to plot: intersection
-        buses = pd.Index([str(b) for b in lv_grid_a.buses_df.index]).intersection(
-            pd.Index([str(b) for b in lv_grid_b.buses_df.index])
-        )
-        if len(buses) == 0:
-            raise RuntimeError("No overlapping LV buses found between base and other object.")
+        # Use all buses (grids are identical), no intersection needed
+        buses = pd.Index([str(b) for b in lv_grid_a.buses_df.index])
+        if buses.empty:
+            raise RuntimeError("No LV buses found in LV grid.")
 
+        df = build_voltage_over_distance_df(
+            buses=buses,
+            dist_a=dist_a,
+            v_a_load=v_a_load,
+            v_a_feed=v_a_feed,
+        )
+ 
         fig = make_voltage_over_distance_figure(
             title=f"LV voltage over distance (lv_id={lv_id})",
             buses=buses,
             dist_a=dist_a,
             v_a_load=v_a_load,
             v_a_feed=v_a_feed,
-            dist_b=dist_b,
-            v_b_load=v_b_load,
-            v_b_feed=v_b_feed,
             band_low=0.90,
             band_high=1.10,
+            x_label="Path length to LV station [-]",
+            df=df,
         )
+
 
         if save_as:
             if isinstance(save_as, str):
@@ -2724,9 +2778,9 @@ class EDisGo:
             else:
                 fig.write_html("voltage_over_distance_lv.html")
 
-        return fig
+        return (fig, df) if return_data else fig
 
-    def plot_voltage_over_dist_mv(self, mv_id, other,save_as=False):
+    def plot_voltage_over_dist_mv(self, mv_id, other, save_as=False, return_data=False):
         """
         Plot MV voltage over distance to the HV/MV transformer, comparing two EDisGo objects.
 
@@ -2741,6 +2795,7 @@ class EDisGo:
             _get_v_res_df,
             _infer_load_and_feedin_timesteps,
             _series_at_t,
+            build_voltage_over_distance_df,
             make_voltage_over_distance_figure,
         )
 
@@ -2792,6 +2847,37 @@ class EDisGo:
         dist_a = pl_a.reindex(mv_buses_a).astype(float)
         dist_b = pl_b.reindex(mv_buses_b).astype(float)
 
+        # Handle cases where MV buses are not in pl_a (e.g., external buses)
+        # Use MV grid graph to compute path lengths if needed
+        import networkx as nx
+        if dist_a.isna().any():
+            try:
+                mv_graph = mv_a.graph
+                for bus in mv_buses_a:
+                    if pd.isna(dist_a.loc[bus]):
+                        try:
+                            path = nx.shortest_path(mv_graph, source=source_a, target=bus)
+                            dist_a.loc[bus] = len(path) - 1  # number of edges
+                        except (nx.NetworkXNoPath, nx.NodeNotFound):
+                            dist_a.loc[bus] = 0
+            except Exception:
+                # Fallback: set all NaN values to 0
+                dist_a = dist_a.fillna(0)
+        
+        if dist_b.isna().any():
+            try:
+                mv_graph = mv_b.graph
+                for bus in mv_buses_b:
+                    if pd.isna(dist_b.loc[bus]):
+                        try:
+                            path = nx.shortest_path(mv_graph, source=source_b, target=bus)
+                            dist_b.loc[bus] = len(path) - 1  # number of edges
+                        except (nx.NetworkXNoPath, nx.NodeNotFound):
+                            dist_b.loc[bus] = 0
+            except Exception:
+                # Fallback: set all NaN values to 0
+                dist_b = dist_b.fillna(0)
+
         t_load_a, t_feed_a = _infer_load_and_feedin_timesteps(self, v_a)
         t_load_b, t_feed_b = _infer_load_and_feedin_timesteps(other, v_b)
 
@@ -2800,12 +2886,20 @@ class EDisGo:
         v_b_load = _series_at_t(v_b, t_load_b)
         v_b_feed = _series_at_t(v_b, t_feed_b)
 
-        buses = pd.Index([str(b) for b in mv_a.buses_df.index]).intersection(
-            pd.Index([str(b) for b in mv_b.buses_df.index])
-        )
-        if len(buses) == 0:
-            raise RuntimeError("No overlapping MV buses found between base and other object.")
+        buses = pd.Index([str(b) for b in mv_a.buses_df.index])
+        if buses.empty:
+            raise RuntimeError("No MV buses found in MV grid.")
 
+
+        df = build_voltage_over_distance_df(
+            buses=buses,
+            dist_a=dist_a,
+            v_a_load=v_a_load,
+            v_a_feed=v_a_feed,
+            dist_b=dist_b,
+            v_b_load=v_b_load,
+            v_b_feed=v_b_feed,
+        )
         fig = make_voltage_over_distance_figure(
             title="MV voltage over distance",
             buses=buses,
@@ -2817,7 +2911,10 @@ class EDisGo:
             v_b_feed=v_b_feed,
             band_low=0.96,
             band_high=1.06,
-        )
+            x_label="Path length to HV/MV station [-]",
+            df=df,
+    )
+
 
         if save_as:
             if isinstance(save_as, str):
@@ -2830,7 +2927,7 @@ class EDisGo:
             else:
                 fig.write_html("voltage_over_distance_mv.html")
 
-        return fig
+        return (fig, df) if return_data else fig
 
     def histogram_relative_line_load(
         self, timestep=None, title=True, voltage_level="mv_lv", **kwargs

@@ -1,9 +1,8 @@
 # edisgo/tools/voltage_over_distance.py
 
 from __future__ import annotations
-
+from edisgo.tools.tools import get_path_length_to_station
 from typing import Optional, Tuple
-
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -101,22 +100,48 @@ def _series_at_t(v_df: pd.DataFrame, t: pd.Timestamp) -> pd.Series:
     s.index = s.index.map(str)
     return s
 
-
-def _shortest_distances_km(G, source_bus: str, weight: Optional[str] = "length") -> pd.Series:
+def build_voltage_over_distance_df(
+    *,
+    buses: pd.Index,
+    dist_a: pd.Series,
+    v_a_load: pd.Series,
+    v_a_feed: pd.Series,
+    dist_b: Optional[pd.Series] = None,
+    v_b_load: Optional[pd.Series] = None,
+    v_b_feed: Optional[pd.Series] = None,
+) -> pd.DataFrame:
     """
-    Uses the networkx API exposed via the graph object already used by eDisGo.
-    Assumes edge attribute `weight` is in km (common is 'length' or 'length_km').
+    Build the DataFrame used for voltage-over-distance plots.
+
+    Returns columns:
+      - bus (str)
+      - x (float)   (path length / distance)
+      - v_pu (float)
+      - label (str) (scenario label)
     """
-    import networkx as nx
+    buses = pd.Index([str(b) for b in buses])
 
-    source_bus = str(source_bus)
-    if source_bus not in G:
-        raise ValueError(f"Source bus '{source_bus}' not in graph.")
+    def _mk_df(dist: pd.Series, vv: pd.Series, label: str) -> pd.DataFrame:
+        df = pd.DataFrame({"bus": buses})
+        df["x"] = df["bus"].map(dist)
+        df["v_pu"] = df["bus"].map(vv)
+        df["label"] = label
+        return df.dropna(subset=["x", "v_pu"])
 
-    dist = nx.single_source_dijkstra_path_length(G, source=source_bus, weight=weight)
-    # include all nodes, missing => NaN
-    return pd.Series({str(n): dist.get(n, np.nan) for n in G.nodes}, name="distance_km")
+    parts = [
+        _mk_df(dist_a, v_a_load, "base — load case"),
+        _mk_df(dist_a, v_a_feed, "base — feed-in case"),
+    ]
 
+    if dist_b is not None and v_b_load is not None and v_b_feed is not None:
+        parts.extend(
+            [
+                _mk_df(dist_b, v_b_load, "other — load case"),
+                _mk_df(dist_b, v_b_feed, "other — feed-in case"),
+            ]
+        )
+
+    return pd.concat(parts, ignore_index=True)
 
 def make_voltage_over_distance_figure(
     *,
@@ -125,34 +150,32 @@ def make_voltage_over_distance_figure(
     dist_a: pd.Series,
     v_a_load: pd.Series,
     v_a_feed: pd.Series,
-    dist_b: pd.Series,
-    v_b_load: pd.Series,
-    v_b_feed: pd.Series,
+    dist_b: Optional[pd.Series] = None,
+    v_b_load: Optional[pd.Series] = None,
+    v_b_feed: Optional[pd.Series] = None,
     band_low: float,
     band_high: float,
+    x_label: str = "Path length to station [-]",
+    df: Optional[pd.DataFrame] = None,
 ) -> go.Figure:
     """
     Builds a plotly scatter figure with 4 traces:
       base-load, base-feed-in, other-load, other-feed-in
     """
+
     buses = pd.Index([str(b) for b in buses])
 
-    def _mk_df(dist: pd.Series, vv: pd.Series, label: str) -> pd.DataFrame:
-        df = pd.DataFrame({"bus": buses})
-        df["distance_km"] = df["bus"].map(dist)
-        df["v_pu"] = df["bus"].map(vv)
-        df["label"] = label
-        return df.dropna(subset=["distance_km", "v_pu"])
+    if df is None:
+        df = build_voltage_over_distance_df(
+            buses=buses,
+            dist_a=dist_a,
+            v_a_load=v_a_load,
+            v_a_feed=v_a_feed,
+            dist_b=dist_b,
+            v_b_load=v_b_load,
+            v_b_feed=v_b_feed,
+        )
 
-    df = pd.concat(
-        [
-            _mk_df(dist_a, v_a_load, "base — load case"),
-            _mk_df(dist_a, v_a_feed, "base — feed-in case"),
-            _mk_df(dist_b, v_b_load, "other — load case"),
-            _mk_df(dist_b, v_b_feed, "other — feed-in case"),
-        ],
-        ignore_index=True,
-    )
 
     fig = go.Figure()
 
@@ -168,20 +191,18 @@ def make_voltage_over_distance_figure(
         sub = df[df["label"] == label]
         fig.add_trace(
             go.Scatter(
-                x=sub["distance_km"],
+                x=sub["x"],
                 y=sub["v_pu"],
                 mode="markers",
                 name=label,
                 customdata=np.stack([sub["bus"]], axis=-1),
-                hovertemplate="bus=%{customdata[0]}<br>dist=%{x:.3f} km<br>v=%{y:.4f} p.u.<extra></extra>",
+                hovertemplate="bus=%{customdata[0]}<br>path=%{x}<br>v=%{y:.4f} p.u.<extra></extra>",
             )
-        )
-
+        )    
     fig.update_layout(
         title=title,
-        xaxis_title="Distance [km]",
+        xaxis_title=x_label,
         yaxis_title="Voltage [p.u.]",
         legend_title="Scenario",
     )
     return fig
-

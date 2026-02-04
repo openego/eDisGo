@@ -1419,11 +1419,15 @@ class TestEDisGo:
     def test_plot_voltage_over_dist(self):
         self.setup_worst_case_time_series()
         self.edisgo.analyze()
-        import copy
-        other = copy.deepcopy(self.edisgo)
-        other.analyze()
-        fig = self.edisgo.plot_voltage_over_dist(mv_id=None, lv_id=0, other=other)
+        fig, df = self.edisgo.plot_voltage_over_dist(mv_id=None, lv_id=0, return_data=True)
+
         assert fig is not None
+        assert df is not None
+        assert not df.empty
+        assert {"bus", "x", "v_pu", "label"}.issubset(df.columns)
+        assert set(df["label"].unique()) == {"base — load case", "base — feed-in case"}
+        assert df["x"].ge(0).all()
+        assert df["v_pu"].between(0.5, 1.5).all()
 
     def test_plot_voltage_over_dist_mv(self):
         self.setup_worst_case_time_series()
@@ -1431,8 +1435,20 @@ class TestEDisGo:
         import copy
         other = copy.deepcopy(self.edisgo)
         other.analyze()
-        fig = self.edisgo.plot_voltage_over_dist_mv(mv_id=None, other=other)
+        fig, df = self.edisgo.plot_voltage_over_dist_mv(mv_id=None, other=other, return_data=True)
+
         assert fig is not None
+        assert df is not None
+        assert not df.empty
+        assert {"bus", "x", "v_pu", "label"}.issubset(df.columns)
+        assert set(df["label"].unique()) == {
+            "base — load case",
+            "base — feed-in case",
+            "other — load case",
+            "other — feed-in case",
+        }
+        assert df["x"].ge(0).all()
+        assert df["v_pu"].between(0.5, 1.5).all()
 
     def test_plot_mv_voltages(self):
         self.setup_worst_case_time_series()
