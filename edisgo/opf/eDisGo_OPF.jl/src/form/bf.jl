@@ -150,7 +150,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
     p_hp14a = get(PowerModels.var(pm, n), :p_hp14a, Dict())  # §14a virtual generators for heat pumps
     p_cp14a = get(PowerModels.var(pm, n), :p_cp14a, Dict())  # §14a virtual generators for charging points
 
-    if PowerModels.ref(pm, 1, :opf_version) in(2, 4)  # Eq. (3.3iii), (3.4iii)
+    if PowerModels.ref(pm, 1, :opf_version) in(2, 4, 5)  # Eq. (3.3iii), (3.4iii)
         pgens  = get(PowerModels.var(pm, n),  :pgens, Dict()); PowerModels._check_var_keys(pgens, bus_gens, "active power slack", "curtailment")
         pds  = get(PowerModels.var(pm, n),  :pds, Dict()); PowerModels._check_var_keys(pds, bus_loads, "active power slack", "load")
         pcps  = get(PowerModels.var(pm, n),  :pcps, Dict()); PowerModels._check_var_keys(pcps, bus_cps, "active power slack", "charging point")
@@ -191,7 +191,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum(pgens[g] * bus_gen_d_pf[g] for g in bus_gens)
             + sum(pdsm[dsm] * bus_dsm_pf[dsm] for dsm in bus_dsm)
             + sum((php[hp] - phps[hp]) * bus_hps_pf[hp] for hp in bus_hps)
-            + sum((pcp[cp] - pcps[cp]) * bus_cps_pf[cp] for hp in bus_cps)
+            + sum((pcp[cp] - pcps[cp]) * bus_cps_pf[cp] for cp in bus_cps)
             # §14a generators have pf=1, q=0
         )
     else  # Eq. (3.3ii), (3.4ii)

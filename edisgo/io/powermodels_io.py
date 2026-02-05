@@ -56,12 +56,12 @@ def to_powermodels(
         optimize self consumption.
         Default: None.
     opf_version : int
-        Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+        Version of optimization models to choose from. Must be one of [1, 2, 3, 4, 5].
         For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
         Default: 1.
     curtailment_14a : dict or None
         Dictionary with §14a EnWG curtailment settings. Keys:
-        - 'max_power_mw': float, minimum power in MW (default 0.0042)
+        - 'min_power_mw': float, minimum power in MW (default 0.0042)
         - 'components': list, heat pump names to apply curtailment to (empty = all)
         - 'max_hours_per_day': float, maximum curtailment hours per day (default 2.0)
         Default: None (no §14a curtailment).
@@ -75,7 +75,7 @@ def to_powermodels(
         reduced by non-flexible components.
 
     """
-    if opf_version in [2, 3, 4]:
+    if opf_version in [2, 3, 4, 5]:
         opf_flex = ["curt"]
     else:
         opf_flex = []
@@ -559,7 +559,7 @@ def from_powermodels(
     )
     edisgo_object.opf_results.heat_storage_t.p_slack = df
 
-    if pm["nw"]["1"]["opf_version"] in [2, 4]:
+    if pm["nw"]["1"]["opf_version"] in [2, 4, 5]:
         slacks = [
             ("gen", "pgens"),
             ("gen_nd", "pgc"),
@@ -1111,7 +1111,7 @@ def _build_battery_storage(
     s_base : int
         Base value of apparent power for per unit system.
     opf_version : int
-        Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+        Version of optimization models to choose from. Must be one of [1, 2, 3, 4, 5].
         For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
 
     """
@@ -1372,10 +1372,10 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
         
     """
     # Extract curtailment settings
-    p_min_14a = curtailment_14a.get("max_power_mw", 0.0042)  # MW
+    p_min_14a = curtailment_14a.get("min_power_mw", curtailment_14a.get("max_power_mw", 0.0042))  # MW
     max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours
     specific_components = curtailment_14a.get("components", [])
-    
+
     # Filter heat pumps if specific components are defined
     if len(specific_components) > 0:
         hps_14a = np.intersect1d(flexible_hps, specific_components)
@@ -1461,7 +1461,7 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
         
     """
     # Extract curtailment settings
-    p_min_14a = curtailment_14a.get("max_power_mw", 0.0042)  # MW (same as HPs)
+    p_min_14a = curtailment_14a.get("min_power_mw", curtailment_14a.get("max_power_mw", 0.0042))  # MW (same as HPs)
     max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours
     specific_components = curtailment_14a.get("components", [])
     
@@ -1557,7 +1557,7 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
         Array containing all heat pumps that allow for flexible operation due to an
         attached heat storage.
     opf_version : int
-        Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+        Version of optimization models to choose from. Must be one of [1, 2, 3, 4, 5].
         For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
 
     """

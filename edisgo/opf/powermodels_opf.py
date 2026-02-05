@@ -71,8 +71,11 @@ def pm_optimize(
         * 4
             * Additional constraints: high voltage requirements
             * Objective: minimize line losses, HV slacks and grid related slacks
+        * 5
+            * §14a curtailment as only flexibility tool
+            * Objective: minimize line losses + §14a usage, feasibility slacks at 1e8
 
-        Must be one of [1, 2, 3, 4].
+        Must be one of [1, 2, 3, 4, 5].
         Default: 1.
     method : str
         Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"

@@ -550,14 +550,17 @@ def setup_edisgo(grid_path, scenario="eGon2035", num_hps=50, num_cps=30, num_day
 def run_optimization_14a(edisgo):
     """
     Run optimization with §14a curtailment enabled.
-    
-    Uses opf_version=3 which minimizes line losses, maximal line loading, and HV slacks.
-    
+
+    Uses opf_version=5 which uses §14a curtailment as the only flexibility tool.
+    Minimizes line losses and §14a usage. Grid restrictions (voltage 0.9-1.1 p.u.,
+    current limits) are enforced as hard constraints. Feasibility slacks exist but
+    are penalized at 1e8 to ensure the model remains feasible.
+
     Parameters
     ----------
     edisgo : EDisGo
         EDisGo object with time series
-        
+
     Returns
     -------
     EDisGo
@@ -566,16 +569,16 @@ def run_optimization_14a(edisgo):
     print(f"\n{'='*80}")
     print(f"⚡ Running OPF with §14a Curtailment")
     print(f"{'='*80}")
-    print(f"\nUsing OPF version 3:")
-    print(f"  - Minimize line losses")
-    print(f"  - Minimize maximal line loading")
-    print(f"  - Minimize HV slacks")
-    print(f"  - §14a curtailment enabled for heat pumps and charging points")
-    
+    print(f"\nUsing OPF version 5:")
+    print(f"  - §14a curtailment as only flexibility tool")
+    print(f"  - Minimize line losses + §14a usage")
+    print(f"  - Grid restrictions enforced (voltage 0.9-1.1, current limits)")
+    print(f"  - Feasibility slacks penalized at 1e8")
+
     start_time = datetime.now()
-    
+
     # Run optimization
-    edisgo.pm_optimize(opf_version=2, curtailment_14a=True)
+    edisgo.pm_optimize(opf_version=5, curtailment_14a=True)
     
     duration = (datetime.now() - start_time).total_seconds()
     
@@ -991,7 +994,7 @@ def main():
     # ============================================================================
     
     # Grid configuration
-    GRID_PATH = "../../30879"
+    GRID_PATH = "/home/gurobi/.ding0/2024-07-25T17:38:34_new_planning_new_edisgo/ding0_grids/30879"
     SCENARIO = "eGon2035"
     
     # Simulation parameters

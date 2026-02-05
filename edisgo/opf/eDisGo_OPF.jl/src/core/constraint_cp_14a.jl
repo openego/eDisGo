@@ -34,6 +34,14 @@ end
 Ensures that the net electrical load (charging point load - virtual generator support)
 stays above the §14a minimum power level (typically 4.2 kW = 0.0042 MW).
 
+For flexible CPs (in electromobility dict): uses optimization variable `pcp`.
+For fixed CPs (in load dict): uses fixed load parameter `load["pd"]`.
+
+Big-M formulation:
+  p_cp - p_cp14a >= p_min_14a - M * (1 - z_cp14a)
+  When z=0 (inactive): constraint relaxed
+  When z=1 (active):   p_cp - p_cp14a >= p_min_14a (net load >= 4.2 kW)
+
 # Arguments
 - `pm::AbstractBFModelEdisgo`: PowerModels model
 - `i::Int`: Virtual generator index
@@ -42,74 +50,54 @@ stays above the §14a minimum power level (typically 4.2 kW = 0.0042 MW).
 function constraint_cp_14a_min_net_load(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
     gen_cp14a = PowerModels.ref(pm, nw, :gen_cp_14a, i)
     cp_idx = gen_cp14a["cp_index"]
-    
+
+    # Virtual generator support variable
+    p_cp14a = PowerModels.var(pm, nw, :p_cp14a, i)
+
+    # §14a minimum power (per unit)
+    p_min_14a = gen_cp14a["p_min_14a"]
+
+    # Maximum support capacity
+    p_max_support = gen_cp14a["pmax"]
+
+    if p_max_support < 1e-6
+        # Charging point too small for §14a curtailment, disable virtual generator
+        JuMP.@constraint(pm.model, p_cp14a == 0.0)
+        return
+    end
+
+    # Binary time variable 
+    z_cp14a = PowerModels.var(pm, nw, :z_cp14a, i)
+    M = p_max_support + p_min_14a
+
     # Check if CP is flexible (in electromobility dict) or simple load
-    p_cp_load = nothing
     if haskey(PowerModels.ref(pm, nw), :electromobility) && haskey(PowerModels.ref(pm, nw, :electromobility), cp_idx)
-        # Flexible CP: use electromobility variable
-        cp = PowerModels.ref(pm, nw, :electromobility, cp_idx)
-        p_cp_load = cp["pcp"]  # Charging power variable (optimization variable)
+        # Flexible CP: use optimization VARIABLE
+        pcp = PowerModels.var(pm, nw, :pcp, cp_idx)
+        JuMP.@constraint(pm.model, pcp - p_cp14a >= p_min_14a - M * (1 - z_cp14a))
     else
         # Non-flexible CP: use fixed load timeseries
-        # Find the load by CP name
         cp_name = gen_cp14a["cp_name"]
-        # Search for load with matching name
         load_found = false
         for (load_id, load) in PowerModels.ref(pm, nw, :load)
             if haskey(load, "name") && load["name"] == cp_name
-                p_cp_load = load["pd"]  # Fixed load value (parameter, not variable)
+                p_cp_load = load["pd"]
                 load_found = true
+                if p_cp_load > 1e-6
+                    # Fixed load with Big-M: when z=1, enforce min net load
+                    JuMP.@constraint(pm.model, p_cp_load - p_cp14a >= p_min_14a - M * (1 - z_cp14a))
+                else
+                    # CP is off, no support needed
+                    JuMP.@constraint(pm.model, p_cp14a == 0.0)
+                end
                 break
             end
         end
-        
+
         if !load_found
             @warn "Could not find load for charging point $(cp_name), skipping constraint"
             return
         end
-    end
-    
-    # Virtual generator support
-    p_cp14a = PowerModels.var(pm, nw, :p_cp14a, i)
-    
-    # §14a minimum power (per unit)
-    p_min_14a = gen_cp14a["p_min_14a"]
-    
-    # Maximum support capacity (matches Python field name "pmax")
-    p_max_support = gen_cp14a["pmax"]
-    
-    if i == 3 
-        println("  [DEBUG NW $nw HP $i]")
-        println("    > p_cp_load:     $(round(p_cp_load, digits=6))")
-        println("    > p_cp14a (Var): $(p_cp14a)") # Zeigt die JuMP-Variable
-        println("    > p_min_14a:     $(round(p_min_14a, digits=6))")
-        println("    > p_max_support: $(round(p_max_support, digits=6))")
-        
-        # Hilfswert für die Logik unten berechnen
-        p_min_net_debug = min(p_cp_load, p_min_14a)
-        println("    > p_min_net:     $(round(p_min_net_debug, digits=6))")
-        println("    " * "-"^20)
-    end
-    
-    # Net load must stay ≥ minimum net load allowed
-    # The minimum is the LOWER of: current load or §14a limit
-    # This handles cases where CP draws less than 4.2 kW (e.g., 3 kW due to low charging demand)
-    # p_cp_load - p_cp14a ≥ min(p_cp_load, p_min_14a)
-    # 
-    # Special cases:
-    # - If p_max_support ≈ 0 (CP too small), force virtual gen to zero
-    # - If CP is off (p_cp_load ≈ 0), no support needed
-    if p_max_support < 1e-6
-        # Charging point too small for §14a curtailment, disable virtual generator
-        JuMP.@constraint(pm.model, p_cp14a == 0.0)
-    elseif p_cp_load > 1e-6
-        # Normal case: enforce minimum net load
-        # Net load cannot go below current load or §14a minimum, whichever is lower
-        p_min_net = min(p_cp_load, p_min_14a)
-        JuMP.@constraint(pm.model, p_cp14a <= p_cp_load - p_min_net)
-    else
-        # Charging point is off, no support needed
-        JuMP.@constraint(pm.model, p_cp14a == 0.0)
     end
 end
 

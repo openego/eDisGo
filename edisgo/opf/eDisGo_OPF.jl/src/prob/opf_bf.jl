@@ -11,7 +11,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
     end
     for (n, network) in PowerModels.nws(pm)
         # VARIABLES
-        if PowerModels.ref(pm, 1, :opf_version) in(1, 2, 3, 4)
+        if PowerModels.ref(pm, 1, :opf_version) in(1, 2, 3, 4, 5)
             eDisGo_OPF.variable_branch_power_radial(pm, nw=n, bounded=false) # keine Begrenzung für Leistung auf Leitungen/Trafos (Strombegrenzung stattdessen)
             if PowerModels.ref(pm, 1, :opf_version) in(1, 3) # nur für Version 1 und 3 (ohne Netzrestriktionen)
                 eDisGo_OPF.variable_branch_current(pm, nw=n, bounded=false) # keine Eq. (3.7)!
@@ -53,7 +53,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
                 end
             end
         else
-            throw(ArgumentError("OPF version $(PowerModels.ref(pm, 1, :opf_version)) is not implemented! Choose between version 1 to 4."))
+            throw(ArgumentError("OPF version $(PowerModels.ref(pm, 1, :opf_version)) is not implemented! Choose between version 1 to 5."))
         end
 
         # CONSTRAINTS
@@ -207,5 +207,7 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         eDisGo_OPF.objective_min_losses_slacks(pm)  # Eq. (3.2 iii)
     elseif PowerModels.ref(pm, 1, :opf_version) == 4
         eDisGo_OPF.objective_min_losses_slacks_OG(pm)  # Nicht Teil der MA
+    elseif PowerModels.ref(pm, 1, :opf_version) == 5
+        eDisGo_OPF.objective_min_losses_14a_only(pm)  # §14a als einzige Flexibilität, Feasibility-Slacks extrem bestraft
     end
 end
