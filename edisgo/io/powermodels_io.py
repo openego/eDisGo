@@ -511,53 +511,55 @@ def from_powermodels(
     edisgo_object.opf_results.slack_generator_t = df
 
     # save internal battery storage variable to edisgo object
-    df = _result_df(
-        pm,
-        "storage",
-        "ps",
-        timesteps,
-        edisgo_object.timeseries.timeindex,
-        s_base,
-    )
-    edisgo_object.opf_results.battery_storage_t.p = df
+    # Version 5 doesn't have storage flexibilities - skip reading
+    if pm["nw"]["1"]["opf_version"] != 5:
+        df = _result_df(
+            pm,
+            "storage",
+            "ps",
+            timesteps,
+            edisgo_object.timeseries.timeindex,
+            s_base,
+        )
+        edisgo_object.opf_results.battery_storage_t.p = df
 
-    df = _result_df(
-        pm,
-        "storage",
-        "se",
-        timesteps,
-        edisgo_object.timeseries.timeindex,
-        s_base,
-    )
-    edisgo_object.opf_results.battery_storage_t.e = df
-    # save heat storage variables to edisgo object
-    df = _result_df(
-        pm,
-        "heat_storage",
-        "phs",
-        timesteps,
-        edisgo_object.timeseries.timeindex,
-        s_base,
-    )
-    edisgo_object.opf_results.heat_storage_t.p = df
-    df = _result_df(
-        pm,
-        "heat_storage",
-        "hse",
-        timesteps,
-        edisgo_object.timeseries.timeindex,
-        s_base,
-    )
-    edisgo_object.opf_results.heat_storage_t.e = df
-    df = _result_df(
-        pm,
-        "heat_storage",
-        "phss",
-        timesteps,
-        edisgo_object.timeseries.timeindex,
-        s_base,
-    )
-    edisgo_object.opf_results.heat_storage_t.p_slack = df
+        df = _result_df(
+            pm,
+            "storage",
+            "se",
+            timesteps,
+            edisgo_object.timeseries.timeindex,
+            s_base,
+        )
+        edisgo_object.opf_results.battery_storage_t.e = df
+        # save heat storage variables to edisgo object
+        df = _result_df(
+            pm,
+            "heat_storage",
+            "phs",
+            timesteps,
+            edisgo_object.timeseries.timeindex,
+            s_base,
+        )
+        edisgo_object.opf_results.heat_storage_t.p = df
+        df = _result_df(
+            pm,
+            "heat_storage",
+            "hse",
+            timesteps,
+            edisgo_object.timeseries.timeindex,
+            s_base,
+        )
+        edisgo_object.opf_results.heat_storage_t.e = df
+        df = _result_df(
+            pm,
+            "heat_storage",
+            "phss",
+            timesteps,
+            edisgo_object.timeseries.timeindex,
+            s_base,
+        )
+        edisgo_object.opf_results.heat_storage_t.p_slack = df
 
     if pm["nw"]["1"]["opf_version"] in [2, 4, 5]:
         slacks = [
@@ -568,11 +570,24 @@ def from_powermodels(
             ("heatpumps", "phps"),
             ("heatpumps", "phps2"),
         ]
+
+        # Track total slack usage for version 5 warning
+        total_slack_usage = 0.0
+        slack_details = []
+
         for comp, var in slacks:
             # save slacks to edisgo object
             df = _result_df(
                 pm, comp, var, timesteps, edisgo_object.timeseries.timeindex, s_base
             )
+
+            # For version 5: Check if any slacks are used (they should be ~0)
+            if pm["nw"]["1"]["opf_version"] == 5:
+                slack_sum = df.abs().sum().sum()
+                if slack_sum > 1e-6:  # Tolerance for numerical noise
+                    total_slack_usage += slack_sum
+                    slack_details.append(f"{comp}/{var}: {slack_sum:.6f} MW")
+
             if comp == "gen":
                 edisgo_object.opf_results.grid_slacks_t.gen_d_crt = df
             elif comp == "gen_nd":
@@ -586,6 +601,15 @@ def from_powermodels(
                     edisgo_object.opf_results.grid_slacks_t.hp_load_shedding = df
                 elif var == "phps2":
                     edisgo_object.opf_results.grid_slacks_t.hp_operation_slack = df
+
+        # Version 5: Warn if slacks were used (indicates §14a was insufficient)
+        if pm["nw"]["1"]["opf_version"] == 5 and total_slack_usage > 1e-6:
+            logger.warning(
+                f"§14a OPF (version 5): Feasibility slacks were used! "
+                f"This means §14a curtailment alone was INSUFFICIENT to maintain grid limits. "
+                f"Total slack usage: {total_slack_usage:.6f} MW. "
+                f"Details: {', '.join(slack_details)}"
+            )
 
     # save line flows and currents to edisgo object
     for variable in ["pf", "qf", "ccm"]:

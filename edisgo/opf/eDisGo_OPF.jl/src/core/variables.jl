@@ -596,4 +596,69 @@ function variable_slack_HV_requirements_imaginary(pm::AbstractPowerModel; nw::In
 
 end
 
-""
+
+### Version 5: Fixed variables (no flexibility except §14a)
+
+"""
+    variable_heat_pump_power_fixed(pm; nw, report)
+
+For OPF version 5: Fix heat pump power to pd/cop (current demand).
+No optimization flexibility - only §14a can reduce load.
+"""
+function variable_heat_pump_power_fixed(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    # Create php variable fixed to pd/cop for each heat pump
+    php = PowerModels.var(pm, nw)[:php] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :heatpumps)], base_name="$(nw)_php"
+    )
+
+    # Fix to current demand: php = pd/cop
+    for (i, hp) in PowerModels.ref(pm, nw, :heatpumps)
+        p_demand = hp["pd"] / hp["cop"]
+        JuMP.fix(php[i], p_demand; force=true)
+    end
+
+    report && PowerModels.sol_component_value(pm, nw, :heatpumps, :php, PowerModels.ids(pm, nw, :heatpumps), php)
+end
+
+"""
+    variable_cp_power_fixed(pm; nw, report)
+
+For OPF version 5: Fix charging point power to pd (current demand from load).
+No optimization flexibility - only §14a can reduce load.
+Also creates cpe (energy) variable fixed at mid-range.
+"""
+function variable_cp_power_fixed(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    # Check if electromobility dict exists and has entries
+    if !haskey(PowerModels.ref(pm, nw), :electromobility) || isempty(PowerModels.ref(pm, nw, :electromobility))
+        # Create empty variables to avoid errors in power balance
+        PowerModels.var(pm, nw)[:pcp] = Dict{Int, JuMP.VariableRef}()
+        PowerModels.var(pm, nw)[:cpe] = Dict{Int, JuMP.VariableRef}()
+        return
+    end
+
+    # Create pcp variable fixed to pd for each charging point
+    pcp = PowerModels.var(pm, nw)[:pcp] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :electromobility)], base_name="$(nw)_pcp"
+    )
+
+    # Fix to current demand: pcp = pd
+    for (i, cp) in PowerModels.ref(pm, nw, :electromobility)
+        p_demand = cp["pd"]
+        JuMP.fix(pcp[i], p_demand; force=true)
+    end
+
+    report && PowerModels.sol_component_value(pm, nw, :electromobility, :pcp, PowerModels.ids(pm, nw, :electromobility), pcp)
+
+    # Also need cpe (energy) variable for constraints - fix at midpoint
+    cpe = PowerModels.var(pm, nw)[:cpe] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :electromobility)], base_name="$(nw)_cpe"
+    )
+
+    for (i, cp) in PowerModels.ref(pm, nw, :electromobility)
+        e_mid = 0.5 * (cp["e_min"] + cp["e_max"])
+        JuMP.fix(cpe[i], e_mid; force=true)
+    end
+
+    report && PowerModels.sol_component_value(pm, nw, :electromobility, :cpe, PowerModels.ids(pm, nw, :electromobility), cpe)
+end
+

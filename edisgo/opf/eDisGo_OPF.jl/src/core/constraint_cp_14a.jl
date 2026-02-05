@@ -66,7 +66,7 @@ function constraint_cp_14a_min_net_load(pm::AbstractBFModelEdisgo, i::Int, nw::I
         return
     end
 
-    # Binary time variable 
+    # Binary variable for Big-M formulation
     z_cp14a = PowerModels.var(pm, nw, :z_cp14a, i)
     M = p_max_support + p_min_14a
 
