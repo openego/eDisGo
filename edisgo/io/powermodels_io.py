@@ -408,21 +408,98 @@ def from_powermodels(
     s_base=1,
 ):
     """
-    Convert results from optimization in PowerModels network data format to eDisGo data
-    format and updates timeseries values of flexibilities on eDisGo object.
+    Convert PowerModels optimization results back to eDisGo format and update timeseries.
+
+    This function performs the reverse transformation of :func:`to_powermodels`, extracting
+    optimized flexibility schedules from Julia's PowerModels results and writing them to
+    the eDisGo object's timeseries.
+
+    **Data Flow:**
+
+    1. **Load Results:** Parse PowerModels JSON dict (from Julia stdout)
+    2. **Index Unwrapping:** Convert 1-indexed Julia results → 0-indexed Python arrays
+    3. **Extract Schedules:** For each flexibility type, extract optimized power schedules
+    4. **§14a Handling:** Virtual generator output (gen_hp_14a, gen_cp_14a) represents
+       curtailment and is written to generators_active_power with positive values
+    5. **Update Timeseries:** Write schedules to edisgo_object.timeseries
+
+    **Flexibility Types Processed:**
+
+    - **curt**: Generator curtailment (renewable generation reduction)
+    - **hp**: Heat pump electrical power (optimized schedule)
+    - **cp**: Charging point power (EV charging schedule)
+    - **storage**: Battery storage charge/discharge
+    - **dsm**: Demand-side management load shifting
+    - **hp_14a**: §14a virtual generator support for heat pumps (curtailment)
+    - **cp_14a**: §14a virtual generator support for charging points (curtailment)
+
+    **§14a Result Handling:**
+
+    Virtual generators for §14a curtailment are treated differently:
+    - They appear in results as generators (gen_hp_14a, gen_cp_14a)
+    - Power output represents how much load was reduced
+    - Written to edisgo_object.timeseries.generators_active_power (not loads)
+    - Example: gen_hp_14a produces 2 kW → HP load reduced by 2 kW from original
 
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
+        eDisGo network object to update with optimization results.
     pm_results : dict or str
-        Dictionary or path to json file that contains all optimization results in
-        PowerModels network data format.
+        PowerModels optimization results. Either:
+
+        - **dict**: Direct PowerModels result dictionary from Julia
+        - **str**: Path to JSON file containing results
+
+        Expected structure: {'nw': {timestep: {flex_type: {component_id: {variable: value}}}}}
     hv_flex_dict : dict
-        Dictionary containing time series of HV requirement for each flexibility
-        retrieved from overlying grid component of edisgo object.
+        HV grid flexibility timeseries from overlying grid component. Used for
+        validation and HV requirement constraints.
     s_base : int
-        Base value of apparent power for per unit system.
+        Base value of apparent power for per unit system (must match to_powermodels).
         Default: 1 MVA.
+
+    Raises
+    ------
+    ValueError
+        If pm_results is neither dict nor valid file path.
+    InfeasibleModelError
+        If Julia optimization failed (no 'solve_time' in results).
+
+    Notes
+    -----
+    **Index Convention:**
+
+    - PowerModels/Julia: 1-indexed dicts with string keys ("1", "2", "3")
+    - eDisGo/Python: 0-indexed pandas DataFrames with component names as index
+
+    **Validation:**
+
+    - Checks for 'solve_time' key to verify Julia process succeeded
+    - Logs warnings if expected flexibility types are missing
+    - Skips missing flexibility types gracefully (continues with others)
+
+    **§14a Virtual Generator Variable Name:**
+
+    - gen_hp_14a and gen_cp_14a use variable "p" (not "php14a"/"pcp14a")
+    - This is because they are actual generators in PowerModels, not modified loads
+    - See flex_dicts mapping (lines 442-450)
+
+    See Also
+    --------
+    to_powermodels : Converts eDisGo network to PowerModels format
+    pm_optimize : Runs Julia optimization and calls this function
+
+    Examples
+    --------
+    Process optimization results from Julia:
+
+    >>> pm_results = {'nw': {...}, 'solve_time': 12.5, 'status': 'Optimal'}
+    >>> from_powermodels(edisgo_obj, pm_results, hv_flex_dict, s_base=1)
+    >>> # edisgo_obj.timeseries now contains optimized schedules
+    >>> curtailment = edisgo_obj.timeseries.generators_active_power[['hp_14a_support_HP1']]
+    >>> print(curtailment.sum())  # Total HP curtailment in MWh
+
     """
     if type(pm_results) == str:
         with open(pm_results) as f:
@@ -449,43 +526,47 @@ def from_powermodels(
         "cp_14a": ["gen_cp_14a", "p"],  # §14a virtual generators for charging points
     }
 
+    # Extract timesteps and sort them (Julia uses 1-indexed string keys: "1", "2", "3", ...)
     timesteps = pd.Series([int(k) for k in pm["nw"].keys()]).sort_values().values
     logger.info("Writing OPF results to eDisGo object.")
-    
-    print("\n" + "="*80)
-    print(" PYTHON DEBUG: Processing OPF Results")
-    print("="*80)
-    print(f"Flexibilities in results: {pm_results['nw']['1']['flexibilities']}")
-    print("="*80 + "\n")
-    
-    # write active power OPF results to edisgo object
+
+    # Process each flexibility type and extract optimized schedules
+    # ============================================================
+    # Loop through all flexibility types that were optimized (stored in pm_results['nw']['1']['flexibilities'])
+    # For each type, extract the power schedules across all timesteps and write to eDisGo timeseries
     for flexibility in pm_results["nw"]["1"]["flexibilities"]:
-        print(f"  → Processing flexibility: {flexibility}")
+        # Map flexibility type to PowerModels dict name and variable name
+        # Example: "hp_14a" → flex="gen_hp_14a", variable="p"
         flex, variable = flex_dicts[flexibility]
-        print(f"    flex={flex}, variable={variable}")
-        
-        # Check if flex exists in network
+
+        # Validate that flexibility exists in both network definition and results
         if flex not in pm["nw"]["1"]:
-            print(f"    ⚠ WARNING: '{flex}' not found in pm['nw']['1']!")
+            logger.warning(
+                f"Flexibility '{flex}' not found in network definition (pm['nw']['1']), skipping."
+            )
             continue
-            
+
+        # Get component names from network definition
+        # These will become column names in the result DataFrame
         names = [
             pm["nw"]["1"][flex][flex_comp]["name"]
             for flex_comp in list(pm["nw"]["1"][flex].keys())
         ]
-        print(f"    Found {len(names)} components: {names[:5]}...")  # Show first 5
-        
-        # Check if results exist in pm_results
+
+        # Validate that results exist for this flexibility type
         if flex not in pm_results["nw"]["1"]:
-            print(f"    ⚠ WARNING: '{flex}' not found in pm_results['nw']['1']!")
-            print(f"    Available keys in pm_results['nw']['1']: {list(pm_results['nw']['1'].keys())}")
+            logger.warning(
+                f"Flexibility '{flex}' not found in optimization results (pm_results['nw']['1']), skipping. "
+                f"Available: {list(pm_results['nw']['1'].keys())}"
+            )
             continue
-        
-        print(f"    ✓ '{flex}' found in pm_results, extracting data...")
-        
-        # replace storage power values by branch power values of virtual branch to
-        # account for losses
+
+        # Extract power schedules for all timesteps
+        # ==========================================
+        # Storage: Use branch power to account for losses (virtual branch connects storage to bus)
+        # Others: Use component variable directly (php, pcp, pdsm, pgc, p)
         if flex == "storage":
+            # Storage uses virtual branch power (accounts for charge/discharge losses)
             branches = [
                 pm["nw"]["1"][flex][flex_comp]["virtual_branch"]
                 for flex_comp in list(pm["nw"]["1"][flex].keys())
@@ -498,6 +579,8 @@ def from_powermodels(
                 for t in timesteps
             ]
         else:
+            # All other flexibilities: Extract variable directly from results
+            # Convert from per-unit to MW by multiplying with s_base
             data = [
                 [
                     pm_results["nw"][str(t)][flex][flex_comp][variable] * s_base
@@ -505,8 +588,6 @@ def from_powermodels(
                 ]
                 for t in timesteps
             ]
-        
-        print(f"    ✓ Extracted {len(data)} timesteps x {len(data[0])} components")
         results = pd.DataFrame(index=timesteps, columns=names, data=data)
         if (flex == "gen_nd") & (pm["nw"]["1"]["opf_version"] in [3, 4]):
             edisgo_object.timeseries._generators_active_power.loc[:, names] = (
