@@ -12,6 +12,8 @@ import os
 import sys
 import argparse
 import pandas as pd
+import geopandas as gpd
+import pypsa
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
@@ -1319,9 +1321,9 @@ def main():
     SCENARIO = "eGon2035"
 
     # Simulation parameters
-    NUM_DAYS = 2 / 24  # Number of days to simulate (e.g., 7, 30, 365)
-    NUM_HEAT_PUMPS = 50  # Number of heat pumps to add
-    NUM_CHARGING_POINTS = 30  # Number of charging points to add
+    NUM_DAYS = 10 / 24  # Number of days to simulate (e.g., 7, 30, 365)
+    NUM_HEAT_PUMPS = 60  # Number of heat pumps to add
+    NUM_CHARGING_POINTS = 50  # Number of charging points to add
 
     # Output
     OUTPUT_DIR = "./"
@@ -1381,6 +1383,86 @@ def main():
         traceback.print_exc()
         sys.exit(1)
 
+    return edisgo
 
-# if __name__ == "__main__":
-#     main()
+
+edisgo = main()
+results = edisgo.results
+orig_net = pypsa.Network("/home/carlos/LoMa/exec_folder/results/MGB_model")
+orig_net.buses = gpd.GeoDataFrame(
+    orig_net.buses,
+    geometry=gpd.points_from_xy(
+        orig_net.buses["x"], orig_net.buses["y"], crs=4326
+    ),
+)
+orig_net.buses = orig_net.buses.to_crs(4326)
+orig_net.buses["x"] = orig_net.buses.geometry.x
+orig_net.buses["y"] = orig_net.buses.geometry.y
+
+n = edisgo.to_pypsa()
+lines_t = results.s_res.loc[:, results.s_res.columns.str.contains("line")]
+n.buses["x"] = n.buses.index.map(orig_net.buses["x"])
+n.buses["y"] = n.buses.index.map(orig_net.buses["y"])
+
+import matplotlib.colors as mcolors
+
+# 1. Define your limits (e.g., 0% to 100% loading)
+v_min = 0
+v_max = 0.5
+
+# 2. Create a normalization object
+norm = mcolors.Normalize(vmin=v_min, vmax=v_max)
+
+import contextily as ctx
+
+fig, ax = plt.subplots()
+
+n.plot(
+    margin=0.05,
+    ax=ax,
+    geomap=False,
+    projection=None,
+    bus_colors="cadetblue",
+    bus_alpha=1,
+    bus_sizes=0.000000001,
+    bus_cmap=None,
+    bus_norm=None,
+    bus_split_circles=False,
+    line_colors=lines_t.loc["2035-01-15 9:00:00", :],
+    link_colors="darkseagreen",
+    transformer_colors="orange",
+    line_alpha=1,
+    link_alpha=1,
+    transformer_alpha=1,
+    line_widths=1,
+    link_widths=1,
+    transformer_widths=0,
+    line_cmap="jet",
+    link_cmap=None,
+    transformer_cmap=None,
+    line_norm=norm,
+    link_norm=None,
+    transformer_norm=None,
+    flow=None,
+    branch_components=None,
+    layouter=None,
+    title="Line loading [%]",
+    boundaries=None,
+    geometry=False,
+    jitter=None,
+    color_geomap=None,
+)
+
+# 2. Add the background tiles
+# crs=4326 tells contextily that your 'ax' coordinates are in lon/lat
+ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
+
+# Create a mappable object for the colorbar
+sm = plt.cm.ScalarMappable(cmap="jet", norm=norm)
+sm.set_array([])  # Empty array needed for matplotlib internals
+
+# Add the colorbar to the figure
+cb = fig.colorbar(sm, ax=ax, orientation="vertical", pad=0.02, aspect=20)
+cb.set_label("Line Loading [relative]", fontsize=6)
+
+plt.show()
