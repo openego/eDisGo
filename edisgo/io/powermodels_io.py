@@ -1460,6 +1460,18 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
             "index": hp_i + 1,
         }
 
+    # Validation: Check that all hp_index references exist in heatpumps dict
+    # This catches index mapping errors that would cause Julia constraint failures
+    for gen_id, gen_data in pm["gen_hp_14a"].items():
+        hp_idx = gen_data["hp_index"]
+        hp_name = gen_data["hp_name"]
+        if str(hp_idx) not in pm.get("heatpumps", {}):
+            logger.warning(
+                f"§14a validation: hp_index {hp_idx} for {hp_name} not found in "
+                f"heatpumps dict (has {len(pm.get('heatpumps', {}))} entries). "
+                f"This may cause Julia constraint failures."
+            )
+
 
 def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailment_14a):
     """
@@ -1562,6 +1574,23 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
             "max_hours_per_day": max_hours_per_day,  # Time budget
             "index": cp_i + 1,
         }
+
+    # Validation: Check that cp_index references are consistent
+    # CPs can be in electromobility dict (flexible) or load dict (fixed)
+    # The Julia constraint will search for CP by name in the load dict
+    for gen_id, gen_data in pm["gen_cp_14a"].items():
+        cp_idx = gen_data["cp_index"]
+        cp_name = gen_data["cp_name"]
+        # Check if CP exists in either electromobility or load dict
+        in_electromobility = str(cp_idx) in pm.get("electromobility", {})
+        # Check if CP name exists in load dict
+        cp_in_loads = any(load.get("name") == cp_name for load in pm.get("load", {}).values())
+        if not in_electromobility and not cp_in_loads:
+            logger.warning(
+                f"§14a validation: cp_index {cp_idx} for {cp_name} not found in "
+                f"electromobility dict ({len(pm.get('electromobility', {}))} entries) "
+                f"and name not found in load dict. This may cause Julia constraint failures."
+            )
 
 
 def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_version):
