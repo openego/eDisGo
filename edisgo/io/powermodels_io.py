@@ -341,7 +341,7 @@ def from_powermodels(
     logger.info("Writing OPF results to eDisGo object.")
     
     print("\n" + "="*80)
-    print("🔍 PYTHON DEBUG: Processing OPF Results")
+    print(" PYTHON DEBUG: Processing OPF Results")
     print("="*80)
     print(f"Flexibilities in results: {pm_results['nw']['1']['flexibilities']}")
     print("="*80 + "\n")

@@ -147,6 +147,14 @@ function ref_add_core!(ref::Dict{Symbol,Any})
         end
         nw_ref[:bus_gen_hp_14a] = bus_gen_hp_14a
 
+        bus_gen_cp_14a = Dict((i, Int[]) for (i,bus) in nw_ref[:bus])
+        if haskey(nw_ref, :gen_cp_14a)
+            for (i,gen) in nw_ref[:gen_cp_14a]
+                push!(bus_gen_cp_14a[gen["gen_bus"]], i)
+            end
+        end
+        nw_ref[:bus_gen_cp_14a] = bus_gen_cp_14a
+
         bus_gens_nd = Dict((i, Int[]) for (i,bus) in nw_ref[:bus])
         for (i,gen) in nw_ref[:gen_nd]
             push!(bus_gens_nd[gen["gen_bus"]], i)

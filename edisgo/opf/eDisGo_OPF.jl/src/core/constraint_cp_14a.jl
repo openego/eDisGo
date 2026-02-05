@@ -78,6 +78,19 @@ function constraint_cp_14a_min_net_load(pm::AbstractBFModelEdisgo, i::Int, nw::I
     # Maximum support capacity (matches Python field name "pmax")
     p_max_support = gen_cp14a["pmax"]
     
+    if i == 3 
+        println("  [DEBUG NW $nw HP $i]")
+        println("    > p_cp_load:     $(round(p_cp_load, digits=6))")
+        println("    > p_cp14a (Var): $(p_cp14a)") # Zeigt die JuMP-Variable
+        println("    > p_min_14a:     $(round(p_min_14a, digits=6))")
+        println("    > p_max_support: $(round(p_max_support, digits=6))")
+        
+        # Hilfswert für die Logik unten berechnen
+        p_min_net_debug = min(p_cp_load, p_min_14a)
+        println("    > p_min_net:     $(round(p_min_net_debug, digits=6))")
+        println("    " * "-"^20)
+    end
+    
     # Net load must stay ≥ minimum net load allowed
     # The minimum is the LOWER of: current load or §14a limit
     # This handles cases where CP draws less than 4.2 kW (e.g., 3 kW due to low charging demand)
