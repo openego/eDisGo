@@ -144,82 +144,52 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
         end
     end
 
-    # §14a EnWG daily time budget constraints
+    # §14a EnWG daily time budget constraints for heat pumps
+    # Apply time budget constraint (max 2 hours/day) for each day in the optimization horizon
+    # Groups timesteps into 24-hour periods based on time_elapsed and constrains z_hp14a binary
     if haskey(PowerModels.ref(pm, 1), :gen_hp_14a) && !isempty(PowerModels.ref(pm, 1, :gen_hp_14a))
-        println("\n" * "="^80)
-        println(" JULIA DEBUG: §14a Generators")
-        println("="^80)
-
-        gen_hp_14a_dict = PowerModels.ref(pm, 1, :gen_hp_14a)
-        println("Number of gen_hp_14a entries: ", length(gen_hp_14a_dict))
-
-        # Show first 5 generators
-        count = 0
-        for (idx, gen) in gen_hp_14a_dict
-            count += 1
-            if count <= 5
-                println("  [$idx]: hp_name=$(get(gen, "hp_name", "N/A")), hp_index=$(get(gen, "hp_index", "N/A")), pmax=$(get(gen, "pmax", "N/A"))")
-            end
-        end
-        println("="^80 * "\n")
-
         # Determine timesteps per day based on time_elapsed (in hours)
+        # Example: time_elapsed = 1.0 → 24 timesteps/day, time_elapsed = 0.5 → 48 timesteps/day
         n_first = network_ids[1]
         time_elapsed = PowerModels.ref(pm, n_first, :time_elapsed)
         timesteps_per_day = Int(round(24.0 / time_elapsed))
 
-        # Group network_ids into days
+        # Group network_ids into days and apply constraint per day per generator
+        # This ensures the §14a time budget (typically 2 hours/day) is respected
         for day_start_idx in 1:timesteps_per_day:length(network_ids)
             day_end_idx = min(day_start_idx + timesteps_per_day - 1, length(network_ids))
             day_network_ids = network_ids[day_start_idx:day_end_idx]
 
             # Apply daily time budget constraint for each §14a generator
+            # Constraint: sum(z_hp14a[t] * time_elapsed for t in day) <= max_hours_per_day
             for i in PowerModels.ids(pm, :gen_hp_14a, nw=network_ids[1])
-                # Call with correct argument order: (pm, day_start, day_end, i)
                 eDisGo_OPF.constraint_hp_14a_time_budget_daily(pm, day_network_ids[1], day_network_ids[end], i)
             end
         end
-    else
-        println("\n⚠ JULIA DEBUG: No gen_hp_14a found or empty!\n")
     end
 
     # §14a EnWG daily time budget constraints for charging points
+    # Apply time budget constraint (max 2 hours/day) for each day in the optimization horizon
+    # Groups timesteps into 24-hour periods based on time_elapsed and constrains z_cp14a binary
     if haskey(PowerModels.ref(pm, 1), :gen_cp_14a) && !isempty(PowerModels.ref(pm, 1, :gen_cp_14a))
-        println("\n" * "="^80)
-        println(" JULIA DEBUG: §14a Charging Point Generators")
-        println("="^80)
-
-        gen_cp_14a_dict = PowerModels.ref(pm, 1, :gen_cp_14a)
-        println("Number of gen_cp_14a entries: ", length(gen_cp_14a_dict))
-
-        # Show first 5 generators
-        count = 0
-        for (idx, gen) in gen_cp_14a_dict
-            count += 1
-            if count <= 5
-                println("  [$idx]: cp_name=$(get(gen, "cp_name", "N/A")), cp_index=$(get(gen, "cp_index", "N/A")), pmax=$(get(gen, "pmax", "N/A"))")
-            end
-        end
-        println("="^80 * "\n")
-
         # Determine timesteps per day based on time_elapsed (in hours)
+        # Example: time_elapsed = 1.0 → 24 timesteps/day, time_elapsed = 0.5 → 48 timesteps/day
         n_first = network_ids[1]
         time_elapsed = PowerModels.ref(pm, n_first, :time_elapsed)
         timesteps_per_day = Int(round(24.0 / time_elapsed))
 
-        # Group network_ids into days
+        # Group network_ids into days and apply constraint per day per generator
+        # This ensures the §14a time budget (typically 2 hours/day) is respected
         for day_start_idx in 1:timesteps_per_day:length(network_ids)
             day_end_idx = min(day_start_idx + timesteps_per_day - 1, length(network_ids))
             day_network_ids = network_ids[day_start_idx:day_end_idx]
 
-            # Apply daily time budget constraint for each §14a generator
+            # Apply daily time budget constraint for each §14a CP generator
+            # Constraint: sum(z_cp14a[t] * time_elapsed for t in day) <= max_hours_per_day
             for i in PowerModels.ids(pm, :gen_cp_14a, nw=network_ids[1])
-                # Call with correct argument order: (pm, day_start, day_end, i)
                 eDisGo_OPF.constraint_cp_14a_time_budget_daily(pm, day_network_ids[1], day_network_ids[end], i)
             end
         end
-    else
-        println("\n⚠ JULIA DEBUG: No gen_cp_14a found or empty!\n")
     end
 
     # OBJECTIVE FUNCTION

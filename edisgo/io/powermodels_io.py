@@ -34,45 +34,157 @@ def to_powermodels(
     curtailment_14a=None,
 ):
     """
-    Convert eDisGo representation of the network topology and timeseries to
-    PowerModels network data format.
+    Convert eDisGo network to PowerModels dictionary format via 3-stage pipeline.
+
+    This function performs a multi-stage conversion to transform eDisGo's network
+    representation into a format suitable for Julia-based PowerModels optimization:
+
+    **Conversion Pipeline:**
+
+    1. **eDisGo → PyPSA** (via :meth:`edisgo.EDisGo.to_pypsa`)
+       - Converts pandas DataFrame topology to PyPSA network objects
+       - Aggregates parallel transformers
+       - Calculates per-unit values and dependent parameters
+
+    2. **PyPSA → PyPower** (via internal helper functions)
+       - Converts PyPSA's DataFrame format to numpy arrays
+       - Uses PyPower's standard indexing (idx_bus, idx_gen, idx_branch)
+       - Creates multi-period optimization structure
+
+    3. **PyPower → PowerModels** (via :func:`pypsa2ppc` and :func:`ppc2pm`)
+       - Converts numpy arrays to nested dictionaries (JSON-serializable)
+       - Changes from 0-indexed (Python) to 1-indexed (Julia)
+       - Adds PowerModels metadata (per_unit flag, baseMVA, source_version)
+
+    **Why PyPower as Intermediate Format?**
+
+    - PyPSA uses pandas DataFrames (not JSON-serializable)
+    - PyPower uses standardized numpy array structure for power systems
+    - PowerModels expects nested dictionaries with 1-based indexing
+    - PyPower serves as a well-defined bridge between these formats
+
+    **§14a EnWG Virtual Generator Creation:**
+
+    If `curtailment_14a` is provided, virtual generators are created for heat pumps
+    and charging points to model §14a curtailment capability:
+
+    - Each eligible HP/CP (>4.2 kW) gets a virtual generator at the same bus
+    - Virtual generator "produces" power to reduce net electrical load
+    - Example: 10 kW HP with 4.2 kW minimum → 5.8 kW virtual generator
+    - Julia constraints enforce: net_load ≥ 4.2 kW when curtailment active
 
     Parameters
     ----------
     edisgo_object : :class:`~.EDisGo`
+        eDisGo network object containing topology and timeseries.
     s_base : int
         Base value of apparent power for per unit system.
         Default: 1 MVA.
     flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
-        Array containing all charging points that allow for flexible charging.
+        Charging points allowing flexible charging (optimization variable `pcp`).
+        If None, all CPs have fixed load profiles.
+        Default: None.
     flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
-        Array containing all heat pumps that allow for flexible operation due to an
-        attached heat storage.
+        Heat pumps with heat storage allowing flexible operation (optimization
+        variable `php`). If None, all HPs follow heat demand / COP.
+        Default: None.
     flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
-        Array containing all flexible loads that allow for application of demand side
-        management strategy.
+        Loads allowing demand-side management (DSM) strategy (optimization variable
+        `pdsm`). If None, all loads have fixed profiles.
+        Default: None.
     flexible_storage_units : :numpy:`numpy.ndarray<ndarray>` or None
-        Array containing all flexible storages. Non-flexible storage units operate to
-        optimize self consumption.
+        Storage units with optimization control (optimization variable `ps`).
+        Non-flexible storage units optimize self-consumption only.
         Default: None.
     opf_version : int
-        Version of optimization models to choose from. Must be one of [1, 2, 3, 4, 5].
-        For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+        Optimization variant selecting constraints and objective function:
+
+        - **1**: Minimize line losses + max line loading (no grid restrictions)
+        - **2**: Minimize line losses + slacks (with voltage/current limits)
+        - **3**: Minimize line loading + HV slacks (overlying grid requirements)
+        - **4**: Minimize losses + HV slacks + grid slacks
+        - **5**: §14a only (HPs/CPs fixed, only §14a curtailment allowed)
+
+        For details see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
         Default: 1.
-    curtailment_14a : dict or None
-        Dictionary with §14a EnWG curtailment settings. Keys:
-        - 'min_power_mw': float, minimum power in MW (default 0.0042)
-        - 'components': list, heat pump names to apply curtailment to (empty = all)
-        - 'max_hours_per_day': float, maximum curtailment hours per day (default 2.0)
-        Default: None (no §14a curtailment).
+    curtailment_14a : dict, bool, or None
+        §14a EnWG curtailment settings controlling mandatory load reduction:
+
+        - If **dict**, keys are:
+
+          - 'min_power_mw': float, minimum power during curtailment (default: 0.0042 = 4.2 kW)
+          - 'max_hours_per_day': float, daily time budget (default: 2.0 hours)
+          - 'components': list of str, specific HPs/CPs to curtail (default: [] = all eligible)
+
+        - If **True**: Uses default settings (4.2 kW min, 2 hours/day, all components)
+        - If **False** or **None**: No §14a curtailment
+
+        Default: None.
 
     Returns
     -------
-    (dict, dict)
-        First dictionary contains all network data in PowerModels network data
-        format. Second dictionary contains time series of HV requirement for each
-        flexibility retrieved from overlying_grid component of edisgo object and
-        reduced by non-flexible components.
+    tuple of (dict, dict)
+        **pm** : dict
+            PowerModels network dictionary (JSON-serializable) with structure:
+
+            - 'name': str, network identifier
+            - 'per_unit': bool, always True
+            - 'baseMVA': float, base power (equals s_base)
+            - 'bus': dict, buses with voltage bounds
+            - 'gen': dict, generators including virtual §14a generators
+            - 'load': dict, loads with timeseries
+            - 'branch': dict, lines and transformers
+            - 'nw': dict, multi-period network data (one entry per timestep)
+            - 'gen_hp_14a': dict, virtual generators for HP §14a support (if enabled)
+            - 'gen_cp_14a': dict, virtual generators for CP §14a support (if enabled)
+            - 'heatpumps': dict, heat pump parameters and heat demand
+            - 'electromobility': dict, charging point parameters
+
+        **hv_flex_dict** : dict
+            HV grid flexibility timeseries for validation. Contains time series of
+            overlying grid requirements for each flexibility type, reduced by
+            non-flexible components.
+
+    Notes
+    -----
+    **Index Conventions:**
+
+    - **eDisGo/PyPSA**: String-based component names (e.g., "HP_123", "Bus_456")
+    - **PyPower**: 0-indexed integer arrays (bus[0], gen[0], branch[0])
+    - **PowerModels/Julia**: 1-indexed dictionary keys ("1", "2", "3")
+
+    **Critical for §14a:**
+
+    - gen_hp_14a["hp_index"] references position in pm["heatpumps"] dict (1-indexed)
+    - gen_cp_14a["cp_index"] references position in pm["electromobility"] or pm["load"] dict
+    - Misaligned indices cause Julia constraint failures (variable not found error)
+    - Validation warnings are logged if indices are out of range
+
+    See Also
+    --------
+    from_powermodels : Converts optimization results back to eDisGo format
+    pypsa2ppc : Stage 1 - PyPSA to PyPower conversion
+    ppc2pm : Stage 2 - PyPower to PowerModels conversion
+    _build_gen_hp_14a_support : Creates virtual generators for HP §14a curtailment
+    _build_gen_cp_14a_support : Creates virtual generators for CP §14a curtailment
+
+    Examples
+    --------
+    Convert network with §14a curtailment enabled:
+
+    >>> curtailment_settings = {
+    ...     'min_power_mw': 0.0042,  # 4.2 kW minimum
+    ...     'max_hours_per_day': 2.0,  # 2 hours/day max
+    ...     'components': []  # All eligible HPs/CPs
+    ... }
+    >>> pm, hv_flex = to_powermodels(
+    ...     edisgo_obj,
+    ...     flexible_hps=hp_names,
+    ...     opf_version=5,
+    ...     curtailment_14a=curtailment_settings
+    ... )
+    >>> # pm now contains gen_hp_14a with virtual generators
+    >>> print(len(pm['gen_hp_14a']))  # Number of HPs eligible for §14a
 
     """
     if opf_version in [2, 3, 4, 5]:
@@ -1395,10 +1507,13 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
         Dictionary with §14a EnWG curtailment settings.
         
     """
-    # Extract curtailment settings
+    # Extract curtailment settings from dict
+    # NOTE: "max_power_mw" is LEGACY naming (now means minimum power during curtailment)
+    # Correct key is "min_power_mw" but we fall back to legacy key for backwards compatibility
+    # §14a EnWG requirement: Devices must maintain at least 4.2 kW when curtailed
     p_min_14a = curtailment_14a.get("min_power_mw", curtailment_14a.get("max_power_mw", 0.0042))  # MW
-    max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours
-    specific_components = curtailment_14a.get("components", [])
+    max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours per day
+    specific_components = curtailment_14a.get("components", [])  # empty list = all eligible HPs
 
     # Filter heat pumps if specific components are defined
     if len(specific_components) > 0:
@@ -1414,7 +1529,12 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
     hp_p_nom = edisgo_obj.topology.loads_df.p_set[hps_14a]
     
     # Filter out heat pumps with nominal power <= §14a minimum
-    # These cannot be curtailed to the minimum and would make constraints infeasible
+    # ============================================================
+    # Reasoning: A 3 kW heat pump cannot be curtailed to 4.2 kW minimum
+    # Including such HPs would create infeasible optimization constraints:
+    #   constraint: php - p_hp14a >= 4.2 kW
+    #   but php_max = 3 kW → infeasible even with p_hp14a = 0
+    # Solution: Exclude small HPs from §14a support (they keep original load profile)
     hps_eligible = [hp for hp in hps_14a if hp_p_nom[hp] > p_min_14a]
     
     if len(hps_eligible) < len(hps_14a):
@@ -1429,7 +1549,20 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
         return
     
     # Create mapping from HP name to its index in pm["heatpumps"]
+    # ============================================================
+    # CRITICAL: This mapping must EXACTLY match the heatpumps dict creation order
+    #
     # The heatpumps dict is built by iterating over flexible_hps with indices 1, 2, 3, ...
+    # (see _build_heat_pump() function which uses enumerate(flexible_hps))
+    #
+    # Julia constraints reference: php = PowerModels.var(pm, nw, :php, hp_idx)
+    # where hp_idx comes from gen_hp_14a["hp_index"]
+    #
+    # If this mapping is WRONG:
+    # - Julia will try to access non-existent variable index → KeyError
+    # - Or worse: reference wrong HP → incorrect curtailment constraints
+    #
+    # Validation added below catches mismatches and logs warnings.
     hp_name_to_index = {hp_name: i + 1 for i, hp_name in enumerate(flexible_hps)}
     
     for hp_i, hp_name in enumerate(hps_eligible):
@@ -1438,10 +1571,20 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
         
         # Nominal power of HP
         p_nominal = hp_p_nom[hp_name]  # MW
-        
+
         # Maximum support = difference between nominal and §14a limit
-        # This is how much the load can be virtually reduced
-        p_max_support = p_nominal - p_min_14a  # Now guaranteed > 0
+        # ============================================================
+        # This is how much the virtual generator can "produce" to reduce net load
+        #
+        # Example: 10 kW heat pump with 4.2 kW §14a minimum
+        # - Original load: 10 kW
+        # - §14a minimum: 4.2 kW
+        # - Maximum curtailment: 10 - 4.2 = 5.8 kW
+        # - Virtual generator: 0 to 5.8 kW (reduces net load from 10 → 4.2 kW)
+        #
+        # Julia constraint enforces: net_load = original_load - virtual_gen >= 4.2 kW
+        # Guaranteed > 0 because hps_eligible filtered out HPs with p_nominal <= p_min_14a
+        p_max_support = p_nominal - p_min_14a
         
         pm["gen_hp_14a"][str(hp_i + 1)] = {
             "name": f"hp_14a_support_{hp_name}",
@@ -1496,10 +1639,13 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
         Dictionary with §14a EnWG curtailment settings.
         
     """
-    # Extract curtailment settings
-    p_min_14a = curtailment_14a.get("min_power_mw", curtailment_14a.get("max_power_mw", 0.0042))  # MW (same as HPs)
-    max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours
-    specific_components = curtailment_14a.get("components", [])
+    # Extract curtailment settings from dict (same as for HPs)
+    # NOTE: "max_power_mw" is LEGACY naming (now means minimum power during curtailment)
+    # Correct key is "min_power_mw" but we fall back to legacy key for backwards compatibility
+    # §14a EnWG requirement: Devices must maintain at least 4.2 kW when curtailed
+    p_min_14a = curtailment_14a.get("min_power_mw", curtailment_14a.get("max_power_mw", 0.0042))  # MW
+    max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours per day
+    specific_components = curtailment_14a.get("components", [])  # empty list = all eligible CPs
     
     # DEBUG: Print all CPs in topology
     all_cps_in_topology = edisgo_obj.topology.charging_points_df

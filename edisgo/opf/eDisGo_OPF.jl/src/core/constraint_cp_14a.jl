@@ -77,6 +77,20 @@ function constraint_cp_14a_min_net_load(pm::AbstractBFModelEdisgo, i::Int, nw::I
         JuMP.@constraint(pm.model, pcp - p_cp14a >= p_min_14a - M * (1 - z_cp14a))
     else
         # Non-flexible CP: use fixed load timeseries
+        # ============================================
+        # NOTE: This is an O(n) linear search through all loads
+        #
+        # Why this search is necessary:
+        # - cp_index may reference electromobility dict (flexible CPs with optimization vars)
+        # - OR it may reference load dict (fixed CPs with constant power draw)
+        # - No unified index mapping exists between these two data structures
+        # - Load name matching is the only reliable way to find the correct load
+        #
+        # Performance impact:
+        # - Acceptable for <1,000 loads per network
+        # - For larger networks, consider pre-indexing loads by name in Python
+        #   before serializing to PowerModels dict
+        # ============================================
         cp_name = gen_cp14a["cp_name"]
         load_found = false
         for (load_id, load) in PowerModels.ref(pm, nw, :load)
@@ -87,7 +101,7 @@ function constraint_cp_14a_min_net_load(pm::AbstractBFModelEdisgo, i::Int, nw::I
                     # Fixed load with Big-M: when z=1, enforce min net load
                     JuMP.@constraint(pm.model, p_cp_load - p_cp14a >= p_min_14a - M * (1 - z_cp14a))
                 else
-                    # CP is off, no support needed
+                    # CP is off (p_cp_load ≈ 0), no support needed
                     JuMP.@constraint(pm.model, p_cp14a == 0.0)
                 end
                 break
