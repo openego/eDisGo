@@ -247,12 +247,21 @@ def to_powermodels(
         if len(all_hps) > 0:
             logger.info("§14a heat pump curtailment will be optimized.")
             opf_flex.append("hp_14a")
-        
+            # CRITICAL: Also add "hp" so from_powermodels writes optimized php
+            # back to loads_active_power. Without this, loads_active_power
+            # retains original values which may differ from Julia's pd/cop,
+            # causing incorrect net load calculations in post-processing.
+            if "hp" not in opf_flex:
+                opf_flex.append("hp")
+
         # Check for charging points
         all_cps = edisgo_object.topology.charging_points_df
         if len(all_cps) > 0:
             logger.info("§14a charging point curtailment will be optimized.")
             opf_flex.append("cp_14a")
+            # NOTE: Do NOT add "cp" to opf_flex here. CPs without electromobility
+            # flexibility bands stay in pm["load"] dict (not pm["electromobility"]).
+            # There is no pcp variable to write back. Only p_cp14a (virtual gen) changes.
     
     pm["flexibilities"] = opf_flex
     logger.info("Transforming busses into PowerModels dictionary format.")
@@ -329,17 +338,39 @@ def to_powermodels(
         flexible_loads = _build_dsm(edisgo_object, psa_net, pm, s_base, flexible_loads)
     if len(psa_net.loads) > 0:
         logger.info("Transforming loads into PowerModels dictionary format.")
+        # Use hps_for_pm instead of flexible_hps to exclude HPs from load dict
+        # when they're already in the heatpumps dict (prevents double-counting
+        # in Julia power balance which sums BOTH bus_pd from loads AND php from heatpumps)
         _build_load(
             edisgo_object,
             psa_net,
             pm,
             s_base,
             flexible_cps,
-            flexible_hps,
+            hps_for_pm if len(hps_for_pm) > 0 else flexible_hps,
             flexible_storage_units,
         )
     else:
         logger.warning("No loads found in network.")
+
+    # Post-build validation: verify §14a CP references exist in load dict
+    # (must run AFTER _build_load populates pm["load"])
+    if "gen_cp_14a" in pm and len(pm["gen_cp_14a"]) > 0:
+        for gen_id, gen_data in pm["gen_cp_14a"].items():
+            cp_idx = gen_data["cp_index"]
+            cp_name = gen_data["cp_name"]
+            in_electromobility = str(cp_idx) in pm.get("electromobility", {})
+            cp_in_loads = any(
+                load.get("name") == cp_name for load in pm.get("load", {}).values()
+            )
+            if not in_electromobility and not cp_in_loads:
+                logger.warning(
+                    f"§14a validation: CP '{cp_name}' (cp_index={cp_idx}) not found in "
+                    f"electromobility ({len(pm.get('electromobility', {}))} entries) or "
+                    f"load dict ({len(pm.get('load', {}))} entries). "
+                    f"Julia constraint_cp_14a_min_net_load may fail."
+                )
+
     if (opf_version == 3) | (opf_version == 4):
         if edisgo_object.overlying_grid.heat_pump_central_active_power.isna().iloc[0]:
             edisgo_object.overlying_grid.heat_pump_central_active_power[:] = 0
@@ -386,13 +417,14 @@ def to_powermodels(
     logger.info(
         "Transforming components timeseries into PowerModels dictionary format."
     )
+    # Use hps_for_pm for timeseries too (must match _build_load exclusion)
     _build_timeseries(
         psa_net,
         pm,
         edisgo_object,
         s_base,
         flexible_cps,
-        flexible_hps,
+        hps_for_pm if len(hps_for_pm) > 0 else flexible_hps,
         flexible_loads,
         flexible_storage_units,
         opf_flex,
@@ -1802,22 +1834,10 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
             "index": cp_i + 1,
         }
 
-    # Validation: Check that cp_index references are consistent
-    # CPs can be in electromobility dict (flexible) or load dict (fixed)
-    # The Julia constraint will search for CP by name in the load dict
-    for gen_id, gen_data in pm["gen_cp_14a"].items():
-        cp_idx = gen_data["cp_index"]
-        cp_name = gen_data["cp_name"]
-        # Check if CP exists in either electromobility or load dict
-        in_electromobility = str(cp_idx) in pm.get("electromobility", {})
-        # Check if CP name exists in load dict
-        cp_in_loads = any(load.get("name") == cp_name for load in pm.get("load", {}).values())
-        if not in_electromobility and not cp_in_loads:
-            logger.warning(
-                f"§14a validation: cp_index {cp_idx} for {cp_name} not found in "
-                f"electromobility dict ({len(pm.get('electromobility', {}))} entries) "
-                f"and name not found in load dict. This may cause Julia constraint failures."
-            )
+    # NOTE: Validation of cp_index references is deferred to after _build_load()
+    # because pm["load"] is not yet populated at this point. The Julia constraint
+    # (constraint_cp_14a_min_net_load) searches loads by name at runtime, which works
+    # correctly because by then all dicts are populated.
 
 
 def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_version):
