@@ -1600,7 +1600,7 @@ class TestTimeSeries:
             ].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_agricultural_LVGrid_5_2", "annual_consumption"
+                    "Load_agricultural_LVGrid_5_2", "p_set"
                 ]
                 * profiles["agricultural"]
             ).values,
@@ -1612,7 +1612,7 @@ class TestTimeSeries:
             ].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_residential_LVGrid_5_3", "annual_consumption"
+                    "Load_residential_LVGrid_5_3", "p_set"
                 ]
                 * profiles["residential"]
             ).values,
@@ -1622,7 +1622,7 @@ class TestTimeSeries:
             self.edisgo.timeseries.loads_active_power["Load_retail_LVGrid_9_14"].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_retail_LVGrid_9_14", "annual_consumption"
+                    "Load_retail_LVGrid_9_14", "p_set"
                 ]
                 * profiles["cts"]
             ).values,
@@ -1634,7 +1634,7 @@ class TestTimeSeries:
             ].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_industrial_LVGrid_6_1", "annual_consumption"
+                    "Load_industrial_LVGrid_6_1", "p_set"
                 ]
                 * profiles["industrial"]
             ).values,
@@ -1654,19 +1654,34 @@ class TestTimeSeries:
             self.edisgo.timeseries.loads_active_power[
                 "Load_industrial_LVGrid_6_1"
             ].values,
-            [0.05728395] * 3,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_industrial_LVGrid_6_1", "p_set"
+                ]
+                * profiles["industrial"]
+            ).values,
         ).all()
         assert np.isclose(
             self.edisgo.timeseries.loads_active_power.loc[
                 index[1], "Load_agricultural_LVGrid_5_2"
             ],
-            0.0274958,
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_agricultural_LVGrid_5_2", "p_set"
+                ]
+                * profiles.loc[index[1], "agricultural"]
+            ),
         )
         assert np.isclose(
             self.edisgo.timeseries.loads_active_power.loc[
                 index, "Load_residential_LVGrid_9_2"
             ].values,
-            [0.00038328, 0.00027608, 0.00022101],
+            (
+                self.edisgo.topology.loads_df.loc[
+                    "Load_residential_LVGrid_9_2", "p_set"
+                ]
+                * profiles.loc[index, "residential"]
+            ).values,
         ).all()
         # test assertion error
         with pytest.raises(ValueError) as exc_info:
@@ -1696,7 +1711,7 @@ class TestTimeSeries:
             ].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_agricultural_LVGrid_5_2", "annual_consumption"
+                    "Load_agricultural_LVGrid_5_2", "p_set"
                 ]
                 * profiles["agricultural"]
             ).values,
@@ -1707,7 +1722,7 @@ class TestTimeSeries:
             ].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_residential_LVGrid_5_3", "annual_consumption"
+                    "Load_residential_LVGrid_5_3", "p_set"
                 ]
                 * profiles["residential"]
             ).values,
@@ -1716,7 +1731,7 @@ class TestTimeSeries:
             self.edisgo.timeseries.loads_active_power["Load_retail_LVGrid_9_14"].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_retail_LVGrid_9_14", "annual_consumption"
+                    "Load_retail_LVGrid_9_14", "p_set"
                 ]
                 * profiles["cts"]
             ).values,
@@ -1727,7 +1742,7 @@ class TestTimeSeries:
             ].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_industrial_LVGrid_6_1", "annual_consumption"
+                    "Load_industrial_LVGrid_6_1", "p_set"
                 ]
                 * profiles["industrial"]
             ).values,
@@ -1755,7 +1770,7 @@ class TestTimeSeries:
             ].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_agricultural_LVGrid_5_2", "annual_consumption"
+                    "Load_agricultural_LVGrid_5_2", "p_set"
                 ]
                 * profiles["agricultural"]
             ).values,
@@ -1766,7 +1781,7 @@ class TestTimeSeries:
             ].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_residential_LVGrid_5_3", "annual_consumption"
+                    "Load_residential_LVGrid_5_3", "p_set"
                 ]
                 * profiles_new["residential"]
             ).values,
@@ -1775,7 +1790,7 @@ class TestTimeSeries:
             self.edisgo.timeseries.loads_active_power["Load_retail_LVGrid_9_14"].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_retail_LVGrid_9_14", "annual_consumption"
+                    "Load_retail_LVGrid_9_14", "p_set"
                 ]
                 * profiles["cts"]
             ).values,
@@ -1786,31 +1801,31 @@ class TestTimeSeries:
             ].values,
             (
                 self.edisgo.topology.loads_df.loc[
-                    "Load_industrial_LVGrid_6_1", "annual_consumption"
+                    "Load_industrial_LVGrid_6_1", "p_set"
                 ]
                 * profiles_new["industrial"]
             ).values,
         ).all()
 
-        # test Error if 'annual_consumption' is missing
-        # Save the original 'annual_consumption' values
-        original_annual_consumption = self.edisgo.topology.loads_df[
-            "annual_consumption"
+        # test Error if 'p_set' is missing
+        # Save the original 'p_set' values
+        original_p_set = self.edisgo.topology.loads_df[
+            "p_set"
         ].copy()
-        # Set 'annual_consumption' to None for the test
-        self.edisgo.topology.loads_df["annual_consumption"] = None
+        # Set 'p_set' to None for the test
+        self.edisgo.topology.loads_df["p_set"] = None
         with pytest.raises(AttributeError) as exc_info:
             self.edisgo.timeseries.predefined_conventional_loads_by_sector(
                 self.edisgo, "demandlib"
             )
         assert (
             exc_info.value.args[0]
-            == "The annual consumption of some loads is missing. Please provide"
+            == "The nominal power 'p_set' of some loads is missing. Please provide it."
         )
-        # Restore the original 'annual_consumption' values
+        # Restore the original 'p_set' values
         self.edisgo.topology.loads_df[
-            "annual_consumption"
-        ] = original_annual_consumption
+            "p_set"
+        ] = original_p_set
 
     def test_predefined_charging_points_by_use_case(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")
