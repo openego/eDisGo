@@ -33,7 +33,7 @@ def read(fname):
 
 requirements = [
     "contextily < 1.8.0",
-    "dash < 3.4.0",
+    "dash < 3.5.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
     "egoio >= 0.4.7, < 0.5.0",
@@ -66,7 +66,7 @@ requirements = [
 ]
 
 dev_requirements = [
-    "black < 25.13.0",
+    "black < 26.2.0",
     "flake8 < 7.4.0",
     "isort < 7.1.0",
     "pre-commit < 4.6.0",
