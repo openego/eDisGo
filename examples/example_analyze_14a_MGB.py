@@ -18,6 +18,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 from pathlib import Path
+import matplotlib.colors as mcolors
+import contextily as ctx
 
 from edisgo import EDisGo
 from edisgo.io.db import engine as egon_engine
@@ -1401,68 +1403,92 @@ orig_net.buses["y"] = orig_net.buses.geometry.y
 
 n = edisgo.to_pypsa()
 lines_t = results.s_res.loc[:, results.s_res.columns.str.contains("line")]
+gen_t = edisgo.timeseries.generators_active_power
+gen = n.generators
 n.buses["x"] = n.buses.index.map(orig_net.buses["x"])
 n.buses["y"] = n.buses.index.map(orig_net.buses["y"])
 
-import matplotlib.colors as mcolors
 
-# 1. Define your limits (e.g., 0% to 100% loading)
-v_min = 0
-v_max = 0.5
+# 1. Define limits for line loading
+v_min = 0.0
+v_max = 1.0
+norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
 
-# 2. Create a normalization object
-norm = mcolors.Normalize(vmin=v_min, vmax=v_max)
+# 2. Prepare bus data
+# Calculating voltage deviation from nominal (1.0 p.u.)
+bus_colors = (1 - edisgo.results.v_res.T["2035-01-15 09:00:00"]).apply(abs)
 
-import contextily as ctx
+# Voltage limits (adjust vmin/vmax based on your bus_colors results)
+norm_buses = mcolors.Normalize(vmin=bus_colors.min(), vmax=bus_colors.max())
 
-fig, ax = plt.subplots()
+# --- (Curtailment logic and bus_sizes calculation) ---
+loads = edisgo.topology.loads_df
+curt_14a = analyze_curtailment_results(edisgo, output_dir="results_14a")[
+    "curtailment_data"
+].T
 
+# Clean up index names to match load names
+curt_14a["load"] = curt_14a.index
+curt_14a["load"] = curt_14a["load"].apply(
+    lambda x: x.replace("cp_14a_support_", "").replace("hp_14a_support_", "")
+)
+
+# Map loads to their respective buses and aggregate curtailment per bus
+curt_14a["bus"] = curt_14a["load"].map(edisgo.topology.loads_df["bus"])
+grouped_14a = curt_14a.groupby("bus").sum()
+grouped_14a.columns = grouped_14a.columns.map(str)
+
+# Calculate bus sizes based on curtailment; reindex to include all buses in the network
+bus_sizes = 0.000000002 + (grouped_14a["2035-01-15 09:00:00"] * 0.000001)
+bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=0.000000002)
+# -------------------------------------------------------------
+
+fig, ax = plt.subplots(figsize=(12, 8))
+
+# Plot the grid
 n.plot(
     margin=0.05,
     ax=ax,
     geomap=False,
-    projection=None,
-    bus_colors="cadetblue",
+    bus_colors=bus_colors,
     bus_alpha=1,
-    bus_sizes=0.000000001,
-    bus_cmap=None,
-    bus_norm=None,
-    bus_split_circles=False,
-    line_colors=lines_t.loc["2035-01-15 9:00:00", :],
-    link_colors="darkseagreen",
-    transformer_colors="orange",
-    line_alpha=1,
-    link_alpha=1,
-    transformer_alpha=1,
-    line_widths=1,
-    link_widths=1,
-    transformer_widths=0,
+    bus_sizes=bus_sizes,
+    bus_cmap="jet",
+    line_colors=lines_t.loc["2035-01-15 09:00:00", :],
+    line_widths=1.2,
     line_cmap="jet",
-    link_cmap=None,
-    transformer_cmap=None,
-    line_norm=norm,
-    link_norm=None,
-    transformer_norm=None,
-    flow=None,
-    branch_components=None,
-    layouter=None,
-    title="Line loading [%]",
-    boundaries=None,
+    line_norm=norm_lines,
+    title="Grid Analysis: Line Loading & Bus Voltage",
     geometry=False,
-    jitter=None,
-    color_geomap=None,
 )
 
-# 2. Add the background tiles
-# crs=4326 tells contextily that your 'ax' coordinates are in lon/lat
+# Add background basemap
 ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
 
-# Create a mappable object for the colorbar
-sm = plt.cm.ScalarMappable(cmap="jet", norm=norm)
-sm.set_array([])  # Empty array needed for matplotlib internals
+# --- COLORBAR 1: LINE LOADING (LEFT SIDE) ---
+sm_lines = plt.cm.ScalarMappable(cmap="jet", norm=norm_lines)
+# Use location='left' and a slightly larger pad to avoid overlap with axis labels
+cb_lines = fig.colorbar(
+    sm_lines,
+    ax=ax,
+    orientation="vertical",
+    location="left",
+    pad=0.08,
+    aspect=20,
+)
+cb_lines.set_label("Line Loading [relative]", fontsize=8)
 
-# Add the colorbar to the figure
-cb = fig.colorbar(sm, ax=ax, orientation="vertical", pad=0.02, aspect=20)
-cb.set_label("Line Loading [relative]", fontsize=6)
+# --- COLORBAR 2: BUS VOLTAGE (RIGHT SIDE) ---
+sm_buses = plt.cm.ScalarMappable(cmap="jet", norm=norm_buses)
+# Default location is right
+cb_buses = fig.colorbar(
+    sm_buses,
+    ax=ax,
+    orientation="vertical",
+    location="right",
+    pad=0.02,
+    aspect=20,
+)
+cb_buses.set_label("Voltage Deviation |1 - V| [p.u.]", fontsize=8)
 
 plt.show()
