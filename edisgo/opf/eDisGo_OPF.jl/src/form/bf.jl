@@ -191,7 +191,7 @@ function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens
             + sum(pgens[g] * bus_gen_d_pf[g] for g in bus_gens)
             + sum(pdsm[dsm] * bus_dsm_pf[dsm] for dsm in bus_dsm)
             + sum((php[hp] - phps[hp]) * bus_hps_pf[hp] for hp in bus_hps)
-            + sum((pcp[cp] - pcps[cp]) * bus_cps_pf[cp] for hp in bus_cps)
+            + sum((pcp[cp] - pcps[cp]) * bus_cps_pf[cp] for cp in bus_cps)
             # §14a generators have pf=1, q=0
         )
     else  # Eq. (3.3ii), (3.4ii)

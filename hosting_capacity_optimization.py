@@ -16,15 +16,11 @@ Methodik:
 - Nur Worst-Case Zeitschritte werden analysiert (standardmäßig 4)
 
 Optimierungsansatz (§14a EnWG):
-- Alle CPs werden auf unrealistisch hohe Leistung gesetzt (500 kW)
+- Alle CPs werden auf unrealistisch hohe Leistung gesetzt
 - Virtuelle Generatoren werden an jedem CP-Bus hinzugefügt
 - PowerModels.jl Optimierung bestimmt optimale "Curtailment" pro CP
-- Optimale CP-Leistung = 500 kW - Curtailment
-- Erlaubt INDIVIDUELLE Leistungen pro CP (im Gegensatz zu Binary Search)
-
-Alternative Methode (Binary Search):
-- Findet UNIFORME maximale Leistung pro Ladesäule
-- Kann durch method='binary_search' aktiviert werden
+- Optimale CP-Leistung = Ausgangsleistung - Curtailment
+- Erlaubt INDIVIDUELLE Leistungen pro CP
 """
 
 import json
@@ -113,18 +109,17 @@ class HostingCapacityOptimization:
             Logger für Ausgaben
         """
         self.edisgo_base = edisgo_obj
-        self.scenarios = {}
         self.logger = logger if logger else logging.getLogger(__name__)
         self.worst_case_timesteps = None
 
-    def create_scenario_s1(self, p_set=0.011):
+    def create_scenario_s1(self, p_set=50000000000000000):
         """
         S1: Eine Ladesäule am HV/MV Trafo.
 
         Parameters
         ----------
         p_set : float
-            Anfangsleistung pro Ladesäule in MW (default: 11 kW)
+            Anfangsleistung pro Ladesäule in kW
 
         Returns
         -------
@@ -149,7 +144,7 @@ class HostingCapacityOptimization:
 
         return edisgo_s1
 
-    def create_scenario_s2(self, p_set=0.011):
+    def create_scenario_s2(self, p_set=500000000000):
         """
         S2: Je eine Ladesäule an jedem MV Bus + je eine an jedem LV ONS.
         Ergibt oberes Ende der Aufnahmefähigkeit.
@@ -157,7 +152,7 @@ class HostingCapacityOptimization:
         Parameters
         ----------
         p_set : float
-            Leistung pro Ladesäule in MW (default: 11 kW)
+            Leistung pro Ladesäule in kW
 
         Returns
         -------
@@ -170,7 +165,7 @@ class HostingCapacityOptimization:
         self._remove_all_charging_points(edisgo_s2)
 
         # Füge eine Ladesäule an jedem MV Bus hinzu
-        mv_buses = edisgo_s2.topology.mv_grid.buses_df.index
+        mv_buses = edisgo_s2.topology.mv_grid.buses_df.index[1:]  # Ohne HV/MV Station
         for i, bus in enumerate(mv_buses):
             edisgo_s2.add_component(
                 comp_type="load",
@@ -196,7 +191,7 @@ class HostingCapacityOptimization:
 
         return edisgo_s2
 
-    def create_scenario_s3(self, p_set=0.011):
+    def create_scenario_s3(self, p_set=1240):
         """
         S3: Referenzszenario - gleichmäßige Verteilung.
         Je eine Ladesäule an ausgewählten MV und LV Buses.
@@ -204,7 +199,7 @@ class HostingCapacityOptimization:
         Parameters
         ----------
         p_set : float
-            Leistung pro Ladesäule in MW (default: 11 kW)
+            Leistung pro Ladesäule in kW
 
         Returns
         -------
@@ -217,7 +212,7 @@ class HostingCapacityOptimization:
         self._remove_all_charging_points(edisgo_s3)
 
         # Füge Ladesäulen an 50% der MV Buses hinzu (gleichmäßig verteilt)
-        mv_buses = edisgo_s3.topology.mv_grid.buses_df.index
+        mv_buses = edisgo_s3.topology.mv_grid.buses_df.index[1:]  # Ohne HV/MV Station
         mv_sample = mv_buses[::2]  # Jeder 2. Bus
         for i, bus in enumerate(mv_sample):
             edisgo_s3.add_component(
@@ -244,7 +239,7 @@ class HostingCapacityOptimization:
 
         return edisgo_s3
 
-    def create_scenario_s4(self, p_set=0.011):
+    def create_scenario_s4(self, p_set=1240):
         """
         S4: Je eine Ladesäule an weitestmöglichen Punkten im Netz.
         Ergibt unteres Ende der Aufnahmefähigkeit.
@@ -252,7 +247,7 @@ class HostingCapacityOptimization:
         Parameters
         ----------
         p_set : float
-            Leistung pro Ladesäule in MW (default: 11 kW)
+            Leistung pro Ladesäule in kW
 
         Returns
         -------
@@ -289,7 +284,7 @@ class HostingCapacityOptimization:
 
         return edisgo_s4
 
-    def create_scenario_s5(self, p_set=0.011):
+    def create_scenario_s5(self, p_set=1240):
         """
         S5: Je eine Ladesäule an jedem LV Bus (am weitesten Punkt jedes LV Grids).
         Keine CPs im MV Netz.
@@ -297,7 +292,7 @@ class HostingCapacityOptimization:
         Parameters
         ----------
         p_set : float
-            Leistung pro Ladesäule in MW (default: 11 kW)
+            Leistung pro Ladesäule in kW
 
         Returns
         -------
@@ -324,37 +319,8 @@ class HostingCapacityOptimization:
 
         return edisgo_s5
 
-    def _identify_worst_case_timesteps(self, edisgo_obj, n_timesteps=4):
-        """
-        Identifiziert die n Worst-Case Zeitschritte basierend auf höchster Gesamtlast.
-
-        Parameters
-        ----------
-        edisgo_obj : EDisGo
-            eDisGo Objekt
-        n_timesteps : int
-            Anzahl der Worst-Case Zeitschritte (default: 4)
-
-        Returns
-        -------
-        list
-            Liste der Worst-Case Zeitstempel
-        """
-        # Berechne Gesamtlast pro Zeitschritt
-        total_load = edisgo_obj.timeseries.loads_active_power.sum(axis=1)
-
-        # Finde die n höchsten Zeitschritte
-        worst_case_indices = total_load.nlargest(n_timesteps).index.tolist()
-
-        self.logger.info(f"Worst-Case Zeitschritte identifiziert: {worst_case_indices}")
-        return worst_case_indices
-
     def run_hosting_capacity_optimization(
         self,
-        n_worst_case_timesteps=4,
-        tolerance=0.01,
-        max_iterations=15,
-        method="optimization",
         max_cp_power_kw=500.0,
     ):
         """
@@ -362,18 +328,6 @@ class HostingCapacityOptimization:
 
         Parameters
         ----------
-        n_worst_case_timesteps : int
-            Anzahl der Worst-Case Zeitschritte (default: 4)
-        tolerance : float
-            Konvergenz-Toleranz für iterative Methode (default: 1%)
-            - nur für binary_search
-        max_iterations : int
-            Maximale Iterationen für Binary Search (default: 15)
-            - nur für binary_search
-        method : str
-            Optimierungsmethode: 'optimization' (§14a mit individuellen
-            CP-Leistungen) oder 'binary_search' (uniforme CP-Leistung).
-            Default: 'optimization'
         max_cp_power_kw : float
             Maximale CP-Leistung in kW für Optimierung (default: 500 kW)
             - nur für optimization
@@ -387,19 +341,13 @@ class HostingCapacityOptimization:
 
         # Identifiziere Worst-Case Zeitschritte (einmal für alle Szenarien)
         self.logger.info("\nIdentifiziere Worst-Case Zeitschritte...")
-        self.worst_case_timesteps = self._identify_worst_case_timesteps(
-            self.edisgo_base, n_timesteps=n_worst_case_timesteps
+        self.edisgo_base.set_time_series_worst_case_analysis()
+        self.worst_case_timesteps = self.edisgo_base.timeseries.timeindex
+
+        self.logger.info(
+            f"\nVerwende §14a OPTIMIERUNG "
+            f"(individuelle CP-Leistungen, max {max_cp_power_kw:.0f} kW)"
         )
-
-        # Log welche Methode verwendet wird
-        if method == "optimization":
-            self.logger.info(
-                f"\nVerwende §14a OPTIMIERUNG "
-                f"(individuelle CP-Leistungen, max {max_cp_power_kw:.0f} kW)"
-            )
-        else:
-            self.logger.info("\nVerwende BINARY SEARCH (uniforme CP-Leistung)")
-
         # WICHTIG: Erstelle alle Szenarien VOR jeglichem weiteren Reinforcement
         # (deepcopy des edisgo_base muss funktionieren)
         self.logger.info("\nErstelle alle Szenarien (deepcopy von Basis-Grid)...")
@@ -426,18 +374,10 @@ class HostingCapacityOptimization:
                     ]
                 )
                 self.logger.info(f"Anzahl Ladepunkte: {n_charging_points}")
-
-                # Wähle Methode
-                if method == "optimization":
-                    # §14a Optimierung - individuelle CP-Leistungen
-                    hc_result = self._calculate_hosting_capacity_optimization(
-                        edisgo_obj, max_cp_power_kw=max_cp_power_kw
-                    )
-                else:
-                    # Binary Search - uniforme CP-Leistung
-                    hc_result = self._calculate_hosting_capacity_iterative(
-                        edisgo_obj, tolerance=tolerance, max_iterations=max_iterations
-                    )
+                # §14a Optimierung - individuelle CP-Leistungen
+                hc_result = self._calculate_hosting_capacity_optimization(
+                    edisgo_obj, max_cp_power_kw=max_cp_power_kw
+                )
 
                 results_list.append(
                     {
@@ -456,6 +396,7 @@ class HostingCapacityOptimization:
                 results_list.append({"scenario": scenario_name, "error": str(e)})
 
         results_df = pd.DataFrame(results_list)
+        self.results = results_df
 
         # Bestimme oberes und unteres Ende
         if not results_df.empty and "max_power_per_cp_kw" in results_df.columns:
@@ -501,15 +442,6 @@ class HostingCapacityOptimization:
 
     # ===== Hilfsfunktionen =====
 
-    def _calculate_total_charging_power(self, edisgo_obj):
-        """Berechnet Gesamt-Ladeleistung."""
-        charging_points = edisgo_obj.topology.loads_df[
-            edisgo_obj.topology.loads_df["type"] == "charging_point"
-        ]
-        return {
-            "p_set": charging_points["p_set"].sum() if not charging_points.empty else 0
-        }
-
     def _remove_all_charging_points(self, edisgo_obj):
         """Entfernt alle Ladepunkte aus dem Netz."""
         charging_points = edisgo_obj.topology.loads_df[
@@ -519,112 +451,74 @@ class HostingCapacityOptimization:
         for cp in charging_points:
             edisgo_obj.remove_component(comp_type="load", comp_name=cp)
 
-    def _classify_charging_points_by_voltage(self, edisgo_obj):
-        """Klassifiziert Ladepunkte nach Spannungsebene (MV/LV)."""
-        charging_points = edisgo_obj.topology.loads_df[
-            edisgo_obj.topology.loads_df["type"] == "charging_point"
-        ]
-
-        mv_buses = edisgo_obj.topology.mv_grid.buses_df.index
-        mv_cps = charging_points[charging_points["bus"].isin(mv_buses)].index.tolist()
-        lv_cps = charging_points[~charging_points["bus"].isin(mv_buses)].index.tolist()
-
-        return mv_cps, lv_cps
-
-    def _calculate_charging_power_subset(self, edisgo_obj, cp_list):
-        """Berechnet Gesamtleistung einer Teilmenge von Ladepunkten."""
-        if not cp_list:
-            return 0
-
-        charging_points = edisgo_obj.topology.loads_df.loc[cp_list]
-        return charging_points["p_set"].sum()
-
-    def _is_cp_in_lv_grid(self, edisgo_obj, cp_name, lv_grid):
-        """Prüft ob Ladepunkt in bestimmtem LV Grid liegt."""
-        cp_bus = edisgo_obj.topology.loads_df.loc[cp_name, "bus"]
-        return cp_bus in lv_grid.buses_df.index
-
     def _find_furthest_bus_mv(self, edisgo_obj):
-        """Findet weitesten Bus im MV Netz (von HV/MV Station)."""
-        # Nutze Entfernung von Station als Proxy
-        # Vereinfachte Implementierung: Bus mit höchstem Index
-        mv_buses = edisgo_obj.topology.mv_grid.buses_df
-        # TODO: Implementiere tatsächliche Distanzberechnung
-        return mv_buses.index[-1] if not mv_buses.empty else None
+        """Findet weitesten Bus im MV Netz (von HV/MV Station).
+
+        Berechnet die Summe der Leitungslaengen (km) entlang des
+        kuerzesten Pfades von der HV/MV Station zu jedem MV Bus
+        und gibt den Bus mit der groessten Distanz zurueck.
+        """
+        import networkx as nx
+
+        mv_grid = edisgo_obj.topology.mv_grid
+        mv_buses = mv_grid.buses_df
+
+        if mv_buses.empty:
+            return None
+
+        graph = mv_grid.graph
+        station = mv_grid.station.index[0]
+
+        max_dist = -1
+        furthest_bus = mv_buses.index[0]
+
+        for bus in mv_buses.index:
+            try:
+                dist = nx.shortest_path_length(
+                    graph, source=station, target=bus,
+                    weight="length",
+                )
+                if dist > max_dist:
+                    max_dist = dist
+                    furthest_bus = bus
+            except nx.NetworkXNoPath:
+                continue
+
+        return furthest_bus
 
     def _find_furthest_bus_lv(self, lv_grid):
-        """Findet weitesten Bus im LV Netz (von ONS)."""
-        # Vereinfachte Implementierung
+        """Findet weitesten Bus im LV Netz (von ONS).
+
+        Berechnet die Summe der Leitungslaengen (km) entlang des
+        kuerzesten Pfades von der ONS zum jeweiligen LV Bus und
+        gibt den Bus mit der groessten Distanz zurueck.
+        """
+        import networkx as nx
+
         lv_buses = lv_grid.buses_df
-        # TODO: Implementiere tatsächliche Distanzberechnung
-        return lv_buses.index[-1] if not lv_buses.empty else None
 
-    def _aggregate_charging_timeseries(self, edisgo_obj):
-        """Aggregiert alle Lade-Zeitreihen."""
-        charging_ts = edisgo_obj.timeseries.loads_active_power.filter(like="Charging")
-        if charging_ts.empty:
-            return pd.DataFrame()
-        return charging_ts.sum(axis=1).to_frame("aggregated_charging")
+        if lv_buses.empty:
+            return None
 
-    def _set_worst_case_loading(self, edisgo_obj, load_factor=1.0):
-        """
-        Setzt nur die Ladepunkte auf Worst-Case (z.B. 100%),
-        nicht die Basislasten.
-        """
-        # Identifiziere Ladepunkte
-        charging_points = edisgo_obj.topology.loads_df[
-            edisgo_obj.topology.loads_df["type"] == "charging_point"
-        ].index.tolist()
+        graph = lv_grid.graph
+        station = lv_grid.station.index[0]
 
-        # Multipliziere nur die Ladepunkt-Zeitreihen mit load_factor
-        if hasattr(edisgo_obj.timeseries, "loads_active_power"):
-            charging_ts_cols = [
-                col
-                for col in edisgo_obj.timeseries.loads_active_power.columns
-                if col in charging_points
-            ]
-            if charging_ts_cols:
-                edisgo_obj.timeseries._loads_active_power[
-                    charging_ts_cols
-                ] *= load_factor
+        max_dist = -1
+        furthest_bus = lv_buses.index[0]
 
-    def _scale_charging_power(self, edisgo_obj, scaling_factor):
-        """
-        Skaliert die Ladeleistung aller Ladepunkte.
+        for bus in lv_buses.index:
+            try:
+                dist = nx.shortest_path_length(
+                    graph, source=station, target=bus,
+                    weight="length",
+                )
+                if dist > max_dist:
+                    max_dist = dist
+                    furthest_bus = bus
+            except nx.NetworkXNoPath:
+                continue
 
-        Parameters
-        ----------
-        edisgo_obj : EDisGo
-            eDisGo Objekt
-        scaling_factor : float
-            Skalierungsfaktor (z.B. 0.5 = 50%, 1.0 = 100%)
-
-        Returns
-        -------
-        EDisGo
-            eDisGo Objekt mit skalierter Ladeleistung
-        """
-        # Skaliere p_set für alle Ladepunkte
-        charging_points = edisgo_obj.topology.loads_df[
-            edisgo_obj.topology.loads_df["type"] == "charging_point"
-        ].index
-
-        if not charging_points.empty:
-            edisgo_obj.topology.loads_df.loc[charging_points, "p_set"] *= scaling_factor
-
-            # Skaliere auch Zeitreihen
-            if hasattr(edisgo_obj.timeseries, "loads_active_power"):
-                charging_ts_cols = [
-                    col
-                    for col in edisgo_obj.timeseries.loads_active_power.columns
-                    if col in charging_points
-                ]
-                if charging_ts_cols:
-                    edisgo_obj.timeseries._loads_active_power[
-                        charging_ts_cols
-                    ] *= scaling_factor
-
-        return edisgo_obj
+        return furthest_bus
 
     def _check_network_violations(self, edisgo_obj):
         """
@@ -667,7 +561,7 @@ class HostingCapacityOptimization:
             "max_line_loading": max_rel_load,
             "max_voltage_deviation": max_voltage_dev,
             "n_overloaded_lines": (
-                len(rel_load[rel_load > 1.0].dropna()) if not rel_load.empty else 0
+                int((rel_load > 1.0).any().sum()) if not rel_load.empty else 0
             ),
             "n_voltage_issues": len(v_issues) if not v_issues.empty else 0,
         }
@@ -782,203 +676,26 @@ class HostingCapacityOptimization:
             all_loads_ts = edisgo_obj.timeseries.loads_active_power.copy()
 
         # Füge Charging Point Spalten hinzu falls sie noch nicht existieren
-        for cp in charging_points:
-            if cp not in all_loads_ts.columns:
-                all_loads_ts[cp] = 0.0
+        missing_cps = [
+            cp for cp in charging_points if cp not in all_loads_ts.columns
+        ]
+        if missing_cps:
+            missing_df = pd.DataFrame(
+                0.0, index=all_loads_ts.index, columns=missing_cps
+            )
+            all_loads_ts = pd.concat([all_loads_ts, missing_df], axis=1)
 
         # Setze Charging Points auf 0 für alle Zeitschritte
         all_loads_ts.loc[:, charging_points] = 0.0
 
         # Setze Worst-Case Zeitschritte auf volle Leistung (nur für CPs)
-        if self.worst_case_timesteps:
+        if self.worst_case_timesteps is not None:
             for ts in self.worst_case_timesteps:
                 if ts in all_loads_ts.index:
                     all_loads_ts.loc[ts, charging_points] = power_per_cp_mw
 
         # Setze komplette Zeitreihen (mit allen Lasten)
         edisgo_obj.set_time_series_manual(loads_p=all_loads_ts)
-
-    def _calculate_hosting_capacity_iterative(
-        self, edisgo_obj, tolerance=0.01, max_iterations=15
-    ):
-        """
-        Berechnet Hosting Capacity durch iterative Binary Search.
-
-        Findet die maximale Leistung PRO Ladesäule, die ohne Netzprobleme
-        integriert werden kann (nur für Worst-Case Zeitschritte).
-
-        Parameters
-        ----------
-        edisgo_obj : EDisGo
-            eDisGo Objekt mit Ladepunkten
-        tolerance : float
-            Konvergenz-Toleranz in MW (default: 0.01 MW = 10 kW)
-        max_iterations : int
-            Maximale Anzahl Iterationen (default: 15)
-
-        Returns
-        -------
-        dict
-            Dictionary mit Hosting Capacity Ergebnissen
-        """
-        # Zähle Ladepunkte
-        n_charging_points = len(
-            edisgo_obj.topology.loads_df[
-                edisgo_obj.topology.loads_df["type"] == "charging_point"
-            ]
-        )
-
-        if n_charging_points == 0:
-            self.logger.warning("Keine Ladepunkte vorhanden")
-            return {
-                "max_power_per_cp_kw": 0,
-                "max_power_per_cp_mw": 0,
-                "total_power_mw": 0,
-                "iterations": 0,
-                "max_line_loading": 0,
-                "has_overloading": False,
-                "has_voltage_issues": False,
-            }
-
-        # Binary Search Grenzen (in MW pro Ladesäule)
-        lower_bound = 0.0  # Untere Grenze (immer feasible)
-        upper_bound = 0.5  # Obere Grenze (initial: 500 kW pro Säule)
-
-        best_feasible_power = 0.0
-        best_violations = None
-
-        # Teste zuerst das Basisnetz (0 kW) um zu prüfen, ob es bereits Probleme hat
-        self.logger.info("\nPrüfe Basisnetz ohne Ladesäulen...")
-        edisgo_base = edisgo_obj.copy(deep=True)
-        charging_points = edisgo_base.topology.loads_df[
-            edisgo_base.topology.loads_df["type"] == "charging_point"
-        ].index
-        edisgo_base.topology.loads_df.loc[charging_points, "p_set"] = 0.0
-        self._set_charging_timeseries(edisgo_base, 0.0)
-
-        try:
-            edisgo_base.analyze(timesteps=self.worst_case_timesteps)
-            base_violations = self._check_network_violations(edisgo_base)
-            self.logger.info(
-                f"  Basisnetz: {base_violations['n_overloaded_lines']} Überlastungen, "
-                f"{base_violations['n_voltage_issues']} Spannungsprobleme"
-            )
-
-            if base_violations["has_violations"]:
-                self.logger.warning(
-                    "⚠ Das Basisnetz hat bereits Probleme OHNE Ladesäulen!"
-                )
-                self.logger.warning("  Hosting Capacity wird 0 kW sein.")
-                # Setze best_violations auf base violations für korrekte Ausgabe
-                best_violations = base_violations
-        except Exception as e:
-            self.logger.warning(f"  Fehler bei Basisnetz-Analyse: {e}")
-
-        self.logger.info(
-            f"\nStarte iterative HC-Berechnung "
-            f"(max {max_iterations} Iterationen, "
-            f"Toleranz {tolerance*1000:.1f} kW)"
-        )
-
-        for iteration in range(max_iterations):
-            # Berechne Testleistung pro Ladesäule (Mittelwert)
-            test_power_mw = (lower_bound + upper_bound) / 2.0
-
-            self.logger.info(
-                f"  Iteration {iteration+1}: "
-                f"Teste {test_power_mw*1000:.1f} kW pro Ladesäule"
-            )
-
-            # Erstelle Kopie
-            edisgo_test = edisgo_obj.copy(deep=True)
-
-            # Setze p_set für alle Ladepunkte
-            charging_points = edisgo_test.topology.loads_df[
-                edisgo_test.topology.loads_df["type"] == "charging_point"
-            ].index
-            edisgo_test.topology.loads_df.loc[charging_points, "p_set"] = test_power_mw
-
-            # Erstelle Zeitreihen (nur Worst-Case Zeitschritte mit Last)
-            self._set_charging_timeseries(edisgo_test, test_power_mw)
-
-            # Stelle sicher dass alle Komponenten Zeitreihen haben
-            self._ensure_complete_timeseries(edisgo_test)
-
-            # Führe Power Flow aus (nur für Worst-Case Zeitschritte)
-            try:
-                edisgo_test.analyze(timesteps=self.worst_case_timesteps)
-
-                # Prüfe Netzrestriktionen
-                violations = self._check_network_violations(edisgo_test)
-
-                if violations["has_violations"]:
-                    # Zu viel Leistung - reduziere upper bound
-                    upper_bound = test_power_mw
-                    self.logger.info(
-                        f"    → Netzprobleme: "
-                        f"{violations['n_overloaded_lines']} Überlastungen, "
-                        f"{violations['n_voltage_issues']} Spannungsprobleme"
-                    )
-                else:
-                    # Feasible - erhöhe lower bound
-                    lower_bound = test_power_mw
-                    best_feasible_power = test_power_mw
-                    best_violations = violations
-                    self.logger.info(
-                        f"    ✓ Feasible: "
-                        f"Max Line Loading {violations['max_line_loading']:.2f}"
-                    )
-
-            except Exception as e:
-                # Power Flow gescheitert - zu viel Leistung
-                self.logger.warning(
-                    f"    Power Flow fehlgeschlagen bei "
-                    f"{test_power_mw*1000:.1f} kW: {e}"
-                )
-                upper_bound = test_power_mw
-
-            # Konvergenz-Check
-            if (upper_bound - lower_bound) < tolerance:
-                self.logger.info(f"  Konvergiert nach {iteration+1} Iterationen")
-                break
-
-        # Berechne finale Hosting Capacity
-        total_power = best_feasible_power * n_charging_points
-
-        self.logger.info(
-            f"✓ Hosting Capacity gefunden: "
-            f"{best_feasible_power*1000:.1f} kW pro Ladesäule"
-        )
-        self.logger.info(
-            f"  ({n_charging_points} Ladesäulen × "
-            f"{best_feasible_power*1000:.1f} kW = "
-            f"{total_power*1000:.1f} kW gesamt)"
-        )
-
-        return {
-            "max_power_per_cp_kw": best_feasible_power * 1000,  # In kW
-            "max_power_per_cp_mw": best_feasible_power,
-            "total_power_mw": total_power,
-            "iterations": iteration + 1,
-            "max_line_loading": (
-                best_violations["max_line_loading"] if best_violations else 0
-            ),
-            "has_overloading": (
-                best_violations["has_overloading"] if best_violations else False
-            ),
-            "has_voltage_issues": (
-                best_violations["has_voltage_issues"] if best_violations else False
-            ),
-            "n_overloaded_lines": (
-                best_violations["n_overloaded_lines"] if best_violations else 0
-            ),
-            "n_voltage_issues": (
-                best_violations["n_voltage_issues"] if best_violations else 0
-            ),
-            "max_voltage_deviation": (
-                best_violations["max_voltage_deviation"] if best_violations else 0
-            ),
-        }
 
     def _calculate_hosting_capacity_optimization(
         self, edisgo_obj, max_cp_power_kw=500.0
@@ -988,14 +705,13 @@ class HostingCapacityOptimization:
         Generatoren.
 
         Diese Methode ermöglicht es, für jede Ladesäule eine INDIVIDUELLE
-        optimale Leistung zu finden (im Gegensatz zur Binary Search, die
-        eine uniforme Leistung findet).
+        optimale Leistung zu finden.
 
         Methodik:
-        1. Setze alle CPs auf unrealistisch hohe Leistung (z.B. 500 kW)
-        2. Füge virtuelle Generatoren an jedem CP-Bus hinzu (max = 500 kW, sehr günstig)
+        1. Setze alle CPs auf unrealistisch hohe Leistung
+        2. Füge virtuelle Generatoren an jedem CP-Bus hinzu
         3. Optimierung "curtailed" die CPs durch die virtuellen Generatoren
-        4. Optimale CP-Leistung = 500 kW - Curtailment
+        4. Optimale CP-Leistung = Ausgangsleistung - Curtailment
 
         Parameters
         ----------
@@ -1125,15 +841,19 @@ class HostingCapacityOptimization:
             for cp_name in charging_points:
                 # Finde den zugehörigen virtuellen Generator
                 # Name-Pattern: "cp_14a_support_{cp_name}"
-                matching_gens = [gen for gen in cp_14a_generators if cp_name in gen]
+                gen_prefix = f"cp_14a_support_{cp_name}"
+                matching_gens = [
+                    gen for gen in cp_14a_generators
+                    if gen == gen_prefix or gen.startswith(gen_prefix)
+                ]
 
                 if matching_gens:
                     gen_name = matching_gens[0]
-                    # Curtailment = durchschnittliche Leistung des virtuellen
-                    # Generators über Worst-Case Zeitschritte
+                    # Curtailment = maximale Leistung des virtuellen
+                    # Generators über Worst-Case Zeitschritte (konservativ)
                     curtailment_mw = edisgo_opt.timeseries.generators_active_power.loc[
                         self.worst_case_timesteps, gen_name
-                    ].mean()
+                    ].max()
 
                     # Optimale CP-Leistung = Initial-Leistung - Curtailment
                     optimal_power_mw = max_cp_power_mw - curtailment_mw
@@ -1166,8 +886,14 @@ class HostingCapacityOptimization:
             # Update timeseries for all worst-case timesteps
             loads_p.loc[self.worst_case_timesteps, cp_name] = optimal_power_mw
 
-        edisgo_opt.set_time_series_manual(loads_p=loads_p)
-        self.logger.info("✓ Lasten auf optimierte Werte gesetzt")
+        # Update reactive power proportionally (CPs have pf=1.0 -> Q=0)
+        loads_q = edisgo_opt.timeseries.loads_reactive_power.copy()
+        for cp_name in cp_powers:
+            if cp_name in loads_q.columns:
+                loads_q.loc[self.worst_case_timesteps, cp_name] = 0.0
+
+        edisgo_opt.set_time_series_manual(loads_p=loads_p, loads_q=loads_q)
+        self.logger.info("✓ Lasten auf optimierte Werte gesetzt (P und Q)")
 
         # Führe finale Power Flow Analyse durch um Verletzungen zu prüfen
         self.logger.info("\nFühre finale Power Flow Analyse durch...")
@@ -1221,18 +947,7 @@ class HostingCapacityOptimization:
         }
 
 
-def example_usage():
-    """Beispiel zur Verwendung."""
-    # edisgo = EDisGo(ding0_grid="path/to/grid")
-    # edisgo.import_electromobility(...)
-    #
-    # hc_opt = HostingCapacityOptimization(edisgo)
-    # results = hc_opt.run_hosting_capacity_optimization()
-    # print(results)
-    pass
-
-
-def run_analysis(grid_path, output_dir=None, n_worst_case_timesteps=4):
+def run_analysis(grid_path, output_dir=None):
     """
     Führt die Hosting Capacity Optimierung für ein gegebenes Grid durch.
 
@@ -1243,8 +958,6 @@ def run_analysis(grid_path, output_dir=None, n_worst_case_timesteps=4):
     output_dir : str, optional
         Pfad zum Output-Verzeichnis. Wenn None, wird im aktuellen
         Verzeichnis gespeichert.
-    n_worst_case_timesteps : int, optional
-        Anzahl der Worst-Case Zeitschritte (default: 4)
 
     Returns
     -------
@@ -1269,38 +982,26 @@ def run_analysis(grid_path, output_dir=None, n_worst_case_timesteps=4):
     )  # 1 Tag, stündliche Auflösung
     edisgo = EDisGo(ding0_grid=grid_path, legacy_ding0_grids=False, timeindex=timeindex)
 
-    # 2. Setze Zeitreihen für Basislasten
-    logger.info("\nSetze Zeitreihen für Basislasten...")
-    try:
-        edisgo.set_time_series_active_power_predefined(
-            fluctuating_generators_ts="oedb", conventional_loads_ts="demandlib"
-        )
-        logger.info("✓ Zeitreihen gesetzt")
-    except Exception as e:
-        logger.warning(f"Warnung beim Setzen der Zeitreihen: {e}")
+    # 2. Setze Worst-Case Zeitreihen fuer alle Lasten und Generatoren
+    logger.info("\nSetze Worst-Case Zeitreihen...")
+    edisgo.set_time_series_worst_case_analysis()
+    logger.info("✓ Zeitreihen gesetzt")
 
-    # 3. WICHTIG: Erstelle Hosting Capacity Optimierung VOR dem Reinforcement
+    # 3. WICHTIG: Erstelle Hosting Capacity Optimierungs Objekt VOR dem Reinforcement
     #    (deepcopy funktioniert nicht nach reinforce wegen Thread-lokaler Objekte)
     logger.info("\nErstelle Hosting Capacity Optimierung (vor Reinforcement)...")
     hc_opt = HostingCapacityOptimization(edisgo, logger=logger)
 
     # 4. Verstärke das Netz um Basisprobleme zu beheben
-    #    Dies geschieht jetzt NACH dem Erstellen der Szenarien
     logger.info("\nVerstärke Netz um Basisprobleme zu beheben...")
-    try:
-        edisgo.reinforce()
-        logger.info("✓ Netz verstärkt - Basisprobleme behoben")
-    except Exception as e:
-        logger.warning(f"Warnung beim Verstärken des Netzes: {e}")
+    edisgo.reinforce()
+    logger.info("✓ Netz verstärkt - Basisprobleme behoben")
 
     # 5. Führe Optimierung durch
     logger.info("\nFühre Optimierung für alle Szenarien durch...")
-    logger.info(f"Nutze {n_worst_case_timesteps} Worst-Case Zeitschritte")
     logger.info("Verwende §14a Optimierung mit virtuellen Generatoren")
     logger.info("-" * 70)
     results = hc_opt.run_hosting_capacity_optimization(
-        n_worst_case_timesteps=n_worst_case_timesteps,
-        method="optimization",  # §14a Optimierung mit individuellen CP-Leistungen
         max_cp_power_kw=500000000000.0,  # Maximale unrealistische CP-Leistung
     )
 
@@ -1319,26 +1020,25 @@ def run_analysis(grid_path, output_dir=None, n_worst_case_timesteps=4):
     results_for_csv.to_csv(output_file, index=False)
     logger.info(f"\n✓ Ergebnisse gespeichert: {output_file}")
 
-    # Speichere individuelle CP-Leistungen als JSON (falls vorhanden)
+    # Speichere individuelle CP-Leistungen pro Szenario als CSV
     if cp_powers_data is not None:
-        cp_powers_file = os.path.join(output_dir, "hosting_capacity_cp_powers.json")
-        # Konvertiere zu serialisierbarem Format
-        cp_powers_serializable = {}
+        cp_powers_dir = os.path.join(output_dir, "cp_powers")
+        os.makedirs(cp_powers_dir, exist_ok=True)
         for idx, cp_dict in cp_powers_data.items():
             scenario_name = (
                 results.loc[idx, "scenario"]
                 if idx in results.index
                 else f"scenario_{idx}"
             )
-            if isinstance(cp_dict, dict):
-                # Konvertiere CP-Namen zu Strings für JSON
-                cp_powers_serializable[scenario_name] = {
-                    str(k): float(v) for k, v in cp_dict.items()
-                }
-
-        with open(cp_powers_file, "w") as f:
-            json.dump(cp_powers_serializable, f, indent=2)
-        logger.info(f"✓ Individuelle CP-Leistungen gespeichert: {cp_powers_file}")
+            if isinstance(cp_dict, dict) and cp_dict:
+                cp_df = pd.DataFrame(
+                    list(cp_dict.items()),
+                    columns=["charging_point", "power_kw"],
+                )
+                cp_df = cp_df.sort_values("power_kw", ascending=False)
+                cp_csv = os.path.join(cp_powers_dir, f"{scenario_name}.csv")
+                cp_df.to_csv(cp_csv, index=False)
+                logger.info(f"✓ CP-Leistungen gespeichert: {cp_csv}")
 
     # 7. Zeige Zusammenfassung
     logger.info("\n" + "=" * 70)
@@ -1352,32 +1052,16 @@ def run_analysis(grid_path, output_dir=None, n_worst_case_timesteps=4):
 if __name__ == "__main__":
     import sys
 
-    # Setup Logging für main
-    logger = setup_logging("ap54_optimization")
-
-    logger.info("AP 5.4 - Methode 2: Optimierung")
-    logger.info("=" * 50)
-    logger.info(
-        "Implementiert 5 Szenarien zur Bestimmung der Hosting Capacity Grenzen."
-    )
-    logger.info("")
-
     # Prüfe Kommandozeilenargumente
     if len(sys.argv) > 1:
         grid_path = sys.argv[1]
         output_dir = sys.argv[2] if len(sys.argv) > 2 else "."
-        n_worst_case = int(sys.argv[3]) if len(sys.argv) > 3 else 4
     else:
         # Default: Beispielgrid
         grid_path = "/home/gurobi/.ding0/2024-07-25T17:38:34_new_planning_new_edisgo/ding0_grids/30879"  # noqa
         output_dir = "."
-        n_worst_case = 4
-        logger.info(f"Verwende Beispielgrid: {grid_path}")
-        logger.info(f"Ausgabe in: {output_dir}")
-        logger.info(f"Worst-Case Zeitschritte: {n_worst_case}")
-        logger.info("")
 
-    # Führe Analyse aus
+    # Führe Analyse aus (setup_logging wird in run_analysis aufgerufen)
     results = run_analysis(
-        grid_path=grid_path, output_dir=output_dir, n_worst_case_timesteps=n_worst_case
+        grid_path=grid_path, output_dir=output_dir
     )

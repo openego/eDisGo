@@ -410,7 +410,7 @@ function variable_gen_hp_14a_power(pm::AbstractPowerModel; nw::Int=nw_id_default
     end
     
     if report
-        println("  🔍 JULIA: Reporting gen_hp_14a power for nw=$nw, ids=$(PowerModels.ids(pm, nw, :gen_hp_14a))")
+        println("  JULIA: Reporting gen_hp_14a power for nw=$nw, ids=$(PowerModels.ids(pm, nw, :gen_hp_14a))")
         PowerModels.sol_component_value(pm, nw, :gen_hp_14a, :p, PowerModels.ids(pm, nw, :gen_hp_14a), p_hp14a)
     end
 end
@@ -441,7 +441,7 @@ function variable_gen_cp_14a_power(pm::AbstractPowerModel; nw::Int=nw_id_default
     end
     
     if report
-        println("  🔍 JULIA: Reporting gen_cp_14a power for nw=$nw, ids=$(PowerModels.ids(pm, nw, :gen_cp_14a))")
+        println("  JULIA: Reporting gen_cp_14a power for nw=$nw, ids=$(PowerModels.ids(pm, nw, :gen_cp_14a))")
         PowerModels.sol_component_value(pm, nw, :gen_cp_14a, :p, PowerModels.ids(pm, nw, :gen_cp_14a), p_cp14a)
     end
 end
