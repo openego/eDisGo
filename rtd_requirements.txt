@@ -21,4 +21,4 @@ sphinx-autoapi < 3.7.0
 sshtunnel < 0.5.0
 urllib3 < 2.7.0
 workalendar < 17.1.0
-astroid == 4.0.3
+astroid == 4.1.0
