@@ -34,6 +34,18 @@ end
 Ensures that the net electrical load (heat pump load - virtual generator support)
 stays above the §14a minimum power level (typically 4.2 kW = 0.0042 MW).
 
+Uses the HP optimization variable `php` (not the fixed parameter) so the constraint
+correctly tracks the actual HP electrical draw after heat storage optimization.
+
+Big-M formulation:
+  php - p_hp14a >= p_min_14a - M * (1 - z_hp14a)
+  When z=0 (inactive): constraint relaxed (always satisfied)
+  When z=1 (active):   php - p_hp14a >= p_min_14a (net load >= 4.2 kW)
+
+If php < p_min_14a at a timestep, z is forced to 0 (no curtailment possible),
+which in turn forces p_hp14a = 0 via binary coupling. This correctly handles
+cases where the HP draws less than 4.2 kW.
+
 # Arguments
 - `pm::AbstractBFModelEdisgo`: PowerModels model
 - `i::Int`: Virtual generator index
@@ -42,55 +54,54 @@ stays above the §14a minimum power level (typically 4.2 kW = 0.0042 MW).
 function constraint_hp_14a_min_net_load(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
     gen_hp14a = PowerModels.ref(pm, nw, :gen_hp_14a, i)
     hp_idx = gen_hp14a["hp_index"]
-    hp = PowerModels.ref(pm, nw, :heatpumps, hp_idx)
-    
-    # Electrical power demand of heat pump (thermal demand / COP)
-    p_hp_load = hp["pd"] / hp["cop"]
-    
-    # Virtual generator support
+
+    # Get the actual HP electrical power VARIABLE (not the fixed parameter)
+    php = PowerModels.var(pm, nw, :php, hp_idx)
+
+    # Virtual generator support variable
     p_hp14a = PowerModels.var(pm, nw, :p_hp14a, i)
-    
+
     # §14a minimum power (per unit)
     p_min_14a = gen_hp14a["p_min_14a"]
-    
-    # Maximum support capacity (matches Python field name "pmax")
+
+    # Maximum support capacity
     p_max_support = gen_hp14a["pmax"]
     
     # --- DEBUG PRINT START ---
-    # Ändere die '12' in die ID, die du genauer prüfen möchtest
-    if i == 12 
-        println("  [DEBUG NW $nw HP $i]")
-        println("    > p_hp_load:     $(round(p_hp_load, digits=6))")
-        println("    > p_hp14a (Var): $(p_hp14a)") # Zeigt die JuMP-Variable
-        println("    > p_min_14a:     $(round(p_min_14a, digits=6))")
-        println("    > p_max_support: $(round(p_max_support, digits=6))")
+    if i == 12 # ID bei Bedarf anpassen
+        println("\n[DEBUG §14a Min Net Load | NW $nw | HP $i]")
+        println("  > hp_idx:        $hp_idx")
+        println("  > php (Var):     $(php)")
+        println("  > p_hp14a (Var): $(p_hp14a)")
+        println("  > p_min_14a:     $p_min_14a")
+        println("  > p_max_support: $p_max_support")
+        println(keys(gen_hp14a))
+        #println("  > Aktuelle Last (pd p.u.): ", gen_hp14a["pd"])
+        #println(" > Last: $(gen_hp14a["pd"])")
         
-        # Hilfswert für die Logik unten berechnen
-        p_min_net_debug = min(p_hp_load, p_min_14a)
-        println("    > p_min_net:     $(round(p_min_net_debug, digits=6))")
-        println("    " * "-"^20)
+        if p_max_support >= 1e-6
+            z_hp14a = PowerModels.var(pm, nw, :z_hp14a, i)
+            M = p_max_support + p_min_14a
+            println("  > z_hp14a (Var): $(z_hp14a)")
+            println("  > Big-M:         $M")
+            # Zeigt die mathematische Formel der Constraint vor der Lösung
+            println("  > Constraint:    php - p_hp14a >= $p_min_14a - $M * (1 - z_hp14a)")
+        else
+            println("  > Status:        Small HP (Constraint: p_hp14a == 0)")
+        end
+        println("-"^40)
     end
     # --- DEBUG PRINT ENDE ---
-    
-    # Net load must stay ≥ minimum net load allowed
-    # The minimum is the LOWER of: current load or §14a limit
-    # This handles cases where HP draws less than 4.2 kW (e.g., 3 kW due to low thermal demand)
-    # p_hp_load - p_hp14a ≥ min(p_hp_load, p_min_14a)
-    # 
-    # Special cases:
-    # - If p_max_support ≈ 0 (HP too small), force virtual gen to zero
-    # - If HP is off (p_hp_load ≈ 0), no support needed
+
     if p_max_support < 1e-6
         # Heat pump too small for §14a curtailment, disable virtual generator
         JuMP.@constraint(pm.model, p_hp14a == 0.0)
-    elseif p_hp_load > 1e-6
-        # Normal case: enforce minimum net load
-        # Net load cannot go below current load or §14a minimum, whichever is lower
-        p_min_net = min(p_hp_load, p_min_14a)
-        JuMP.@constraint(pm.model, p_hp_load - p_hp14a >= p_min_net)
     else
-        # Heat pump is off, no support needed
-        JuMP.@constraint(pm.model, p_hp14a == 0.0)
+        # Big-M formulation: when z=1 (curtailment active), enforce min net load
+        # when z=0 (curtailment inactive), constraint is relaxed
+        z_hp14a = PowerModels.var(pm, nw, :z_hp14a, i)
+        M = p_max_support + p_min_14a
+        JuMP.@constraint(pm.model, php - p_hp14a >= p_min_14a - M * (1 - z_hp14a))
     end
 end
 
