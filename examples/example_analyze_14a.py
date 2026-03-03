@@ -17,6 +17,12 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from pathlib import Path
 
+import contextily as ctx
+import pypsa
+import geopandas as gpd
+import imageio.v2 as imageio
+import matplotlib.colors as mcolors
+
 from edisgo import EDisGo
 from edisgo.io.db import engine as egon_engine
 
@@ -1115,7 +1121,7 @@ def main():
     # ============================================================================
 
     # Grid configuration - LOOP THROUGH ALL GRIDS
-    GRID_BASE_PATH = "/home/gurobi/.ding0/2024-07-25T17:38:34_new_planning_new_edisgo/ding0_grids"
+    GRID_BASE_PATH = "/home/student/Execution/eDisGo_exe/test_grid"
     SCENARIO = "eGon2035"
 
     # Simulation parameters
@@ -1195,7 +1201,160 @@ def main():
             print(f"  - {grid_id}: {error[:100]}")
 
     print(f"\nCompleted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    return edisgo
+
+def create_network_gif(
+    folder_path="./plots", output_name="network_evolution.gif", duration=1
+):
+    """
+    Creates a GIF from PNG files in a folder.
+    duration: time in seconds between frames
+    """
+    images = []
+
+    # Get all png files that start with 'grid_analysis_'
+    files = [
+        f
+        for f in os.listdir(folder_path)
+        if f.endswith(".png") and f.startswith("grid_analysis_")
+    ]
+
+    # IMPORTANT: Sort files by time.
+    # Since your files are named 'grid_analysis_YYYY-MM-DD HH:MM:SS.png',
+    # standard string sorting works perfectly for chronological order.
+    files.sort()
+
+    print(f"Found {len(files)} frames. Processing...")
+
+    for filename in files:
+        file_path = os.path.join(folder_path, filename)
+        images.append(imageio.imread(file_path))
+        print(f"Added: {filename}")
+
+    # Save the GIF
+    # loop=0 means it will loop forever
+    imageio.mimsave(output_name, images, duration=duration, loop=0)
+    print(f"Success! GIF saved as {output_name}")
+
+
+def plot_network(
+    edisgo,
+    snapshot: str = "2035-01-15 09:00:00",
+    show: bool = True,
+    save: bool = True,
+    base_bus_size = 0.0000002
+):
+    results = edisgo.results
+    
+    n = edisgo.to_pypsa()
+    coords = edisgo.topology.buses_df[["x", "y"]]
+    coords = coords.reindex(n.buses.index)  #secure that index is matching
+    n.buses["x"] = coords["x"].values
+    n.buses["y"] = coords["y"].values
+    
+    line_columns = n.lines.index
+    lines_t = results.s_res.loc[:, line_columns]
+
+    # 1. Define limits for line loading
+    v_min = 0.0
+    v_max = 1.0
+    norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
+
+    # 2. Prepare bus data
+    # Calculating voltage deviation from nominal (1.0 p.u.)
+    bus_colors = (1 - edisgo.results.v_res.T[snapshot]).apply(abs)
+
+    # Voltage limits (adjust vmin/vmax based on your bus_colors results)
+    norm_buses = mcolors.Normalize(
+        vmin=0, vmax=0.3
+    )
+
+    # --- (Curtailment logic and bus_sizes calculation) ---
+    curt_14a = analyze_curtailment_results(edisgo, output_dir="results_14a")[
+        "curtailment_data"
+    ].T
+
+    # Clean up index names to match load names
+    curt_14a["load"] = curt_14a.index
+    curt_14a["load"] = curt_14a["load"].apply(
+        lambda x: x.replace("cp_14a_support_", "").replace(
+            "hp_14a_support_", ""
+        )
+    )
+
+    # Map loads to their respective buses and aggregate curtailment per bus
+    curt_14a["bus"] = curt_14a["load"].map(edisgo.topology.loads_df["bus"])
+    grouped_14a = curt_14a.groupby("bus").sum()
+    grouped_14a.columns = grouped_14a.columns.map(str)
+
+    # Calculate bus sizes based on curtailment; reindex to include all buses in the 
+    bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.0001)
+    bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
+    # -------------------------------------------------------------
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Plot the grid
+    n.plot(
+        margin=0.05,
+        ax=ax,
+        geomap=False,
+        bus_colors=bus_colors,
+        bus_alpha=1,
+        bus_sizes=bus_sizes,
+        bus_cmap="jet",
+        line_colors=lines_t.loc[snapshot, :],
+        line_widths=1.6,
+        line_cmap="jet",
+        line_norm=norm_lines,
+        title=f"Grid Analysis: {snapshot}",
+        geometry=False,
+    )
+
+    # Add background basemap
+    ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
+
+    # --- COLORBAR 1: LINE LOADING (LEFT SIDE) ---
+    sm_lines = plt.cm.ScalarMappable(cmap="jet", norm=norm_lines)
+    # Use location='left' and a slightly larger pad to avoid overlap with axis labels
+    cb_lines = fig.colorbar(
+        sm_lines,
+        ax=ax,
+        orientation="vertical",
+        location="left",
+        pad=0.08,
+        aspect=20,
+    )
+    cb_lines.set_label("Line Loading [relative]", fontsize=8)
+
+    # --- COLORBAR 2: BUS VOLTAGE (RIGHT SIDE) ---
+    sm_buses = plt.cm.ScalarMappable(cmap="jet", norm=norm_buses)
+    # Default location is right
+    cb_buses = fig.colorbar(
+        sm_buses,
+        ax=ax,
+        orientation="vertical",
+        location="right",
+        pad=0.02,
+        aspect=20,
+    )
+    cb_buses.set_label("Voltage Deviation |1 - V| [p.u.]", fontsize=8)
+
+    if save:
+        plt.savefig(
+            f"plots/grid_analysis_{snapshot}.png", dpi=300, bbox_inches="tight"
+        )
+
+    if show:
+        plt.show()
 
 
 if __name__ == "__main__":
-    main()
+    edisgo = main()
+    #create a plots folder in your execution folder for executing this oart
+    #for ts in edisgo.timeseries.timeindex:  
+          #plot_network(edisgo, show=False, snapshot=str(ts), base_bus_size=0.0000002)
+    #create_network_gif(output_name='network_evolution.gif', duration=500)
+
+
