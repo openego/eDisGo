@@ -43,6 +43,24 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
                 PowerModels.var(pm, n)[:ps] = Dict{Int, JuMP.VariableRef}()
                 PowerModels.var(pm, n)[:phs] = Dict{Int, JuMP.VariableRef}()
                 PowerModels.var(pm, n)[:pdsm] = Dict{Int, JuMP.VariableRef}()
+
+                # Fix ALL feasibility slacks to 0: if §14a alone is not sufficient,
+                # the model must become infeasible (no hidden load shedding allowed)
+                for i in PowerModels.ids(pm, :load, nw=n)
+                    JuMP.fix(PowerModels.var(pm, n, :pds, i), 0.0; force=true)
+                end
+                for i in PowerModels.ids(pm, :heatpumps, nw=n)
+                    JuMP.fix(PowerModels.var(pm, n, :phps, i), 0.0; force=true)
+                end
+                for i in PowerModels.ids(pm, :electromobility, nw=n)
+                    JuMP.fix(PowerModels.var(pm, n, :pcps, i), 0.0; force=true)
+                end
+                for i in PowerModels.ids(pm, :gen, nw=n)
+                    JuMP.fix(PowerModels.var(pm, n, :pgens, i), 0.0; force=true)
+                end
+                for i in PowerModels.ids(pm, :gen_nd, nw=n)
+                    JuMP.fix(PowerModels.var(pm, n, :pgc, i), 0.0; force=true)
+                end
             else
                 eDisGo_OPF.variable_battery_storage(pm, nw=n)  # Eq. (3.11) und (3.12)
                 eDisGo_OPF.variable_heat_storage(pm, nw=n)  # Eq. (3.24)
