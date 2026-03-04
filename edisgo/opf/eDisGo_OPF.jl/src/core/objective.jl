@@ -124,7 +124,7 @@ function objective_min_losses_14a_only(pm::AbstractBFModelEdisgo)
 
     return JuMP.@objective(pm.model, Min,
         # Primary: minimize line losses
-        0.4 * sum(sum(ccm[n][b] * r[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)
+        # 0.4 * sum(sum(ccm[n][b] * r[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)
         # Secondary: minimize §14a curtailment usage
         + factor_14a * sum(sum(p_hp14a[n][i] for i in keys(p_hp14a[n])) for n in nws)  # §14a HP curtailment
         + factor_14a * sum(sum(p_cp14a[n][i] for i in keys(p_cp14a[n])) for n in nws)  # §14a CP curtailment
