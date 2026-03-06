@@ -590,8 +590,6 @@ def run_optimization_14a(edisgo):
     print("solve_time:", edisgo.opf_results.solution_time)
     print("AC PF min/max:", edisgo.results.v_res.min().min(), edisgo.results.v_res.max().max())
     
-    edisgo.analyze()
-    
     duration = (datetime.now() - start_time).total_seconds()
     
     print(f"\n✓ Optimization complete!")
@@ -1177,6 +1175,9 @@ def main():
 
             # Run optimization with §14a
             edisgo = run_optimization_14a(edisgo)
+            
+            #update line_loading and voltage values
+            edisgo.analyze()
 
             # Analyze results
             results = analyze_curtailment_results(edisgo, output_dir=output_dir)
@@ -1260,11 +1261,12 @@ def plot_network(
     n.buses["y"] = coords["y"].values
     
     line_columns = n.lines.index
-    lines_t = results.s_res.loc[:, line_columns]
 
     # 1. Define limits for line loading
-    v_min = 0.0
-    v_max = 1.0
+    line_loading = results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
+
+    # 1. Limits für Farbskala (jetzt auf 0% - 100% bezogen)
+    v_min, v_max = 0.0, 1.0
     norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
 
     # 2. Prepare bus data
@@ -1310,7 +1312,7 @@ def plot_network(
         bus_sizes=bus_sizes,
         bus_cmap="jet",
         bus_norm=norm_buses,
-        line_colors=lines_t.loc[snapshot, :],
+        line_colors=line_loading,
         line_widths=1.6,
         line_cmap="jet",
         line_norm=norm_lines,
@@ -1361,6 +1363,6 @@ if __name__ == "__main__":
     #create a plots folder in your execution folder for executing this oart
     for ts in edisgo.timeseries.timeindex:  
           plot_network(edisgo, show=False, snapshot=str(ts), base_bus_size=0.0000002)
-    create_network_gif(output_name='network_evolution_factor100.gif', duration=500)
+    create_network_gif(output_name='network_evolution.gif', duration=500)
 """
 

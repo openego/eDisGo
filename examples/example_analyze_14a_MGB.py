@@ -23,7 +23,6 @@ import contextily as ctx
 import imageio.v2 as imageio
 import re
 
-
 from edisgo import EDisGo
 from edisgo.io.db import engine as egon_engine
 
@@ -591,6 +590,7 @@ def setup_edisgo(
     # edisgo.topology.lines_df.r = 0.01
     # edisgo.topology.lines_df.s_nom = 1000
     # edisgo.topology.generators_df
+
     pypsa_network = edisgo.to_pypsa()
     # pypsa_network.export_to_csv_folder("/home/carlos/LoMa/validation/solve_pf_problem")
     # breakpoint()
@@ -1327,8 +1327,8 @@ def main():
 
     # Simulation parameters
     NUM_DAYS = 10 / 24  # Number of days to simulate (e.g., 7, 30, 365)
-    NUM_HEAT_PUMPS = 60  # Number of heat pumps to add
-    NUM_CHARGING_POINTS = 50  # Number of charging points to add
+    NUM_HEAT_PUMPS = 20  # Number of heat pumps to add
+    NUM_CHARGING_POINTS = 20  # Number of charging points to add
 
     # Output
     OUTPUT_DIR = "./"
@@ -1355,11 +1355,13 @@ def main():
 
         # Run optimization with §14a
         edisgo = run_optimization_14a(edisgo)
+        
+        #update line_loading and voltage values
+        edisgo.analyze()
 
         # Analyze results
-        '''
         results = analyze_curtailment_results(edisgo, output_dir=output_dir)
-         
+
         if results:
             # Create plots
             create_plots(results, output_dir=output_dir)
@@ -1381,7 +1383,7 @@ def main():
         print(
             f"\nCompleted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         )
-        '''
+
     except Exception as e:
         print(f"\n❌ ERROR: {str(e)}")
         import traceback
@@ -1400,7 +1402,7 @@ def create_network_gif(
     duration: time in seconds between frames
     """
     images = []
-    
+
     # Get all png files that start with 'grid_analysis_'
     files = [
         f
@@ -1445,8 +1447,10 @@ def plot_network(
     lines_t = results.s_res.loc[:, line_columns]
 
     # 1. Define limits for line loading
-    v_min = 0.0
-    v_max = 1.0
+    loading_relative = results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
+
+    # 1. Limits für Farbskala (jetzt auf 0% - 100% bezogen)
+    v_min, v_max = 0.0, 1.0
     norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
 
     # 2. Prepare bus data
@@ -1493,7 +1497,7 @@ def plot_network(
         bus_sizes=bus_sizes,
         bus_cmap="jet",
         bus_norm=norm_buses,
-        line_colors=lines_t.loc[snapshot, :],
+        line_colors=loading_relative,
         line_widths=1.6,
         line_cmap="jet",
         line_norm=norm_lines,
@@ -1537,9 +1541,9 @@ def plot_network(
 
     if show:
         plt.show()
-"""
+'''
 edisgo = main()
 for ts in edisgo.timeseries.timeindex:
-    plot_network(edisgo, show=False, snapshot=str(ts), base_bus_size = 0.000000002 )
-create_network_gif(output_name='network_evolution_MGB.gif', duration=500)
-"""
+    plot_network(edisgo, show=False, snapshot=str(ts))
+create_network_gif(output_name='network_evolution.gif', duration=500)
+'''
