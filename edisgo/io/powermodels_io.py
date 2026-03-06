@@ -217,6 +217,7 @@ def to_powermodels(
     costs = line_expansion_costs(edisgo_object).drop(columns="voltage_level")
     # convert eDisGo object to pypsa network structure
     psa_net = edisgo_object.to_pypsa()
+    import pdb; pdb.set_trace()
     # add line costs to psa_net
     psa_net.lines = psa_net.lines.merge(costs, left_index=True, right_index=True)
     psa_net.lines.capital_cost = (
@@ -633,8 +634,18 @@ def from_powermodels(
             edisgo_object.timeseries._generators_active_power.loc[:, names] = results[
                 names
             ].values
-            print(f"    ✓ Written successfully!")
-        
+            #implement 14a-gens in topology dataframe
+            for gen_name in names:
+                  load_name = gen_name.replace("hp_14a_support_", "")
+                  bus_name = edisgo_object.topology.loads_df.loc[load_name].bus
+                  if gen_name not in edisgo_object.topology.generators_df.index:
+                        edisgo_object.topology.generators_df.loc[gen_name] = {
+                              "type": "hp_14a",
+                              "p_nom": results[gen_name].max(),
+                              "bus": bus_name,
+                              "control": "PQ",
+                              }
+                        print(f"Generator {gen_name} has been implemented ✓")
         elif flex == "gen_cp_14a":
             # §14a virtual generators for CPs: write as positive generation
             print(f"    → Writing {len(names)} gen_cp_14a generators to generators_active_power")
@@ -643,6 +654,20 @@ def from_powermodels(
                 names
             ].values
             print(f"    ✓ Written successfully!")
+            # Also reduce corresponding charging point loads by the curtailment amount
+            #implement 14a-gens in topology dataframe
+            for gen_name in names:
+                  load_name = gen_name.replace("cp_14a_support_", "")
+                  bus_name = edisgo_object.topology.loads_df.loc[load_name].bus
+                  if gen_name not in edisgo_object.topology.generators_df.index:
+                        edisgo_object.topology.generators_df.loc[gen_name] = {
+                              "type": "cp_14a",
+                              "p_nom": results[gen_name].max(),
+                              "bus": bus_name,
+                              "control": "PQ",
+                              }
+                        print(f"Generator {gen_name} has been implemented ✓")
+
         elif flex in ["heatpumps", "electromobility"]:
             edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
                 names
@@ -673,8 +698,7 @@ def from_powermodels(
                         columns=names,
                         data=results[names].values,
                     ),
-                )
-
+           )
     # calculate corresponding reactive power values
     edisgo_object.set_time_series_reactive_power_control()
 
@@ -943,6 +967,11 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
             "base_kv": psa_net.buses.v_nom.iloc[bus_i],
             "grid_level": grid_level[psa_net.buses.v_nom.iloc[bus_i]],
         }
+        
+    import pdb; pdb.set_trace()
+    vmins = [pm["bus"][k]["vmin"] for k in sorted(pm["bus"].keys())]
+    vmaxs = [pm["bus"][k]["vmax"] for k in sorted(pm["bus"].keys())]
+    print(min(vmins), max(vmins), min(vmaxs), max(vmaxs))
     # add virtual busses for storage units
     for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
@@ -965,6 +994,7 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
             "base_kv": psa_net.buses.v_nom.iloc[idx_bus - 1],
             "grid_level": grid_level[psa_net.buses.v_nom.iloc[idx_bus - 1]],
         }
+        
 
 
 def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):

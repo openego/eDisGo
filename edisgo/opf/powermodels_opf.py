@@ -117,6 +117,7 @@ def pm_optimize(
         Default: True.
 
     """
+
     Topology.find_meshes(edisgo_obj)
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
@@ -166,6 +167,23 @@ def pm_optimize(
             break
         if out.rstrip().startswith('{"name"'):
             pm_opf = json.loads(out)
+            
+            ####check voltage values
+            import math
+            import statistics
+            all_voltages = []
+            for t in pm_opf["nw"].keys():
+                for bid in pm_opf["nw"][t]["bus"].keys():
+                    v = math.sqrt(pm_opf["nw"][t]["bus"][bid]["w"])
+                    all_voltages.append(v)
+            
+            print(f"OPF Voltage Statistics (all {len(all_voltages)} values):")
+            print(f"  Min:  {min(all_voltages):.4f} p.u.")
+            print(f"  Max:  {max(all_voltages):.4f} p.u.")
+            print(f"  Mean: {statistics.mean(all_voltages):.4f} p.u.")
+            print(f"  Violations (V<0.9 or V>1.1): {sum(1 for v in all_voltages if v<0.9 or v>1.1)} / {len(all_voltages)}")
+            #####
+            
             # write results to edisgo object
             from_powermodels(
                 edisgo_obj,

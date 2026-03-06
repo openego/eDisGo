@@ -585,6 +585,12 @@ def run_optimization_14a(edisgo):
 
     # Run optimization
     edisgo.pm_optimize(opf_version=5, curtailment_14a=True)
+    print("status:", edisgo.opf_results.status)
+    print("solver:", edisgo.opf_results.solver)
+    print("solve_time:", edisgo.opf_results.solution_time)
+    print("AC PF min/max:", edisgo.results.v_res.min().min(), edisgo.results.v_res.max().max())
+    
+    edisgo.analyze()
     
     duration = (datetime.now() - start_time).total_seconds()
     
@@ -1240,7 +1246,7 @@ def create_network_gif(
 
 def plot_network(
     edisgo,
-    snapshot: str = "2035-01-15 09:00:00",
+    snapshot: str = '2035-01-15 09:00:00',
     show: bool = True,
     save: bool = True,
     base_bus_size = 0.0000002
@@ -1267,8 +1273,7 @@ def plot_network(
 
     # Voltage limits (adjust vmin/vmax based on your bus_colors results)
     norm_buses = mcolors.Normalize(
-        vmin=0, vmax=0.3
-    )
+        vmin=bus_colors.min(), vmax=bus_colors.max()    )
 
     # --- (Curtailment logic and bus_sizes calculation) ---
     curt_14a = analyze_curtailment_results(edisgo, output_dir="results_14a")[
@@ -1289,7 +1294,7 @@ def plot_network(
     grouped_14a.columns = grouped_14a.columns.map(str)
 
     # Calculate bus sizes based on curtailment; reindex to include all buses in the 
-    bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.0001)
+    bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.001)
     bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
     # -------------------------------------------------------------
 
@@ -1304,6 +1309,7 @@ def plot_network(
         bus_alpha=1,
         bus_sizes=bus_sizes,
         bus_cmap="jet",
+        bus_norm=norm_buses,
         line_colors=lines_t.loc[snapshot, :],
         line_widths=1.6,
         line_cmap="jet",
@@ -1350,11 +1356,11 @@ def plot_network(
         plt.show()
 
 
-if __name__ == "__main__":
-    edisgo = main()
+#if __name__ == "__main__":
+   # edisgo = main()
     #create a plots folder in your execution folder for executing this oart
-    #for ts in edisgo.timeseries.timeindex:  
-          #plot_network(edisgo, show=False, snapshot=str(ts), base_bus_size=0.0000002)
-    #create_network_gif(output_name='network_evolution.gif', duration=500)
+    for ts in edisgo.timeseries.timeindex:  
+          plot_network(edisgo, show=False, snapshot=str(ts), base_bus_size=0.0000002)
+    create_network_gif(output_name='network_evolution_factor100.gif', duration=500)
 
 

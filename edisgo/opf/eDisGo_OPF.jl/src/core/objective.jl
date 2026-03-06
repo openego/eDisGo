@@ -120,7 +120,9 @@ function objective_min_losses_14a_only(pm::AbstractBFModelEdisgo)
     p_hp14a = Dict(n => get(PowerModels.var(pm, n), :p_hp14a, Dict()) for n in nws)
     p_cp14a = Dict(n => get(PowerModels.var(pm, n), :p_cp14a, Dict()) for n in nws)
 
-    factor_14a = 0.5  # Weight for §14a curtailment
+    factor_14a = 1e12  # EXTREME penalty - §14a only as last option
+    println("factor_14a = ", factor_14a)
+    factor_feasibility = 1e8  # Extreme penalty - slacks should be zero in normal operation
 
     return JuMP.@objective(pm.model, Min,
         # Primary: minimize line losses
@@ -130,6 +132,7 @@ function objective_min_losses_14a_only(pm::AbstractBFModelEdisgo)
         + factor_14a * sum(sum(p_cp14a[n][i] for i in keys(p_cp14a[n])) for n in nws)  # §14a CP curtailment
     )
 end
+
 
 # OPF Version 3 (alternative): Minimize line losses, maximal line loading and HV slacks (with overlying grid)
 function objective_min_line_loading_max_OG(pm::AbstractBFModelEdisgo)

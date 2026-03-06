@@ -1455,7 +1455,7 @@ def plot_network(
 
     # Voltage limits (adjust vmin/vmax based on your bus_colors results)
     norm_buses = mcolors.Normalize(
-        vmin=0, vmax=0.3
+        vmin=0.0, vmax=0.3
     )
 
     # --- (Curtailment logic and bus_sizes calculation) ---
@@ -1492,6 +1492,7 @@ def plot_network(
         bus_alpha=1,
         bus_sizes=bus_sizes,
         bus_cmap="jet",
+        bus_norm=norm_buses,
         line_colors=lines_t.loc[snapshot, :],
         line_widths=1.6,
         line_cmap="jet",
@@ -1536,8 +1537,9 @@ def plot_network(
 
     if show:
         plt.show()
-
+"""
 edisgo = main()
 for ts in edisgo.timeseries.timeindex:
     plot_network(edisgo, show=False, snapshot=str(ts), base_bus_size = 0.000000002 )
-create_network_gif(output_name='network_evolution.gif', duration=500)
+create_network_gif(output_name='network_evolution_MGB.gif', duration=500)
+"""
