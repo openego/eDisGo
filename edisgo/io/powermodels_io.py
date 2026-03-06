@@ -217,7 +217,6 @@ def to_powermodels(
     costs = line_expansion_costs(edisgo_object).drop(columns="voltage_level")
     # convert eDisGo object to pypsa network structure
     psa_net = edisgo_object.to_pypsa()
-    import pdb; pdb.set_trace()
     # add line costs to psa_net
     psa_net.lines = psa_net.lines.merge(costs, left_index=True, right_index=True)
     psa_net.lines.capital_cost = (
@@ -967,11 +966,7 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
             "base_kv": psa_net.buses.v_nom.iloc[bus_i],
             "grid_level": grid_level[psa_net.buses.v_nom.iloc[bus_i]],
         }
-        
-    import pdb; pdb.set_trace()
-    vmins = [pm["bus"][k]["vmin"] for k in sorted(pm["bus"].keys())]
-    vmaxs = [pm["bus"][k]["vmax"] for k in sorted(pm["bus"].keys())]
-    print(min(vmins), max(vmins), min(vmaxs), max(vmaxs))
+
     # add virtual busses for storage units
     for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(

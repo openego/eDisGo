@@ -1355,12 +1355,12 @@ def plot_network(
     if show:
         plt.show()
 
-
-#if __name__ == "__main__":
-   # edisgo = main()
+"""
+if __name__ == "__main__":
+    edisgo = main()
     #create a plots folder in your execution folder for executing this oart
     for ts in edisgo.timeseries.timeindex:  
           plot_network(edisgo, show=False, snapshot=str(ts), base_bus_size=0.0000002)
     create_network_gif(output_name='network_evolution_factor100.gif', duration=500)
-
+"""
 
