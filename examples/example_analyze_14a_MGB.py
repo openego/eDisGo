@@ -1541,17 +1541,12 @@ def plot_network(
 
     if show:
         plt.show()
-<<<<<<< HEAD
+
+
 '''
 edisgo = main()
 for ts in edisgo.timeseries.timeindex:
     plot_network(edisgo, show=False, snapshot=str(ts))
 create_network_gif(output_name='network_evolution.gif', duration=500)
 '''
-=======
 
-edisgo = main()
-for ts in edisgo.timeseries.timeindex:
-    plot_network(edisgo, show=False, snapshot=str(ts))
-create_network_gif(duration=500)
->>>>>>> project/411_LoMa_14aOptimization_with_virtual_generators
