@@ -32,6 +32,7 @@ def to_powermodels(
     flexible_storage_units=None,
     opf_version=1,
     curtailment_14a=None,
+    hours_limit_14a: int = 24,
 ):
     """
     Convert eDisGo network to PowerModels dictionary format via 3-stage pipeline.
@@ -321,7 +322,7 @@ def to_powermodels(
         if len(all_hps) > 0:
             logger.info(f"Creating virtual generators for §14a heat pump support ({len(all_hps)} heat pumps).")
             _build_gen_hp_14a_support(
-                psa_net, pm, edisgo_object, s_base, all_hps, curtailment_14a_config
+                psa_net, pm, edisgo_object, s_base, all_hps, curtailment_14a_config, hours_limit_14a
             )
         
         # Build §14a support for charging points
@@ -330,7 +331,7 @@ def to_powermodels(
         if len(all_cps) > 0:
             logger.info(f"Creating virtual generators for §14a charging point support ({len(all_cps)} CPs).")
             _build_gen_cp_14a_support(
-                psa_net, pm, edisgo_object, s_base, all_cps, curtailment_14a_config
+                psa_net, pm, edisgo_object, s_base, all_cps, curtailment_14a_config, hours_limit_14a
             )
     
     if len(flexible_loads) > 0:
@@ -1622,7 +1623,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         }
 
 
-def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, curtailment_14a):
+def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, curtailment_14a, hours_limit_14a):
     """
     Build virtual generator dictionary for §14a heat pump support and add it to 
     PowerModels dictionary 'pm'.
@@ -1650,8 +1651,10 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
     # Correct key is "min_power_mw" but we fall back to legacy key for backwards compatibility
     # §14a EnWG requirement: Devices must maintain at least 4.2 kW when curtailed
     p_min_14a = curtailment_14a.get("min_power_mw", curtailment_14a.get("max_power_mw", 0.0042))  # MW
-    max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours per day
+    max_hours_per_day = curtailment_14a.get("max_hours_per_day", hours_limit_14a)  # hours per day
     specific_components = curtailment_14a.get("components", [])  # empty list = all eligible HPs
+    
+    print(f"hour_limit is implemented: \n ########### \n {hours_limit_14a} \n ##########")
 
     # Filter heat pumps if specific components are defined
     if len(specific_components) > 0:
@@ -1754,7 +1757,7 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
             )
 
 
-def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailment_14a):
+def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailment_14a, hours_limit_14a):
     """
     Build virtual generator dictionary for §14a charging point support and add it to 
     PowerModels dictionary 'pm'.
@@ -1782,7 +1785,7 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
     # Correct key is "min_power_mw" but we fall back to legacy key for backwards compatibility
     # §14a EnWG requirement: Devices must maintain at least 4.2 kW when curtailed
     p_min_14a = curtailment_14a.get("min_power_mw", curtailment_14a.get("max_power_mw", 0.0042))  # MW
-    max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours per day
+    max_hours_per_day = curtailment_14a.get("max_hours_per_day", hours_limit_14a)  # hours per day
     specific_components = curtailment_14a.get("components", [])  # empty list = all eligible CPs
     
     # DEBUG: Print all CPs in topology

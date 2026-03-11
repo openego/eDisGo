@@ -27,6 +27,7 @@ def pm_optimize(
     warm_start: bool = False,
     silence_moi: bool = False,
     curtailment_14a: bool = False,
+    hours_limit_14a: int = 24,
 ) -> None:
     """
     Run OPF for edisgo object in julia subprocess and write results of OPF to edisgo
@@ -129,6 +130,7 @@ def pm_optimize(
         flexible_storage_units=flexible_storage_units,
         opf_version=opf_version,
         curtailment_14a=curtailment_14a,
+        hours_limit_14a = hours_limit_14a,
     )
 
     def _convert(o):
