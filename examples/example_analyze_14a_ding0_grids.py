@@ -1350,6 +1350,7 @@ def plot_network(
     cb_buses.set_label("Voltage Deviation |1 - V| [p.u.]", fontsize=8)
 
     if save:
+        os.makedirs("plots", exist_ok=True)
         plt.savefig(
             f"plots/grid_analysis_{snapshot}.png", dpi=300, bbox_inches="tight"
         )
