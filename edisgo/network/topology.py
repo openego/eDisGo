@@ -1474,6 +1474,10 @@ class Topology:
             },
             index=[line_name],
         )
+        # FIXME: casting non-numeric values with numeric values into one series changes
+        #  the data type to 'Object'. Change the data type to numeric if possible
+        for col in new_line_df.columns:
+            new_line_df[col] = pd.to_numeric(new_line_df[col], errors="ignore")
         self.lines_df = pd.concat(
             [
                 self.lines_df,

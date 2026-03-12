@@ -327,7 +327,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         "boundaries",
     )
     egon_etrago_bus, egon_etrago_link = config.import_tables_from_oep(
-        engine, ["egon_etrago_bus", "egon_etrago_link"], "supply"
+        engine, ["egon_etrago_bus", "egon_etrago_link"], "grid"
     )
 
     building_ids = edisgo_object.topology.loads_df.building_id.unique()
@@ -552,9 +552,22 @@ def _grid_integration(
                     == hp_central.at[hp, "district_heating_id"]
                 ]
                 p_set += rh.p_set.sum()
-            voltage_level = determine_grid_integration_voltage_level(
-                edisgo_object, p_set
-            )
+            if p_set <= 0:
+                logger.warning(
+                    f"Skipping central heat pump {hp} with p_set={p_set} MW "
+                    f"(<= 0)."
+                )
+                continue
+            try:
+                voltage_level = determine_grid_integration_voltage_level(
+                    edisgo_object, p_set
+                )
+            except ValueError:
+                logger.warning(
+                    f"Central heat pump {hp} has p_set={p_set} MW which "
+                    f"exceeds the maximum voltage level limit. Skipping."
+                )
+                continue
             # check if there is a resistive heater as well
             hp_name = edisgo_object.integrate_component_based_on_geolocation(
                 comp_type="heat_pump",

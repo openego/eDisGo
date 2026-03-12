@@ -463,35 +463,34 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
 
         # if node_2_3 is a representative (meaning it is already
         # directly connected to the station), line cannot be
-        # disconnected and must therefore be reinforced
+        # disconnected and must therefore be reinforced.
+        # Reinforce ALL lines on the path to the critical node,
+        # not just the first segment.
         if node_2_3 in nodes_feeder.keys():
-            crit_line_name = graph.get_edge_data(station_node, node_2_3)["branch_name"]
-            crit_line = grid.lines_df.loc[crit_line_name]
+            for i in range(len(path) - 1):
+                seg_line_name = graph.get_edge_data(
+                    path[i], path[i + 1]
+                )["branch_name"]
+                seg_line = grid.lines_df.loc[seg_line_name]
 
-            # if critical line is already a standard line install one
-            # more parallel line
-            if crit_line.type_info == standard_line:
-                edisgo_obj.topology.update_number_of_parallel_lines(
-                    pd.Series(
-                        index=[crit_line_name],
-                        data=[
-                            edisgo_obj.topology._lines_df.at[
-                                crit_line_name, "num_parallel"
-                            ]
-                            + 1
-                        ],
+                if seg_line.type_info == standard_line:
+                    edisgo_obj.topology.update_number_of_parallel_lines(
+                        pd.Series(
+                            index=[seg_line_name],
+                            data=[
+                                edisgo_obj.topology._lines_df.at[
+                                    seg_line_name, "num_parallel"
+                                ]
+                                + 1
+                            ],
+                        )
                     )
-                )
-                lines_changes[crit_line_name] = 1
-
-            # if critical line is not yet a standard line replace old
-            # line by a standard line
-            else:
-                # number of parallel standard lines could be calculated
-                # following [2] p.103; for now number of parallel
-                # standard lines is iterated
-                edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
-                lines_changes[crit_line_name] = 1
+                    lines_changes[seg_line_name] = 1
+                else:
+                    edisgo_obj.topology.change_line_type(
+                        [seg_line_name], standard_line
+                    )
+                    lines_changes[seg_line_name] = 1
 
         # if node_2_3 is not a representative, disconnect line
         else:
