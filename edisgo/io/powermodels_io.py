@@ -1653,8 +1653,6 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
     p_min_14a = curtailment_14a.get("min_power_mw", curtailment_14a.get("max_power_mw", 0.0042))  # MW
     max_hours_per_day = curtailment_14a.get("max_hours_per_day", hours_limit_14a)  # hours per day
     specific_components = curtailment_14a.get("components", [])  # empty list = all eligible HPs
-    
-    print(f"hour_limit is implemented: \n ########### \n {hours_limit_14a} \n ##########")
 
     # Filter heat pumps if specific components are defined
     if len(specific_components) > 0:

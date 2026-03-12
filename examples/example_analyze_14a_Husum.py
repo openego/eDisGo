@@ -27,35 +27,46 @@ from edisgo import EDisGo
 from edisgo.io.db import engine as egon_engine
 
 
-def import_generators_timeseries(grid_path, edisgo, cos_phi, num_days=30):
+def import_generators_timeseries(grid_path, edisgo, cos_phi, start_date, end_date):
     """
     Imports generator active power and initializes reactive power timeseries for EDisGo simulation.
 
     Parameters
     ----------
     grid_path : str
-        Path to the grid results folder containing the timeseries CSV files.
+        Path to the grid results folder.
     edisgo : EDisGo
-        An instance of the EDisGo object to update with generator timeseries.
-    num_days : int, optional
-        Number of days to import (default is 30).
-
-    Returns
-    -------
-    EDisGo
-        The updated EDisGo object with generator timeseries loaded.
+        EDisGo object.
+    start_date : str or datetime
+        Startzeitpunkt (z.B. '2023-01-01 00:00').
+    end_date : str or datetime
+        Endzeitpunkt (z.B. '2023-01-31 23:45').
     """
-    # Load generator per-unit maximum active power timeseries
+    # 1. Daten laden
     gen_ts_path = f"{grid_path}/timeseries/gen_p_max_pu_timeseries.csv"
-    generator_ts = pd.read_csv(gen_ts_path, index_col=0)[: int(num_days * 24)]
-    generator_ts.index = edisgo.timeseries.timeindex
+    generator_ts = pd.read_csv(gen_ts_path, index_col=0)
+    
+    # 2. Index in Datetime umwandeln (falls noch nicht geschehen)
+    generator_ts.index = pd.to_datetime(generator_ts.index)
+    
+    # 3. Zeitraum filtern
+    generator_ts = generator_ts.loc[start_date:end_date]
 
-    # Update active power timeseries in EDisGo
+    start_dt = pd.to_datetime(start_date)
+    target_year = start_dt.year
+    
+    # Jahr im Index der geladenen Daten anpassen
+    generator_ts.index = generator_ts.index.map(lambda t: t.replace(year=target_year))
+
+    # 4. EDisGo-Index auf gewünschtes Jahr anpassen
+    edisgo.timeseries.timeindex = pd.DatetimeIndex(generator_ts.index, freq="H")
+    
+    # 4. Active Power in EDisGo setzen
     edisgo.timeseries.active_power_p_max_pu(
         edisgo_object=edisgo, ts_generators_p_max_pu=generator_ts
     )
 
-    # Initialize reactive power timeseries for all generators with zeros
+    # 5. Reactive Power initialisieren (passend zum neuen Zeitraum)
     gen_reactive = pd.DataFrame(
         data=0.0,
         columns=edisgo.topology.generators_df.index,
@@ -66,9 +77,10 @@ def import_generators_timeseries(grid_path, edisgo, cos_phi, num_days=30):
     return edisgo
 
 
-def import_loads_timeseries(grid_path, edisgo, cos_phi, num_days=30):
+def import_loads_timeseries(grid_path, edisgo, cos_phi, start_date, end_date):
     """
-    Imports load timeseries into EDisGo and initializes heat pump attributes.
+    Imports load timeseries into EDisGo and initializes heat pump attributes
+    based on a specific time range.
 
     Parameters
     ----------
@@ -76,55 +88,72 @@ def import_loads_timeseries(grid_path, edisgo, cos_phi, num_days=30):
         Path to the grid folder containing timeseries CSV files.
     edisgo : EDisGo
         EDisGo instance to update.
-    num_days : int, optional
-        Number of days to import (default is 30).
+    cos_phi : float
+        Power factor for reactive power calculation.
+    start_date : str or datetime
+        Start of the simulation period.
+    end_date : str or datetime
+        End of the simulation period.
 
     Returns
     -------
     EDisGo
         Updated EDisGo object with loads and heat pump timeseries.
     """
-    # --- Active and reactive power for all loads ---
-    load_ts = pd.read_csv(
-        f"{grid_path}/timeseries/load_timeseries.csv", index_col=0
-    )[: int(num_days * 24)]
-    load_ts.index = edisgo.timeseries.timeindex
+    # --- 1. Last-Zeitreihen laden und filtern ---
+    load_ts_path = f"{grid_path}/timeseries/load_timeseries.csv"
+    load_ts = pd.read_csv(load_ts_path, index_col=0)
+    load_ts.index = pd.to_datetime(load_ts.index)
+    # Zeitraum filtern
+    load_ts = load_ts.loc[start_date:end_date]
+
+    # 3. DAS JAHR AUS DEINEM INPUT EXTRAHIEREN
+    # Wir wandeln start_date in ein Datetime-Objekt um, falls es ein String ist
+    start_dt = pd.to_datetime(start_date)
+    target_year = start_dt.year
+    
+    # Jahr im Index der geladenen Daten anpassen
+    load_ts.index = load_ts.index.map(lambda t: t.replace(year=target_year))
+    
+    edisgo.timeseries.timeindex = pd.DatetimeIndex(load_ts.index, freq ='H')
+
+    # Wirkleistung setzen
     edisgo.timeseries.set_active_power_manual(
         edisgo_object=edisgo, ts_loads=load_ts
     )
 
+    # Blindleistung basierend auf cos_phi berechnen
     active_power = edisgo.timeseries.loads_active_power
     tan_phi = np.tan(np.arccos(cos_phi))
     reactive_power_ts = active_power * tan_phi
     edisgo.timeseries._loads_reactive_power = reactive_power_ts
 
-    # --- Wärmepumpen-Logik (Nur ausführen, wenn HPs vorhanden sind) ---
+    # --- 2. Wärmepumpen-Logik ---
     hp_loads = edisgo.topology.loads_df.query("type == 'heat_pump'")
-    # toDo: check if this is still necessary
+    
     if not hp_loads.empty:
-        # COP Zeitreihen laden
-        cop_ts = pd.read_csv(
-            f"{grid_path}/timeseries/cop_timeseries.csv", index_col=0
-        )[: int(num_days * 24)]
+        # COP Zeitreihen laden und analog filtern
+        cop_ts_path = f"{grid_path}/timeseries/cop_timeseries.csv"
+        cop_ts = pd.read_csv(cop_ts_path, index_col=0)
+        cop_ts.index = pd.to_datetime(cop_ts.index)
+        cop_ts.index = cop_ts.index.map(lambda t: t.replace(year=target_year))
+        
+        cop_ts = cop_ts.loc[start_date:end_date]
         cop_ts.index = edisgo.timeseries.timeindex
 
         cop_series = cop_ts.iloc[:, 0]
-        # Concat schlägt nun nicht mehr fehl, da hp_loads.index nicht leer ist
+        
+        # COP Matrix für alle Wärmepumpen erstellen
         cop_hp_ts = pd.concat(
             [cop_series] * len(hp_loads), axis=1, keys=hp_loads.index
         )
         edisgo.heat_pump.cop_df = cop_hp_ts
 
-        # Wärmebedarf berechnen
-        hp_p_el_ts = edisgo.timeseries.loads_active_power.loc[
-            :, hp_loads.index
-        ]
+        # Wärmebedarf berechnen (P_el * COP)
+        hp_p_el_ts = edisgo.timeseries.loads_active_power.loc[:, hp_loads.index]
         edisgo.heat_pump.heat_demand_df = hp_p_el_ts * cop_hp_ts
     else:
-        # Optional: Logge, dass keine HPs gefunden wurden
-        print(
-            "Info: Keine Wärmepumpen im Netzmodell gefunden. HP-Import wird übersprungen."
-        )
+        print("Info: Keine Wärmepumpen im Netzmodell gefunden. HP-Import wird übersprungen.")
 
     return edisgo
 
@@ -136,6 +165,8 @@ def setup_edisgo(
     num_days=30,
     cos_phi_load=0.9,
     cos_phi_gen=0.95,
+    start_date = '2023-01-01 00:00:00', 
+    end_date='2023-01-01 09:00:00',
 ):
     """
     Load grid and setup components for time series analysis.
@@ -166,7 +197,7 @@ def setup_edisgo(
     edisgo = EDisGo(ding0_grid=grid_path, legacy_ding0_grids=False)
     num_timesteps = num_days * 24
     timeindex = pd.date_range(
-        "2035-01-15", periods=num_timesteps, freq="h"
+        "2035-01-15", periods=num_timesteps, freq="H"
     )  # Mid-winter
     edisgo.timeseries.timeindex = timeindex
 
@@ -175,11 +206,11 @@ def setup_edisgo(
         "2. Importing generators timeseries"
     )  # ToDo implement own generator timeseires´
     edisgo = import_generators_timeseries(
-        grid_path, edisgo, cos_phi_gen, num_days
+        grid_path, edisgo, cos_phi_gen, start_date, end_date
     )
 
     print("3. Importing load timeseries")
-    edisgo = import_loads_timeseries(grid_path, edisgo, cos_phi_load, num_days)
+    edisgo = import_loads_timeseries(grid_path, edisgo, cos_phi_load, start_date, end_date)
 
     return edisgo
 
@@ -873,7 +904,8 @@ def main():
     GRID_PATH = "/home/student/Execution/LoMa_exe/results/MGB_Model_V3"  # ".
 
     # Simulation parameters
-    NUM_DAYS = 10 / 24  # Number of days to simulate (e.g., 7, 30, 365)
+    start_date = "2023-01-01 00:00:00"
+    end_date = "2023-01-01 23:00:00"
     NUM_HEAT_PUMPS = 25  # Number of heat pumps to add
     NUM_CHARGING_POINTS = 25  # Number of charging points to add
     hours_limit_per_day = 24  # Limit the amount of hours per day for 14a usage
@@ -881,15 +913,20 @@ def main():
     # Output
     OUTPUT_DIR = "./"
 
-    # ============================================================================
-    # END CONFIGURATION
-    # ============================================================================
-    # Create directory name from configuration parameters
-    output_dir = f"{OUTPUT_DIR}/results_{NUM_DAYS}d_HP{NUM_HEAT_PUMPS}_CP{NUM_CHARGING_POINTS}_14a"
+    # --- Datum für den Pfad formatieren (z.B. '20230101_0000') ---
+    # Wir wandeln den String kurz in ein Objekt um, um ihn sauber zu formatieren
+    start_clean = datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S").strftime("%Y%m%d_%H%M")
+    end_clean = datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S").strftime("%Y%m%d_%H%M")
+      
+    # --- Verzeichnisname erstellen ---
+    # Jetzt nutzen wir start_clean und end_clean statt der alten Variable {start}d
+    output_dir = f"{OUTPUT_DIR}/results_{start_clean}_to_{end_clean}_HP{NUM_HEAT_PUMPS}_CP{NUM_CHARGING_POINTS}_14a"
+      
     print(f"\n{'#'*80}")
-    print(f"# §14a EnWG Heat Pump Curtailment Analysis - {NUM_DAYS} Days")
+    print(f"# §14a EnWG Analysis: {start_date} bis {end_date}")
     print(f"{'#'*80}")
     print(f"\nStarted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Output directory: {output_dir}")
 
     try:
         # Setup grid and load data
@@ -897,7 +934,8 @@ def main():
             GRID_PATH,
             num_hps=NUM_HEAT_PUMPS,
             num_cps=NUM_CHARGING_POINTS,
-            num_days=NUM_DAYS,
+            start_date=start_date,
+            end_date=end_date
         )
 
         edisgo.analyze()
@@ -940,7 +978,7 @@ def main():
         for ts in edisgo.timeseries.timeindex:
             plot_network(edisgo, show=False, snapshot=str(ts))
         create_network_gif(
-            output_name="network_evolution_own_version.gif", duration=500
+            output_name="network_evolution_Husum.gif", duration=500
         )
 
     except Exception as e:

@@ -5,7 +5,7 @@ This script performs a monthly optimization with §14a heat pump curtailment
 and generates comprehensive analysis plots and statistics.
 
 Usage:
-    python analyze_14a_full_year.py --grid_path <path_to_ding0_grid> --scenario eGon2035 --num_days 30
+    python analyze_14a_full_year.py --grid_path <path_to_ding0_grid> --scenario eGon2035 
 """
 
 import os
@@ -207,26 +207,26 @@ def add_heat_pumps_manually(edisgo, num_hps=50, seed=42):
     return edisgo
 
 
-def create_hp_timeseries(edisgo, scenario="eGon2035", num_days=30):
+def create_hp_timeseries(edisgo, start_date, end_date, scenario="eGon2035"):
     """
-    Create realistic heat demand and COP time series for heat pumps.
+    Create realistic heat demand and COP time series for heat pumps based on a date range.
     
     Parameters
     ----------
     edisgo : EDisGo
         EDisGo object with heat pumps
+    start_date : str or datetime
+        Start date of the simulation
+    end_date : str or datetime
+        End date of the simulation
     scenario : str
-        Scenario name for time index
-    num_days : int
-        Number of days to simulate (default: 30 for one month)
+        Scenario name (optional)
         
     Returns
     -------
     EDisGo
         EDisGo object with HP time series
     """
-    print(f"\n4. Creating heat pump time series for {num_days} days...")
-    
     # Get heat pumps
     heat_pumps = edisgo.topology.loads_df[edisgo.topology.loads_df['type'] == 'heat_pump']
     
@@ -234,13 +234,16 @@ def create_hp_timeseries(edisgo, scenario="eGon2035", num_days=30):
         print("  ⚠ Warning: No heat pumps found")
         return edisgo
     
-    # Create time index (hourly for specified days)
-    num_timesteps = num_days * 24
-    timeindex = pd.date_range('2035-01-15', periods=num_timesteps, freq='h')  # Mid-winter
-    edisgo.timeseries.timeindex = timeindex
+    # --- NEUE LOGIK FÜR DEN ZEITINDEX ---
+    # Wir erstellen den Index direkt aus start und end. 
+    # pd.date_range sorgt dafür, dass die Frequenz ('h') korrekt gesetzt wird.
+    timeindex = pd.date_range(start=start_date, end=end_date, freq='h')
+    
+    # WICHTIG: Den Index als DatetimeIndex mit fester Frequenz zuweisen
+    edisgo.timeseries.timeindex = pd.DatetimeIndex(timeindex, freq='h')
     
     print(f"  Creating time series for {len(heat_pumps)} heat pumps...")
-    print(f"  Timeindex: {len(timeindex)} timesteps (hourly, {num_days} days)")
+    print(f"  Timeindex: {len(timeindex)} timesteps (hourly, from {start_date} to {end_date})")
     
     # Create realistic heat demand profile for winter month
     hours = np.arange(len(timeindex))
@@ -308,7 +311,7 @@ def create_hp_timeseries(edisgo, scenario="eGon2035", num_days=30):
     return edisgo
 
 
-def create_cp_timeseries(edisgo, scenario="eGon2035", num_days=30):
+def create_cp_timeseries(edisgo, scenario="eGon2035"):
     """
     Create realistic charging demand time series for charging points.
     
@@ -318,28 +321,25 @@ def create_cp_timeseries(edisgo, scenario="eGon2035", num_days=30):
         EDisGo object with charging points
     scenario : str
         Scenario name for time index
-    num_days : int
-        Number of days to simulate (default: 30 for one month)
         
     Returns
     -------
     EDisGo
         EDisGo object with CP time series
     """
-    print(f"\n4a. Creating charging point time series for {num_days} days...")
+    # 1. Zeitindex vom EDisGo-Objekt beziehen
+    # Dieser wurde bereits in create_hp_timeseries gesetzt
+    timeindex = edisgo.timeseries.timeindex
     
-    # Get charging points
+    # Ladepunkte filtern
     charging_points = edisgo.topology.loads_df[edisgo.topology.loads_df['type'] == 'charging_point']
     
     if len(charging_points) == 0:
         print("  ⚠ Warning: No charging points found")
         return edisgo
     
-    # Use same time index as heat pumps
-    timeindex = edisgo.timeseries.timeindex
-    
     print(f"  Creating time series for {len(charging_points)} charging points...")
-    print(f"  Timeindex: {len(timeindex)} timesteps (hourly, {num_days} days)")
+    print(f"  Timeindex: {len(timeindex)} timesteps (hourly, covering {timeindex[0]} to {timeindex[-1]})")
     
     # Create realistic charging profiles based on use case
     hours = np.arange(len(timeindex))
@@ -401,7 +401,7 @@ def create_cp_timeseries(edisgo, scenario="eGon2035", num_days=30):
     return edisgo
 
 
-def setup_edisgo(grid_path, scenario="eGon2035", num_hps=50, num_cps=30, num_days=30):
+def setup_edisgo(grid_path, start_date, end_date, scenario="eGon2035", num_hps=50, num_cps=30):
     """
     Load grid and setup components for time series analysis.
     
@@ -415,9 +415,6 @@ def setup_edisgo(grid_path, scenario="eGon2035", num_hps=50, num_cps=30, num_day
         Number of heat pumps to add (default: 50)
     num_cps : int
         Number of charging points to add (default: 30)
-    num_days : int
-        Number of days to simulate (default: 30)
-        
     Returns
     -------
     EDisGo
@@ -444,10 +441,10 @@ def setup_edisgo(grid_path, scenario="eGon2035", num_hps=50, num_cps=30, num_day
     edisgo = add_charging_points_manually(edisgo, num_cps=num_cps)
     
     # Create HP time series (this sets the timeindex)
-    edisgo = create_hp_timeseries(edisgo, scenario=scenario, num_days=num_days)
+    edisgo = create_hp_timeseries(edisgo, start_date, end_date, scenario=scenario)
     
     # Create CP time series
-    edisgo = create_cp_timeseries(edisgo, scenario=scenario, num_days=num_days)
+    edisgo = create_cp_timeseries(edisgo, scenario=scenario)
     
     # Store HP timeindex
     hp_timeindex = edisgo.timeseries.timeindex
@@ -1129,9 +1126,10 @@ def main():
     SCENARIO = "eGon2035"
 
     # Simulation parameters
-    NUM_DAYS = 1  # Quick test with 1 day
-    NUM_HEAT_PUMPS = 20  # Reduced for faster testing
-    NUM_CHARGING_POINTS = 10  # Reduced for faster testing
+    start_date = '2035-01-15 00:00:00'  
+    end_date = '2035-01-15 09:00:00' # Quick test with 10 hours
+    NUM_HEAT_PUMPS = 1  # Reduced for faster testing
+    NUM_CHARGING_POINTS = 1  # Reduced for faster testing
 
     # Output
     OUTPUT_DIR = "./test_results_all_grids"
@@ -1148,7 +1146,8 @@ def main():
     print(f"# §14a EnWG Multi-Grid Test - Testing {len(grid_dirs)} Grids")
     print(f"{'#'*80}")
     print(f"\nStarted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Testing with: {NUM_DAYS} day(s), {NUM_HEAT_PUMPS} HPs, {NUM_CHARGING_POINTS} CPs per grid\n")
+    print(f"Testing from {start_date} to {end_date}")
+    print(f"Components: {NUM_HEAT_PUMPS} HPs, {NUM_CHARGING_POINTS} CPs per grid\n")
 
     # Track results
     successful_grids = []
@@ -1167,11 +1166,13 @@ def main():
             # Setup grid and load data
             edisgo = setup_edisgo(
                 grid_path,
+                start_date,
+                end_date,
                 scenario=SCENARIO,
                 num_hps=NUM_HEAT_PUMPS,
-                num_cps=NUM_CHARGING_POINTS,
-                num_days=NUM_DAYS
+                num_cps=NUM_CHARGING_POINTS
             )
+            import pdb; pdb.set_trace()
 
             # Run optimization with §14a
             edisgo = run_optimization_14a(edisgo)
@@ -1189,7 +1190,12 @@ def main():
                 print(f"✓ Grid {grid_id} SUCCESS")
                 print(f"  Curtailment: {results['total_curtailment_MWh']:.4f} MWh ({results['curtailment_percentage']:.2f}%)")
                 successful_grids.append(grid_id)
-
+                
+            #create a plots folder in your execution folder for executing this oart
+            for ts in edisgo.timeseries.timeindex:  
+                  plot_network(edisgo, show=False, snapshot=str(ts), base_bus_size=0.0000002)
+            create_network_gif(output_name=f'network_evolution_{grid_id}.gif', duration=500)
+            
         except Exception as e:
             print(f"✗ Grid {grid_id} FAILED: {str(e)}")
             failed_grids.append((grid_id, str(e)))
@@ -1201,6 +1207,7 @@ def main():
     print(f"Total Grids Tested: {len(grid_dirs)}")
     print(f"Successful: {len(successful_grids)}")
     print(f"Failed: {len(failed_grids)}")
+    
 
     if failed_grids:
         print(f"\nFailed Grids:")
@@ -1361,9 +1368,5 @@ def plot_network(
 """
 if __name__ == "__main__":
     edisgo = main()
-    #create a plots folder in your execution folder for executing this oart
-    for ts in edisgo.timeseries.timeindex:  
-          plot_network(edisgo, show=False, snapshot=str(ts), base_bus_size=0.0000002)
-    create_network_gif(output_name='network_evolution.gif', duration=500)
 """
 
