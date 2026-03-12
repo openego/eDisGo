@@ -224,7 +224,7 @@ def to_powermodels(
         psa_net.lines.costs_earthworks + psa_net.lines.costs_cable
     )
     # aggregate parallel transformers
-    aggregate_parallel_transformers(psa_net)
+    #aggregate_parallel_transformers(psa_net)
     psa_net.transformers.capital_cost = edisgo_object.config._data[
         "costs_transformers"
     ]["lv"]
