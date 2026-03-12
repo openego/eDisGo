@@ -395,6 +395,68 @@ function variable_cp_energy(pm::AbstractPowerModel; nw::Int=nw_id_default, bound
     report && PowerModels.sol_component_value(pm, nw, :electromobility, :cpe, PowerModels.ids(pm, nw, :electromobility), cpe)
 end
 
+"§14a virtual generator continuous variables for curtailment support power"
+function variable_gen_hp_14a_power(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    p_hp14a = PowerModels.var(pm, nw)[:p_hp14a] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :gen_hp_14a)], 
+        base_name="$(nw)_p_hp14a",
+        lower_bound = 0.0
+    )
+    
+    if bounded
+        for (i, gen) in PowerModels.ref(pm, nw, :gen_hp_14a)
+            JuMP.set_upper_bound(p_hp14a[i], gen["pmax"])
+        end
+    end
+    
+    if report
+        println("   JULIA: Reporting gen_hp_14a power for nw=$nw, ids=$(PowerModels.ids(pm, nw, :gen_hp_14a))")
+        PowerModels.sol_component_value(pm, nw, :gen_hp_14a, :p, PowerModels.ids(pm, nw, :gen_hp_14a), p_hp14a)
+    end
+end
+
+"§14a virtual generator binary variables for time budget tracking"
+function variable_gen_hp_14a_binary(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    z_hp14a = PowerModels.var(pm, nw)[:z_hp14a] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :gen_hp_14a)], 
+        base_name="$(nw)_z_hp14a",
+        binary = true
+    )
+    
+    report && PowerModels.sol_component_value(pm, nw, :gen_hp_14a, :z, PowerModels.ids(pm, nw, :gen_hp_14a), z_hp14a)
+end
+
+"§14a virtual generator power variables for charging points"
+function variable_gen_cp_14a_power(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
+    p_cp14a = PowerModels.var(pm, nw)[:p_cp14a] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :gen_cp_14a)], 
+        base_name="$(nw)_p_cp14a",
+        lower_bound = 0.0
+    )
+    
+    if bounded
+        for (i, gen) in PowerModels.ref(pm, nw, :gen_cp_14a)
+            JuMP.set_upper_bound(p_cp14a[i], gen["pmax"])
+        end
+    end
+    
+    if report
+        println("   JULIA: Reporting gen_cp_14a power for nw=$nw, ids=$(PowerModels.ids(pm, nw, :gen_cp_14a))")
+        PowerModels.sol_component_value(pm, nw, :gen_cp_14a, :p, PowerModels.ids(pm, nw, :gen_cp_14a), p_cp14a)
+    end
+end
+
+"§14a virtual generator binary variables for charging point time budget tracking"
+function variable_gen_cp_14a_binary(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    z_cp14a = PowerModels.var(pm, nw)[:z_cp14a] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :gen_cp_14a)], 
+        base_name="$(nw)_z_cp14a",
+        binary = true
+    )
+    
+    report && PowerModels.sol_component_value(pm, nw, :gen_cp_14a, :z, PowerModels.ids(pm, nw, :gen_cp_14a), z_cp14a)
+end
+
 "slack variables for grid restrictions"
 function variable_slack_grid_restrictions(pm::AbstractBFModelEdisgo; kwargs...)
     eDisGo_OPF.variable_hp_slack(pm; kwargs...)
@@ -534,4 +596,69 @@ function variable_slack_HV_requirements_imaginary(pm::AbstractPowerModel; nw::In
 
 end
 
-""
+
+### Version 5: Fixed variables (no flexibility except §14a)
+
+"""
+    variable_heat_pump_power_fixed(pm; nw, report)
+
+For OPF version 5: Fix heat pump power to pd/cop (current demand).
+No optimization flexibility - only §14a can reduce load.
+"""
+function variable_heat_pump_power_fixed(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    # Create php variable fixed to pd/cop for each heat pump
+    php = PowerModels.var(pm, nw)[:php] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :heatpumps)], base_name="$(nw)_php"
+    )
+
+    # Fix to current demand: php = pd/cop
+    for (i, hp) in PowerModels.ref(pm, nw, :heatpumps)
+        p_demand = hp["pd"] / hp["cop"]
+        JuMP.fix(php[i], p_demand; force=true)
+    end
+
+    report && PowerModels.sol_component_value(pm, nw, :heatpumps, :php, PowerModels.ids(pm, nw, :heatpumps), php)
+end
+
+"""
+    variable_cp_power_fixed(pm; nw, report)
+
+For OPF version 5: Fix charging point power to pd (current demand from load).
+No optimization flexibility - only §14a can reduce load.
+Also creates cpe (energy) variable fixed at mid-range.
+"""
+function variable_cp_power_fixed(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    # Check if electromobility dict exists and has entries
+    if !haskey(PowerModels.ref(pm, nw), :electromobility) || isempty(PowerModels.ref(pm, nw, :electromobility))
+        # Create empty variables to avoid errors in power balance
+        PowerModels.var(pm, nw)[:pcp] = Dict{Int, JuMP.VariableRef}()
+        PowerModels.var(pm, nw)[:cpe] = Dict{Int, JuMP.VariableRef}()
+        return
+    end
+
+    # Create pcp variable fixed to pd for each charging point
+    pcp = PowerModels.var(pm, nw)[:pcp] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :electromobility)], base_name="$(nw)_pcp"
+    )
+
+    # Fix to current demand: pcp = pd
+    for (i, cp) in PowerModels.ref(pm, nw, :electromobility)
+        p_demand = cp["pd"]
+        JuMP.fix(pcp[i], p_demand; force=true)
+    end
+
+    report && PowerModels.sol_component_value(pm, nw, :electromobility, :pcp, PowerModels.ids(pm, nw, :electromobility), pcp)
+
+    # Also need cpe (energy) variable for constraints - fix at midpoint
+    cpe = PowerModels.var(pm, nw)[:cpe] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :electromobility)], base_name="$(nw)_cpe"
+    )
+
+    for (i, cp) in PowerModels.ref(pm, nw, :electromobility)
+        e_mid = 0.5 * (cp["e_min"] + cp["e_max"])
+        JuMP.fix(cpe[i], e_mid; force=true)
+    end
+
+    report && PowerModels.sol_component_value(pm, nw, :electromobility, :cpe, PowerModels.ids(pm, nw, :electromobility), cpe)
+end
+

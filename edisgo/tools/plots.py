@@ -391,7 +391,7 @@ def mv_grid_topology(
         else:
             return colors_dict["else"], sizes_dict["else"]
 
-    def nodes_by_technology(buses, edisgo_obj):
+    def nodes_by_technology(buses, edisgo_obj, sizes_dict=None):
         bus_sizes = {}
         bus_colors = {}
         colors_dict = {
@@ -405,17 +405,18 @@ def mv_grid_topology(
             "DisconnectingPoint": "0.75",
             "else": "orange",
         }
-        sizes_dict = {
-            "BranchTee": 10000,
-            "GeneratorFluctuating": 100000,
-            "Generator": 100000,
-            "Load": 100000,
-            "LVStation": 50000,
-            "MVStation": 120000,
-            "Storage": 100000,
-            "DisconnectingPoint": 75000,
-            "else": 200000,
-        }
+        if sizes_dict is None:
+            sizes_dict = {
+                "BranchTee": 10000,
+                "GeneratorFluctuating": 100000,
+                "Generator": 100000,
+                "Load": 100000,
+                "LVStation": 50000,
+                "MVStation": 120000,
+                "Storage": 100000,
+                "DisconnectingPoint": 75000,
+                "else": 200000,
+            }
         for bus in buses:
             connected_components = (
                 edisgo_obj.topology.get_connected_components_from_bus(bus)
@@ -582,7 +583,9 @@ def mv_grid_topology(
 
     # bus colors and sizes
     if node_color == "technology":
-        bus_sizes, bus_colors = nodes_by_technology(pypsa_plot.buses.index, edisgo_obj)
+        bus_sizes, bus_colors = nodes_by_technology(
+            pypsa_plot.buses.index, edisgo_obj, kwargs.get("sizes_dict", None)
+        )
         bus_cmap = None
     elif node_color == "voltage":
         bus_sizes, bus_colors = nodes_by_voltage(

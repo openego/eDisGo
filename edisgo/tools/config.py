@@ -132,6 +132,8 @@ class Config:
     """
 
     def __init__(self, **kwargs):
+        self._engine = kwargs.get("engine", None)
+
         if not kwargs.get("from_json", False):
             self._data = self.from_cfg(kwargs.get("config_path", "default"))
         else:
@@ -175,7 +177,7 @@ class Config:
 
     def get_database_alias_dictionaries(self) -> tuple[dict[str, str], dict[str, str]]:
         """
-        Retrieves the database alias dictionaries for table and schema mappings.
+        Retrieves the OEP database alias dictionaries for table and schema mappings.
 
         Returns
         -------
@@ -187,13 +189,13 @@ class Config:
                 names.
         """
         engine = Engine()
-        dictionary_schema_name = "data"
+        dictionary_schema_name = "dataset"
         dictionary_table = self._get_module_attr(
             self._get_saio_module(dictionary_schema_name, engine),
             "edut_00",
             f"saio.{dictionary_schema_name}",
         )
-        with session_scope_egon_data(engine) as session:
+        with session_scope_egon_data(self._engine) as session:
             query = session.query(dictionary_table)
             dictionary_entries = query.all()
             name_mapping = {

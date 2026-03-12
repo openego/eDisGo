@@ -26,6 +26,8 @@ def pm_optimize(
     method: str = "soc",
     warm_start: bool = False,
     silence_moi: bool = False,
+    curtailment_14a: bool = False,
+    hours_limit_14a: int = 24,
 ) -> None:
     """
     Run OPF for edisgo object in julia subprocess and write results of OPF to edisgo
@@ -70,8 +72,11 @@ def pm_optimize(
         * 4
             * Additional constraints: high voltage requirements
             * Objective: minimize line losses, HV slacks and grid related slacks
+        * 5
+            * §14a curtailment as only flexibility tool
+            * Objective: minimize line losses + §14a usage, feasibility slacks at 1e8
 
-        Must be one of [1, 2, 3, 4].
+        Must be one of [1, 2, 3, 4, 5].
         Default: 1.
     method : str
         Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
@@ -93,6 +98,11 @@ def pm_optimize(
         hence there will be no logging coming from julia subprocess in python
         process.
         Default: False.
+    curtailment_14a : bool
+        If True, enables §14a EnWG curtailment for heat pumps with virtual
+        generators. Heat pumps can be curtailed down to 4.2 kW with time budget
+        constraints.
+        Default: False.
     save_heat_storage : bool
         Indicates whether to save results of heat storage variables from the
         optimization to eDisGo object.
@@ -108,6 +118,7 @@ def pm_optimize(
         Default: True.
 
     """
+
     Topology.find_meshes(edisgo_obj)
     opf_dir = os.path.dirname(os.path.abspath(__file__))
     solution_dir = os.path.join(opf_dir, "opf_solutions")
@@ -118,6 +129,8 @@ def pm_optimize(
         flexible_loads=flexible_loads,
         flexible_storage_units=flexible_storage_units,
         opf_version=opf_version,
+        curtailment_14a=curtailment_14a,
+        hours_limit_14a = hours_limit_14a,
     )
 
     def _convert(o):
@@ -156,6 +169,23 @@ def pm_optimize(
             break
         if out.rstrip().startswith('{"name"'):
             pm_opf = json.loads(out)
+            
+            ####check voltage values
+            import math
+            import statistics
+            all_voltages = []
+            for t in pm_opf["nw"].keys():
+                for bid in pm_opf["nw"][t]["bus"].keys():
+                    v = math.sqrt(pm_opf["nw"][t]["bus"][bid]["w"])
+                    all_voltages.append(v)
+            
+            print(f"OPF Voltage Statistics (all {len(all_voltages)} values):")
+            print(f"  Min:  {min(all_voltages):.4f} p.u.")
+            print(f"  Max:  {max(all_voltages):.4f} p.u.")
+            print(f"  Mean: {statistics.mean(all_voltages):.4f} p.u.")
+            print(f"  Violations (V<0.9 or V>1.1): {sum(1 for v in all_voltages if v<0.9 or v>1.1)} / {len(all_voltages)}")
+            #####
+            
             # write results to edisgo object
             from_powermodels(
                 edisgo_obj,

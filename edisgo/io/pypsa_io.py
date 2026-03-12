@@ -50,7 +50,6 @@ def to_pypsa(edisgo_object, mode=None, timesteps=None, **kwargs):
         :pypsa:`PyPSA.Network<network>` representation.
 
     """
-
     def _set_slack(grid):
         """
         Sets slack at given grid's station secondary side.
