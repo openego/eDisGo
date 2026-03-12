@@ -550,7 +550,7 @@ def setup_edisgo(grid_path, start_date, end_date, scenario="eGon2035", num_hps=5
     return edisgo
 
 
-def run_optimization_14a(edisgo):
+def run_optimization_14a(edisgo, hours_limit):
     """
     Run optimization with §14a curtailment enabled.
 
@@ -581,7 +581,7 @@ def run_optimization_14a(edisgo):
     start_time = datetime.now()
 
     # Run optimization
-    edisgo.pm_optimize(opf_version=5, curtailment_14a=True)
+    edisgo.pm_optimize(opf_version=5, curtailment_14a=True, hours_limit_14a = hours_limit)
     print("status:", edisgo.opf_results.status)
     print("solver:", edisgo.opf_results.solver)
     print("solve_time:", edisgo.opf_results.solution_time)
@@ -1128,8 +1128,9 @@ def main():
     # Simulation parameters
     start_date = '2035-01-15 00:00:00'  
     end_date = '2035-01-15 09:00:00' # Quick test with 10 hours
-    NUM_HEAT_PUMPS = 1  # Reduced for faster testing
-    NUM_CHARGING_POINTS = 1  # Reduced for faster testing
+    NUM_HEAT_PUMPS = 20  # Reduced for faster testing
+    NUM_CHARGING_POINTS = 30  # Reduced for faster testing
+    hours_limit_per_day = 24  # Limit the amount of hours per day for 14a usage
 
     # Output
     OUTPUT_DIR = "./test_results_all_grids"
@@ -1172,10 +1173,9 @@ def main():
                 num_hps=NUM_HEAT_PUMPS,
                 num_cps=NUM_CHARGING_POINTS
             )
-            import pdb; pdb.set_trace()
 
             # Run optimization with §14a
-            edisgo = run_optimization_14a(edisgo)
+            edisgo = run_optimization_14a(edisgo, hours_limit_per_day)
             
             #update line_loading and voltage values
             edisgo.analyze()
