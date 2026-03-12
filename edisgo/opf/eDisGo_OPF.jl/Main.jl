@@ -43,15 +43,17 @@ function optimize_edisgo()
     result_soc, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, SOCBFPowerModelEdisgo, gurobi)
     #println("Termination status: "*result_soc["termination_status"])
     if result_soc["termination_status"] != MOI.OPTIMAL
-      # if result_soc["termination_status"] == MOI.SUBOPTIMAL_TERMINATION
-      #   PowerModels.update_data!(data_edisgo_mn, result_soc["solution"])
-      # else
-      JuMP.compute_conflict!(pm.model)
-      if MOI.get(pm.model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
-        iis_model, _ = copy_conflict(pm.model)
-        print(iis_model)
+      println("ERROR: SOC optimization failed with status: $(result_soc["termination_status"])")
+      try
+        JuMP.compute_conflict!(pm.model)
+        if MOI.get(pm.model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
+          iis_model, _ = copy_conflict(pm.model)
+          print(iis_model)
+        end
+      catch e
+        println("WARNING: Could not compute conflict (IIS): $e")
       end
-      #end
+      exit(1)
     elseif result_soc["termination_status"] == MOI.OPTIMAL
       # Check if SOC constraint is tight
       soc_tight, soc_dict = eDisGo_OPF.check_SOC_equality(result_soc, data_edisgo)
@@ -66,14 +68,40 @@ function optimize_edisgo()
       data_edisgo_mn["solve_time"] = result_soc["solve_time"]
       data_edisgo_mn["status"] = result_soc["termination_status"]
       data_edisgo_mn["solver"] = "Gurobi"
-      if soc_tight & warm_start
+      if warm_start
+        # SOC->NC Skalierungsfix: CP-Grenzen auf SOC-optimale Werte setzen
+        # SOC hat optimale Ladeleistung je CP bestimmt (z.B. 32 kW statt 500 GW).
+        # Koeffizientenrange sinkt von [7e-9, 5e+8] auf [7e-9, ~0.05] -> Ipopt konvergiert.
+        println("Adjusting CP bounds for NC based on SOC solution (scaling fix)...")
+        for (nw_id, network) in data_edisgo_mn["nw"]
+          # 1. CP-Ladeleistung: p_max = SOC-optimaler Wert * 10 (genug Spielraum fuer NC-Physik)
+          # 10x statt 1%: NC braucht Umverteilungsfreiheit zwischen CPs (sonst LOCALLY_INFEASIBLE)
+          for (cp_id, cp) in get(network, "electromobility", Dict())
+            if haskey(cp, "pcp") && cp["pcp"] > 0
+              cp["p_max"] = min(cp["pcp"] * 10.0, cp["p_max"])
+            end
+          end
+          # 2. Para 14a-Generatoren: pmax = SOC-optimaler Wert * 10
+          for (gen_id, gen) in get(network, "gen_cp_14a", Dict())
+            if haskey(gen, "p")
+              gen["pmax"] = min(max(gen["p"] * 10.0, get(gen, "pmin", 0.0)), gen["pmax"])
+            end
+          end
+        end
         println("Starting warm-start non-convex AC-OPF with IPOPT.")
-        set_ac_bf_start_values!(data_edisgo_mn["nw"]["1"])
-        result_nc_ws, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, NCBFPowerModelEdisgo, ipopt)
-        PowerModels.update_data!(data_edisgo_mn, result_nc_ws["solution"])
-        data_edisgo_mn["solve_time"] = result_nc_ws["solve_time"]
-        data_edisgo_mn["status"] = result_nc_ws["termination_status"]
-        data_edisgo_mn["solver"] = "Ipopt"
+        eDisGo_OPF.set_ac_bf_start_values!(data_edisgo_mn["nw"]["1"])
+        result_nc_ws, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, NCBFPowerModelEdisgo, ipopt; relax_integrality=true)
+        nc_status = result_nc_ws["termination_status"]
+        if nc_status in [MOI.LOCALLY_SOLVED, MOI.ALMOST_LOCALLY_SOLVED]
+          println("NC warm-start converged: $nc_status — using Ipopt solution.")
+          PowerModels.update_data!(data_edisgo_mn, result_nc_ws["solution"])
+          data_edisgo_mn["solve_time"] = result_nc_ws["solve_time"]
+          data_edisgo_mn["status"] = nc_status
+          data_edisgo_mn["solver"] = "Ipopt"
+        else
+          println("WARNING: NC warm-start did not converge ($nc_status) — keeping SOC solution.")
+          data_edisgo_mn["solver"] = "Gurobi (SOC, NC failed)"
+        end
       end
     end
   elseif method == "nc" # Non-Convex

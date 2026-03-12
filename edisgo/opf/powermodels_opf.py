@@ -139,7 +139,7 @@ def pm_optimize(
     logger.info("starting julia process")
     julia_process = subprocess.Popen(
         [
-            "julia",
+            "/opt/julia-1.8.3/bin/julia",
             os.path.join(opf_dir, "eDisGo_OPF.jl/Main.jl"),
             pm["name"],
             solution_dir,
@@ -150,6 +150,7 @@ def pm_optimize(
         stdin=subprocess.PIPE,
         text=True,
         stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     julia_process.stdin.write(json_str)
     julia_process.stdin.close()
@@ -159,7 +160,12 @@ def pm_optimize(
             if julia_process.poll() == 0:
                 logger.info("Julia process was successful.")
             else:
-                raise exceptions.InfeasibleModelError("Julia process failed!")
+                stderr_output = julia_process.stderr.read()
+                if stderr_output:
+                    logger.error(f"Julia stderr:\n{stderr_output}")
+                raise exceptions.InfeasibleModelError(
+                    f"Julia process failed! (exit code {julia_process.poll()})"
+                )
             break
         if out.rstrip().startswith('{"name"'):
             pm_opf = json.loads(out)
@@ -175,5 +181,4 @@ def pm_optimize(
         ):
             continue
         elif out != "":
-            sys.stdout.write(out)
-            sys.stdout.flush()
+            logger.info(out.rstrip())

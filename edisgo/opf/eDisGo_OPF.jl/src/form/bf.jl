@@ -23,7 +23,7 @@ function variable_buspair_current_magnitude_sqr(pm::AbstractBFModel; nw::Int=nw_
             if haskey(b, "rate_a")
                 rate_a = b["rate_a"]
             end
-            ub = ((rate_a*b["tap"])/(bus[b["f_bus"]]["vmin"]))^2
+            ub = ((rate_a*b["tap"])/(bus[b["f_bus"]]["vmax"]))^2
 
             if !isinf(ub)
                 JuMP.set_upper_bound(ccm[i], ub)
@@ -36,7 +36,7 @@ function variable_buspair_current_magnitude_sqr(pm::AbstractBFModel; nw::Int=nw_
             if haskey(b, "rate_a")
                 rate_a = b["rate_a"]
             end
-            ub = ((rate_a*b["tap"])/(bus[b["f_bus"]]["vmin"]))^2
+            ub = ((rate_a*b["tap"])/(bus[b["f_bus"]]["vmax"]))^2
 
             if !isinf(ub)&(b["storage"])
                 JuMP.set_upper_bound(ccm[i], ub)

@@ -2448,6 +2448,114 @@ class EDisGo:
             **kwargs,
         )
 
+    def plot_mv_grid_topology_w_cp_hosting(self, technologies=False, **kwargs):
+        """
+        Plots plain MV network topology and optionally nodes by technology type
+        (e.g. station or generator).
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        Parameters
+        ----------
+        technologies : bool
+            If True plots stations, generators, etc. in the topology in
+            different colors. If False does not plot any nodes. Default: False.
+
+        """
+
+        plots.mv_grid_topology_w_cp_hosting(
+            self,
+            node_color="technology" if technologies is True else None,
+            filename=kwargs.get("filename", None),
+            grid_district_geom=kwargs.get("grid_district_geom", True),
+            background_map=kwargs.get("background_map", True),
+            xlim=kwargs.get("xlim", None),
+            ylim=kwargs.get("ylim", None),
+            title=kwargs.get("title", ""),
+            **kwargs,
+        )
+
+    def plot_lv_grid_with_charging_points(
+        self,
+        lv_grid_id,
+        technologies=False,
+        charging_points_df=None,
+        planned_power_col="original_power_kw",
+        final_power_col="power_kw",
+        **kwargs,
+    ):
+        """
+        Plots plain LV network topology with charging points and their planned vs final power.
+
+        For more information see :func:`edisgo.tools.plots.lv_grid_with_charging_points`.
+
+        Parameters
+        ----------
+        lv_grid_id : int or str
+            ID (e.g. 1) or name (string representation, e.g. "LVGrid_1") of LV grid to plot.
+        technologies : bool
+            If True plots stations, generators, etc. in the topology in
+            different colors. If False does not plot any nodes. Default: False.
+        charging_points_df : :pandas:`pandas.DataFrame<DataFrame>` or \
+            :geopandas:`geopandas.GeoDataFrame` or None
+            Dataframe with charging points to plot. Must contain 'geometry' (WKT/shapely)
+            or 'x' and 'y' columns. If None, no charging points are plotted. Default: None.
+        planned_power_col : :obj:`str`
+            Column name for planned power in kW. Default: 'planned_power_kw'.
+        final_power_col : :obj:`str`
+            Column name for final power in kW. Default: 'final_power_kw'.
+
+        Other Parameters
+        ----------------
+        filename : :obj:`str` or None
+            Path to save the plot. If None, plot is shown. Default: None.
+        grid_district_geom : :obj:`bool`
+            Whether to plot district geometry. Default: False.
+        background_map : :obj:`bool`
+            Whether to plot background map. Default: False.
+        xlim : :obj:`tuple` or None
+            X-axis limits. Default: None.
+        ylim : :obj:`tuple` or None
+            Y-axis limits. Default: None.
+        title : :obj:`str`
+            Plot title. Default: ''.
+        planned_color : :obj:`str`
+            Color for planned power markers. Default: 'cyan'.
+        final_color : :obj:`str`
+            Color for final power markers. Default: 'red'.
+        power_size_scale : :obj:`float`
+            Scaling factor for marker sizes. Default: 0.001.
+        plot_charging_points : :obj:`bool`
+            Whether to plot charging points. Default: True.
+
+        """
+        # Get the LV grid object
+        lv_grid = self.topology.get_lv_grid(lv_grid_id)
+
+        plots.lv_grid_with_charging_points(
+            self,
+            lv_grid=lv_grid,
+            node_color="technology" if technologies is True else None,
+            charging_points_df=charging_points_df,
+            planned_power_col=planned_power_col,
+            final_power_col=final_power_col,
+            filename=kwargs.get("filename", None),
+            grid_district_geom=kwargs.get("grid_district_geom", False),
+            background_map=kwargs.get("background_map", False),
+            xlim=kwargs.get("xlim", None),
+            ylim=kwargs.get("ylim", None),
+            title=kwargs.get("title", ""),
+            plot_charging_points=kwargs.get("plot_charging_points", True),
+            planned_color=kwargs.get("planned_color", "cyan"),
+            final_color=kwargs.get("final_color", "red"),
+            power_size_scale=kwargs.get("power_size_scale", 0.001),
+            **{k: v for k, v in kwargs.items() if k not in [
+                "filename", "grid_district_geom", "background_map", "xlim", "ylim",
+                "title", "plot_charging_points", "planned_color", "final_color",
+                "power_size_scale"
+            ]},
+        )
+
     def plot_mv_voltages(self, **kwargs):
         """
         Plots voltages in MV network on network topology plot.

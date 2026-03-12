@@ -10,6 +10,8 @@ import matplotlib
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+from shapely.geometry import Point
+from shapely.wkt import loads as wkt_loads
 
 from dash import dcc, html
 from dash.dependencies import Input, Output
@@ -577,7 +579,7 @@ def mv_grid_topology(
         line_costs = pypsa_plot.lines.join(
             grid_expansion_costs, rsuffix="costs", how="left"
         )
-        line_colors = line_costs.total_costs.fillna(0)
+        line_colors = line_costs.total_costs.na(0)
     else:
         line_colors = pd.Series("black", index=pypsa_plot.lines.index)
 
@@ -859,6 +861,1214 @@ def mv_grid_topology(
         plt.savefig(filename, bbox_inches="tight")
         plt.close()
 
+def mv_grid_topology_w_cp_hosting(
+    edisgo_obj,
+    timestep=None,
+    line_color=None,
+    node_color=None,
+    grid_expansion_costs=None,
+    filename=None,
+    arrows=False,
+    grid_district_geom=True,
+    background_map=True,
+    limits_cb_lines=None,
+    limits_cb_nodes=None,
+    xlim=None,
+    ylim=None,
+    lines_cmap="inferno_r",
+    title="",
+    scaling_factor_line_width=None,
+    curtailment_df=None,
+    points_df=None,                # GeoDataFrame or DataFrame with 'geometry' (WKT/shapely) or 'x'/'y'
+    plot_points=True,              # whether to plot charging point markers at all
+    points_color="red",            # color for plotted (sized) power markers
+    points_size_col="power_kw",    # column used to size circles (primary power)
+    points_size_scale=1.0,
+    points_alpha=0.7,
+    plot_original_power=False,     # whether to plot original_power as separate markers
+    original_color="cyan",         # color for original power markers (filled or edge)
+    original_power_size_col="original_power_kw",
+    original_power_scale = 0.001,
+    **kwargs,
+):
+    """
+    Plot line loading as color on lines.
+
+    Displays line loading relative to nominal capacity.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~edisgo.EDisGo`
+    timestep : :pandas:`pandas.Timestamp<Timestamp>`
+        Time step to plot analysis results for. If `timestep` is None maximum
+        line load and if given, maximum voltage deviation, is used. In that
+        case arrows cannot be drawn. Default: None.
+    line_color : :obj:`str` or None
+        Defines whereby to choose line colors (and implicitly size). Possible
+        options are:
+
+        * 'loading'
+          Line color is set according to loading of the line. Loading of MV
+          lines must be provided by parameter `line_load`.
+        * 'expansion_costs'
+          Line color is set according to investment costs of the line. This
+          option also effects node colors and sizes by plotting investment in
+          stations and setting `node_color` to 'storage_integration' in order
+          to plot storage size of integrated storage units. Grid expansion costs
+          must be provided by parameter `grid_expansion_costs`.
+        * None (default)
+          Lines are plotted in black. Is also the fallback option in case of
+          wrong input.
+
+    node_color : :obj:`str` or None
+        Defines whereby to choose node colors (and implicitly size). Possible
+        options are:
+
+        * 'technology'
+          Node color as well as size is set according to type of node
+          (generator, MV station, etc.).
+        * 'voltage'
+          Node color is set according to voltage at each node. In case several
+          time steps are selected the maximum voltage is shown.
+        * 'voltage_deviation'
+          Node color is set according to voltage deviation from 1 p.u.. In case several
+          time steps are selected the maximum absolute voltage deviation from 1 p.u.
+          is shown.
+        * 'storage_integration'
+          Only storage units are plotted. Size of node corresponds to size of
+          storage.
+        * None (default)
+          Nodes are not plotted. Is also the fallback option in case of wrong
+          input.
+        * 'curtailment'
+          Plots curtailment per node. Size of node corresponds to share of
+          curtailed power for the given time span. When this option is chosen
+          a dataframe with curtailed power per time step and node needs to be
+          provided in parameter `curtailment_df`.
+        * 'charging_park'
+          Plots nodes with charging stations in red.
+
+    line_load : :pandas:`pandas.DataFrame<DataFrame>` or None
+        Dataframe with current results from power flow analysis in A. Index of
+        the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
+        columns are the line representatives. Only needs to be provided when
+        parameter `line_color` is set to 'loading'. Default: None.
+    grid_expansion_costs : :pandas:`pandas.DataFrame<DataFrame>` or None
+        Dataframe with network expansion costs in kEUR. See `grid_expansion_costs`
+        in :class:`~.network.results.Results` for more information. Only needs to
+        be provided when parameter `line_color` is set to 'expansion_costs'.
+        Default: None.
+    filename : :obj:`str`
+        Filename to save plot under. If not provided, figure is shown directly.
+        Default: None.
+    arrows : :obj:`Boolean`
+        If True draws arrows on lines in the direction of the power flow. Does
+        only work when `line_color` option 'loading' is used and a time step
+        is given.
+        Default: False.
+    grid_district_geom : :obj:`Boolean`
+        If True network district polygon is plotted in the background. This also
+        requires the geopandas package to be installed. Default: True.
+    background_map : :obj:`Boolean`
+        If True map is drawn in the background. This also requires the
+        contextily package to be installed. Default: True.
+    limits_cb_lines : :obj:`tuple`
+        Tuple with limits for colorbar of line color. First entry is the
+        minimum and second entry the maximum value. Only needs to be provided
+        when parameter `line_color` is not None. Default: None.
+    limits_cb_nodes : :obj:`tuple`
+        Tuple with limits for colorbar of nodes. First entry is the
+        minimum and second entry the maximum value. Only needs to be provided
+        when parameter `node_color` is not None. Default: None.
+    xlim : :obj:`tuple`
+        Limits of x-axis. Default: None.
+    ylim : :obj:`tuple`
+        Limits of y-axis. Default: None.
+    lines_cmap : :obj:`str`
+        Colormap to use for lines in case `line_color` is 'loading' or
+        'expansion_costs'. Default: 'inferno_r'.
+    title : :obj:`str`
+        Title of the plot. Default: ''.
+    scaling_factor_line_width : :obj:`float` or None
+        If provided line width is set according to the nominal apparent power
+        of the lines. If line width is None a default line width of 2 is used
+        for each line. Default: None.
+    curtailment_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with curtailed power per time step and node. Columns of the
+        dataframe correspond to buses and index to the time step. Only needs
+        to be provided if `node_color` is set to 'curtailment'.
+    legend_loc : str
+        Location of legend. See matplotlib legend location options for more
+        information. Default: 'upper left'.
+
+    """
+
+    def get_color_and_size(connected_components, colors_dict, sizes_dict):
+        # Todo: handling of multiple connected elements, so far determined as
+        #  'other'
+        if not connected_components["transformers_hvmv"].empty:
+            return colors_dict["MVStation"], sizes_dict["MVStation"]
+        elif not connected_components["transformers"].empty:
+            return colors_dict["LVStation"], sizes_dict["LVStation"]
+        elif (
+            not connected_components["generators"].empty
+            and connected_components["loads"].empty
+            and connected_components["storage_units"].empty
+        ):
+            if (connected_components["generators"].type.isin(["wind", "solar"])).all():
+                return (
+                    colors_dict["GeneratorFluctuating"],
+                    sizes_dict["GeneratorFluctuating"],
+                )
+            else:
+                return colors_dict["Generator"], sizes_dict["Generator"]
+        elif (
+            not connected_components["loads"].empty
+            and connected_components["generators"].empty
+            and connected_components["storage_units"].empty
+        ):
+            return colors_dict["Load"], sizes_dict["Load"]
+        elif not connected_components["switches"].empty:
+            return (
+                colors_dict["DisconnectingPoint"],
+                sizes_dict["DisconnectingPoint"],
+            )
+        elif (
+            not connected_components["storage_units"].empty
+            and connected_components["loads"].empty
+            and connected_components["generators"].empty
+        ):
+            return colors_dict["Storage"], sizes_dict["Storage"]
+        elif len(connected_components["lines"]) > 1:
+            return colors_dict["BranchTee"], sizes_dict["BranchTee"]
+        else:
+            return colors_dict["else"], sizes_dict["else"]
+
+    def nodes_by_technology(buses, edisgo_obj, sizes_dict=None):
+        bus_sizes = {}
+        bus_colors = {}
+        colors_dict = {
+            "BranchTee": "b",
+            "GeneratorFluctuating": "g",
+            "Generator": "k",
+            "Load": "m",
+            "LVStation": "c",
+            "MVStation": "r",
+            "Storage": "y",
+            "DisconnectingPoint": "0.75",
+            "else": "orange",
+        }
+        if sizes_dict is None:
+            sizes_dict = {
+                "BranchTee": 10000,
+                "GeneratorFluctuating": 100000,
+                "Generator": 100000,
+                "Load": 100000,
+                "LVStation": 50000,
+                "MVStation": 120000,
+                "Storage": 100000,
+                "DisconnectingPoint": 75000,
+                "else": 200000,
+            }
+            sizes_dict = {k: v * 0.2 for k, v in sizes_dict.items()}
+        for bus in buses:
+            connected_components = (
+                edisgo_obj.topology.get_connected_components_from_bus(bus)
+            )
+            bus_colors[bus], bus_sizes[bus] = get_color_and_size(
+                connected_components, colors_dict, sizes_dict
+            )
+        return bus_sizes, bus_colors
+
+    def nodes_charging_park(buses, edisgo_obj):
+        bus_sizes = {}
+        bus_colors = {}
+        positions = []
+        colors_dict = {"ChargingPark": "r", "else": "black"}
+        sizes_dict = {"ChargingPark": 100000, "else": 10000}
+        for bus in edisgo_obj.topology.loads_df.index:
+            if "charging_park" in bus:
+                position = str(bus).rsplit("_")[-1]
+                positions.append(position)
+        for bus in buses:
+            bus_colors[bus] = colors_dict["else"]
+            bus_sizes[bus] = sizes_dict["else"]
+            for position in positions:
+                if position in bus:
+                    bus_colors[bus] = colors_dict["ChargingPark"]
+                    bus_sizes[bus] = sizes_dict["ChargingPark"]
+        return bus_sizes, bus_colors
+
+    def nodes_by_voltage(buses, voltages):
+        bus_colors_dict = {}
+        bus_sizes_dict = {}
+        if timestep is not None:
+            bus_colors_dict.update({bus: voltages.loc[timestep, bus] for bus in buses})
+        else:
+            bus_colors_dict.update({bus: max(voltages.loc[:, bus]) for bus in buses})
+        bus_sizes_dict.update({bus: 100000 ^ 2 for bus in buses})
+        return bus_sizes_dict, bus_colors_dict
+
+    def nodes_by_voltage_deviation(buses, voltages):
+        bus_colors_dict = {}
+        bus_sizes_dict = {}
+        if timestep is not None:
+            bus_colors_dict.update(
+                {bus: 100 * (voltages.loc[timestep, bus] - 1) for bus in buses}
+            )
+        else:
+            bus_colors_dict.update(
+                {bus: 100 * max(abs(1 - voltages.loc[:, bus])) for bus in buses}
+            )
+
+        bus_sizes_dict.update({bus: 100000 ^ 2 for bus in buses})
+        return bus_sizes_dict, bus_colors_dict
+
+    def nodes_storage_integration(buses, edisgo_obj):
+        bus_sizes = {}
+        buses_with_storages = buses[
+            buses.isin(edisgo_obj.topology.storage_units_df.bus.values)
+        ]
+        buses_without_storages = buses[~buses.isin(buses_with_storages)]
+        bus_sizes.update({bus: 0 for bus in buses_without_storages})
+        # size nodes such that 300 kW storage equals size 100
+        bus_sizes.update(
+            {
+                bus: edisgo_obj.topology.get_connected_components_from_bus(bus)[
+                    "storage_units"
+                ].p_nom.values.sum()
+                * 1000
+                / 3
+                for bus in buses_with_storages
+            }
+        )
+        return bus_sizes
+
+    def nodes_curtailment(buses, curtailment_df):
+        bus_sizes = {}
+        buses_with_curtailment = buses[buses.isin(curtailment_df.columns)]
+        buses_without_curtailment = buses[~buses.isin(buses_with_curtailment)]
+        bus_sizes.update({bus: 0 for bus in buses_without_curtailment})
+        curtailment_total = curtailment_df.sum().sum()
+        # size nodes such that 100% curtailment share equals size 1000
+        bus_sizes.update(
+            {
+                bus: curtailment_df.loc[:, bus].sum() / curtailment_total * 2000
+                for bus in buses_with_curtailment
+            }
+        )
+        return bus_sizes
+
+    def nodes_by_costs(buses, grid_expansion_costs, edisgo_obj):
+        # sum costs for each station
+        costs_lv_stations = grid_expansion_costs[
+            grid_expansion_costs.index.isin(edisgo_obj.topology.transformers_df.index)
+        ]
+        costs_lv_stations["station"] = edisgo_obj.topology.transformers_df.loc[
+            costs_lv_stations.index, "bus0"
+        ].values
+        costs_lv_stations = costs_lv_stations.groupby("station").sum()
+        costs_mv_station = grid_expansion_costs[
+            grid_expansion_costs.index.isin(
+                edisgo_obj.topology.transformers_hvmv_df.index
+            )
+        ]
+        costs_mv_station["station"] = edisgo_obj.topology.transformers_hvmv_df.loc[
+            costs_mv_station.index, "bus1"
+        ]
+        costs_mv_station = costs_mv_station.groupby("station").sum()
+
+        bus_sizes = {}
+        bus_colors = {}
+        for bus in buses:
+            # LVStation handeling
+            if bus in edisgo_obj.topology.transformers_df.bus0.values:
+                try:
+                    bus_colors[bus] = costs_lv_stations.loc[bus, "total_costs"]
+                    bus_sizes[bus] = 100.0
+                except Exception:
+                    bus_colors[bus] = 0.0
+                    bus_sizes[bus] = 0.0
+            # MVStation handeling
+            elif bus in edisgo_obj.topology.transformers_hvmv_df.bus1.values:
+                try:
+                    bus_colors[bus] = costs_mv_station.loc[bus, "total_costs"]
+                    bus_sizes[bus] = 100.0
+                except Exception:
+                    bus_colors[bus] = 0.0
+                    bus_sizes[bus] = 0.0
+            else:
+                bus_colors[bus] = 0.0
+                bus_sizes[bus] = 0.0
+
+        return bus_sizes, bus_colors
+
+    # set font and font size
+    font = {"family": "serif", "size": 15}
+    matplotlib.rc("font", **font)
+
+    # create pypsa network only containing MV buses and lines
+    pypsa_plot = PyPSANetwork()
+    pypsa_plot.buses = edisgo_obj.topology.buses_df.loc[
+        edisgo_obj.topology.buses_df.v_nom > 1
+    ].loc[:, ["x", "y"]]
+    # filter buses of aggregated loads and generators
+    pypsa_plot.buses = pypsa_plot.buses[~pypsa_plot.buses.index.str.contains("agg")]
+    pypsa_plot.lines = edisgo_obj.topology.lines_df[
+        edisgo_obj.topology.lines_df.bus0.isin(pypsa_plot.buses.index)
+        & edisgo_obj.topology.lines_df.bus1.isin(pypsa_plot.buses.index)
+    ].loc[:, ["bus0", "bus1"]]
+
+    # line colors
+    if line_color == "loading":
+        line_colors = lines_relative_load(edisgo_obj, pypsa_plot.lines.index)
+        if timestep is None:
+            line_colors = line_colors.max()
+        else:
+            line_colors = line_colors.loc[timestep, :]
+    elif line_color == "expansion_costs":
+        node_color = "expansion_costs"
+        line_costs = pypsa_plot.lines.join(
+            grid_expansion_costs, rsuffix="costs", how="left"
+        )
+        line_colors = line_costs.total_costs.fillna(0)
+    else:
+        line_colors = pd.Series("black", index=pypsa_plot.lines.index)
+
+    # bus colors and sizes
+    if node_color == "technology":
+        bus_sizes, bus_colors = nodes_by_technology(
+            pypsa_plot.buses.index, edisgo_obj, kwargs.get("sizes_dict", None)
+        )
+        bus_cmap = None
+    elif node_color == "voltage":
+        bus_sizes, bus_colors = nodes_by_voltage(
+            pypsa_plot.buses.index, edisgo_obj.results.v_res
+        )
+        bus_cmap = plt.cm.Blues
+    elif node_color == "voltage_deviation":
+        bus_sizes, bus_colors = nodes_by_voltage_deviation(
+            pypsa_plot.buses.index, edisgo_obj.results.v_res
+        )
+        bus_cmap = plt.cm.Blues
+    elif node_color == "storage_integration":
+        bus_sizes = nodes_storage_integration(pypsa_plot.buses.index, edisgo_obj)
+        bus_colors = "orangered"
+        bus_cmap = None
+    elif node_color == "expansion_costs":
+        bus_sizes, bus_colors = nodes_by_costs(
+            pypsa_plot.buses.index, grid_expansion_costs, edisgo_obj
+        )
+        bus_cmap = matplotlib.pyplot.colormaps.get_cmap(lines_cmap)
+    elif node_color == "curtailment":
+        bus_sizes = nodes_curtailment(pypsa_plot.buses.index, curtailment_df)
+        bus_colors = "orangered"
+        bus_cmap = None
+    elif node_color == "charging_park":
+        bus_sizes, bus_colors = nodes_charging_park(pypsa_plot.buses.index, edisgo_obj)
+        bus_cmap = None
+    elif node_color is None:
+        bus_sizes = 0
+        bus_colors = "r"
+        bus_cmap = None
+    else:
+        if kwargs.get("bus_colors", None):
+            bus_colors = pd.Series(kwargs.get("bus_colors")).loc[pypsa_plot.buses]
+        else:
+            logger.warning(
+                "Choice for `node_color` is not valid. Default bus colors are "
+                "used instead."
+            )
+            bus_colors = "r"
+        if kwargs.get("bus_sizes", None):
+            bus_sizes = pd.Series(kwargs.get("bus_sizes")).loc[pypsa_plot.buses]
+        else:
+            logger.warning(
+                "Choice for `node_color` is not valid. Default bus sizes are "
+                "used instead."
+            )
+            bus_sizes = 0
+        if kwargs.get("bus_cmap", None):
+            bus_cmap = kwargs.get("bus_cmap", None)
+        else:
+            logger.warning(
+                "Choice for `node_color` is not valid. Default bus colormap "
+                "is used instead."
+            )
+            bus_cmap = None
+
+    # convert bus coordinates to Mercator
+    if contextily and background_map:
+        transformer = Transformer.from_crs("epsg:4326", "epsg:3857", always_xy=True)
+        x2, y2 = transformer.transform(
+            list(pypsa_plot.buses.loc[:, "x"]),
+            list(pypsa_plot.buses.loc[:, "y"]),
+        )
+        pypsa_plot.buses.loc[:, "x"] = x2
+        pypsa_plot.buses.loc[:, "y"] = y2
+
+    # plot
+    plt.figure(figsize=(12, 8))
+    ax = plt.gca()
+
+    # plot network district
+    if grid_district_geom:
+        try:
+            projection = 3857 if contextily and background_map else 4326
+            crs = "epsg:{}".format(int(edisgo_obj.topology.grid_district["srid"]))
+            region = gpd.GeoDataFrame(
+                {"geometry": [edisgo_obj.topology.grid_district["geom"]]},
+                crs=crs,
+            )
+            if projection != int(edisgo_obj.topology.grid_district["srid"]):
+                region = region.to_crs(epsg=projection)
+            region.plot(ax=ax, color="white", alpha=0.2, edgecolor="red", linewidth=2)
+        except Exception as e:
+            logger.warning(
+                "Grid district geometry could not be plotted due "
+                "to the following error: {}".format(e)
+            )
+
+    # if scaling factor is given s_nom is plotted as line width
+    if scaling_factor_line_width is not None:
+        line_width = pypsa_plot.lines.s_nom * scaling_factor_line_width
+    else:
+        line_width = 2
+    cmap = matplotlib.pyplot.colormaps.get_cmap(lines_cmap)
+
+    ll = pypsa_plot.plot(
+        line_colors=line_colors,
+        line_cmap=cmap,
+        ax=ax,
+        title=title,
+        line_widths=line_width,
+        branch_components=["Line"],
+        geomap=False,
+        bus_sizes=bus_sizes,
+        bus_colors=bus_colors,
+        bus_cmap=bus_cmap,
+    )
+
+    # color bar line loading
+    if line_color == "loading":
+        if limits_cb_lines is None:
+            limits_cb_lines = (min(line_colors), max(line_colors))
+        v = np.linspace(limits_cb_lines[0], limits_cb_lines[1], 101)
+        cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
+        cb.norm.vmin = limits_cb_lines[0]
+        cb.norm.vmax = limits_cb_lines[1]
+        cb.set_label("Line loading in p.u.")
+    # color bar network expansion costs
+    elif line_color == "expansion_costs":
+        if limits_cb_lines is None:
+            limits_cb_lines = (
+                min(min(line_colors), min(bus_colors.values())),
+                max(max(line_colors), max(bus_colors.values())),
+            )
+        v = np.linspace(limits_cb_lines[0], limits_cb_lines[1], 101)
+        cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
+        cb.norm.vmin = limits_cb_lines[0]
+        cb.norm.vmax = limits_cb_lines[1]
+        cb.set_label("Grid expansion costs in kEUR")
+
+    # color bar voltage
+    if node_color == "voltage" or node_color == "voltage_deviation":
+        if limits_cb_nodes is None:
+            limits_cb_nodes = (
+                min(bus_colors.values()),
+                max(bus_colors.values()),
+            )
+        v_voltage = np.linspace(limits_cb_nodes[0], limits_cb_nodes[1], 101)
+        # for some reason, the cmap given to pypsa plot is overwritten and
+        # needs to be set again
+        ll[0].set(cmap="Blues")
+        cb_voltage = plt.colorbar(
+            ll[0], boundaries=v_voltage, ticks=v_voltage[0:101:10]
+        )
+        cb_voltage.norm.vmin = limits_cb_nodes[0]
+        cb_voltage.norm.vmax = limits_cb_nodes[1]
+        if node_color == "voltage":
+            if timestep is not None:
+                cb_voltage.set_label("Voltage in p.u.")
+            else:
+                cb_voltage.set_label("Maximum voltage in p.u.")
+        else:
+            if timestep is not None:
+                cb_voltage.set_label("Voltage deviation from 1 p.u.")
+            else:
+                cb_voltage.set_label("Maximum absolute voltage deviation from 1 p.u.")
+
+    # storage_units
+    if node_color == "expansion_costs":
+        if not edisgo_obj.topology.storage_units_df.empty:
+            ax.scatter(
+                pypsa_plot.buses.loc[
+                    edisgo_obj.topology.storage_units_df.loc[:, "bus"], "x"
+                ],
+                pypsa_plot.buses.loc[
+                    edisgo_obj.topology.storage_units_df.loc[:, "bus"], "y"
+                ],
+                c="orangered",
+                s=edisgo_obj.topology.storage_units_df.loc[:, "p_nom"] * 1000 / 3,
+            )
+
+        # --- optional extra points with sizes (geometry or x/y) ---
+    if plot_points and points_df is not None:
+        
+         
+ 
+         # normalize input to GeoDataFrame
+         if isinstance(points_df, gpd.GeoDataFrame):
+             pts_gdf = points_df.copy()
+         else:
+             pts_gdf = pd.DataFrame(points_df)
+             if "geometry" in pts_gdf.columns:
+                 # convert WKT strings if necessary
+                 pts_gdf["geometry"] = pts_gdf["geometry"].apply(lambda v: wkt_loads(v) if isinstance(v, str) else v)
+                 pts_gdf = gpd.GeoDataFrame(pts_gdf, geometry="geometry", crs="EPSG:4326")
+             elif {"x", "y"}.issubset(pts_gdf.columns):
+                 pts_gdf["geometry"] = pts_gdf.apply(lambda r: Point(r["x"], r["y"]), axis=1)
+                 pts_gdf = gpd.GeoDataFrame(pts_gdf, geometry="geometry", crs="EPSG:4326")
+             else:
+                 raise ValueError("points_df must contain a 'geometry' column (WKT/shapely) or 'x' and 'y' columns")
+ 
+         if pts_gdf.crs is None:
+             pts_gdf.set_crs(epsg=4326, inplace=True)
+ 
+         # transform to web-mercator when plotting map background, otherwise keep native coords
+         if background_map:
+             pts_plot = pts_gdf.to_crs(epsg=3857)
+         else:
+             pts_plot = pts_gdf
+ 
+         xs = pts_plot.geometry.x.values
+         ys = pts_plot.geometry.y.values
+         if points_size_col in pts_plot.columns:
+            sizes = (pts_plot[points_size_col].fillna(0).astype(float) * points_size_scale).values
+         else:
+            sizes = np.full(len(pts_plot), 1.0 * points_size_scale)
+
+                # optionally plot original_power as separate filled circles in different color
+         if plot_original_power and original_power_size_col in pts_plot.columns:
+            orig_sizes = (pts_plot[original_power_size_col].fillna(0).astype(float) * original_power_scale).values
+            # plot original power as semi-transparent filled circles with different color
+            ax.scatter(xs, ys, c=original_color, s=orig_sizes, alpha=max(0.3, points_alpha * 0.8), zorder=6, edgecolors="none")
+
+        # plot main points (filled circles sized by points_size_col)
+         ax.scatter(xs, ys, c=points_color, s=sizes, alpha=points_alpha, zorder=5, edgecolors="k", linewidths=0.3)
+
+    # add legend for storage size and line capacity
+    if (
+        node_color == "storage_integration" or node_color == "expansion_costs"
+    ) and edisgo_obj.topology.storage_units_df.loc[:, "p_nom"].any() > 0:
+        scatter_handle = plt.scatter(
+            [], [], c="orangered", s=100, label="= 300 kW battery storage"
+        )
+    elif node_color == "curtailment":
+        scatter_handle = plt.scatter(
+            [],
+            [],
+            c="orangered",
+            s=200,
+            label="$\\equiv$ 10% share of curtailment",
+        )
+    else:
+        scatter_handle = None
+    if scaling_factor_line_width is not None:
+        line_handle = plt.plot(
+            [],
+            [],
+            c="black",
+            linewidth=scaling_factor_line_width * 10,
+            label="= 10 MVA",
+        )
+    else:
+        line_handle = None
+    legend_loc = kwargs.get("legend_loc", "upper left")
+    if scatter_handle and line_handle:
+        plt.legend(
+            handles=[scatter_handle, line_handle[0]],
+            labelspacing=1,
+            title="Storage size and line capacity",
+            borderpad=0.5,
+            loc=legend_loc,
+            framealpha=0.5,
+            fontsize="medium",
+        )
+    elif scatter_handle:
+        plt.legend(
+            handles=[scatter_handle],
+            labelspacing=0,
+            title=None,
+            borderpad=0.3,
+            loc=legend_loc,
+            framealpha=0.5,
+            fontsize="medium",
+        )
+    elif line_handle:
+        plt.legend(
+            handles=[line_handle[0]],
+            labelspacing=1,
+            title="Line capacity",
+            borderpad=0.5,
+            loc=legend_loc,
+            framealpha=0.5,
+            fontsize="medium",
+        )
+
+    # axes limits
+    if xlim is not None:
+        ax.set_xlim(xlim[0], xlim[1])
+    if ylim is not None:
+        ax.set_ylim(ylim[0], ylim[1])
+
+    # hide axes labels
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+
+    # draw arrows on lines
+    if arrows and timestep and line_color == "loading":
+        path = ll[1].get_segments()
+        # colors = cmap(ll[1].get_array() / 100)
+        for i in range(len(path)):
+            if edisgo_obj.lines_t.p0.loc[timestep, line_colors.index[i]] > 0:
+                arrowprops = dict(arrowstyle="->", color="b")  # colors[i])
+            else:
+                arrowprops = dict(arrowstyle="<-", color="b")  # colors[i])
+            ax.annotate(
+                "",
+                xy=abs((path[i][0] - path[i][1]) * 0.51 - path[i][0]),
+                xytext=abs((path[i][0] - path[i][1]) * 0.49 - path[i][0]),
+                arrowprops=arrowprops,
+                size=10,
+            )
+
+    # plot map data in background
+    if contextily and background_map:
+        try:
+            add_basemap(ax, zoom=12)
+        except Exception as e:
+            logger.warning(
+                "Background map could not be plotted due to the "
+                "following error: {}".format(e)
+            )
+
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename, bbox_inches="tight")
+        plt.close()
+
+def lv_grid_with_charging_points(
+    edisgo_obj,
+    lv_grid,
+    timestep=None,
+    line_color=None,
+    node_color=None,
+    grid_expansion_costs=None,
+    filename=None,
+    arrows=False,
+    grid_district_geom=False,
+    background_map=True,
+    limits_cb_lines=None,
+    limits_cb_nodes=None,
+    xlim=None,
+    ylim=None,
+    lines_cmap="inferno_r",
+    title="",
+    scaling_factor_line_width=None,
+    charging_points_df=None,            # GeoDataFrame or DataFrame with 'geometry' (WKT/shapely) or 'x'/'y'
+    plot_charging_points=True,          # whether to plot charging point markers at all
+    points_color="red",                 # color for plotted (sized) power markers
+    points_size_col="power_kw",         # column used to size circles (primary power)
+    points_size_scale=1.0,
+    points_alpha=0.7,
+    plot_original_power=False,          # whether to plot original_power as separate markers
+    original_color="cyan",              # color for original power markers (filled or edge)
+    original_power_size_col="original_power_kw",
+    original_power_scale = 0.001,
+    **kwargs,
+):
+    """
+    LV-version of mv_grid_topology_w_cp_hosting:
+    Plot an LV grid (passed as `lv_grid`) and optionally charging points with
+    planned vs final power. Implementation mirrors mv_grid_topology_w_cp_hosting
+    but uses the provided lv_grid object instead of the MV topology.
+    """
+    # reuse helper logic from MV plotting (local copies)
+    def get_color_and_size(connected_components, colors_dict, sizes_dict):
+        if not connected_components["transformers_hvmv"].empty:
+            return colors_dict["MVStation"], sizes_dict["MVStation"]
+        elif not connected_components["transformers"].empty:
+            return colors_dict["LVStation"], sizes_dict["LVStation"]
+        elif (
+            not connected_components["generators"].empty
+            and connected_components["loads"].empty
+            and connected_components["storage_units"].empty
+        ):
+            if (connected_components["generators"].type.isin(["wind", "solar"])).all():
+                return (
+                    colors_dict["GeneratorFluctuating"],
+                    sizes_dict["GeneratorFluctuating"],
+                )
+            else:
+                return colors_dict["Generator"], sizes_dict["Generator"]
+        elif (
+            not connected_components["loads"].empty
+            and connected_components["generators"].empty
+            and connected_components["storage_units"].empty
+        ):
+            return colors_dict["Load"], sizes_dict["Load"]
+        elif not connected_components["switches"].empty:
+            return (
+                colors_dict["DisconnectingPoint"],
+                sizes_dict["DisconnectingPoint"],
+            )
+        elif (
+            not connected_components["storage_units"].empty
+            and connected_components["loads"].empty
+            and connected_components["generators"].empty
+        ):
+            return colors_dict["Storage"], sizes_dict["Storage"]
+        elif len(connected_components["lines"]) > 1:
+            return colors_dict["BranchTee"], sizes_dict["BranchTee"]
+        else:
+            return colors_dict["else"], sizes_dict["else"]
+
+    def nodes_by_technology(buses, edisgo_obj, sizes_dict=None):
+        bus_sizes = {}
+        bus_colors = {}
+        colors_dict = {
+            "BranchTee": "b",
+            "GeneratorFluctuating": "g",
+            "Generator": "k",
+            "Load": "m",
+            "LVStation": "c",
+            "MVStation": "r",
+            "Storage": "y",
+            "DisconnectingPoint": "0.75",
+            "else": "orange",
+        }
+        if sizes_dict is None:
+            sizes_dict = {
+                "BranchTee": 10000,
+                "GeneratorFluctuating": 100000,
+                "Generator": 100000,
+                "Load": 100000,
+                "LVStation": 50000,
+                "MVStation": 120000,
+                "Storage": 100000,
+                "DisconnectingPoint": 75000,
+                "else": 200000,
+            }
+            sizes_dict = {k: v * 0.2 for k, v in sizes_dict.items()}
+        for bus in buses:
+            connected_components = edisgo_obj.topology.get_connected_components_from_bus(bus)
+            bus_colors[bus], bus_sizes[bus] = get_color_and_size(
+                connected_components, colors_dict, sizes_dict
+            )
+        return bus_sizes, bus_colors
+
+    def nodes_charging_park(buses, edisgo_obj):
+        bus_sizes = {}
+        bus_colors = {}
+        positions = []
+        colors_dict = {"ChargingPark": "r", "else": "black"}
+        sizes_dict = {"ChargingPark": 100000, "else": 10000}
+        for bus in edisgo_obj.topology.loads_df.index:
+            if "charging_park" in bus:
+                position = str(bus).rsplit("_")[-1]
+                positions.append(position)
+        for bus in buses:
+            bus_colors[bus] = colors_dict["else"]
+            bus_sizes[bus] = sizes_dict["else"]
+            for position in positions:
+                if position in bus:
+                    bus_colors[bus] = colors_dict["ChargingPark"]
+                    bus_sizes[bus] = sizes_dict["ChargingPark"]
+        return bus_sizes, bus_colors
+
+    def nodes_by_voltage(buses, voltages):
+        bus_colors_dict = {}
+        bus_sizes_dict = {}
+        if timestep is not None:
+            bus_colors_dict.update({bus: voltages.loc[timestep, bus] for bus in buses})
+        else:
+            bus_colors_dict.update({bus: max(voltages.loc[:, bus]) for bus in buses})
+        bus_sizes_dict.update({bus: 100000 ^ 2 for bus in buses})
+        return bus_sizes_dict, bus_colors_dict
+
+    def nodes_by_voltage_deviation(buses, voltages):
+        bus_colors_dict = {}
+        bus_sizes_dict = {}
+        if timestep is not None:
+            bus_colors_dict.update(
+                {bus: 100 * (voltages.loc[timestep, bus] - 1) for bus in buses}
+            )
+        else:
+            bus_colors_dict.update(
+                {bus: 100 * max(abs(1 - voltages.loc[:, bus])) for bus in buses}
+            )
+        bus_sizes_dict.update({bus: 100000 ^ 2 for bus in buses})
+        return bus_sizes_dict, bus_colors_dict
+
+    def nodes_storage_integration(buses, edisgo_obj):
+        bus_sizes = {}
+        buses_with_storages = buses[
+            buses.isin(edisgo_obj.topology.storage_units_df.bus.values)
+        ]
+        buses_without_storages = buses[~buses.isin(buses_with_storages)]
+        bus_sizes.update({bus: 0 for bus in buses_without_storages})
+        bus_sizes.update(
+            {
+                bus: edisgo_obj.topology.get_connected_components_from_bus(bus)[
+                    "storage_units"
+                ].p_nom.values.sum()
+                * 1000
+                / 3
+                for bus in buses_with_storages
+            }
+        )
+        return bus_sizes
+
+    def nodes_curtailment(buses, curtailment_df):
+        bus_sizes = {}
+        buses_with_curtailment = buses[buses.isin(curtailment_df.columns)]
+        buses_without_curtailment = buses[~buses.isin(buses_with_curtailment)]
+        bus_sizes.update({bus: 0 for bus in buses_without_curtailment})
+        curtailment_total = curtailment_df.sum().sum()
+        bus_sizes.update(
+            {
+                bus: curtailment_df.loc[:, bus].sum() / curtailment_total * 2000
+                for bus in buses_with_curtailment
+            }
+        )
+        return bus_sizes
+
+    def nodes_by_costs(buses, grid_expansion_costs, edisgo_obj):
+        costs_lv_stations = grid_expansion_costs[
+            grid_expansion_costs.index.isin(edisgo_obj.topology.transformers_df.index)
+        ]
+        costs_lv_stations["station"] = edisgo_obj.topology.transformers_df.loc[
+            costs_lv_stations.index, "bus0"
+        ].values
+        costs_lv_stations = costs_lv_stations.groupby("station").sum()
+        costs_mv_station = grid_expansion_costs[
+            grid_expansion_costs.index.isin(edisgo_obj.topology.transformers_hvmv_df.index)
+        ]
+        costs_mv_station["station"] = edisgo_obj.topology.transformers_hvmv_df.loc[
+            costs_mv_station.index, "bus1"
+        ]
+        costs_mv_station = costs_mv_station.groupby("station").sum()
+
+        bus_sizes = {}
+        bus_colors = {}
+        for bus in buses:
+            if bus in edisgo_obj.topology.transformers_df.bus0.values:
+                try:
+                    bus_colors[bus] = costs_lv_stations.loc[bus, "total_costs"]
+                    bus_sizes[bus] = 100.0
+                except Exception:
+                    bus_colors[bus] = 0.0
+                    bus_sizes[bus] = 0.0
+            elif bus in edisgo_obj.topology.transformers_hvmv_df.bus1.values:
+                try:
+                    bus_colors[bus] = costs_mv_station.loc[bus, "total_costs"]
+                    bus_sizes[bus] = 100.0
+                except Exception:
+                    bus_colors[bus] = 0.0
+                    bus_sizes[bus] = 0.0
+            else:
+                bus_colors[bus] = 0.0
+                bus_sizes[bus] = 0.0
+        return bus_sizes, bus_colors
+
+    # set font and font size
+    font = {"family": "serif", "size": 15}
+    matplotlib.rc("font", **font)
+
+    # create pypsa network only containing LV buses and lines from provided lv_grid
+    pypsa_plot = PyPSANetwork()
+    # Normalize buses dataframe: ensure columns 'x' and 'y' exist (extract from geometry if needed)
+    buses_df = lv_grid.buses_df.copy()
+    if "geometry" in buses_df.columns:
+        try:
+            import geopandas as gpd  # local import
+
+            if not isinstance(buses_df, gpd.GeoDataFrame):
+                buses_gdf = gpd.GeoDataFrame(buses_df, geometry=buses_df.geometry, crs=buses_df.get("crs", None))
+            else:
+                buses_gdf = buses_df
+            buses_xy = pd.DataFrame({"x": buses_gdf.geometry.x, "y": buses_gdf.geometry.y}, index=buses_gdf.index)
+        except Exception:
+           # fallback to x/y columns if geometry handling fails
+            if {"x", "y"}.issubset(buses_df.columns):
+                buses_xy = buses_df.loc[:, ["x", "y"]].copy()
+            else:
+                raise KeyError("buses_df must contain 'geometry' or 'x'/'y' columns")
+    elif {"x", "y"}.issubset(buses_df.columns):
+        buses_xy = buses_df.loc[:, ["x", "y"]].copy()
+    elif {"lon", "lat"}.issubset(buses_df.columns):
+        buses_xy = buses_df.loc[:, ["lon", "lat"]].rename(columns={"lon": "x", "lat": "y"}).copy()
+    elif {"longitude", "latitude"}.issubset(buses_df.columns):
+        buses_xy = buses_df.loc[:, ["longitude", "latitude"]].rename(columns={"longitude": "x", "latitude": "y"}).copy()
+    else:
+        raise KeyError("LV grid buses_df must contain 'geometry' or x/y (e.g. 'x'/'y', 'lon'/'lat') columns")
+
+    buses_xy["x"] = buses_xy["x"].astype(float)
+    buses_xy["y"] = buses_xy["y"].astype(float)
+    pypsa_plot.buses = buses_xy
+    pypsa_plot.buses = pypsa_plot.buses[~pypsa_plot.buses.index.str.contains("agg", na=False)]
+    pypsa_plot.lines = lv_grid.lines_df[
+        lv_grid.lines_df.bus0.isin(pypsa_plot.buses.index)
+        & lv_grid.lines_df.bus1.isin(pypsa_plot.buses.index)
+    ].loc[:, ["bus0", "bus1"]]
+
+    # line colors
+    if line_color == "loading":
+        line_colors = lines_relative_load(edisgo_obj, pypsa_plot.lines.index)
+        if timestep is None:
+            line_colors = line_colors.max()
+        else:
+            line_colors = line_colors.loc[timestep, :]
+    elif line_color == "expansion_costs":
+        node_color = "expansion_costs"
+        line_costs = pypsa_plot.lines.join(grid_expansion_costs, rsuffix="costs", how="left")
+        line_colors = line_costs.total_costs.fillna(0)
+    else:
+        line_colors = pd.Series("black", index=pypsa_plot.lines.index)
+
+    # bus colors and sizes
+    if node_color == "technology":
+        bus_sizes, bus_colors = nodes_by_technology(pypsa_plot.buses.index, edisgo_obj, kwargs.get("sizes_dict", None))
+        bus_cmap = None
+    elif node_color == "voltage":
+        bus_sizes, bus_colors = nodes_by_voltage(pypsa_plot.buses.index, edisgo_obj.results.v_res)
+        bus_cmap = plt.cm.Blues
+    elif node_color == "voltage_deviation":
+        bus_sizes, bus_colors = nodes_by_voltage_deviation(pypsa_plot.buses.index, edisgo_obj.results.v_res)
+        bus_cmap = plt.cm.Blues
+    elif node_color == "storage_integration":
+        bus_sizes = nodes_storage_integration(pypsa_plot.buses.index, edisgo_obj)
+        bus_colors = "orangered"
+        bus_cmap = None
+    elif node_color == "expansion_costs":
+        bus_sizes, bus_colors = nodes_by_costs(pypsa_plot.buses.index, grid_expansion_costs, edisgo_obj)
+        bus_cmap = matplotlib.pyplot.colormaps.get_cmap(lines_cmap)
+    elif node_color == "curtailment":
+        bus_sizes = nodes_curtailment(pypsa_plot.buses.index, kwargs.get("curtailment_df", None))
+        bus_colors = "orangered"
+        bus_cmap = None
+    elif node_color == "charging_park":
+        bus_sizes, bus_colors = nodes_charging_park(pypsa_plot.buses.index, edisgo_obj)
+        bus_cmap = None
+    elif node_color is None:
+        bus_sizes = 0
+        bus_colors = "r"
+        bus_cmap = None
+    else:
+        if kwargs.get("bus_colors", None):
+            bus_colors = pd.Series(kwargs.get("bus_colors")).loc[pypsa_plot.buses.index]
+        else:
+            logger.warning("Choice for `node_color` is not valid. Default bus colors are used instead.")
+            bus_colors = "r"
+        if kwargs.get("bus_sizes", None):
+            bus_sizes = pd.Series(kwargs.get("bus_sizes")).loc[pypsa_plot.buses.index]
+        else:
+            logger.warning("Choice for `node_color` is not valid. Default bus sizes are used instead.")
+            bus_sizes = 0
+        bus_cmap = kwargs.get("bus_cmap", None)
+
+    # convert coordinates to Mercator when using contextily basemap
+    if contextily and background_map:
+        transformer = Transformer.from_crs("epsg:4326", "epsg:3857", always_xy=True)
+        x2, y2 = transformer.transform(list(pypsa_plot.buses.loc[:, "x"]), list(pypsa_plot.buses.loc[:, "y"]))
+        pypsa_plot.buses.loc[:, "x"] = x2
+        pypsa_plot.buses.loc[:, "y"] = y2
+
+    # plot
+    plt.figure(figsize=(12, 8))
+    ax = plt.gca()
+
+    # plot network district (optional)
+    if grid_district_geom and hasattr(edisgo_obj.topology, "grid_district"):
+        try:
+            projection = 3857 if contextily and background_map else 4326
+            crs = "epsg:{}".format(int(edisgo_obj.topology.grid_district["srid"]))
+            region = gpd.GeoDataFrame({"geometry": [edisgo_obj.topology.grid_district["geom"]]}, crs=crs)
+            if projection != int(edisgo_obj.topology.grid_district["srid"]):
+                region = region.to_crs(epsg=projection)
+            region.plot(ax=ax, color="white", alpha=0.2, edgecolor="red", linewidth=2)
+        except Exception as e:
+            logger.warning("Grid district geometry could not be plotted due to the following error: {}".format(e))
+
+    # if scaling factor is given s_nom is plotted as line width
+    if scaling_factor_line_width is not None:
+        try:
+            line_width = pypsa_plot.lines.s_nom * scaling_factor_line_width
+        except Exception:
+            line_width = 2
+    else:
+        line_width = 2
+    cmap = matplotlib.pyplot.colormaps.get_cmap(lines_cmap)
+
+    ll = pypsa_plot.plot(
+        line_colors=line_colors,
+        line_cmap=cmap,
+        ax=ax,
+        title=title,
+        line_widths=line_width,
+        branch_components=["Line"],
+        geomap=False,
+        bus_sizes=bus_sizes,
+        bus_colors=bus_colors,
+        bus_cmap=bus_cmap,
+    )
+
+    # color bars (reuse mv logic)
+    if line_color == "loading":
+        if limits_cb_lines is None:
+            limits_cb_lines = (min(line_colors), max(line_colors))
+        v = np.linspace(limits_cb_lines[0], limits_cb_lines[1], 101)
+        cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
+        cb.norm.vmin = limits_cb_lines[0]
+        cb.norm.vmax = limits_cb_lines[1]
+        cb.set_label("Line loading in p.u.")
+    elif line_color == "expansion_costs":
+        if limits_cb_lines is None:
+            limits_cb_lines = (
+                min(min(line_colors), min(bus_colors.values())),
+                max(max(line_colors), max(bus_colors.values())),
+            )
+        v = np.linspace(limits_cb_lines[0], limits_cb_lines[1], 101)
+        cb = plt.colorbar(ll[1], boundaries=v, ticks=v[0:101:10])
+        cb.norm.vmin = limits_cb_lines[0]
+        cb.norm.vmax = limits_cb_lines[1]
+        cb.set_label("Grid expansion costs in kEUR")
+
+    if node_color == "voltage" or node_color == "voltage_deviation":
+        if limits_cb_nodes is None:
+            limits_cb_nodes = (min(bus_colors.values()), max(bus_colors.values()))
+        v_voltage = np.linspace(limits_cb_nodes[0], limits_cb_nodes[1], 101)
+        ll[0].set(cmap="Blues")
+        cb_voltage = plt.colorbar(ll[0], boundaries=v_voltage, ticks=v_voltage[0:101:10])
+        cb_voltage.norm.vmin = limits_cb_nodes[0]
+        cb_voltage.norm.vmax = limits_cb_nodes[1]
+        if node_color == "voltage":
+            if timestep is not None:
+                cb_voltage.set_label("Voltage in p.u.")
+            else:
+                cb_voltage.set_label("Maximum voltage in p.u.")
+        else:
+            if timestep is not None:
+                cb_voltage.set_label("Voltage deviation from 1 p.u.")
+            else:
+                cb_voltage.set_label("Maximum absolute voltage deviation from 1 p.u.")
+
+    # storage units legend / sizing (same as MV)
+    if node_color == "expansion_costs":
+        if not edisgo_obj.topology.storage_units_df.empty:
+            ax.scatter(
+                pypsa_plot.buses.loc[edisgo_obj.topology.storage_units_df.loc[:, "bus"], "x"],
+                pypsa_plot.buses.loc[edisgo_obj.topology.storage_units_df.loc[:, "bus"], "y"],
+                c="orangered",
+                s=edisgo_obj.topology.storage_units_df.loc[:, "p_nom"] * 1000 / 3,
+            )
+
+    # --- optional extra charging points with sizes (geometry or x/y) ---
+    if plot_charging_points and charging_points_df is not None:
+        # normalize input to GeoDataFrame
+        if isinstance(charging_points_df, gpd.GeoDataFrame):
+            pts_gdf = charging_points_df.copy()
+        else:
+            pts_gdf = pd.DataFrame(charging_points_df)
+            if "geometry" in pts_gdf.columns:
+                pts_gdf["geometry"] = pts_gdf["geometry"].apply(lambda v: wkt_loads(v) if isinstance(v, str) else v)
+                pts_gdf = gpd.GeoDataFrame(pts_gdf, geometry="geometry", crs="EPSG:4326")
+            elif {"x", "y"}.issubset(pts_gdf.columns):
+                pts_gdf["geometry"] = pts_gdf.apply(lambda r: Point(r["x"], r["y"]), axis=1)
+                pts_gdf = gpd.GeoDataFrame(pts_gdf, geometry="geometry", crs="EPSG:4326")
+            else:
+                raise ValueError("charging_points_df must contain a 'geometry' column (WKT/shapely) or 'x' and 'y' columns")
+
+        if pts_gdf.crs is None:
+            pts_gdf.set_crs(epsg=4326, inplace=True)
+
+        # transform to web-mercator when plotting map background, otherwise keep native coords
+        if background_map and contextily:
+            pts_plot = pts_gdf.to_crs(epsg=3857)
+        else:
+            pts_plot = pts_gdf
+
+        xs = pts_plot.geometry.x.values
+        ys = pts_plot.geometry.y.values
+        if points_size_col in pts_plot.columns:
+            sizes = (pts_plot[points_size_col].fillna(0).astype(float) * points_size_scale).values
+        else:
+            sizes = np.full(len(pts_plot), 1.0 * points_size_scale)
+
+        # optionally plot original_power as separate filled circles in different color
+        if plot_original_power and original_power_size_col in pts_plot.columns:
+            orig_sizes = (pts_plot[original_power_size_col].fillna(0).astype(float) * original_power_scale).values
+            ax.scatter(xs, ys, c=original_color, s=orig_sizes, alpha=max(0.3, points_alpha * 0.8), zorder=6, edgecolors="none")
+
+        # plot main points (filled circles sized by points_size_col)
+        ax.scatter(xs, ys, c=points_color, s=sizes, alpha=points_alpha, zorder=5, edgecolors="k", linewidths=0.3)
+
+    # add legend for storage size and line capacity (same logic)
+    if (node_color == "storage_integration" or node_color == "expansion_costs") and edisgo_obj.topology.storage_units_df.loc[:, "p_nom"].any() > 0:
+        scatter_handle = plt.scatter([], [], c="orangered", s=100, label="= 300 kW battery storage")
+    elif node_color == "curtailment":
+        scatter_handle = plt.scatter([], [], c="orangered", s=200, label="$\\equiv$ 10% share of curtailment")
+    else:
+        scatter_handle = None
+    if scaling_factor_line_width is not None:
+        line_handle = plt.plot([], [], c="black", linewidth=scaling_factor_line_width * 10, label="= 10 MVA")
+    else:
+        line_handle = None
+    legend_loc = kwargs.get("legend_loc", "upper left")
+    if scatter_handle and line_handle:
+        plt.legend(handles=[scatter_handle, line_handle[0]], labelspacing=1, title="Storage size and line capacity", borderpad=0.5, loc=legend_loc, framealpha=0.5, fontsize="medium")
+    elif scatter_handle:
+        plt.legend(handles=[scatter_handle], labelspacing=0, title=None, borderpad=0.3, loc=legend_loc, framealpha=0.5, fontsize="medium")
+    elif line_handle:
+        plt.legend(handles=[line_handle[0]], labelspacing=1, title="Line capacity", borderpad=0.5, loc=legend_loc, framealpha=0.5, fontsize="medium")
+
+    # axes limits
+    if xlim is not None:
+        ax.set_xlim(xlim[0], xlim[1])
+    if ylim is not None:
+        ax.set_ylim(ylim[0], ylim[1])
+
+    # hide axes labels
+    ax.get_xaxis().set_visible(False)
+    ax.get_yaxis().set_visible(False)
+
+    # draw arrows on lines (limited support, mirrors MV)
+    if arrows and timestep and line_color == "loading":
+        try:
+            path = ll[1].get_segments()
+            for i in range(len(path)):
+                if edisgo_obj.lines_t.p0.loc[timestep, line_colors.index[i]] > 0:
+                    arrowprops = dict(arrowstyle="->", color="b")
+                else:
+                    arrowprops = dict(arrowstyle="<-", color="b")
+                ax.annotate("", xy=abs((path[i][0] - path[i][1]) * 0.51 - path[i][0]), xytext=abs((path[i][0] - path[i][1]) * 0.49 - path[i][0]), arrowprops=arrowprops, size=10)
+        except Exception:
+            pass
+
+    # plot map data in background
+    if contextily and background_map:
+        try:
+            add_basemap(ax, zoom=12)
+        except Exception as e:
+            logger.warning("Background map could not be plotted due to the following error: {}".format(e))
+
+    if filename is None:
+        plt.show()
+    else:
+        plt.savefig(filename, bbox_inches="tight")
+        plt.close()
 
 def color_map_color(
     value: Number,
@@ -1575,6 +2785,893 @@ def plot_plotly(
         )
     return fig
 
+def plot_plotly_cp(
+    edisgo_obj: EDisGo,
+    grid: Grid | None = None,
+    line_color: None | str = "relative_loading",
+    node_color: None | str = "voltage_deviation",
+    line_result_selection: str = "max",
+    node_result_selection: str = "max",
+    selected_timesteps: pd.Timestamp | list | None = None,
+    plot_map: bool = False,
+    pseudo_coordinates: bool = False,
+    node_selection: list | bool = False,
+    height: int = 500,
+    map_style: str = "open-street-map",
+    highlight_transformers: bool = False,
+    # charging points (optional)
+    charging_points_df=None,
+    points_size_col: str = "power_kw",
+    original_power_col: str = "original_power_kw",
+    points_size_scale: float = 1.0,
+    original_points_size_scale: float = 1.0,
+    plot_original_power: bool = False,
+    points_color: str = "red",
+    original_color: str = "cyan",
+    min_marker_size: int = 4,
+) -> BaseFigure:
+    """
+    Draws a plotly html figure.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+        Selected edisgo_obj to get plotting information from.
+
+    grid : :class:`~.network.grids.Grid`
+        Grid to plot. If None, the MVGrid of the edisgo_obj is plotted. Default: None.
+
+    line_color : str or None
+        Defines whereby to choose line colors. Possible options are:
+
+        * 'loading'
+            Line color is set according to loading of the line.
+        * 'relative_loading' (default)
+            Line color is set according to relative loading of the line.
+        * 'reinforce'
+            Line color is set according to investment costs of the line.
+        * None
+            Line color is black. This is also the fallback, in case other options fail.
+
+    node_color : str or None
+        Defines whereby to choose node colors. Possible options are:
+
+        * 'adjacencies'
+            Node color as well as size is set according to the number of direct
+            neighbors.
+        * 'voltage_deviation' (default)
+            Node color is set according to voltage deviation from 1 p.u..
+        * None
+            Line color is black. This is also the fallback, in case other options fail.
+
+    line_result_selection : str
+        Defines which values are shown for the load of the lines:
+
+        * 'min'
+            Minimal line load of all time steps.
+        * 'max' (default)
+            Maximal line load of all time steps.
+
+    node_result_selection : str
+        Defines which values are shown for the voltage of the nodes:
+
+        * 'min'
+            Minimal node voltage of all time steps.
+        * 'max' (default)
+            Maximal node voltage of all time steps.
+
+    selected_timesteps : :pandas:`pandas.Timestamp<Timestamp>` or \
+        list(:pandas:`pandas.Timestamp<Timestamp>`) or None
+        Selected time steps to show results for.
+
+        * None (default)
+            All time steps are used.
+        * list(:pandas:`pandas.Timestamp<Timestamp>`) or \
+            :pandas:`pandas.Timestamp<Timestamp>`
+          Selected time steps are used.
+
+    plot_map : bool
+        Enable the plotting of a background map.
+
+    pseudo_coordinates : bool
+        Enable pseudo coordinates for the plotted grid. Default: False.
+
+    node_selection : bool or list(str)
+        Only plot selected nodes. Default: False.
+
+    height : int
+        Height of the plotly plot in pixels.
+
+    Returns
+    -------
+    :plotly:`plotly.graph_objects.Figure`
+        Plotly figure with branches and nodes.
+
+    """
+    if grid is None:
+        grid = edisgo_obj.topology.mv_grid
+
+    G = grid.graph
+
+    logger.debug(f"selected_timesteps={selected_timesteps}")
+
+    if isinstance(selected_timesteps, pd.Timestamp) or isinstance(
+        selected_timesteps, str
+    ):
+        selected_timesteps = [selected_timesteps]
+
+    if selected_timesteps is None:
+        selected_timesteps = edisgo_obj.results.s_res.index
+
+    if edisgo_obj.results.s_res.empty:
+        power_flow_results = False
+        warning_message = "No power flow results. -> Run power flow."
+    elif len(selected_timesteps) == 0:
+        power_flow_results = False
+        warning_message = "No time steps selected."
+    else:
+        power_flow_results = True
+        warning_message = False
+
+    try:
+        edisgo_obj.results.s_res.loc[selected_timesteps, :]
+    except KeyError:
+        power_flow_results = False
+        warning_message = "Time steps are not in the results."
+
+    # check for existing reinforcement results
+    if edisgo_obj.results.equipment_changes.empty:
+        reinforcement_results = False
+    else:
+        reinforcement_results = True
+
+    # check line_color input
+    line_color_options = ["loading", "relative_loading", "reinforce"]
+    if line_color not in line_color_options:
+        logger.warning(f"Line colors need to be one of {line_color_options}.")
+        line_color = None
+    elif (line_color in ["loading", "relative_loading"]) and (not power_flow_results):
+        logger.warning("No power flow results to show. -> Run power flow.")
+        line_color = None
+    elif (line_color in ["reinforce"]) and (not reinforcement_results):
+        logger.warning("No reinforcement results to show. -> Run reinforcement.")
+        line_color = None
+
+    # check node_color input
+    node_color_options = ["voltage_deviation", "adjacencies"]
+    if node_color not in node_color_options:
+        logger.warning(f"Line colors need to be one of {node_color_options}.")
+        node_color = None
+    elif (node_color in ["voltage_deviation"]) and (not power_flow_results):
+        logger.warning("No power flow results to show. -> Run power flow.")
+        node_color = None
+
+    if hasattr(grid, "transformers_df"):
+        node_root = grid.transformers_df.bus1.iat[0]
+        x_center, y_center = G.nodes[node_root]["pos"]
+    else:
+        node_root = edisgo_obj.topology.transformers_hvmv_df.bus1.iat[0]
+        x_center, y_center = G.nodes[node_root]["pos"]
+
+    x_root = 0
+    y_root = 0
+
+    if pseudo_coordinates:
+        G = make_pseudo_coordinates_graph(
+            G, edisgo_obj.config["grid_connection"]["branch_detour_factor"]
+        )
+
+    if node_selection:
+        G = G.subgraph(node_selection)
+        if not list(G.nodes()):
+            raise ValueError("Selected nodes are not in the selected grid.")
+
+    # Select values for displaying results.
+    if power_flow_results:
+        s_res_view = edisgo_obj.results.s_res.columns.isin(
+            [edge[2]["branch_name"] for edge in G.edges.data()]
+        )
+        v_res_view = edisgo_obj.results.v_res.columns.isin([node for node in G.nodes])
+
+        s_res = edisgo_obj.results.s_res.loc[selected_timesteps, s_res_view]
+        v_res = edisgo_obj.results.v_res.loc[selected_timesteps, v_res_view]
+
+        result_selection_options = ["min", "max"]
+        if line_result_selection == "min":
+            s_res = s_res.min()
+        elif line_result_selection == "max":
+            s_res = s_res.max()
+        else:
+            raise ValueError(
+                f"line_result_selection needs to be one of {result_selection_options}"
+            )
+        if node_result_selection == "min":
+            v_res = v_res.min()
+        elif node_result_selection == "max":
+            v_res = v_res.max()
+        else:
+            raise ValueError(
+                f"node_result_selection needs to be one of {result_selection_options}"
+            )
+
+    def get_coordinates_for_edge(edge):
+        x0, y0 = G.nodes[edge[0]]["pos"]
+        x1, y1 = G.nodes[edge[1]]["pos"]
+        return x0, y0, x1, y1
+
+    def plot_line_text():
+        middle_node_x = []
+        middle_node_y = []
+        middle_node_text = []
+
+        for edge in G.edges(data=True):
+            x0, y0, x1, y1 = get_coordinates_for_edge(edge)
+            middle_node_x.append((x0 - x_root + x1 - x_root) / 2)
+            middle_node_y.append((y0 - y_root + y1 - y_root) / 2)
+
+            branch_name = edge[2]["branch_name"]
+
+            text = str(branch_name)
+            if power_flow_results:
+                text += "<br>" + "Loading = " + str(s_res.loc[branch_name])
+
+            line_parameters = edisgo_obj.topology.lines_df.loc[branch_name, :]
+            for index, value in line_parameters.items():
+                text += "<br>" + str(index) + " = " + str(value)
+
+            middle_node_text.append(text)
+
+        if plot_map:
+            middle_node_scatter = go.Scattermapbox(
+                lon=middle_node_x,
+                lat=middle_node_y,
+                text=middle_node_text,
+                mode="markers",
+                hoverinfo="text",
+                marker=dict(
+                    opacity=0.0,
+                    size=10,
+                    color="white",
+                ),
+                showlegend=False,
+            )
+        else:
+            middle_node_scatter = go.Scatter(
+                x=middle_node_x,
+                y=middle_node_y,
+                text=middle_node_text,
+                mode="markers",
+                hoverinfo="text",
+                marker=dict(
+                    opacity=0.0,
+                    size=10,
+                    color="white",
+                ),
+                showlegend=False,
+            )
+
+        return [middle_node_scatter]
+
+    def plot_lines():
+        showscale = True
+
+        if line_color == "loading":
+            color_min = s_res.min()
+            color_max = s_res.max()
+            colorscale = "YlOrRd"
+        elif line_color == "relative_loading":
+            color_min = 0
+            color_max = 1
+            colorscale = [
+                [0, "yellow"],
+                [0.45, "orange"],
+                [0.9, "crimson"],
+                [0.9, "indigo"],
+                [1, "indigo"],
+            ]
+        elif line_color == "reinforce":
+            color_min = 0
+            color_max = 1
+            colorscale = [[0, "green"], [0.5, "green"], [0.5, "red"], [1, "red"]]
+        else:
+            showscale = False
+
+        data_line_plot = []
+        for edge in G.edges(data=True):
+            x0, y0, x1, y1 = get_coordinates_for_edge(edge)
+            edge_x = [x0 - x_root, x1 - x_root, None]
+            edge_y = [y0 - y_root, y1 - y_root, None]
+
+            branch_name = edge[2]["branch_name"]
+
+            if line_color == "reinforce":
+                # Possible distinction between added parallel
+                # lines and changed lines
+                if (
+                    edisgo_obj.results.equipment_changes.index[
+                        edisgo_obj.results.equipment_changes["change"] == "added"
+                    ]
+                    .isin([branch_name])
+                    .any()
+                ):
+                    color = "green"
+                # Changed lines
+                elif (
+                    edisgo_obj.results.equipment_changes.index[
+                        edisgo_obj.results.equipment_changes["change"] == "changed"
+                    ]
+                    .isin([branch_name])
+                    .any()
+                ):
+                    color = "red"
+                else:
+                    color = "black"
+
+            elif line_color == "loading":
+                loading = s_res.loc[branch_name]
+                color = color_map_color(
+                    loading,
+                    vmin=color_min,
+                    vmax=color_max,
+                    cmap_name=colorscale,
+                )
+
+            elif line_color == "relative_loading":
+                loading = s_res.loc[branch_name]
+                s_nom = edisgo_obj.topology.lines_df.s_nom.loc[branch_name]
+                color = color_map_color(
+                    loading / s_nom * 0.9,
+                    vmin=color_min,
+                    vmax=color_max,
+                    cmap_name=colorscale,
+                )
+                if loading > s_nom:
+                    color = "indigo"
+            else:
+                color = "grey"
+            if plot_map:
+                edge_scatter = go.Scattermapbox(
+                    mode="lines",
+                    lon=edge_x,
+                    lat=edge_y,
+                    hoverinfo="none",
+                    opacity=0.8,
+                    showlegend=False,
+                    line=dict(
+                        width=3.5,
+                        color=color,
+                    ),
+                )
+            else:
+                edge_scatter = go.Scatter(
+                    mode="lines",
+                    x=edge_x,
+                    y=edge_y,
+                    hoverinfo="none",
+                    opacity=0.8,
+                    showlegend=False,
+                    line=dict(
+                        width=2,
+                        color=color,
+                    ),
+                )
+
+            data_line_plot.append(edge_scatter)
+
+        # Add colorbar for line colors (works for both map and non-map plots)
+        if line_color:
+            line_color_title = {
+                "loading": "Loading in MVA",
+                "relative_loading": "Relative loading in p.u.",
+                "reinforce": "Reinforce",
+            }
+
+            # Create invisible scatter plot for colorbar
+            if plot_map:
+                colorbar_edge_scatter = go.Scattermapbox(
+                    mode="markers",
+                    lon=[None],
+                    lat=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=line_color_title[line_color],
+                            xanchor="left",
+                            titleside="right",
+                            x=1.02,
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        cmax=color_max,
+                        cmin=color_min,
+                        showscale=showscale,
+                        opacity=0,  # Make invisible
+                    ),
+                    showlegend=False,
+                )
+            else:
+                colorbar_edge_scatter = go.Scatter(
+                    mode="markers",
+                    x=[None],
+                    y=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=line_color_title[line_color],
+                            xanchor="left",
+                            titleside="right",
+                            x=1.19,
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        cmax=color_max,
+                        cmin=color_min,
+                        showscale=showscale,
+                    ),
+                )
+
+            if line_color == "reinforce":
+                colorbar_edge_scatter.marker.colorbar.tickmode = "array"
+                colorbar_edge_scatter.marker.colorbar.ticktext = ["added", "changed"]
+                colorbar_edge_scatter.marker.colorbar.tickvals = [0.25, 0.75]
+            elif line_color == "relative_loading":
+                colorbar_edge_scatter.marker.colorbar.tickmode = "array"
+                colorbar_edge_scatter.marker.colorbar.ticktext = [
+                    0,
+                    0.2,
+                    0.4,
+                    0.6,
+                    0.8,
+                    1,
+                    "Overloaded",
+                ]
+                colorbar_edge_scatter.marker.colorbar.tickvals = [
+                    0,
+                    0.2 * 0.9,
+                    0.4 * 0.9,
+                    0.6 * 0.9,
+                    0.8 * 0.9,
+                    1 * 0.9,
+                    0.95,
+                ]
+            data_line_plot.append(colorbar_edge_scatter)
+
+        return data_line_plot
+
+    def plot_buses():
+        node_x = []
+        node_y = []
+
+        for node in G.nodes():
+            x, y = G.nodes[node]["pos"]
+            node_x.append(x - x_root)
+            node_y.append(y - y_root)
+
+        if node_color == "voltage_deviation":
+            node_colors = []
+            for node in G.nodes():
+                color = v_res.loc[node] - 1
+                node_colors.append(color)
+
+            colorbar = dict(
+                thickness=15,
+                title="Node voltage deviation in p.u.",
+                xanchor="left",
+                titleside="right",
+            )
+            colorscale = "RdBu"
+            cmid = 0
+            showscale = True
+
+        elif node_color == "adjacencies":
+            node_colors = [len(adjacencies[1]) for adjacencies in G.adjacency()]
+            colorscale = "YlGnBu"
+            cmid = None
+
+            colorbar = dict(
+                thickness=15,
+                title="Node connections",
+                xanchor="left",
+                titleside="right",
+            )
+            showscale = True
+
+        else:
+            node_colors = "grey"
+            cmid = None
+            colorscale = None
+            colorbar = None
+            showscale = False
+
+        node_text = []
+        for node in G.nodes():
+            text = str(node)
+            if power_flow_results:
+                peak_load = edisgo_obj.topology.loads_df.loc[
+                    edisgo_obj.topology.loads_df.bus == node
+                ].p_set.sum()
+                text += "<br>" + "peak_load = " + str(peak_load)
+
+                p_nom = edisgo_obj.topology.generators_df.loc[
+                    edisgo_obj.topology.generators_df.bus == node
+                ].p_nom.sum()
+                text += "<br>" + "p_nom_gen = " + str(p_nom)
+
+                v = v_res.loc[node]
+                text += "<br>" + "v = " + str(v)
+
+            text = text + "<br>" + "Neighbors = " + str(G.degree(node))
+
+            node_parameters = edisgo_obj.topology.buses_df.loc[node]
+            for index, value in node_parameters.items():
+                text += "<br>" + str(index) + " = " + str(value)
+
+            node_text.append(text)
+        # Create node scatter plots
+        node_scatter_plots = []
+
+        if plot_map:
+            node_scatter = go.Scattermapbox(
+                lon=node_x,
+                lat=node_y,
+                mode="markers",
+                hoverinfo="text",
+                text=node_text,
+                marker=dict(
+                    showscale=False,  # Disable colorbar for mapbox, added it separately
+                    colorscale=colorscale,
+                    color=node_colors,
+                    size=8,
+                    cmid=cmid,
+                ),
+            )
+        else:
+            node_scatter = go.Scatter(
+                x=node_x,
+                y=node_y,
+                mode="markers",
+                hoverinfo="text",
+                text=node_text,
+                marker=dict(
+                    showscale=showscale,
+                    colorscale=colorscale,
+                    color=node_colors,
+                    size=8,
+                    cmid=cmid,
+                    line_width=2,
+                    colorbar=colorbar,
+                ),
+            )
+
+        node_scatter_plots.append(node_scatter)
+
+        # Add separate colorbar for nodes in mapbox plots
+        if plot_map and node_color and showscale:
+            if plot_map:
+                node_colorbar_scatter = go.Scattermapbox(
+                    mode="markers",
+                    lon=[None],
+                    lat=[None],
+                    marker=dict(
+                        colorbar=dict(
+                            title=colorbar["title"] if colorbar else "Node values",
+                            xanchor="left",
+                            titleside="right",
+                            x=1.12,  # Position it next to line colorbar
+                            thickness=15,
+                        ),
+                        colorscale=colorscale,
+                        color=[0, 1],  # Dummy values for colorbar range
+                        cmax=max(node_colors) if isinstance(node_colors, list) else 1,
+                        cmin=min(node_colors) if isinstance(node_colors, list) else 0,
+                        cmid=cmid,
+                        showscale=True,
+                        opacity=0,  # Make invisible
+                    ),
+                    showlegend=False,
+                )
+                node_scatter_plots.append(node_colorbar_scatter)
+
+        return node_scatter_plots
+
+
+    def highlight_transformers():
+        """Highlight transformers if requested."""
+        transformer_scatter_plots = []
+        transformer_buses_mv_hv = edisgo_obj.topology.transformers_hvmv_df.bus1.values
+        transformer_buses_mv_lv_MV = edisgo_obj.topology.transformers_df.bus0.values
+        transformer_buses_mv_lv_LV = edisgo_obj.topology.transformers_df.bus1.values
+
+        transformer_buses_mv_hv_in_grid = [
+            bus for bus in transformer_buses_mv_hv.tolist() if bus in G.nodes()
+        ]
+        transformer_buses_mv_lv_MV_in_grid = [
+            bus for bus in transformer_buses_mv_lv_MV.tolist() if bus in G.nodes()
+        ]
+        transformer_buses_mv_lv_LV_in_grid = [
+            bus for bus in transformer_buses_mv_lv_LV.tolist() if bus in G.nodes()
+        ]
+        if not transformer_buses_mv_hv_in_grid and not transformer_buses_mv_lv_MV_in_grid and not transformer_buses_mv_lv_LV_in_grid:
+            return transformer_scatter_plots
+
+        def plot_transformer_highlight(transformer_buses, label, color):
+            transformer_x = []
+            transformer_y = []
+            transformer_text = []
+            for bus in transformer_buses:
+                x, y = G.nodes[bus]["pos"]
+                transformer_x.append(x - x_root)
+                transformer_y.append(y - y_root)
+                transformer_text.append(f"Transformer at {bus}")
+
+            if plot_map:
+                transformer_scatter = go.Scattermapbox(
+                    lon=transformer_x,
+                    lat=transformer_y,
+                    mode="markers",
+                    hoverinfo="text",
+                    text=transformer_text,
+                    marker=dict(
+                        color=color,
+                        size=10,
+                        opacity=0.85,
+                        symbol="circle",
+                    ),
+                    name=label + " Transformers",
+                    showlegend=True,
+                )
+                transformer_halo = go.Scattermapbox(
+                    lon=transformer_x,
+                    lat=transformer_y,
+                    mode="markers",
+                    hoverinfo="skip",
+                    marker=dict(
+                        color=color,
+                        opacity=0.3,
+                        symbol="circle",
+                    ),
+                    showlegend=False,
+                )
+                transformer_scatter_plots.extend([transformer_halo, transformer_scatter])
+            else:
+                transformer_scatter = go.Scatter(
+                    x=transformer_x,
+                    y=transformer_y,
+                    mode="markers",
+                    hoverinfo="text",
+                    text=transformer_text,
+                    marker=dict(
+                        color="orange",
+                        opacity=0.85,
+                        symbol="circle",
+                        line=dict(width=2, color=color),
+                    ),
+                    name=label + " Transformers",
+                    showlegend=True,
+                )
+                transformer_scatter_plots.append(transformer_scatter)
+            return transformer_scatter_plots
+        transformer_scatter_plots.extend(plot_transformer_highlight(transformer_buses_mv_lv_MV_in_grid, "MV-LV MV", "blue"))
+        transformer_scatter_plots.extend(plot_transformer_highlight(transformer_buses_mv_lv_LV_in_grid, "MV-LV LV", "blue"))
+        transformer_scatter_plots.extend(plot_transformer_highlight(transformer_buses_mv_hv_in_grid, "MV-HV", "green"))
+        return transformer_scatter_plots
+
+    # Calculate optimal zoom level for map based on network extent
+    def calculate_zoom_level():
+        if not plot_map:
+            return 11  # Default zoom for non-map plots
+
+        # Get all node coordinates
+        lats = []
+        lons = []
+        for node in G.nodes():
+            x, y = G.nodes[node]["pos"]
+            lons.append(x)
+            lats.append(y)
+
+        if not lats or not lons:
+            return 11  # Default if no coordinates
+
+        # Calculate bounds
+        lat_min, lat_max = min(lats), max(lats)
+        lon_min, lon_max = min(lons), max(lons)
+
+        # Calculate the extent in degrees
+        lat_range = lat_max - lat_min
+        lon_range = lon_max - lon_min
+        max_range = max(lat_range, lon_range)
+
+        # Simple zoom level calculation based on coordinate range
+        # These values are empirically determined for good fit
+        if max_range > 0.5:
+            zoom = 9
+        elif max_range > 0.2:
+            zoom = 10
+        elif max_range > 0.1:
+            zoom = 11
+        elif max_range > 0.05:
+            zoom = 12
+        elif max_range > 0.02:
+            zoom = 13
+        elif max_range > 0.01:
+            zoom = 14
+        elif max_range > 0.005:
+            zoom = 15
+        else:
+            zoom = 16
+
+        return min(zoom, 18)  # Cap at maximum zoom level
+
+    zoom_level = calculate_zoom_level()
+
+    # Create layout based on whether map is enabled
+    if plot_map:
+        layout = go.Layout(
+            height=height,
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            mapbox=dict(
+                center=dict(
+                    lat=y_center,
+                    lon=x_center,
+                ),
+                zoom=zoom_level,
+                style=map_style,
+            ),
+        )
+    else:
+        layout = go.Layout(
+            height=height,
+            showlegend=False,
+            hovermode="closest",
+            margin=dict(b=20, l=5, r=5, t=40),
+            style = map_style,
+            xaxis=dict(
+                showgrid=True,
+                zeroline=True,
+                showticklabels=True,
+            ),
+            yaxis=dict(
+                showgrid=True,
+                zeroline=True,
+                showticklabels=True,
+                scaleanchor="x",
+                scaleratio=1,
+            ),
+        )
+
+    # Prepare plot data
+    plot_data = plot_lines() + plot_buses() + plot_line_text()
+
+    # Add transformer highlights if requested
+    if highlight_transformers:
+        plot_data.extend(highlight_transformers())
+
+    fig = go.Figure(
+        data=plot_data,
+        layout=layout
+    )
+
+    if charging_points_df is not None:
+        try:
+            # support dict input (e.g. {"MV": gdf, "LV": gdf})
+            if isinstance(charging_points_df, dict):
+                dfs = []
+                for v in charging_points_df.values():
+                    if isinstance(v, (pd.DataFrame,)):
+                        dfs.append(v.copy())
+                charging_points_df = pd.concat(dfs, ignore_index=True, sort=False) if dfs else None
+
+            if charging_points_df is None:
+                raise ValueError("charging_points_df empty after unwrapping dict")
+
+            # build GeoDataFrame
+            if "gpd" in globals() and isinstance(charging_points_df, gpd.GeoDataFrame):
+                pts_gdf = charging_points_df.copy()
+            else:
+                pts_df = pd.DataFrame(charging_points_df)
+                if "geometry" in pts_df.columns:
+                    pts_df["geometry"] = pts_df["geometry"].apply(lambda v: wkt_loads(v) if isinstance(v, str) else v)
+                    pts_gdf = gpd.GeoDataFrame(pts_df, geometry="geometry", crs=pts_df.get("crs", "EPSG:4326"))
+                elif {"x", "y"}.issubset(pts_df.columns):
+                    pts_df["geometry"] = pts_df.apply(lambda r: Point(r["x"], r["y"]), axis=1)
+                    pts_gdf = gpd.GeoDataFrame(pts_df, geometry="geometry", crs="EPSG:4326")
+                elif {"lon", "lat"}.issubset(pts_df.columns):
+                    pts_df["geometry"] = pts_df.apply(lambda r: Point(r["lon"], r["lat"]), axis=1)
+                    pts_gdf = gpd.GeoDataFrame(pts_df, geometry="geometry", crs="EPSG:4326")
+                else:
+                    raise ValueError("charging_points_df must contain 'geometry' or 'x'/'y' or 'lon'/'lat'")
+
+            if pts_gdf.crs is None:
+                pts_gdf.set_crs(epsg=4326, inplace=True)
+            # ensure lon/lat for map plotting
+            pts_gdf = pts_gdf.to_crs(epsg=4326)
+            lon = pts_gdf.geometry.x.values
+            lat = pts_gdf.geometry.y.values
+
+            # compute sizes and ensure visibility
+            if points_size_col in pts_gdf.columns:
+                vals = pts_gdf[points_size_col].fillna(0).astype(float).values
+            else:
+                vals = np.zeros(len(pts_gdf), dtype=float)
+            sizes = np.maximum(vals * float(points_size_scale), min_marker_size)
+
+                        # optional original/planned power 
+            if plot_original_power and original_power_col in pts_gdf.columns:
+                orig_vals = pts_gdf[original_power_col].fillna(0).astype(float).values
+                orig_sizes = np.maximum(orig_vals * float(original_points_size_scale), min_marker_size)
+                if plot_map:
+                    fig.add_trace(
+                        go.Scattermapbox(
+                            lon=lon,
+                            lat=lat,
+                            mode="markers",
+                            marker=dict(size=orig_sizes, color=original_color, opacity=0.6),
+                            name=f"Original ({original_power_col})",
+                            customdata=orig_vals,
+                            hovertemplate="lon: %{lon}<br>lat: %{lat}<br>orig power: %{customdata}<extra></extra>",
+                        )
+                    )
+                    
+                else:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=[x - x_root for x in lon],
+                            y=[y - y_root for y in lat],
+                            mode="markers",
+                            marker=dict(size=orig_sizes, color=original_color, opacity=0.6),                            name=f"Original ({original_power_col})",
+                            customdata=orig_vals,
+                            hovertemplate="x: %{x}<br>y: %{y}<br>orig power: %{customdata}<extra></extra>",
+                        )
+                    )
+
+            # final power (filled markers)
+            if plot_map:
+                fig.add_trace(
+                    go.Scattermapbox(
+                        lon=lon,
+                        lat=lat,
+                        mode="markers",
+                        marker=dict(size=sizes, color=points_color, opacity=0.75),
+                        name=f"Final ({points_size_col})",
+                        customdata=vals,
+                        hovertemplate="lon: %{lon}<br>lat: %{lat}<br>power: %{customdata}<extra></extra>",
+                    )
+                )
+            else:
+                # convert to plot coordinates (centered like nodes)
+                x_vals = lon
+                y_vals = lat
+                # subtract root to match node centering used elsewhere
+                x_plot = [x - x_root for x in x_vals]
+                y_plot = [y - y_root for y in y_vals]
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_plot,
+                        y=y_plot,
+                        mode="markers",
+                        marker=dict(size=sizes, color=points_color, opacity=0.75),
+                        name=f"Final ({points_size_col})",
+                        customdata=vals,
+                        hovertemplate="x: %{x}<br>y: %{y}<br>power: %{customdata}<extra></extra>",
+                    )
+                )
+        except Exception:
+            logger.exception("Failed to add charging points to plotly figure.")
+
+    if warning_message:
+        fig.add_annotation(
+            x=0,
+            y=1,
+            xref="paper",
+            yref="paper",
+            xanchor="left",
+            text=warning_message,
+            showarrow=False,
+            font=dict(size=16, color="#ffffff"),
+            bgcolor="red",
+            opacity=0.75,
+        )
+    return fig
 
 def chosen_graph(
     edisgo_obj: EDisGo,

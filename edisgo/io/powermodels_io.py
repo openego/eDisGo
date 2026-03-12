@@ -129,14 +129,8 @@ def to_powermodels(
 
     # Add §14a curtailment flexibility if enabled
     # (must be BEFORE pm["flexibilities"] assignment)
+    # Note: Only charging points participate in §14a, NOT heat pumps
     if curtailment_14a is not None and curtailment_14a is not False:
-        all_hps = edisgo_object.topology.loads_df[
-            edisgo_object.topology.loads_df["type"] == "heat_pump"
-        ]
-        if len(all_hps) > 0:
-            logger.info("§14a heat pump curtailment will be optimized.")
-            opf_flex.append("hp_14a")
-
         # Check for charging points
         all_cps = edisgo_object.topology.charging_points_df
         if len(all_cps) > 0:
@@ -167,21 +161,9 @@ def to_powermodels(
             flexible_cps,
         )
 
-    # Get all heat pumps for §14a support (needed before flexible_hps check)
-    all_hps = edisgo_object.topology.loads_df[
-        edisgo_object.topology.loads_df["type"] == "heat_pump"
-    ].index.to_numpy()
-
-    # Determine which heat pumps need to be in PowerModels dict
-    # Either flexible_hps OR §14a curtailment requires heatpump dict
+    # Only flexible heat pumps (with thermal data) go into PowerModels dict
+    # §14a does NOT apply to heat pumps — only to charging points
     hps_for_pm = flexible_hps if len(flexible_hps) > 0 else []
-    if (
-        curtailment_14a is not None
-        and curtailment_14a is not False
-        and len(all_hps) > 0
-    ):
-        # For §14a, we need ALL heat pumps in the PM dict
-        hps_for_pm = all_hps
 
     if len(hps_for_pm) > 0:
         logger.info("Transforming heatpumps into PowerModels dictionary format.")
@@ -192,22 +174,13 @@ def to_powermodels(
         _build_heat_storage(psa_net, pm, edisgo_object, s_base, hps_for_pm, opf_version)
 
     # Create virtual generators for §14a curtailment if enabled
-    # This applies to ALL heat pumps, not just flexible ones
+    # Only charging points participate — heat pumps are excluded
     if curtailment_14a is not None and curtailment_14a is not False:
         # Convert bool to dict if needed
         if curtailment_14a is True:
             curtailment_14a_config = {}
         else:
             curtailment_14a_config = curtailment_14a
-
-        if len(all_hps) > 0:
-            logger.info(
-                f"Creating virtual generators for §14a heat pump support "
-                f"({len(all_hps)} heat pumps)."
-            )
-            _build_gen_hp_14a_support(
-                psa_net, pm, edisgo_object, s_base, all_hps, curtailment_14a_config
-            )
 
         # Build §14a support for charging points
         # Use ALL charging points for §14a, not just flexible ones
@@ -701,8 +674,66 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
         dtype=int,
     )
     grid_level = {20: "mv", 10: "mv", 0.4: "lv"}
-    v_max = [min(val, 1.1) for val in psa_net.buses["v_mag_pu_max"].values]
-    v_min = [max(val, 0.9) for val in psa_net.buses["v_mag_pu_min"].values]
+
+    # Use split voltage bands from eDisGo config instead of hardcoded ±10%
+    try:
+        cfg_vd = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"]
+        hv_mv_offset = cfg_vd["hv_mv_trafo_offset"]
+        hv_mv_ctrl = cfg_vd["hv_mv_trafo_control_deviation"]
+        mv_v_rise = cfg_vd["mv_max_v_rise"]
+        mv_v_drop = cfg_vd["mv_max_v_drop"]
+        lv_v_rise = cfg_vd["lv_max_v_rise"]
+        lv_v_drop = cfg_vd["lv_max_v_drop"]
+        station_v_rise = cfg_vd["mv_lv_station_max_v_rise"]
+        station_v_drop = cfg_vd["mv_lv_station_max_v_drop"]
+
+        mv_ref = 1.0 + hv_mv_offset
+        # Sicherheitspuffer: OPF-Grenzen etwas enger als Check-Grenzen setzen,
+        # damit numerische Toleranz und Solver-Ungenauigkeiten keine Verletzungen erzeugen
+        mv_margin = 0.002
+        lv_margin = 0.005
+        mv_vmax = min(mv_ref + mv_v_rise + hv_mv_ctrl, 1.1) - mv_margin
+        mv_vmin = max(mv_ref - mv_v_drop - hv_mv_ctrl, 0.9) + mv_margin
+        lv_vmax = min(
+            mv_ref + mv_v_rise + station_v_rise + lv_v_rise + hv_mv_ctrl, 1.1
+        ) - lv_margin
+        lv_vmin = max(
+            mv_ref - mv_v_drop - station_v_drop - lv_v_drop - hv_mv_ctrl, 0.9
+        ) + lv_margin
+
+        # Kaskadierte Grenzen fuer MV/LV-Trafo-Sekundaerseiten (LV-Sammelschienen):
+        # check_tech_constraints prueft diese Busse relativ zur MV-Spannung (v_mv - 0.02),
+        # daher muessen die OPF-Grenzen an mv_vmin verankert sein und nicht am worst-case-Stapel.
+        station_vmin = mv_vmin - station_v_drop   # = 0.987 - 0.02 = 0.967
+        station_vmax = min(mv_vmax + station_v_rise, lv_vmax)  # = min(1.048+0.015, 1.095) = 1.063
+
+        # Trafo-Sekundaerseiten identifizieren (LV-Sammelschienen der MV/LV-Trafos)
+        mv_lv_secondary_buses = set(psa_net.transformers.bus1.values)
+
+        v_max = []
+        v_min = []
+        for bus_i in range(len(psa_net.buses.index)):
+            v_nom = psa_net.buses.v_nom.iloc[bus_i]
+            if v_nom in (10, 20):  # MV
+                v_max.append(mv_vmax)
+                v_min.append(mv_vmin)
+            elif v_nom == 0.4:  # LV
+                bus_name = psa_net.buses.index[bus_i]
+                if bus_name in mv_lv_secondary_buses:
+                    # LV-Sammelschiene (Trafo-Sekundaer): kaskadiert von MV-Grenzen
+                    v_max.append(station_vmax)
+                    v_min.append(station_vmin)
+                else:
+                    # LV-Verteilungsnetz: gestapelter worst-case (unveraendert)
+                    v_max.append(lv_vmax)
+                    v_min.append(lv_vmin)
+            else:  # Slack/HV
+                v_max.append(1.1)
+                v_min.append(0.9)
+    except Exception:
+        # Fallback to original behavior
+        v_max = [min(val, 1.1) for val in psa_net.buses["v_mag_pu_max"].values]
+        v_min = [max(val, 0.9) for val in psa_net.buses["v_mag_pu_min"].values]
     for bus_i in np.arange(len(psa_net.buses.index)):
         pm["bus"][str(bus_i + 1)] = {
             "index": bus_i + 1,
@@ -966,7 +997,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             "b_fr": branches.b_pu.iloc[branch_i] / 2 * s_base,
             "shift": shift.iloc[branch_i],
             "br_status": 1.0,
-            "rate_a": branches.s_nom.iloc[branch_i].real / s_base,
+            "rate_a": branches.s_nom.iloc[branch_i].real / s_base * 0.95,
             "rate_b": 250 / s_base,
             "rate_c": 250 / s_base,
             "angmin": -np.pi / 6,
