@@ -162,7 +162,6 @@ def setup_edisgo(
     grid_path,
     num_hps=50,
     num_cps=30,
-    num_days=30,
     cos_phi_load=0.9,
     cos_phi_gen=0.95,
     start_date = '2023-01-01 00:00:00', 
@@ -179,8 +178,10 @@ def setup_edisgo(
         Number of heat pumps to add (default: 50)
     num_cps : int
         Number of charging points to add (default: 30)
-    num_days : int
-        Number of days to simulate (default: 30)
+    cos_phi_load: int 
+        Value for calculating reactive load timeseries
+    cos_phi_gen: int 
+        Value for calculating reactive gen timeseries
 
     Returns
     -------
@@ -195,11 +196,9 @@ def setup_edisgo(
     # Load grid
     print("\n1. Loading ding0 grid...")
     edisgo = EDisGo(ding0_grid=grid_path, legacy_ding0_grids=False)
-    num_timesteps = num_days * 24
-    timeindex = pd.date_range(
-        "2035-01-15", periods=num_timesteps, freq="H"
-    )  # Mid-winter
-    edisgo.timeseries.timeindex = timeindex
+    # Define tiemindex
+    new_timeindex = pd.date_range(start=start_date, end=end_date, freq="H")
+    edisgo.timeseries.timeindex = pd.DatetimeIndex(new_timeindex, freq="H")
 
     # Import generators
     print(
@@ -905,7 +904,7 @@ def main():
 
     # Simulation parameters
     start_date = "2023-01-01 00:00:00"
-    end_date = "2023-01-01 23:00:00"
+    end_date = "2023-01-01 10:00:00"
     NUM_HEAT_PUMPS = 25  # Number of heat pumps to add
     NUM_CHARGING_POINTS = 25  # Number of charging points to add
     hours_limit_per_day = 24  # Limit the amount of hours per day for 14a usage
