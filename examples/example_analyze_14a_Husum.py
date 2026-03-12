@@ -67,12 +67,12 @@ def import_generators_timeseries(grid_path, edisgo, cos_phi, start_date, end_dat
     )
 
     # 5. Reactive Power initialisieren (passend zum neuen Zeitraum)
-    gen_reactive = pd.DataFrame(
-        data=0.0,
-        columns=edisgo.topology.generators_df.index,
-        index=edisgo.timeseries.timeindex,
-    )
-    edisgo.timeseries._generators_reactive_power = gen_reactive
+    pv_gens=edisgo.topology.generators_df[
+          edisgo.topology.generators_df.index.str.contains('pv')].index
+    active_power = edisgo.timeseries.generators_active_power[pv_gens]
+    tan_phi = np.tan(np.arccos(cos_phi))
+    reactive_power_ts = active_power * tan_phi
+    edisgo.timeseries._generators_reactive_power = reactive_power_ts
 
     return edisgo
 
