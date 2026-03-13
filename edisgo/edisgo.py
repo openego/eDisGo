@@ -14,7 +14,6 @@ import numpy as np
 import pandas as pd
 
 from sqlalchemy.engine.base import Engine
-from edisgo.tools.tools import get_path_length_to_station
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.check_tech_constraints import lines_relative_load
@@ -42,6 +41,7 @@ from edisgo.io.electromobility_import import (
 )
 from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.io.storage_import import home_batteries_oedb
+from edisgo.io.timeseries_import import _timeindex_helper_func
 from edisgo.network import timeseries
 from edisgo.network.dsm import DSM
 from edisgo.network.electromobility import Electromobility
@@ -72,6 +72,11 @@ class EDisGo:
     ----------
     ding0_grid : :obj:`str`
         Path to directory containing csv files of network to be loaded.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+        Database engine for connecting to the `OpenEnergy DataBase OEDB
+        <https://openenergyplatform.org/dataedit/schemas>`_ or other eGon-data
+        databases. Defaults to the OEDB engine. Can be set to None if no scenario is to
+        be loaded.
     generator_scenario : None or :obj:`str`, optional
         If None, the generator park of the imported grid is kept as is.
         Otherwise defines which scenario of future generator park to use
@@ -159,8 +164,10 @@ class EDisGo:
     """
 
     def __init__(self, **kwargs):
+        # Set database engine for future scenarios
+        self.engine: Engine | None = kwargs.pop("engine", egon_engine())
         # load configuration
-        self._config = Config(**kwargs)
+        self._config = Config(engine=self.engine, **kwargs)
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
@@ -419,12 +426,9 @@ class EDisGo:
                 Technology- and weather cell-specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_. See
-                :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
-
-                This option requires that the parameter `engine` is provided in case
-                new ding0 grids with geo-referenced LV grids are used. For further
-                settings, the parameter `timeindex` can also be provided.
+                <https://openenergyplatform.org/dataedit/schemas>`_ or other eGon-data
+                databases. See :func:`edisgo.io.timeseries_import.feedin_oedb` for more
+                information.
 
             * :pandas:`pandas.DataFrame<DataFrame>`
 
@@ -537,9 +541,6 @@ class EDisGo:
 
         Other Parameters
         ------------------
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine. This parameter is only required in case
-            `conventional_loads_ts` or `fluctuating_generators_ts` is 'oedb'.
         scenario : str
             Scenario for which to retrieve demand data. Possible options are 'eGon2035'
             and 'eGon100RE'. This parameter is only required in case
@@ -557,15 +558,45 @@ class EDisGo:
             is indexed using a default year and set for the whole year.
 
         """
+        timeindex = kwargs.get("timeindex", None)
         engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
-        if self.timeseries.timeindex.empty:
+        if timeindex is not None and not self.timeseries.timeindex.empty:
             logger.warning(
-                "When setting time series using predefined profiles it is better to "
-                "set a time index as all data in TimeSeries class is indexed by the"
-                "time index. You can set the time index upon initialisation of "
-                "the EDisGo object by providing the input parameter 'timeindex' or by "
-                "using the function EDisGo.set_timeindex()."
+                "The given timeindex is different from the EDisGo.TimeSeries.timeindex."
+                " Therefore the EDisGo.TimeSeries.timeindex will be overwritten by the "
+                "given timeindex."
             )
+
+            set_timeindex = True
+
+        elif self.timeseries.timeindex.empty:
+            logger.warning(
+                "The EDisGo.TimeSeries.timeindex is empty. By default, this function "
+                "will set the timeindex to the default year of the provided database "
+                "connection. To ensure expected behavior, consider setting the "
+                "timeindex explicitly before running this function using "
+                "EDisGo.set_timeindex()."
+            )
+
+            set_timeindex = True
+
+        else:
+            set_timeindex = False
+
+        if set_timeindex:
+            if timeindex is None:
+                timeindex, _ = _timeindex_helper_func(
+                    self, timeindex, allow_leap_year=True
+                )
+
+            logger.warning(f"Setting EDisGo.TimeSeries.timeindex to {timeindex}.")
+
+            self.set_timeindex(timeindex)
+
+        logger.info(
+            f"Trying to set predefined timeseries for {self.timeseries.timeindex}"
+        )
+
         if fluctuating_generators_ts is not None:
             self.timeseries.predefined_fluctuating_generators_by_technology(
                 self,
@@ -797,6 +828,7 @@ class EDisGo:
         flexible_loads=None,
         flexible_storage_units=None,
         opf_version=1,
+        curtailment_14a=False,
     ):
         """
         Convert eDisGo representation of the network topology and timeseries to
@@ -823,6 +855,11 @@ class EDisGo:
             Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
             For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
             Default: 1.
+        curtailment_14a : bool
+            If True, enables §14a EnWG curtailment for heat pumps with virtual
+            generators. Heat pumps can be curtailed down to 4.2 kW with time budget
+            constraints.
+            Default: False.
 
         Returns
         -------
@@ -839,6 +876,7 @@ class EDisGo:
             flexible_loads=flexible_loads,
             flexible_storage_units=flexible_storage_units,
             opf_version=opf_version,
+            curtailment_14a=curtailment_14a,
         )
 
     def pm_optimize(
@@ -855,6 +893,7 @@ class EDisGo:
         save_heat_storage=True,
         save_slack_gen=True,
         save_slacks=True,
+        curtailment_14a=False,
     ):
         """
         Run OPF in julia subprocess and write results of OPF back to edisgo object.
@@ -902,6 +941,11 @@ class EDisGo:
             hence there will be no logging coming from julia subprocess in python
             process.
             Default: False.
+        curtailment_14a : bool
+            If True, enables §14a EnWG curtailment for heat pumps with virtual
+            generators. Heat pumps can be curtailed down to 4.2 kW with time budget
+            constraints.
+            Default: False.
         """
         return powermodels_opf.pm_optimize(
             self,
@@ -914,6 +958,7 @@ class EDisGo:
             method=method,
             warm_start=warm_start,
             silence_moi=silence_moi,
+            curtailment_14a=curtailment_14a,
         )
 
     def to_graph(self):
@@ -973,9 +1018,7 @@ class EDisGo:
         Other Parameters
         ----------------
         kwargs :
-            In case you are using new ding0 grids, where the LV is geo-referenced, a
-            database engine needs to be provided through keyword argument `engine`.
-            In case you are using old ding0 grids, where the LV is not geo-referenced,
+            If you are using old ding0 grids, where the LV is not geo-referenced,
             you can check :func:`edisgo.io.generators_import.oedb_legacy` for possible
             keyword arguments.
 
@@ -1353,7 +1396,7 @@ class EDisGo:
 
         """
         if copy_grid:
-            edisgo_obj = copy.deepcopy(self)
+            edisgo_obj = self.copy()
         else:
             edisgo_obj = self
 
@@ -1451,6 +1494,88 @@ class EDisGo:
             edisgo_obj.analyze(
                 mode=analyze_mode, lv_grid_id=lv_grid_id, timesteps=timesteps_pfa
             )
+
+            # Final cross-mode overloading check: after worst-case splitting,
+            # some lines may be overloaded during timesteps of the "other" mode
+            # (e.g. MV lines overloaded during LV-timesteps). Run a full check
+            # with ALL timesteps and no mode restriction to catch these.
+            if mode is None:
+                from edisgo.flex_opt.check_tech_constraints import (
+                    mv_line_max_relative_overload,
+                    lv_line_max_relative_overload,
+                    hv_mv_station_max_overload,
+                    mv_lv_station_max_overload,
+                )
+                from edisgo.flex_opt import reinforce_measures
+                from edisgo.flex_opt.reinforce_grid import (
+                    _add_lines_changes_to_equipment_changes,
+                    _add_transformer_changes_to_equipment_changes,
+                )
+
+                # Run power flow with ALL timesteps
+                edisgo_obj.analyze(mode=None)
+
+                for _cross_attempt in range(max_while_iterations):
+                    crit_lines_cross = pd.concat([
+                        mv_line_max_relative_overload(edisgo_obj),
+                        lv_line_max_relative_overload(edisgo_obj),
+                    ])
+                    overloaded_mv_cross = hv_mv_station_max_overload(edisgo_obj)
+                    overloaded_lv_cross = mv_lv_station_max_overload(edisgo_obj)
+
+                    if (
+                        crit_lines_cross.empty
+                        and overloaded_mv_cross.empty
+                        and overloaded_lv_cross.empty
+                    ):
+                        if _cross_attempt > 0:
+                            logger.info(
+                                f"Cross-mode overloading resolved after "
+                                f"{_cross_attempt} iteration(s)."
+                            )
+                        break
+
+                    logger.info(
+                        f"Cross-mode overloading check: {len(crit_lines_cross)} "
+                        f"lines, {len(overloaded_mv_cross)} MV stations, "
+                        f"{len(overloaded_lv_cross)} LV stations overloaded "
+                        f"(attempt {_cross_attempt + 1}). Reinforcing..."
+                    )
+
+                    if not overloaded_mv_cross.empty:
+                        tc = reinforce_measures.reinforce_hv_mv_station_overloading(
+                            edisgo_obj, overloaded_mv_cross
+                        )
+                        _add_transformer_changes_to_equipment_changes(
+                            edisgo_obj, tc, 1, "added"
+                        )
+                        _add_transformer_changes_to_equipment_changes(
+                            edisgo_obj, tc, 1, "removed"
+                        )
+                    if not overloaded_lv_cross.empty:
+                        tc = reinforce_measures.reinforce_mv_lv_station_overloading(
+                            edisgo_obj, overloaded_lv_cross
+                        )
+                        _add_transformer_changes_to_equipment_changes(
+                            edisgo_obj, tc, 1, "added"
+                        )
+                        _add_transformer_changes_to_equipment_changes(
+                            edisgo_obj, tc, 1, "removed"
+                        )
+                    if not crit_lines_cross.empty:
+                        lc = reinforce_measures.reinforce_lines_overloading(
+                            edisgo_obj, crit_lines_cross
+                        )
+                        _add_lines_changes_to_equipment_changes(
+                            edisgo_obj, lc, 1
+                        )
+
+                    edisgo_obj.analyze(mode=None)
+                else:
+                    logger.warning(
+                        f"Cross-mode overloading: {len(crit_lines_cross)} lines "
+                        f"still overloaded after {max_while_iterations} attempts."
+                    )
 
         # add measure to Results object
         if not copy_grid:
@@ -1922,9 +2047,8 @@ class EDisGo:
 
     def import_electromobility(
         self,
-        data_source: str,
+        data_source: str = "oedb",
         scenario: str = None,
-        engine: Engine = None,
         charging_processes_dir: PurePath | str = None,
         potential_charging_points_dir: PurePath | str = None,
         import_electromobility_data_kwds=None,
@@ -1966,10 +2090,8 @@ class EDisGo:
             * "oedb"
 
                 Electromobility data is obtained from the `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_.
-
-                This option requires that the parameters `scenario` and `engine` are
-                provided.
+                <https://openenergyplatform.org/dataedit/schemas>`_ or other eGon-data
+                databases depending on the provided Engine.
 
             * "directory"
 
@@ -1979,9 +2101,6 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve electromobility data in case `data_source` is
             set to "oedb". Possible options are "eGon2035" and "eGon100RE".
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine. Needs to be provided in case `data_source` is set to
-            "oedb".
         charging_processes_dir : str or pathlib.PurePath
             Directory holding data on charging processes (standing times, charging
             demand, etc. per vehicle), including metadata, from SimBEV.
@@ -2043,7 +2162,7 @@ class EDisGo:
             import_electromobility_from_oedb(
                 self,
                 scenario=scenario,
-                engine=engine,
+                engine=self.engine,
                 **import_electromobility_data_kwds,
             )
         elif data_source == "directory":
@@ -2066,7 +2185,7 @@ class EDisGo:
 
         integrate_charging_parks(self)
 
-    def apply_charging_strategy(self, strategy: str = "dumb", charging_park_ids: list[int] | None = None, **kwargs):
+    def apply_charging_strategy(self, strategy="dumb", **kwargs):
         """
         Applies charging strategy to set EV charging time series at charging parks.
 
@@ -2134,12 +2253,13 @@ class EDisGo:
         series resampled back to the original frequency.
 
         """
-        charging_strategy(self, strategy=strategy, charging_park_ids=charging_park_ids, **kwargs)
+        charging_strategy(self, strategy=strategy, **kwargs)
 
-    def import_heat_pumps(self, scenario, engine, timeindex=None, import_types=None):
+    def import_heat_pumps(self, scenario, timeindex=None, import_types=None):
         """
-        Gets heat pump data for specified scenario from oedb and integrates the heat
-        pumps into the grid.
+        Gets heat pump data for specified scenario from the OEDB or other eGon-data
+        databases depending on the provided Engine and integrates the heat pumps into
+        the grid.
 
         Besides heat pump capacity the heat pump's COP and heat demand to be served
         are as well retrieved.
@@ -2194,8 +2314,6 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve heat pump data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to set COP and heat demand data. Leap years
             can currently not be handled. In case the given
@@ -2236,7 +2354,7 @@ class EDisGo:
             year = tools.get_year_based_on_scenario(scenario)
             return self.import_heat_pumps(
                 scenario,
-                engine,
+                self.engine,
                 timeindex=pd.date_range(f"1/1/{year}", periods=8760, freq="H"),
                 import_types=import_types,
             )
@@ -2244,7 +2362,7 @@ class EDisGo:
         integrated_heat_pumps = import_heat_pumps_oedb(
             edisgo_object=self,
             scenario=scenario,
-            engine=engine,
+            engine=self.engine,
             import_types=import_types,
         )
         if len(integrated_heat_pumps) > 0:
@@ -2252,7 +2370,7 @@ class EDisGo:
                 self,
                 "oedb",
                 heat_pump_names=integrated_heat_pumps,
-                engine=engine,
+                engine=self.engine,
                 scenario=scenario,
                 timeindex=timeindex,
             )
@@ -2260,7 +2378,7 @@ class EDisGo:
                 self,
                 "oedb",
                 heat_pump_names=integrated_heat_pumps,
-                engine=engine,
+                engine=self.engine,
                 timeindex=timeindex,
             )
 
@@ -2308,7 +2426,7 @@ class EDisGo:
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
-    def import_dsm(self, scenario: str, engine: Engine, timeindex=None):
+    def import_dsm(self, scenario: str, timeindex=None):
         """
         Gets industrial and CTS DSM profiles from the
         `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
@@ -2327,8 +2445,6 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve DSM data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to get data. Leap years can currently not be
             handled. In case the given timeindex contains a leap year, the data will be
@@ -2341,7 +2457,7 @@ class EDisGo:
 
         """
         dsm_profiles = dsm_import.oedb(
-            edisgo_obj=self, scenario=scenario, engine=engine, timeindex=timeindex
+            edisgo_obj=self, scenario=scenario, engine=self.engine, timeindex=timeindex
         )
         self.dsm.p_min = dsm_profiles["p_min"]
         self.dsm.p_max = dsm_profiles["p_max"]
@@ -2351,7 +2467,6 @@ class EDisGo:
     def import_home_batteries(
         self,
         scenario: str,
-        engine: Engine,
     ):
         """
         Gets home battery data for specified scenario and integrates the batteries into
@@ -2362,7 +2477,8 @@ class EDisGo:
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
-        `open energy platform <https://openenergyplatform.org/>`_.
+        `open energy platform <https://openenergyplatform.org/>`_ or other eGon-data
+        databases depending on the given Engine.
 
         The batteries are integrated into the grid (added to
         :attr:`~.network.topology.Topology.storage_units_df`) based on their building
@@ -2379,14 +2495,12 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve home battery data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
 
         """
         home_batteries_oedb(
             edisgo_obj=self,
             scenario=scenario,
-            engine=engine,
+            engine=self.engine,
         )
 
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
@@ -2413,6 +2527,115 @@ class EDisGo:
             xlim=kwargs.get("xlim", None),
             ylim=kwargs.get("ylim", None),
             title=kwargs.get("title", ""),
+            **kwargs,
+        )
+
+    def plot_mv_grid_topology_w_cp_hosting(self, technologies=False, **kwargs):
+        """
+        Plots plain MV network topology and optionally nodes by technology type
+        (e.g. station or generator).
+
+        For more information see :func:`edisgo.tools.plots.mv_grid_topology`.
+
+        Parameters
+        ----------
+        technologies : bool
+            If True plots stations, generators, etc. in the topology in
+            different colors. If False does not plot any nodes. Default: False.
+
+        """
+
+        plots.mv_grid_topology_w_cp_hosting(
+            self,
+            node_color="technology" if technologies is True else None,
+            filename=kwargs.get("filename", None),
+            grid_district_geom=kwargs.get("grid_district_geom", True),
+            background_map=kwargs.get("background_map", True),
+            xlim=kwargs.get("xlim", None),
+            ylim=kwargs.get("ylim", None),
+            title=kwargs.get("title", ""),
+            **kwargs,
+        )
+
+    def plot_lv_grid_with_charging_points(
+        self,
+        lv_grid_id,
+        technologies=False,
+        charging_points_df=None,
+        planned_power_col="original_power_kw",
+        final_power_col="power_kw",
+        **kwargs,
+    ):
+        """
+        Plots plain LV network topology with charging points and their planned vs final power.
+
+        For more information see :func:`edisgo.tools.plots.lv_grid_with_charging_points`.
+
+        Parameters
+        ----------
+        lv_grid_id : int or str
+            ID (e.g. 1) or name (string representation, e.g. "LVGrid_1") of LV grid to plot.
+        technologies : bool
+            If True plots stations, generators, etc. in the topology in
+            different colors. If False does not plot any nodes. Default: False.
+        charging_points_df : :pandas:`pandas.DataFrame<DataFrame>` or \
+            :geopandas:`geopandas.GeoDataFrame` or None
+            Dataframe with charging points to plot. Must contain 'geometry' (WKT/shapely)
+            or 'x' and 'y' columns. If None, no charging points are plotted. Default: None.
+        planned_power_col : :obj:`str`
+            Column name for planned power in kW. Default: 'planned_power_kw'.
+        final_power_col : :obj:`str`
+            Column name for final power in kW. Default: 'final_power_kw'.
+
+        Other Parameters
+        ----------------
+        filename : :obj:`str` or None
+            Path to save the plot. If None, plot is shown. Default: None.
+        grid_district_geom : :obj:`bool`
+            Whether to plot district geometry. Default: False.
+        background_map : :obj:`bool`
+            Whether to plot background map. Default: False.
+        xlim : :obj:`tuple` or None
+            X-axis limits. Default: None.
+        ylim : :obj:`tuple` or None
+            Y-axis limits. Default: None.
+        title : :obj:`str`
+            Plot title. Default: ''.
+        planned_color : :obj:`str`
+            Color for planned power markers. Default: 'cyan'.
+        final_color : :obj:`str`
+            Color for final power markers. Default: 'red'.
+        power_size_scale : :obj:`float`
+            Scaling factor for marker sizes. Default: 0.001.
+        plot_charging_points : :obj:`bool`
+            Whether to plot charging points. Default: True.
+
+        """
+        # Get the LV grid object
+        lv_grid = self.topology.get_lv_grid(lv_grid_id)
+
+        plots.lv_grid_with_charging_points(
+            self,
+            lv_grid=lv_grid,
+            node_color="technology" if technologies is True else None,
+            charging_points_df=charging_points_df,
+            planned_power_col=planned_power_col,
+            final_power_col=final_power_col,
+            filename=kwargs.get("filename", None),
+            grid_district_geom=kwargs.get("grid_district_geom", False),
+            background_map=kwargs.get("background_map", False),
+            xlim=kwargs.get("xlim", None),
+            ylim=kwargs.get("ylim", None),
+            title=kwargs.get("title", ""),
+            plot_charging_points=kwargs.get("plot_charging_points", True),
+            planned_color=kwargs.get("planned_color", "cyan"),
+            final_color=kwargs.get("final_color", "red"),
+            power_size_scale=kwargs.get("power_size_scale", 0.001),
+            **{k: v for k, v in kwargs.items() if k not in [
+                "filename", "grid_district_geom", "background_map", "xlim", "ylim",
+                "title", "plot_charging_points", "planned_color", "final_color",
+                "power_size_scale"
+            ]},
         )
 
     def plot_mv_voltages(self, **kwargs):
@@ -2595,339 +2818,6 @@ class EDisGo:
         elif title is False:
             title = None
         plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
-
-    def plot_voltage_over_dist(self, mv_id, lv_id, save_as=False, split_branches=False, return_data=False, other=None):
-
-        """
-        Plot LV voltage over distance to the MV/LV transformer for one LV grid,
-
-        Parameters
-        ----------
-        mv_id : kept for API compatibility (currently unused)
-        lv_id : int or str identifying LV grid (int = index in mv_grid.lv_grids)
-        save_as : bool or str
-            If True -> writes default html. If str -> file path (.html or .png).
-        split_branches : kept for API compatibility (currently unused)
-        other : EDisGo object, optional
-            Another EDisGo object to compare voltage data. If None, only self is used.
-        """
-        # Local imports to avoid import overhead
-        from edisgo.tools.voltage_over_distance import (
-            _get_v_res_df,
-            _infer_load_and_feedin_timesteps,
-            _series_at_t,
-            build_voltage_over_distance_df,
-            make_voltage_over_distance_figure,
-        )
-
-        # If other is None, use self for comparison
-        if other is None:
-            other = self
-
-        # Require results on both
-        v_a = _get_v_res_df(self)
-        v_b = _get_v_res_df(other)
-        if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
-            raise RuntimeError(
-                "Voltage results (results.v_res) are empty. "
-                "Run analyze() with timesteps/snapshots so voltage results are generated."
-            )
-        # Resolve LV grids (index-based resolution)
-        lv_grids_a = list(self.topology.mv_grid.lv_grids)
-        lv_grids_b = list(other.topology.mv_grid.lv_grids)
-
-        if isinstance(lv_id, int):
-            try:
-                lv_grid_a = lv_grids_a[lv_id]
-                lv_grid_b = lv_grids_b[lv_id]
-            except IndexError as e:
-                raise ValueError(f"lv_id={lv_id} out of range. base has {len(lv_grids_a)} LV grids.") from e
-        else:
-            # String matching fallback
-            target = str(lv_id)
-            def _match(lvs):
-                for g in lvs:
-                    for cand in (getattr(g, "id", None), getattr(g, "name", None), str(g)):
-                        if cand is not None and str(cand) == target:
-                            return g
-                return None
-            lv_grid_a = _match(lv_grids_a)
-            lv_grid_b = _match(lv_grids_b)
-            if lv_grid_a is None or lv_grid_b is None:
-                raise ValueError(f"Could not resolve lv_id='{lv_id}' in one of the EDisGo objects.")
-
-        # Determine LV transformer (source) bus
-        # Prefer station-like attributes; fallback to first bus if not found.
-        def _lv_source_bus(lv_grid):
-            for attr in ("station", "mv_lv_station", "lv_station"):
-                st = getattr(lv_grid, attr, None)
-                if st is not None:
-                    bus = getattr(st, "bus", None)
-                    if bus is not None:
-                        return str(bus)
-            # fallback: take first bus in lv_grid
-            return str(lv_grid.buses_df.index[0])
-
-        source_a = _lv_source_bus(lv_grid_a)
-        source_b = _lv_source_bus(lv_grid_b)
-
-
-        # Distances (Dijkstra)
-        # Edge weight attribute commonly is 'length' in eDisGo graphs; adjust if your graph uses 'length_km'
-        pl_a = get_path_length_to_station(self)
-        pl_b = get_path_length_to_station(other)
-
-        # restrict to LV buses and shift so LV station bus is at 0
-        lv_buses_a = pd.Index([str(b) for b in lv_grid_a.buses_df.index])
-        lv_buses_b = pd.Index([str(b) for b in lv_grid_b.buses_df.index])
-
-        dist_a = pl_a.reindex(lv_buses_a).astype(float)
-        dist_b = pl_b.reindex(lv_buses_b).astype(float)
-
-        # Import networkx once
-        import networkx as nx
-        
-        # If LV station bus is not in pl_a (external bus), set its distance to 0 and compute other buses relative to it
-        if str(source_a) in dist_a.index and pd.isna(dist_a.loc[str(source_a)]):
-            # Use LV grid graph to compute path lengths
-            try:
-                lv_graph = lv_grid_a.graph
-                lv_station = str(lv_grid_a.station.index[0])  if hasattr(lv_grid_a, 'station') else str(source_a)
-                
-                # Compute all path lengths from station at once using BFS
-                try:
-                    path_lengths = nx.single_source_shortest_path_length(lv_graph, source=lv_station)
-                    for bus in lv_buses_a:
-                        dist_a.loc[bus] = path_lengths.get(bus, 0)
-                except (nx.NetworkXError, nx.NodeNotFound):
-                    # If computation fails, set all to 0
-                    dist_a.loc[:] = 0
-            except Exception:
-                # Fallback: set all LV buses to 0
-                dist_a.loc[:] = 0
-        
-        if str(source_b) in dist_b.index and pd.isna(dist_b.loc[str(source_b)]):
-            # Use LV grid graph to compute path lengths
-            try:
-                lv_graph = lv_grid_b.graph
-                lv_station = str(lv_grid_b.station.index[0]) if hasattr(lv_grid_b, 'station') else str(source_b)
-                
-                # Compute all path lengths from station at once using BFS
-                try:
-                    path_lengths = nx.single_source_shortest_path_length(lv_graph, source=lv_station)
-                    for bus in lv_buses_b:
-                        dist_b.loc[bus] = path_lengths.get(bus, 0)
-                except (nx.NetworkXError, nx.NodeNotFound):
-                    # If computation fails, set all to 0
-                    dist_b.loc[:] = 0
-            except Exception:
-                # Fallback: set all LV buses to 0
-                dist_b.loc[:] = 0
- 
-        # Shift to LV station reference (station bus distance -> 0)
-        if str(source_a) in pl_a.index and not pd.isna(pl_a.loc[str(source_a)]):
-            dist_a = dist_a - float(pl_a.loc[str(source_a)])
-        if str(source_b) in pl_b.index and not pd.isna(pl_b.loc[str(source_b)]):
-            dist_b = dist_b - float(pl_b.loc[str(source_b)])
-
-
-
-        # Worst-case timesteps
-        t_load_a, t_feed_a = _infer_load_and_feedin_timesteps(self, v_a)
-        t_load_b, t_feed_b = _infer_load_and_feedin_timesteps(other, v_b)
-
-        # Voltages at those timesteps
-        v_a_load = _series_at_t(v_a, t_load_a)
-        v_a_feed = _series_at_t(v_a, t_feed_a)
-        v_b_load = _series_at_t(v_b, t_load_b)
-        v_b_feed = _series_at_t(v_b, t_feed_b)
-
-        # Use all buses (grids are identical), no intersection needed
-        buses = pd.Index([str(b) for b in lv_grid_a.buses_df.index])
-        if buses.empty:
-            raise RuntimeError("No LV buses found in LV grid.")
-
-        df = build_voltage_over_distance_df(
-            buses=buses,
-            dist_a=dist_a,
-            v_a_load=v_a_load,
-            v_a_feed=v_a_feed,
-        )
- 
-        fig = make_voltage_over_distance_figure(
-            title=f"LV voltage over distance (lv_id={lv_id})",
-            buses=buses,
-            dist_a=dist_a,
-            v_a_load=v_a_load,
-            v_a_feed=v_a_feed,
-            band_low=0.90,
-            band_high=1.10,
-            x_label="Path length to LV station [-]",
-            df=df,
-        )
-
-
-        if save_as:
-            if isinstance(save_as, str):
-                if save_as.lower().endswith(".html"):
-                    fig.write_html(save_as)
-                elif save_as.lower().endswith(".png"):
-                    fig.write_image(save_as)
-                else:
-                    fig.write_html(save_as)
-            else:
-                fig.write_html("voltage_over_distance_lv.html")
-
-        return (fig, df) if return_data else fig
-
-    def plot_voltage_over_dist_mv(self, mv_id, other, save_as=False, return_data=False):
-        """
-        Plot MV voltage over distance to the HV/MV transformer, comparing two EDisGo objects.
-
-        Parameters
-        ----------
-        mv_id : kept for API compatibility (currently unused)
-        other : EDisGo
-        save_as : bool or str
-            If True -> writes default html. If str -> file path (.html or .png).
-        """
-        from edisgo.tools.voltage_over_distance import (
-            _get_v_res_df,
-            _infer_load_and_feedin_timesteps,
-            _series_at_t,
-            build_voltage_over_distance_df,
-            make_voltage_over_distance_figure,
-        )
-
-        v_a = _get_v_res_df(self)
-        v_b = _get_v_res_df(other)
-        if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
-            raise RuntimeError(
-                "Voltage results (results.v_res) are empty. "
-                "Run analyze() with timesteps/snapshots so voltage results are generated."
-            )
-        mv_a = self.topology.mv_grid
-        mv_b = other.topology.mv_grid
-
-        # HV/MV transformer (source) bus:
-        # Use first MV bus as fallback if no explicit station bus is available.
-        def _mv_source_bus(edisgo_obj):
-            mv = edisgo_obj.topology.mv_grid
-            G = mv.graph
-
-            # 1) Try transformer buses, but only accept if they exist in graph nodes
-            trafos = getattr(edisgo_obj.topology, "transformers_hvmv_df", None)
-            if trafos is not None and hasattr(trafos, "columns") and {"bus0", "bus1"}.issubset(trafos.columns):
-                for col in ("bus0", "bus1"):
-                    b = str(trafos.iloc[0][col])
-                    if b in G:
-                        return b
-
-            # 2) Try common station bus attributes (if present)
-            for attr in ("station", "hvmv_station", "mv_station"):
-                st = getattr(mv, attr, None)
-                if st is not None:
-                    bus = getattr(st, "bus", None)
-                    if bus is not None and str(bus) in G:
-                        return str(bus)
-                 # Fallback: first graph node (guaranteed)
-            return str(next(iter(G.nodes)))
-
-
-        source_a = _mv_source_bus(self)
-        source_b = _mv_source_bus(other)
-
-        # Path length to station (topological distance, not km)
-        pl_a = get_path_length_to_station(self)
-        pl_b = get_path_length_to_station(other)
-
-        mv_buses_a = pd.Index([str(b) for b in mv_a.buses_df.index])
-        mv_buses_b = pd.Index([str(b) for b in mv_b.buses_df.index])
-
-        dist_a = pl_a.reindex(mv_buses_a).astype(float)
-        dist_b = pl_b.reindex(mv_buses_b).astype(float)
-
-        # Handle cases where MV buses are not in pl_a (e.g., external buses)
-        # Use MV grid graph to compute path lengths if needed
-        import networkx as nx
-        if dist_a.isna().any():
-            try:
-                mv_graph = mv_a.graph
-                for bus in mv_buses_a:
-                    if pd.isna(dist_a.loc[bus]):
-                        try:
-                            path = nx.shortest_path(mv_graph, source=source_a, target=bus)
-                            dist_a.loc[bus] = len(path) - 1  # number of edges
-                        except (nx.NetworkXNoPath, nx.NodeNotFound):
-                            dist_a.loc[bus] = 0
-            except Exception:
-                # Fallback: set all NaN values to 0
-                dist_a = dist_a.fillna(0)
-        
-        if dist_b.isna().any():
-            try:
-                mv_graph = mv_b.graph
-                for bus in mv_buses_b:
-                    if pd.isna(dist_b.loc[bus]):
-                        try:
-                            path = nx.shortest_path(mv_graph, source=source_b, target=bus)
-                            dist_b.loc[bus] = len(path) - 1  # number of edges
-                        except (nx.NetworkXNoPath, nx.NodeNotFound):
-                            dist_b.loc[bus] = 0
-            except Exception:
-                # Fallback: set all NaN values to 0
-                dist_b = dist_b.fillna(0)
-
-        t_load_a, t_feed_a = _infer_load_and_feedin_timesteps(self, v_a)
-        t_load_b, t_feed_b = _infer_load_and_feedin_timesteps(other, v_b)
-
-        v_a_load = _series_at_t(v_a, t_load_a)
-        v_a_feed = _series_at_t(v_a, t_feed_a)
-        v_b_load = _series_at_t(v_b, t_load_b)
-        v_b_feed = _series_at_t(v_b, t_feed_b)
-
-        buses = pd.Index([str(b) for b in mv_a.buses_df.index])
-        if buses.empty:
-            raise RuntimeError("No MV buses found in MV grid.")
-
-
-        df = build_voltage_over_distance_df(
-            buses=buses,
-            dist_a=dist_a,
-            v_a_load=v_a_load,
-            v_a_feed=v_a_feed,
-            dist_b=dist_b,
-            v_b_load=v_b_load,
-            v_b_feed=v_b_feed,
-        )
-        fig = make_voltage_over_distance_figure(
-            title="MV voltage over distance",
-            buses=buses,
-            dist_a=dist_a,
-            v_a_load=v_a_load,
-            v_a_feed=v_a_feed,
-            dist_b=dist_b,
-            v_b_load=v_b_load,
-            v_b_feed=v_b_feed,
-            band_low=0.96,
-            band_high=1.06,
-            x_label="Path length to HV/MV station [-]",
-            df=df,
-    )
-
-
-        if save_as:
-            if isinstance(save_as, str):
-                if save_as.lower().endswith(".html"):
-                    fig.write_html(save_as)
-                elif save_as.lower().endswith(".png"):
-                    fig.write_image(save_as)
-                else:
-                    fig.write_html(save_as)
-            else:
-                fig.write_html("voltage_over_distance_mv.html")
-
-        return (fig, df) if return_data else fig
 
     def histogram_relative_line_load(
         self, timestep=None, title=True, voltage_level="mv_lv", **kwargs
@@ -3469,7 +3359,7 @@ class EDisGo:
 
         """
         if copy_edisgo is True:
-            edisgo_obj = copy.deepcopy(self)
+            edisgo_obj = self.copy()
         else:
             edisgo_obj = self
         busmap_df, linemap_df = spatial_complexity_reduction(
@@ -3682,6 +3572,44 @@ class EDisGo:
         self.electromobility.resample(freq=freq)
         self.heat_pump.resample_timeseries(method=method, freq=freq)
         self.overlying_grid.resample(method=method, freq=freq)
+
+    def copy(self, deep=True):
+        """
+        Returns a copy of the object, with an option for a deep copy.
+
+        The SQLAlchemy engine is excluded from the copying process and restored
+        afterward.
+
+        Parameters
+        ----------
+        deep : bool
+            If True, performs a deep copy; otherwise, performs a shallow copy.
+
+        Returns
+        ---------
+        :class:`~.EDisGo`
+            Copied EDisGo object.
+
+        """
+        tmp_engine = (
+            getattr(self, "engine", None)
+            if isinstance(getattr(self, "engine", None), Engine)
+            else None
+        )
+
+        if tmp_engine:
+            logging.info("Temporarily removing the SQLAlchemy engine before copying.")
+            self.engine = self.config._engine = None
+
+        cpy = copy.deepcopy(self) if deep else copy.copy(self)
+
+        if tmp_engine:
+            logging.info("Restoring the SQLAlchemy engine after copying.")
+            self.engine = self.config._engine = cpy.engine = cpy.config._engine = (
+                tmp_engine
+            )
+
+        return cpy
 
 
 def import_edisgo_from_pickle(filename, path=""):
