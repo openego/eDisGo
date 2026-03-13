@@ -660,12 +660,83 @@ def reinforce_grid(
             f"in {while_counter} iteration step(s)."
         )
 
-    # final check 10% criteria
-    voltage_dev = checks.voltage_deviation_from_allowed_voltage_limits(
-        edisgo, split_voltage_band=False
-    )
-    voltage_dev = voltage_dev[voltage_dev != 0.0].dropna(how="all").dropna(how="all")
-    if not voltage_dev.empty:
+    # final check 10% criteria — with retry loop
+    for final_attempt in range(max_while_iterations):
+        voltage_dev = checks.voltage_deviation_from_allowed_voltage_limits(
+            edisgo, split_voltage_band=False
+        )
+        voltage_dev = voltage_dev[voltage_dev != 0.0].dropna(how="all").dropna(
+            how="all"
+        )
+        if voltage_dev.empty:
+            break
+
+        logger.info(
+            f"==> Final 10% check: {len(voltage_dev.columns)} buses with "
+            f"violations (attempt {final_attempt + 1}). Re-reinforcing..."
+        )
+
+        # Reinforce MV voltage issues with strict 10% band
+        if mode != "lv" and not kwargs.get("skip_mv_reinforcement", False):
+            crit_nodes_strict = checks.voltage_issues(
+                edisgo, voltage_level="mv", split_voltage_band=False
+            )
+            if not crit_nodes_strict.empty:
+                lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
+                    edisgo, edisgo.topology.mv_grid, crit_nodes_strict
+                )
+                _add_lines_changes_to_equipment_changes(
+                    edisgo, lines_changes, iteration_step
+                )
+
+        # Reinforce MV/LV station voltage issues with strict band
+        if mode != "mv":
+            crit_stations_strict = checks.voltage_issues(
+                edisgo, voltage_level="mv_lv", split_voltage_band=False
+            )
+            if not crit_stations_strict.empty:
+                transformer_changes = (
+                    reinforce_measures.reinforce_mv_lv_station_voltage_issues(
+                        edisgo, crit_stations_strict
+                    )
+                )
+                _add_transformer_changes_to_equipment_changes(
+                    edisgo, transformer_changes, iteration_step, "added"
+                )
+
+        # Reinforce LV voltage issues with strict band
+        if not mode or mode == "lv":
+            crit_nodes_lv_strict = checks.voltage_issues(
+                edisgo,
+                voltage_level="lv",
+                split_voltage_band=False,
+                lv_grid_id=lv_grid_id,
+            )
+            if not crit_nodes_lv_strict.empty:
+                for grid_id in crit_nodes_lv_strict.lv_grid_id.unique():
+                    lines_changes = (
+                        reinforce_measures.reinforce_lines_voltage_issues(
+                            edisgo,
+                            edisgo.topology.get_lv_grid(int(grid_id)),
+                            crit_nodes_lv_strict[
+                                crit_nodes_lv_strict.lv_grid_id == grid_id
+                            ],
+                        )
+                    )
+                    _add_lines_changes_to_equipment_changes(
+                        edisgo, lines_changes, iteration_step
+                    )
+
+        # Re-run power flow after reinforcement
+        edisgo.analyze(
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            lv_grid_id=lv_grid_id,
+            scale_timeseries=scale_timeseries,
+        )
+        iteration_step += 1
+    else:
+        # Loop exhausted without break → still violations
         message = "Maximum allowed voltage deviation of 10% exceeded."
         raise ValueError(message)
 
