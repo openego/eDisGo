@@ -1495,6 +1495,88 @@ class EDisGo:
                 mode=analyze_mode, lv_grid_id=lv_grid_id, timesteps=timesteps_pfa
             )
 
+            # Final cross-mode overloading check: after worst-case splitting,
+            # some lines may be overloaded during timesteps of the "other" mode
+            # (e.g. MV lines overloaded during LV-timesteps). Run a full check
+            # with ALL timesteps and no mode restriction to catch these.
+            if mode is None:
+                from edisgo.flex_opt.check_tech_constraints import (
+                    mv_line_max_relative_overload,
+                    lv_line_max_relative_overload,
+                    hv_mv_station_max_overload,
+                    mv_lv_station_max_overload,
+                )
+                from edisgo.flex_opt import reinforce_measures
+                from edisgo.flex_opt.reinforce_grid import (
+                    _add_lines_changes_to_equipment_changes,
+                    _add_transformer_changes_to_equipment_changes,
+                )
+
+                # Run power flow with ALL timesteps
+                edisgo_obj.analyze(mode=None)
+
+                for _cross_attempt in range(max_while_iterations):
+                    crit_lines_cross = pd.concat([
+                        mv_line_max_relative_overload(edisgo_obj),
+                        lv_line_max_relative_overload(edisgo_obj),
+                    ])
+                    overloaded_mv_cross = hv_mv_station_max_overload(edisgo_obj)
+                    overloaded_lv_cross = mv_lv_station_max_overload(edisgo_obj)
+
+                    if (
+                        crit_lines_cross.empty
+                        and overloaded_mv_cross.empty
+                        and overloaded_lv_cross.empty
+                    ):
+                        if _cross_attempt > 0:
+                            logger.info(
+                                f"Cross-mode overloading resolved after "
+                                f"{_cross_attempt} iteration(s)."
+                            )
+                        break
+
+                    logger.info(
+                        f"Cross-mode overloading check: {len(crit_lines_cross)} "
+                        f"lines, {len(overloaded_mv_cross)} MV stations, "
+                        f"{len(overloaded_lv_cross)} LV stations overloaded "
+                        f"(attempt {_cross_attempt + 1}). Reinforcing..."
+                    )
+
+                    if not overloaded_mv_cross.empty:
+                        tc = reinforce_measures.reinforce_hv_mv_station_overloading(
+                            edisgo_obj, overloaded_mv_cross
+                        )
+                        _add_transformer_changes_to_equipment_changes(
+                            edisgo_obj, tc, 1, "added"
+                        )
+                        _add_transformer_changes_to_equipment_changes(
+                            edisgo_obj, tc, 1, "removed"
+                        )
+                    if not overloaded_lv_cross.empty:
+                        tc = reinforce_measures.reinforce_mv_lv_station_overloading(
+                            edisgo_obj, overloaded_lv_cross
+                        )
+                        _add_transformer_changes_to_equipment_changes(
+                            edisgo_obj, tc, 1, "added"
+                        )
+                        _add_transformer_changes_to_equipment_changes(
+                            edisgo_obj, tc, 1, "removed"
+                        )
+                    if not crit_lines_cross.empty:
+                        lc = reinforce_measures.reinforce_lines_overloading(
+                            edisgo_obj, crit_lines_cross
+                        )
+                        _add_lines_changes_to_equipment_changes(
+                            edisgo_obj, lc, 1
+                        )
+
+                    edisgo_obj.analyze(mode=None)
+                else:
+                    logger.warning(
+                        f"Cross-mode overloading: {len(crit_lines_cross)} lines "
+                        f"still overloaded after {max_while_iterations} attempts."
+                    )
+
         # add measure to Results object
         if not copy_grid:
             self.results.measures = "grid_expansion"

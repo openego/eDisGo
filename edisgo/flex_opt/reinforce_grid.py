@@ -519,8 +519,7 @@ def reinforce_grid(
             )
             raise exceptions.MaximumIterationError(
                 "Over-voltage issues for the following nodes in LV grids "
-                f"could not be solved within {max_while_iterations} iterations: "
-                f"{crit_nodes}"
+                f"could not be solved: {crit_nodes}"
             )
         else:
             logger.info(
@@ -661,14 +660,172 @@ def reinforce_grid(
             f"in {while_counter} iteration step(s)."
         )
 
-    # final check 10% criteria
-    voltage_dev = checks.voltage_deviation_from_allowed_voltage_limits(
-        edisgo, split_voltage_band=False
-    )
-    voltage_dev = voltage_dev[voltage_dev != 0.0].dropna(how="all").dropna(how="all")
-    if not voltage_dev.empty:
+    # final check 10% criteria — with retry loop
+    for final_attempt in range(max_while_iterations):
+        voltage_dev = checks.voltage_deviation_from_allowed_voltage_limits(
+            edisgo, split_voltage_band=False
+        )
+        voltage_dev = voltage_dev[voltage_dev != 0.0].dropna(how="all").dropna(
+            how="all"
+        )
+        if voltage_dev.empty:
+            break
+
+        logger.info(
+            f"==> Final 10% check: {len(voltage_dev.columns)} buses with "
+            f"violations (attempt {final_attempt + 1}). Re-reinforcing..."
+        )
+
+        # Reinforce MV voltage issues with strict 10% band
+        if mode != "lv" and not kwargs.get("skip_mv_reinforcement", False):
+            crit_nodes_strict = checks.voltage_issues(
+                edisgo, voltage_level="mv", split_voltage_band=False
+            )
+            if not crit_nodes_strict.empty:
+                lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
+                    edisgo, edisgo.topology.mv_grid, crit_nodes_strict
+                )
+                _add_lines_changes_to_equipment_changes(
+                    edisgo, lines_changes, iteration_step
+                )
+
+        # Reinforce MV/LV station voltage issues with strict band
+        if mode != "mv":
+            crit_stations_strict = checks.voltage_issues(
+                edisgo, voltage_level="mv_lv", split_voltage_band=False
+            )
+            if not crit_stations_strict.empty:
+                transformer_changes = (
+                    reinforce_measures.reinforce_mv_lv_station_voltage_issues(
+                        edisgo, crit_stations_strict
+                    )
+                )
+                _add_transformer_changes_to_equipment_changes(
+                    edisgo, transformer_changes, iteration_step, "added"
+                )
+
+        # Reinforce LV voltage issues with strict band
+        if not mode or mode == "lv":
+            crit_nodes_lv_strict = checks.voltage_issues(
+                edisgo,
+                voltage_level="lv",
+                split_voltage_band=False,
+                lv_grid_id=lv_grid_id,
+            )
+            if not crit_nodes_lv_strict.empty:
+                for grid_id in crit_nodes_lv_strict.lv_grid_id.unique():
+                    lines_changes = (
+                        reinforce_measures.reinforce_lines_voltage_issues(
+                            edisgo,
+                            edisgo.topology.get_lv_grid(int(grid_id)),
+                            crit_nodes_lv_strict[
+                                crit_nodes_lv_strict.lv_grid_id == grid_id
+                            ],
+                        )
+                    )
+                    _add_lines_changes_to_equipment_changes(
+                        edisgo, lines_changes, iteration_step
+                    )
+
+        # Re-run power flow after reinforcement
+        edisgo.analyze(
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            lv_grid_id=lv_grid_id,
+            scale_timeseries=scale_timeseries,
+        )
+        iteration_step += 1
+    else:
+        # Loop exhausted without break → still violations
         message = "Maximum allowed voltage deviation of 10% exceeded."
         raise ValueError(message)
+
+    # final check: ensure no overloading remains after all reinforcement phases
+    # (catches cross-mode issues where MV-timestep overloads LV lines etc.)
+    for final_overload_attempt in range(max_while_iterations):
+        crit_lines_final = pd.DataFrame(dtype=float)
+        if mode != "lv" and not kwargs.get("skip_mv_reinforcement", False):
+            crit_lines_final = pd.concat([
+                crit_lines_final,
+                checks.mv_line_max_relative_overload(edisgo),
+            ])
+        if not mode or mode == "lv":
+            crit_lines_final = pd.concat([
+                crit_lines_final,
+                checks.lv_line_max_relative_overload(edisgo, lv_grid_id=lv_grid_id),
+            ])
+
+        overloaded_mv_final = (
+            pd.DataFrame(dtype=float)
+            if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
+            else checks.hv_mv_station_max_overload(edisgo)
+        )
+        overloaded_lv_final = (
+            pd.DataFrame(dtype=float)
+            if lv_grid_id or mode == "mv"
+            else checks.mv_lv_station_max_overload(edisgo)
+        )
+
+        if (
+            crit_lines_final.empty
+            and overloaded_mv_final.empty
+            and overloaded_lv_final.empty
+        ):
+            break
+
+        logger.info(
+            f"==> Final overloading check: {len(crit_lines_final)} lines, "
+            f"{len(overloaded_mv_final)} MV stations, "
+            f"{len(overloaded_lv_final)} LV stations overloaded "
+            f"(attempt {final_overload_attempt + 1}). Re-reinforcing..."
+        )
+
+        if not overloaded_mv_final.empty:
+            transformer_changes = (
+                reinforce_measures.reinforce_hv_mv_station_overloading(
+                    edisgo, overloaded_mv_final
+                )
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "removed"
+            )
+
+        if not overloaded_lv_final.empty:
+            transformer_changes = (
+                reinforce_measures.reinforce_mv_lv_station_overloading(
+                    edisgo, overloaded_lv_final
+                )
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "added"
+            )
+            _add_transformer_changes_to_equipment_changes(
+                edisgo, transformer_changes, iteration_step, "removed"
+            )
+
+        if not crit_lines_final.empty:
+            lines_changes = reinforce_measures.reinforce_lines_overloading(
+                edisgo, crit_lines_final
+            )
+            _add_lines_changes_to_equipment_changes(
+                edisgo, lines_changes, iteration_step
+            )
+
+        edisgo.analyze(
+            mode=analyze_mode,
+            timesteps=timesteps_pfa,
+            lv_grid_id=lv_grid_id,
+            scale_timeseries=scale_timeseries,
+        )
+        iteration_step += 1
+    else:
+        logger.warning(
+            f"Final overloading check: {len(crit_lines_final)} lines still "
+            f"overloaded after {max_while_iterations} attempts."
+        )
 
     # calculate topology expansion costs
     edisgo.results.grid_expansion_costs = grid_expansion_costs(
