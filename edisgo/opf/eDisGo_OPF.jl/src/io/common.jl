@@ -1,3 +1,23 @@
+function check_conductors(data::Dict{String,<:Any})
+    # Handle legacy 'conductors' entries in JSON data.
+    # Currently only single conductors are supported; warn and ignore if present.
+    try
+        if haskey(data, "conductors")
+            Memento.warn(_LOGGER, "Network data contains 'conductors'. Only single conductors are supported; ignoring 'conductors'. Consider converting to single conductor format or using PowerModelsDistribution.")
+            # Optionally convert or remove the key to avoid downstream issues
+            delete!(data, "conductors")
+        end
+    catch e
+        # if _LOGGER is not available or other error, fallback to printing
+        try
+            @warn "check_conductors warning: $e"
+        catch
+        end
+    end
+
+end
+
+
 function correct_network_data!(data::Dict{String,<:Any})
     check_conductors(data)
     check_connectivity(data)

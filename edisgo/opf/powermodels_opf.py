@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 
@@ -13,6 +14,71 @@ from edisgo.io.powermodels_io import from_powermodels
 from edisgo.network.topology import Topology
 
 logger = logging.getLogger(__name__)
+
+
+def find_julia_binary():
+    """
+    Find suitable Julia binary with version >= 1.6.
+    
+    Tries in order:
+    1. julia1.11 (if available)
+    2. julia (if version >= 1.6)
+    3. Raises error if no suitable Julia found
+    
+    Returns
+    -------
+    str
+        Path or name of Julia binary
+    """
+    # Try julia1.11 first (preferred for eDisGo)
+    julia1_11_path = shutil.which("julia1.11")
+    if julia1_11_path:
+        try:
+            result = subprocess.run(
+                [julia1_11_path, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                logger.debug(f"Using Julia: {result.stdout.strip()}")
+                return julia1_11_path
+        except Exception as e:
+            logger.warning(f"julia1.11 found but failed to execute: {e}")
+    
+    # Try default julia
+    julia_path = shutil.which("julia")
+    if julia_path:
+        try:
+            result = subprocess.run(
+                [julia_path, "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            if result.returncode == 0:
+                version_str = result.stdout.strip()
+                # Extract version number (e.g., "julia version 1.8.5")
+                version_parts = version_str.split()
+                if len(version_parts) >= 3:
+                    version = version_parts[2]
+                    major_minor = tuple(map(int, version.split('.')[:2]))
+                    if major_minor >= (1, 6):
+                        logger.debug(f"Using Julia: {version_str}")
+                        return julia_path
+                    else:
+                        logger.warning(
+                            f"Found Julia {version} but eDisGo requires >= 1.6"
+                        )
+        except Exception as e:
+            logger.warning(f"julia found but failed to execute: {e}")
+    
+    # No suitable Julia found
+    raise RuntimeError(
+        "No suitable Julia installation found. "
+        "eDisGo requires Julia >= 1.6. "
+        "Please install Julia 1.11 or later from https://julialang.org/downloads/"
+    )
 
 
 def pm_optimize(
@@ -129,10 +195,13 @@ def pm_optimize(
 
     json_str = json.dumps(pm, default=_convert)
 
-    logger.info("starting julia process")
+    # Find suitable Julia binary
+    julia_binary = find_julia_binary()
+    logger.info(f"starting julia process with {julia_binary}")
+    
     julia_process = subprocess.Popen(
         [
-            "julia",
+            julia_binary,
             os.path.join(opf_dir, "eDisGo_OPF.jl/Main.jl"),
             pm["name"],
             solution_dir,
@@ -143,6 +212,7 @@ def pm_optimize(
         stdin=subprocess.PIPE,
         text=True,
         stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     julia_process.stdin.write(json_str)
     julia_process.stdin.close()
@@ -152,7 +222,29 @@ def pm_optimize(
             if julia_process.poll() == 0:
                 logger.info("Julia process was successful.")
             else:
-                raise exceptions.InfeasibleModelError("Julia process failed!")
+                # capture any remaining output and stderr for diagnostics
+                try:
+                    remaining_out = julia_process.stdout.read() or ""
+                except Exception:
+                    remaining_out = ""
+                try:
+                    err_out = julia_process.stderr.read() or ""
+                except Exception:
+                    err_out = ""
+
+                logger.error(
+                    "Julia process failed with return code %s. stdout: %s stderr: %s",
+                    julia_process.returncode,
+                    remaining_out,
+                    err_out,
+                )
+
+                raise exceptions.InfeasibleModelError(
+                    "Julia process failed! See logger for stdout/stderr details.\n"
+                    f"returncode={julia_process.returncode}\n"
+                    f"stdout={remaining_out}\n"
+                    f"stderr={err_out}"
+                )
             break
         if out.rstrip().startswith('{"name"'):
             pm_opf = json.loads(out)

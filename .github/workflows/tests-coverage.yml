@@ -141,7 +141,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: julia-actions/setup-julia@v2
         with:
-          version: "1.6"
+          version: "1.11"
 
       # Linux package installation (classic pip install)
       - name: Install dependencies (Linux)
