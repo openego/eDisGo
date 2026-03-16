@@ -2630,6 +2630,8 @@ class Topology:
                 num_parallel=num_parallel,
             )
             # add line to equipment changes
+            # ToDo number_parallel_lines should be given to
+            #  _add_line_to_equipment_changes
             edisgo_object.results._add_line_to_equipment_changes(
                 line=self.lines_df.loc[new_line_name, :],
             )
