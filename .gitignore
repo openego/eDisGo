@@ -30,4 +30,4 @@ venv/
 /edisgo/opf/eDisGo_OPF.jl/.vscode
 .vscode/settings.json
 
-*TOEP_TOKEN.*
+*OEP_TOKEN.*
