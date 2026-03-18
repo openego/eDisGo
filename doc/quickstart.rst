@@ -73,7 +73,7 @@ Beyond a running and up-to-date installation of eDisGo you need **grid topology
 data**. Currently synthetic grid data generated with the python project
 `Ding0 <https://github.com/openego/ding0>`_
 is the only supported data source. You can retrieve data from
-`Zenodo <https://zenodo.org/records/890479>`_
+`Zenodo <https://zenodo.org/records/10405129>`_
 (make sure you choose latest data) or check out the
 `Ding0 documentation <https://dingo.readthedocs.io/en/dev/usage_details.html#ding0-examples>`_
 on how to generate grids yourself.

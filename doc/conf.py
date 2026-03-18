@@ -210,6 +210,9 @@ linkcheck_ignore = [
     r"https://www.mdpi.com/*",
 ]
 
+# retry flaky links (e.g. numpy docs returning incomplete responses in CI)
+linkcheck_retries = 3
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
