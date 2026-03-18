@@ -32,6 +32,7 @@ def read(fname):
 
 
 requirements = [
+    "setuptools < 82.0.0",
     "contextily < 1.8.0",
     "dash < 3.5.0",
     "demandlib < 0.3.0",
