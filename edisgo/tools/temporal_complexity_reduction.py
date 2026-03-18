@@ -71,7 +71,7 @@ def _scored_most_critical_loading(
         crit_lines_score.dropna(how="all").dropna(how="all", axis=1).fillna(0)
     )
     # sort sum in descending order
-    return crit_lines_score.sum(axis=1).sort_values(ascending=False)
+    return crit_lines_score.sum(axis=1).sort_values(ascending=False, kind='stable')
 
 
 def _scored_most_critical_voltage_issues(
@@ -143,7 +143,7 @@ def _scored_most_critical_voltage_issues(
     # drop components and time steps without violations
     voltage_diff = voltage_diff.dropna(how="all").dropna(how="all", axis=1).fillna(0)
     # sort sum in descending order
-    return voltage_diff.sum(axis=1).sort_values(ascending=False)
+    return voltage_diff.sum(axis=1).sort_values(ascending=False, kind='stable')
 
 
 def _scored_most_critical_loading_time_interval(

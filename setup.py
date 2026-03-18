@@ -33,7 +33,7 @@ def read(fname):
 
 requirements = [
     "contextily < 1.8.0",
-    "dash < 3.4.0",
+    "dash < 4.1.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
     "egoio >= 0.4.7, < 0.5.0",
@@ -62,23 +62,23 @@ requirements = [
     "sshtunnel < 0.5.0",
     "urllib3 < 2.7.0",
     "workalendar < 17.1.0",
-    "astroid == 4.0.2",
+    "astroid == 4.0.3",
 ]
 
 dev_requirements = [
-    "black < 25.13.0",
+    "black < 26.2.0",
     "flake8 < 7.4.0",
     "isort < 7.1.0",
     "pre-commit < 4.6.0",
-    "pylint < 3.4.0",
+    "pylint < 4.1.0",
     "pytest < 9.1.0",
     "pytest-notebook < 0.11.0",
     "pyupgrade < 3.22.0",
-    "sphinx < 9.1.0",
-    "sphinx_rtd_theme >=0.5.2, < 3.1.0",
+    "sphinx < 9.2.0",
+    "sphinx_rtd_theme >= 0.5.2, < 3.2.0",
     "sphinx-autodoc-typehints < 3.7.0",
-    "sphinx-autoapi < 3.7.0",
-    "astroid == 4.0.2",
+    "sphinx-autoapi < 3.8.0",
+    "astroid == 4.0.3",
 ]
 
 extras = {"dev": dev_requirements}

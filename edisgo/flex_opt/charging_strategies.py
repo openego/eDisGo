@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 
 from numbers import Number
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Iterable
 
 import numpy as np
 import pandas as pd
@@ -52,6 +52,7 @@ def charging_strategy(
     strategy: str = "dumb",
     timestamp_share_threshold: Number = 0.2,
     minimum_charging_capacity_factor: Number = 0.1,
+    charging_park_ids: Iterable[int] | None = None,
 ):
     """
     Applies charging strategy to set EV charging time series at charging parks.
@@ -78,21 +79,48 @@ def charging_strategy(
 
     """
     # get integrated charging parks
+    integrated_parks = edisgo_obj.electromobility.integrated_charging_parks_df
+
+    # Bestimmen, welche Ladeparks überhaupt angesprochen werden
+    if charging_park_ids is None:
+        target_park_ids = integrated_parks.index
+    else:
+        charging_park_ids = list(charging_park_ids)
+        target_park_ids = integrated_parks.index.intersection(charging_park_ids)
+
+        missing_ids = sorted(set(charging_park_ids) - set(target_park_ids))
+        if missing_ids:
+            logger.warning(
+                "The following charging park IDs are not integrated and will be "
+                "ignored in charging_strategy: %s",
+                missing_ids,
+            )
+
+    # PotentialChargingParks-Objekte auf diese Submenge filtern
     charging_parks = [
         cp
-        for cp in list(edisgo_obj.electromobility.potential_charging_parks)
-        if cp.grid is not None
+        for cp in edisgo_obj.electromobility.potential_charging_parks
+        if cp.grid is not None and cp.id in target_park_ids
     ]
 
-    # Delete possible old time series as these influence "residual" charging
+    if len(charging_parks) == 0:
+        logger.info(
+            "No charging parks selected for charging strategy '%s'. Nothing to do.",
+            strategy,
+        )
+        return
+
+    # EDisGo-IDs der betroffenen Ladeparks
+    edisgo_ids_to_update = integrated_parks.loc[target_park_ids, "edisgo_id"].values
+
+    # Nur für diese Ladeparks alte Zeitreihen löschen
     edisgo_obj.timeseries.drop_component_time_series(
         "loads_active_power",
-        edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values,
+        edisgo_ids_to_update,
     )
-
     edisgo_obj.timeseries.drop_component_time_series(
         "loads_reactive_power",
-        edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values,
+        edisgo_ids_to_update,
     )
 
     eta_cp = edisgo_obj.electromobility.eta_charging_points
@@ -196,8 +224,8 @@ def charging_strategy(
         # "residual" charging
         # only use charging processes from integrated charging parks
         charging_processes_df = edisgo_obj.electromobility.charging_processes_df[
-            edisgo_obj.electromobility.charging_processes_df.charging_park_id.isin(
-                edisgo_obj.electromobility.integrated_charging_parks_df.index
+        edisgo_obj.electromobility.charging_processes_df.charging_park_id.isin(
+        target_park_ids
             )
         ]
 
@@ -318,8 +346,7 @@ def charging_strategy(
         pd.DataFrame(
             data=0.0,
             index=edisgo_obj.timeseries.timeindex,
-            columns=edisgo_obj.electromobility.integrated_charging_parks_df
-            .edisgo_id.values,
+            columns=edisgo_ids_to_update,
         ),
     )
     # fmt: on
