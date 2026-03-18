@@ -167,7 +167,7 @@ def engine(
         configuration YAML. If False try to connect to local database.
     token : str or pathlib.Path, optional (default=None)
         Token for database connection or path to text file containing token.
-        If empty the default token file in the config folder TOEP_TOKEN.txt
+        If empty the default token file in the config folder OEP_TOKEN.txt
         will be used. If the default token file is not found, no token
         will be used and the connection will be established without token.
 
@@ -180,8 +180,8 @@ def engine(
 
     if not ssh:
         # Github Actions KHs token
-        if "TOEP_TOKEN_KH" in os.environ:
-            token = os.environ["TOEP_TOKEN_KH"]
+        if "OEP_TOKEN_KH" in os.environ:
+            token = os.environ["OEP_TOKEN_KH"]
 
             read = True
         else:
@@ -189,7 +189,7 @@ def engine(
 
             if token is None:
                 spec = importlib.util.find_spec("edisgo")
-                token = Path(spec.origin).resolve().parent / "config" / "TOEP_TOKEN.txt"
+                token = Path(spec.origin).resolve().parent / "config" / "OEP_TOKEN.txt"
 
             if token.is_file():
                 logger.info(f"Getting OEP token from file {token}.")
@@ -199,7 +199,7 @@ def engine(
 
                 read = True
 
-        database_url = "toep.iks.cs.ovgu.de"
+        database_url = "openenergyplatform.org"
 
         msg = ""
 
