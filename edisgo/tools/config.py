@@ -67,38 +67,21 @@ class Config:
 
     Other Parameters
     ----------------
-    config_path : None or str or :dict
+    config_path : None or str or dict
         Path to the config directory. Options are:
 
-        * 'default' (default)
-            If `config_path` is set to 'default', the provided default config files
-            are used directly.
-        * str
-            If `config_path` is a string, configs will be loaded from the
-            directory specified by `config_path`. If the directory
-            does not exist, it is created. If config files don't exist, the
-            default config files are copied into the directory.
-        * dict
-            A dictionary can be used to specify different paths to the
-            different config files. The dictionary must have the following
-            keys:
-
-            * 'config_db_tables'
-
-            * 'config_grid'
-
-            * 'config_grid_expansion'
-
-            * 'config_timeseries'
-
-            Values of the dictionary are paths to the corresponding
-            config file. In contrast to the other options, the directories
-            and config files must exist and are not automatically created.
-        * None
-            If `config_path` is None, configs are loaded from the edisgo
-            default config directory ($HOME$/.edisgo). If the directory
-            does not exist, it is created. If config files don't exist, the
-            default config files are copied into the directory.
+        * 'default' (default): The provided default config files are used directly.
+        * str: Configs will be loaded from the directory specified by `config_path`.
+          If the directory does not exist, it is created. If config files don't exist,
+          the default config files are copied into the directory.
+        * dict: A dictionary can be used to specify different paths to the different
+          config files. Keys are 'config_db_tables', 'config_grid',
+          'config_grid_expansion', and 'config_timeseries'. Values are paths to the
+          corresponding config file. The directories and config files must exist and
+          are not automatically created.
+        * None: Configs are loaded from the edisgo default config directory
+          (~/.edisgo). If the directory does not exist, it is created. If config
+          files don't exist, the default config files are copied into the directory.
 
         Default: "default".
 
