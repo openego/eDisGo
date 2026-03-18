@@ -1,4 +1,4 @@
-dash < 3.4.0
+dash < 4.1.0
 demandlib < 0.3.0
 egoio >= 0.4.7, < 0.5.0
 geopy >= 2.0.0, < 2.5.0
@@ -17,7 +17,7 @@ scikit-learn < 1.6
 sphinx < 9.2.0
 sphinx_rtd_theme >= 0.5.2, < 3.2.0
 sphinx-autodoc-typehints < 3.7.0
-sphinx-autoapi < 3.7.0
+sphinx-autoapi < 3.8.0
 sshtunnel < 0.5.0
 urllib3 < 2.7.0
 workalendar < 17.1.0
