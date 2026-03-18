@@ -28,6 +28,7 @@ __author__ = "nesnoj, gplssm"
 # serve to show the default.
 
 import importlib.metadata
+import logging
 import os
 import sys
 
@@ -66,8 +67,8 @@ autoapi_options = [
     "show-inheritance",
     "show-inheritance-diagram",
     "show-module-summary",
-    "special-members",
 ]
+autoapi_own_page_level = "class"
 # Files to ignore when building api documentation
 autoapi_ignore = [
     "*/opf/timeseries_reduction.py",
@@ -83,8 +84,23 @@ def skip_autoapi_parts(app, what, name, obj, skip, options):
     return skip
 
 
+class _SuppressDuplicateObjectFilter(logging.Filter):
+    """Suppress autoapi duplicate object description warnings.
+
+    These warnings arise because autoapi registers attributes both from
+    instance assignments in __init__ and from the Attributes section in the
+    class docstring.
+    """
+
+    def filter(self, record):
+        return "duplicate object description" not in record.getMessage()
+
+
 def setup(sphinx):
     sphinx.connect("autoapi-skip-member", skip_autoapi_parts)
+    logging.getLogger("sphinx.domains.python").addFilter(
+        _SuppressDuplicateObjectFilter()
+    )
 
 
 # Autodoc mock imports - Mock all heavy dependencies that cause import issues
@@ -209,6 +225,9 @@ linkcheck_ignore = [
     r"https://support.gurobi.com/*",
     r"https://www.gnu.org/licenses/",
     r"https://www.mdpi.com/*",
+    # zenodo and numpy.org return errors in CI even though the links are correct
+    r"https://zenodo.org/*",
+    r"https://numpy.org/*",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
