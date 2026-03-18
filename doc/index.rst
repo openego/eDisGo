@@ -15,10 +15,10 @@ The toolbox currently includes:
 
   * `ding0 <https://github.com/openego/ding0>`_ tool for synthetic medium and low
     voltage grid topologies for the whole of Germany
-  * `OpenEnergy DataBase (oedb) <https://openenergyplatform.org/dataedit/schemas>`_ for
+  * `OpenEnergy DataBase (oedb) <https://openenergyplatform.org/database/>`_ for
     feed-in time series of fluctuating renewables and scenarios for future
     power plant park of Germany
-  * `demandlib <https://github.com/oemof/demandlib>`_ for electrical load time series
+  * `demandlib <https://github.com/oemof/oemof-demand>`_ for electrical load time series
   * `SimBEV <https://github.com/rl-institut/simbev>`_ and
     `TracBEV <https://github.com/rl-institut/tracbev>`_ for charging demand data of electric
     vehicles, respectively potential charging point locations
