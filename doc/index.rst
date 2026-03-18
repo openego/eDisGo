@@ -71,3 +71,4 @@ Contents
    equipment
    whatsnew
    genindex
+   autoapi/edisgo/index

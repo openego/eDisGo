@@ -65,7 +65,6 @@ autoapi_options = [
     "show-inheritance",
     "show-inheritance-diagram",
     "show-module-summary",
-    "special-members",
 ]
 # Files to ignore when building api documentation
 autoapi_ignore = [

@@ -66,7 +66,7 @@ class Config:
     Container for all configurations.
 
     Other Parameters
-    -----------------
+    ----------------
     config_path : None or str or :dict
         Path to the config directory. Options are:
 
