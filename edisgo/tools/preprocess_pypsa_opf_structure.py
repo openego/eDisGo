@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import numpy as np
 import pandas as pd
 
@@ -40,9 +51,9 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
 
     # check if generator slack has a fluctuating variable set
     gen_slack_loc = psa_network.generators.control == "Slack"
-    psa_network.buses.control.loc[
-        psa_network.generators.bus.loc[gen_slack_loc]
-    ] = "Slack"
+    psa_network.buses.control.loc[psa_network.generators.bus.loc[gen_slack_loc]] = (
+        "Slack"
+    )
     is_fluct = psa_network.generators.fluctuating.loc[gen_slack_loc][0]
     # check for nan value
     if is_fluct != is_fluct:

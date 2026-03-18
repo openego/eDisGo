@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -486,9 +497,9 @@ def get_path_length_to_station(edisgo_obj):
                 lv_station = lvgrid.station.index[0]
                 for bus in lvgrid.buses_df.index:
                     lv_path = nx.shortest_path(lv_graph, source=lv_station, target=bus)
-                    edisgo_obj.topology.buses_df.at[
-                        bus, "path_length_to_station"
-                    ] = len(path) + len(lv_path)
+                    edisgo_obj.topology.buses_df.at[bus, "path_length_to_station"] = (
+                        len(path) + len(lv_path)
+                    )
     return edisgo_obj.topology.buses_df.path_length_to_station
 
 

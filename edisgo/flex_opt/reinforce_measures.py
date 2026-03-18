@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -506,9 +517,9 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             else:
                 raise ValueError("Bus not in line buses. Please check.")
             # change line length and type
-            edisgo_obj.topology._lines_df.at[
-                crit_line_name, "length"
-            ] = path_length_dict[node_2_3]
+            edisgo_obj.topology._lines_df.at[crit_line_name, "length"] = (
+                path_length_dict[node_2_3]
+            )
             edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
             lines_changes[crit_line_name] = 1
             # TODO: Include switch disconnector

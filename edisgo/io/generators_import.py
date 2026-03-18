@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -25,9 +36,13 @@ if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
 
     from egoio.db_tables import model_draft, supply
-    from edisgo.io.mviews_filters import build_conv_scenario_filter, build_res_scenario_filter
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
+
+    from edisgo.io.mviews_filters import (
+        build_conv_scenario_filter,
+        build_res_scenario_filter,
+    )
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -125,14 +140,11 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
                 orm_conv_generators.capacity.label("p_nom"),
                 orm_conv_generators.voltage_level,
                 orm_conv_generators.fuel.label("generator_type"),
-                func.ST_AsText(
-                    func.ST_Transform(orm_conv_generators.geom, srid)
-                ).label("geom"),
+                func.ST_AsText(func.ST_Transform(orm_conv_generators.geom, srid)).label(
+                    "geom"
+                ),
             )
-            .filter(
-                orm_conv_generators.subst_id
-                == edisgo_object.topology.mv_grid.id
-            )
+            .filter(orm_conv_generators.subst_id == edisgo_object.topology.mv_grid.id)
             .filter(orm_conv_generators.voltage_level.in_([4, 5]))
             .filter(orm_conv_generators_version)
         )
@@ -175,13 +187,11 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
                 func.ST_AsText(
                     func.ST_Transform(orm_re_generators.rea_geom_new, srid)
                 ).label("geom"),
-                func.ST_AsText(
-                    func.ST_Transform(orm_re_generators.geom, srid)
-                ).label("geom_em"),
+                func.ST_AsText(func.ST_Transform(orm_re_generators.geom, srid)).label(
+                    "geom_em"
+                ),
             )
-            .filter(
-                orm_re_generators.subst_id == edisgo_object.topology.mv_grid.id
-            )
+            .filter(orm_re_generators.subst_id == edisgo_object.topology.mv_grid.id)
             .filter(orm_re_generators_version)
         )
 
@@ -305,18 +315,16 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
 
     # Map generator_scenario to full scenario names for mview filter logic
     scenario_mapping = {
-        'nep2035': 'NEP 2035',
-        'ego100': 'eGo 100',
-        'status_quo': 'Status Quo',
-        'sq': 'Status Quo'
+        "nep2035": "NEP 2035",
+        "ego100": "eGo 100",
+        "status_quo": "Status Quo",
+        "sq": "Status Quo",
     }
-    scenario_name = scenario_mapping.get(
-        generator_scenario.lower(),
-        generator_scenario
-    )
+    scenario_name = scenario_mapping.get(generator_scenario.lower(), generator_scenario)
 
     if oedb_data_source == "model_draft":
-        # Use base tables from model_draft schema (CamelCase ORM names, without _mview suffix)
+        # Use base tables from model_draft schema
+        # (CamelCase ORM names, without _mview suffix)
         orm_conv_generators = model_draft.__getattribute__("EgoDpSupplyConvPowerplant")
         orm_re_generators = model_draft.__getattribute__("EgoDpSupplyResPowerplant")
 
@@ -331,7 +339,8 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     elif oedb_data_source == "versioned":
         data_version = edisgo_object.config["versioned"]["version"]
 
-        # Use base tables from supply schema (CamelCase ORM names, without _mview suffix)
+        # Use base tables from supply schema
+        # (CamelCase ORM names, without _mview suffix)
         orm_conv_generators = supply.__getattribute__("EgoDpConvPowerplant")
         orm_re_generators = supply.__getattribute__("EgoDpResPowerplant")
 

@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import logging
 import os
 
@@ -913,9 +924,7 @@ class Electromobility:
                 df = df.assign(geometry=gpd.GeoSeries.from_wkt(df["geometry"]))
 
                 try:
-                    df = gpd.GeoDataFrame(
-                        df, geometry="geometry", crs=f"epsg:{epsg}"
-                    )
+                    df = gpd.GeoDataFrame(df, geometry="geometry", crs=f"epsg:{epsg}")
 
                 except Exception:
                     logger.warning(
@@ -923,9 +932,7 @@ class Electromobility:
                         f"EPSG {epsg}. Trying with EPSG 4326 as fallback."
                     )
 
-                    df = gpd.GeoDataFrame(
-                        df, geometry="geometry", crs="epsg:4326"
-                    )
+                    df = gpd.GeoDataFrame(df, geometry="geometry", crs="epsg:4326")
 
             if attr == "simbev_config_df":
                 for col in ["start_date", "end_date"]:

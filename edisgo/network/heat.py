@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -238,9 +249,9 @@ class HeatPump:
                     random_weather_cell_id = hp_df.weather_cell_id.dropna().unique()[0]
                     hp_without_weather_cell = hp_df[hp_df.weather_cell_id.isna()].index
                     # random weather cell ID is not written to loads_df!
-                    hp_df.loc[
-                        hp_without_weather_cell, "weather_cell_id"
-                    ] = random_weather_cell_id
+                    hp_df.loc[hp_without_weather_cell, "weather_cell_id"] = (
+                        random_weather_cell_id
+                    )
                 weather_cells = hp_df.weather_cell_id.dropna().unique()
 
                 # get COP per weather cell

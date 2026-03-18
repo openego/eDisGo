@@ -1,10 +1,13 @@
-"""
-This module provides tools to convert eDisGo representation of the network
-topology and timeseries to PowerModels network data format and to retrieve results from
-PowerModels OPF in PowerModels network data format to eDisGo representation.
-Call :func:`to_powermodels` to retrieve the PowerModels network container and
-:func:`from_powermodels` to write OPF results to edisgo object.
-"""
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 import json
 import logging
@@ -250,10 +253,10 @@ def from_powermodels(
         Base value of apparent power for per unit system.
         Default: 1 MVA.
     """
-    if type(pm_results) == str:
+    if isinstance(pm_results, str):
         with open(pm_results) as f:
             pm = json.loads(json.load(f))
-    elif type(pm_results) == dict:
+    elif isinstance(pm_results, dict):
         pm = pm_results
     else:
         raise ValueError(
@@ -363,9 +366,11 @@ def from_powermodels(
         for flex in df2.columns:
             abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
             rel_error = [
-                abs_error[i] / hv_flex_dict[flex].iloc[i]
-                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
-                else 0
+                (
+                    abs_error[i] / hv_flex_dict[flex].iloc[i]
+                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
+                    else 0
+                )
                 for i in range(len(abs_error))
             ]
             df2[flex] = rel_error
@@ -707,13 +712,17 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_g = max(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.p_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     0.0,
                 ]
             )
             q_g = min(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.q_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     0.0,
                 ]
             )
@@ -841,9 +850,9 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
 
         pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
-            "br_r": (0.017 * s_base / (psa_net.buses.v_nom.iloc[idx_bus - 1] ** 2)).round(
-                10
-            ),
+            "br_r": (
+                0.017 * s_base / (psa_net.buses.v_nom.iloc[idx_bus - 1] ** 2)
+            ).round(10),
             "r": 0.017,
             "br_x": 0,
             "f_bus": idx_bus,
@@ -958,13 +967,17 @@ def _build_load(
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_d = -min(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.p_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     np.float64(0.0),
                 ]
             )
             q_d = -max(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.q_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     np.float64(0.0),
                 ]
             )
@@ -1049,9 +1062,13 @@ def _build_battery_storage(
             "pf": pf,
             "sign": sign,
             "virtual_branch": str(stor_i + len(branches.index) + 1),
-            "ps": psa_net.storage_units.p_set.loc[flexible_storage_units[stor_i]].round(20)
+            "ps": psa_net.storage_units.p_set.loc[flexible_storage_units[stor_i]].round(
+                20
+            )
             / s_base,
-            "qs": psa_net.storage_units.q_set.loc[flexible_storage_units[stor_i]].round(20)
+            "qs": psa_net.storage_units.q_set.loc[flexible_storage_units[stor_i]].round(
+                20
+            )
             / s_base,
             "pmax": psa_net.storage_units.p_nom.loc[
                 flexible_storage_units[stor_i]

@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import json
@@ -1079,11 +1090,11 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
                 idx, "charging_point_id"
             ] = charging_point_id
 
-            available_charging_points_df.loc[
-                charging_point_id
-            ] = edisgo_obj.electromobility.charging_processes_df.loc[
-                idx, available_charging_points_df.columns
-            ].tolist()
+            available_charging_points_df.loc[charging_point_id] = (
+                edisgo_obj.electromobility.charging_processes_df.loc[
+                    idx, available_charging_points_df.columns
+                ].tolist()
+            )
 
             designated_charging_point_capacity_df.at[
                 charging_park_id, "designated_charging_point_capacity"

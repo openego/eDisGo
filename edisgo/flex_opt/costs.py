@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import logging
 import os
 
@@ -162,9 +173,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         ]["quantity"].to_frame()
         lines_added_unique = lines_added.index.unique()
         lines_added = (
-            lines_added.groupby(level=0)
-            .sum()
-            .loc[lines_added_unique, ["quantity"]]
+            lines_added.groupby(level=0).sum().loc[lines_added_unique, ["quantity"]]
         )
         # use the minimum of quantity and num_parallel, as sometimes lines are added
         # and in a next reinforcement step removed again, e.g. when feeder is split
