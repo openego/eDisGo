@@ -208,10 +208,10 @@ linkcheck_ignore = [
     r"https://support.gurobi.com/*",
     r"https://www.gnu.org/licenses/",
     r"https://www.mdpi.com/*",
+    # zenodo and numpy.org return errors in CI even though the links are correct
+    r"https://zenodo.org/*",
+    r"https://numpy.org/*",
 ]
-
-# retry flaky links (e.g. numpy docs returning incomplete responses in CI)
-linkcheck_retries = 3
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
