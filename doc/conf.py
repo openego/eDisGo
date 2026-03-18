@@ -27,6 +27,7 @@ __author__ = "nesnoj, gplssm"
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+import importlib.metadata
 import os
 import sys
 
@@ -234,7 +235,10 @@ author = "open_eGo-Team"
 # built documents.
 #
 # The short X.Y version.
-version = "0.2.1"
+try:
+    version = importlib.metadata.version("eDisGo")
+except importlib.metadata.PackageNotFoundError:
+    version = "unknown"
 # The full version, including alpha/beta/rc tags.
 release = version
 
