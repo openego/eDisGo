@@ -5,27 +5,15 @@ repos:
   -   id: check-yaml
   -   id: end-of-file-fixer
   -   id: trailing-whitespace
-- repo: https://github.com/psf/black
-  rev: 25.1.0
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  # Ruff version.
+  rev: v0.15.6
   hooks:
-    - id: black
-- repo: https://github.com/pycqa/flake8
-  rev: 7.1.1
-  hooks:
-    - id: flake8
-- repo: https://github.com/pycqa/isort
-  rev: 6.0.0
-  hooks:
-    - id: isort
-      name: isort (python)
-- repo: https://github.com/asottile/pyupgrade
-  rev: v3.19.1
-  hooks:
-    - id: pyupgrade
-#- repo: https://github.com/pycqa/pylint
-#  rev: pylint-2.6.0
-#  hooks:
-#    - id: pylint
+    # Run the linter.
+    - id: ruff-check
+      args: [ --fix ]
+    # Run the formatter.
+    - id: ruff-format
 - repo: https://github.com/kynan/nbstripout
   rev: 0.8.1
   hooks:
