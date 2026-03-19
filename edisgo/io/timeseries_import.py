@@ -244,7 +244,7 @@ def feedin_oedb(
 def load_time_series_demandlib(edisgo_obj, timeindex=None):
     """
     Get normalized sectoral electricity load time series using the
-    `demandlib <https://github.com/oemof/demandlib/>`_.
+    `demandlib <https://github.com/oemof/oemof-demand>`_.
 
     Resulting electricity load profiles hold time series of hourly conventional
     electricity demand for the sectors residential, cts, agricultural

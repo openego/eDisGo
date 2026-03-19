@@ -403,7 +403,7 @@ class EDisGo:
 
         Predefined profiles comprise i.e. standard electric conventional load profiles
         for different sectors generated using the oemof
-        `demandlib <https://github.com/oemof/demandlib/>`_ or feed-in time series of
+        `demandlib <https://github.com/oemof/oemof-demand>`_ or feed-in time series of
         fluctuating solar and wind generators provided on the OpenEnergy DataBase.
         This function can also be used to provide your own profiles per technology or
         load sector.
@@ -432,7 +432,7 @@ class EDisGo:
                 Technology- and weather cell-specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_. See
+                <https://openenergyplatform.org/database/>`_. See
                 :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
 
                 This option requires that the parameter `engine` is provided in case
@@ -493,7 +493,7 @@ class EDisGo:
 
                 Sets active power demand time series using individual hourly electricity
                 load time series for one year obtained from the `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_.
+                <https://openenergyplatform.org/database/>`_.
 
                 This option requires that the parameters `engine` and `scenario` are
                 provided. For further settings, the parameter `timeindex` can also be
@@ -503,7 +503,7 @@ class EDisGo:
 
                 Sets active power demand time series using hourly electricity load time
                 series obtained using standard electric load profiles from
-                the oemof `demandlib <https://github.com/oemof/demandlib/>`_.
+                the oemof `demandlib <https://github.com/oemof/oemof-demand>`_.
                 The demandlib provides sector-specific time series for the sectors
                 'residential', 'cts', 'industrial', and 'agricultural'.
 
@@ -1947,7 +1947,7 @@ class EDisGo:
         Imports electromobility data and integrates charging points into grid.
 
         Electromobility data can be obtained from the `OpenEnergy DataBase
-        <https://openenergyplatform.org/dataedit/schemas>`_ or from self-provided
+        <https://openenergyplatform.org/database/>`_ or from self-provided
         data. In case you want to use self-provided data, it needs to be generated
         using the tools
         `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
@@ -1979,7 +1979,7 @@ class EDisGo:
             * "oedb"
 
                 Electromobility data is obtained from the `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_.
+                <https://openenergyplatform.org/database/>`_.
 
                 This option requires that the parameters `scenario` and `engine` are
                 provided.
@@ -2165,7 +2165,7 @@ class EDisGo:
         are as well retrieved.
 
         Currently, the only supported data source is scenario data generated
-        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        in the research project `eGo^n <https://rego-n.org/>`_. You can choose
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
@@ -2331,7 +2331,7 @@ class EDisGo:
     def import_dsm(self, scenario: str, engine: Engine, timeindex=None):
         """
         Gets industrial and CTS DSM profiles from the
-        `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+        `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
         Profiles comprise minimum and maximum load increase in MW as well as maximum
         energy pre- and postponing in MWh. The data is written to the
