@@ -56,7 +56,7 @@ Installation Steps
 1. Install Julia 1.6.7
 
 
-Download Julia 1.6.7 from the `Julia LTS releases page <https://julialang.org/downloads/#long_term_support_release>`_.
+Download Julia 1.6.7 from the `Julia downloads page <https://julialang.org/downloads/>`_.
 
 Install Julia by following the instructions in the `Julia installation guide <https://julialang.org/downloads/platform/#linux_and_freebsd>`_. Make sure to add Julia to your system path.
 
@@ -73,7 +73,7 @@ Beyond a running and up-to-date installation of eDisGo you need **grid topology
 data**. Currently synthetic grid data generated with the python project
 `Ding0 <https://github.com/openego/ding0>`_
 is the only supported data source. You can retrieve data from
-`Zenodo <https://zenodo.org/records/890479>`_
+`Zenodo <https://zenodo.org/records/10405129>`_
 (make sure you choose latest data) or check out the
 `Ding0 documentation <https://dingo.readthedocs.io/en/dev/usage_details.html#ding0-examples>`_
 on how to generate grids yourself.
@@ -98,7 +98,7 @@ Aside from grid topology data you may eventually need a dataset on future
 installation of power plants. You may therefore use the scenarios developed in
 the `open_eGo <https://openegoproject.wordpress.com>`_ project that
 are available in the
-`OpenEnergy DataBase (oedb) <https://openenergyplatform.org/dataedit/schemas>`_
+`OpenEnergy DataBase (oedb) <https://openenergyplatform.org/database/>`_
 hosted on the `OpenEnergy Platform (OEP) <https://openenergyplatform.org/>`_.
 eDisGo provides an interface to the oedb using the package
 `ego.io <https://github.com/openego/ego.io>`_. ego.io gives you a python

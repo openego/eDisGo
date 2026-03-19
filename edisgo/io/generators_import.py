@@ -8,13 +8,13 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-import saio
 
 from sqlalchemy import func
 from sqlalchemy.engine.base import Engine
 
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
 from edisgo.tools import session_scope
+from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus, proj2equidistant
 from edisgo.tools.tools import (
     determine_bus_voltage_level,
@@ -25,6 +25,7 @@ if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
 
     from egoio.db_tables import model_draft, supply
+    from edisgo.io.mviews_filters import build_conv_scenario_filter, build_res_scenario_filter
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
 
@@ -42,10 +43,10 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     The importer uses SQLAlchemy ORM objects. These are defined in
     `ego.io <https://github.com/openego/ego.io/tree/dev/egoio/db_tables/>`_.
     The data is imported from the tables
-    `conventional power plants <https://openenergyplatform.org/dataedit/\
-    view/supply/ego_dp_conv_powerplant>`_ and
-    `renewable power plants <https://openenergyplatform.org/dataedit/\
-    view/supply/ego_dp_res_powerplant>`_.
+    `conventional power plants <https://openenergyplatform.org/database/\
+    tables/ego_dp_conv_powerplant>`_ and
+    `renewable power plants <https://openenergyplatform.org/database/\
+    tables/ego_dp_res_powerplant>`_.
 
     When the generator data is retrieved, the following steps are conducted:
 
@@ -117,22 +118,22 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
         # build query
         generators_sqla = (
             session.query(
-                orm_conv_generators.columns.id,
-                orm_conv_generators.columns.id.label("generator_id"),
-                orm_conv_generators.columns.subst_id,
-                orm_conv_generators.columns.la_id,
-                orm_conv_generators.columns.capacity.label("p_nom"),
-                orm_conv_generators.columns.voltage_level,
-                orm_conv_generators.columns.fuel.label("generator_type"),
+                orm_conv_generators.id,
+                orm_conv_generators.id.label("generator_id"),
+                orm_conv_generators.subst_id,
+                orm_conv_generators.la_id,
+                orm_conv_generators.capacity.label("p_nom"),
+                orm_conv_generators.voltage_level,
+                orm_conv_generators.fuel.label("generator_type"),
                 func.ST_AsText(
-                    func.ST_Transform(orm_conv_generators.columns.geom, srid)
+                    func.ST_Transform(orm_conv_generators.geom, srid)
                 ).label("geom"),
             )
             .filter(
-                orm_conv_generators.columns.subst_id
+                orm_conv_generators.subst_id
                 == edisgo_object.topology.mv_grid.id
             )
-            .filter(orm_conv_generators.columns.voltage_level.in_([4, 5]))
+            .filter(orm_conv_generators.voltage_level.in_([4, 5]))
             .filter(orm_conv_generators_version)
         )
 
@@ -161,32 +162,32 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
         # build basic query
         generators_sqla = (
             session.query(
-                orm_re_generators.columns.id,
-                orm_re_generators.columns.id.label("generator_id"),
-                orm_re_generators.columns.subst_id,
-                orm_re_generators.columns.la_id,
-                orm_re_generators.columns.mvlv_subst_id,
-                orm_re_generators.columns.electrical_capacity.label("p_nom"),
-                orm_re_generators.columns.generation_type.label("generator_type"),
-                orm_re_generators.columns.generation_subtype.label("subtype"),
-                orm_re_generators.columns.voltage_level,
-                orm_re_generators.columns.w_id.label("weather_cell_id"),
+                orm_re_generators.id,
+                orm_re_generators.id.label("generator_id"),
+                orm_re_generators.subst_id,
+                orm_re_generators.la_id,
+                orm_re_generators.mvlv_subst_id,
+                orm_re_generators.electrical_capacity.label("p_nom"),
+                orm_re_generators.generation_type.label("generator_type"),
+                orm_re_generators.generation_subtype.label("subtype"),
+                orm_re_generators.voltage_level,
+                orm_re_generators.w_id.label("weather_cell_id"),
                 func.ST_AsText(
-                    func.ST_Transform(orm_re_generators.columns.rea_geom_new, srid)
+                    func.ST_Transform(orm_re_generators.rea_geom_new, srid)
                 ).label("geom"),
                 func.ST_AsText(
-                    func.ST_Transform(orm_re_generators.columns.geom, srid)
+                    func.ST_Transform(orm_re_generators.geom, srid)
                 ).label("geom_em"),
             )
             .filter(
-                orm_re_generators.columns.subst_id == edisgo_object.topology.mv_grid.id
+                orm_re_generators.subst_id == edisgo_object.topology.mv_grid.id
             )
             .filter(orm_re_generators_version)
         )
 
         # extend basic query for MV generators and read data from db
         generators_mv_sqla = generators_sqla.filter(
-            orm_re_generators.columns.voltage_level.in_([4, 5])
+            orm_re_generators.voltage_level.in_([4, 5])
         )
         gens_mv = pd.read_sql_query(
             generators_mv_sqla.statement, session.bind, index_col="id"
@@ -200,7 +201,7 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
 
         # extend basic query for LV generators and read data from db
         generators_lv_sqla = generators_sqla.filter(
-            orm_re_generators.columns.voltage_level.in_([6, 7])
+            orm_re_generators.voltage_level.in_([6, 7])
         )
         gens_lv = pd.read_sql_query(
             generators_lv_sqla.statement, session.bind, index_col="id"
@@ -302,51 +303,59 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     oedb_data_source = edisgo_object.config["data_source"]["oedb_data_source"]
     srid = edisgo_object.topology.grid_district["srid"]
 
-    # load ORM names
-    orm_conv_generators_name = (
-        edisgo_object.config[oedb_data_source]["conv_generators_prefix"]
-        + generator_scenario
-        + edisgo_object.config[oedb_data_source]["conv_generators_suffix"]
-    )
-    orm_re_generators_name = (
-        edisgo_object.config[oedb_data_source]["re_generators_prefix"]
-        + generator_scenario
-        + edisgo_object.config[oedb_data_source]["re_generators_suffix"]
+    # Map generator_scenario to full scenario names for mview filter logic
+    scenario_mapping = {
+        'nep2035': 'NEP 2035',
+        'ego100': 'eGo 100',
+        'status_quo': 'Status Quo',
+        'sq': 'Status Quo'
+    }
+    scenario_name = scenario_mapping.get(
+        generator_scenario.lower(),
+        generator_scenario
     )
 
     if oedb_data_source == "model_draft":
-        # import ORMs
-        orm_conv_generators = model_draft.__getattribute__(orm_conv_generators_name)
-        orm_re_generators = model_draft.__getattribute__(orm_re_generators_name)
+        # Use base tables from model_draft schema (CamelCase ORM names, without _mview suffix)
+        orm_conv_generators = model_draft.__getattribute__("EgoDpSupplyConvPowerplant")
+        orm_re_generators = model_draft.__getattribute__("EgoDpSupplyResPowerplant")
 
-        # set dummy version condition (select all generators)
-        orm_conv_generators_version = 1 == 1
-        orm_re_generators_version = 1 == 1
+        # Build scenario filters that replicate mview logic
+        orm_conv_generators_version = build_conv_scenario_filter(
+            orm_conv_generators, scenario_name, version=None
+        )
+        orm_re_generators_version = build_res_scenario_filter(
+            orm_re_generators, scenario_name, version=None
+        )
 
     elif oedb_data_source == "versioned":
         data_version = edisgo_object.config["versioned"]["version"]
 
-        # import ORMs
-        orm_conv_generators = supply.__getattribute__(orm_conv_generators_name)
-        orm_re_generators = supply.__getattribute__(orm_re_generators_name)
+        # Use base tables from supply schema (CamelCase ORM names, without _mview suffix)
+        orm_conv_generators = supply.__getattribute__("EgoDpConvPowerplant")
+        orm_re_generators = supply.__getattribute__("EgoDpResPowerplant")
 
-        # set version condition
-        orm_conv_generators_version = (
-            orm_conv_generators.columns.version == data_version
+        # Build scenario filters that replicate mview logic with version
+        orm_conv_generators_version = build_conv_scenario_filter(
+            orm_conv_generators, scenario_name, version=data_version
         )
-        orm_re_generators_version = orm_re_generators.columns.version == data_version
+        orm_re_generators_version = build_res_scenario_filter(
+            orm_re_generators, scenario_name, version=data_version
+        )
 
     # get conventional and renewable generators
     with session_scope() as session:
         generators_conv_mv = _import_conv_generators(session)
         generators_res_mv, generators_res_lv = _import_res_generators(session)
 
-    generators_mv = pd.concat(
-        [
-            generators_conv_mv,
-            generators_res_mv,
-        ]
-    )
+    # Filter out empty DataFrames before concatenation to avoid FutureWarning
+    dfs_to_concat = [
+        df for df in [generators_conv_mv, generators_res_mv] if not df.empty
+    ]
+    if dfs_to_concat:
+        generators_mv = pd.concat(dfs_to_concat)
+    else:
+        generators_mv = pd.DataFrame()
 
     # validate that imported generators are located inside the grid district
     _validate_sample_geno_location()
@@ -465,14 +474,20 @@ def _update_grids(
     cap_diff_threshold = 10**-4
 
     # get all imported generators
-    imported_gens = pd.concat(
-        [imported_generators_lv, imported_generators_mv], sort=True
-    )
+    # Filter out empty DataFrames before concatenation to avoid FutureWarning
+    dfs_to_concat = [
+        df for df in [imported_generators_lv, imported_generators_mv] if not df.empty
+    ]
+    if dfs_to_concat:
+        imported_gens = pd.concat(dfs_to_concat, sort=True)
+    else:
+        imported_gens = pd.DataFrame()
 
     logger.debug(f"{len(imported_gens)} generators imported.")
 
-    # get existing generators and append ID column
-    existing_gens = edisgo_object.topology.generators_df
+    # get existing generators and append ID column (make copy to avoid
+    # SettingWithCopyWarning)
+    existing_gens = edisgo_object.topology.generators_df.copy()
     existing_gens["id"] = list(
         map(lambda _: int(_.split("_")[-1]), existing_gens.index)
     )
@@ -937,11 +952,15 @@ def oedb(
             ).to_crs(srid_edisgo)
         return chp_gdf
 
-    saio.register_schema("supply", engine)
-    from saio.supply import (
+    config = Config()
+    (
         egon_chp_plants,
         egon_power_plants,
         egon_power_plants_pv_roof_building,
+    ) = config.import_tables_from_oep(
+        engine,
+        ["egon_chp_plants", "egon_power_plants", "egon_power_plants_pv_roof_building"],
+        "supply",
     )
 
     # get generator data from database
@@ -1048,15 +1067,15 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
         suffixes=("_old", ""),
     ).set_index("gen_name")
     # add building id
-    edisgo_object.topology.generators_df.loc[
-        gens_existing.index, "building_id"
-    ] = gens_existing.building_id
+    edisgo_object.topology.generators_df.loc[gens_existing.index, "building_id"] = (
+        gens_existing.building_id
+    )
     # update plants where capacity decreased
     gens_decreased_cap = gens_existing.query("p_nom < p_nom_old")
     if len(gens_decreased_cap) > 0:
-        edisgo_object.topology.generators_df.loc[
-            gens_decreased_cap.index, "p_nom"
-        ] = gens_decreased_cap.p_nom
+        edisgo_object.topology.generators_df.loc[gens_decreased_cap.index, "p_nom"] = (
+            gens_decreased_cap.p_nom
+        )
     # update plants where capacity increased
     gens_increased_cap = gens_existing.query("p_nom > p_nom_old")
     for gen in gens_increased_cap.index:
@@ -1069,9 +1088,9 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
         if voltage_level_new >= voltage_level_old:
             # simply update p_nom if plant doesn't need to be connected to higher
             # voltage level
-            edisgo_object.topology.generators_df.at[
-                gen, "p_nom"
-            ] = gens_increased_cap.at[gen, "p_nom"]
+            edisgo_object.topology.generators_df.at[gen, "p_nom"] = (
+                gens_increased_cap.at[gen, "p_nom"]
+            )
         else:
             # if plant needs to be connected to higher voltage level, remove existing
             # plant and integrate new component based on geolocation
@@ -1179,10 +1198,10 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
 
     # add voltage level
     for gen in pv_rooftop_df.index:
-        pv_rooftop_df.at[
-            gen, "voltage_level"
-        ] = determine_grid_integration_voltage_level(
-            edisgo_object, pv_rooftop_df.at[gen, "p_nom"]
+        pv_rooftop_df.at[gen, "voltage_level"] = (
+            determine_grid_integration_voltage_level(
+                edisgo_object, pv_rooftop_df.at[gen, "p_nom"]
+            )
         )
 
     # check for duplicated generator names and choose random name for duplicates
@@ -1400,9 +1419,9 @@ def _integrate_power_and_chp_plants(edisgo_object, power_plants_gdf, chp_gdf):
             if voltage_level_new >= voltage_level_old:
                 # simply update p_nom if plant doesn't need to be connected to higher
                 # voltage level
-                edisgo_object.topology.generators_df.at[
-                    gen, "p_nom"
-                ] = gens_increased_cap.at[gen, "p_nom"]
+                edisgo_object.topology.generators_df.at[gen, "p_nom"] = (
+                    gens_increased_cap.at[gen, "p_nom"]
+                )
             else:
                 # if plant needs to be connected to higher voltage level, remove
                 # existing plant and integrate new component based on geolocation

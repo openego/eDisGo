@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING
 import networkx as nx
 import numpy as np
 import pandas as pd
-import saio
 
 from sqlalchemy.engine.base import Engine
 
 from edisgo.flex_opt import exceptions, q_control
 from edisgo.io.db import session_scope_egon_data, sql_grid_geom, sql_intersects
 from edisgo.tools import session_scope
+from edisgo.tools.config import Config
 
 if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import climate
@@ -579,6 +579,7 @@ def assign_voltage_level_to_component(df, buses_df):
         (either 'mv' or 'lv').
 
     """
+    df = df.copy()
     df["voltage_level"] = df.apply(
         lambda _: "lv" if buses_df.at[_.bus, "v_nom"] < 1 else "mv",
         axis=1,
@@ -741,8 +742,10 @@ def get_weather_cells_intersecting_with_grid_district(
             ).filter(sql_intersects(table.geom, sql_geom, srid))
             weather_cells = pd.read_sql(sql=query.statement, con=query.session.bind).gid
     else:
-        saio.register_schema("supply", engine)
-        from saio.supply import egon_era5_weather_cells
+        config = Config()
+        (egon_era5_weather_cells,) = config.import_tables_from_oep(
+            engine, ["egon_era5_weather_cells"], "supply"
+        )
 
         with session_scope_egon_data(engine=engine) as session:
             query = session.query(

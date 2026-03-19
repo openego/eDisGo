@@ -828,19 +828,23 @@ class TimeSeries:
         )
         # write reactive power configuration to TimeSeriesRaw
         self.time_series_raw.q_control.drop(df.index, errors="ignore", inplace=True)
-        self.time_series_raw.q_control = pd.concat(
-            [
-                self.time_series_raw.q_control,
-                pd.DataFrame(
-                    index=df.index,
-                    data={
-                        "type": "fixed_cosphi",
-                        "q_sign": q_sign,
-                        "power_factor": power_factor,
-                    },
-                ),
-            ]
+        new_q_control = pd.DataFrame(
+            index=df.index,
+            data={
+                "type": "fixed_cosphi",
+                "q_sign": q_sign,
+                "power_factor": power_factor,
+            },
         )
+        if self.time_series_raw.q_control.empty:
+            self.time_series_raw.q_control = new_q_control
+        elif not new_q_control.empty:
+            self.time_series_raw.q_control = pd.concat(
+                [
+                    self.time_series_raw.q_control,
+                    new_q_control,
+                ]
+            )
         # calculate reactive power of generators
         reactive_power = q_control.fixed_cosphi(active_power, q_sign, power_factor)
         return active_power, reactive_power
@@ -981,9 +985,9 @@ class TimeSeries:
         for s in sectors:
             for case in cases:
                 for voltage_level in ["mv", "lv"]:
-                    power_scaling.at[
-                        f"{case}_{voltage_level}", s
-                    ] = worst_case_scale_factors[f"{voltage_level}_{case}_cp_{s}"]
+                    power_scaling.at[f"{case}_{voltage_level}", s] = (
+                        worst_case_scale_factors[f"{voltage_level}_{case}_cp_{s}"]
+                    )
 
         # calculate active power of charging points
         active_power = pd.concat(
@@ -1204,7 +1208,7 @@ class TimeSeries:
                 Technology and weather cell specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_. See
+                <https://openenergyplatform.org/database/>`_. See
                 :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
 
                 This option requires that the parameter `engine` is provided in case
@@ -1375,9 +1379,11 @@ class TimeSeries:
 
         # scale time series by nominal power
         ts_scaled = generators_df.apply(
-            lambda x: ts_generators[x.type] * x.p_nom
-            if x.type in ts_generators.columns
-            else ts_generators["other"] * x.p_nom,
+            lambda x: (
+                ts_generators[x.type] * x.p_nom
+                if x.type in ts_generators.columns
+                else ts_generators["other"] * x.p_nom
+            ),
             axis=1,
         ).T
         if not ts_scaled.empty:
@@ -1435,9 +1441,9 @@ class TimeSeries:
 
         # write to TimeSeriesRaw
         for col in ts_loads:
-            self.time_series_raw.conventional_loads_active_power_by_sector[
-                col
-            ] = ts_loads[col]
+            self.time_series_raw.conventional_loads_active_power_by_sector[col] = (
+                ts_loads[col]
+            )
 
         # set load_names if None
         if load_names is None:
@@ -1494,9 +1500,9 @@ class TimeSeries:
 
         # write to TimeSeriesRaw
         for col in ts_loads:
-            self.time_series_raw.charging_points_active_power_by_use_case[
-                col
-            ] = ts_loads[col]
+            self.time_series_raw.charging_points_active_power_by_use_case[col] = (
+                ts_loads[col]
+            )
 
         # set load_names if None
         if load_names is None:
@@ -1729,19 +1735,21 @@ class TimeSeries:
                 ],
                 inplace=True,
             )
-            self.time_series_raw.q_control = pd.concat(
-                [
-                    self.time_series_raw.q_control,
-                    pd.DataFrame(
-                        index=components_names,
-                        data={
-                            "type": "fixed_cosphi",
-                            "q_sign": q_sign,
-                            "power_factor": power_factor,
-                        },
-                    ),
-                ]
+            new_data = pd.DataFrame(
+                index=components_names,
+                data={
+                    "type": "fixed_cosphi",
+                    "q_sign": q_sign,
+                    "power_factor": power_factor,
+                },
             )
+            frames_to_concat = [
+                df for df in [self.time_series_raw.q_control, new_data] if not df.empty
+            ]
+            if frames_to_concat:
+                self.time_series_raw.q_control = pd.concat(frames_to_concat)
+            elif not new_data.empty:
+                self.time_series_raw.q_control = new_data
             return q_sign, power_factor
 
         # set reactive power for generators

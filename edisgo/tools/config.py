@@ -20,6 +20,7 @@ __author__ = "nesnoj, gplssm"
 
 import copy
 import datetime
+import importlib
 import json
 import logging
 import os
@@ -28,7 +29,17 @@ import shutil
 from glob import glob
 from zipfile import ZipFile
 
+import oedialect  # noqa: F401
+import sqlalchemy as sa
+
+from saio import register_schema
+from sqlalchemy import MetaData, Table
+from sqlalchemy.ext.declarative import declarative_base
+
 import edisgo
+
+from edisgo.io.db import engine as Engine
+from edisgo.io.db import session_scope_egon_data
 
 logger = logging.getLogger(__name__)
 
@@ -55,39 +66,22 @@ class Config:
     Container for all configurations.
 
     Other Parameters
-    -----------------
-    config_path : None or str or :dict
+    ----------------
+    config_path : None or str or dict
         Path to the config directory. Options are:
 
-        * 'default' (default)
-            If `config_path` is set to 'default', the provided default config files
-            are used directly.
-        * str
-            If `config_path` is a string, configs will be loaded from the
-            directory specified by `config_path`. If the directory
-            does not exist, it is created. If config files don't exist, the
-            default config files are copied into the directory.
-        * dict
-            A dictionary can be used to specify different paths to the
-            different config files. The dictionary must have the following
-            keys:
-
-            * 'config_db_tables'
-
-            * 'config_grid'
-
-            * 'config_grid_expansion'
-
-            * 'config_timeseries'
-
-            Values of the dictionary are paths to the corresponding
-            config file. In contrast to the other options, the directories
-            and config files must exist and are not automatically created.
-        * None
-            If `config_path` is None, configs are loaded from the edisgo
-            default config directory ($HOME$/.edisgo). If the directory
-            does not exist, it is created. If config files don't exist, the
-            default config files are copied into the directory.
+        * 'default' (default): The provided default config files are used directly.
+        * str: Configs will be loaded from the directory specified by `config_path`.
+          If the directory does not exist, it is created. If config files don't exist,
+          the default config files are copied into the directory.
+        * dict: A dictionary can be used to specify different paths to the different
+          config files. Keys are 'config_db_tables', 'config_grid',
+          'config_grid_expansion', and 'config_timeseries'. Values are paths to the
+          corresponding config file. The directories and config files must exist and
+          are not automatically created.
+        * None: Configs are loaded from the edisgo default config directory
+          (~/.edisgo). If the directory does not exist, it is created. If config
+          files don't exist, the default config files are copied into the directory.
 
         Default: "default".
 
@@ -129,6 +123,179 @@ class Config:
                 filename=kwargs.get("json_filename", None),
                 from_zip_archive=kwargs.get("from_zip_archive", False),
             )
+        self._config_dict = {}
+
+    @property
+    def db_table_mapping(self):
+        if not self._config_dict.get("db_table_mapping"):
+            self._ensure_db_mappings_loaded()
+        return self._config_dict.get("db_table_mapping", {})
+
+    @db_table_mapping.setter
+    def db_table_mapping(self, value):
+        self._config_dict["db_table_mapping"] = value
+
+    @property
+    def db_schema_mapping(self):
+        if not self._config_dict.get("db_schema_mapping"):
+            self._ensure_db_mappings_loaded()
+        return self._config_dict.get("db_schema_mapping", {})
+
+    @db_schema_mapping.setter
+    def db_schema_mapping(self, value):
+        self._config_dict["db_schema_mapping"] = value
+
+    def _ensure_db_mappings_loaded(self) -> None:
+        """Lazy-loads DB mappings only when needed for remote OEP access."""
+        if self._config_dict.get("db_table_mapping") and self._config_dict.get(
+            "db_schema_mapping"
+        ):
+            return
+
+        name_mapping, schema_mapping = self.get_database_alias_dictionaries()
+        self.db_table_mapping = name_mapping
+        self.db_schema_mapping = schema_mapping
+
+    def get_database_alias_dictionaries(self) -> tuple[dict[str, str], dict[str, str]]:
+        """
+        Retrieves the database alias dictionaries for table and schema mappings.
+
+        Returns
+        -------
+        tuple
+            A tuple containing two dictionaries:
+            - name_mapping: A dictionary mapping source table names to target table
+                names.
+            - schema_mapping: A dictionary mapping source schema names to target schema
+                names.
+        """
+        engine = Engine()
+        dictionary_schema_name = "data"
+        dictionary_table = self._get_module_attr(
+            self._get_saio_module(dictionary_schema_name, engine),
+            "edut_00",
+            f"saio.{dictionary_schema_name}",
+        )
+        with session_scope_egon_data(engine) as session:
+            query = session.query(dictionary_table)
+            dictionary_entries = query.all()
+            name_mapping = {
+                entry.source_name: entry.target_name for entry in dictionary_entries
+            }
+            schema_mapping = {
+                entry.source_schema: getattr(entry, "target_schema", "dataset")
+                for entry in dictionary_entries
+            }
+
+        return name_mapping, schema_mapping
+
+    @staticmethod
+    def _get_module_attr(module, attribute: str, module_name: str):
+        try:
+            return getattr(module, attribute)
+        except AttributeError as exc:
+            raise AttributeError(
+                f"Module '{module_name}' has no attribute '{attribute}'. "
+                "Check the table mapping configuration."
+            ) from exc
+
+    def _get_saio_module(self, schema: str, engine: sa.engine.Engine):
+        register_schema(schema, engine)
+        module_name = f"saio.{schema}"
+        try:
+            return importlib.import_module(module_name)
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                f"Could not import module '{module_name}'. "
+                "Verify schema registration and saio package availability."
+            ) from exc
+
+    @staticmethod
+    def _parse_time(value):
+        if isinstance(value, datetime.time):
+            return value
+        for time_format in ("%H:%M:%S", "%H:%M"):
+            try:
+                parsed = datetime.datetime.strptime(value, time_format)
+                return datetime.time(parsed.hour, parsed.minute)
+            except (TypeError, ValueError):
+                continue
+        raise ValueError(f"Unsupported time format for value '{value}'")
+
+    def _normalize_demandlib_times(self, config_dict: dict) -> None:
+        if "demandlib" not in config_dict:
+            return
+        demandlib = config_dict["demandlib"]
+        for key in ("day_start", "day_end"):
+            if key in demandlib:
+                demandlib[key] = self._parse_time(demandlib[key])
+
+    def import_tables_from_oep(
+        self, engine: sa.engine.Engine, table_names: list[str], schema_name: str
+    ) -> list[sa.Table]:
+        """
+        Imports tables from the OEP database based on the provided table names and
+        schema name.
+
+        Parameters
+        ----------
+        engine : sqlalchemy.engine.Engine
+            The SQLAlchemy engine to use for database connection.
+        table_names : list of str
+            List of table names to import.
+        schema_name : str
+            The schema name to use for importing tables.
+
+        Returns
+        -------
+        list of sqlalchemy.Table
+            A list of SQLAlchemy Table objects corresponding to the imported tables.
+        """
+        if "openenergyplatform" in str(engine.url):
+            self._ensure_db_mappings_loaded()
+            schema = self.db_schema_mapping.get(schema_name)
+            if not schema:
+                raise KeyError(
+                    f"No schema mapping found for '{schema_name}'. "
+                    "Ensure database alias dictionaries are available."
+                )
+
+            module = self._get_saio_module(schema, engine)
+
+            tables: list[sa.Table] = []
+            for table in table_names:
+                mapped_table = self.db_table_mapping.get(table)
+                if not mapped_table:
+                    raise KeyError(
+                        f"No table mapping found for '{table}'. "
+                        "Update the database alias dictionaries."
+                    )
+                tables.append(
+                    self._get_module_attr(module, mapped_table, module.__name__)
+                )
+
+            return tables
+        else:
+            # --- Local egon_data DB case ---
+            Base = declarative_base()
+            metadata = MetaData(schema=schema_name)
+            metadata.reflect(bind=engine, only=table_names)
+
+            orm_classes = []
+            for table_name in table_names:
+                table = Table(
+                    table_name, metadata, autoload_with=engine, schema=schema_name
+                )
+
+                # dynamisch eine ORM-Klasse erzeugen
+                orm_class = type(
+                    table_name,
+                    (Base,),
+                    {"__tablename__": table_name, "__table__": table},
+                )
+                orm_classes.append(orm_class)
+
+            return orm_classes
 
     def from_cfg(self, config_path=None):
         """
@@ -184,22 +351,7 @@ class Config:
                 except Exception:
                     pass
 
-        # convert to time object
-        config_dict["demandlib"]["day_start"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_start"], "%H:%M"
-        )
-        config_dict["demandlib"]["day_start"] = datetime.time(
-            config_dict["demandlib"]["day_start"].hour,
-            config_dict["demandlib"]["day_start"].minute,
-        )
-        config_dict["demandlib"]["day_end"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_end"], "%H:%M"
-        )
-        config_dict["demandlib"]["day_end"] = datetime.time(
-            config_dict["demandlib"]["day_end"].hour,
-            config_dict["demandlib"]["day_end"].minute,
-        )
-
+        self._normalize_demandlib_times(config_dict)
         return config_dict
 
     def to_json(self, directory, filename=None):
@@ -260,20 +412,7 @@ class Config:
 
         config_dict = json.loads(data)
 
-        config_dict["demandlib"]["day_start"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_start"], "%H:%M:%S"
-        )
-        config_dict["demandlib"]["day_start"] = datetime.time(
-            config_dict["demandlib"]["day_start"].hour,
-            config_dict["demandlib"]["day_start"].minute,
-        )
-        config_dict["demandlib"]["day_end"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_end"], "%H:%M:%S"
-        )
-        config_dict["demandlib"]["day_end"] = datetime.time(
-            config_dict["demandlib"]["day_end"].hour,
-            config_dict["demandlib"]["day_end"].minute,
-        )
+        self._normalize_demandlib_times(config_dict)
 
         return config_dict
 
@@ -375,16 +514,12 @@ def get(section, key):
     """
     if not _loaded:
         pass
-    try:
-        return cfg.getfloat(section, key)
-    except Exception:
+    for accessor in (cfg.getfloat, cfg.getint, cfg.getboolean):
         try:
-            return cfg.getint(section, key)
+            return accessor(section, key)
         except Exception:
-            try:
-                return cfg.getboolean(section, key)
-            except Exception:
-                return cfg.get(section, key)
+            continue
+    return cfg.get(section, key)
 
 
 def get_default_config_path():

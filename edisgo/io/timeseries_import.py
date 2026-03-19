@@ -6,7 +6,6 @@ import os
 
 import numpy as np
 import pandas as pd
-import saio
 
 from demandlib import bdew as bdew
 from demandlib import particular_profiles as profiles
@@ -15,6 +14,7 @@ from workalendar.europe import Germany
 
 from edisgo.io.db import session_scope_egon_data
 from edisgo.tools import session_scope, tools
+from edisgo.tools.config import Config
 
 if "READTHEDOCS" not in os.environ:
     from egoio.db_tables import model_draft, supply
@@ -74,7 +74,7 @@ def _timeindex_helper_func(
 def feedin_oedb_legacy(edisgo_object, timeindex=None):
     """
     Import feed-in time series data for wind and solar power plants from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Parameters
     ----------
@@ -158,7 +158,7 @@ def feedin_oedb(
 ):
     """
     Import feed-in time series data for wind and solar power plants from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Parameters
     ----------
@@ -187,8 +187,10 @@ def feedin_oedb(
         edisgo_object, engine=engine
     )
 
-    saio.register_schema("supply", engine)
-    from saio.supply import egon_era5_renewable_feedin
+    config = Config()
+    (egon_era5_renewable_feedin,) = config.import_tables_from_oep(
+        engine, ["egon_era5_renewable_feedin"], "supply"
+    )
 
     with session_scope_egon_data(engine) as session:
         query = (
@@ -231,7 +233,7 @@ def feedin_oedb(
 def load_time_series_demandlib(edisgo_obj, timeindex=None):
     """
     Get normalized sectoral electricity load time series using the
-    `demandlib <https://github.com/oemof/demandlib/>`_.
+    `demandlib <https://github.com/oemof/oemof-demand>`_.
 
     Resulting electricity load profiles hold time series of hourly conventional
     electricity demand for the sectors residential, cts, agricultural
@@ -323,7 +325,7 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
 def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
     """
     Get COP (coefficient of performance) time series data from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Parameters
     ----------
@@ -354,8 +356,10 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
         edisgo_object, timeindex, default_year=2011, allow_leap_year=False
     )
 
-    saio.register_schema("supply", engine)
-    from saio.supply import egon_era5_renewable_feedin
+    config = Config()
+    (egon_era5_renewable_feedin,) = config.import_tables_from_oep(
+        engine, ["egon_era5_renewable_feedin"], "supply"
+    )
 
     # get cop from database
     with session_scope_egon_data(engine) as session:
@@ -381,7 +385,7 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
 def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
     """
     Get heat demand profiles for heat pumps from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Heat demand data is returned for all heat pumps in the grid.
     For more information on how individual heat demand profiles are obtained see
@@ -502,7 +506,7 @@ def electricity_demand_oedb(
 ):
     """
     Get electricity demand profiles for all conventional loads from the
-    `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+    `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
     Conventional loads comprise conventional electricity applications in the
     residential, CTS and industrial sector.
@@ -650,8 +654,10 @@ def _get_zensus_cells_of_buildings(building_ids, engine):
         zensus cell ID in column 'zensus_id' (as integer).
 
     """
-    saio.register_schema("boundaries", engine)
-    from saio.boundaries import egon_map_zensus_mvgd_buildings
+    config = Config()
+    (egon_map_zensus_mvgd_buildings,) = config.import_tables_from_oep(
+        engine, ["egon_map_zensus_mvgd_buildings"], "boundaries"
+    )
 
     with session_scope_egon_data(engine) as session:
         query = session.query(
@@ -828,16 +834,25 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
             df = pd.read_sql(query.statement, query.session.bind, index_col=None)
         return df
 
-    saio.register_schema("demand", engine)
-    from saio.demand import egon_daily_heat_demand_per_climate_zone as daily_heat_demand
-    from saio.demand import (
+    config = Config()
+    (
+        daily_heat_demand,
         egon_heat_idp_pool,
         egon_heat_timeseries_selected_profiles,
         egon_peta_heat,
+    ) = config.import_tables_from_oep(
+        engine,
+        [
+            "egon_daily_heat_demand_per_climate_zone",
+            "egon_heat_idp_pool",
+            "egon_heat_timeseries_selected_profiles",
+            "egon_peta_heat",
+        ],
+        "demand",
     )
-
-    saio.register_schema("boundaries", engine)
-    from saio.boundaries import egon_map_zensus_climate_zones
+    (egon_map_zensus_climate_zones,) = config.import_tables_from_oep(
+        engine, ["egon_map_zensus_climate_zones"], "boundaries"
+    )
 
     # get zensus cells
     zensus_cells_df = _get_zensus_cells_of_buildings(building_ids, engine)
@@ -925,8 +940,10 @@ def get_district_heating_heat_demand_profiles(district_heating_ids, scenario, en
         and column names are district heating network ID as integer.
 
     """
-    saio.register_schema("demand", engine)
-    from saio.demand import egon_timeseries_district_heating
+    config = Config()
+    (egon_timeseries_district_heating,) = config.import_tables_from_oep(
+        engine, ["egon_timeseries_district_heating"], "demand"
+    )
 
     with session_scope_egon_data(engine) as session:
         query = session.query(
@@ -978,8 +995,10 @@ def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
         column names are building ID as integer.
 
     """
-    saio.register_schema("boundaries", engine)
-    from saio.boundaries import egon_map_zensus_mvgd_buildings
+    config = Config()
+    (egon_map_zensus_mvgd_buildings,) = config.import_tables_from_oep(
+        engine, ["egon_map_zensus_mvgd_buildings"], "boundaries"
+    )
 
     # get MV grid IDs of CTS loads
     cts_loads = edisgo_obj.topology.loads_df[
@@ -1133,12 +1152,21 @@ def get_cts_profiles_per_grid(
             df = pd.read_sql(query.statement, engine, index_col=None)
         return df.demand.sum()
 
-    saio.register_schema("demand", engine)
+    config = Config()
+
+    # saio.register_schema("demand", engine)
 
     if sector == "electricity":
-        from saio.demand import (
+        (
             egon_cts_electricity_demand_building_share,
             egon_etrago_electricity_cts,
+        ) = config.import_tables_from_oep(
+            engine,
+            [
+                "egon_cts_electricity_demand_building_share",
+                "egon_etrago_electricity_cts",
+            ],
+            "demand",
         )
 
         df_cts_substation_profiles = _get_substation_profile()
@@ -1147,15 +1175,22 @@ def get_cts_profiles_per_grid(
         df_demand_share = _get_demand_share()
 
     elif sector == "heat":
-        from saio.demand import (
+        (
             egon_cts_heat_demand_building_share,
             egon_etrago_heat_cts,
             egon_peta_heat,
+        ) = config.import_tables_from_oep(
+            engine,
+            [
+                "egon_cts_heat_demand_building_share",
+                "egon_etrago_heat_cts",
+                "egon_peta_heat",
+            ],
+            "demand",
         )
-
-        saio.register_schema("boundaries", engine)
-        from saio.boundaries import egon_map_zensus_grid_districts
-
+        (egon_map_zensus_grid_districts,) = config.import_tables_from_oep(
+            engine, ["egon_map_zensus_grid_districts"], "boundaries"
+        )
         df_cts_substation_profiles = _get_substation_profile()
         if df_cts_substation_profiles.empty:
             return
@@ -1295,13 +1330,19 @@ def get_residential_electricity_profiles_per_building(building_ids, scenario, en
 
         return df_converted
 
-    saio.register_schema("demand", engine)
-    from saio.demand import (
-        egon_household_electricity_profile_in_census_cell as hh_profile,
-    )
-    from saio.demand import (
+    config = Config()
+    (
+        hh_profile,
         egon_household_electricity_profile_of_buildings,
         iee_household_load_profiles,
+    ) = config.import_tables_from_oep(
+        engine,
+        [
+            "egon_household_electricity_profile_in_census_cell",
+            "egon_household_electricity_profile_of_buildings",
+            "iee_household_load_profiles",
+        ],
+        "demand",
     )
 
     # get zensus cells of buildings
@@ -1412,10 +1453,17 @@ def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
             )
         return pd.read_sql(query.statement, engine, index_col=None)
 
-    saio.register_schema("demand", engine)
-    from saio.demand import (
+    config = Config()
+    (
         egon_osm_ind_load_curves_individual,
         egon_sites_ind_load_curves_individual,
+    ) = config.import_tables_from_oep(
+        engine,
+        [
+            "egon_osm_ind_load_curves_individual",
+            "egon_sites_ind_load_curves_individual",
+        ],
+        "demand",
     )
 
     # get profiles of sites and OSM areas

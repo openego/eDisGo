@@ -171,10 +171,10 @@ class Topology:
             config = {}
             for voltage_level, eq_list in equipment.items():
                 for i in eq_list:
-                    config[
-                        "equipment_{}_parameters_{}".format(voltage_level, i)
-                    ] = "equipment-parameters_{}_{}.csv".format(
-                        voltage_level.upper(), i
+                    config["equipment_{}_parameters_{}".format(voltage_level, i)] = (
+                        "equipment-parameters_{}_{}.csv".format(
+                            voltage_level.upper(), i
+                        )
                     )
         else:
             equipment_dir = config["system_dirs"]["equipment_dir"]
@@ -1447,9 +1447,7 @@ class Topology:
         line_name = "Line_{}_{}".format(bus0, bus1)
         while line_name in self.lines_df.index:
             random.seed(a=line_name)
-            line_name = "Line_{}_{}_{}".format(
-                bus0, bus1, random.randint(10**8, 10**9)
-            )
+            line_name = "Line_{}_{}_{}".format(bus0, bus1, random.randint(10**8, 10**9))
 
         # check if all necessary data is now available
         if b is None:
@@ -1560,7 +1558,7 @@ class Topology:
         """
         if name in self.loads_df.index:
             bus = self.loads_df.at[name, "bus"]
-            self._loads_df.drop(name, inplace=True)
+            self._loads_df = self._loads_df.drop(name)
 
             # if no other elements are connected, remove line and bus as well
             if self._check_bus_for_removal(bus):
@@ -1583,7 +1581,7 @@ class Topology:
         """
         if name in self.generators_df.index:
             bus = self.generators_df.at[name, "bus"]
-            self._generators_df.drop(name, inplace=True)
+            self._generators_df = self._generators_df.drop(name)
 
             # if no other elements are connected to same bus, remove line
             # and bus
@@ -1610,7 +1608,7 @@ class Topology:
         # remove storage unit and time series
         if name in self.storage_units_df.index:
             bus = self.storage_units_df.at[name, "bus"]
-            self._storage_units_df.drop(name, inplace=True)
+            self._storage_units_df = self._storage_units_df.drop(name)
 
             # if no other elements are connected, remove line and bus as well
             if self._check_bus_for_removal(bus):
@@ -1723,9 +1721,9 @@ class Topology:
         )
 
         # update number parallel lines
-        self._lines_df.loc[
-            lines_num_parallel.index, "num_parallel"
-        ] = lines_num_parallel
+        self._lines_df.loc[lines_num_parallel.index, "num_parallel"] = (
+            lines_num_parallel
+        )
 
     def change_line_type(self, lines, new_line_type):
         """
@@ -1878,7 +1876,7 @@ class Topology:
         power = comp_data.pop("p")
 
         # create new bus for new component
-        if type(comp_data["geom"]) != Point:
+        if not isinstance(comp_data["geom"], Point):
             geom = wkt_loads(comp_data["geom"])
         else:
             geom = comp_data["geom"]
@@ -3403,9 +3401,9 @@ class Topology:
         self.buses_df = self.buses_df[~self.buses_df.index.isin(buses_to_drop)]
         self.lines_df = self.lines_df[~self.lines_df.index.isin(lines_to_drop)]
         self.loads_df.loc[self.loads_df.bus.isin(buses_to_drop), "bus"] = station_bus
-        self.generators_df.loc[
-            self.generators_df.bus.isin(buses_to_drop), "bus"
-        ] = station_bus
+        self.generators_df.loc[self.generators_df.bus.isin(buses_to_drop), "bus"] = (
+            station_bus
+        )
         self.storage_units_df.loc[
             self.storage_units_df.bus.isin(buses_to_drop), "bus"
         ] = station_bus
