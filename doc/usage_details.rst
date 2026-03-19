@@ -361,10 +361,10 @@ This mode can be invoked as follows:
 For the following components you can use existing time series:
 
 * Fluctuating generators: Feed-in time series for solar and wind power plants can be
-  retrieved from the `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+  retrieved from the `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 * Conventional loads: Standard load profiles for the different sectors residential,
   commercial, agricultural and industrial are generated using the oemof
-  `demandlib <https://github.com/oemof/demandlib/>`_.
+  `demandlib <https://github.com/oemof/oemof-demand>`_.
 
 For all other components you need to provide your own time series. Time series for
 heat pumps cannot be set using this mode.
