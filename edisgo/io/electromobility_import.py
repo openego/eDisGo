@@ -371,10 +371,49 @@ def assure_minimum_potential_charging_parks(
     edisgo_obj: EDisGo,
     potential_charging_parks_gdf: gpd.GeoDataFrame,
     **kwargs,
-):
-    # ensure minimum number of potential charging parks per car
+) -> gpd.GeoDataFrame:
+    """
+    Ensures that there is a minimum number of potential charging parks
+    relative to the number of electric vehicles for each use case (home, work,
+    public, and high-power charging). This function adjusts the potential
+    charging parks by duplicating entries if necessary.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+        The eDisGo object containing grid and electromobility data.
+    potential_charging_parks_gdf : :geopandas:`geopandas.GeoDataFrame<GeoDataFrame>`
+        A GeoDataFrame containing potential charging park locations
+        and their attributes.
+    **kwargs : dict, optional
+        Additional keyword arguments to specify the grid connection to car
+        rate for different use cases. Expected keys:
+        - 'gc_to_car_rate_home' : float, optional, default 0.5
+        - 'gc_to_car_rate_work' : float, optional, default 0.25
+        - 'gc_to_car_rate_public' : float, optional, default 0.1
+        - 'gc_to_car_rate_hpc' : float, optional, default 0.005
+
+    Returns
+    -------
+    :geopandas:`geopandas.GeoDataFrame<GeoDataFrame>`
+        A GeoDataFrame with adjusted potential charging park locations,
+        ensuring the minimum required number of parks per use case.
+
+    Notes
+    -----
+    - The function may duplicate potential charging park entries if the
+      current number does not meet the required rate relative to the number
+      of cars for each use case.
+    - If no charging parks are available for a use case, a random sample of
+      10% of public charging parks will be duplicated and assigned to the
+      missing use case.
+    """
+
+    # Calculate the total number of unique cars
     num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
 
+    # Iterate over each use case to ensure the minimum number of potential charging
+    # parks
     for use_case in USECASES:
         if use_case == "home":
             gc_to_car_rate = kwargs.get("gc_to_car_rate_home", 0.5)
@@ -385,30 +424,33 @@ def assure_minimum_potential_charging_parks(
         elif use_case == "hpc":
             gc_to_car_rate = kwargs.get("gc_to_car_rate_hpc", 0.005)
 
+        # Filter the GeoDataFrame for the current use case
         use_case_gdf = potential_charging_parks_gdf.loc[
             potential_charging_parks_gdf.use_case == use_case
         ]
 
+        # Count the number of potential grid connections (GCs) for the use case
         num_gcs = len(use_case_gdf)
 
-        # if tracbev doesn't provide possible grid connections choose a
-        # random public potential charging park and duplicate
+        # Handle cases where no potential charging parks exist for a specific use case
         if num_gcs == 0:
             logger.warning(
-                f"There are no potential charging parks for use case {use_case}. "
-                f"Therefore 10 % of public potential charging parks are duplicated "
-                f"randomly and assigned to use case {use_case}."
+                f"No potential charging parks found for use case '{use_case}'. "
+                f"Duplicating 10% of public potential charging parks and assigning "
+                f"them to use case '{use_case}'."
             )
 
+            # Randomly sample 10% of public charging parks and assign to the current use
+            # case
             public_gcs = potential_charging_parks_gdf.loc[
                 potential_charging_parks_gdf.use_case == "public"
             ]
-
             random_gcs = public_gcs.sample(
                 int(np.ceil(len(public_gcs) / 10)),
                 random_state=edisgo_obj.topology.mv_grid.id,
             ).assign(use_case=use_case)
 
+            # Append the new entries to the GeoDataFrame
             potential_charging_parks_gdf = pd.concat(
                 [
                     potential_charging_parks_gdf,
@@ -421,21 +463,22 @@ def assure_minimum_potential_charging_parks(
             ]
             num_gcs = len(use_case_gdf)
 
-        # escape zero division
+        # Calculate the actual grid connection to car rate
         actual_gc_to_car_rate = np.Infinity if num_cars == 0 else num_gcs / num_cars
 
-        # duplicate potential charging parks until desired quantity is ensured
+        # Duplicate potential charging parks until the required rate is met
         max_it = 50
         n = 0
-
         while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
             logger.info(
                 f"Duplicating potential charging parks to meet the desired grid "
-                f"connections to cars rate of {gc_to_car_rate*100:.2f} % for use case "
-                f"{use_case}. Iteration: {n+1}."
+                f"connections to cars rate of {gc_to_car_rate * 100:.2f}% for use case "
+                f"'{use_case}'. Iteration: {n + 1}."
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
+                # Double the number of potential charging parks by duplicating the
+                # entire subset
                 potential_charging_parks_gdf = pd.concat(
                     [
                         potential_charging_parks_gdf,
@@ -443,17 +486,15 @@ def assure_minimum_potential_charging_parks(
                     ],
                     ignore_index=True,
                 )
-
             else:
+                # Calculate the number of extra grid connections needed and sample them
                 extra_gcs = (
                     int(np.ceil(num_gcs * gc_to_car_rate / actual_gc_to_car_rate))
                     - num_gcs
                 )
-
                 extra_gdf = use_case_gdf.sample(
                     n=extra_gcs, random_state=edisgo_obj.topology.mv_grid.id
                 )
-
                 potential_charging_parks_gdf = pd.concat(
                     [
                         potential_charging_parks_gdf,
@@ -462,23 +503,21 @@ def assure_minimum_potential_charging_parks(
                     ignore_index=True,
                 )
 
+            # Recalculate the grid connection to car rate after duplication
             use_case_gdf = potential_charging_parks_gdf.loc[
                 potential_charging_parks_gdf.use_case == use_case
             ]
-
             num_gcs = len(use_case_gdf)
-
             actual_gc_to_car_rate = num_gcs / num_cars
 
             n += 1
 
-    # sort GeoDataFrame
+    # Sort the GeoDataFrame by use case, AGS, and user-centric weight
     potential_charging_parks_gdf = potential_charging_parks_gdf.sort_values(
         by=["use_case", "ags", "user_centric_weight"], ascending=[True, True, False]
     ).reset_index(drop=True)
 
-    # in case of polygons use the centroid as potential charging parks point
-    # and set crs to match edisgo object
+    # For polygon geometries, use the centroid as the charging park point and match CRS
     return (
         potential_charging_parks_gdf.assign(
             geometry=potential_charging_parks_gdf.geometry.representative_point()
@@ -523,70 +562,83 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
 
 def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
     """
-    Get weights per potential charging point for a given set of grid connection indices.
+    Calculate the weights for potential charging points based on user and grid
+    preferences.
+
+    This function determines the attractiveness of potential charging parks by
+    calculating weights that reflect either user convenience or grid stability,
+    or a combination of both. The weights are adjusted based on specified
+    parameters and are returned as a DataFrame.
 
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+        The eDisGo object containing relevant grid and electromobility data.
     potential_charging_park_indices : list
-        List of potential charging parks indices
+        A list of indices identifying the potential charging parks to be
+        evaluated.
 
     Other Parameters
-    -----------------
-    mode : str
-        Only use user friendly weights ("user_friendly") or combine with
-        grid friendly weights ("grid_friendly"). Default: "user_friendly".
-    user_friendly_weight : float
-        Weight of user friendly weight if mode "grid_friendly". Default: 0.5.
-    distance_weight: float
-        Grid friendly weight is a combination of the installed capacity of
-        generators and loads within a LV grid and the distance towards the
-        nearest substation. This parameter sets the weight for the distance
-        parameter. Default: 1/3.
+    ----------------
+    mode : str, optional
+        Determines the weighting approach. "user_friendly" uses only user-centric
+        weights, while "grid_friendly" combines user-centric and grid-centric
+        weights. Default is "user_friendly".
+    user_friendly_weight : float, optional
+        The weight assigned to user-centric preferences when using the
+        "grid_friendly" mode. Default is 0.5.
+    distance_weight : float, optional
+        Weighting factor for the distance to the nearest substation when using
+        the "grid_friendly" mode. This affects the grid-centric weight
+        calculation. Default is 1/3.
 
     Returns
     -------
     :pandas:`pandas.DataFrame<DataFrame>`
-        DataFrame with numeric weights
+        A DataFrame containing the calculated weights for each potential charging
+        park, reflecting either user or grid preferences, or a combination thereof.
 
+    Notes
+    -----
+    - The grid-friendly weighting takes into account the installed capacity of
+      generators and loads within a low-voltage (LV) grid, as well as the
+      distance to the nearest substation.
+    - If the mode is set to "grid_friendly", the function will combine user
+      preferences with grid stability considerations to determine the final
+      weights.
+
+    Raises
+    ------
+    ValueError
+        If an invalid mode is provided, an exception is raised.
     """
 
     def _get_lv_grid_weights():
         """
-        DataFrame containing technical data of LV grids.
+        Calculate technical weights for LV grids.
+
+        This internal function creates a DataFrame containing technical
+        information about LV grids, which is used to calculate grid-centric
+        weights for potential charging parks.
 
         Returns
-        --------
+        -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            Columns of the DataFrame are:
-                peak_generation_capacity : float
-                    Cumulative peak generation capacity of generators in the network in
-                    MW.
-
-                p_set : float
-                    Cumulative peak load of loads in the network in MW.
-
-                substation_capacity : float
-                    Cumulative capacity of transformers to overlaying network.
-
-                generators_weight : float
-                    Weighting used in grid friendly siting of public charging points.
-                    In the case of generators the weight is defined by dividing the
-                    peak_generation_capacity by substation_capacity and norming the
-                    results from 0 .. 1. A higher weight is more attractive.
-
-                loads_weight : float
-                    Weighting used in grid friendly siting of public charging points.
-                    In the case of loads the weight is defined by dividing the
-                    p_set by substation_capacity and norming the results from 0 .. 1.
-                    The result is then substracted from 1 as the higher the p_set is
-                    in relation to the substation_capacity the less attractive this LV
-                    grid is for new loads from a grid perspective. A higher weight is
-                    more attractive.
+            A DataFrame with the following columns:
+            - peak_generation_capacity: Cumulative peak generation capacity of
+              generators in the LV grid (in MW).
+            - p_set: Cumulative peak load of loads in the LV grid (in MW).
+            - substation_capacity: Cumulative capacity of transformers
+              connecting the LV grid to the overlaying network.
+            - generators_weight: Weight reflecting the attractiveness of the
+              LV grid for new generation capacity.
+            - loads_weight: Weight reflecting the attractiveness of the LV grid
+              for new loads, from a grid stability perspective.
 
         """
         lv_grids = list(edisgo_obj.topology.mv_grid.lv_grids)
 
+        # Create a DataFrame to store LV grid weights
         lv_grids_df = pd.DataFrame(
             index=[_._id for _ in lv_grids],
             columns=[
@@ -598,14 +650,15 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
             ],
         )
 
+        # Populate the DataFrame with relevant data
         lv_grids_df.peak_generation_capacity = [
             _.peak_generation_capacity for _ in lv_grids
         ]
-
         lv_grids_df.substation_capacity = [
             _.transformers_df.s_nom.sum() for _ in lv_grids
         ]
 
+        # Normalize generator weights
         min_max_scaler = preprocessing.MinMaxScaler()
         lv_grids_df.generators_weight = lv_grids_df.peak_generation_capacity.divide(
             lv_grids_df.substation_capacity
@@ -616,23 +669,27 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
 
         lv_grids_df.p_set = [_.p_set for _ in lv_grids]
 
+        # Normalize load weights and normalize them
         lv_grids_df.loads_weight = lv_grids_df.p_set.divide(
             lv_grids_df.substation_capacity
         )
         lv_grids_df.loads_weight = 1 - min_max_scaler.fit_transform(
             lv_grids_df.loads_weight.values.reshape(-1, 1)
         )
+
         return lv_grids_df
 
     mode = kwargs.get("mode", "user_friendly")
 
     if mode == "user_friendly":
+        # Retrieve user-centric weights for the selected charging parks
         weights = [
             _.user_centric_weight
             for _ in edisgo_obj.electromobility.potential_charging_parks
             if _.id in potential_charging_park_indices
         ]
     elif mode == "grid_friendly":
+        # Prepare data for grid-centric weight calculation
         potential_charging_parks = list(
             edisgo_obj.electromobility.potential_charging_parks
         )
@@ -648,28 +705,30 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
         generators_weight_factor = kwargs.get("generators_weight_factor", 0.5)
         loads_weight_factor = 1 - generators_weight_factor
 
+        # Combine generator and load weights to calculate grid-centric weights
         combined_weights = (
             generators_weight_factor * lv_grids_df["generators_weight"]
             + loads_weight_factor * lv_grids_df["loads_weight"]
         )
 
+        # Retrieve the IDs of the nearest LV grids for each potential charging park
         lv_grid_ids = [
             _.nearest_substation["lv_grid_id"] for _ in potential_charging_parks
         ]
 
+        # Map the combined weights to the corresponding charging parks
         load_and_generator_capacity_weights = [
             combined_weights.at[lv_grid_id] for lv_grid_id in lv_grid_ids
         ]
 
-        # fmt: off
+        # Extract the distance weights from the eDisGo object
         distance_weights = (
-            edisgo_obj.electromobility._potential_charging_parks_df.distance_weight
-            .tolist()
+            edisgo_obj.electromobility._potential_charging_parks_df.distance_weight.tolist()  # noqa: E501
         )
-        # fmt: on
 
         distance_weight = kwargs.get("distance_weight", 1 / 3)
 
+        # Combine the distance weights with the load and generator capacity weights
         grid_friendly_weights = [
             (1 - distance_weight) * load_and_generator_capacity_weights[i]
             + distance_weight * distance_weights[i]
@@ -678,17 +737,18 @@ def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
 
         user_friendly_weight = kwargs.get("user_friendly_weight", 0.5)
 
+        # Final combined weights considering both user and grid preferences
         weights = [
             (1 - user_friendly_weight) * grid_friendly_weights[i]
             + user_friendly_weight * user_friendly_weights[i]
             for i in range(len(grid_friendly_weights))
         ]
-
     else:
         raise ValueError(
-            "Provided mode is not valid, needs to be 'user_friendly' or "
+            "Provided mode is not valid. It must be either 'user_friendly' or "
             "'grid_friendly'."
         )
+
     return pd.DataFrame(weights)
 
 

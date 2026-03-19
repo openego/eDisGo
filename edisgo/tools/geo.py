@@ -5,6 +5,8 @@ import os
 
 from typing import TYPE_CHECKING
 
+import pandas as pd
+
 from geopy.distance import geodesic
 from pyproj import Transformer
 
@@ -212,12 +214,9 @@ def find_nearest_bus(point, bus_target):
         Tuple that contains the name of the nearest bus and its distance in km.
 
     """
-    bus_target["dist"] = [
-        geodesic((point.y, point.x), (y, x)).km
-        for (x, y) in zip(bus_target["x"], bus_target["y"])
-    ]
+    bus_target = calculate_distance_to_buses_df(point, bus_target)
 
-    return bus_target["dist"].idxmin(), bus_target["dist"].min()
+    return bus_target["distance"].idxmin(), bus_target["distance"].min()
 
 
 def find_nearest_conn_objects(grid_topology, bus, lines, conn_diff_tolerance=0.0001):
@@ -324,3 +323,33 @@ def mv_grid_gdf(edisgo_obj: EDisGo):
         geometry=[edisgo_obj.topology.grid_district["geom"]],
         crs=f"EPSG:{edisgo_obj.topology.grid_district['srid']}",
     )
+
+
+def calculate_distance_to_buses_df(
+    point: Point, buses_df: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Calculate the distance between buses and a given geometry.
+
+    Parameters
+    ----------
+    point : :shapely:`shapely.Point<Point>`
+        Geolocation to calculate distance to.
+    buses_df : :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with buses and their positions given in 'x' and 'y'
+        columns. The dataframe has the same format as
+        :attr:`~.network.topology.Topology.buses_df`.
+
+    Returns
+    -------
+    :pandas:`pandas.DataFrame<DataFrame>`
+        Data of `buses_df` with additional column 'distance' containing the distance
+        to the given geometry in km.
+
+    """
+    distances = buses_df.apply(
+        lambda row: geodesic((row["y"], row["x"]), (point.y, point.x)).km,
+        axis=1,
+    )
+    buses_df.loc[:, "distance"] = distances
+    return buses_df
