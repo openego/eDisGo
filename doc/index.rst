@@ -7,7 +7,7 @@ Welcome to the documentation of eDisGo!
 
 The python package eDisGo serves as a toolbox to evaluate flexibility measures
 as an economic alternative to conventional grid expansion in
-medium and low voltage grids.
+medium and low voltage grids. You can find the source code on `GitHub <https://github.com/openego/eDisGo>`_.
 
 The toolbox currently includes:
 
