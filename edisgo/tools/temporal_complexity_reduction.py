@@ -71,7 +71,7 @@ def _scored_most_critical_loading(
         crit_lines_score.dropna(how="all").dropna(how="all", axis=1).fillna(0)
     )
     # sort sum in descending order
-    return crit_lines_score.sum(axis=1).sort_values(ascending=False, kind='stable')
+    return crit_lines_score.sum(axis=1).sort_values(ascending=False, kind="stable")
 
 
 def _scored_most_critical_voltage_issues(
@@ -121,9 +121,9 @@ def _scored_most_critical_voltage_issues(
         lv_station_buses = [
             lv_grid.station.index[0] for lv_grid in edisgo_obj.topology.mv_grid.lv_grids
         ]
-        edisgo_obj.topology.buses_df.loc[
-            lv_station_buses, "grid_feeder"
-        ] = lv_station_buses
+        edisgo_obj.topology.buses_df.loc[lv_station_buses, "grid_feeder"] = (
+            lv_station_buses
+        )
         # weight voltage violations with expansion costs
         costs = _costs_per_feeder(edisgo_obj, lv_station_buses=lv_station_buses)
         # map feeder costs to buses
@@ -143,7 +143,7 @@ def _scored_most_critical_voltage_issues(
     # drop components and time steps without violations
     voltage_diff = voltage_diff.dropna(how="all").dropna(how="all", axis=1).fillna(0)
     # sort sum in descending order
-    return voltage_diff.sum(axis=1).sort_values(ascending=False, kind='stable')
+    return voltage_diff.sum(axis=1).sort_values(ascending=False, kind="stable")
 
 
 def _scored_most_critical_loading_time_interval(
@@ -514,7 +514,7 @@ def _most_critical_time_interval(
     crit_timesteps = (
         crit_timesteps.iloc[int(time_steps_per_time_interval) - 1 :]
         .iloc[time_step_day_start::time_steps_per_day]
-        .sort_values(ascending=False, kind='stable')
+        .sort_values(ascending=False, kind="stable")
     )
     # get time steps in each time interval - these are set up setting the given time
     # step to be the end of the respective time interval, as rolling() function gives
@@ -618,8 +618,7 @@ def _troubleshooting_mode(
                     scale_timeseries=fraction,
                 )
                 logger.info(
-                    f"Power flow fully converged for a reduction factor "
-                    f"of {fraction}."
+                    f"Power flow fully converged for a reduction factor of {fraction}."
                 )
                 break
             except Exception:

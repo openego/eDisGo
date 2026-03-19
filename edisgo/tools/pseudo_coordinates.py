@@ -240,7 +240,7 @@ def make_pseudo_coordinates(edisgo_obj: EDisGo, mv_coordinates: bool = False):
         grids = [edisgo_obj.topology.mv_grid] + grids
 
     for grid in grids:
-        logger.debug("Make pseudo coordinates for: {}".format(grid))
+        logger.debug(f"Make pseudo coordinates for: {grid}")
         G = grid.graph
         G = make_pseudo_coordinates_graph(
             G, edisgo_obj.config["grid_connection"]["branch_detour_factor"]

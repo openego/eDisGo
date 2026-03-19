@@ -131,8 +131,8 @@ def rename_virtual_buses(
             ):
                 pairs.append([node, node.lstrip("virtual_")])
 
-    logger.debug("Pairs: {}".format(pairs))
-    logger.debug("Length pairs: {}".format(len(pairs)))
+    logger.debug(f"Pairs: {pairs}")
+    logger.debug(f"Length pairs: {len(pairs)}")
     if len(pairs) > 0:
         logger.debug("Rename virtual buses")
         for feeder_virtual, feeder_non_virtual in pairs:
@@ -476,7 +476,7 @@ def make_busmap_grid(
     # Cluster every grid
     for grid in grid_list:
         v_grid = grid.nominal_voltage
-        logger.debug("Make busmap for grid: {}, v_nom={}".format(grid, v_grid))
+        logger.debug(f"Make busmap for grid: {grid}, v_nom={v_grid}")
 
         buses_df = grid.buses_df
         graph = grid.graph
@@ -488,7 +488,7 @@ def make_busmap_grid(
         number_of_distinct_nodes = buses_df.groupby(by=["x", "y"]).first().shape[0]
         logger.debug("Number_of_distinct_nodes = " + str(number_of_distinct_nodes))
         n_clusters = math.ceil(number_of_distinct_nodes * reduction_factor)
-        logger.debug("n_clusters = {}".format(n_clusters))
+        logger.debug(f"n_clusters = {n_clusters}")
         # Cluster with kmeans
         kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
 
@@ -705,20 +705,18 @@ def make_busmap_feeders(
     for grid in grid_list:
         grid_id = grid.id
         v_grid = grid.nominal_voltage
-        logger.debug("Make busmap for grid: {}, v_nom={}".format(grid, v_grid))
+        logger.debug(f"Make busmap for grid: {grid}, v_nom={v_grid}")
 
         graph_root = grid.graph
         transformer_node = grid.transformers_df.bus1.values[0]
         transformer_coordinates = grid.buses_df.loc[
             transformer_node, ["x", "y"]
         ].tolist()
-        logger.debug("Transformer node: {}".format(transformer_node))
+        logger.debug(f"Transformer node: {transformer_node}")
 
         neighbors = list(nx.neighbors(graph_root, transformer_node))
         neighbors.sort()
-        logger.debug(
-            "Transformer has {} neighbors: {}".format(len(neighbors), neighbors)
-        )
+        logger.debug(f"Transformer has {len(neighbors)} neighbors: {neighbors}")
 
         graph_without_transformer = copy.deepcopy(graph_root)
         graph_without_transformer.remove_node(transformer_node)
@@ -754,7 +752,7 @@ def make_busmap_feeders(
             )
             logger.debug("Number_of_distinct_nodes = " + str(number_of_distinct_nodes))
             n_clusters = math.ceil(selected_reduction_factor * number_of_distinct_nodes)
-            logger.debug("n_clusters = {}".format(n_clusters))
+            logger.debug(f"n_clusters = {n_clusters}")
 
             # Aggregate to transformer bus if there are no clusters
             if n_clusters == 0:
@@ -969,20 +967,18 @@ def make_busmap_main_feeders(
     for grid in grid_list:
         grid_id = grid.id
         v_grid = grid.nominal_voltage
-        logger.debug("Make busmap for grid: {}, v_nom={}".format(grid, v_grid))
+        logger.debug(f"Make busmap for grid: {grid}, v_nom={v_grid}")
 
         graph_root = grid.graph
         transformer_node = grid.transformers_df.bus1.values[0]
         transformer_coordinates = grid.buses_df.loc[
             transformer_node, ["x", "y"]
         ].tolist()
-        logger.debug("Transformer node: {}".format(transformer_node))
+        logger.debug(f"Transformer node: {transformer_node}")
 
         neighbors = list(nx.neighbors(graph_root, transformer_node))
         neighbors.sort()
-        logger.debug(
-            "Transformer has {} neighbors: {}".format(len(neighbors), neighbors)
-        )
+        logger.debug(f"Transformer has {len(neighbors)} neighbors: {neighbors}")
 
         graph_without_transformer = copy.deepcopy(graph_root)
         graph_without_transformer.remove_node(transformer_node)
@@ -1161,7 +1157,7 @@ def make_busmap_main_feeders(
                 n_clusters = math.ceil(
                     selected_reduction_factor * number_of_distinct_nodes
                 )
-                logger.debug("n_clusters = {}".format(n_clusters))
+                logger.debug(f"n_clusters = {n_clusters}")
 
                 # Aggregate to transformer bus if there are no clusters
                 if n_clusters == 0:
@@ -1756,7 +1752,7 @@ def apply_busmap(
                 )
 
         if len(switches_to_drop) > 0:
-            logger.warning("Drop unused switches: {}".format(switches_to_drop))
+            logger.warning(f"Drop unused switches: {switches_to_drop}")
             switches_df = switches_df.drop(switches_to_drop)
 
         # apply busmap
@@ -1972,7 +1968,7 @@ def compare_voltage(
     )
     logger.debug(
         "Root-mean-square error between voltages in unreduced and reduced "
-        "EDisGo object is: rms = {:.2%}".format(rms)
+        f"EDisGo object is: rms = {rms:.2%}"
     )
     return voltages_df, rms
 
@@ -2044,6 +2040,6 @@ def compare_apparent_power(
     )
     logger.debug(
         "Root-mean-square error between apparent power in unreduced and reduced "
-        "EDisGo object is: rms = {:.2}".format(rms)
+        f"EDisGo object is: rms = {rms:.2}"
     )
     return s_df, rms

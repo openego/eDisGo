@@ -446,7 +446,7 @@ def select_cable(
     if suitable_cables.empty:
         raise exceptions.MaximumIterationError(
             "Could not find a suitable cable for apparent power of "
-            "{} MVA.".format(apparent_power)
+            f"{apparent_power} MVA."
         )
 
     cable_type = suitable_cables.loc[suitable_cables["I_max_th"].idxmin()]
@@ -486,9 +486,9 @@ def get_path_length_to_station(edisgo_obj):
                 lv_station = lvgrid.station.index[0]
                 for bus in lvgrid.buses_df.index:
                     lv_path = nx.shortest_path(lv_graph, source=lv_station, target=bus)
-                    edisgo_obj.topology.buses_df.at[
-                        bus, "path_length_to_station"
-                    ] = len(path) + len(lv_path)
+                    edisgo_obj.topology.buses_df.at[bus, "path_length_to_station"] = (
+                        len(path) + len(lv_path)
+                    )
     return edisgo_obj.topology.buses_df.path_length_to_station
 
 
@@ -1361,7 +1361,7 @@ def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.Da
     if show_reduction is True:
         print(
             "Reduced memory usage of DataFrame by "
-            f"{(1 - end_mem/start_mem) * 100:.2f} %."
+            f"{(1 - end_mem / start_mem) * 100:.2f} %."
         )
 
     return df

@@ -1130,16 +1130,12 @@ class EDisGo:
             if raise_not_converged and len(timesteps_not_converged) > 0:
                 raise ValueError(
                     "Power flow analysis did not converge for the "
-                    "following {} time steps: {}.".format(
-                        len(timesteps_not_converged), timesteps_not_converged
-                    )
+                    f"following {len(timesteps_not_converged)} time steps: {timesteps_not_converged}."
                 )
             elif len(timesteps_not_converged) > 0:
                 logger.warning(
                     "Power flow analysis did not converge for the "
-                    "following {} time steps: {}.".format(
-                        len(timesteps_not_converged), timesteps_not_converged
-                    )
+                    f"following {len(timesteps_not_converged)} time steps: {timesteps_not_converged}."
                 )
             return timesteps_converged, timesteps_not_converged
 
@@ -1181,9 +1177,7 @@ class EDisGo:
                 pypsa_network = _scale_timeseries(pypsa_network_copy, fraction)
                 # run power flow analysis
                 pf_results = pypsa_network.pf(timesteps, use_seed=True)
-                logger.info(
-                    "Current fraction in iterative process: {}.".format(fraction)
-                )
+                logger.info(f"Current fraction in iterative process: {fraction}.")
                 # get converged and not converged time steps
                 timesteps_converged, timesteps_not_converged = _check_convergence()
         else:
@@ -1698,8 +1692,7 @@ class EDisGo:
         if voltage_level not in supported_voltage_levels:
             if p is None:
                 raise ValueError(
-                    "Neither appropriate voltage level nor nominal power "
-                    "were supplied."
+                    "Neither appropriate voltage level nor nominal power were supplied."
                 )
             # determine voltage level manually from nominal power
             voltage_level = determine_grid_integration_voltage_level(self, p)
@@ -1855,9 +1848,7 @@ class EDisGo:
                                 naming.format("_".join(k))
                                 if isinstance(k, tuple)
                                 else naming.format(k)
-                            ): getattr(self.timeseries, attribute)
-                            .loc[:, v]
-                            .sum(axis=1)
+                            ): getattr(self.timeseries, attribute).loc[:, v].sum(axis=1)
                         }
                     )
                     for k, v in groups.items()
@@ -2434,14 +2425,12 @@ class EDisGo:
         try:
             if self.results.v_res is None:
                 logger.warning(
-                    "Voltages from power flow "
-                    "analysis must be available to plot them."
+                    "Voltages from power flow analysis must be available to plot them."
                 )
                 return
         except AttributeError:
             logger.warning(
-                "Results must be available to plot voltages. "
-                "Please analyze grid first."
+                "Results must be available to plot voltages. Please analyze grid first."
             )
             return
         except ValueError:
@@ -3652,10 +3641,8 @@ class EDisGo:
             if comparison.any():
                 logger.warning(
                     "Heat demand is higher than rated heatpump power"
-                    " of heatpumps: {}. Demand can not be covered if no sufficient"
-                    " heat storage capacities are available.".format(
-                        comparison.index[comparison.values].values
-                    )
+                    f" of heatpumps: {comparison.index[comparison.values].values}. Demand can not be covered if no sufficient"
+                    " heat storage capacities are available."
                 )
 
         logging.info("Integrity check finished. Please pay attention to warnings.")

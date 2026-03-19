@@ -431,8 +431,8 @@ def assure_minimum_potential_charging_parks(
         while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
             logger.info(
                 f"Duplicating potential charging parks to meet the desired grid "
-                f"connections to cars rate of {gc_to_car_rate*100:.2f} % for use case "
-                f"{use_case}. Iteration: {n+1}."
+                f"connections to cars rate of {gc_to_car_rate * 100:.2f} % for use case "
+                f"{use_case}. Iteration: {n + 1}."
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
@@ -1079,11 +1079,11 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
                 idx, "charging_point_id"
             ] = charging_point_id
 
-            available_charging_points_df.loc[
-                charging_point_id
-            ] = edisgo_obj.electromobility.charging_processes_df.loc[
-                idx, available_charging_points_df.columns
-            ].tolist()
+            available_charging_points_df.loc[charging_point_id] = (
+                edisgo_obj.electromobility.charging_processes_df.loc[
+                    idx, available_charging_points_df.columns
+                ].tolist()
+            )
 
             designated_charging_point_capacity_df.at[
                 charging_park_id, "designated_charging_point_capacity"
