@@ -125,7 +125,7 @@ def pytest_collection_modifyitems(config, items):
             if "runonlinux" in item.keywords:
                 item.add_marker(skip_windows)
     if not config.getoption("--runlocal"):
-        skip_windows = pytest.mark.skip(reason="need --runonlinux option to run")
+        skip_local = pytest.mark.skip(reason="need --runlocal option to run")
         for item in items:
             if "local" in item.keywords:
                 item.add_marker(skip_local)
