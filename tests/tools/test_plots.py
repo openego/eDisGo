@@ -15,9 +15,9 @@ class TestPlots:
         cls.edisgo_reinforced = copy.deepcopy(cls.edisgo_root)
         cls.edisgo_analyzed.analyze()
         cls.edisgo_reinforced.reinforce()
-        cls.edisgo_reinforced.results.equipment_changes.loc[
-            "Line_10006", "change"
-        ] = "added"
+        cls.edisgo_reinforced.results.equipment_changes.loc["Line_10006", "change"] = (
+            "added"
+        )
 
     @pytest.mark.parametrize(
         "line_color,"

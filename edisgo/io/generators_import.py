@@ -25,9 +25,13 @@ if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
 
     from egoio.db_tables import model_draft, supply
-    from edisgo.io.mviews_filters import build_conv_scenario_filter, build_res_scenario_filter
     from shapely.ops import transform
     from shapely.wkt import loads as wkt_loads
+
+    from edisgo.io.mviews_filters import (
+        build_conv_scenario_filter,
+        build_res_scenario_filter,
+    )
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -125,14 +129,11 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
                 orm_conv_generators.capacity.label("p_nom"),
                 orm_conv_generators.voltage_level,
                 orm_conv_generators.fuel.label("generator_type"),
-                func.ST_AsText(
-                    func.ST_Transform(orm_conv_generators.geom, srid)
-                ).label("geom"),
+                func.ST_AsText(func.ST_Transform(orm_conv_generators.geom, srid)).label(
+                    "geom"
+                ),
             )
-            .filter(
-                orm_conv_generators.subst_id
-                == edisgo_object.topology.mv_grid.id
-            )
+            .filter(orm_conv_generators.subst_id == edisgo_object.topology.mv_grid.id)
             .filter(orm_conv_generators.voltage_level.in_([4, 5]))
             .filter(orm_conv_generators_version)
         )
@@ -175,13 +176,11 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
                 func.ST_AsText(
                     func.ST_Transform(orm_re_generators.rea_geom_new, srid)
                 ).label("geom"),
-                func.ST_AsText(
-                    func.ST_Transform(orm_re_generators.geom, srid)
-                ).label("geom_em"),
+                func.ST_AsText(func.ST_Transform(orm_re_generators.geom, srid)).label(
+                    "geom_em"
+                ),
             )
-            .filter(
-                orm_re_generators.subst_id == edisgo_object.topology.mv_grid.id
-            )
+            .filter(orm_re_generators.subst_id == edisgo_object.topology.mv_grid.id)
             .filter(orm_re_generators_version)
         )
 
@@ -305,15 +304,12 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
 
     # Map generator_scenario to full scenario names for mview filter logic
     scenario_mapping = {
-        'nep2035': 'NEP 2035',
-        'ego100': 'eGo 100',
-        'status_quo': 'Status Quo',
-        'sq': 'Status Quo'
+        "nep2035": "NEP 2035",
+        "ego100": "eGo 100",
+        "status_quo": "Status Quo",
+        "sq": "Status Quo",
     }
-    scenario_name = scenario_mapping.get(
-        generator_scenario.lower(),
-        generator_scenario
-    )
+    scenario_name = scenario_mapping.get(generator_scenario.lower(), generator_scenario)
 
     if oedb_data_source == "model_draft":
         # Use base tables from model_draft schema (CamelCase ORM names, without _mview suffix)
@@ -464,8 +460,8 @@ def _update_grids(
             # set geom to EnergyMap's geom, if available
             if generator_data.geom_em:
                 logger.debug(
-                    "Generator {} has no geom entry, EnergyMap's geom "
-                    "entry will be used.".format(generator_data.name)
+                    f"Generator {generator_data.name} has no geom entry, EnergyMap's geom "
+                    "entry will be used."
                 )
                 return generator_data.geom_em
         return None
@@ -506,8 +502,8 @@ def _update_grids(
             gen_name = existing_gens[existing_gens.id == id].index[0]
             edisgo_object.topology.remove_generator(gen_name)
             logger.warning(
-                "Capacity of generator {} is <= 0, it is therefore "
-                "removed. Check your data source.".format(gen_name)
+                f"Capacity of generator {gen_name} is <= 0, it is therefore "
+                "removed. Check your data source."
             )
         # remove from imported generators
         imported_gens.drop(id, inplace=True)
@@ -546,10 +542,8 @@ def _update_grids(
         log_geno_count = len(gens_to_update_cap)
         log_geno_cap = gens_to_update_cap["cap_diff"].sum()
         logger.debug(
-            "Capacities of {} of {} existing generators updated "
-            "({} MW).".format(
-                log_geno_count, len(gens_to_update), round(log_geno_cap, 1)
-            )
+            f"Capacities of {log_geno_count} of {len(gens_to_update)} existing generators updated "
+            f"({round(log_geno_cap, 1)} MW)."
         )
 
     # ==================================================
@@ -568,9 +562,7 @@ def _update_grids(
         log_geno_cap = decommissioned_gens.p_nom.sum()
         log_geno_count = len(decommissioned_gens)
         logger.debug(
-            "{} decommissioned generators removed ({} MW).".format(
-                log_geno_count, round(log_geno_cap, 1)
-            )
+            f"{log_geno_count} decommissioned generators removed ({round(log_geno_cap, 1)} MW)."
         )
 
     # ===================================
@@ -679,7 +671,7 @@ def _update_grids(
         geom = _check_mv_generator_geom(new_gens_mv.loc[id, :])
         if geom is None:
             logger.warning(
-                "Generator {} has no geom entry and will not be imported!".format(id)
+                f"Generator {id} has no geom entry and will not be imported!"
             )
             new_gens_mv.drop(id)
             continue
@@ -691,9 +683,7 @@ def _update_grids(
     log_geno_count = len(new_gens_mv)
     log_geno_cap = new_gens_mv["p_nom"].sum()
     logger.debug(
-        "{} of {} new MV generators added ({} MW).".format(
-            log_geno_count, number_new_gens, round(log_geno_cap, 1)
-        )
+        f"{log_geno_count} of {number_new_gens} new MV generators added ({round(log_geno_cap, 1)} MW)."
     )
 
     # ====================================
@@ -757,9 +747,7 @@ def _update_grids(
     log_geno_count = len(new_gens_lv)
     log_geno_cap = new_gens_lv["p_nom"].sum()
     logger.debug(
-        "{} new LV generators added ({} MW).".format(
-            log_geno_count, round(log_geno_cap, 1)
-        )
+        f"{log_geno_count} new LV generators added ({round(log_geno_cap, 1)} MW)."
     )
 
     for lv_grid in edisgo_object.topology.mv_grid.lv_grids:
@@ -770,10 +758,8 @@ def _update_grids(
         # warn if there are more generators than loads in LV grid
         if lv_gens_voltage_level_7 > lv_loads * 2:
             logger.debug(
-                "There are {} generators (voltage level 7) but only {} "
-                "loads in LV grid {}.".format(
-                    lv_gens_voltage_level_7, lv_loads, lv_grid.id
-                )
+                f"There are {lv_gens_voltage_level_7} generators (voltage level 7) but only {lv_loads} "
+                f"loads in LV grid {lv_grid.id}."
             )
 
 
@@ -1212,7 +1198,7 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
         random.seed(a=duplicate)
         new_name = duplicate
         while new_name in tmp:
-            new_name = f"{duplicate}_{random.randint(10 ** 1, 10 ** 2)}"
+            new_name = f"{duplicate}_{random.randint(10**1, 10**2)}"
         # change name in pv_rooftop_df
         pv_rooftop_df.rename(index={duplicate: new_name}, inplace=True)
 

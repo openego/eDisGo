@@ -191,7 +191,7 @@ extlinks = {
         "geopandas.%s",
     ),
     "networkx": (
-        "https://networkx.org/documentation/stable/reference/classes/" "graph.html#%s",
+        "https://networkx.org/documentation/stable/reference/classes/graph.html#%s",
         "networkx.%s",
     ),
     "sqlalchemy": (

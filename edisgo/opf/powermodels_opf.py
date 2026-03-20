@@ -4,8 +4,6 @@ import os
 import subprocess
 import sys
 
-from typing import Optional
-
 import numpy as np
 
 from edisgo.flex_opt import exceptions
@@ -18,10 +16,10 @@ logger = logging.getLogger(__name__)
 def pm_optimize(
     edisgo_obj,
     s_base: int = 1,
-    flexible_cps: Optional[np.ndarray] = None,
-    flexible_hps: Optional[np.ndarray] = None,
-    flexible_loads: Optional[np.ndarray] = None,
-    flexible_storage_units: Optional[np.ndarray] = None,
+    flexible_cps: np.ndarray | None = None,
+    flexible_hps: np.ndarray | None = None,
+    flexible_loads: np.ndarray | None = None,
+    flexible_storage_units: np.ndarray | None = None,
     opf_version: int = 1,
     method: str = "soc",
     warm_start: bool = False,

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 
+from collections.abc import Iterable
 from numbers import Number
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -224,8 +225,8 @@ def charging_strategy(
         # "residual" charging
         # only use charging processes from integrated charging parks
         charging_processes_df = edisgo_obj.electromobility.charging_processes_df[
-        edisgo_obj.electromobility.charging_processes_df.charging_park_id.isin(
-        target_park_ids
+            edisgo_obj.electromobility.charging_processes_df.charging_park_id.isin(
+                target_park_ids
             )
         ]
 

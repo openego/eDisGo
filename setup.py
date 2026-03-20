@@ -1,16 +1,8 @@
 """Setup"""
 
 import os
-import sys
 
 from setuptools import find_packages, setup
-
-if sys.version_info[:2] < (3, 9):
-    error = (
-        "eDisGo requires Python 3.9 or later (%d.%d detected)." % sys.version_info[:2]
-    )
-    sys.stderr.write(error + "\n")
-    sys.exit(1)
 
 
 def read(fname):
@@ -66,13 +58,18 @@ requirements = [
 ]
 
 dev_requirements = [
-    "black < 26.2.0",
-    "flake8 < 7.4.0",
-    "isort < 7.1.0",
+    "ruff < 0.16.0",
     "pre-commit < 4.6.0",
     "pylint < 4.1.0",
     "pytest < 9.1.0",
     "pytest-notebook < 0.11.0",
+    "pytest-xdist < 4.0.0",
+    "pytest-rerunfailures < 17.0.0",
+    "pytest-html < 5.0.0",
+    "pytest-metadata < 4.0.0",
+    "anyio < 5.0.0",
+    "dash < 4.1.0",
+    "pluggy < 2.0.0",
     "pyupgrade < 3.22.0",
     "sphinx < 9.2.0",
     "sphinx_rtd_theme >= 0.5.2, < 3.2.0",

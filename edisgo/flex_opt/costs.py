@@ -93,8 +93,9 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     def _get_line_costs(lines_added):
         costs_lines = line_expansion_costs(edisgo_obj, lines_added.index)
         costs_lines["costs"] = costs_lines.apply(
-            lambda x: x.costs_earthworks
-            + x.costs_cable * lines_added.loc[x.name, "quantity"],
+            lambda x: (
+                x.costs_earthworks + x.costs_cable * lines_added.loc[x.name, "quantity"]
+            ),
             axis=1,
         )
 
@@ -162,9 +163,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         ]["quantity"].to_frame()
         lines_added_unique = lines_added.index.unique()
         lines_added = (
-            lines_added.groupby(level=0)
-            .sum()
-            .loc[lines_added_unique, ["quantity"]]
+            lines_added.groupby(level=0).sum().loc[lines_added_unique, ["quantity"]]
         )
         # use the minimum of quantity and num_parallel, as sometimes lines are added
         # and in a next reinforcement step removed again, e.g. when feeder is split
@@ -272,12 +271,12 @@ def line_expansion_costs(edisgo_obj, lines_names=None):
     costs_cable_lv = float(edisgo_obj.config["costs_cables"]["lv_cable"])
     costs_cable_earthwork_mv = float(
         edisgo_obj.config["costs_cables"][
-            "mv_cable_incl_earthwork_{}".format(population_density)
+            f"mv_cable_incl_earthwork_{population_density}"
         ]
     )
     costs_cable_earthwork_lv = float(
         edisgo_obj.config["costs_cables"][
-            "lv_cable_incl_earthwork_{}".format(population_density)
+            f"lv_cable_incl_earthwork_{population_density}"
         ]
     )
 
