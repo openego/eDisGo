@@ -145,20 +145,29 @@ class Config:
     def db_schema_mapping(self, value):
         self._config_dict["db_schema_mapping"] = value
 
-    def _ensure_db_mappings_loaded(self) -> None:
+    def _ensure_db_mappings_loaded(self, engine=None) -> None:
         """Lazy-loads DB mappings only when needed for remote OEP access."""
         if self._config_dict.get("db_table_mapping") and self._config_dict.get(
             "db_schema_mapping"
         ):
             return
 
-        name_mapping, schema_mapping = self.get_database_alias_dictionaries()
+        name_mapping, schema_mapping = self.get_database_alias_dictionaries(
+            engine=engine
+        )
         self.db_table_mapping = name_mapping
         self.db_schema_mapping = schema_mapping
 
-    def get_database_alias_dictionaries(self) -> tuple[dict[str, str], dict[str, str]]:
+    def get_database_alias_dictionaries(
+        self, engine=None
+    ) -> tuple[dict[str, str], dict[str, str]]:
         """
         Retrieves the database alias dictionaries for table and schema mappings.
+
+        Parameters
+        ----------
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`, optional
+            Database engine. If not provided, a default OEP engine is created.
 
         Returns
         -------
@@ -169,7 +178,8 @@ class Config:
             - schema_mapping: A dictionary mapping source schema names to target schema
                 names.
         """
-        engine = Engine()
+        if engine is None:
+            engine = Engine()
         dictionary_schema_name = "data"
         dictionary_table = self._get_module_attr(
             self._get_saio_module(dictionary_schema_name, engine),
@@ -252,7 +262,7 @@ class Config:
             A list of SQLAlchemy Table objects corresponding to the imported tables.
         """
         if "openenergyplatform" in str(engine.url):
-            self._ensure_db_mappings_loaded()
+            self._ensure_db_mappings_loaded(engine=engine)
             schema = self.db_schema_mapping.get(schema_name)
             if not schema:
                 raise KeyError(
@@ -277,21 +287,55 @@ class Config:
             return tables
         else:
             # --- Local egon_data DB case ---
-            Base = declarative_base()
-            metadata = MetaData(schema=schema_name)
-            metadata.reflect(bind=engine, only=table_names)
+            from sqlalchemy import inspect as sa_inspect
+
+            inspector = sa_inspect(engine)
+            all_schemas = inspector.get_schema_names()
 
             orm_classes = []
             for table_name in table_names:
+                # Find the correct schema for this table (may differ from OEP
+                # mapping, e.g. egon_etrago_bus is in "grid" locally but
+                # imported via "supply" on OEP)
+                resolved_schema = schema_name
+                if table_name not in inspector.get_table_names(schema=schema_name):
+                    for s in all_schemas:
+                        if table_name in inspector.get_table_names(schema=s):
+                            resolved_schema = s
+                            break
+                    else:
+                        raise KeyError(
+                            f"Table '{table_name}' not found in any schema "
+                            f"of the local database."
+                        )
+
+                Base = declarative_base()
+                metadata = MetaData(schema=resolved_schema)
                 table = Table(
-                    table_name, metadata, autoload_with=engine, schema=schema_name
+                    table_name,
+                    metadata,
+                    autoload_with=engine,
+                    schema=resolved_schema,
                 )
 
-                # dynamisch eine ORM-Klasse erzeugen
+                # Tables without a primary key (e.g. mapping tables) need a
+                # synthetic PK so SQLAlchemy ORM can map them.
+                pk_cols = inspector.get_pk_constraint(
+                    table_name, schema=resolved_schema
+                )
+                class_dict = {
+                    "__tablename__": table_name,
+                    "__table__": table,
+                }
+                if not pk_cols.get("constrained_columns"):
+                    class_dict["__mapper_args__"] = {
+                        "primary_key": list(table.columns),
+                    }
+
                 orm_class = type(
                     table_name,
                     (Base,),
-                    {"__tablename__": table_name, "__table__": table},
+                    class_dict,
                 )
                 orm_classes.append(orm_class)
 

@@ -72,7 +72,7 @@ class TestTimeseriesImport:
         assert np.isclose(feedin["solar"][1122075][timeindex[61]], 0.423823)
         assert np.isclose(feedin["wind"][1122075][timeindex[1356]], 0.106361)
 
-    def test_feedin_oedb(self):
+    def test_feedin_oedb(self, db_engine):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -80,7 +80,7 @@ class TestTimeseriesImport:
         edisgo_object.set_timeindex(timeindex)
         feedin_df = timeseries_import.feedin_oedb(
             edisgo_object,
-            engine=pytest.engine,
+            engine=db_engine,
         )
         assert feedin_df.shape == (6, 4)
         assert_index_equal(feedin_df.index, timeindex)
@@ -102,10 +102,10 @@ class TestTimeseriesImport:
         assert np.isclose(load.sum()["agricultural"], 1.0)
         assert np.isclose(load.sum()["industrial"], 1.0)
 
-    def test_cop_oedb(self):
+    def test_cop_oedb(self, db_engine):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         cop_df = timeseries_import.cop_oedb(
-            edisgo_object=edisgo, engine=pytest.engine, weather_cell_ids=[11051, 11052]
+            edisgo_object=edisgo, engine=db_engine, weather_cell_ids=[11051, 11052]
         )
         assert cop_df.shape == (8760, 2)
         assert (cop_df > 1.0).all().all()
@@ -137,7 +137,7 @@ class TestTimeseriesImport:
         )
         return hp_df
 
-    def test_heat_demand_oedb(self, caplog):
+    def test_heat_demand_oedb(self, caplog, db_engine):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -145,9 +145,7 @@ class TestTimeseriesImport:
         edisgo_object.topology.loads_df = pd.concat(
             [edisgo_object.topology.loads_df, hp_data_egon]
         )
-        df = timeseries_import.heat_demand_oedb(
-            edisgo_object, "eGon2035", pytest.engine
-        )
+        df = timeseries_import.heat_demand_oedb(edisgo_object, "eGon2035", db_engine)
         assert df.shape == (8760, 3)
         assert df.index[0].year == 2035
 
@@ -156,7 +154,7 @@ class TestTimeseriesImport:
             df = timeseries_import.heat_demand_oedb(
                 edisgo_object,
                 "eGon100RE",
-                pytest.engine,
+                db_engine,
                 timeindex=pd.date_range("1/1/2020", periods=8760, freq="H"),
             )
         assert "A leap year was given." in caplog.text
@@ -165,7 +163,7 @@ class TestTimeseriesImport:
 
         # ToDo add further tests
 
-    def test_electricity_demand_oedb(self, caplog):
+    def test_electricity_demand_oedb(self, caplog, db_engine):
         # test with one load each and without year
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -173,7 +171,7 @@ class TestTimeseriesImport:
         df = timeseries_import.electricity_demand_oedb(
             edisgo_object,
             "eGon2035",
-            pytest.engine,
+            db_engine,
             load_names=[
                 "Load_mvgd_33535_1_industrial",
                 "Load_mvgd_33535_lvgd_1141170000_1_residential",
@@ -190,7 +188,7 @@ class TestTimeseriesImport:
         df = timeseries_import.electricity_demand_oedb(
             edisgo_object,
             "eGon2035",
-            pytest.engine,
+            db_engine,
             load_names=["Load_mvgd_33535_1_industrial"],
             timeindex=pd.date_range("1/1/2011", periods=4, freq="H"),
         )
@@ -202,7 +200,7 @@ class TestTimeseriesImport:
             df = timeseries_import.electricity_demand_oedb(
                 edisgo_object,
                 "eGon100RE",
-                pytest.engine,
+                db_engine,
                 timeindex=pd.date_range("1/1/2020", periods=4, freq="H"),
             )
         assert "A leap year was given." in caplog.text
@@ -211,21 +209,21 @@ class TestTimeseriesImport:
 
         # ToDo add further tests to check values
 
-    def test_get_residential_heat_profiles_per_building(self):
+    def test_get_residential_heat_profiles_per_building(self, db_engine):
         df = timeseries_import.get_residential_heat_profiles_per_building(
-            [442081, 430859], "eGon2035", pytest.engine
+            [442081, 430859], "eGon2035", db_engine
         )
         assert df.shape == (8760, 2)
         # ToDo add further tests
 
-    def test_get_district_heating_heat_demand_profiles(self):
+    def test_get_district_heating_heat_demand_profiles(self, db_engine):
         df = timeseries_import.get_district_heating_heat_demand_profiles(
-            [6], "eGon2035", pytest.engine
+            [6], "eGon2035", db_engine
         )
         assert df.shape == (8760, 1)
         # ToDo add further tests
 
-    def test_get_cts_profiles_per_building(self):
+    def test_get_cts_profiles_per_building(self, db_engine):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -233,47 +231,47 @@ class TestTimeseriesImport:
             edisgo_object.topology.loads_df.sector == "cts"
         ]
         df = timeseries_import.get_cts_profiles_per_building(
-            edisgo_object, "eGon2035", "electricity", pytest.engine
+            edisgo_object, "eGon2035", "electricity", db_engine
         )
         assert df.shape == (8760, len(cts_loads))
 
         # manipulate CTS load to lie within another grid
         edisgo_object.topology.loads_df.at[cts_loads.index[0], "building_id"] = 5
         df = timeseries_import.get_cts_profiles_per_building(
-            edisgo_object, "eGon2035", "electricity", pytest.engine
+            edisgo_object, "eGon2035", "electricity", db_engine
         )
         assert df.shape == (8760, len(cts_loads))
         # ToDo add further tests
 
-    def test_get_cts_profiles_per_grid(self):
+    def test_get_cts_profiles_per_grid(self, db_engine):
         df = timeseries_import.get_cts_profiles_per_grid(
-            33535, "eGon2035", "heat", pytest.engine
+            33535, "eGon2035", "heat", db_engine
         )
         assert df.shape == (8760, 85)
         df = timeseries_import.get_cts_profiles_per_grid(
-            33535, "eGon2035", "electricity", pytest.engine
+            33535, "eGon2035", "electricity", db_engine
         )
         assert df.shape == (8760, 85)
         # ToDo add further tests
 
-    def test_get_residential_electricity_profiles_per_building(self):
+    def test_get_residential_electricity_profiles_per_building(self, db_engine):
         df = timeseries_import.get_residential_electricity_profiles_per_building(
-            [-1, 442081], "eGon2035", pytest.engine
+            [-1, 442081], "eGon2035", db_engine
         )
         assert df.shape == (8760, 1)
         assert np.isclose(df.loc[:, 442081].sum(), 3.20688, atol=1e-3)
 
         # test with status quo
         df = timeseries_import.get_residential_electricity_profiles_per_building(
-            [-1, 442081], "eGon2021", pytest.engine
+            [-1, 442081], "eGon2021", db_engine
         )
         assert df.shape == (8760, 1)
         assert np.isclose(df.loc[:, 442081].sum(), 4.288845, atol=1e-3)
 
-    def test_get_industrial_electricity_profiles_per_site(self):
+    def test_get_industrial_electricity_profiles_per_site(self, db_engine):
         # test with one site and one OSM area
         df = timeseries_import.get_industrial_electricity_profiles_per_site(
-            [1, 541658], "eGon2035", pytest.engine
+            [1, 541658], "eGon2035", db_engine
         )
         assert df.shape == (8760, 2)
         assert np.isclose(df.loc[:, 1].sum(), 32417.233, atol=1e-3)
@@ -281,13 +279,13 @@ class TestTimeseriesImport:
 
         # test without site and only OSM area
         df = timeseries_import.get_industrial_electricity_profiles_per_site(
-            [541658], "eGon2035", pytest.engine
+            [541658], "eGon2035", db_engine
         )
         assert df.shape == (8760, 1)
 
         # test with status quo
         df = timeseries_import.get_industrial_electricity_profiles_per_site(
-            [1, 541658], "eGon2021", pytest.engine
+            [1, 541658], "eGon2021", db_engine
         )
         assert df.shape == (8760, 2)
         assert np.isclose(df.loc[:, 1].sum(), 31655.640, atol=1e-3)

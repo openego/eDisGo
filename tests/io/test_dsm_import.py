@@ -5,13 +5,13 @@ from edisgo.io import dsm_import
 
 
 class TestDSMImport:
-    def test_oedb(self):
+    def test_oedb(self, db_engine):
         # test without industrial load
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         dsm_profiles = dsm_import.oedb(
-            edisgo_object, scenario="eGon2035", engine=pytest.engine
+            edisgo_object, scenario="eGon2035", engine=db_engine
         )
         for dsm_profile in ["e_max", "e_min", "p_max", "p_min"]:
             assert dsm_profiles[dsm_profile].shape == (8760, 87)
@@ -29,7 +29,7 @@ class TestDSMImport:
         edisgo_object.topology.loads_df.at[dsm_load, "building_id"] = 1
 
         dsm_profiles = dsm_import.oedb(
-            edisgo_object, scenario="eGon2035", engine=pytest.engine
+            edisgo_object, scenario="eGon2035", engine=db_engine
         )
         for dsm_profile in ["e_max", "e_min", "p_max", "p_min"]:
             assert dsm_profiles[dsm_profile].shape == (8760, 87)
@@ -39,9 +39,9 @@ class TestDSMImport:
         assert (dsm_profiles["p_max"] >= 0.0).all().all()
         assert (dsm_profiles["e_max"] >= 0.0).all().all()
 
-    def test_get_profiles_per_industrial_load(self):
+    def test_get_profiles_per_industrial_load(self, db_engine):
         dsm_profiles = dsm_import.get_profiles_per_industrial_load(
-            load_ids=[15388, 241, 1], scenario="eGon2035", engine=pytest.engine
+            load_ids=[15388, 241, 1], scenario="eGon2035", engine=db_engine
         )
         for dsm_profile in ["e_max", "e_min", "p_max", "p_min"]:
             assert dsm_profiles[dsm_profile].shape == (8760, 3)
@@ -52,16 +52,16 @@ class TestDSMImport:
         assert (dsm_profiles["e_max"] >= 0.0).all().all()
 
         dsm_profiles = dsm_import.get_profiles_per_industrial_load(
-            load_ids=[], scenario="eGon2035", engine=pytest.engine
+            load_ids=[], scenario="eGon2035", engine=db_engine
         )
         assert dsm_profiles["p_min"].empty
 
-    def test_get_profile_cts(self):
+    def test_get_profile_cts(self, db_engine):
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         dsm_profiles = dsm_import.get_profile_cts(
-            edisgo_obj=edisgo, scenario="eGon2035", engine=pytest.engine
+            edisgo_obj=edisgo, scenario="eGon2035", engine=db_engine
         )
         for dsm_profile in ["e_max", "e_min", "p_max", "p_min"]:
             assert dsm_profiles[dsm_profile].shape == (8760, 85)

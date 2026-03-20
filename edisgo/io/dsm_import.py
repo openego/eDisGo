@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 def oedb(
     edisgo_obj: EDisGo,
     scenario: str,
-    engine: Engine,
+    engine: Engine = None,
     timeindex=None,
 ):
     """
@@ -61,6 +61,9 @@ def oedb(
         associated with as in index of :attr:`~.network.topology.Topology.loads_df`.
 
     """
+    if engine is None:
+        engine = edisgo_obj.engine
+
     # get CTS and industrial DSM profiles
     dsm_cts = get_profile_cts(edisgo_obj, scenario, engine)
     ind_loads = edisgo_obj.topology.loads_df[
@@ -100,7 +103,7 @@ def oedb(
 def get_profiles_per_industrial_load(
     load_ids,
     scenario: str,
-    engine: Engine,
+    engine: Engine = None,
 ):
     """
     Gets industrial DSM profiles per site and OSM area.
@@ -202,7 +205,7 @@ def get_profiles_per_industrial_load(
 def get_profile_cts(
     edisgo_obj: EDisGo,
     scenario: str,
-    engine: Engine,
+    engine: Engine = None,
 ):
     """
     Gets CTS DSM profiles for all CTS loads in the MV grid.
@@ -235,6 +238,9 @@ def get_profile_cts(
     egon_data and ding0.
 
     """
+    if engine is None:
+        engine = edisgo_obj.engine
+
     config = Config()
     (egon_etrago_electricity_cts_dsm_timeseries,) = config.import_tables_from_oep(
         engine, ["egon_etrago_electricity_cts_dsm_timeseries"], "demand"

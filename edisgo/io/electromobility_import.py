@@ -430,8 +430,9 @@ def assure_minimum_potential_charging_parks(
 
         while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
             logger.info(
-                f"Duplicating potential charging parks to meet the desired grid "
-                f"connections to cars rate of {gc_to_car_rate * 100:.2f} % for use case "
+                "Duplicating potential charging parks to meet "
+                "the desired grid connections to cars rate of "
+                f"{gc_to_car_rate * 100:.2f} % for use case "
                 f"{use_case}. Iteration: {n + 1}."
             )
 
@@ -1151,7 +1152,7 @@ def integrate_charging_parks(edisgo_obj):
 def import_electromobility_from_oedb(
     edisgo_obj: EDisGo,
     scenario: str,
-    engine: Engine,
+    engine: Engine = None,
     **kwargs,
 ):
     """
@@ -1178,6 +1179,8 @@ def import_electromobility_from_oedb(
         :attr:`~.EDisGo.import_electromobility` for more information.
 
     """
+    if engine is None:
+        engine = edisgo_obj.engine
     edisgo_obj.electromobility.charging_processes_df = charging_processes_from_oedb(
         edisgo_obj=edisgo_obj, engine=engine, scenario=scenario, **kwargs
     )
@@ -1198,7 +1201,7 @@ def import_electromobility_from_oedb(
 
 def simbev_config_from_oedb(
     scenario: str,
-    engine: Engine,
+    engine: Engine = None,
 ):
     """
     Gets :attr:`~.network.electromobility.Electromobility.simbev_config_df`
@@ -1236,7 +1239,7 @@ def simbev_config_from_oedb(
 
 def potential_charging_parks_from_oedb(
     edisgo_obj: EDisGo,
-    engine: Engine,
+    engine: Engine = None,
 ):
     """
     Gets :attr:`~.network.electromobility.Electromobility.potential_charging_parks_gdf`
@@ -1256,6 +1259,8 @@ def potential_charging_parks_from_oedb(
         for more information.
 
     """
+    if engine is None:
+        engine = edisgo_obj.engine
     config = Config()
     (egon_emob_charging_infrastructure,) = config.import_tables_from_oep(
         engine, ["egon_emob_charging_infrastructure"], "grid"
@@ -1285,7 +1290,7 @@ def potential_charging_parks_from_oedb(
 
 
 def charging_processes_from_oedb(
-    edisgo_obj: EDisGo, engine: Engine, scenario: str, **kwargs
+    edisgo_obj: EDisGo, engine: Engine = None, scenario: str = None, **kwargs
 ):
     """
     Gets :attr:`~.network.electromobility.Electromobility.charging_processes_df` data
@@ -1314,6 +1319,8 @@ def charging_processes_from_oedb(
         more information.
 
     """
+    if engine is None:
+        engine = edisgo_obj.engine
     config = Config()
     egon_ev_mv_grid_district, egon_ev_trip = config.import_tables_from_oep(
         engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"

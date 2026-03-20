@@ -153,7 +153,7 @@ def feedin_oedb_legacy(edisgo_object, timeindex=None):
 
 def feedin_oedb(
     edisgo_object,
-    engine: Engine,
+    engine: Engine = None,
     timeindex=None,
 ):
     """
@@ -182,6 +182,8 @@ def feedin_oedb(
         capacity of 1 MW. Index of the dataframe depends on parameter `timeindex`.
 
     """
+    if engine is None:
+        engine = edisgo_object.engine
     # get weather cell IDs in grid
     weather_cell_ids = tools.get_weather_cells_intersecting_with_grid_district(
         edisgo_object, engine=engine
@@ -322,7 +324,7 @@ def load_time_series_demandlib(edisgo_obj, timeindex=None):
     return elec_demand.loc[timeindex]
 
 
-def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
+def cop_oedb(edisgo_object, engine=None, weather_cell_ids=None, timeindex=None):
     """
     Get COP (coefficient of performance) time series data from the
     `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
@@ -351,6 +353,8 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
         dataframe is a time index. Columns contain the weather cell ID as integer.
 
     """
+    if engine is None:
+        engine = edisgo_object.engine
     # set up time index to index COP data by
     timeindex, timeindex_full = _timeindex_helper_func(
         edisgo_object, timeindex, default_year=2011, allow_leap_year=False
@@ -382,7 +386,7 @@ def cop_oedb(edisgo_object, engine, weather_cell_ids, timeindex=None):
     return cop.loc[timeindex, :]
 
 
-def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
+def heat_demand_oedb(edisgo_obj, scenario, engine=None, timeindex=None):
     """
     Get heat demand profiles for heat pumps from the
     `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
@@ -420,6 +424,8 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
         :attr:`~.network.topology.Topology.loads_df`.
 
     """
+    if engine is None:
+        engine = edisgo_obj.engine
     if scenario not in ["eGon2035", "eGon100RE"]:
         raise ValueError(
             "Invalid input for parameter 'scenario'. Possible options are "
@@ -502,7 +508,7 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
 
 
 def electricity_demand_oedb(
-    edisgo_obj, scenario, engine, timeindex=None, load_names=None
+    edisgo_obj, scenario, engine=None, timeindex=None, load_names=None
 ):
     """
     Get electricity demand profiles for all conventional loads from the
@@ -545,6 +551,8 @@ def electricity_demand_oedb(
         in index of :attr:`~.network.topology.Topology.loads_df`.
 
     """
+    if engine is None:
+        engine = edisgo_obj.engine
     if scenario not in ["eGon2035", "eGon100RE"]:
         raise ValueError(
             "Invalid input for parameter 'scenario'. Possible options are "
@@ -636,7 +644,7 @@ def electricity_demand_oedb(
     ).loc[timeindex, :]
 
 
-def _get_zensus_cells_of_buildings(building_ids, engine):
+def _get_zensus_cells_of_buildings(building_ids, engine=None):
     """
     Gets zensus cell ID each building is in from oedb.
 
@@ -672,7 +680,7 @@ def _get_zensus_cells_of_buildings(building_ids, engine):
     return df.drop_duplicates(subset=["building_id"])
 
 
-def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
+def get_residential_heat_profiles_per_building(building_ids, scenario, engine=None):
     """
     Gets residential heat demand profiles per building.
 
@@ -918,7 +926,9 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
     return df_profile_merge.loc[:, building_ids_res_select]
 
 
-def get_district_heating_heat_demand_profiles(district_heating_ids, scenario, engine):
+def get_district_heating_heat_demand_profiles(
+    district_heating_ids, scenario, engine=None
+):
     """
     Gets heat demand profiles of district heating networks from oedb.
 
@@ -962,7 +972,7 @@ def get_district_heating_heat_demand_profiles(district_heating_ids, scenario, en
     return df.astype("float")
 
 
-def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
+def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine=None):
     """
     Gets CTS heat demand profiles per CTS building for all CTS buildings in MV grid.
 
@@ -995,6 +1005,8 @@ def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
         column names are building ID as integer.
 
     """
+    if engine is None:
+        engine = edisgo_obj.engine
     config = Config()
     (egon_map_zensus_mvgd_buildings,) = config.import_tables_from_oep(
         engine, ["egon_map_zensus_mvgd_buildings"], "boundaries"
@@ -1220,7 +1232,9 @@ def get_cts_profiles_per_grid(
     return building_profiles
 
 
-def get_residential_electricity_profiles_per_building(building_ids, scenario, engine):
+def get_residential_electricity_profiles_per_building(
+    building_ids, scenario, engine=None
+):
     """
     Gets residential electricity demand profiles per building.
 
@@ -1378,7 +1392,7 @@ def get_residential_electricity_profiles_per_building(building_ids, scenario, en
     return ts_df
 
 
-def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine):
+def get_industrial_electricity_profiles_per_site(site_ids, scenario, engine=None):
     """
     Gets industrial electricity demand profiles per site and OSM area.
 

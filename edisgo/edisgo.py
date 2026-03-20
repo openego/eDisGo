@@ -31,7 +31,6 @@ from edisgo.io import (
     pypsa_io,
     timeseries_import,
 )
-from edisgo.io.db import engine as egon_engine
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
@@ -131,6 +130,26 @@ class EDisGo:
         Default: "default".
     legacy_ding0_grids : bool
         Allow import of old ding0 grids. Default: True.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`, optional
+        SQLAlchemy database engine. If provided, this engine is used for all
+        database queries. If not provided, an engine is lazily created based
+        on other database parameters or defaults to an OEP connection.
+        Default: None.
+    db_config_path : str or pathlib.Path, optional
+        Path to an egon-data YAML configuration file (e.g.
+        ``~/.ssh/egon-data.configuration.yaml``). Used together with `db_ssh`
+        to create a local database engine via SSH tunnel.
+        Default: None.
+    db_url : str, optional
+        SQLAlchemy database URL for direct connection (e.g.
+        ``postgresql+psycopg2://egon:data@localhost:59510/egon-data``).
+        Default: None.
+    db_ssh : bool
+        If True, use SSH tunnel when connecting via `db_config_path`.
+        Default: False.
+    db_token : str or pathlib.Path, optional
+        OEP token or path to token file for OEP connection.
+        Default: None.
 
     Attributes
     ----------
@@ -157,12 +176,49 @@ class EDisGo:
         requirements or power plant dispatch.
     dsm : :class:`~.network.dsm.DSM`
         This is a container holding data on demand side management potential.
+    engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine for OEDB access. Lazily initialized on first access.
+        Defaults to OEP connection. Can be overridden via setter or constructor
+        parameters.
+
+    Examples
+    --------
+    Default OEP connection (engine created lazily on first DB access):
+
+    >>> edisgo = EDisGo(ding0_grid="path/to/grid")
+    >>> edisgo.import_generators(generator_scenario="eGon2035")
+
+    Local database via YAML config with SSH tunnel:
+
+    >>> edisgo = EDisGo(
+    ...     ding0_grid="path/to/grid",
+    ...     db_config_path="~/.ssh/egon-data.configuration.yaml",
+    ...     db_ssh=True,
+    ... )
+
+    Local database via connection string:
+
+    >>> edisgo = EDisGo(
+    ...     ding0_grid="path/to/grid",
+    ...     db_url="postgresql+psycopg2://egon:data@localhost:59510/egon-data",
+    ... )
+
+    Override engine after construction:
+
+    >>> edisgo.engine = my_custom_engine
 
     """
 
     def __init__(self, **kwargs):
         # load configuration
         self._config = Config(**kwargs)
+
+        # database engine configuration (lazy initialization)
+        self._engine = kwargs.get("engine", None)
+        self._db_config_path = kwargs.get("db_config_path", None)
+        self._db_url = kwargs.get("db_url", None)
+        self._db_ssh = kwargs.get("db_ssh", False)
+        self._db_token = kwargs.get("db_token", None)
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
@@ -231,6 +287,66 @@ class EDisGo:
     @config.setter
     def config(self, kwargs):
         self._config = Config(**kwargs)
+
+    @property
+    def engine(self):
+        """
+        Database engine for accessing the OEDB or local egon-data database.
+
+        Lazy initialization: the engine is only created when first accessed.
+        By default, creates an OEP engine using oedialect. Can be overridden
+        by providing a custom engine via the setter, or by passing `db_config_path`,
+        `db_url`, or `engine` to the EDisGo constructor.
+
+        Parameters
+        ----------
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            SQLAlchemy engine to use for database connections.
+
+        Returns
+        -------
+        :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine.
+
+        """
+        if self._engine is None:
+            if self._db_url is not None:
+                from sqlalchemy import create_engine
+
+                self._engine = create_engine(self._db_url, echo=False)
+            elif self._db_config_path is not None:
+                from edisgo.io.db import engine as create_db_engine
+
+                self._engine = create_db_engine(
+                    path=self._db_config_path, ssh=self._db_ssh
+                )
+            else:
+                from edisgo.io.db import engine as create_db_engine
+
+                self._engine = create_db_engine(token=self._db_token)
+        return self._engine
+
+    @engine.setter
+    def engine(self, value):
+        self._engine = value
+
+    def __deepcopy__(self, memo):
+        import copy as _copy
+
+        # Engine (SQLAlchemy) contains _thread._local objects that cannot be
+        # pickled.  Exclude it from the deep copy and let the copy lazily
+        # recreate its own engine from the stored configuration parameters
+        # (_db_config_path, _db_url, _db_token etc. are all plain strings/bools
+        # and will be deep-copied normally).
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+        for k, v in self.__dict__.items():
+            if k == "_engine":
+                setattr(result, k, None)
+            else:
+                setattr(result, k, _copy.deepcopy(v, memo))
+        return result
 
     def import_ding0_grid(self, path, legacy_ding0_grids=True):
         """
@@ -559,7 +675,7 @@ class EDisGo:
             is indexed using a default year and set for the whole year.
 
         """
-        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
+        engine = kwargs.pop("engine", None) or self.engine
         if self.timeseries.timeindex.empty:
             logger.warning(
                 "When setting time series using predefined profiles it is better to "
@@ -982,7 +1098,7 @@ class EDisGo:
             keyword arguments.
 
         """
-        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
+        engine = kwargs.pop("engine", None) or self.engine
         if self.legacy_grids is True:
             generators_import.oedb_legacy(
                 edisgo_object=self, generator_scenario=generator_scenario, **kwargs
@@ -1130,12 +1246,14 @@ class EDisGo:
             if raise_not_converged and len(timesteps_not_converged) > 0:
                 raise ValueError(
                     "Power flow analysis did not converge for the "
-                    f"following {len(timesteps_not_converged)} time steps: {timesteps_not_converged}."
+                    f"following {len(timesteps_not_converged)} time "
+                    f"steps: {timesteps_not_converged}."
                 )
             elif len(timesteps_not_converged) > 0:
                 logger.warning(
                     "Power flow analysis did not converge for the "
-                    f"following {len(timesteps_not_converged)} time steps: {timesteps_not_converged}."
+                    f"following {len(timesteps_not_converged)} time "
+                    f"steps: {timesteps_not_converged}."
                 )
             return timesteps_converged, timesteps_not_converged
 
@@ -2032,6 +2150,9 @@ class EDisGo:
         if import_electromobility_data_kwds is None:
             import_electromobility_data_kwds = {}
 
+        if engine is None:
+            engine = self.engine
+
         if data_source == "oedb":
             import_electromobility_from_oedb(
                 self,
@@ -2136,7 +2257,9 @@ class EDisGo:
             self, strategy=strategy, charging_park_ids=charging_park_ids, **kwargs
         )
 
-    def import_heat_pumps(self, scenario, engine, timeindex=None, import_types=None):
+    def import_heat_pumps(
+        self, scenario, engine=None, timeindex=None, import_types=None
+    ):
         """
         Gets heat pump data for specified scenario from oedb and integrates the heat
         pumps into the grid.
@@ -2212,6 +2335,9 @@ class EDisGo:
             "central_resistive_heaters". If None, all are imported.
 
         """
+        if engine is None:
+            engine = self.engine
+
         # set up year to index data by
         # first try to get index from time index
         if timeindex is None:
@@ -2308,7 +2434,7 @@ class EDisGo:
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
-    def import_dsm(self, scenario: str, engine: Engine, timeindex=None):
+    def import_dsm(self, scenario: str, engine: Engine = None, timeindex=None):
         """
         Gets industrial and CTS DSM profiles from the
         `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
@@ -2327,8 +2453,8 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve DSM data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`, optional
+            Database engine. If not provided, uses :attr:`~.EDisGo.engine`.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to get data. Leap years can currently not be
             handled. In case the given timeindex contains a leap year, the data will be
@@ -2340,6 +2466,9 @@ class EDisGo:
             is indexed using the default year and returned for the whole year.
 
         """
+        if engine is None:
+            engine = self.engine
+
         dsm_profiles = dsm_import.oedb(
             edisgo_obj=self, scenario=scenario, engine=engine, timeindex=timeindex
         )
@@ -2351,7 +2480,7 @@ class EDisGo:
     def import_home_batteries(
         self,
         scenario: str,
-        engine: Engine,
+        engine: Engine = None,
     ):
         """
         Gets home battery data for specified scenario and integrates the batteries into
@@ -2379,10 +2508,13 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve home battery data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`, optional
+            Database engine. If not provided, uses :attr:`~.EDisGo.engine`.
 
         """
+        if engine is None:
+            engine = self.engine
+
         home_batteries_oedb(
             edisgo_obj=self,
             scenario=scenario,
@@ -3640,8 +3772,10 @@ class EDisGo:
             ).any()
             if comparison.any():
                 logger.warning(
-                    "Heat demand is higher than rated heatpump power"
-                    f" of heatpumps: {comparison.index[comparison.values].values}. Demand can not be covered if no sufficient"
+                    "Heat demand is higher than rated heatpump "
+                    "power of heatpumps: "
+                    f"{comparison.index[comparison.values].values}"
+                    ". Demand can not be covered if no sufficient"
                     " heat storage capacities are available."
                 )
 

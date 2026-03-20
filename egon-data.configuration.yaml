@@ -1,0 +1,19 @@
+# Configuration for connecting to a local egon-data PostgreSQL database.
+# Copy this file and fill in your credentials to use with:
+#   EDisGo(ding0_grid=..., db_config_path="path/to/this/file.yaml")
+# or for testing:
+#   pytest tests/ --runlocal --egon-data-config="path/to/this/file.yaml"
+#
+# The ssh-tunnel section is optional. If present, an SSH tunnel is
+# automatically established. Remove it for direct database connections.
+
+egon-data:
+  --database-name: egon-data
+  --database-password: <PASSWORD>
+  --database-port: '<PORT>'
+  --database-user: <USER>
+ssh-tunnel:
+  ssh-host: "<SSH_HOST>"
+  ssh-user: "<SSH_USER>"
+  ssh-pkey: "~/.ssh/<KEY>"
+  pgres-host: "localhost"

@@ -1403,7 +1403,7 @@ class TestTimeSeries:
         )
         # fmt: on
 
-    def test_predefined_fluctuating_generators_by_technology_oedb(self):
+    def test_predefined_fluctuating_generators_by_technology_oedb(self, db_engine):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -1412,7 +1412,7 @@ class TestTimeSeries:
 
         # ############# oedb, all generators (default)
         edisgo_object.timeseries.predefined_fluctuating_generators_by_technology(
-            edisgo_object, "oedb", engine=pytest.engine
+            edisgo_object, "oedb", engine=db_engine
         )
 
         # check shape
@@ -2313,7 +2313,8 @@ class TestTimeSeries:
                 setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
                 self.edisgo.timeseries.check_integrity()
                 assert (
-                    f"{attr} has duplicated columns: {ts_tmp.iloc[:, 0:2].columns.values}"
+                    f"{attr} has duplicated columns: "
+                    f"{ts_tmp.iloc[:, 0:2].columns.values}"
                     in caplog.text
                 )
                 caplog.clear()

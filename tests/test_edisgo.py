@@ -257,7 +257,7 @@ class TestEDisGo:
         assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 0)
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
 
-    def test_set_time_series_active_power_predefined_oedb(self):
+    def test_set_time_series_active_power_predefined_oedb(self, db_engine):
         # test conventional_loads_ts="oedb" for all loads in grid
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -267,7 +267,7 @@ class TestEDisGo:
             conventional_loads_ts="oedb",
             fluctuating_generators_ts="oedb",
             scenario="eGon2035",
-            engine=pytest.engine,
+            engine=db_engine,
             timeindex=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
             conventional_loads_names=[
                 "Load_mvgd_33535_lvgd_1164210000_244_residential"
@@ -389,7 +389,9 @@ class TestEDisGo:
         except Exception as e:
             if "Table does not exist" in str(e) or "HTTP 404" in str(e):
                 pytest.skip(
-                    "Database table not accessible (requires external database connection)"
+                    "Database table not accessible "
+                    "(requires external database "
+                    "connection)"
                 )
             else:
                 raise
@@ -1302,7 +1304,7 @@ class TestEDisGo:
         )
         # fmt: on
 
-    def test_import_electromobility_oedb(self):
+    def test_import_electromobility_oedb(self, db_engine):
         """
         Test import from oedb.
         """
@@ -1312,7 +1314,7 @@ class TestEDisGo:
 
         # test with default parameters
         self.edisgo.import_electromobility(
-            data_source="oedb", scenario="eGon2035", engine=pytest.engine
+            data_source="oedb", scenario="eGon2035", engine=db_engine
         )
 
         assert len(self.edisgo.electromobility.charging_processes_df) == 324117
@@ -1359,7 +1361,7 @@ class TestEDisGo:
         )
         # fmt: on
 
-    def test_import_heat_pumps(self):
+    def test_import_heat_pumps(self, db_engine):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -1368,13 +1370,13 @@ class TestEDisGo:
         with pytest.raises(ValueError):
             edisgo_object.import_heat_pumps(
                 scenario="eGon",
-                engine=pytest.engine,
+                engine=db_engine,
             )
 
         # ################# test with leap year #############
         edisgo_object.import_heat_pumps(
             scenario="eGon2035",
-            engine=pytest.engine,
+            engine=db_engine,
             timeindex=pd.date_range("1/1/2020", periods=2, freq="H"),
             import_types=["individual_heat_pumps", "central_heat_pumps"],
         )

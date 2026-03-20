@@ -1255,6 +1255,8 @@ class TimeSeries:
 
         """
         # in case time series from oedb are used, retrieve oedb time series
+        if engine is None:
+            engine = edisgo_object.engine
         if isinstance(ts_generators, str) and ts_generators == "oedb":
             if edisgo_object.legacy_grids is True:
                 ts_generators = timeseries_import.feedin_oedb_legacy(

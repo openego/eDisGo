@@ -1,3 +1,4 @@
+import logging
 import os
 
 # Set matplotlib backend to non-interactive for tests (prevents TclError on Windows CI)
@@ -6,7 +7,36 @@ import pytest
 
 matplotlib.use("Agg")
 
-from edisgo.io.db import engine
+# Suppress paramiko DEBUG keepalive messages that cause "I/O operation on
+# closed file" logging errors when pytest workers shut down while the SSH
+# tunnel background thread is still running.
+logging.getLogger("paramiko").setLevel(logging.WARNING)
+
+from edisgo.io.db import engine  # noqa: E402
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--runslow", action="store_true", default=False, help="run slow tests"
+    )
+    parser.addoption(
+        "--runonlinux",
+        action="store_true",
+        default=False,
+        help="run tests that only work on linux",
+    )
+    parser.addoption(
+        "--runlocal",
+        action="store_true",
+        default=False,
+        help="also run DB tests against local egon-data database",
+    )
+    parser.addoption(
+        "--egon-data-config",
+        action="store",
+        default=None,
+        help="path to egon-data YAML configuration file for local DB tests",
+    )
 
 
 def pytest_configure(config):
@@ -33,36 +63,54 @@ def pytest_configure(config):
         os.path.realpath(os.path.dirname(__file__)), "data/tracbev_example_scenario"
     )
 
-    pytest.egon_data_config_yml = os.path.join(
-        "/home/jonas/.ssh/egon-data.configuration.yaml",
-    )
+    # OEP engine (always created)
+    config._oep_engine = engine()
+    pytest.engine = config._oep_engine  # backward compatibility
 
-    pytest.engine = engine()
+    # Local engine (only when --runlocal is passed)
+    if config.getoption("--runlocal"):
+        egon_config = (
+            config.getoption("--egon-data-config")
+            or os.environ.get("EGON_DATA_CONFIG")
+            or os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                "egon-data.configuration.yaml",
+            )
+        )
+        config._local_engine = engine(path=egon_config)
+    else:
+        config._local_engine = None
 
     config.addinivalue_line("markers", "slow: mark test as slow to run")
-    config.addinivalue_line("markers", "local: mark test as local to run")
     config.addinivalue_line("markers", "runonlinux: mark test to run only on linux")
-
-    if config.getoption("--runlocal"):
-        pytest.engine_local = engine(path=pytest.egon_data_config_yml, ssh=False)
+    config.addinivalue_line("markers", "local: mark test that requires local DB")
 
 
-def pytest_addoption(parser):
-    parser.addoption(
-        "--runslow", action="store_true", default=False, help="run slow tests"
-    )
-    parser.addoption(
-        "--runonlinux",
-        action="store_true",
-        default=False,
-        help="run tests that only work on linux",
-    )
-    parser.addoption(
-        "--runlocal",
-        action="store_true",
-        default=False,
-        help="run tests that only work locally",
-    )
+@pytest.fixture
+def db_engine(request):
+    """Database engine fixture, parametrized by pytest_generate_tests."""
+    return request.param
+
+
+def pytest_generate_tests(metafunc):
+    if "db_engine" in metafunc.fixturenames:
+        engines = [metafunc.config._oep_engine]
+        ids = ["oep"]
+        if metafunc.config._local_engine is not None:
+            engines.append(metafunc.config._local_engine)
+            ids.append("local")
+        metafunc.parametrize("db_engine", engines, ids=ids, indirect=True)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Dispose engines and stop SSH tunnels after all tests."""
+    for attr in ("_local_engine", "_oep_engine"):
+        eng = getattr(session.config, attr, None)
+        if eng is not None:
+            ssh_server = getattr(eng, "_ssh_server", None)
+            eng.dispose()
+            if ssh_server is not None:
+                ssh_server.stop()
 
 
 def pytest_collection_modifyitems(config, items):
@@ -71,11 +119,6 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "slow" in item.keywords:
                 item.add_marker(skip_slow)
-    if not config.getoption("--runlocal"):
-        skip_local = pytest.mark.skip(reason="need --runlocal option to run")
-        for item in items:
-            if "local" in item.keywords:
-                item.add_marker(skip_local)
     if not config.getoption("--runonlinux"):
         skip_windows = pytest.mark.skip(reason="need --runonlinux option to run")
         for item in items:

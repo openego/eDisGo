@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 def home_batteries_oedb(
     edisgo_obj: EDisGo,
     scenario: str,
-    engine: Engine,
+    engine: Engine = None,
 ):
     """
     Gets home battery data from oedb and integrates them into the grid.
@@ -49,6 +49,8 @@ def home_batteries_oedb(
         units.
 
     """
+    if engine is None:
+        engine = edisgo_obj.engine
     config = Config()
     (egon_home_batteries,) = config.import_tables_from_oep(
         engine, ["egon_home_batteries"], "supply"

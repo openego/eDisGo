@@ -244,9 +244,10 @@ class HeatPump:
                 weather_cells = hp_df.weather_cell_id.dropna().unique()
 
                 # get COP per weather cell
+                engine = kwargs.get("engine", None) or edisgo_object.engine
                 ts_cop_per_weather_cell = timeseries_import.cop_oedb(
                     edisgo_object=edisgo_object,
-                    engine=kwargs.get("engine", None),
+                    engine=engine,
                     weather_cell_ids=weather_cells,
                     timeindex=kwargs.get("timeindex", None),
                 )
@@ -275,7 +276,7 @@ class HeatPump:
                 # get efficiencies of resistive heaters
                 eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
                     scenario="eGon2035",  # currently only possible scenario
-                    engine=kwargs.get("engine", None),
+                    engine=engine,
                 )
                 # determine timeindex to use
                 if not cop_df.empty:
@@ -389,10 +390,11 @@ class HeatPump:
 
             if len(heat_pump_names) > 0:
                 # get heat demand per heat pump
+                engine = kwargs.get("engine", None) or edisgo_object.engine
                 heat_demand_df = timeseries_import.heat_demand_oedb(
                     edisgo_object,
                     scenario=kwargs.get("scenario", ""),
-                    engine=kwargs.get("engine", None),
+                    engine=engine,
                     timeindex=kwargs.get("timeindex", None),
                 )
                 heat_pump_names_select = [

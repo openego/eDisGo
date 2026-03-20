@@ -57,11 +57,9 @@ class TestHeatPumpImport:
         )
         return hp_df
 
-    def test_oedb(self, caplog):
+    def test_oedb(self, caplog, db_engine):
         with caplog.at_level(logging.DEBUG):
-            heat_pump_import.oedb(
-                self.edisgo, scenario="eGon2035", engine=pytest.engine
-            )
+            heat_pump_import.oedb(self.edisgo, scenario="eGon2035", engine=db_engine)
         loads_df = self.edisgo.topology.loads_df
         hp_df = loads_df[loads_df.type == "heat_pump"]
         assert "Capacity of individual heat pumps" not in caplog.text
@@ -87,7 +85,7 @@ class TestHeatPumpImport:
         heat_pump_import.oedb(
             self.edisgo,
             scenario="eGon2035",
-            engine=pytest.engine,
+            engine=db_engine,
             import_types=["central_heat_pumps"],
         )
         loads_df = self.edisgo.topology.loads_df
@@ -195,9 +193,9 @@ class TestHeatPumpImport:
         bus_rh = hp_df[hp_df.p_set == 0.17].bus[0]
         assert determine_bus_voltage_level(self.edisgo, bus_rh) == 6
 
-    def test_efficiency_resistive_heaters_oedb(self):
+    def test_efficiency_resistive_heaters_oedb(self, db_engine):
         eta_dict = heat_pump_import.efficiency_resistive_heaters_oedb(
-            scenario="eGon2035", engine=pytest.engine
+            scenario="eGon2035", engine=db_engine
         )
         assert eta_dict["central_resistive_heater"] == 0.99
         assert eta_dict["rural_resistive_heater"] == 0.9

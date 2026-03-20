@@ -706,9 +706,9 @@ class TestGeneratorsImportOEDB:
             p_biomass_before * 1.0,
         )
 
-    def test_oedb(self):
+    def test_oedb(self, db_engine):
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
-        edisgo.import_generators(generator_scenario="eGon2035", engine=pytest.engine)
+        edisgo.import_generators(generator_scenario="eGon2035", engine=db_engine)
         assert len(edisgo.topology.generators_df) == 677

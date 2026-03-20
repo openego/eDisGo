@@ -20,7 +20,7 @@ if "READTHEDOCS" not in os.environ:
 logger = logging.getLogger(__name__)
 
 
-def oedb(edisgo_object, scenario, engine, import_types=None):
+def oedb(edisgo_object, scenario, engine=None, import_types=None):
     """
     Gets heat pumps for specified scenario from oedb and integrates them into the grid.
 
@@ -46,6 +46,9 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         of integrated heat pumps.
 
     """
+
+    if engine is None:
+        engine = edisgo_object.engine
 
     def _get_individual_heat_pumps():
         """
@@ -624,7 +627,7 @@ def _grid_integration(
     return integrated_hps
 
 
-def efficiency_resistive_heaters_oedb(scenario, engine):
+def efficiency_resistive_heaters_oedb(scenario, engine=None):
     """
     Get efficiency of resistive heaters from the
     `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.

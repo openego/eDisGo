@@ -125,7 +125,7 @@ def credentials(path: Path | str) -> dict[str, str | int | Path]:
     return egon_config
 
 
-def ssh_tunnel(cred: dict) -> str:
+def ssh_tunnel(cred: dict) -> tuple[str, SSHTunnelForwarder]:
     """
     Initialize an SSH tunnel to a remote host according to the input arguments.
     See https://sshtunnel.readthedocs.io/en/latest/ for more information.
@@ -137,8 +137,10 @@ def ssh_tunnel(cred: dict) -> str:
 
     Returns
     -------
-    str
-        Name of local port.
+    tuple
+        Tuple of (local_port, server) where local_port is a string and server
+        is the :class:`SSHTunnelForwarder` instance. Call ``server.stop()`` to
+        close the tunnel when no longer needed.
 
     """
     server = SSHTunnelForwarder(
@@ -149,11 +151,11 @@ def ssh_tunnel(cred: dict) -> str:
     )
     server.start()
 
-    return str(server.local_bind_port)
+    return str(server.local_bind_port), server
 
 
 def engine(
-    path: Path | str = None, ssh: bool = False, token: Path | str = None
+    path: Path | str = None, ssh: bool = None, token: Path | str = None
 ) -> Engine:
     """
     Engine for local or remote database.
@@ -162,11 +164,16 @@ def engine(
     ----------
     path : str or pathlib.Path, optional (default=None)
         Path to configuration YAML file of egon-data database.
-    ssh : bool (default=False)
-        If True try to establish ssh tunnel from given information within the
-        configuration YAML. If False try to connect to local database.
+        If provided, a local/remote PostgreSQL engine is created.
+        If None, an OEP (OpenEnergyPlatform) engine is created.
+    ssh : bool, optional (default=None)
+        If True, establish an SSH tunnel using information from the
+        configuration YAML. If False, connect directly using host/port
+        from the YAML. If None (default), SSH is auto-detected based on
+        whether the YAML contains an ``ssh-tunnel`` section.
     token : str or pathlib.Path, optional (default=None)
-        Token for database connection or path to text file containing token.
+        Token for OEP database connection or path to text file containing
+        token. Only used when ``path`` is None (OEP mode).
         If empty the default token file in the config folder OEP_TOKEN.txt
         will be used. If the default token file is not found, no token
         will be used and the connection will be established without token.
@@ -178,61 +185,76 @@ def engine(
 
     """
 
-    if not ssh:
-        # Github Actions KHs token
-        if "OEP_TOKEN_KH" in os.environ:
-            token = os.environ["OEP_TOKEN_KH"]
+    if path is not None:
+        # Local/remote DB via YAML configuration
+        cred = credentials(path=path)
 
-            read = True
+        # Auto-detect SSH if not explicitly set
+        if ssh is None:
+            ssh = "SSH_HOST" in cred
+
+        if ssh:
+            local_port, ssh_server = ssh_tunnel(cred)
+            host = cred.get("PGRES_HOST", "localhost")
+            port = local_port
         else:
-            read = False
+            ssh_server = None
+            host = cred.get("HOST", "localhost")
+            port = cred["PORT"]
 
-            if token is None:
-                spec = importlib.util.find_spec("edisgo")
-                token = Path(spec.origin).resolve().parent / "config" / "OEP_TOKEN.txt"
-
-            if token.is_file():
-                logger.info(f"Getting OEP token from file {token}.")
-
-                with open(token) as file:
-                    token = file.read().strip()
-
-                read = True
-
-        database_url = "openenergyplatform.org"
-
-        msg = ""
-
-        if not read:
-            msg = f"Token file {token} not found"
-            token = ""
-        # Check if the token format is valid
-        elif not re.match(r"^[a-f0-9]{40}$", token):
-            msg = (
-                f"Invalid token format for token {token}. A 40 character "
-                f"hexadecimal string was expected"
-            )
-            token = ""
-
-        if msg:
-            logger.warning(
-                f"{msg}. Connecting to {database_url} without a user token. This may "
-                f"cause connection errors due to connection limitations. Consider "
-                f"setting up an OEP account and providing your user token."
-            )
-
-        return create_engine(
-            f"postgresql+oedialect://:{token}@{database_url}",
+        db_engine = create_engine(
+            f"postgresql+psycopg2://{cred['POSTGRES_USER']}:"
+            f"{cred['POSTGRES_PASSWORD']}@{host}:{port}/{cred['POSTGRES_DB']}",
             echo=False,
         )
+        db_engine._ssh_server = ssh_server
+        return db_engine
 
-    cred = credentials(path=path)
-    local_port = ssh_tunnel(cred)
+    # OEP (OpenEnergyPlatform) engine
+    # Github Actions KHs token
+    if "OEP_TOKEN_KH" in os.environ:
+        token = os.environ["OEP_TOKEN_KH"]
+
+        read = True
+    else:
+        read = False
+
+        if token is None:
+            spec = importlib.util.find_spec("edisgo")
+            token = Path(spec.origin).resolve().parent / "config" / "OEP_TOKEN.txt"
+
+        if token.is_file():
+            logger.info(f"Getting OEP token from file {token}.")
+
+            with open(token) as file:
+                token = file.read().strip()
+
+            read = True
+
+    database_url = "openenergyplatform.org"
+
+    msg = ""
+
+    if not read:
+        msg = f"Token file {token} not found"
+        token = ""
+    # Check if the token format is valid
+    elif not re.match(r"^[a-f0-9]{40}$", token):
+        msg = (
+            f"Invalid token format for token {token}. A 40 character "
+            f"hexadecimal string was expected"
+        )
+        token = ""
+
+    if msg:
+        logger.warning(
+            f"{msg}. Connecting to {database_url} without a user token. This may "
+            f"cause connection errors due to connection limitations. Consider "
+            f"setting up an OEP account and providing your user token."
+        )
 
     return create_engine(
-        f"postgresql+psycopg2://{cred['POSTGRES_USER']}:"
-        f"{cred['POSTGRES_PASSWORD']}@{cred['PGRES_HOST']}:"
-        f"{local_port}/{cred['POSTGRES_DB']}",
+        f"postgresql+oedialect://:{token}@{database_url}",
         echo=False,
     )
 
