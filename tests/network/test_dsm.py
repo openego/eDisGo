@@ -158,6 +158,31 @@ class TestDSM:
         )
 
         caplog.clear()
+
+        # check for negative p_max values
+        self.dsm.p_max = self.p_max.copy()
+        self.dsm.p_min = self.p_min.copy() * -1  # make p_min valid (<=0)
+        self.dsm.e_max = self.e_max.copy()
+        self.dsm.e_min = self.e_min.copy() * -1  # make e_min valid (<=0)
+        self.dsm.p_max.iloc[0, 0] = -1.0  # make p_max invalid (<0)
+        with caplog.at_level(logging.WARNING):
+            self.dsm.check_integrity()
+        assert (
+            "DSM timeseries p_max contains values smaller than zero" in caplog.text
+        )
+
+        caplog.clear()
+
+        # check for negative e_max values
+        self.dsm.p_max = self.p_max.copy()  # reset p_max to valid
+        self.dsm.e_max.iloc[0, 0] = -0.5  # make e_max invalid (<0)
+        with caplog.at_level(logging.WARNING):
+            self.dsm.check_integrity()
+        assert (
+            "DSM timeseries e_max contains values smaller than zero" in caplog.text
+        )
+
+        caplog.clear()
         # check for empty DSM class
         self.dsm = DSM()
         with caplog.at_level(logging.WARNING):

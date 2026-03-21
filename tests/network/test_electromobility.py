@@ -122,6 +122,14 @@ class TestElectromobility:
         eta_charging_points = self.edisgo_obj.electromobility.eta_charging_points
         assert eta_charging_points == 0.9
 
+    def test_property_getters_without_data(self):
+        """Property getters return None/empty when simbev data is missing."""
+        em = Electromobility()
+        assert em.stepsize is None
+        assert em.simulated_days is None
+        assert em.eta_charging_points is None
+        assert em.charging_processes_df.empty
+
     def test_get_flexibility_bands(self):
         self.edisgo_obj.electromobility.get_flexibility_bands(
             self.edisgo_obj, ["work", "public"]

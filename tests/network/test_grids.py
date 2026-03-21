@@ -162,3 +162,8 @@ class TestGrids:
                 "Bus_BranchTee_LVGrid_3_5": 0.383,
             }
         }
+
+    def test_mv_grid_draw_not_implemented(self):
+        mv_grid = self.topology.mv_grid
+        with pytest.raises(NotImplementedError):
+            mv_grid.draw()

@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from edisgo.flex_opt import q_control
 from edisgo.tools.config import Config
@@ -217,3 +218,33 @@ class TestQControl:
             pf.loc[["comp_mv_1", "comp_lv_1", "comp_lv_2"]].values,
             [-1.0, -1.0, -1.0],
         ).all()
+
+    def test_get_q_sign_generator_invalid(self):
+        with pytest.raises(ValueError, match="must either be"):
+            q_control.get_q_sign_generator("invalid_mode")
+
+    def test_get_q_sign_load_invalid(self):
+        with pytest.raises(ValueError, match="must either be"):
+            q_control.get_q_sign_load("invalid_mode")
+
+    def test__fixed_cosphi_default_power_factor_invalid_type(self):
+        df = pd.DataFrame(
+            data={"voltage_level": ["mv"]},
+            index=["comp_mv_1"],
+        )
+        config = Config()
+        with pytest.raises(ValueError, match="not valid"):
+            q_control._fixed_cosphi_default_power_factor(
+                comp_df=df, component_type="invalid_type", configs=config
+            )
+
+    def test__fixed_cosphi_default_reactive_power_sign_invalid_type(self):
+        df = pd.DataFrame(
+            data={"voltage_level": ["mv"]},
+            index=["comp_mv_1"],
+        )
+        config = Config()
+        with pytest.raises(ValueError, match="not valid"):
+            q_control._fixed_cosphi_default_reactive_power_sign(
+                comp_df=df, component_type="invalid_type", configs=config
+            )

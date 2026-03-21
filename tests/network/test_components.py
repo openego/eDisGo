@@ -108,6 +108,18 @@ class TestComponents:
         with pytest.raises(AttributeError, match=msg):
             gen.bus = "None"
 
+    def test_storage_repr(self):
+        gen = Storage(id="Storage_1", edisgo_obj=self.edisgo_obj)
+        assert repr(gen) == "Storage_1"
+
+    def test_generator_repr(self):
+        gen = Generator(id="GeneratorFluctuating_7", edisgo_obj=self.edisgo_obj)
+        assert repr(gen) == "Generator_GeneratorFluctuating_7"
+
+    def test_load_repr(self):
+        load = Load(id="Load_agricultural_LVGrid_1_1", edisgo_obj=self.edisgo_obj)
+        assert repr(load) == "Load_Load_agricultural_LVGrid_1_1"
+
     def test_switch_class(self):
         """Test Switch class"""
 

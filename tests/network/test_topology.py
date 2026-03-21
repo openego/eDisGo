@@ -908,6 +908,26 @@ class TestTopology:
         assert len(set(list_of_feeders)) == 1
         assert list_of_feeders[0] == feeder_of_lv_grids_mv_bus
 
+    def test_assign_feeders_invalid_mode(self):
+        with pytest.raises(ValueError, match="Invalid mode"):
+            self.topology.assign_feeders(mode="invalid_mode")
+
+    def test_get_line_connecting_buses_none(self):
+        """get_line_connecting_buses returns None when no direct line exists."""
+        # Two buses on different feeders — no direct line between them
+        buses = self.topology.buses_df.index
+        bus_1 = buses[0]
+        # find a bus that is NOT directly connected to bus_1
+        connected_lines = self.topology.get_connected_lines_from_bus(bus_1)
+        connected_buses = set()
+        for _, row in connected_lines.iterrows():
+            connected_buses.add(row["bus0"])
+            connected_buses.add(row["bus1"])
+        unconnected = [b for b in buses if b not in connected_buses and b != bus_1]
+        if unconnected:
+            result = self.topology.get_line_connecting_buses(bus_1, unconnected[0])
+            assert result is None
+
     def test_aggregate_lv_grid_at_station(self, caplog):
         """Test method aggregate_lv_grid_at_station"""
 

@@ -1,0 +1,8 @@
+[run]
+source = edisgo
+
+[report]
+omit =
+    edisgo/tools/powermodels_io.py
+    edisgo/tools/preprocess_pypsa_opf_structure.py
+    edisgo/opf/timeseries_reduction.py

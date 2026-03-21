@@ -197,7 +197,7 @@ def engine(
             local_port, ssh_server = ssh_tunnel(cred)
             host = cred.get("PGRES_HOST", "localhost")
             port = local_port
-        else:
+        else:  # pragma: no cover – local DB without SSH, needs --runlocal
             ssh_server = None
             host = cred.get("HOST", "localhost")
             port = cred["PORT"]
@@ -211,9 +211,9 @@ def engine(
         return db_engine
 
     # OEP (OpenEnergyPlatform) engine
-    # Github Actions KHs token
-    if "OEP_TOKEN_KH" in os.environ:
-        token = os.environ["OEP_TOKEN_KH"]
+    # Token from environment variable (e.g. GitHub Actions secret)
+    if "OEP_TOKEN" in os.environ:
+        token = os.environ["OEP_TOKEN"]
 
         read = True
     else:
@@ -274,14 +274,14 @@ def session_scope_egon_data(engine: Engine):
         session.close()
 
 
-def sql_grid_geom(edisgo_obj: EDisGo) -> Geometry:
+def sql_grid_geom(edisgo_obj: EDisGo) -> Geometry:  # pragma: no cover – called by DB imports
     return func.ST_GeomFromText(
         edisgo_obj.topology.grid_district["geom"].wkt,
         edisgo_obj.topology.grid_district["srid"],
     )
 
 
-def get_srid_of_db_table(session: Session, geom_col: InstrumentedAttribute) -> int:
+def get_srid_of_db_table(session: Session, geom_col: InstrumentedAttribute) -> int:  # pragma: no cover – called by DB imports
     query = session.query(func.ST_SRID(geom_col)).limit(1)
 
     return pd.read_sql(sql=query.statement, con=query.session.bind).iat[0, 0]

@@ -208,6 +208,16 @@ class TestHeatPump:
             check_freq=False,
         )
 
+    def test_set_cop_invalid_type(self):
+        heat_pump = HeatPump()
+        with pytest.raises(ValueError, match="'ts_cop' must either be"):
+            heat_pump.set_cop(None, 42)
+
+    def test_set_heat_demand_invalid_type(self):
+        heat_pump = HeatPump()
+        with pytest.raises(ValueError, match="'ts_heat_demand' must either be"):
+            heat_pump.set_heat_demand(None, 42)
+
     def test_set_heat_demand_oedb(self, db_engine):
         # test with oedb
         edisgo_object = EDisGo(
