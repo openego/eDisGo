@@ -380,8 +380,17 @@ Optimised
 
 Use this mode to optimise flexibilities, e.g. charging of electric vehicles or
 dispatch of heat pumps with thermal storage units.
+It can be invoked as follows:
 
-.. todo:: Add more details once the optimisation is merged.
+.. code-block:: python
+
+    edisgo.pm_optimize()
+
+Prior to the optimisation, you need to parametrise the flexibility options.
+
+.. todo:: Add information on how flexibility bands for electric vehicle charging,
+          heat stores for heat pumps and DSM can be added. Maybe information below on
+          Electromobility and Heat pumps can simply be referenced.
 
 Heuristic
 ~~~~~~~~~
@@ -708,52 +717,15 @@ a time series for the storage unit needs to be provided.
             index=edisgo.timeseries.timeindex)
     )
 
-To optimise storage positioning and operation eDisGo provides the options to use a
-heuristic (described in section :ref:`storage-integration-label`) or an optimal power
-flow approach. However, the storage integration heuristic is not yet adapted to the
-refactored code and therefore not available, and the OPF is not maintained and may therefore
-not work out of the box.
-Following you find an example on how to use the OPF to find the optimal storage
-positions in the grid with regard to grid expansion costs. Storage operation
-is optimized at the same time. The example uses the same EDisGo instance as
-above. A total storage capacity of 10 MW is distributed in the grid. `storage_buses`
-can be used to specify certain buses storage units may be connected to.
-This does not need to be provided but will speed up the optimization.
+Demand side management
+------------------------
 
-.. code-block:: python
-
-    random_bus = edisgo.topology.buses_df.index[3:13]
-    edisgo.perform_mp_opf(
-        timesteps=period,
-        scenario="storage",
-        storage_units=True,
-        storage_buses=busnames,
-        total_storage_capacity=10.0,
-        results_path=results_path)
+.. todo:: Add information on DSM class
 
 Curtailment
 -----------
 
-The curtailment function is used to spatially distribute the power that is to be curtailed.
-To optimise which generators should be curtailed eDisGo provides the options to use a
-heuristics (heuristics `feedin-proportional` and `voltage-based`, in detail explained
-in section :ref:`curtailment_in_detail-label`) or an optimal power
-flow approach. However, the heuristics are not yet adapted to the
-refactored code and therefore not available, and the OPF is not maintained and may therefore
-not work out of the box.
-
-In the following example the optimal power flow is used to find the optimal generator
-curtailment with regard to minimizing grid expansion costs for given
-curtailment requirements. It uses the EDisGo object from above.
-
-.. code-block:: python
-
-    edisgo.perform_mp_opf(
-        timesteps=period,
-        scenario='curtailment',
-        results_path=results_path,
-        curtailment_requirement=True,
-        curtailment_requirement_series=[10, 20, 15, 0])
+.. todo:: Curtailment can now be optimised as part of pm_optimize().
 
 Plots
 ----------------
@@ -803,3 +775,5 @@ Results can be saved to csv files with:
     edisgo.results.save('path/to/results/directory/')
 
 See :meth:`~.network.results.Results.save` for more information.
+
+.. todo:: Results of OPF are saved in OPFResults class in EDisGo.opf_results

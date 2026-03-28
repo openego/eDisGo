@@ -9,12 +9,12 @@ Power flow analysis
 In order to analyse voltages and line loadings a non-linear power flow analysis (PF) using pypsa is conducted.
 All loads and generators are modelled as PQ nodes. The slack is positioned at the substation's secondary side.
 
-Multi period optimal power flow
----------------------------------
+Optimal power flow
+--------------------
 
-.. warning:: The non-linear optimal power flow is currently not maintained and might not work out of the box!
-
-.. todo:: Add
+.. todo:: Add information. Text from final report of egon can partly be used (chapter 6.5.2.2).
+          The four options defined through opf_version in pm_optimize need to be described.
+          Also reference to Maikes master's thesis needs to be added.
 
 .. _grid_expansion_methodology:
 
@@ -173,6 +173,7 @@ Reinforce lines due to voltage
   After each feeder with voltage problems has been considered, a power flow analysis is conducted and the voltage rechecked. The process of solving voltage issues is repeated until voltage issues are solved
   or until the maximum number of allowed iterations is reached.
 
+ToDo: Enhanced reinforcement
 
 Grid expansion costs
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -187,79 +188,6 @@ The population density is calculated by the population and area of the grid dist
 
 Costs for lines of aggregated loads and generators are not considered in the costs calculation since grids of
 aggregated areas are not modeled but aggregated loads and generators are directly connected to the MV busbar.
-
-.. _curtailment_in_detail-label:
-
-Curtailment
------------
-
-.. warning:: The curtailment methods are not yet adapted to the refactored code and therefore currently do not work.
-
-eDisGo right now provides two curtailment methodologies called 'feedin-proportional' and 'voltage-based', that are implemented in
-:py:mod:`~edisgo.flex_opt.curtailment`.
-Both methods are intended to take a given curtailment target obtained from an optimization of the EHV and HV grids using
-`eTraGo <https://github.com/openego/eTraGo>`_ and allocate it to the generation units in the grids. Curtailment targets can be specified for all
-wind and solar generators,
-by generator type (solar or wind) or by generator type in a given weather cell.
-It is also possible to curtail specific generators internally, though a user friendly implementation is still in the works.
-
-'feedin-proportional'
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-    The 'feedin-proportional' curtailment is implemented in :py:func:`~edisgo.flex_opt.curtailment.feedin_proportional`.
-    The curtailment that has to be met in each time step is allocated equally to all generators depending on their share of total
-    feed-in in that time step.
-
-    .. math::
-        c_{g,t} = \frac{a_{g,t}}{\sum\limits_{g \in gens} a_{g,t}} \times  c_{target,t} ~ ~ \forall t\in timesteps
-
-    where :math:`c_{g,t}` is the curtailed power of generator :math:`g` in timestep :math:`t`, :math:`a_{g,t}` is the weather-dependent availability
-    of generator :math:`g` in timestep :math:`t` and :math:`c_{target,t}` is the given curtailment target (power) for timestep :math:`t` to be allocated
-    to the generators.
-
-'voltage-based'
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-    The 'voltage-based' curtailment is implemented in :py:func:`~edisgo.flex_opt.curtailment.voltage_based`.
-    The curtailment that has to be met in each time step is allocated to all generators depending on
-    the exceedance of the allowed voltage deviation at the nodes of the generators. The higher the exceedance, the higher
-    the curtailment.
-
-    The optional parameter *voltage_threshold* specifies the threshold for the exceedance of the allowed voltage deviation above
-    which a generator is curtailed. By default it is set to zero, meaning that all generators at nodes with voltage deviations
-    that exceed the allowed voltage deviation are curtailed. Generators at nodes where the allowed voltage deviation is not
-    exceeded are not curtailed. In the case that the required
-    curtailment exceeds the weather-dependent availability of all generators with voltage deviations above the specified threshold,
-    the voltage threshold is lowered in steps of 0.01 p.u. until the curtailment target can be met.
-
-    Above the threshold, the curtailment is proportional to the exceedance of the allowed voltage deviation.
-
-    .. math::
-        \frac{c_{g,t}}{a_{g,t}} = n \cdot (V_{g,t} - V_{threshold, g, t}) + offset
-
-    where :math:`c_{g,t}` is the curtailed power of generator :math:`g` in timestep :math:`t`, :math:`a_{g,t}` is the weather-dependent availability
-    of generator :math:`g` in timestep :math:`t`, :math:`V_{g,t}` is the voltage at generator :math:`g` in timestep :math:`t` and
-    :math:`V_{threshold, g, t}` is the voltage threshold for generator :math:`g` in timestep :math:`t`. :math:`V_{threshold, g, t}` is calculated as follows:
-
-    .. math::
-        V_{threshold, g, t} = V_{g_{station}, t} + \Delta V_{g_{allowed}} + \Delta V_{offset, t}
-
-    where :math:`V_{g_{station}, t}` is the voltage at the station's secondary side, :math:`\Delta V_{g_{allowed}}` is the allowed voltage
-    deviation in the reverse power flow and :math:`\Delta V_{offset, t}` is the exceedance of the allowed voltage deviation above which generators are curtailed.
-
-    :math:`n` and :math:`offset` in the equation above are slope and y-intercept of a linear relation between
-    the curtailment and the exceedance of the allowed voltage deviation. They are calculated by solving the following linear problem that penalizes the offset
-    using the python package pyomo:
-
-    .. math::
-        min \left(\sum\limits_{t} offset_t\right)
-
-    .. math::
-        s.t. \sum\limits_{g} c_{g,t} = c_{target,t} ~ \forall g \in (solar, wind) \\
-         c_{g,t} \leq a_{g,t}  \forall g \in (solar, wind),t
-
-    where :math:`c_{target,t}` is the given curtailment target (power) for timestep :math:`t` to be allocated
-    to the generators.
 
 .. _electromobility-integration-label:
 
@@ -317,31 +245,30 @@ minimum_charging_capacity_factor.
 This is an active charging strategy. The cars are charged when the residual load in the MV grid is lowest
 (high generation and low consumption). Charging processes with a low flexibility are given priority.
 
+'grid-optimal'
+""""""""""""""""""
 
-.. _storage-integration-label:
+.. todo:: Add information. Text below can be used (probably copied from somewhere, check
+          if it needs to be referenced). Maybe Maikes master's thesis is
+          also helpful and the eGon final report. Needs to be pointed out that this is
+          called through pm_optimize().
 
-Storage integration
---------------------
-
-.. warning:: The storage integration methods described below are not yet adapted to the refactored code and therefore currently do not work.
-
-Besides the possibility to connect a storage with a given operation to any node in the
-grid, eDisGo provides a methodology that takes
-a given storage capacity and allocates it to multiple smaller storage units such that it
-reduces line overloading and voltage deviations.
-The methodology is implemented in :py:func:`~edisgo.flex_opt.storage_positioning.one_storage_per_feeder`.
-As the above described
-curtailment allocation methodologies it is intended to be used in combination
-with `eTraGo <https://github.com/openego/eTraGo>`_ where
-storage capacity and operation is optimized.
-
-For each feeder with load or voltage issues it is checked if integrating a
-storage will reduce peaks in the feeder, starting with the feeder with
-the highest theoretical grid expansion costs. A heuristic approach is used
-to estimate storage sizing and siting while storage operation is carried
-over from the given storage operation.
-
-A more thorough documentation will follow soon.
+the flexibility potential for
+controlled charging is mapped using
+so-called flexibility bands. These bands comprise an upper and lower power band for
+the charging power and an upper and lower energy band for the energy to be recharged
+for each charging point in hourly resolution. The lower power band is always zero, as
+power can only be drawn but not fed back into the grid. The upper power band describes
+the maximum charging power that can be used for charging. This depends on the charging
+power of the vehicle or the charging station, whichever is lower, and is zero if no
+vehicle is present. The upper energy band describes the energy recharged at the
+charging point in the event that the vehicle charges at full power immediately after
+arriving at the charging station until it is fully charged. The lower energy band
+describes the recharged energy in the event that the vehicle is charged as late as
+possible. The charging process can be made more flexible within these bands. If there
+are several charging stations at a charging point charging point, the bands are added
+together. The flexibility bands are determined for each charging point within the
+eDisGo tool and are not part of eGon-data.
 
 Spatial complexity reduction
 ----------------------------
@@ -415,6 +342,12 @@ If you want more flexibility in using the complexity reduction, you can also run
 
 For more details see the API documentation or the thesis where the methods were implemented and tested [SCR]_.
 
+Temporal complexity reduction
+-------------------------------
+
+.. todo:: Add information on functions get_most_critical_time_steps() and get_most_critical_time_intervals().
+          Information can be found in final report of eGon project.
+
 References
 ----------
 
@@ -430,4 +363,12 @@ References
 
 .. [HoerschBrown]   `Jonas Hörsch, Tom Brown: The role of spatial scale in joint optimisations of
                     generation and transmission for European highly renewable scenarios
-                    <https://arxiv.org/abs/1705.07617>`_
+                    <https://arxiv.org/pdf/1705.07617.pdf>`_
+
+.. [MAMaike]    `Master Thesis - Maike Held - Netzdienlich optimaler Einsatz von Flexibilitäten in
+                radialen Verteilnetzen basierend auf einem AC-Lastflussmodell (written in German)
+                <https://reiner-lemoine-institut.de/wp-content/uploads/2023/11/2023_MA_Maike_Held_Netzdienlich_optimaler_Einsatz_von_Flexibilitaeten.pdf>`_
+
+.. [egon]   `Final report: Ein offenes netzebenen- und sektorenübergreifendes Planungsinstrument zur Bestimmung des optimalen Einsatzes
+            und Ausbaus von Flexibilitätsoptionen in Deutschland (written in German)
+            <https://ego-n.org/papers/Endbericht_egon_v2.pdf>`_
