@@ -32,6 +32,7 @@ def to_powermodels(
     flexible_storage_units=None,
     opf_version=1,
     curtailment_14a=None,
+    hours_limit_14a: int = 24,
 ):
     """
     Convert eDisGo network to PowerModels dictionary format via 3-stage pipeline.
@@ -223,7 +224,7 @@ def to_powermodels(
         psa_net.lines.costs_earthworks + psa_net.lines.costs_cable
     )
     # aggregate parallel transformers
-    aggregate_parallel_transformers(psa_net)
+    #aggregate_parallel_transformers(psa_net)
     psa_net.transformers.capital_cost = edisgo_object.config._data[
         "costs_transformers"
     ]["lv"]
@@ -321,7 +322,7 @@ def to_powermodels(
         if len(all_hps) > 0:
             logger.info(f"Creating virtual generators for §14a heat pump support ({len(all_hps)} heat pumps).")
             _build_gen_hp_14a_support(
-                psa_net, pm, edisgo_object, s_base, all_hps, curtailment_14a_config
+                psa_net, pm, edisgo_object, s_base, all_hps, curtailment_14a_config, hours_limit_14a
             )
         
         # Build §14a support for charging points
@@ -330,7 +331,7 @@ def to_powermodels(
         if len(all_cps) > 0:
             logger.info(f"Creating virtual generators for §14a charging point support ({len(all_cps)} CPs).")
             _build_gen_cp_14a_support(
-                psa_net, pm, edisgo_object, s_base, all_cps, curtailment_14a_config
+                psa_net, pm, edisgo_object, s_base, all_cps, curtailment_14a_config, hours_limit_14a
             )
     
     if len(flexible_loads) > 0:
@@ -633,8 +634,18 @@ def from_powermodels(
             edisgo_object.timeseries._generators_active_power.loc[:, names] = results[
                 names
             ].values
-            print(f"    ✓ Written successfully!")
-        
+            #implement 14a-gens in topology dataframe
+            for gen_name in names:
+                  load_name = gen_name.replace("hp_14a_support_", "")
+                  bus_name = edisgo_object.topology.loads_df.loc[load_name].bus
+                  if gen_name not in edisgo_object.topology.generators_df.index:
+                        edisgo_object.topology.generators_df.loc[gen_name] = {
+                              "type": "hp_14a",
+                              "p_nom": results[gen_name].max(),
+                              "bus": bus_name,
+                              "control": "PQ",
+                              }
+                        print(f"Generator {gen_name} has been implemented ✓")
         elif flex == "gen_cp_14a":
             # §14a virtual generators for CPs: write as positive generation
             print(f"    → Writing {len(names)} gen_cp_14a generators to generators_active_power")
@@ -643,6 +654,20 @@ def from_powermodels(
                 names
             ].values
             print(f"    ✓ Written successfully!")
+            # Also reduce corresponding charging point loads by the curtailment amount
+            #implement 14a-gens in topology dataframe
+            for gen_name in names:
+                  load_name = gen_name.replace("cp_14a_support_", "")
+                  bus_name = edisgo_object.topology.loads_df.loc[load_name].bus
+                  if gen_name not in edisgo_object.topology.generators_df.index:
+                        edisgo_object.topology.generators_df.loc[gen_name] = {
+                              "type": "cp_14a",
+                              "p_nom": results[gen_name].max(),
+                              "bus": bus_name,
+                              "control": "PQ",
+                              }
+                        print(f"Generator {gen_name} has been implemented ✓")
+
         elif flex in ["heatpumps", "electromobility"]:
             edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
                 names
@@ -673,8 +698,7 @@ def from_powermodels(
                         columns=names,
                         data=results[names].values,
                     ),
-                )
-
+           )
     # calculate corresponding reactive power values
     edisgo_object.set_time_series_reactive_power_control()
 
@@ -943,6 +967,7 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
             "base_kv": psa_net.buses.v_nom.iloc[bus_i],
             "grid_level": grid_level[psa_net.buses.v_nom.iloc[bus_i]],
         }
+
     # add virtual busses for storage units
     for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
@@ -965,6 +990,7 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
             "base_kv": psa_net.buses.v_nom.iloc[idx_bus - 1],
             "grid_level": grid_level[psa_net.buses.v_nom.iloc[idx_bus - 1]],
         }
+        
 
 
 def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
@@ -1597,7 +1623,7 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
         }
 
 
-def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, curtailment_14a):
+def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, curtailment_14a, hours_limit_14a):
     """
     Build virtual generator dictionary for §14a heat pump support and add it to 
     PowerModels dictionary 'pm'.
@@ -1625,7 +1651,7 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
     # Correct key is "min_power_mw" but we fall back to legacy key for backwards compatibility
     # §14a EnWG requirement: Devices must maintain at least 4.2 kW when curtailed
     p_min_14a = curtailment_14a.get("min_power_mw", curtailment_14a.get("max_power_mw", 0.0042))  # MW
-    max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours per day
+    max_hours_per_day = curtailment_14a.get("max_hours_per_day", hours_limit_14a)  # hours per day
     specific_components = curtailment_14a.get("components", [])  # empty list = all eligible HPs
 
     # Filter heat pumps if specific components are defined
@@ -1729,7 +1755,7 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
             )
 
 
-def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailment_14a):
+def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailment_14a, hours_limit_14a):
     """
     Build virtual generator dictionary for §14a charging point support and add it to 
     PowerModels dictionary 'pm'.
@@ -1757,7 +1783,7 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
     # Correct key is "min_power_mw" but we fall back to legacy key for backwards compatibility
     # §14a EnWG requirement: Devices must maintain at least 4.2 kW when curtailed
     p_min_14a = curtailment_14a.get("min_power_mw", curtailment_14a.get("max_power_mw", 0.0042))  # MW
-    max_hours_per_day = curtailment_14a.get("max_hours_per_day", 2.0)  # hours per day
+    max_hours_per_day = curtailment_14a.get("max_hours_per_day", hours_limit_14a)  # hours per day
     specific_components = curtailment_14a.get("components", [])  # empty list = all eligible CPs
     
     # DEBUG: Print all CPs in topology

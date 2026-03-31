@@ -27,408 +27,145 @@ from edisgo import EDisGo
 from edisgo.io.db import engine as egon_engine
 
 
-def add_charging_points_manually(edisgo, num_cps=30, seed=42):
+def import_generators_timeseries(grid_path, edisgo, cos_phi, start_date, end_date):
     """
-    Add charging points manually to the grid with realistic size distribution.
+    Imports generator active power and initializes reactive power timeseries for EDisGo simulation.
 
     Parameters
     ----------
+    grid_path : str
+        Path to the grid results folder.
     edisgo : EDisGo
-        EDisGo object
-    num_cps : int
-        Number of charging points to add (default: 30)
-    seed : int
-        Random seed for reproducibility (default: 42)
-
-    Returns
-    -------
-    EDisGo
-        EDisGo object with added charging points
+        EDisGo object.
+    start_date : str or datetime
+        Startzeitpunkt (z.B. '2023-01-01 00:00').
+    end_date : str or datetime
+        Endzeitpunkt (z.B. '2023-01-31 23:45').
     """
-    print(f"\n3a. Adding {num_cps} charging points manually...")
+    # 1. Daten laden
+    gen_ts_path = f"{grid_path}/timeseries/gen_p_max_pu_timeseries.csv"
+    generator_ts = pd.read_csv(gen_ts_path, index_col=0)
+    
+    # 2. Index in Datetime umwandeln (falls noch nicht geschehen)
+    generator_ts.index = pd.to_datetime(generator_ts.index)
+    
+    # 3. Zeitraum filtern
+    generator_ts = generator_ts.loc[start_date:end_date]
 
-    np.random.seed(seed + 100)  # Different seed than HPs
+    start_dt = pd.to_datetime(start_date)
+    target_year = start_dt.year
+    
+    # Jahr im Index der geladenen Daten anpassen
+    generator_ts.index = generator_ts.index.map(lambda t: t.replace(year=target_year))
 
-    # Get random LV buses (different from HP buses if possible)
-    lv_buses = edisgo.topology.buses_df[
-        edisgo.topology.buses_df.v_nom < 1.0  # LV buses
-    ]
-
-    if len(lv_buses) < num_cps:
-        print(
-            f"  ⚠ Warning: Only {len(lv_buses)} LV buses available, using all"
-        )
-        num_cps = len(lv_buses)
-
-    selected_buses = lv_buses.sample(n=num_cps, random_state=seed + 100)
-
-    # Realistic distribution based on typical EV charging points:
-    # - 50% home charging (3.7-11 kW, typically 11 kW)
-    # - 30% work/public charging (11-22 kW)
-    # - 20% fast charging (22-50 kW, but curtailed to grid limits)
-    num_home = int(num_cps * 0.5)
-    num_work = int(num_cps * 0.3)
-    num_fast = num_cps - num_home - num_work
-
-    cp_data = []
-    cp_names = []
-
-    # Home charging points (3.7-11 kW)
-    for i in range(num_home):
-        p_set = np.random.uniform(0.0037, 0.011)  # 3.7-11 kW
-        cp_data.append(
-            {
-                "bus": selected_buses.index[i],
-                "p_set": p_set,
-                "type": "charging_point",
-                "sector": "home",
-            }
-        )
-        cp_names.append(f"CP_home_{i+1}")
-
-    # Work/public charging points (11-22 kW)
-    for i in range(num_work):
-        p_set = np.random.uniform(0.011, 0.022)  # 11-22 kW
-        cp_data.append(
-            {
-                "bus": selected_buses.index[num_home + i],
-                "p_set": p_set,
-                "type": "charging_point",
-                "sector": "work",
-            }
-        )
-        cp_names.append(f"CP_work_{i+1}")
-
-    # Fast charging points (22-50 kW)
-    for i in range(num_fast):
-        p_set = np.random.uniform(0.022, 0.050)  # 22-50 kW
-        cp_data.append(
-            {
-                "bus": selected_buses.index[num_home + num_work + i],
-                "p_set": p_set,
-                "type": "charging_point",
-                "sector": "public",
-            }
-        )
-        cp_names.append(f"CP_fast_{i+1}")
-
-    # Add to topology
-    cp_df = pd.DataFrame(cp_data, index=cp_names)
-    edisgo.topology.loads_df = pd.concat([edisgo.topology.loads_df, cp_df])
-
-    print(f"  ✓ Added {len(cp_names)} charging points:")
-    print(f"    - {num_home} home (3.7-11 kW)")
-    print(f"    - {num_work} work/public (11-22 kW)")
-    print(f"    - {num_fast} fast charging (22-50 kW)")
-    print(
-        f"    - §14a eligible (>4.2 kW): {len(cp_df[cp_df['p_set'] > 0.0042])}"
+    # 4. EDisGo-Index auf gewünschtes Jahr anpassen
+    edisgo.timeseries.timeindex = pd.DatetimeIndex(generator_ts.index, freq="H")
+    
+    # 4. Active Power in EDisGo setzen
+    edisgo.timeseries.active_power_p_max_pu(
+        edisgo_object=edisgo, ts_generators_p_max_pu=generator_ts
     )
+
+    # 5. Reactive Power initialisieren (passend zum neuen Zeitraum)
+    pv_gens=edisgo.topology.generators_df[
+          edisgo.topology.generators_df.index.str.contains('pv')].index
+    active_power = edisgo.timeseries.generators_active_power[pv_gens]
+    tan_phi = np.tan(np.arccos(cos_phi))
+    reactive_power_ts = active_power * tan_phi
+    edisgo.timeseries._generators_reactive_power = reactive_power_ts
 
     return edisgo
 
 
-def add_heat_pumps_manually(edisgo, num_hps=50, seed=42):
+def import_loads_timeseries(grid_path, edisgo, cos_phi, start_date, end_date):
     """
-    Add heat pumps manually to the grid with realistic size distribution.
+    Imports load timeseries into EDisGo and initializes heat pump attributes
+    based on a specific time range.
 
     Parameters
     ----------
+    grid_path : str
+        Path to the grid folder containing timeseries CSV files.
     edisgo : EDisGo
-        EDisGo object
-    num_hps : int
-        Number of heat pumps to add (default: 50)
-    seed : int
-        Random seed for reproducibility (default: 42)
+        EDisGo instance to update.
+    cos_phi : float
+        Power factor for reactive power calculation.
+    start_date : str or datetime
+        Start of the simulation period.
+    end_date : str or datetime
+        End of the simulation period.
 
     Returns
     -------
     EDisGo
-        EDisGo object with added heat pumps
+        Updated EDisGo object with loads and heat pump timeseries.
     """
-    print(f"\n3. Adding {num_hps} heat pumps manually...")
+    # --- 1. Last-Zeitreihen laden und filtern ---
+    load_ts_path = f"{grid_path}/timeseries/load_timeseries.csv"
+    load_ts = pd.read_csv(load_ts_path, index_col=0)
+    load_ts.index = pd.to_datetime(load_ts.index)
+    # Zeitraum filtern
+    load_ts = load_ts.loc[start_date:end_date]
 
-    np.random.seed(seed)
+    # 3. DAS JAHR AUS DEINEM INPUT EXTRAHIEREN
+    # Wir wandeln start_date in ein Datetime-Objekt um, falls es ein String ist
+    start_dt = pd.to_datetime(start_date)
+    target_year = start_dt.year
+    
+    # Jahr im Index der geladenen Daten anpassen
+    load_ts.index = load_ts.index.map(lambda t: t.replace(year=target_year))
+    
+    edisgo.timeseries.timeindex = pd.DatetimeIndex(load_ts.index, freq ='H')
 
-    # Get random LV buses
-    lv_buses = edisgo.topology.buses_df[
-        edisgo.topology.buses_df.v_nom < 1.0  # LV buses
-    ]
+    # Wirkleistung setzen
+    edisgo.timeseries.set_active_power_manual(
+        edisgo_object=edisgo, ts_loads=load_ts
+    )
 
-    if len(lv_buses) < num_hps:
-        print(
-            f"  ⚠ Warning: Only {len(lv_buses)} LV buses available, using all"
+    # Blindleistung basierend auf cos_phi berechnen
+    active_power = edisgo.timeseries.loads_active_power
+    tan_phi = np.tan(np.arccos(cos_phi))
+    reactive_power_ts = active_power * tan_phi
+    edisgo.timeseries._loads_reactive_power = reactive_power_ts
+
+    # --- 2. Wärmepumpen-Logik ---
+    hp_loads = edisgo.topology.loads_df.query("type == 'heat_pump'")
+    
+    if not hp_loads.empty:
+        # COP Zeitreihen laden und analog filtern
+        cop_ts_path = f"{grid_path}/timeseries/cop_timeseries.csv"
+        cop_ts = pd.read_csv(cop_ts_path, index_col=0)
+        cop_ts.index = pd.to_datetime(cop_ts.index)
+        cop_ts.index = cop_ts.index.map(lambda t: t.replace(year=target_year))
+        
+        cop_ts = cop_ts.loc[start_date:end_date]
+        cop_ts.index = edisgo.timeseries.timeindex
+
+        cop_series = cop_ts.iloc[:, 0]
+        
+        # COP Matrix für alle Wärmepumpen erstellen
+        cop_hp_ts = pd.concat(
+            [cop_series] * len(hp_loads), axis=1, keys=hp_loads.index
         )
-        num_hps = len(lv_buses)
+        edisgo.heat_pump.cop_df = cop_hp_ts
 
-    selected_buses = lv_buses.sample(n=num_hps, random_state=seed)
-
-    # Realistic distribution based on German residential heat pumps:
-    # - 60% large (11-20 kW) - typical for older/larger houses
-    # - 30% medium (5-11 kW) - typical for modern houses
-    # - 10% small (3-5 kW) - typical for well-insulated new buildings
-    num_large = int(num_hps * 0.6)
-    num_medium = int(num_hps * 0.3)
-    num_small = num_hps - num_large - num_medium
-
-    hp_data = []
-    hp_names = []
-
-    # Large heat pumps (11-20 kW)
-    for i in range(num_large):
-        p_set = np.random.uniform(0.011, 0.020)  # 11-20 kW
-        hp_data.append(
-            {
-                "bus": selected_buses.index[i],
-                "p_set": p_set,
-                "type": "heat_pump",
-                "sector": "residential",
-            }
-        )
-        hp_names.append(f"HP_large_{i+1}")
-
-    # Medium heat pumps (5-11 kW)
-    for i in range(num_medium):
-        p_set = np.random.uniform(0.005, 0.011)  # 5-11 kW
-        hp_data.append(
-            {
-                "bus": selected_buses.index[num_large + i],
-                "p_set": p_set,
-                "type": "heat_pump",
-                "sector": "residential",
-            }
-        )
-        hp_names.append(f"HP_medium_{i+1}")
-
-    # Small heat pumps (3-5 kW)
-    for i in range(num_small):
-        p_set = np.random.uniform(0.003, 0.005)  # 3-5 kW
-        hp_data.append(
-            {
-                "bus": selected_buses.index[num_large + num_medium + i],
-                "p_set": p_set,
-                "type": "heat_pump",
-                "sector": "residential",
-            }
-        )
-        hp_names.append(f"HP_small_{i+1}")
-
-    # Add to topology
-    hp_df = pd.DataFrame(hp_data, index=hp_names)
-    edisgo.topology.loads_df = pd.concat([edisgo.topology.loads_df, hp_df])
-
-    print(f"  ✓ Added {len(hp_names)} heat pumps:")
-    print(f"    - {num_large} large (11-20 kW)")
-    print(f"    - {num_medium} medium (5-11 kW)")
-    print(f"    - {num_small} small (3-5 kW)")
-    print(f"    - §14a eligible (>4.2 kW): {num_large + num_medium}")
-
-    return edisgo
-
-
-def create_hp_timeseries(edisgo, scenario="eGon2035", num_days=30):
-    """
-    Create realistic heat demand and COP time series for heat pumps.
-
-    Parameters
-    ----------
-    edisgo : EDisGo
-        EDisGo object with heat pumps
-    scenario : str
-        Scenario name for time index
-    num_days : int
-        Number of days to simulate (default: 30 for one month)
-
-    Returns
-    -------
-    EDisGo
-        EDisGo object with HP time series
-    """
-    print(f"\n4. Creating heat pump time series for {num_days} days...")
-
-    # Get heat pumps
-    heat_pumps = edisgo.topology.loads_df[
-        edisgo.topology.loads_df["type"] == "heat_pump"
-    ]
-
-    if len(heat_pumps) == 0:
-        print("  ⚠ Warning: No heat pumps found")
-        return edisgo
-    timeindex = edisgo.timeseries.timeindex
-    print(f"  Creating time series for {len(heat_pumps)} heat pumps...")
-    print(f"  Timeindex: {len(timeindex)} timesteps (hourly, {num_days} days)")
-
-    # Create realistic heat demand profile for winter month
-    hour_of_day = timeindex.hour.values
-    day_of_week = timeindex.dayofweek.values  # 0=Monday, 6=Sunday
-
-    # Winter season - high base load (mid-January)
-    seasonal_factor = 0.9  # High demand in winter
-
-    # Daily pattern (higher demand morning and evening)
-    daily_factor = 0.7 + 0.3 * (
-        np.exp(-((hour_of_day - 7) ** 2) / 8)  # Morning peak
-        + np.exp(-((hour_of_day - 19) ** 2) / 8)  # Evening peak
-    )
-
-    # Weekend pattern (slightly different - later morning, more evening)
-    weekend_mask = day_of_week >= 5
-    daily_factor[weekend_mask] = 0.6 + 0.4 * (
-        np.exp(-((hour_of_day[weekend_mask] - 9) ** 2) / 10)  # Later morning
-        + np.exp(-((hour_of_day[weekend_mask] - 20) ** 2) / 10)  # Evening peak
-    )
-
-    # Combine patterns
-    base_profile = seasonal_factor * daily_factor
-
-    # Create COP profile (winter - lower COP due to cold temperatures)
-    # Typical air-source heat pump COP in winter: 2.5-3.5
-    cop_profile = 3.0 + np.random.normal(0, 0.2, len(timeindex))
-    cop_profile = np.clip(cop_profile, 2.5, 3.5)
-
-    # Create individual profiles for each HP
-    heat_demand_data = {}
-    cop_data = {}
-
-    for hp_name in heat_pumps.index:
-        p_set = heat_pumps.loc[hp_name, "p_set"]
-
-        # Heat demand: base profile scaled by nominal power with random variation
-        # Assume average COP of 3.5, so thermal = electrical * 3.5
-        base_thermal = p_set * 3.5
-
-        # Add individual variation (±20%)
-        individual_factor = 0.8 + 0.4 * np.random.random(len(timeindex))
-        heat_demand = base_profile * base_thermal * individual_factor
-
-        # Add some random noise
-        heat_demand += np.random.normal(0, 0.001, len(timeindex))
-        heat_demand = np.maximum(heat_demand, 0)  # No negative demand
-
-        heat_demand_data[hp_name] = heat_demand
-
-        # Individual COP with small variation
-        individual_cop = cop_profile + np.random.normal(0, 0.1, len(timeindex))
-        individual_cop = np.clip(individual_cop, 2.5, 4.5)
-        cop_data[hp_name] = individual_cop
-
-    # Set data
-    edisgo.heat_pump.heat_demand_df = pd.DataFrame(
-        heat_demand_data, index=timeindex
-    )
-    edisgo.heat_pump.cop_df = pd.DataFrame(cop_data, index=timeindex)
-
-    print(f"  ✓ Created time series:")
-    print(
-        f"    Heat demand range: {edisgo.heat_pump.heat_demand_df.min().min():.6f} - {edisgo.heat_pump.heat_demand_df.max().max():.6f} MW"
-    )
-    print(
-        f"    COP range: {edisgo.heat_pump.cop_df.min().min():.2f} - {edisgo.heat_pump.cop_df.max().max():.2f}"
-    )
-
-    return edisgo
-
-
-def create_cp_timeseries(edisgo, scenario="eGon2035", num_days=30):
-    """
-    Create realistic charging demand time series for charging points.
-
-    Parameters
-    ----------
-    edisgo : EDisGo
-        EDisGo object with charging points
-    scenario : str
-        Scenario name for time index
-    num_days : int
-        Number of days to simulate (default: 30 for one month)
-
-    Returns
-    -------
-    EDisGo
-        EDisGo object with CP time series
-    """
-    print(f"\n4a. Creating charging point time series for {num_days} days...")
-
-    # Get charging points
-    charging_points = edisgo.topology.loads_df[
-        edisgo.topology.loads_df["type"] == "charging_point"
-    ]
-
-    if len(charging_points) == 0:
-        print("  ⚠ Warning: No charging points found")
-        return edisgo
-
-    # Use same time index as heat pumps
-    timeindex = edisgo.timeseries.timeindex
-
-    print(
-        f"  Creating time series for {len(charging_points)} charging points..."
-    )
-    print(f"  Timeindex: {len(timeindex)} timesteps (hourly, {num_days} days)")
-
-    # Create realistic charging profiles based on use case
-    hours = np.arange(len(timeindex))
-    hour_of_day = timeindex.hour.values
-    day_of_week = timeindex.dayofweek.values  # 0=Monday, 6=Sunday
-
-    cp_load_data = {}
-
-    for cp_name in charging_points.index:
-        p_set = charging_points.loc[cp_name, "p_set"]
-        sector = charging_points.loc[cp_name, "sector"]
-
-        # Different profiles based on sector
-        if sector == "home":
-            # Home charging: evening/night (18:00-07:00), higher on weekends
-            peak_hours = (hour_of_day >= 18) | (hour_of_day <= 7)
-            base_profile = np.where(peak_hours, 0.7, 0.1)
-            # Higher usage on weekends
-            weekend_mask = day_of_week >= 5
-            base_profile[weekend_mask] *= 1.3
-
-        elif sector == "work":
-            # Work charging: daytime on weekdays (08:00-17:00)
-            work_hours = (hour_of_day >= 8) & (hour_of_day <= 17)
-            weekday_mask = day_of_week < 5
-            base_profile = np.where(work_hours & weekday_mask, 0.6, 0.05)
-
-        else:  # public/fast charging
-            # Public charging: distributed throughout day, peaks at noon and evening
-            base_profile = 0.3 + 0.4 * (
-                np.exp(-((hour_of_day - 12) ** 2) / 12)  # Noon peak
-                + np.exp(-((hour_of_day - 18) ** 2) / 12)  # Evening peak
-            )
-
-        # Add randomness and individual variation
-        random_factor = 0.7 + 0.6 * np.random.random(len(timeindex))
-        cp_load = base_profile * p_set * random_factor
-
-        # Add some random noise
-        cp_load += np.random.normal(0, p_set * 0.05, len(timeindex))
-        cp_load = np.maximum(cp_load, 0)  # No negative load
-        cp_load = np.minimum(cp_load, p_set)  # Cap at nominal power
-
-        cp_load_data[cp_name] = cp_load
-
-    # Add CP loads to timeseries (they will be added to loads_active_power)
-    cp_load_df = pd.DataFrame(cp_load_data, index=timeindex)
-
-    # Store for later use
-    if not hasattr(edisgo, "charging_point_loads"):
-        edisgo.charging_point_loads = cp_load_df
+        # Wärmebedarf berechnen (P_el * COP)
+        hp_p_el_ts = edisgo.timeseries.loads_active_power.loc[:, hp_loads.index]
+        edisgo.heat_pump.heat_demand_df = hp_p_el_ts * cop_hp_ts
     else:
-        edisgo.charging_point_loads = cp_load_df
-
-    print(f"  ✓ Created time series:")
-    print(
-        f"    Load range: {cp_load_df.min().min():.6f} - {cp_load_df.max().max():.6f} MW"
-    )
-    print(f"    Average load: {cp_load_df.mean().mean():.6f} MW")
+        print("Info: Keine Wärmepumpen im Netzmodell gefunden. HP-Import wird übersprungen.")
 
     return edisgo
 
 
 def setup_edisgo(
-    grid_path, scenario="eGon2035", num_hps=50, num_cps=30, num_days=30
+    grid_path,
+    num_hps=50,
+    num_cps=30,
+    cos_phi_load=0.9,
+    cos_phi_gen=0.95,
+    start_date = '2023-01-01 00:00:00', 
+    end_date='2023-01-01 09:00:00',
 ):
     """
     Load grid and setup components for time series analysis.
@@ -437,14 +174,14 @@ def setup_edisgo(
     ----------
     grid_path : str
         Path to ding0 grid folder
-    scenario : str
-        Scenario name (default: eGon2035)
     num_hps : int
         Number of heat pumps to add (default: 50)
     num_cps : int
         Number of charging points to add (default: 30)
-    num_days : int
-        Number of days to simulate (default: 30)
+    cos_phi_load: int 
+        Value for calculating reactive load timeseries
+    cos_phi_gen: int 
+        Value for calculating reactive gen timeseries
 
     Returns
     -------
@@ -455,186 +192,29 @@ def setup_edisgo(
     print(f"🔧 Setting up EDisGo Grid")
     print(f"{'='*80}")
     print(f"Grid path: {grid_path}")
-    print(f"Scenario: {scenario}")
 
     # Load grid
     print("\n1. Loading ding0 grid...")
-
     edisgo = EDisGo(ding0_grid=grid_path, legacy_ding0_grids=False)
+    # Define tiemindex
+    new_timeindex = pd.date_range(start=start_date, end=end_date, freq="H")
+    edisgo.timeseries.timeindex = pd.DatetimeIndex(new_timeindex, freq="H")
 
-    edisgo.topology.loads_df = edisgo.topology.loads_df[
-        ~edisgo.topology.loads_df.type.isin(["charging_point", "heat_pump"])
-    ]
-
-    # Set the timeindex
-    num_timesteps = num_days * 24
-    timeindex = pd.date_range(
-        "2035-01-15", periods=num_timesteps, freq="h"
-    )  # Mid-winter
-    edisgo.timeseries.timeindex = timeindex
-
-    # Add heat pumps manually
-    edisgo = add_heat_pumps_manually(edisgo, num_hps=num_hps)
-
-    # Add charging points manually
-    edisgo = add_charging_points_manually(edisgo, num_cps=num_cps)
-
-    # Create HP time series
-    edisgo = create_hp_timeseries(edisgo, scenario=scenario, num_days=num_days)
-
-    # Create CP time series
-    edisgo = create_cp_timeseries(edisgo, scenario=scenario, num_days=num_days)
-
-    # Store HP timeindex
-    hp_timeindex = edisgo.timeseries.timeindex
-    num_timesteps = len(hp_timeindex)
-
-    # Set time series for other components (generators, loads)
-    print("\n5. Setting time series for generators and loads...")
-
-    # Create simple time series for generators (use nominal power)
-    generators = edisgo.topology.generators_df
-    p_max_pu = pd.read_csv(
-        grid_path + "/timeseries/gen_p_max_pu_timeseries.csv",
-        index_col="snapshot",
-        parse_dates=["snapshot"],
-    )
-    # TODO: Check why the years do not match
-    p_max_pu = p_max_pu.iloc[0 : len(edisgo.timeseries.timeindex), :]
-    p_max_pu.index = edisgo.timeseries.timeindex
-    edisgo.timeseries.active_power_p_max_pu(
-        edisgo, ts_generators_p_max_pu=p_max_pu
-    )
-
-    gen_reactive = pd.DataFrame(
-        data=0.0,
-        columns=edisgo.topology.generators_df.index,
-        index=edisgo.timeseries.timeindex,
-    )
-    edisgo.timeseries._generators_reactive_power = gen_reactive
-
-    print(f"  ✓ Created time series for {len(generators)} generators")
-
-    # Create simple time series for other loads (use nominal power)
-
-    other_loads = edisgo.topology.loads_df[
-        ~edisgo.topology.loads_df["type"].isin(["heat_pump", "charging_point"])
-    ]
-    p_set = pd.read_csv(
-        grid_path + "/timeseries/load_timeseries.csv",
-        index_col="snapshot",
-        parse_dates=["snapshot"],
-        usecols=lambda c: c == "snapshot" or c in other_loads.index,
-    )
-    p_set = p_set.iloc[0 : len(edisgo.timeseries.timeindex), :]
-    p_set.index = edisgo.timeseries.timeindex
-    edisgo.timeseries._loads_active_power = p_set
-
-    edisgo.timeseries._loads_reactive_power = pd.DataFrame(
-        0.0,
-        index=edisgo.timeseries.timeindex,
-        columns=edisgo.topology.loads_df.index,
-    )
-    print(f"  ✓ Created time series for {len(other_loads)} other loads")
-
-    # Calculate HP loads from heat demand and COP
-    print("6. Calculating heat pump electrical loads...")
-    heat_pumps = edisgo.topology.loads_df[
-        edisgo.topology.loads_df["type"] == "heat_pump"
-    ]
-
-    # Initialize loads_active_power with existing data if any, or create empty
-    if (
-        not hasattr(edisgo.timeseries, "_loads_active_power")
-        or edisgo.timeseries._loads_active_power is None
-    ):
-        edisgo.timeseries._loads_active_power = pd.DataFrame(
-            index=hp_timeindex
-        )
-
-    if (
-        not hasattr(edisgo.timeseries, "_loads_reactive_power")
-        or edisgo.timeseries._loads_reactive_power is None
-    ):
-        edisgo.timeseries._loads_reactive_power = pd.DataFrame(
-            index=hp_timeindex
-        )
-
-    # Add HP electrical loads
-    for hp_name in heat_pumps.index:
-        hp_load = (
-            edisgo.heat_pump.heat_demand_df[hp_name]
-            / edisgo.heat_pump.cop_df[hp_name]
-        )
-        edisgo.timeseries._loads_active_power[hp_name] = hp_load.values
-        edisgo.timeseries._loads_reactive_power[hp_name] = 0.0
-
-    print(f"  ✓ Calculated electrical loads for {len(heat_pumps)} heat pumps")
-
-    # Add charging point loads
-    if hasattr(edisgo, "charging_point_loads"):
-        charging_points = edisgo.topology.loads_df[
-            edisgo.topology.loads_df["type"] == "charging_point"
-        ]
-        for cp_name in charging_points.index:
-            edisgo.timeseries._loads_active_power[cp_name] = (
-                edisgo.charging_point_loads[cp_name].values
-            )
-            edisgo.timeseries._loads_reactive_power[cp_name] = 0.0
-        print(f"  ✓ Added loads for {len(charging_points)} charging points")
-
-    # Initial analysis
-    print("7. Running initial power flow analysis...")
-    # edisgo.topology.transformers_df.at["trafo_bus_319", "s_nom"] = 1000
-    # edisgo.topology.lines_df.x = 0.01
-    # edisgo.topology.lines_df.r = 0.01
-    # edisgo.topology.lines_df.s_nom = 1000
-    # edisgo.topology.generators_df
-    pypsa_network = edisgo.to_pypsa()
-    # pypsa_network.export_to_csv_folder("/home/carlos/LoMa/validation/solve_pf_problem")
-    # breakpoint()
-    pypsa_network.pf()
-    edisgo.analyze()
-
-    print("\n✓ Grid setup complete!")
-    print(f"  Timeindex: {len(edisgo.timeseries.timeindex)} timesteps")
-    print(f"  Start: {edisgo.timeseries.timeindex[0]}")
-    print(f"  End: {edisgo.timeseries.timeindex[-1]}")
-
-    # Heat pump statistics
-    print(f"\n  Heat pumps: {len(heat_pumps)}")
+    # Import generators
     print(
-        f"  Power range: {heat_pumps['p_set'].min()*1000:.1f} - {heat_pumps['p_set'].max()*1000:.1f} kW"
-    )
-    print(
-        f"  §14a eligible (>4.2 kW): {len(heat_pumps[heat_pumps['p_set'] > 0.0042])}"
+        "2. Importing generators timeseries"
+    )  # ToDo implement own generator timeseires´
+    edisgo = import_generators_timeseries(
+        grid_path, edisgo, cos_phi_gen, start_date, end_date
     )
 
-    # Charging point statistics
-    charging_points = edisgo.topology.loads_df[
-        edisgo.topology.loads_df["type"] == "charging_point"
-    ]
-    if len(charging_points) > 0:
-        print(f"\n  Charging points: {len(charging_points)}")
-        print(
-            f"  Power range: {charging_points['p_set'].min()*1000:.1f} - {charging_points['p_set'].max()*1000:.1f} kW"
-        )
-        print(
-            f"  §14a eligible (>4.2 kW): {len(charging_points[charging_points['p_set'] > 0.0042])}"
-        )
-
-        # DEBUG: Verify charging_points_df property works
-        cp_via_property = edisgo.topology.charging_points_df
-        print(
-            f"  DEBUG: topology.charging_points_df returns {len(cp_via_property)} CPs"
-        )
-        if len(cp_via_property) != len(charging_points):
-            print(f"  ⚠️ WARNING: Mismatch between direct query and property!")
+    print("3. Importing load timeseries")
+    edisgo = import_loads_timeseries(grid_path, edisgo, cos_phi_load, start_date, end_date)
 
     return edisgo
 
 
-def run_optimization_14a(edisgo):
+def run_optimization_14a(edisgo, hours_limit):
     """
     Run optimization with §14a curtailment enabled.
 
@@ -658,11 +238,11 @@ def run_optimization_14a(edisgo):
     print(f"  - Minimize maximal line loading")
     print(f"  - Minimize HV slacks")
     print(f"  - §14a curtailment enabled for heat pumps and charging points")
-
+    print(f"Hour limit for 14a usage: {hours_limit}")
     start_time = datetime.now()
 
     # Run optimization
-    edisgo.pm_optimize(opf_version=2, curtailment_14a=True)
+    edisgo.pm_optimize(opf_version=5, curtailment_14a=True, hours_limit_14a=hours_limit)
 
     duration = (datetime.now() - start_time).total_seconds()
 
@@ -1129,9 +709,11 @@ def create_plots(results, output_dir="results_14a"):
 
         # Sample week (first week with curtailment)
         curtailment_weeks = curtailment_power.resample("W").sum()
-        first_curtailment_week = curtailment_weeks[
-            curtailment_weeks > 0
-        ].index[0]
+        first_curtailment_week = (
+            curtailment_weeks[curtailment_weeks > 0].index[0]
+            if any(curtailment_weeks > 0)
+            else curtailment_weeks.index[0]
+        )
         week_start = first_curtailment_week
         week_end = week_start + pd.Timedelta(days=7)
 
@@ -1318,42 +900,54 @@ def main():
     # ============================================================================
 
     # Grid configuration
-    # GRID_PATH = '/home/carlos/LoMa/eDisGo/30879'
-    GRID_PATH = (
-        "/home/carlos/LoMa/exec_folder/results/MGB_model"  # MGB_Husum_model'
-    )
-    SCENARIO = "eGon2035"
+    GRID_PATH = "/home/student/Execution/LoMa_exe/results/MGB_Model_V3"  # ".
 
     # Simulation parameters
-    NUM_DAYS = 10 / 24  # Number of days to simulate (e.g., 7, 30, 365)
-    NUM_HEAT_PUMPS = 60  # Number of heat pumps to add
-    NUM_CHARGING_POINTS = 50  # Number of charging points to add
+    start_date = "2023-01-01 00:00:00"
+    end_date = "2023-01-01 10:00:00"
+    NUM_HEAT_PUMPS = 25  # Number of heat pumps to add
+    NUM_CHARGING_POINTS = 25  # Number of charging points to add
+    hours_limit_per_day = 24  # Limit the amount of hours per day for 14a usage
 
     # Output
     OUTPUT_DIR = "./"
 
-    # ============================================================================
-    # END CONFIGURATION
-    # ============================================================================
-    # Create directory name from configuration parameters
-    output_dir = f"{OUTPUT_DIR}/results_{NUM_DAYS}d_HP{NUM_HEAT_PUMPS}_CP{NUM_CHARGING_POINTS}_14a"
+    # --- Datum für den Pfad formatieren (z.B. '20230101_0000') ---
+    # Wir wandeln den String kurz in ein Objekt um, um ihn sauber zu formatieren
+    start_clean = datetime.strptime(start_date, "%Y-%m-%d %H:%M:%S").strftime("%Y%m%d_%H%M")
+    end_clean = datetime.strptime(end_date, "%Y-%m-%d %H:%M:%S").strftime("%Y%m%d_%H%M")
+      
+    # --- Verzeichnisname erstellen ---
+    # Jetzt nutzen wir start_clean und end_clean statt der alten Variable {start}d
+    output_dir = f"{OUTPUT_DIR}/results_{start_clean}_to_{end_clean}_HP{NUM_HEAT_PUMPS}_CP{NUM_CHARGING_POINTS}_14a"
+      
     print(f"\n{'#'*80}")
-    print(f"# §14a EnWG Heat Pump Curtailment Analysis - {NUM_DAYS} Days")
+    print(f"# §14a EnWG Analysis: {start_date} bis {end_date}")
     print(f"{'#'*80}")
     print(f"\nStarted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Output directory: {output_dir}")
 
     try:
         # Setup grid and load data
         edisgo = setup_edisgo(
             GRID_PATH,
-            scenario=SCENARIO,
             num_hps=NUM_HEAT_PUMPS,
             num_cps=NUM_CHARGING_POINTS,
-            num_days=NUM_DAYS,
+            start_date=start_date,
+            end_date=end_date
         )
 
+        edisgo.analyze()
+
         # Run optimization with §14a
-        edisgo = run_optimization_14a(edisgo)
+        print(f"\nStarted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        edisgo = run_optimization_14a(edisgo, hours_limit_per_day)
+        print(
+            f"\nCompleted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+        
+        # update voltage- and line_loading values with results of 14a Optimization
+        edisgo.analyze()
 
         # Analyze results
         results = analyze_curtailment_results(edisgo, output_dir=output_dir)
@@ -1378,6 +972,12 @@ def main():
 
         print(
             f"\nCompleted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        )
+
+        for ts in edisgo.timeseries.timeindex:
+            plot_network(edisgo, show=False, snapshot=str(ts))
+        create_network_gif(
+            output_name="network_evolution_Husum.gif", duration=500
         )
 
     except Exception as e:
@@ -1429,27 +1029,26 @@ def plot_network(
     snapshot: str = "2035-01-15 09:00:00",
     show: bool = True,
     save: bool = True,
+    base_bus_size=0.000000002,
 ):
     results = edisgo.results
-    orig_net = pypsa.Network("/home/carlos/LoMa/exec_folder/results/MGB_model")
-    orig_net.buses = gpd.GeoDataFrame(
-        orig_net.buses,
-        geometry=gpd.points_from_xy(
-            orig_net.buses["x"], orig_net.buses["y"], crs=4326
-        ),
-    )
-    orig_net.buses = orig_net.buses.to_crs(4326)
-    orig_net.buses["x"] = orig_net.buses.geometry.x
-    orig_net.buses["y"] = orig_net.buses.geometry.y
 
     n = edisgo.to_pypsa()
-    lines_t = results.s_res.loc[:, results.s_res.columns.str.contains("line")]
-    n.buses["x"] = n.buses.index.map(orig_net.buses["x"])
-    n.buses["y"] = n.buses.index.map(orig_net.buses["y"])
+    coords = edisgo.topology.buses_df[["x", "y"]]
+    coords = coords.reindex(n.buses.index)  # secure that index is matching
+    n.buses["x"] = coords["x"].values
+    n.buses["y"] = coords["y"].values
+
+    line_columns = n.lines.index
+    lines_t = results.s_res.loc[:, line_columns]
 
     # 1. Define limits for line loading
-    v_min = 0.0
-    v_max = 1.0
+    loading_relative = (
+        results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
+    )
+
+    # 1. Limits für Farbskala (jetzt auf 0% - 100% bezogen)
+    v_min, v_max = 0.0, 1.0
     norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
 
     # 2. Prepare bus data
@@ -1457,9 +1056,7 @@ def plot_network(
     bus_colors = (1 - edisgo.results.v_res.T[snapshot]).apply(abs)
 
     # Voltage limits (adjust vmin/vmax based on your bus_colors results)
-    norm_buses = mcolors.Normalize(
-        vmin=0, vmax=0.3
-    )
+    norm_buses = mcolors.Normalize(vmin=0.0, vmax=0.3)
 
     # --- (Curtailment logic and bus_sizes calculation) ---
     curt_14a = analyze_curtailment_results(edisgo, output_dir="results_14a")[
@@ -1480,8 +1077,8 @@ def plot_network(
     grouped_14a.columns = grouped_14a.columns.map(str)
 
     # Calculate bus sizes based on curtailment; reindex to include all buses in the network
-    bus_sizes = 0.000000002 + (grouped_14a[snapshot] * 0.000001)
-    bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=0.000000002)
+    bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.000001)
+    bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
     # -------------------------------------------------------------
 
     fig, ax = plt.subplots(figsize=(12, 8))
@@ -1495,7 +1092,8 @@ def plot_network(
         bus_alpha=1,
         bus_sizes=bus_sizes,
         bus_cmap="jet",
-        line_colors=lines_t.loc[snapshot, :],
+        bus_norm=norm_buses,
+        line_colors=loading_relative,
         line_widths=1.6,
         line_cmap="jet",
         line_norm=norm_lines,
@@ -1533,6 +1131,7 @@ def plot_network(
     cb_buses.set_label("Voltage Deviation |1 - V| [p.u.]", fontsize=8)
 
     if save:
+        os.makedirs("plots", exist_ok=True)
         plt.savefig(
             f"plots/grid_analysis_{snapshot}.png", dpi=300, bbox_inches="tight"
         )
@@ -1540,7 +1139,8 @@ def plot_network(
     if show:
         plt.show()
 
-edisgo = main()
-for ts in edisgo.timeseries.timeindex:
-    plot_network(edisgo, show=False, snapshot=str(ts))
-create_network_gif(duration=500)
+
+"""
+if __name__ == "__main__":
+    edisgo = main()
+"""
