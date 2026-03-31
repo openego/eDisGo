@@ -5,7 +5,7 @@ This script performs a monthly optimization with §14a heat pump curtailment
 and generates comprehensive analysis plots and statistics.
 
 Usage:
-    python analyze_14a_full_year.py --grid_path <path_to_ding0_grid> --scenario eGon2035 --num_days 30
+    python analyze_14a_full_year.py --grid_path <path_to_ding0_grid> --scenario eGon2035 
 """
 
 import os
@@ -16,6 +16,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime
 from pathlib import Path
+
+import contextily as ctx
+import pypsa
+import geopandas as gpd
+import imageio.v2 as imageio
+import matplotlib.colors as mcolors
 
 from edisgo import EDisGo
 from edisgo.io.db import engine as egon_engine
@@ -201,26 +207,26 @@ def add_heat_pumps_manually(edisgo, num_hps=50, seed=42):
     return edisgo
 
 
-def create_hp_timeseries(edisgo, scenario="eGon2035", num_days=30):
+def create_hp_timeseries(edisgo, start_date, end_date, scenario="eGon2035"):
     """
-    Create realistic heat demand and COP time series for heat pumps.
+    Create realistic heat demand and COP time series for heat pumps based on a date range.
     
     Parameters
     ----------
     edisgo : EDisGo
         EDisGo object with heat pumps
+    start_date : str or datetime
+        Start date of the simulation
+    end_date : str or datetime
+        End date of the simulation
     scenario : str
-        Scenario name for time index
-    num_days : int
-        Number of days to simulate (default: 30 for one month)
+        Scenario name (optional)
         
     Returns
     -------
     EDisGo
         EDisGo object with HP time series
     """
-    print(f"\n4. Creating heat pump time series for {num_days} days...")
-    
     # Get heat pumps
     heat_pumps = edisgo.topology.loads_df[edisgo.topology.loads_df['type'] == 'heat_pump']
     
@@ -228,13 +234,16 @@ def create_hp_timeseries(edisgo, scenario="eGon2035", num_days=30):
         print("  ⚠ Warning: No heat pumps found")
         return edisgo
     
-    # Create time index (hourly for specified days)
-    num_timesteps = num_days * 24
-    timeindex = pd.date_range('2035-01-15', periods=num_timesteps, freq='h')  # Mid-winter
-    edisgo.timeseries.timeindex = timeindex
+    # --- NEUE LOGIK FÜR DEN ZEITINDEX ---
+    # Wir erstellen den Index direkt aus start und end. 
+    # pd.date_range sorgt dafür, dass die Frequenz ('h') korrekt gesetzt wird.
+    timeindex = pd.date_range(start=start_date, end=end_date, freq='h')
+    
+    # WICHTIG: Den Index als DatetimeIndex mit fester Frequenz zuweisen
+    edisgo.timeseries.timeindex = pd.DatetimeIndex(timeindex, freq='h')
     
     print(f"  Creating time series for {len(heat_pumps)} heat pumps...")
-    print(f"  Timeindex: {len(timeindex)} timesteps (hourly, {num_days} days)")
+    print(f"  Timeindex: {len(timeindex)} timesteps (hourly, from {start_date} to {end_date})")
     
     # Create realistic heat demand profile for winter month
     hours = np.arange(len(timeindex))
@@ -302,7 +311,7 @@ def create_hp_timeseries(edisgo, scenario="eGon2035", num_days=30):
     return edisgo
 
 
-def create_cp_timeseries(edisgo, scenario="eGon2035", num_days=30):
+def create_cp_timeseries(edisgo, scenario="eGon2035"):
     """
     Create realistic charging demand time series for charging points.
     
@@ -312,28 +321,25 @@ def create_cp_timeseries(edisgo, scenario="eGon2035", num_days=30):
         EDisGo object with charging points
     scenario : str
         Scenario name for time index
-    num_days : int
-        Number of days to simulate (default: 30 for one month)
         
     Returns
     -------
     EDisGo
         EDisGo object with CP time series
     """
-    print(f"\n4a. Creating charging point time series for {num_days} days...")
+    # 1. Zeitindex vom EDisGo-Objekt beziehen
+    # Dieser wurde bereits in create_hp_timeseries gesetzt
+    timeindex = edisgo.timeseries.timeindex
     
-    # Get charging points
+    # Ladepunkte filtern
     charging_points = edisgo.topology.loads_df[edisgo.topology.loads_df['type'] == 'charging_point']
     
     if len(charging_points) == 0:
         print("  ⚠ Warning: No charging points found")
         return edisgo
     
-    # Use same time index as heat pumps
-    timeindex = edisgo.timeseries.timeindex
-    
     print(f"  Creating time series for {len(charging_points)} charging points...")
-    print(f"  Timeindex: {len(timeindex)} timesteps (hourly, {num_days} days)")
+    print(f"  Timeindex: {len(timeindex)} timesteps (hourly, covering {timeindex[0]} to {timeindex[-1]})")
     
     # Create realistic charging profiles based on use case
     hours = np.arange(len(timeindex))
@@ -395,7 +401,7 @@ def create_cp_timeseries(edisgo, scenario="eGon2035", num_days=30):
     return edisgo
 
 
-def setup_edisgo(grid_path, scenario="eGon2035", num_hps=50, num_cps=30, num_days=30):
+def setup_edisgo(grid_path, start_date, end_date, scenario="eGon2035", num_hps=50, num_cps=30):
     """
     Load grid and setup components for time series analysis.
     
@@ -409,9 +415,6 @@ def setup_edisgo(grid_path, scenario="eGon2035", num_hps=50, num_cps=30, num_day
         Number of heat pumps to add (default: 50)
     num_cps : int
         Number of charging points to add (default: 30)
-    num_days : int
-        Number of days to simulate (default: 30)
-        
     Returns
     -------
     EDisGo
@@ -438,10 +441,10 @@ def setup_edisgo(grid_path, scenario="eGon2035", num_hps=50, num_cps=30, num_day
     edisgo = add_charging_points_manually(edisgo, num_cps=num_cps)
     
     # Create HP time series (this sets the timeindex)
-    edisgo = create_hp_timeseries(edisgo, scenario=scenario, num_days=num_days)
+    edisgo = create_hp_timeseries(edisgo, start_date, end_date, scenario=scenario)
     
     # Create CP time series
-    edisgo = create_cp_timeseries(edisgo, scenario=scenario, num_days=num_days)
+    edisgo = create_cp_timeseries(edisgo, scenario=scenario)
     
     # Store HP timeindex
     hp_timeindex = edisgo.timeseries.timeindex
@@ -547,7 +550,7 @@ def setup_edisgo(grid_path, scenario="eGon2035", num_hps=50, num_cps=30, num_day
     return edisgo
 
 
-def run_optimization_14a(edisgo):
+def run_optimization_14a(edisgo, hours_limit):
     """
     Run optimization with §14a curtailment enabled.
 
@@ -578,7 +581,11 @@ def run_optimization_14a(edisgo):
     start_time = datetime.now()
 
     # Run optimization
-    edisgo.pm_optimize(opf_version=5, curtailment_14a=True)
+    edisgo.pm_optimize(opf_version=5, curtailment_14a=True, hours_limit_14a = hours_limit)
+    print("status:", edisgo.opf_results.status)
+    print("solver:", edisgo.opf_results.solver)
+    print("solve_time:", edisgo.opf_results.solution_time)
+    print("AC PF min/max:", edisgo.results.v_res.min().min(), edisgo.results.v_res.max().max())
     
     duration = (datetime.now() - start_time).total_seconds()
     
@@ -1115,13 +1122,15 @@ def main():
     # ============================================================================
 
     # Grid configuration - LOOP THROUGH ALL GRIDS
-    GRID_BASE_PATH = "/home/gurobi/.ding0/2024-07-25T17:38:34_new_planning_new_edisgo/ding0_grids"
+    GRID_BASE_PATH = "/home/student/Execution/eDisGo_exe/test_grid"
     SCENARIO = "eGon2035"
 
     # Simulation parameters
-    NUM_DAYS = 1  # Quick test with 1 day
+    start_date = '2035-01-15 00:00:00'  
+    end_date = '2035-01-15 09:00:00' # Quick test with 10 hours
     NUM_HEAT_PUMPS = 20  # Reduced for faster testing
-    NUM_CHARGING_POINTS = 10  # Reduced for faster testing
+    NUM_CHARGING_POINTS = 30  # Reduced for faster testing
+    hours_limit_per_day = 24  # Limit the amount of hours per day for 14a usage
 
     # Output
     OUTPUT_DIR = "./test_results_all_grids"
@@ -1138,7 +1147,8 @@ def main():
     print(f"# §14a EnWG Multi-Grid Test - Testing {len(grid_dirs)} Grids")
     print(f"{'#'*80}")
     print(f"\nStarted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Testing with: {NUM_DAYS} day(s), {NUM_HEAT_PUMPS} HPs, {NUM_CHARGING_POINTS} CPs per grid\n")
+    print(f"Testing from {start_date} to {end_date}")
+    print(f"Components: {NUM_HEAT_PUMPS} HPs, {NUM_CHARGING_POINTS} CPs per grid\n")
 
     # Track results
     successful_grids = []
@@ -1157,14 +1167,18 @@ def main():
             # Setup grid and load data
             edisgo = setup_edisgo(
                 grid_path,
+                start_date,
+                end_date,
                 scenario=SCENARIO,
                 num_hps=NUM_HEAT_PUMPS,
-                num_cps=NUM_CHARGING_POINTS,
-                num_days=NUM_DAYS
+                num_cps=NUM_CHARGING_POINTS
             )
 
             # Run optimization with §14a
-            edisgo = run_optimization_14a(edisgo)
+            edisgo = run_optimization_14a(edisgo, hours_limit_per_day)
+            
+            #update line_loading and voltage values
+            edisgo.analyze()
 
             # Analyze results
             results = analyze_curtailment_results(edisgo, output_dir=output_dir)
@@ -1176,7 +1190,12 @@ def main():
                 print(f"✓ Grid {grid_id} SUCCESS")
                 print(f"  Curtailment: {results['total_curtailment_MWh']:.4f} MWh ({results['curtailment_percentage']:.2f}%)")
                 successful_grids.append(grid_id)
-
+                
+            #create a plots folder in your execution folder for executing this oart
+            for ts in edisgo.timeseries.timeindex:  
+                  plot_network(edisgo, show=False, snapshot=str(ts), base_bus_size=0.0000002)
+            create_network_gif(output_name=f'network_evolution_{grid_id}.gif', duration=500)
+            
         except Exception as e:
             print(f"✗ Grid {grid_id} FAILED: {str(e)}")
             failed_grids.append((grid_id, str(e)))
@@ -1188,6 +1207,7 @@ def main():
     print(f"Total Grids Tested: {len(grid_dirs)}")
     print(f"Successful: {len(successful_grids)}")
     print(f"Failed: {len(failed_grids)}")
+    
 
     if failed_grids:
         print(f"\nFailed Grids:")
@@ -1195,7 +1215,158 @@ def main():
             print(f"  - {grid_id}: {error[:100]}")
 
     print(f"\nCompleted at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    return edisgo
+
+def create_network_gif(
+    folder_path="./plots", output_name="network_evolution.gif", duration=1
+):
+    """
+    Creates a GIF from PNG files in a folder.
+    duration: time in seconds between frames
+    """
+    images = []
+
+    # Get all png files that start with 'grid_analysis_'
+    files = [
+        f
+        for f in os.listdir(folder_path)
+        if f.endswith(".png") and f.startswith("grid_analysis_")
+    ]
+
+    # IMPORTANT: Sort files by time.
+    # Since your files are named 'grid_analysis_YYYY-MM-DD HH:MM:SS.png',
+    # standard string sorting works perfectly for chronological order.
+    files.sort()
+
+    print(f"Found {len(files)} frames. Processing...")
+
+    for filename in files:
+        file_path = os.path.join(folder_path, filename)
+        images.append(imageio.imread(file_path))
+        print(f"Added: {filename}")
+
+    # Save the GIF
+    # loop=0 means it will loop forever
+    imageio.mimsave(output_name, images, duration=duration, loop=0)
+    print(f"Success! GIF saved as {output_name}")
 
 
+def plot_network(
+    edisgo,
+    snapshot: str = '2035-01-15 09:00:00',
+    show: bool = True,
+    save: bool = True,
+    base_bus_size = 0.0000002
+):
+    results = edisgo.results
+    
+    n = edisgo.to_pypsa()
+    coords = edisgo.topology.buses_df[["x", "y"]]
+    coords = coords.reindex(n.buses.index)  #secure that index is matching
+    n.buses["x"] = coords["x"].values
+    n.buses["y"] = coords["y"].values
+    
+    line_columns = n.lines.index
+
+    # 1. Define limits for line loading
+    line_loading = results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
+
+    # 1. Limits für Farbskala (jetzt auf 0% - 100% bezogen)
+    v_min, v_max = 0.0, 1.0
+    norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
+
+    # 2. Prepare bus data
+    # Calculating voltage deviation from nominal (1.0 p.u.)
+    bus_colors = (1 - edisgo.results.v_res.T[snapshot]).apply(abs)
+
+    # Voltage limits (adjust vmin/vmax based on your bus_colors results)
+    norm_buses = mcolors.Normalize(
+        vmin=bus_colors.min(), vmax=bus_colors.max()    )
+
+    # --- (Curtailment logic and bus_sizes calculation) ---
+    curt_14a = analyze_curtailment_results(edisgo, output_dir="results_14a")[
+        "curtailment_data"
+    ].T
+
+    # Clean up index names to match load names
+    curt_14a["load"] = curt_14a.index
+    curt_14a["load"] = curt_14a["load"].apply(
+        lambda x: x.replace("cp_14a_support_", "").replace(
+            "hp_14a_support_", ""
+        )
+    )
+
+    # Map loads to their respective buses and aggregate curtailment per bus
+    curt_14a["bus"] = curt_14a["load"].map(edisgo.topology.loads_df["bus"])
+    grouped_14a = curt_14a.groupby("bus").sum()
+    grouped_14a.columns = grouped_14a.columns.map(str)
+
+    # Calculate bus sizes based on curtailment; reindex to include all buses in the 
+    bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.001)
+    bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
+    # -------------------------------------------------------------
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    # Plot the grid
+    n.plot(
+        margin=0.05,
+        ax=ax,
+        geomap=False,
+        bus_colors=bus_colors,
+        bus_alpha=1,
+        bus_sizes=bus_sizes,
+        bus_cmap="jet",
+        bus_norm=norm_buses,
+        line_colors=line_loading,
+        line_widths=1.6,
+        line_cmap="jet",
+        line_norm=norm_lines,
+        title=f"Grid Analysis: {snapshot}",
+        geometry=False,
+    )
+
+    # Add background basemap
+    ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
+
+    # --- COLORBAR 1: LINE LOADING (LEFT SIDE) ---
+    sm_lines = plt.cm.ScalarMappable(cmap="jet", norm=norm_lines)
+    # Use location='left' and a slightly larger pad to avoid overlap with axis labels
+    cb_lines = fig.colorbar(
+        sm_lines,
+        ax=ax,
+        orientation="vertical",
+        location="left",
+        pad=0.08,
+        aspect=20,
+    )
+    cb_lines.set_label("Line Loading [relative]", fontsize=8)
+
+    # --- COLORBAR 2: BUS VOLTAGE (RIGHT SIDE) ---
+    sm_buses = plt.cm.ScalarMappable(cmap="jet", norm=norm_buses)
+    # Default location is right
+    cb_buses = fig.colorbar(
+        sm_buses,
+        ax=ax,
+        orientation="vertical",
+        location="right",
+        pad=0.02,
+        aspect=20,
+    )
+    cb_buses.set_label("Voltage Deviation |1 - V| [p.u.]", fontsize=8)
+
+    if save:
+        os.makedirs("plots", exist_ok=True)
+        plt.savefig(
+            f"plots/grid_analysis_{snapshot}.png", dpi=300, bbox_inches="tight"
+        )
+
+    if show:
+        plt.show()
+
+"""
 if __name__ == "__main__":
-    main()
+    edisgo = main()
+"""
+

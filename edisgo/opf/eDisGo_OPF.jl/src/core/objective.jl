@@ -110,41 +110,29 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
 end
 
 # OPF Version 5: Minimize line losses, use ONLY §14a curtailment as flexibility
-# Feasibility slacks exist but are penalized at 1e8 to ensure model remains feasible
+# All feasibility slacks are fixed to 0 in opf_bf.jl — if §14a is not sufficient, model is infeasible
 function objective_min_losses_14a_only(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
     ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
     r = Dict(n => Dict(i => get(branch, "br_r", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)
-    pgc = Dict(n => PowerModels.var(pm, n, :pgc) for n in nws)
-    pgens = Dict(n => PowerModels.var(pm, n, :pgens) for n in nws)
-    pds = Dict(n => PowerModels.var(pm, n, :pds) for n in nws)
-    pcps = Dict(n => PowerModels.var(pm, n, :pcps) for n in nws)
-    phps = Dict(n => PowerModels.var(pm, n, :phps) for n in nws)
-    phps2 = Dict(n => PowerModels.var(pm, n, :phps2) for n in nws)
-    phss = Dict(n => PowerModels.var(pm, n, :phss) for n in nws)
 
     # §14a virtual generators for HPs and CPs
     p_hp14a = Dict(n => get(PowerModels.var(pm, n), :p_hp14a, Dict()) for n in nws)
     p_cp14a = Dict(n => get(PowerModels.var(pm, n), :p_cp14a, Dict()) for n in nws)
 
-    factor_14a = 0.5  # Weight for §14a curtailment
+    factor_14a = 1e12  # EXTREME penalty - §14a only as last option
+    println("factor_14a = ", factor_14a)
     factor_feasibility = 1e8  # Extreme penalty - slacks should be zero in normal operation
 
     return JuMP.@objective(pm.model, Min,
         # Primary: minimize line losses
-        0.4 * sum(sum(ccm[n][b] * r[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)
+        # 0.4 * sum(sum(ccm[n][b] * r[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)
         # Secondary: minimize §14a curtailment usage
         + factor_14a * sum(sum(p_hp14a[n][i] for i in keys(p_hp14a[n])) for n in nws)  # §14a HP curtailment
         + factor_14a * sum(sum(p_cp14a[n][i] for i in keys(p_cp14a[n])) for n in nws)  # §14a CP curtailment
-        # Feasibility slacks (extreme penalty - should never be used if §14a is sufficient)
-        + factor_feasibility * sum(sum(pgc[n][i] for i in keys(PowerModels.ref(pm, 1, :gen_nd))) for n in nws)
-        + factor_feasibility * sum(sum(pgens[n][i] for i in keys(PowerModels.ref(pm, 1, :gen))) for n in nws)
-        + factor_feasibility * sum(sum(pds[n][i] for i in keys(PowerModels.ref(pm, 1, :load))) for n in nws)
-        + factor_feasibility * sum(sum(pcps[n][i] for i in keys(PowerModels.ref(pm, 1, :electromobility))) for n in nws)
-        + factor_feasibility * sum(sum(phps[n][i] for i in keys(PowerModels.ref(pm, 1, :heatpumps))) for n in nws)
-        + 1e4 * sum(sum(phss[n][i] + phps2[n][i] for i in keys(PowerModels.ref(pm, 1, :heatpumps))) for n in nws)
     )
 end
+
 
 # OPF Version 3 (alternative): Minimize line losses, maximal line loading and HV slacks (with overlying grid)
 function objective_min_line_loading_max_OG(pm::AbstractBFModelEdisgo)
