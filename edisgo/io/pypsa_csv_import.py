@@ -161,7 +161,8 @@ def _assign_timeseries(
 
 
 def _parse_timestamps(series: pd.Series) -> pd.DatetimeIndex:
-    return pd.to_datetime(series)
+    idx = pd.DatetimeIndex(pd.to_datetime(series.values), name="snapshot")
+    return idx.freq and idx or pd.DatetimeIndex(idx, freq=pd.infer_freq(idx), name="snapshot")
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +241,7 @@ def populate_edisgo_from_pypsa_csv(
 
     # --- Buses --------------------------------------------------------- #
     buses_raw = _read(folder, "buses.csv")
+    buses_raw = buses_raw[buses_raw["v_nom"] <= 20]
     buses = _keep_and_rename(buses_raw, BUSES_RENAME)
 
     # Reproject coordinates from source CRS to WGS-84
@@ -374,6 +376,7 @@ def populate_edisgo_from_pypsa_csv(
 
     # --- Loads --------------------------------------------------------- #
     loads_raw = _read(folder, "loads.csv")
+
     loads = _keep_and_rename(loads_raw, LOADS_RENAME)
 
     # p_set: static baseline, overwritten with time-series max where available.
@@ -416,7 +419,8 @@ def populate_edisgo_from_pypsa_csv(
     snap = _read(folder, "snapshots.csv", index_col=None)
     if not snap.empty:
         timeindex = _parse_timestamps(snap.loc[:, "snapshot"].iloc[ts_slice])
-        ts.timeindex = timeindex
+        ts.timeindex = pd.DatetimeIndex(timeindex, name="snapshot",
+                                        freq=pd.infer_freq(timeindex))
     else:
         timeindex = None
 
@@ -435,6 +439,7 @@ def populate_edisgo_from_pypsa_csv(
 
     # Active power - loads
     load_p = _read_ts(folder, "loads-p_set.csv", ts_slice)
+    #load_p = load_p * 10 # to force use of 14a
     if not load_p.empty:
         ts.loads_active_power = _assign_timeseries(load_p, timeindex)
 
