@@ -439,7 +439,9 @@ def populate_edisgo_from_pypsa_csv(
 
     # Active power - loads
     load_p = _read_ts(folder, "loads-p_set.csv", ts_slice)
-    #load_p = load_p * 10 # to force use of 14a
+    #load_p.loc[:,load_p.columns.str.contains("heat_")] = 0.1 # to force usage of 14a
+    #edisgo_obj.topology.loads_df.loc[edisgo_obj.topology.loads_df.index.str.contains("heat_"),"p_set"] = 0.1 # to force usage of 14a
+
     if not load_p.empty:
         ts.loads_active_power = _assign_timeseries(load_p, timeindex)
 

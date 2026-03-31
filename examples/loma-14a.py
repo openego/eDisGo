@@ -434,7 +434,7 @@ def run_optimization_14a(edisgo):
     start_time = datetime.now()
 
     # Run optimization
-    edisgo.pm_optimize(opf_version=5, curtailment_14a=True, flexible_hps=[])
+    edisgo.pm_optimize(opf_version=5, curtailment_14a=True)
 
     duration = (datetime.now() - start_time).total_seconds()
 
@@ -446,7 +446,7 @@ def run_optimization_14a(edisgo):
 
 grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_model_pypsa"
 
-edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 3))
+edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 2))
 mv_grid_geom = gpd.read_file(
     "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
 )
@@ -468,10 +468,12 @@ edisgo.topology.buses_df = edisgo.topology.buses_df[
     edisgo.topology.buses_df.index != "HV_dummy_bus"
 ]
 
+######### This will be removed once Paul include the CP timeseries ############
 # Remove remporarily the charging points
 edisgo.topology.loads_df = edisgo.topology.loads_df[
     edisgo.topology.loads_df.type != "charging_point"
 ]
+######### This will be removed once Paul include the CP timeseries ############
 
 # Set Zero active power for batteries (let the OPF optimize dispatch freely)
 storage_names = edisgo.topology.storage_units_df.index
@@ -519,3 +521,13 @@ edisgo.analyze()
 for ts in edisgo.timeseries.timeindex:
     plot_network(edisgo, show=False, snapshot=str(ts))
 create_network_gif(duration=500)
+
+# edisgo.results.v_res
+# edisgo.results.s_res
+
+# load_t = edisgo.timeseries.loads_active_power
+# g = edisgo.topology.generators_df
+# gt = edisgo.timeseries.generators_active_power
+# lines = edisgo.topology.lines_df
+
+# demand_q = edisgo.timeseries.loads_reactive_power
