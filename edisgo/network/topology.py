@@ -1818,7 +1818,7 @@ class Topology:
                 self.lines_df.at[line, "bus0"] = bus1
                 self.lines_df.at[line, "bus1"] = bus0
 
-    def connect_to_mv(self, edisgo_object, comp_data, comp_type="generator"):
+    def connect_to_mv(self, edisgo_object, comp_data, comp_type="generator"): #CHANGED
         """
         Add and connect new component.
 
@@ -1880,30 +1880,62 @@ class Topology:
             geom = wkt_loads(comp_data["geom"])
         else:
             geom = comp_data["geom"]
+          
+        if comp_type == "charging_point":
 
-        if comp_type == "generator":
-            if comp_data["generator_id"] is not None:
-                bus = f'Bus_Generator_{comp_data["generator_id"]}'
-            else:
-                bus = f"Bus_Generator_{len(self.generators_df)}"
-        elif comp_type == "charging_point":
-            bus = f"Bus_ChargingPoint_{len(self.charging_points_df)}"
-        elif comp_type == "heat_pump":
-            bus = f"Bus_HeatPump_{len(self.loads_df)}"
-        elif comp_type == "storage_unit":
-            bus = f"Bus_Storage_{len(self.storage_units_df)}"
-        else:
-            raise ValueError(
-                f"Provided component type {comp_type} is not valid. Must either be"
-                f"'generator', 'charging_point', 'heat_pump' or 'storage_unit'."
+            mv_buses = self.mv_grid.buses_df
+            target_bus, target_bus_distance = geo.find_nearest_bus(geom, mv_buses)
+
+            MAX_DIST = 0.2  # km
+        
+            if target_bus_distance >= MAX_DIST:
+                print(
+                    f"SKIP CP (too far from MV bus): dist={target_bus_distance:.3f} km"
+                )
+                return None
+
+            # attach directly to existing MV bus
+            comp_data.pop("geom", None)
+            comp_data.pop("p", None)
+
+            return self.add_load(
+                bus=target_bus,
+                type="charging_point",
+                **comp_data
             )
 
-        self.add_bus(
-            bus_name=bus,
-            v_nom=self.mv_grid.nominal_voltage,
-            x=geom.x,
-            y=geom.y,
-        )
+        # ===== FIND NEAREST MV BUS =====
+        mv_buses = self.mv_grid.buses_df
+        target_bus, target_bus_distance = geo.find_nearest_bus(geom, mv_buses)
+
+        MAX_DIST = 0.2
+
+        if comp_type == "charging_point" and target_bus_distance < MAX_DIST:
+            bus = target_bus
+        else:
+            if comp_type == "generator":
+                if comp_data["generator_id"] is not None:
+                    bus = f'Bus_Generator_{comp_data["generator_id"]}'
+                else:
+                    bus = f"Bus_Generator_{len(self.generators_df)}"
+            elif comp_type == "charging_point":
+                bus = f"Bus_ChargingPoint_{len(self.charging_points_df)}"
+            elif comp_type == "heat_pump":
+                bus = f"Bus_HeatPump_{len(self.loads_df)}"
+            elif comp_type == "storage_unit":
+                bus = f"Bus_Storage_{len(self.storage_units_df)}"
+            else:
+                raise ValueError(
+                    f"Provided component type {comp_type} is not valid. Must either be"
+                    f"'generator', 'charging_point', 'heat_pump' or 'storage_unit'."
+                )
+
+            self.add_bus(
+                bus_name=bus,
+                v_nom=self.mv_grid.nominal_voltage,
+                x=geom.x,
+                y=geom.y,
+            )
 
         # add component to newly created bus
         comp_data.pop("geom")
@@ -2340,7 +2372,7 @@ class Topology:
         edisgo_object,
         comp_data,
         comp_type,
-        max_distance_from_target_bus=0.02,
+        max_distance_from_target_bus=0.2, #CHANGED from 0.02
     ):
         """
         Add and connect new component to LV grid topology based on its geolocation.
@@ -2432,23 +2464,23 @@ class Topology:
             target_bus, target_bus_distance = geo.find_nearest_bus(
                 geolocation, substations
             )
+
         else:
             lv_buses = self.buses_df.drop(self.mv_grid.buses_df.index)
             target_bus, target_bus_distance = geo.find_nearest_bus(
                 geolocation, lv_buses
             )
 
-        # check distance from target bus
-        if target_bus_distance > max_distance_from_target_bus:
-            # if target bus is too far away from the component, connect the component
-            # via a new bus
-            bus = self._connect_to_lv_bus(
-                edisgo_object, target_bus, comp_type, comp_data
-            )
-        else:
-            # if target bus is very close to the component, the component is directly
-            # connected at the target bus
+        if comp_type == "charging_point":
             bus = target_bus
+        else:
+            if target_bus_distance > max_distance_from_target_bus:
+                bus = self._connect_to_lv_bus(
+                    edisgo_object, target_bus, comp_type, comp_data
+                )
+            else:
+                bus = target_bus
+        
         comp_data.pop("geom")
         comp_data.pop("p")
         comp_name = add_func(bus=bus, **comp_data)

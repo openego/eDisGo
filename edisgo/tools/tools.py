@@ -330,7 +330,7 @@ def calculate_voltage_diff_pu_per_line_from_type(
     )
 
 
-def select_cable(
+def select_cable( #CHANGED
     edisgo_obj: EDisGo,
     level: str,
     apparent_power: float,
@@ -382,55 +382,76 @@ def select_cable(
         needed.
 
     """
+
+    print("============================\n")
+    print("SELECT CABLE USED")
+    print("============================\n")
+
+    if component_type == "charging_point":
+        try:
+            cp_df = edisgo_obj.electromobility.charging_points_df
+
+            # S in MVA zurück nach kVA
+            s_kva = apparent_power * 1000
+
+            # passende Charging Points finden
+            hits = cp_df[
+                abs(cp_df["apparent_power_kVA"] - s_kva) < 1e-3
+            ]
+
+            if not hits.empty:
+                row = hits.iloc[0]
+                print("\n=== CHARGING POINT DEBUG ===")
+                print("Charging point id:", row.name)
+                print("Park id:", row["charging_park_id"])
+                print("Use case:", row["use_case"])
+                print("P [kW]:", row["p_nominal_kW"])
+                print("S [kVA]:", row["apparent_power_kVA"])
+                print("Geometry:", row["geometry"])
+                print("============================\n")
+        except Exception as e:
+            print("Charging point debug failed:", e)
+
     if level == "mv":
         cable_data = edisgo_obj.topology.equipment_data["mv_cables"]
         available_cables = cable_data[
             cable_data["U_n"] == edisgo_obj.topology.mv_grid.nominal_voltage
         ]
         if not max_voltage_diff:
-            max_voltage_diff = edisgo_obj.config["grid_connection"][
-                "mv_max_voltage_deviation"
-            ]
+            max_voltage_diff = edisgo_obj.config["grid_connection"]["mv_max_voltage_deviation"]
     elif level == "lv":
         available_cables = edisgo_obj.topology.equipment_data["lv_cables"]
         if not max_voltage_diff:
-            max_voltage_diff = edisgo_obj.config["grid_connection"][
-                "lv_max_voltage_deviation"
-            ]
+            max_voltage_diff = edisgo_obj.config["grid_connection"]["lv_max_voltage_deviation"]
     else:
-        raise ValueError(
-            "Specified voltage level is not valid. Must either be 'mv' or 'lv'."
-        )
+        raise ValueError("Voltage level must be 'mv' or 'lv'")
 
     cable_count = 1
     suitable_cables = available_cables[
-        calculate_apparent_power(
-            available_cables["U_n"], available_cables["I_max_th"], cable_count
-        )
-        > apparent_power
+        calculate_apparent_power(available_cables["U_n"], available_cables["I_max_th"], cable_count) > apparent_power
     ]
-    if length != 0:
-        suitable_cables = suitable_cables[
-            calculate_voltage_diff_pu_per_line_from_type(
-                edisgo_obj=edisgo_obj,
-                cable_names=suitable_cables.index,
-                length=length,
-                num_parallel=cable_count,
-                v_nom=available_cables["U_n"].values[0],
-                s_max=apparent_power,
-                component_type=component_type,
-            )
-            < max_voltage_diff
-        ]
 
-    # increase cable count until appropriate cable type is found
-    while suitable_cables.empty and cable_count < max_cables:  # parameter
+    if length != 0:
+        vd = calculate_voltage_diff_pu_per_line_from_type(
+            edisgo_obj=edisgo_obj,
+            cable_names=suitable_cables.index,
+            length=length,
+            num_parallel=cable_count,
+            v_nom=available_cables["U_n"].values[0],
+            s_max=apparent_power,
+            component_type=component_type,
+            )
+
+        print("Voltage diff per cable:")
+        for name, val in vd.items():
+            print(f"  {name:15s} -> {val:.4f} pu")
+
+        suitable_cables = suitable_cables[vd < max_voltage_diff]
+    
+    while suitable_cables.empty and cable_count < max_cables:
         cable_count += 1
         suitable_cables = available_cables[
-            calculate_apparent_power(
-                available_cables["U_n"], available_cables["I_max_th"], cable_count
-            )
-            > apparent_power
+            calculate_apparent_power(available_cables["U_n"], available_cables["I_max_th"], cable_count) > apparent_power
         ]
         if length != 0:
             suitable_cables = suitable_cables[
@@ -445,14 +466,13 @@ def select_cable(
                 )
                 < max_voltage_diff
             ]
+
     if suitable_cables.empty:
         raise exceptions.MaximumIterationError(
-            "Could not find a suitable cable for apparent power of "
-            "{} MVA.".format(apparent_power)
+            f"Could not find a suitable cable for apparent power of {apparent_power} MVA."
         )
 
     cable_type = suitable_cables.loc[suitable_cables["I_max_th"].idxmin()]
-
     return cable_type, cable_count
 
 
