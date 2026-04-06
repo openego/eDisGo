@@ -23,6 +23,7 @@ from edisgo.tools.tools import (
     calculate_line_resistance,
     calculate_line_susceptance,
     select_cable,
+    select_cable_14a,
 )
 
 if "READTHEDOCS" not in os.environ:
@@ -1818,7 +1819,193 @@ class Topology:
                 self.lines_df.at[line, "bus0"] = bus1
                 self.lines_df.at[line, "bus1"] = bus0
 
-    def connect_to_mv(self, edisgo_object, comp_data, comp_type="generator"): #CHANGED
+    def connect_to_mv(self, edisgo_object, comp_data, comp_type="generator"):
+        """
+        Add and connect new component.
+
+        Currently, components can be generators, charging points, heat pumps and
+        storage units.
+
+        This function creates a new bus the new component is connected to. The
+        new bus is then connected to the grid depending on the specified
+        voltage level (given in `comp_data` parameter).
+        Components of voltage level 4 are connected to the HV/MV station.
+        Components of voltage level 5 are connected to the nearest
+        MV bus or line. In case the component is connected to a line, the line
+        is split at the point closest to the new component (using perpendicular
+        projection) and a new branch tee is added to connect the new
+        component to.
+
+        Parameters
+        ----------
+        edisgo_object : :class:`~.EDisGo`
+        comp_data : dict
+            Dictionary with all information on component.
+            The dictionary must contain all required arguments
+            of method :attr:`~.network.topology.Topology.add_generator`,
+            :attr:`~.network.topology.Topology.add_storage_unit`
+            respectively
+            :attr:`~.network.topology.Topology.add_load`, except the
+            `bus` that is assigned in this function, and may contain all other
+            parameters of those methods. Additionally, the dictionary must
+            contain the voltage level to connect in key 'voltage_level' and
+            the geolocation in key 'geom'. The
+            voltage level must be provided as integer, with possible options
+            being 4 (component is connected directly to the HV/MV station)
+            or 5 (component is connected somewhere in the MV grid). The
+            geolocation must be provided as
+            :shapely:`Shapely Point object<points>`.
+        comp_type : str
+            Type of added component. Can be 'generator', 'charging_point', 'heat_pump'
+            or 'storage_unit'.
+            Default: 'generator'.
+
+        Returns
+        -------
+        str
+            The identifier of the newly connected component.
+
+        """
+        if "p" not in comp_data.keys():
+            comp_data["p"] = (
+                comp_data["p_set"]
+                if "p_set" in comp_data.keys()
+                else comp_data["p_nom"]
+            )
+
+        voltage_level = comp_data.pop("voltage_level")
+        power = comp_data.pop("p")
+
+        # create new bus for new component
+        if not isinstance(comp_data["geom"], Point):
+            geom = wkt_loads(comp_data["geom"])
+        else:
+            geom = comp_data["geom"]
+
+        if comp_type == "generator":
+            if comp_data["generator_id"] is not None:
+                bus = f'Bus_Generator_{comp_data["generator_id"]}'
+            else:
+                bus = f"Bus_Generator_{len(self.generators_df)}"
+        elif comp_type == "charging_point":
+            bus = f"Bus_ChargingPoint_{len(self.charging_points_df)}"
+        elif comp_type == "heat_pump":
+            bus = f"Bus_HeatPump_{len(self.loads_df)}"
+        elif comp_type == "storage_unit":
+            bus = f"Bus_Storage_{len(self.storage_units_df)}"
+        else:
+            raise ValueError(
+                f"Provided component type {comp_type} is not valid. Must either be"
+                f"'generator', 'charging_point', 'heat_pump' or 'storage_unit'."
+            )
+
+        self.add_bus(
+            bus_name=bus,
+            v_nom=self.mv_grid.nominal_voltage,
+            x=geom.x,
+            y=geom.y,
+        )
+
+        # add component to newly created bus
+        comp_data.pop("geom")
+        if comp_type == "generator":
+            comp_name = self.add_generator(bus=bus, **comp_data)
+        elif comp_type == "charging_point":
+            comp_name = self.add_load(bus=bus, type="charging_point", **comp_data)
+        elif comp_type == "heat_pump":
+            comp_name = self.add_load(bus=bus, type="heat_pump", **comp_data)
+        else:
+            comp_name = self.add_storage_unit(bus=bus, **comp_data)
+
+        # ===== voltage level 4: component is connected to MV station =====
+        if voltage_level == 4:
+            # add line
+            line_length = geo.calc_geo_dist_vincenty(
+                grid_topology=self,
+                bus_source=bus,
+                bus_target=self.mv_grid.station.index[0],
+                branch_detour_factor=edisgo_object.config["grid_connection"][
+                    "branch_detour_factor"
+                ],
+            )
+            # avoid very short lines by limiting line length to at least 1m
+            line_length = max(line_length, 0.001)
+
+            line_type, num_parallel = select_cable(
+                edisgo_obj=edisgo_object,
+                level="mv",
+                apparent_power=power,
+                length=line_length,
+                component_type=comp_type,
+            )
+
+            line_name = self.add_line(
+                bus0=self.mv_grid.station.index[0],
+                bus1=bus,
+                length=line_length,
+                kind="cable",
+                type_info=line_type.name,
+                num_parallel=num_parallel,
+            )
+
+            # add line to equipment changes to track costs
+            edisgo_object.results._add_line_to_equipment_changes(
+                line=self.lines_df.loc[line_name],
+            )
+
+        elif voltage_level == 5:
+            # get branches within the predefined `connection_buffer_radius`
+            lines = geo.calc_geo_lines_in_buffer(
+                grid_topology=self,
+                bus=self.buses_df.loc[bus, :],
+                grid=self.mv_grid,
+                buffer_radius=int(
+                    edisgo_object.config["grid_connection"]["conn_buffer_radius"]
+                ),
+                buffer_radius_inc=int(
+                    edisgo_object.config["grid_connection"]["conn_buffer_radius_inc"]
+                ),
+            )
+
+            # calc distance between component and grid's lines -> find nearest line
+            conn_objects_min_stack = geo.find_nearest_conn_objects(
+                grid_topology=self,
+                bus=self.buses_df.loc[bus, :],
+                lines=lines,
+                conn_diff_tolerance=edisgo_object.config["grid_connection"][
+                    "conn_diff_tolerance"
+                ],
+            )
+
+            # connect
+            # go through the stack (from nearest to farthest connection target
+            # object)
+            comp_connected = False
+            for dist_min_obj in conn_objects_min_stack:
+                # do not allow connection to virtual busses
+                if "virtual" not in dist_min_obj["repr"]:
+                    target_obj_result = self._connect_mv_bus_to_target_object(
+                        edisgo_object=edisgo_object,
+                        bus=self.buses_df.loc[bus, :],
+                        target_obj=dist_min_obj,
+                        comp_type=comp_type,
+                        power=power,
+                    )
+
+                    if target_obj_result is not None:
+                        comp_connected = True
+                        break
+
+            if not comp_connected:
+                logger.error(
+                    f"Component {comp_name} could not be connected. Try to increase the"
+                    f" parameter `conn_buffer_radius` in config file `config_grid.cfg` "
+                    f"to gain more possible connection points."
+                )
+
+        return comp_name
+    
+    def connect_to_mv_14a(self, edisgo_object, comp_data, comp_type="generator"): #CHANGED
         """
         Add and connect new component.
 
@@ -1884,9 +2071,9 @@ class Topology:
         if comp_type == "charging_point":
 
             mv_buses = self.mv_grid.buses_df
-            target_bus, target_bus_distance = geo.find_nearest_bus(geom, mv_buses)
+            target_bus, target_bus_distance = geo.find_nearest_bus_14a(geom, mv_buses)
 
-            MAX_DIST = 0.2  # km
+            MAX_DIST = 0.3  # km
         
             if target_bus_distance >= MAX_DIST:
                 print(
@@ -1906,9 +2093,9 @@ class Topology:
 
         # ===== FIND NEAREST MV BUS =====
         mv_buses = self.mv_grid.buses_df
-        target_bus, target_bus_distance = geo.find_nearest_bus(geom, mv_buses)
+        target_bus, target_bus_distance = geo.find_nearest_bus_14a(geom, mv_buses)
 
-        MAX_DIST = 0.2
+        MAX_DIST = 0.3
 
         if comp_type == "charging_point" and target_bus_distance < MAX_DIST:
             bus = target_bus
@@ -1962,7 +2149,7 @@ class Topology:
             # avoid very short lines by limiting line length to at least 1m
             line_length = max(line_length, 0.001)
 
-            line_type, num_parallel = select_cable(
+            line_type, num_parallel = select_cable_14a(
                 edisgo_obj=edisgo_object,
                 level="mv",
                 apparent_power=power,
@@ -2372,7 +2559,7 @@ class Topology:
         edisgo_object,
         comp_data,
         comp_type,
-        max_distance_from_target_bus=0.2, #CHANGED from 0.02
+        max_distance_from_target_bus=0.02,
     ):
         """
         Add and connect new component to LV grid topology based on its geolocation.
@@ -2430,8 +2617,7 @@ class Topology:
             :attr:`~.network.topology.Topology.storage_units_df`, depending on component
             type.
 
-        """
-
+        """        
         if "p" not in comp_data.keys():
             comp_data["p"] = (
                 comp_data["p_set"]
@@ -2464,27 +2650,160 @@ class Topology:
             target_bus, target_bus_distance = geo.find_nearest_bus(
                 geolocation, substations
             )
-
         else:
             lv_buses = self.buses_df.drop(self.mv_grid.buses_df.index)
             target_bus, target_bus_distance = geo.find_nearest_bus(
                 geolocation, lv_buses
             )
 
-        if comp_type == "charging_point":
-            bus = target_bus
+        # check distance from target bus
+        if target_bus_distance > max_distance_from_target_bus:
+            # if target bus is too far away from the component, connect the component
+            # via a new bus
+            bus = self._connect_to_lv_bus(
+                edisgo_object, target_bus, comp_type, comp_data
+            )
         else:
-            if target_bus_distance > max_distance_from_target_bus:
-                bus = self._connect_to_lv_bus(
-                    edisgo_object, target_bus, comp_type, comp_data
-                )
-            else:
-                bus = target_bus
-        
+            # if target bus is very close to the component, the component is directly
+            # connected at the target bus
+            bus = target_bus
         comp_data.pop("geom")
         comp_data.pop("p")
         comp_name = add_func(bus=bus, **comp_data)
         return comp_name
+   
+    def connect_to_lv_based_on_geolocation_14a(
+        self,
+        edisgo_object,
+        comp_data,
+        comp_type,
+        max_distance_from_target_bus=0.3,
+    ):
+        """
+        Custom 14a variant of :meth:`connect_to_lv_based_on_geolocation`.
+
+        Differences to the standard function:
+        - larger default `max_distance_from_target_bus`
+        - different algorithm for finding the closest bus
+        """
+        import numpy as np
+        from scipy.spatial import cKDTree
+
+        # -------------------------------------------------------------
+        # Helper: build KDTree cache
+        # -------------------------------------------------------------
+        def _build_cache(bus_df):
+            coords = bus_df[["x", "y"]].dropna()
+
+            if len(coords) == 0:
+                raise ValueError("No valid coordinates for KDTree.")
+
+            xs = coords["x"].to_numpy(dtype=float)
+            ys = coords["y"].to_numpy(dtype=float)
+
+            lat0 = np.deg2rad(np.mean(ys))
+
+            x_km = xs * 111.320 * np.cos(lat0)
+            y_km = ys * 110.574
+
+            tree = cKDTree(np.column_stack((x_km, y_km)))
+
+            return {
+                "tree": tree,
+                "index": coords.index.to_numpy(),
+                "lat0": lat0,
+                "size": len(bus_df),
+            }
+
+        # -------------------------------------------------------------
+        # Helper: query KDTree
+        # -------------------------------------------------------------
+        def _query_cache(point, cache):
+            px = point.x * 111.320 * np.cos(cache["lat0"])
+            py = point.y * 110.574
+
+            dist, idx = cache["tree"].query([px, py], k=1)
+
+            return cache["index"][idx], float(dist)
+
+        # -------------------------------------------------------------
+        # Setup
+        # -------------------------------------------------------------
+        if "p" not in comp_data:
+            comp_data["p"] = comp_data.get("p_set", comp_data.get("p_nom"))
+
+        voltage_level = comp_data.pop("voltage_level")
+
+        if voltage_level not in [6, 7]:
+            raise ValueError(f"Invalid voltage level {voltage_level}")
+
+        geolocation = comp_data.get("geom")
+
+        if comp_type == "generator":
+            add_func = self.add_generator
+        elif comp_type in ["charging_point", "heat_pump"]:
+            add_func = self.add_load
+            comp_data["type"] = comp_type
+        elif comp_type == "storage_unit":
+            add_func = self.add_storage_unit
+        else:
+            logger.error(f"Invalid component type {comp_type}")
+            return
+
+        # -------------------------------------------------------------
+        # Voltage level 6 → substations
+        # -------------------------------------------------------------
+        if voltage_level == 6:
+            subst = self.buses_df.loc[self.transformers_df.bus1.unique()]
+
+            if (
+                not hasattr(self, "_geo_cache_substations_14a")
+                or self._geo_cache_substations_14a["size"] != len(subst)
+            ):
+                self._geo_cache_substations_14a = _build_cache(subst)
+
+            target_bus, dist = _query_cache(
+                geolocation, self._geo_cache_substations_14a
+            )
+
+        # -------------------------------------------------------------
+        # Voltage level 7 → LV buses
+        # -------------------------------------------------------------
+        else:
+            lv_buses = self.buses_df.drop(self.mv_grid.buses_df.index)
+
+            if (
+                not hasattr(self, "_geo_cache_lv_14a")
+                or self._geo_cache_lv_14a["size"] != len(lv_buses)
+            ):
+                self._geo_cache_lv_14a = _build_cache(lv_buses)
+
+            target_bus, dist = _query_cache(
+                geolocation, self._geo_cache_lv_14a
+            )
+
+        # -------------------------------------------------------------
+        # Connection logic
+        # -------------------------------------------------------------
+        if comp_type == "charging_point":
+            bus = target_bus
+        else:
+            if dist > max_distance_from_target_bus:
+                bus = self._connect_to_lv_bus(
+                    edisgo_object, target_bus, comp_type, comp_data
+                )
+
+                # topology changed → invalidate LV cache
+                if hasattr(self, "_geo_cache_lv_14a"):
+                    del self._geo_cache_lv_14a
+            else:
+                bus = target_bus
+
+        comp_data.pop("geom")
+        comp_data.pop("p")
+
+        return add_func(bus=bus, **comp_data)
+
 
     def _connect_mv_bus_to_target_object(
         self,

@@ -220,6 +220,41 @@ def find_nearest_bus(point, bus_target):
     return bus_target["dist"].idxmin(), bus_target["dist"].min()
 
 
+def find_nearest_bus_14a(point, bus_target):
+    """
+    Faster nearest-bus lookup using a local planar approximation and KD-tree.
+
+    This is a custom helper for the 14a EV workflow. The original
+    :func:`find_nearest_bus` remains untouched for standard eDisGo usage.
+    """
+    import numpy as np
+    from scipy.spatial import cKDTree
+
+    if len(bus_target) == 0:
+        raise ValueError("bus_target is empty.")
+
+    coords = bus_target[["x", "y"]].dropna()
+    if len(coords) == 0:
+        raise ValueError("bus_target has no valid coordinates.")
+
+    xs = coords["x"].to_numpy(dtype=float)
+    ys = coords["y"].to_numpy(dtype=float)
+
+    # local projection (fast + sufficient accuracy)
+    lat0 = np.deg2rad(point.y)
+    x_km = xs * 111.320 * np.cos(lat0)
+    y_km = ys * 110.574
+
+    tree = cKDTree(np.column_stack((x_km, y_km)))
+
+    px_km = point.x * 111.320 * np.cos(lat0)
+    py_km = point.y * 110.574
+
+    dist, idx = tree.query([px_km, py_km], k=1)
+
+    return coords.index[idx], float(dist)
+
+
 def find_nearest_conn_objects(grid_topology, bus, lines, conn_diff_tolerance=0.0001):
     """
     Searches all lines for the nearest possible connection object per line.

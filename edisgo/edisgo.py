@@ -37,7 +37,9 @@ from edisgo.io.electromobility_import import (
     distribute_charging_demand,
     import_electromobility_from_dir,
     import_electromobility_from_oedb,
+    import_electromobility_from_oedb_14a,
     integrate_charging_parks,
+    integrate_charging_parks_14a,
 )
 from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
 from edisgo.io.storage_import import home_batteries_oedb
@@ -53,7 +55,7 @@ from edisgo.opf import powermodels_opf
 from edisgo.opf.results.opf_result_class import OPFResults
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
-from edisgo.tools.geo import find_nearest_bus
+from edisgo.tools.geo import find_nearest_bus, find_nearest_bus_14a
 from edisgo.tools.spatial_complexity_reduction import spatial_complexity_reduction
 from edisgo.tools.tools import determine_grid_integration_voltage_level
 
@@ -1781,7 +1783,7 @@ class EDisGo:
 
             else:
                 max_distance_from_target_bus = kwargs.pop(
-                    "max_distance_from_target_bus", 0.2 #CHANGED from 0.02
+                    "max_distance_from_target_bus", 0.02
                 )
                 comp_name = self.topology.connect_to_lv_based_on_geolocation(
                     self, kwargs, comp_type, max_distance_from_target_bus
@@ -1800,6 +1802,91 @@ class EDisGo:
                 )
 
         return comp_name
+    
+    def integrate_component_based_on_geolocation_14a(
+        self,
+        comp_type,
+        geolocation,
+        voltage_level=None,
+        add_ts=True,
+        ts_active_power=None,
+        ts_reactive_power=None,
+        **kwargs,
+    ):
+        """
+        14a variant of integrate_component_based_on_geolocation.
+        
+        Uses explicit _14a helper functions where custom behavior was introduced,
+        while leaving the original integrate_component_based_on_geolocation
+        unchanged for standard users.
+        """
+        supported_voltage_levels = {4, 5, 6, 7}
+        p_nom = kwargs.get("p_nom", None)
+        p_set = kwargs.get("p_set", None)
+        
+        p = p_nom if p_set is None else p_set
+        kwargs["p"] = p
+
+        if voltage_level not in supported_voltage_levels:
+            if p is None:
+                raise ValueError(
+                    "Neither appropriate voltage level nor nominal power were supplied."
+                )
+            voltage_level = determine_grid_integration_voltage_level(self, p)
+
+        # convert geolocation to shapely Point if needed
+        if type(geolocation) is not Point:
+            geolocation = Point(geolocation)
+
+        kwargs["geom"] = geolocation
+        kwargs["voltage_level"] = voltage_level
+
+        # -------------------------
+        # Connect in MV
+        # -------------------------
+        if voltage_level in [4, 5]:
+            comp_name = self.topology.connect_to_mv_14a(self, kwargs, comp_type)
+
+        # -------------------------
+        # Connect in LV
+        # -------------------------
+        else:
+            lv_buses = self.topology.buses_df.drop(self.topology.mv_grid.buses_df.index)
+            lv_buses_dropna = lv_buses.dropna(axis=0, subset=["x", "y"])
+
+            # fallback path for non-georeferenced LV grids
+            if len(lv_buses_dropna) < len(lv_buses):
+                if kwargs.get("mvlv_subst_id", None) is None:
+                    substations = self.topology.buses_df.loc[
+                        self.topology.transformers_df.bus1.unique()
+                    ]
+                    nearest_substation, _ = find_nearest_bus_14a(geolocation, substations)
+                    kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
+
+                comp_name = self.topology.connect_to_lv_14a(self, kwargs, comp_type)
+
+            else:
+                max_distance_from_target_bus = kwargs.pop(
+                    "max_distance_from_target_bus", 0.3 #CHANGED #14a
+                )
+                comp_name = self.topology.connect_to_lv_based_on_geolocation_14a(
+                    self, kwargs, comp_type, max_distance_from_target_bus
+                )
+
+        if add_ts:
+            if comp_type == "generator":
+                self.set_time_series_manual(
+                    generators_p=pd.DataFrame({comp_name: ts_active_power}),
+                    generators_q=pd.DataFrame({comp_name: ts_reactive_power}),
+                )
+            else:
+                self.set_time_series_manual(
+                    loads_p=pd.DataFrame({comp_name: ts_active_power}),
+                    loads_q=pd.DataFrame({comp_name: ts_reactive_power}),
+                )
+
+        return comp_name
+
 
     def remove_component(self, comp_type, comp_name, drop_ts=True):
         """
@@ -2106,6 +2193,52 @@ class EDisGo:
         distribute_charging_demand(self, **allocate_charging_demand_kwds)
 
         integrate_charging_parks(self)
+        
+    def import_electromobility_14a(
+        self,
+        data_source: str = "oedb",
+        scenario: str = None,
+        charging_processes_dir: PurePath | str = None,
+        potential_charging_points_dir: PurePath | str = None,
+        import_electromobility_data_kwds=None,
+        allocate_charging_demand_kwds=None,
+    ):
+        """
+        14a variant of :meth:`import_electromobility`.
+
+        The standard method remains unchanged. This custom method uses the 14a
+        EV integration path and therefore keeps the default eDisGo API intact for
+        other users.
+        """
+        if import_electromobility_data_kwds is None:
+            import_electromobility_data_kwds = {}
+
+        if data_source == "oedb":
+            import_electromobility_from_oedb_14a(
+                self,
+                scenario=scenario,
+                engine=self.engine,
+                **import_electromobility_data_kwds,
+            )
+        elif data_source == "directory":
+            import_electromobility_from_dir(
+                self,
+                charging_processes_dir,
+                potential_charging_points_dir,
+                **import_electromobility_data_kwds,
+            )
+        else:
+            raise ValueError(
+                "Invalid input for parameter 'data_source'. Possible options are "
+                "'oedb' and 'directory'."
+            )
+
+        if allocate_charging_demand_kwds is None:
+            allocate_charging_demand_kwds = {}
+
+        distribute_charging_demand(self, **allocate_charging_demand_kwds)
+        
+        integrate_charging_parks_14a(self)
 
     def apply_charging_strategy(self, strategy="dumb", **kwargs):
         """
