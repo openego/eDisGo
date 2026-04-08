@@ -2204,11 +2204,9 @@ class EDisGo:
         allocate_charging_demand_kwds=None,
     ):
         """
-        14a variant of :meth:`import_electromobility`.
+        14a variant of import_electromobility.
 
-        The standard method remains unchanged. This custom method uses the 14a
-        EV integration path and therefore keeps the default eDisGo API intact for
-        other users.
+        This method uses the specific 14a EV integration path.
         """
         if import_electromobility_data_kwds is None:
             import_electromobility_data_kwds = {}

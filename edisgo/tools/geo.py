@@ -222,10 +222,9 @@ def find_nearest_bus(point, bus_target):
 
 def find_nearest_bus_14a(point, bus_target):
     """
-    Faster nearest-bus lookup using a local planar approximation and KD-tree.
+    14a variant of find_nearest_bus.
 
-    This is a custom helper for the 14a EV workflow. The original
-    :func:`find_nearest_bus` remains untouched for standard eDisGo usage.
+    Faster nearest-bus lookup using a local planar approximation and KD-tree.
     """
     import numpy as np
     from scipy.spatial import cKDTree

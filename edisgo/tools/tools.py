@@ -466,10 +466,9 @@ def select_cable_14a( #CHANGED#14a
     max_cables: int = 7,
 ) -> tuple[pd.Series, int]:
     """
-    Custom 14a variant of :func:`select_cable` with additional EV debug output.
+    Custom 14a variant of select_cable with additional EV debug output.
 
-    Standard eDisGo keeps using :func:`select_cable`. This function can be used
-    explicitly in the 14a workflow.
+    This function can be used explicitly in the 14a workflow.
     """
     print("============================\n")
     print("SELECT CABLE USED (_14a)")

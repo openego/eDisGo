@@ -2007,49 +2007,7 @@ class Topology:
     
     def connect_to_mv_14a(self, edisgo_object, comp_data, comp_type="generator"): #CHANGED
         """
-        Add and connect new component.
-
-        Currently, components can be generators, charging points, heat pumps and
-        storage units.
-
-        This function creates a new bus the new component is connected to. The
-        new bus is then connected to the grid depending on the specified
-        voltage level (given in `comp_data` parameter).
-        Components of voltage level 4 are connected to the HV/MV station.
-        Components of voltage level 5 are connected to the nearest
-        MV bus or line. In case the component is connected to a line, the line
-        is split at the point closest to the new component (using perpendicular
-        projection) and a new branch tee is added to connect the new
-        component to.
-
-        Parameters
-        ----------
-        edisgo_object : :class:`~.EDisGo`
-        comp_data : dict
-            Dictionary with all information on component.
-            The dictionary must contain all required arguments
-            of method :attr:`~.network.topology.Topology.add_generator`,
-            :attr:`~.network.topology.Topology.add_storage_unit`
-            respectively
-            :attr:`~.network.topology.Topology.add_load`, except the
-            `bus` that is assigned in this function, and may contain all other
-            parameters of those methods. Additionally, the dictionary must
-            contain the voltage level to connect in key 'voltage_level' and
-            the geolocation in key 'geom'. The
-            voltage level must be provided as integer, with possible options
-            being 4 (component is connected directly to the HV/MV station)
-            or 5 (component is connected somewhere in the MV grid). The
-            geolocation must be provided as
-            :shapely:`Shapely Point object<points>`.
-        comp_type : str
-            Type of added component. Can be 'generator', 'charging_point', 'heat_pump'
-            or 'storage_unit'.
-            Default: 'generator'.
-
-        Returns
-        -------
-        str
-            The identifier of the newly connected component.
+        14a variant of connect_to_mv.
 
         """
         if "p" not in comp_data.keys():
@@ -2671,23 +2629,38 @@ class Topology:
         comp_data.pop("p")
         comp_name = add_func(bus=bus, **comp_data)
         return comp_name
-   
+
+    
     def connect_to_lv_based_on_geolocation_14a(
         self,
         edisgo_object,
         comp_data,
         comp_type,
         max_distance_from_target_bus=0.3,
-    ):
+    ):  
         """
-        Custom 14a variant of :meth:`connect_to_lv_based_on_geolocation`.
+        Custom 14a variant of connect_to_lv_based_on_geolocation.
 
         Differences to the standard function:
-        - larger default `max_distance_from_target_bus`
-        - different algorithm for finding the closest bus
+            - larger default `max_distance_from_target_bus`
+            - different algorithm for finding the closest bus
+            - optional filtering of eligible LV buses by charging-point use case
+            and bus comp_type
         """
         import numpy as np
         from scipy.spatial import cKDTree
+
+        # -------------------------------------------------------------
+        # Charging-point bus eligibility by use case
+        # Extend this dictionary later as needed.
+        # None means: keep previous default behavior (= all LV buses)
+        # -------------------------------------------------------------
+        CHARGING_USE_CASE_BUS_COMP_TYPES = {
+            "home": ["house_connection"],
+            "work": None,
+            "public": None,
+            "hpc": None,
+        }
 
         # -------------------------------------------------------------
         # Helper: build KDTree cache
@@ -2712,7 +2685,7 @@ class Topology:
                 "tree": tree,
                 "index": coords.index.to_numpy(),
                 "lat0": lat0,
-                "size": len(bus_df),
+                "size": len(coords),
             }
 
         # -------------------------------------------------------------
@@ -2725,6 +2698,14 @@ class Topology:
             dist, idx = cache["tree"].query([px, py], k=1)
 
             return cache["index"][idx], float(dist)
+
+        # -------------------------------------------------------------
+        # Helper: cache key for filtered LV buses
+        # -------------------------------------------------------------
+        def _cache_attr_name_for_use_case(use_case):
+            if use_case is None:
+                return "_geo_cache_lv_14a_all"
+            return f"_geo_cache_lv_14a_{use_case}"
 
         # -------------------------------------------------------------
         # Setup
@@ -2758,7 +2739,7 @@ class Topology:
 
             if (
                 not hasattr(self, "_geo_cache_substations_14a")
-                or self._geo_cache_substations_14a["size"] != len(subst)
+                or self._geo_cache_substations_14a["size"] != len(subst[["x", "y"]].dropna())
             ):
                 self._geo_cache_substations_14a = _build_cache(subst)
 
@@ -2772,14 +2753,46 @@ class Topology:
         else:
             lv_buses = self.buses_df.drop(self.mv_grid.buses_df.index)
 
+            # ---------------------------------------------------------
+            # Optional use-case-specific filtering for charging points
+            # ---------------------------------------------------------
+            if comp_type == "charging_point":
+                use_case = comp_data.get("sector")
+                allowed_comp_types = CHARGING_USE_CASE_BUS_COMP_TYPES.get(use_case, None)
+
+                if allowed_comp_types is not None:
+                    if "comp_type" not in lv_buses.columns:
+                        raise KeyError(
+                            "Column 'comp_type' not found in buses_df, but it is "
+                            f"required for charging-point use case '{use_case}'."
+                        )
+
+                    lv_buses = lv_buses.loc[
+                        lv_buses["comp_type"].isin(allowed_comp_types)
+                    ]
+
+                    if lv_buses.empty:
+                        raise ValueError(
+                            f"No eligible LV buses found for charging use case "
+                            f"'{use_case}' with allowed comp_type values "
+                            f"{allowed_comp_types}."
+                        )
+
+                cache_attr = _cache_attr_name_for_use_case(use_case)
+
+            else:
+                cache_attr = _cache_attr_name_for_use_case(None)
+
+            valid_coords_count = len(lv_buses[["x", "y"]].dropna())
+
             if (
-                not hasattr(self, "_geo_cache_lv_14a")
-                or self._geo_cache_lv_14a["size"] != len(lv_buses)
+                not hasattr(self, cache_attr)
+                or getattr(self, cache_attr)["size"] != valid_coords_count
             ):
-                self._geo_cache_lv_14a = _build_cache(lv_buses)
+                setattr(self, cache_attr, _build_cache(lv_buses))
 
             target_bus, dist = _query_cache(
-                geolocation, self._geo_cache_lv_14a
+                geolocation, getattr(self, cache_attr)
             )
 
         # -------------------------------------------------------------
@@ -2793,9 +2806,11 @@ class Topology:
                     edisgo_object, target_bus, comp_type, comp_data
                 )
 
-                # topology changed → invalidate LV cache
-                if hasattr(self, "_geo_cache_lv_14a"):
-                    del self._geo_cache_lv_14a
+                # topology changed → invalidate LV caches
+                for attr in list(vars(self).keys()):
+                    if attr.startswith("_geo_cache_lv_14a_"):
+                        delattr(self, attr)
+
             else:
                 bus = target_bus
 
