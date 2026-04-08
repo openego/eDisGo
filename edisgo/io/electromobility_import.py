@@ -133,7 +133,7 @@ def import_electromobility_from_dir(
         gc_to_car_rate_work : float
             Specifies the minimum rate between potential charging parks
             points for the use case "work" and the total number of cars.
-            Default f5 .
+            Default 0.25 .
         gc_to_car_rate_public : float
             Specifies the minimum rate between potential charging parks
             points for the use case "public" and the total number of cars.
@@ -1793,6 +1793,9 @@ def charging_processes_from_oedb(
         more information.
 
     """
+    if not engine:
+        engine = egon_engine()
+
     config = Config()
     egon_ev_mv_grid_district, egon_ev_trip = config.import_tables_from_oep(
         engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
