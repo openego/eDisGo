@@ -23,7 +23,6 @@ from edisgo.tools.tools import (
     calculate_line_resistance,
     calculate_line_susceptance,
     select_cable,
-    select_cable_14a,
 )
 
 if "READTHEDOCS" not in os.environ:
@@ -2058,29 +2057,7 @@ class Topology:
         if comp_type == "charging_point" and target_bus_distance < MAX_DIST:
             bus = target_bus
         else:
-            if comp_type == "generator":
-                if comp_data["generator_id"] is not None:
-                    bus = f'Bus_Generator_{comp_data["generator_id"]}'
-                else:
-                    bus = f"Bus_Generator_{len(self.generators_df)}"
-            elif comp_type == "charging_point":
-                bus = f"Bus_ChargingPoint_{len(self.charging_points_df)}"
-            elif comp_type == "heat_pump":
-                bus = f"Bus_HeatPump_{len(self.loads_df)}"
-            elif comp_type == "storage_unit":
-                bus = f"Bus_Storage_{len(self.storage_units_df)}"
-            else:
-                raise ValueError(
-                    f"Provided component type {comp_type} is not valid. Must either be"
-                    f"'generator', 'charging_point', 'heat_pump' or 'storage_unit'."
-                )
-
-            self.add_bus(
-                bus_name=bus,
-                v_nom=self.mv_grid.nominal_voltage,
-                x=geom.x,
-                y=geom.y,
-            )
+            print("comp_type is not charging_point in _14a workflow")
 
         # add component to newly created bus
         comp_data.pop("geom")
@@ -2093,41 +2070,9 @@ class Topology:
         else:
             comp_name = self.add_storage_unit(bus=bus, **comp_data)
 
-        # ===== voltage level 4: component is connected to MV station =====
+        #===== voltage level 4: component is connected to MV station =====
         if voltage_level == 4:
-            # add line
-            line_length = geo.calc_geo_dist_vincenty(
-                grid_topology=self,
-                bus_source=bus,
-                bus_target=self.mv_grid.station.index[0],
-                branch_detour_factor=edisgo_object.config["grid_connection"][
-                    "branch_detour_factor"
-                ],
-            )
-            # avoid very short lines by limiting line length to at least 1m
-            line_length = max(line_length, 0.001)
-
-            line_type, num_parallel = select_cable_14a(
-                edisgo_obj=edisgo_object,
-                level="mv",
-                apparent_power=power,
-                length=line_length,
-                component_type=comp_type,
-            )
-
-            line_name = self.add_line(
-                bus0=self.mv_grid.station.index[0],
-                bus1=bus,
-                length=line_length,
-                kind="cable",
-                type_info=line_type.name,
-                num_parallel=num_parallel,
-            )
-
-            # add line to equipment changes to track costs
-            edisgo_object.results._add_line_to_equipment_changes(
-                line=self.lines_df.loc[line_name],
-            )
+            print("Voltage_level 4 in connect_t_mv_14a - No 14a workflow yet.")
 
         elif voltage_level == 5:
             # get branches within the predefined `connection_buffer_radius`
