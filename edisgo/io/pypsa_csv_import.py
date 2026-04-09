@@ -162,7 +162,7 @@ def _assign_timeseries(
 
 def _parse_timestamps(series: pd.Series) -> pd.DatetimeIndex:
     idx = pd.DatetimeIndex(pd.to_datetime(series.values), name="snapshot")
-    return idx.freq and idx or pd.DatetimeIndex(idx, freq=pd.infer_freq(idx), name="snapshot")
+    return idx.freq and idx or pd.DatetimeIndex(idx, freq="h", name="snapshot")
 
 
 # ---------------------------------------------------------------------------
@@ -405,6 +405,7 @@ def populate_edisgo_from_pypsa_csv(
 
     # --- Storage units ------------------------------------------------- #
     stor_raw = _read(folder, "storage_units.csv")
+
     stor = _keep_and_rename(stor_raw, STORAGE_RENAME)
     stor["mv_grid_id"] = mv_grid_id
     topo.storage_units_df = stor
@@ -420,7 +421,7 @@ def populate_edisgo_from_pypsa_csv(
     if not snap.empty:
         timeindex = _parse_timestamps(snap.loc[:, "snapshot"].iloc[ts_slice])
         ts.timeindex = pd.DatetimeIndex(timeindex, name="snapshot",
-                                        freq=pd.infer_freq(timeindex))
+                                        freq="h")
     else:
         timeindex = None
 
