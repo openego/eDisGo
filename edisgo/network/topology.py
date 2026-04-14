@@ -2004,127 +2004,216 @@ class Topology:
 
         return comp_name
     
-    def connect_to_mv_14a(self, edisgo_object, comp_data, comp_type="generator"): #CHANGED
-        """
-        14a variant of connect_to_mv.
+    # def connect_to_mv_14a(self, edisgo_object, comp_data, comp_type="generator"): #CHANGED
+    #     """
+    #     14a variant of connect_to_mv.
 
-        """
-        if "p" not in comp_data.keys():
-            comp_data["p"] = (
-                comp_data["p_set"]
-                if "p_set" in comp_data.keys()
-                else comp_data["p_nom"]
-            )
+    #     """
+    #     if "p" not in comp_data.keys():
+    #         comp_data["p"] = (
+    #             comp_data["p_set"]
+    #             if "p_set" in comp_data.keys()
+    #             else comp_data["p_nom"]
+    #         )
 
-        voltage_level = comp_data.pop("voltage_level")
-        power = comp_data.pop("p")
+    #     voltage_level = comp_data.pop("voltage_level")
+    #     power = comp_data.pop("p")
 
-        # create new bus for new component
-        if not isinstance(comp_data["geom"], Point):
-            geom = wkt_loads(comp_data["geom"])
-        else:
-            geom = comp_data["geom"]
+    #     # create new bus for new component
+    #     if not isinstance(comp_data["geom"], Point):
+    #         geom = wkt_loads(comp_data["geom"])
+    #     else:
+    #         geom = comp_data["geom"]
           
-        if comp_type == "charging_point":
+    #     if comp_type == "charging_point":
 
-            mv_buses = self.mv_grid.buses_df
-            target_bus, target_bus_distance = geo.find_nearest_bus_14a(geom, mv_buses)
+    #         mv_buses = self.mv_grid.buses_df
+    #         target_bus, target_bus_distance = geo.find_nearest_bus_14a(geom, mv_buses)
 
-            MAX_DIST = 0.3  # km
+    #         MAX_DIST = 0.3  # km
         
-            if target_bus_distance >= MAX_DIST:
-                print(
-                    f"SKIP CP (too far from MV bus): dist={target_bus_distance:.3f} km"
-                )
-                return None
+    #         if target_bus_distance >= MAX_DIST:
+    #             print(
+    #                 f"SKIP CP (too far from MV bus): dist={target_bus_distance:.3f} km"
+    #             )
+    #             return None
 
-            # attach directly to existing MV bus
-            comp_data.pop("geom", None)
-            comp_data.pop("p", None)
+    #         # attach directly to existing MV bus
+    #         comp_data.pop("geom", None)
+    #         comp_data.pop("p", None)
 
-            return self.add_load(
-                bus=target_bus,
-                type="charging_point",
-                **comp_data
+    #         return self.add_load(
+    #             bus=target_bus,
+    #             type="charging_point",
+    #             **comp_data
+    #         )
+
+    #     # ===== FIND NEAREST MV BUS =====
+    #     mv_buses = self.mv_grid.buses_df
+    #     target_bus, target_bus_distance = geo.find_nearest_bus_14a(geom, mv_buses)
+
+    #     MAX_DIST = 0.3
+
+    #     if comp_type == "charging_point" and target_bus_distance < MAX_DIST:
+    #         bus = target_bus
+    #     else:
+    #         print("comp_type has to be charging_point in _14a workflow")
+
+    #     # add component to newly created bus
+    #     comp_data.pop("geom")
+    #     if comp_type == "generator":
+    #         comp_name = self.add_generator(bus=bus, **comp_data)
+    #     elif comp_type == "charging_point":
+    #         comp_name = self.add_load(bus=bus, type="charging_point", **comp_data)
+    #     elif comp_type == "heat_pump":
+    #         comp_name = self.add_load(bus=bus, type="heat_pump", **comp_data)
+    #     else:
+    #         comp_name = self.add_storage_unit(bus=bus, **comp_data)
+
+    #     # ===== voltage level 4: component is connected to MV station =====
+    #     if voltage_level == 4:
+    #         print("Voltage_level 4 in connect_t_mv_14a has no 14a workflow yet.")
+
+    #     elif voltage_level == 5:
+    #         # get branches within the predefined `connection_buffer_radius`
+    #         lines = geo.calc_geo_lines_in_buffer(
+    #             grid_topology=self,
+    #             bus=self.buses_df.loc[bus, :],
+    #             grid=self.mv_grid,
+    #             buffer_radius=int(
+    #                 edisgo_object.config["grid_connection"]["conn_buffer_radius"]
+    #             ),
+    #             buffer_radius_inc=int(
+    #                 edisgo_object.config["grid_connection"]["conn_buffer_radius_inc"]
+    #             ),
+    #         )
+
+    #         # calc distance between component and grid's lines -> find nearest line
+    #         conn_objects_min_stack = geo.find_nearest_conn_objects(
+    #             grid_topology=self,
+    #             bus=self.buses_df.loc[bus, :],
+    #             lines=lines,
+    #             conn_diff_tolerance=edisgo_object.config["grid_connection"][
+    #                 "conn_diff_tolerance"
+    #             ],
+    #         )
+
+    #         # connect
+    #         # go through the stack (from nearest to farthest connection target
+    #         # object)
+    #         comp_connected = False
+    #         for dist_min_obj in conn_objects_min_stack:
+    #             # do not allow connection to virtual busses
+    #             if "virtual" not in dist_min_obj["repr"]:
+    #                 target_obj_result = self._connect_mv_bus_to_target_object(
+    #                     edisgo_object=edisgo_object,
+    #                     bus=self.buses_df.loc[bus, :],
+    #                     target_obj=dist_min_obj,
+    #                     comp_type=comp_type,
+    #                     power=power,
+    #                 )
+
+    #                 if target_obj_result is not None:
+    #                     comp_connected = True
+    #                     break
+
+    #         if not comp_connected:
+    #             logger.error(
+    #                 f"Component {comp_name} could not be connected. Try to increase the"
+    #                 f" parameter `conn_buffer_radius` in config file `config_grid.cfg` "
+    #                 f"to gain more possible connection points."
+    #             )
+
+    #     return comp_name
+
+    def connect_to_mv_14a(self, edisgo_object, comp_data, comp_type="generator"):
+        """
+        Connect a charging point directly to the nearest existing MV bus.
+        
+        This 14a variant is intended exclusively for charging points.
+        It never creates a new bus. If no MV bus is found within the
+        maximum allowed distance, an error is raised.
+        
+        Parameters
+        ----------
+        edisgo_object : object
+            Included for interface compatibility. Not used here except to
+            keep the function signature aligned with similar methods.
+        comp_data : dict
+            Component data. Must contain at least:
+            - "geom": geometry of the charging point
+            - "voltage_level": retained for compatibility, but not used
+            Optional:
+            - "p", "p_set", or "p_nom"
+        comp_type : str, default "generator"
+            Must be "charging_point".
+
+        Returns
+        -------
+        str
+            Name of the created load.
+
+        Raises
+        ------
+        ValueError
+            If comp_type is not "charging_point", required fields are missing,
+            geometry is invalid, or no MV bus is within the maximum distance.
+        """
+        from shapely.geometry import Point
+        from shapely.wkt import loads as wkt_loads
+    
+        MAX_DIST_KM = 0.3
+
+        if comp_type != "charging_point":
+            raise ValueError(
+                f"connect_to_mv_14a only supports comp_type='charging_point', "
+                f"got {comp_type!r}."
             )
 
-        # ===== FIND NEAREST MV BUS =====
+        if "geom" not in comp_data:
+            raise ValueError("comp_data must contain a 'geom' entry.")
+
+        if "voltage_level" not in comp_data:
+            raise ValueError("comp_data must contain a 'voltage_level' entry.")
+
+        # Work on a copy so the caller's dict is not modified unexpectedly.
+        comp_data = comp_data.copy()
+
+        # Keep old p-resolution logic for compatibility, even though it is
+        # not used for the direct MV-bus attachment itself.
+        if "p" not in comp_data:
+            if "p_set" in comp_data:
+                comp_data["p"] = comp_data["p_set"]
+            elif "p_nom" in comp_data:
+                comp_data["p"] = comp_data["p_nom"]
+
+        # Pop fields that are not needed by add_load(...)
+        comp_data.pop("voltage_level")
+        geom_raw = comp_data.pop("geom")
+
+        # Parse geometry
+        if isinstance(geom_raw, Point):
+            geom = geom_raw
+        else:
+            geom = wkt_loads(geom_raw)
+
+        # Find nearest existing MV bus
         mv_buses = self.mv_grid.buses_df
         target_bus, target_bus_distance = geo.find_nearest_bus_14a(geom, mv_buses)
 
-        MAX_DIST = 0.3
-
-        if comp_type == "charging_point" and target_bus_distance < MAX_DIST:
-            bus = target_bus
-        else:
-            print("comp_type is not charging_point in _14a workflow")
-
-        # add component to newly created bus
-        comp_data.pop("geom")
-        if comp_type == "generator":
-            comp_name = self.add_generator(bus=bus, **comp_data)
-        elif comp_type == "charging_point":
-            comp_name = self.add_load(bus=bus, type="charging_point", **comp_data)
-        elif comp_type == "heat_pump":
-            comp_name = self.add_load(bus=bus, type="heat_pump", **comp_data)
-        else:
-            comp_name = self.add_storage_unit(bus=bus, **comp_data)
-
-        #===== voltage level 4: component is connected to MV station =====
-        if voltage_level == 4:
-            print("Voltage_level 4 in connect_t_mv_14a - No 14a workflow yet.")
-
-        elif voltage_level == 5:
-            # get branches within the predefined `connection_buffer_radius`
-            lines = geo.calc_geo_lines_in_buffer(
-                grid_topology=self,
-                bus=self.buses_df.loc[bus, :],
-                grid=self.mv_grid,
-                buffer_radius=int(
-                    edisgo_object.config["grid_connection"]["conn_buffer_radius"]
-                ),
-                buffer_radius_inc=int(
-                    edisgo_object.config["grid_connection"]["conn_buffer_radius_inc"]
-                ),
+        if target_bus_distance >= MAX_DIST_KM:
+            raise ValueError(
+                f"Charging point cannot be connected: nearest MV bus is "
+                f"{target_bus_distance:.3f} km away, exceeding the maximum "
+                f"allowed distance of {MAX_DIST_KM:.3f} km."
             )
 
-            # calc distance between component and grid's lines -> find nearest line
-            conn_objects_min_stack = geo.find_nearest_conn_objects(
-                grid_topology=self,
-                bus=self.buses_df.loc[bus, :],
-                lines=lines,
-                conn_diff_tolerance=edisgo_object.config["grid_connection"][
-                    "conn_diff_tolerance"
-                ],
-            )
-
-            # connect
-            # go through the stack (from nearest to farthest connection target
-            # object)
-            comp_connected = False
-            for dist_min_obj in conn_objects_min_stack:
-                # do not allow connection to virtual busses
-                if "virtual" not in dist_min_obj["repr"]:
-                    target_obj_result = self._connect_mv_bus_to_target_object(
-                        edisgo_object=edisgo_object,
-                        bus=self.buses_df.loc[bus, :],
-                        target_obj=dist_min_obj,
-                        comp_type=comp_type,
-                        power=power,
-                    )
-
-                    if target_obj_result is not None:
-                        comp_connected = True
-                        break
-
-            if not comp_connected:
-                logger.error(
-                    f"Component {comp_name} could not be connected. Try to increase the"
-                    f" parameter `conn_buffer_radius` in config file `config_grid.cfg` "
-                    f"to gain more possible connection points."
-                )
-
-        return comp_name
+        # 'p' is not passed explicitly here because add_load gets the rest of comp_data
+        return self.add_load(
+            bus=target_bus,
+            type="charging_point",
+            **comp_data,
+        )
 
     def connect_to_lv(
         self,
