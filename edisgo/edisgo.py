@@ -35,6 +35,7 @@ from edisgo.io.db import engine as egon_engine
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
+    distribute_charging_demand_14a, #engine
     import_electromobility_from_dir,
     import_electromobility_from_oedb,
     import_electromobility_from_oedb_14a,
@@ -2194,47 +2195,113 @@ class EDisGo:
 
         integrate_charging_parks(self)
         
+    # def import_electromobility_14a(
+    #     self,
+    #     data_source: str = "oedb",
+    #     scenario: str = None,
+    #     import_electromobility_data_kwds=None,
+    #     allocate_charging_demand_kwds=None,
+    # ):
+    #     """
+    #     14a variant of import_electromobility.
+
+    #     This method uses the specific 14a EV integration path.
+    #     """
+    #     # if import_electromobility_data_kwds is None:
+    #     #     import_electromobility_data_kwds = {}
+
+    #     # if data_source == "oedb":
+    #     #     import_electromobility_from_oedb_14a(
+    #     #         self,
+    #     #         scenario=scenario,
+    #     #         engine=self.engine,
+    #     #         **import_electromobility_data_kwds,
+    #     #     )
+    #     # elif data_source == "directory":
+    #     #     import_electromobility_from_dir(
+    #     #         self,
+    #     #         charging_processes_dir,
+    #     #         potential_charging_points_dir,
+    #     #         **import_electromobility_data_kwds,
+    #     #     )
+        
+    #     if data_source == "oedb":
+    #         if import_electromobility_data_kwds is None:
+    #             import_electromobility_data_kwds = {}
+
+    #         if "shapefile_path" not in import_electromobility_data_kwds:
+    #             raise ValueError(
+    #                 "For import_electromobility_14a with data_source='oedb', "
+    #                 "'shapefile_path' must be provided in import_electromobility_data_kwds."
+    #             )
+
+    #         import_electromobility_from_oedb_14a(
+    #             self,
+    #             scenario=scenario,
+    #             engine=self.engine,
+    #             **import_electromobility_data_kwds,
+    #         )
+    #     else:
+    #         raise ValueError(
+    #             "Invalid input for parameter 'data_source'. Currently only 'oedb' is supported."
+    #         )
+
+    #     if allocate_charging_demand_kwds is None:
+    #         allocate_charging_demand_kwds = {}
+
+    #     distribute_charging_demand_14a(self, **allocate_charging_demand_kwds)
+        
+    #     integrate_charging_parks_14a(self)
+        
     def import_electromobility_14a(
         self,
         data_source: str = "oedb",
         scenario: str = None,
-        charging_processes_dir: PurePath | str = None,
-        potential_charging_points_dir: PurePath | str = None,
         import_electromobility_data_kwds=None,
         allocate_charging_demand_kwds=None,
     ):
         """
         14a variant of import_electromobility.
-
+        
         This method uses the specific 14a EV integration path.
         """
+        if data_source != "oedb":
+            raise ValueError(
+                "Invalid input for parameter 'data_source'. Currently only 'oedb' is supported."
+            )
+
+        valid_scenarios = {"eGon2035", "eGon100RE"}
+        if scenario not in valid_scenarios:
+            raise ValueError(
+                f"Invalid scenario '{scenario}'. Possible options are {sorted(valid_scenarios)}."
+            )
+            
+        if self.engine is None:
+            raise ValueError(
+                "No database engine available. Please set 'self.engine' before calling "
+                "import_electromobility_14a()."
+            )
+
         if import_electromobility_data_kwds is None:
             import_electromobility_data_kwds = {}
 
-        if data_source == "oedb":
-            import_electromobility_from_oedb_14a(
-                self,
-                scenario=scenario,
-                engine=self.engine,
-                **import_electromobility_data_kwds,
-            )
-        elif data_source == "directory":
-            import_electromobility_from_dir(
-                self,
-                charging_processes_dir,
-                potential_charging_points_dir,
-                **import_electromobility_data_kwds,
-            )
-        else:
+        if "shapefile_path" not in import_electromobility_data_kwds:
             raise ValueError(
-                "Invalid input for parameter 'data_source'. Possible options are "
-                "'oedb' and 'directory'."
+                "For import_electromobility_14a with data_source='oedb', "
+                "'shapefile_path' must be provided in import_electromobility_data_kwds."
             )
 
         if allocate_charging_demand_kwds is None:
             allocate_charging_demand_kwds = {}
+        
+        import_electromobility_from_oedb_14a(
+            self,
+            scenario=scenario,
+            engine=self.engine,
+            **import_electromobility_data_kwds,
+        )
 
-        distribute_charging_demand(self, **allocate_charging_demand_kwds)
+        distribute_charging_demand_14a(self, **allocate_charging_demand_kwds)
         
         integrate_charging_parks_14a(self)
 
