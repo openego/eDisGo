@@ -1370,3 +1370,241 @@ if __name__ == "__main__":
     edisgo = main()
 """
 
+
+# ============================================================================
+# TEMPORARY TEST FOR EV FUNCTIONS
+# ============================================================================
+GRID_BASE_PATH = "/home/paul/eDisGo/examples/30879"
+EXPORT_DIR = Path("/home/paul/eDisGo/examples/test_ev_exports")
+EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Load grid
+print("\n1. Loading ding0 grid...")
+edisgo = EDisGo(ding0_grid=GRID_BASE_PATH, legacy_ding0_grids=False)
+
+# Set timeindex
+timeindex = pd.date_range("2035-01-15 00:00:00", periods=24*7, freq="h")
+edisgo.set_timeindex(timeindex)
+
+# Import generators
+print("2. Importing generators...")
+scenario = "eGon2035"
+edisgo.import_generators(generator_scenario=scenario)
+
+# ============================================================================
+# EV PART
+# ============================================================================
+# Import + distribute + integrate together
+edisgo.import_electromobility(scenario=scenario)
+
+# Apply charging strategy (writes timeseries for the integrated CP load IDs from eDisGo)
+edisgo.apply_charging_strategy(strategy="dumb")
+
+# ============================================================================
+# Checks
+# ============================================================================
+print("\n3. Checking imported EV data...")
+
+# Charging points
+cp_df = edisgo.topology.charging_points_df.copy()
+print("Charging points shape:", cp_df.shape)
+print(cp_df.head())
+
+# Charging processes
+cp_process_df = edisgo.electromobility.charging_processes_df.copy()
+print("Charging processes shape:", cp_process_df.shape)
+print(cp_process_df.head())
+
+# Charging point time series
+loads_df = edisgo.timeseries.loads_active_power.copy()
+print("Loads active power shape:", loads_df.shape)
+print(loads_df.head())
+
+# ============================================================================
+# Export charging point time series
+# ============================================================================
+print("\n5. Exporting charging point time series...")
+
+timeseries_csv = EXPORT_DIR / "charging_points_timeseries.csv"
+loads_df.to_csv(timeseries_csv, index=True)
+
+print(f"Charging point time series exported to: {timeseries_csv}")
+
+# Optional: export only 5 sample charging points
+sample_cols = loads_df.columns[:10]
+df_sample = loads_df[sample_cols]
+
+sample_csv = EXPORT_DIR / "charging_points_timeseries_sample_5.csv"
+df_sample.to_csv(sample_csv, index=True)
+
+print(f"Sample 5 charging point time series exported to: {sample_csv}")
+
+# ============================================================================
+# Show full output for 5 charging points and plot
+# ============================================================================
+print("\n6. Full output for 5 charging points...")
+# with pd.option_context(
+#     "display.max_rows", None,
+#     "display.max_columns", None,
+#     "display.width", None
+# ):
+#     print(df_sample)
+
+# Plot 5 charging point time series
+df_sample.plot(figsize=(12, 5))
+plt.title("Charging profiles (5 sample CPs)")
+plt.ylabel("Power")
+plt.xlabel("Time")
+plt.tight_layout()
+plt.show()
+
+# ============================================================================
+# Export shp files of whole grid including charging points
+# ============================================================================
+from pathlib import Path
+import pandas as pd
+from shapely.geometry import LineString
+
+EXPORT_DIR = Path("/home/paul/eDisGo/examples/test_ev_exports/network_shp")
+EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Helper: detect coordinate columns in buses_df
+def find_xy_columns(df):
+    candidates_x = ["x", "X", "lon", "longitude"]
+    candidates_y = ["y", "Y", "lat", "latitude"]
+
+    x_col = next((c for c in candidates_x if c in df.columns), None)
+    y_col = next((c for c in candidates_y if c in df.columns), None)
+
+    if x_col is None or y_col is None:
+        raise ValueError(
+            f"Could not find coordinate columns in buses_df. Columns are: {list(df.columns)}"
+        )
+    return x_col, y_col
+
+# Base topology tables
+buses_df = edisgo.topology.buses_df.copy()
+lines_df = edisgo.topology.lines_df.copy()
+loads_df = edisgo.topology.loads_df.copy()
+generators_df = edisgo.topology.generators_df.copy()
+transformers_df = edisgo.topology.transformers_df.copy()
+
+x_col, y_col = find_xy_columns(buses_df)
+
+# Optional: set CRS
+# Replace with the correct CRS of your ding0 grid if you know it
+CRS = "EPSG:4326"
+
+# 1) Buses -> Point shapefile
+buses_export = buses_df.reset_index().rename(columns={"index": "bus_id"})
+buses_gdf = gpd.GeoDataFrame(
+    buses_export,
+    geometry=gpd.points_from_xy(buses_export[x_col], buses_export[y_col]),
+    crs=CRS,
+)
+buses_gdf.to_file(EXPORT_DIR / "buses.shp", driver="ESRI Shapefile")
+
+# 2) Loads -> Point shapefile (including EV charging points)
+if "bus" in loads_df.columns:
+    loads_export = loads_df.reset_index().rename(columns={"index": "load_id"})
+    loads_export = loads_export.merge(
+        buses_df[[x_col, y_col]],
+        left_on="bus",
+        right_index=True,
+        how="left"
+    )
+    loads_gdf = gpd.GeoDataFrame(
+        loads_export,
+        geometry=gpd.points_from_xy(loads_export[x_col], loads_export[y_col]),
+        crs=CRS,
+    )
+    loads_gdf.to_file(EXPORT_DIR / "loads.shp", driver="ESRI Shapefile")
+
+# 3) Charging points only -> Point shapefile
+cp_df = edisgo.topology.charging_points_df.copy()
+if "bus" in cp_df.columns:
+    cp_export = cp_df.reset_index().rename(columns={"index": "charging_point_id"})
+    cp_export = cp_export.merge(
+        buses_df[[x_col, y_col]],
+        left_on="bus",
+        right_index=True,
+        how="left"
+    )
+    cp_gdf = gpd.GeoDataFrame(
+        cp_export,
+        geometry=gpd.points_from_xy(cp_export[x_col], cp_export[y_col]),
+        crs=CRS,
+    )
+    cp_gdf.to_file(EXPORT_DIR / "charging_points.shp", driver="ESRI Shapefile")
+else:
+    # fallback: if charging_points_df already has geometry
+    if "geometry" in cp_df.columns:
+        cp_gdf = gpd.GeoDataFrame(cp_df.reset_index(), geometry="geometry", crs=CRS)
+        cp_gdf.to_file(EXPORT_DIR / "charging_points.shp", driver="ESRI Shapefile")
+
+# 4) Generators -> Point shapefile
+if "bus" in generators_df.columns:
+    gen_export = generators_df.reset_index().rename(columns={"index": "generator_id"})
+    gen_export = gen_export.merge(
+        buses_df[[x_col, y_col]],
+        left_on="bus",
+        right_index=True,
+        how="left"
+    )
+    gen_gdf = gpd.GeoDataFrame(
+        gen_export,
+        geometry=gpd.points_from_xy(gen_export[x_col], gen_export[y_col]),
+        crs=CRS,
+    )
+    gen_gdf.to_file(EXPORT_DIR / "generators.shp", driver="ESRI Shapefile")
+
+# 5) Lines -> LineString shapefile
+required_line_cols = {"bus0", "bus1"}
+if required_line_cols.issubset(lines_df.columns):
+    line_records = []
+    for line_id, row in lines_df.iterrows():
+        bus0 = row["bus0"]
+        bus1 = row["bus1"]
+
+        if bus0 in buses_df.index and bus1 in buses_df.index:
+            x0, y0 = buses_df.loc[bus0, [x_col, y_col]]
+            x1, y1 = buses_df.loc[bus1, [x_col, y_col]]
+
+            geom = LineString([(x0, y0), (x1, y1)])
+            rec = row.to_dict()
+            rec["line_id"] = line_id
+            rec["geometry"] = geom
+            line_records.append(rec)
+
+    lines_gdf = gpd.GeoDataFrame(line_records, geometry="geometry", crs=CRS)
+    lines_gdf.to_file(EXPORT_DIR / "lines.shp", driver="ESRI Shapefile")
+
+# 6) Transformers -> simple connection lines between buses
+# Adjust column names if your dataframe uses different ones
+possible_hv_cols = ["bus0", "hv_bus", "bus_hv"]
+possible_lv_cols = ["bus1", "lv_bus", "bus_lv"]
+
+hv_col = next((c for c in possible_hv_cols if c in transformers_df.columns), None)
+lv_col = next((c for c in possible_lv_cols if c in transformers_df.columns), None)
+
+if hv_col and lv_col:
+    trafo_records = []
+    for trafo_id, row in transformers_df.iterrows():
+        bus_hv = row[hv_col]
+        bus_lv = row[lv_col]
+
+        if bus_hv in buses_df.index and bus_lv in buses_df.index:
+            x0, y0 = buses_df.loc[bus_hv, [x_col, y_col]]
+            x1, y1 = buses_df.loc[bus_lv, [x_col, y_col]]
+
+            geom = LineString([(x0, y0), (x1, y1)])
+            rec = row.to_dict()
+            rec["transformer_id"] = trafo_id
+            rec["geometry"] = geom
+            trafo_records.append(rec)
+
+    if trafo_records:
+        trafos_gdf = gpd.GeoDataFrame(trafo_records, geometry="geometry", crs=CRS)
+        trafos_gdf.to_file(EXPORT_DIR / "transformers.shp", driver="ESRI Shapefile")
+
+print(f"Shapefiles exported to: {EXPORT_DIR}")
