@@ -520,6 +520,16 @@ def distribute_charging_demand(edisgo_obj, **kwargs):
     distribute_private_charging_demand(edisgo_obj)
 
     distribute_public_charging_demand(edisgo_obj, **kwargs)
+    
+    
+def distribute_charging_demand_14a(edisgo_obj, **kwargs):
+    """
+    14a variant of distribute_charging_demand.
+
+    """
+    distribute_private_charging_demand_14a(edisgo_obj)
+
+    distribute_public_charging_demand_14a(edisgo_obj, **kwargs)
 
 
 def get_weights_df(edisgo_obj, potential_charging_park_indices, **kwargs):
@@ -948,6 +958,134 @@ def distribute_private_charging_demand(edisgo_obj):
             raise ValueError(f"Destination {destination} is unknown.")
 
 
+def distribute_private_charging_demand_14a(edisgo_obj):
+    """
+    14a variant of distribute_charging_demand.
+
+    """
+    try:
+        rng = default_rng(seed=edisgo_obj.topology.id)
+    except Exception:
+        rng = None
+
+    private_charging_df = edisgo_obj.electromobility.charging_processes_df.loc[
+        (edisgo_obj.electromobility.charging_processes_df.chargingdemand_kWh > 0)
+        & edisgo_obj.electromobility.charging_processes_df.use_case.isin(
+            ["home", "work"]
+        )
+    ]
+
+    charging_point_id = 0
+
+    user_centric_weights_df = get_weights_df(
+        edisgo_obj, edisgo_obj.electromobility.potential_charging_parks_gdf.index
+    )
+
+    designated_charging_point_capacity_df = pd.DataFrame(
+        index=user_centric_weights_df.index,
+        columns=["designated_charging_point_capacity"],
+        data=0.0,
+        dtype=float,
+    )
+
+    for destination in private_charging_df.destination.sort_values().unique():
+        private_charging_destination_df = private_charging_df.loc[
+            private_charging_df.destination == destination
+        ]
+
+        use_case = PRIVATE_DESTINATIONS[destination]
+
+        if use_case == "work":
+            potential_charging_park_indices = (
+                edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
+                    edisgo_obj.electromobility.potential_charging_parks_gdf.use_case
+                    == use_case
+                ].index
+            )
+
+            for car_id in private_charging_destination_df.car_id.sort_values().unique():
+                weights = combine_weights(
+                    potential_charging_park_indices,
+                    designated_charging_point_capacity_df,
+                    user_centric_weights_df,
+                )
+
+                charging_park_id = weighted_random_choice(
+                    edisgo_obj,
+                    potential_charging_park_indices,
+                    car_id,
+                    destination,
+                    charging_point_id,
+                    weights,
+                    rng=rng,
+                )
+
+                charging_capacity = (
+                    private_charging_destination_df.loc[
+                        (private_charging_destination_df.car_id == car_id)
+                        & (private_charging_destination_df.destination == "0_work")
+                    ].nominal_charging_capacity_kW.iat[0]
+                    / edisgo_obj.electromobility.eta_charging_points
+                )
+
+                designated_charging_point_capacity_df.at[
+                    charging_park_id, "designated_charging_point_capacity"
+                ] += charging_capacity
+
+                charging_point_id += 1
+
+        elif use_case == "home":
+            for ags in private_charging_destination_df.ags.sort_values().unique():
+                private_charging_ags_df = private_charging_destination_df.loc[
+                    private_charging_destination_df.ags == ags
+                ]
+
+                # fmt: off
+                potential_charging_park_indices = edisgo_obj.electromobility.\
+                    potential_charging_parks_gdf.loc[
+                        (
+                            edisgo_obj.electromobility.potential_charging_parks_gdf.ags
+                            == ags
+                        )
+                        & (
+                            edisgo_obj.electromobility.potential_charging_parks_gdf.
+                            use_case == use_case
+                        )
+                    ].index
+                # fmt: on
+
+                for car_id in private_charging_ags_df.car_id.sort_values().unique():
+                    weights = combine_weights(
+                        potential_charging_park_indices,
+                        designated_charging_point_capacity_df,
+                        user_centric_weights_df,
+                    )
+
+                    charging_park_id = weighted_random_choice( #changed14a
+                        edisgo_obj,
+                        potential_charging_park_indices,
+                        car_id,
+                        destination,
+                        charging_point_id,
+                        weights,
+                        rng=rng,
+                    )
+
+                    charging_capacity = private_charging_destination_df.loc[
+                        (private_charging_destination_df.car_id == car_id)
+                        & (private_charging_destination_df.destination == "6_home")
+                    ].nominal_charging_capacity_kW.iat[0]
+
+                    designated_charging_point_capacity_df.at[
+                        charging_park_id, "designated_charging_point_capacity"
+                    ] += charging_capacity
+
+                    charging_point_id += 1
+
+        else:
+            raise ValueError(f"Destination {destination} is unknown.")
+
+
 def distribute_public_charging_demand(edisgo_obj, **kwargs):
     """
     Distributes all public charging processes. For each process it is
@@ -969,6 +1107,149 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
         ascending=[True, True],
     )
 
+    try:
+        rng = default_rng(seed=edisgo_obj.topology.id)
+    except Exception:
+        rng = default_rng(seed=1)
+
+    available_charging_points_df = pd.DataFrame(
+        columns=COLUMNS["available_charging_points_df"]
+    )
+
+    grid_and_user_centric_weights_df = get_weights_df(
+        edisgo_obj,
+        edisgo_obj.electromobility.potential_charging_parks_gdf.index,
+        **kwargs,
+    )
+
+    designated_charging_point_capacity_df = pd.DataFrame(
+        index=grid_and_user_centric_weights_df.index,
+        columns=["designated_charging_point_capacity"],
+        data=0.0,
+        dtype=float,
+    )
+
+    columns = [
+        "destination",
+        "use_case",
+        "park_start_timesteps",
+        "park_end_timesteps",
+        "nominal_charging_capacity_kW",
+    ]
+
+    for (
+        idx,
+        destination,
+        use_case,
+        park_start_timesteps,
+        park_end_timesteps,
+        nominal_charging_capacity_kW,
+    ) in public_charging_df[columns].itertuples():
+        matching_charging_points_df = available_charging_points_df.loc[
+            (available_charging_points_df.park_end_timesteps < park_start_timesteps)
+            & (
+                available_charging_points_df.nominal_charging_capacity_kW.round(1)
+                == round(nominal_charging_capacity_kW, 1)
+            )
+        ]
+
+        if len(matching_charging_points_df) > 0:
+            potential_charging_park_indices = matching_charging_points_df.index
+
+            weights = normalize(
+                grid_and_user_centric_weights_df.loc[
+                    matching_charging_points_df.charging_park_id
+                ]
+            )
+
+            charging_point_s = matching_charging_points_df.loc[
+                rng.choice(a=potential_charging_park_indices, p=weights)
+            ]
+
+            edisgo_obj.electromobility.charging_processes_df.at[
+                idx, "charging_park_id"
+            ] = charging_point_s["charging_park_id"]
+
+            edisgo_obj.electromobility.charging_processes_df.at[
+                idx, "charging_point_id"
+            ] = charging_point_s.name
+
+            available_charging_points_df.at[
+                charging_point_s.name, "park_end_timesteps"
+            ] = park_end_timesteps
+
+        else:
+            potential_charging_park_indices = (
+                edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
+                    (
+                        edisgo_obj.electromobility.potential_charging_parks_gdf.use_case
+                        == use_case
+                    )
+                ].index
+            )
+
+            weights = combine_weights(
+                potential_charging_park_indices,
+                designated_charging_point_capacity_df,
+                grid_and_user_centric_weights_df,
+            )
+
+            charging_park_id = rng.choice(
+                a=potential_charging_park_indices,
+                p=weights,
+            )
+
+            # fmt: off
+            charging_point_id = (
+                edisgo_obj.electromobility.charging_processes_df.charging_point_id
+                .max()
+                + 1
+            )
+            # fmt: on
+
+            if charging_point_id != charging_point_id:
+                charging_point_id = 0
+
+            edisgo_obj.electromobility.charging_processes_df.at[
+                idx, "charging_park_id"
+            ] = charging_park_id
+
+            edisgo_obj.electromobility.charging_processes_df.at[
+                idx, "charging_point_id"
+            ] = charging_point_id
+
+            available_charging_points_df.loc[charging_point_id] = (
+                edisgo_obj.electromobility.charging_processes_df.loc[
+                    idx, available_charging_points_df.columns
+                ].tolist()
+            )
+
+            designated_charging_point_capacity_df.at[
+                charging_park_id, "designated_charging_point_capacity"
+            ] += nominal_charging_capacity_kW
+
+
+def distribute_public_charging_demand_14a(edisgo_obj, **kwargs): #CHANGED14a
+    """
+    14a variant of distribute_pubic_charging_demand.
+    
+    """
+    #bessere sortierung für reproduzierbarkeit
+    public_charging_df = edisgo_obj.electromobility.charging_processes_df.loc[
+        (edisgo_obj.electromobility.charging_processes_df.chargingdemand_kWh > 0)
+        & edisgo_obj.electromobility.charging_processes_df.use_case.isin(
+            ["public", "hpc"]
+        )
+    ].sort_values(
+        by=[
+            "park_start_timesteps",
+            "park_end_timesteps",
+            "nominal_charging_capacity_kW",
+            "car_id",
+        ],
+        ascending=[True, True, True, True],
+    )
+        
     try:
         rng = default_rng(seed=edisgo_obj.topology.id)
     except Exception:
@@ -1147,7 +1428,99 @@ def integrate_charging_parks(edisgo_obj):
         data=edisgo_ids,
         index=charging_park_ids,
     )
+    
 
+def integrate_charging_parks_14a(edisgo_obj):
+    """
+    14a variant of integrate_charging_parks.
+    
+    """
+    import time
+    from collections import defaultdict
+
+    charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
+    designated_charging_parks = [
+        cp
+        for cp in charging_parks
+        if (cp.designated_charging_point_capacity > 0) and cp.within_grid
+    ]
+
+    charging_park_ids = []
+    edisgo_ids = []
+    comp_type = "charging_point"
+
+    stats = {
+        "integrate_component_based_on_geolocation_14a": {"count": 0, "total_time": 0.0},
+        "parks": {"count": 0, "total_time": 0.0},
+    }
+    voltage_level_counter = defaultdict(int)
+
+    print("\n\n=========== START INTEGRATING CHARGING PARKS (_14a) ===========\n")
+    print(f"Designated charging parks: {len(designated_charging_parks)}\n")
+
+    total_start = time.perf_counter()
+
+    for i, cp in enumerate(designated_charging_parks, start=1):
+        park_start = time.perf_counter()
+        try:
+            voltage_level_counter[cp.voltage_level] += 1 if hasattr(cp, "voltage_level") else 0
+
+            t0 = time.perf_counter()
+            edisgo_id = edisgo_obj.integrate_component_based_on_geolocation_14a(
+                comp_type=comp_type,
+                geolocation=cp.geometry,
+                sector=cp.use_case,
+                add_ts=False,
+                p_set=cp.grid_connection_capacity,
+            )
+            dt_integrate = time.perf_counter() - t0
+
+            stats["integrate_component_based_on_geolocation_14a"]["count"] += 1
+            stats["integrate_component_based_on_geolocation_14a"]["total_time"] += dt_integrate
+
+            park_dt = time.perf_counter() - park_start
+            stats["parks"]["count"] += 1
+            stats["parks"]["total_time"] += park_dt
+
+            if edisgo_id is None:
+                continue
+
+            charging_park_ids.append(cp.id)
+            edisgo_ids.append(edisgo_id)
+
+            if i % 500 == 0:
+                avg_park = stats["parks"]["total_time"] / stats["parks"]["count"]
+                print(f"[{i:>5}/{len(designated_charging_parks)}] last={park_dt:8.4f}s | avg={avg_park:8.4f}s")
+
+        except Exception as e:
+            print("\n!!!!!!!!!!!!!! FAILED PARK !!!!!!!!!!!!!!")
+            print("Park ID:                        ", cp.id)
+            print("Grid connection capacity [MVA]: ", cp.grid_connection_capacity)
+            print("Geometry:                       ", cp.geometry)
+            print("Exception:                      ", e)
+            print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
+            raise
+
+    total_dt = time.perf_counter() - total_start
+
+    print("\n=========== FINISHED INTEGRATING CHARGING PARKS (_14a) ===========\n")
+
+    edisgo_obj.electromobility.integrated_charging_parks_df = pd.DataFrame(
+        columns=COLUMNS["integrated_charging_parks_df"],
+        data=edisgo_ids,
+        index=charging_park_ids,
+    )
+    
+    ### temp begin
+    print("successful returned ids:", len(edisgo_ids))
+    print("unique returned ids:", len(set(edisgo_ids)))
+    print("none returns:", stats["integrate_component_based_on_geolocation_14a"]["count"] - len(edisgo_ids))
+    ### temp end
+    
+    if stats["parks"]["count"] > 0:
+        print(f"Total parks: {stats['parks']['count']}")
+        print(f"Total time: {total_dt:.4f}s")
+        print(f"Avg park:   {stats['parks']['total_time'] / stats['parks']['count']:.6f}s")
 
 def import_electromobility_from_oedb(
     edisgo_obj: EDisGo,
@@ -1196,6 +1569,40 @@ def import_electromobility_from_oedb(
         )
     )
 
+
+def import_electromobility_from_oedb_14a(
+    edisgo_obj: EDisGo,
+    scenario: str,
+    engine: Engine,
+    shapefile_path: str,
+    **kwargs,
+):
+    """
+    14a variant of import_electromobility_from_oedb.
+
+    """
+    edisgo_obj.electromobility.charging_processes_df = charging_processes_from_oedb_14a(
+        edisgo_obj=edisgo_obj, 
+        engine=engine, 
+        scenario=scenario, 
+        shapefile_path=shapefile_path,
+        **kwargs
+    )
+    edisgo_obj.electromobility.simbev_config_df = simbev_config_from_oedb(
+        scenario=scenario, engine=engine
+    )
+    potential_charging_parks_gdf = potential_charging_parks_from_oedb_14a(
+        edisgo_obj=edisgo_obj, 
+        engine=engine, 
+        shapefile_path=shapefile_path,
+    )
+    edisgo_obj.electromobility.potential_charging_parks_gdf = (
+        assure_minimum_potential_charging_parks(
+            edisgo_obj=edisgo_obj,
+            potential_charging_parks_gdf=potential_charging_parks_gdf,
+            **kwargs,
+        )
+    )
 
 def simbev_config_from_oedb(
     scenario: str,
@@ -1283,6 +1690,77 @@ def potential_charging_parks_from_oedb(
         ).to_crs(crs)
 
     return gdf.assign(ags=0)
+
+
+def potential_charging_parks_from_oedb_14a( #CHANGED#14a
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    shapefile_path: str | None = None,
+):
+    """
+    14a variant of potential_charging_parks_from_oedb.
+
+    """
+    from sqlalchemy import func
+
+    if shapefile_path is None:
+        raise ValueError("shapefile_path must be provided for spatial filtering.")
+    
+    config = Config()
+    (egon_emob_charging_infrastructure,) = config.import_tables_from_oep(
+        engine, ["egon_emob_charging_infrastructure"], "grid"
+    )
+
+    crs = edisgo_obj.topology.grid_district["srid"]
+
+    # ---- Load and prepare shapefile geometry ----
+    local_shape = gpd.read_file(shapefile_path)
+
+    with session_scope_egon_data(engine) as session:
+        srid = get_srid_of_db_table(session, egon_emob_charging_infrastructure.geometry)
+
+        # Reproject shapefile to DB CRS
+        local_shape = local_shape.to_crs(f"EPSG:{srid}")
+        shape_union = local_shape.unary_union
+        shape_wkt = shape_union.wkt
+
+        # ---- Spatial filter happens HERE in PostGIS ----
+        query = session.query(
+            egon_emob_charging_infrastructure.cp_id,
+            egon_emob_charging_infrastructure.use_case,
+            egon_emob_charging_infrastructure.weight.label("user_centric_weight"),
+            egon_emob_charging_infrastructure.mv_grid_id,
+            egon_emob_charging_infrastructure.geometry.label("geom"),
+        ).filter(
+            # func.ST_Intersects(                               #CHNAGED14a
+            #     egon_emob_charging_infrastructure.geometry,
+            #     func.ST_GeomFromText(shape_wkt, srid)
+            # )
+            func.ST_Within(
+                egon_emob_charging_infrastructure.geometry,
+                func.ST_GeomFromText(shape_wkt, srid)
+            )   
+        )
+
+        gdf = gpd.read_postgis(
+            sql=query.statement,
+            con=session.bind,
+            geom_col="geom",
+            crs=f"EPSG:{srid}",
+            index_col="cp_id",
+        )
+        
+        #gdf sortieren für reproduzierbarkeit
+        gdf = gdf.to_crs(crs).assign(ags=0)
+
+        gdf = gdf.sort_values(
+            by=["use_case", "mv_grid_id", "user_centric_weight"],
+            ascending=[True, True, False],
+            kind="mergesort",
+        )
+        
+    return gdf.sort_index()
+    #return gdf.to_crs(crs).assign(ags=0)
 
 
 def charging_processes_from_oedb(
@@ -1378,3 +1856,148 @@ def charging_processes_from_oedb(
         charging_park_id=np.nan,
         charging_point_id=np.nan,
     ).astype(DTYPES["charging_processes_df"])
+
+
+def charging_processes_from_oedb_14a( #CHANGED#14a
+    edisgo_obj: EDisGo,
+    engine: Engine,
+    scenario: str,
+    shapefile_path: str | None = None,
+    **kwargs
+):
+    """
+    14a variant of charging_processes_from_oedb.
+
+    """
+    if not engine:
+        engine = egon_engine()
+
+    config = Config()
+    egon_ev_mv_grid_district, egon_ev_trip = config.import_tables_from_oep(
+        engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
+    )
+
+    # ------------------------------------------------------------
+    # 1) Lade reales MV-Grid-Polygon
+    # ------------------------------------------------------------
+    if shapefile_path:
+        # Lade Parks aus OEDB
+        charging_parks = potential_charging_parks_from_oedb_14a(
+            edisgo_obj=edisgo_obj,
+            engine=engine,
+            shapefile_path=shapefile_path,
+        )
+        # Nur die mv_grid_ids der Parks innerhalb des Polygon verwenden
+        if charging_parks.empty:
+            print("WARNING: Keine Parks innerhalb des Shapefile-Netzes gefunden!")
+            mv_grid_ids_in_grid = []
+        else:
+            mv_grid_ids_in_grid = charging_parks['mv_grid_id'].unique()
+
+        print("INFO: mv_grid_ids_in_grid:", mv_grid_ids_in_grid)
+    else:
+        mv_grid_ids_in_grid = [edisgo_obj.topology.id]
+    # ------------------------------------------------------------
+    # 2) EV-Pool für die ausgewählten MV-Grids
+    # ------------------------------------------------------------
+    scenario_variation = {"eGon2035": "NEP C 2035", "eGon100RE": "Reference 2050"}
+    with session_scope_egon_data(engine) as session:
+        query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
+            egon_ev_mv_grid_district.scenario == scenario,
+            egon_ev_mv_grid_district.scenario_variation == scenario_variation[scenario],
+            egon_ev_mv_grid_district.bus_id.in_(mv_grid_ids_in_grid),
+        )
+        pool_df = pd.read_sql(sql=query.statement, con=engine)
+
+        if pool_df.empty:
+            print("WARNING: EV-Pool für die gewählten MV-Grids ist leer!")
+
+        pool = Counter(pool_df.egon_ev_pool_ev_id)
+
+    # ------------------------------------------------------------
+    # 3) Lade EV-Trips
+    # ------------------------------------------------------------
+    with session_scope_egon_data(engine) as session:
+        query = session.query(
+            egon_ev_trip.egon_ev_pool_ev_id.label("car_id"),
+            egon_ev_trip.use_case,
+            egon_ev_trip.location.label("destination"),
+            egon_ev_trip.charging_capacity_nominal.label("nominal_charging_capacity_kW"),
+            egon_ev_trip.charging_capacity_grid.label("grid_charging_capacity_kW"),
+            egon_ev_trip.charging_demand.label("chargingdemand_kWh"),
+            egon_ev_trip.park_start.label("park_start_timesteps"),
+            egon_ev_trip.park_end.label("park_end_timesteps"),
+        ).filter(
+            egon_ev_trip.scenario == scenario,
+            egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
+        )       
+        if kwargs.get("mode_parking_times", "frugal") == "frugal":
+            query = query.filter(egon_ev_trip.charging_demand > 0)
+
+        ev_trips_df = pd.read_sql(sql=query.statement, con=engine)
+        
+        #ev tips sortieren für reproduzierbarkeit
+        ev_trips_df = ev_trips_df.sort_values(
+            by=[
+                "car_id",
+                "park_start_timesteps",
+                "park_end_timesteps",
+                "use_case",
+                "destination",
+                "nominal_charging_capacity_kW",
+            ],
+            ascending=[True, True, True, True, True, True],
+            kind="mergesort",
+        ).reset_index(drop=True)
+        
+        print("INFO: Unique car_ids:", ev_trips_df.car_id.nunique())
+
+    # ------------------------------------------------------------
+    # 4) Dupliziere EVs für mehrfaches Auftreten im Pool
+    # ------------------------------------------------------------
+    df_list = []
+    last_id = 0
+    n_max = max(pool.values()) if pool else 0
+    for i in range(n_max, 0, -1):
+        evs = sorted([ev_id for ev_id, count in pool.items() if count >= i])
+        df = ev_trips_df.loc[ev_trips_df.car_id.isin(evs)].copy()
+        mapping = {ev: count + last_id for count, ev in enumerate(evs)}
+        df.car_id = df.car_id.map(mapping)
+        last_id = max(mapping.values()) + 1
+        df_list.append(df)
+
+    df = pd.concat(df_list, ignore_index=True) if df_list else pd.DataFrame()
+
+    # make sure count starts at 0
+    if not df.empty and df.park_start_timesteps.min() == 1:
+        df.loc[:, ["park_start_timesteps", "park_end_timesteps"]] -= 1
+
+    # final formatting
+    if not df.empty:
+        df = df.assign(
+            ags=0,
+            park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
+            charging_park_id=np.nan,
+            charging_point_id=np.nan,
+        ).astype(DTYPES["charging_processes_df"])
+    else:
+        df = pd.DataFrame(columns=DTYPES["charging_processes_df"].keys())
+    
+    #sortieren für reproduzierbarkeit
+    if not df.empty:
+        df = df.sort_values(
+            by=[
+                "car_id",
+                "park_start_timesteps",
+                "park_end_timesteps",
+                "use_case",
+                "destination",
+                "nominal_charging_capacity_kW",
+            ],
+            ascending=[True, True, True, True, True, True],
+            kind="mergesort",
+        ).reset_index(drop=True)
+    
+    print("INFO: Final car_ids:", df.car_id.nunique())
+
+    return df
