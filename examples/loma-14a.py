@@ -1,8 +1,6 @@
 import os
 
 from datetime import datetime
-from pathlib import Path
-
 import contextily as ctx
 import geopandas as gpd
 import imageio.v2 as imageio
@@ -13,243 +11,22 @@ import pandas as pd
 from edisgo import EDisGo
 
 
-def analyze_curtailment_results(edisgo, output_dir="results_14a"):
+def get_curtailment_data(edisgo):
     """
-    Analyze §14a curtailment results and generate statistics.
+    Return the §14a virtual generator curtailment time series.
 
-    Parameters
-    ----------
-    edisgo : EDisGo
-        EDisGo object with optimization results
-    output_dir : str
-        Directory to save results
-
-    Returns
-    -------
-    dict
-        Dictionary with analysis results
+    Returns a DataFrame of generators_active_power columns corresponding to
+    hp_14a_support and cp_14a_support virtual generators, transposed so that
+    the index is the generator name (ready for bus mapping).
     """
-    print(f"\n{'='*80}")
-    print(f"📊 Analyzing §14a Curtailment Results")
-    print(f"{'='*80}")
-
-    # Create output directory
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-    # Get curtailment data for both heat pumps and charging points
-    hp_gen_cols = [
+    gen_cols = [
         col
         for col in edisgo.timeseries.generators_active_power.columns
         if "hp_14a_support" in col
+        or "cp_14a_support" in col
+        or "charging_point_14a_support" in col
     ]
-    cp_gen_cols = [
-        col
-        for col in edisgo.timeseries.generators_active_power.columns
-        if "cp_14a_support" in col or "charging_point_14a_support" in col
-    ]
-
-    all_gen_cols = hp_gen_cols + cp_gen_cols
-
-    if len(all_gen_cols) == 0:
-        print("⚠ WARNING: No §14a virtual generators found in results!")
-        return {}
-
-    curtailment = edisgo.timeseries.generators_active_power[all_gen_cols]
-
-    # Get heat pump and charging point load data
-    heat_pumps = edisgo.topology.loads_df[
-        edisgo.topology.loads_df["type"] == "heat_pump"
-    ]
-    charging_points = edisgo.topology.loads_df[
-        edisgo.topology.loads_df["type"] == "charging_point"
-    ]
-
-    all_flexible_loads = pd.concat([heat_pumps, charging_points])
-    flexible_loads = edisgo.timeseries.loads_active_power[
-        all_flexible_loads.index
-    ]
-
-    # Separate for detailed analysis
-    hp_loads = (
-        edisgo.timeseries.loads_active_power[heat_pumps.index]
-        if len(heat_pumps) > 0
-        else pd.DataFrame()
-    )
-    cp_loads = (
-        edisgo.timeseries.loads_active_power[charging_points.index]
-        if len(charging_points) > 0
-        else pd.DataFrame()
-    )
-
-    # Calculate statistics
-    total_curtailment = curtailment.sum().sum()
-    total_flexible_load = flexible_loads.sum().sum()
-    total_hp_load = hp_loads.sum().sum() if len(hp_loads) > 0 else 0
-    total_cp_load = cp_loads.sum().sum() if len(cp_loads) > 0 else 0
-    curtailment_percentage = (
-        (total_curtailment / total_flexible_load * 100)
-        if total_flexible_load > 0
-        else 0
-    )
-
-    flexible_curtailment_total = curtailment.sum()
-    curtailed_units = flexible_curtailment_total[
-        flexible_curtailment_total > 0
-    ]
-
-    # Separate HP and CP curtailment
-    hp_curtailment_total = (
-        curtailment[hp_gen_cols].sum() if len(hp_gen_cols) > 0 else pd.Series()
-    )
-    cp_curtailment_total = (
-        curtailment[cp_gen_cols].sum() if len(cp_gen_cols) > 0 else pd.Series()
-    )
-    curtailed_hps = (
-        hp_curtailment_total[hp_curtailment_total > 0]
-        if len(hp_curtailment_total) > 0
-        else pd.Series()
-    )
-    curtailed_cps = (
-        cp_curtailment_total[cp_curtailment_total > 0]
-        if len(cp_curtailment_total) > 0
-        else pd.Series()
-    )
-
-    # Time series statistics
-    curtailment_per_timestep = curtailment.sum(axis=1)
-    max_curtailment_timestep = curtailment_per_timestep.idxmax()
-    max_curtailment_value = curtailment_per_timestep.max()
-
-    # Daily statistics
-    curtailment_daily = curtailment_per_timestep.resample("D").sum()
-
-    # Monthly statistics
-    curtailment_monthly = curtailment_per_timestep.resample("M").sum()
-
-    results = {
-        "total_curtailment_MWh": total_curtailment,
-        "total_flexible_load_MWh": total_flexible_load,
-        "total_hp_load_MWh": total_hp_load,
-        "total_cp_load_MWh": total_cp_load,
-        "curtailment_percentage": curtailment_percentage,
-        "num_virtual_gens": len(all_gen_cols),
-        "num_hp_gens": len(hp_gen_cols),
-        "num_cp_gens": len(cp_gen_cols),
-        "num_curtailed_hps": len(curtailed_hps),
-        "num_curtailed_cps": len(curtailed_cps),
-        "max_curtailment_MW": curtailment.max().max(),
-        "max_curtailment_timestep": max_curtailment_timestep,
-        "max_curtailment_value_MW": max_curtailment_value,
-        "curtailment_per_timestep": curtailment_per_timestep,
-        "curtailment_daily": curtailment_daily,
-        "curtailment_monthly": curtailment_monthly,
-        "curtailment_data": curtailment,
-        "hp_curtailment_data": (
-            curtailment[hp_gen_cols]
-            if len(hp_gen_cols) > 0
-            else pd.DataFrame()
-        ),
-        "cp_curtailment_data": (
-            curtailment[cp_gen_cols]
-            if len(cp_gen_cols) > 0
-            else pd.DataFrame()
-        ),
-        "hp_loads": hp_loads,
-        "cp_loads": cp_loads,
-        "flexible_loads": flexible_loads,
-        "hp_curtailment_total": hp_curtailment_total,
-        "cp_curtailment_total": cp_curtailment_total,
-        "curtailed_hps": curtailed_hps,
-        "curtailed_cps": curtailed_cps,
-    }
-
-    # Print summary
-    print(f"\n📈 Summary Statistics:")
-    print(
-        f"  Virtual generators: {len(all_gen_cols)} (HPs: {len(hp_gen_cols)}, CPs: {len(cp_gen_cols)})"
-    )
-    print(f"  Heat pumps curtailed: {len(curtailed_hps)} / {len(heat_pumps)}")
-    print(
-        f"  Charging points curtailed: {len(curtailed_cps)} / {len(charging_points)}"
-    )
-    print(f"  Total curtailment: {total_curtailment:.2f} MWh")
-    print(
-        f"  Total flexible load: {total_flexible_load:.2f} MWh (HP: {total_hp_load:.2f}, CP: {total_cp_load:.2f})"
-    )
-    print(f"  Curtailment ratio: {curtailment_percentage:.2f}%")
-    print(f"  Max curtailment: {curtailment.max().max():.4f} MW")
-    print(
-        f"  Max total curtailment (timestep): {max_curtailment_value:.4f} MW at {max_curtailment_timestep}"
-    )
-
-    if len(curtailed_hps) > 0:
-        print(f"\n  Top 5 curtailed heat pumps:")
-        for i, (hp, value) in enumerate(
-            curtailed_hps.sort_values(ascending=False).head().items(), 1
-        ):
-            hp_name = hp.replace("hp_14a_support_", "")
-            print(f"    {i}. {hp_name}: {value:.4f} MWh")
-
-    if len(curtailed_cps) > 0:
-        print(f"\n  Top 5 curtailed charging points:")
-        for i, (cp, value) in enumerate(
-            curtailed_cps.sort_values(ascending=False).head().items(), 1
-        ):
-            cp_name = cp.replace("cp_14a_support_", "").replace(
-                "charging_point_14a_support_", ""
-            )
-            print(f"    {i}. {cp_name}: {value:.4f} MWh")
-
-    # Save statistics to CSV
-    stats_df = pd.DataFrame(
-        {
-            "Metric": [
-                "Total Curtailment (MWh)",
-                "Total Flexible Load (MWh)",
-                "Total HP Load (MWh)",
-                "Total CP Load (MWh)",
-                "Curtailment Percentage (%)",
-                "Virtual Generators (Total)",
-                "Virtual Generators (HPs)",
-                "Virtual Generators (CPs)",
-                "Curtailed HPs",
-                "Curtailed CPs",
-                "Max Curtailment (MW)",
-                "Max Total Curtailment (MW)",
-            ],
-            "Value": [
-                f"{total_curtailment:.2f}",
-                f"{total_flexible_load:.2f}",
-                f"{total_hp_load:.2f}",
-                f"{total_cp_load:.2f}",
-                f"{curtailment_percentage:.2f}",
-                len(all_gen_cols),
-                len(hp_gen_cols),
-                len(cp_gen_cols),
-                len(curtailed_hps),
-                len(curtailed_cps),
-                f"{curtailment.max().max():.4f}",
-                f"{max_curtailment_value:.4f}",
-            ],
-        }
-    )
-    stats_df.to_csv(f"{output_dir}/summary_statistics.csv", index=False)
-    print(
-        f"\n✓ Summary statistics saved to {output_dir}/summary_statistics.csv"
-    )
-
-    # Save detailed curtailment data
-    curtailment.to_csv(f"{output_dir}/curtailment_timeseries.csv")
-    curtailment_daily.to_csv(f"{output_dir}/curtailment_daily.csv")
-    curtailment_monthly.to_csv(f"{output_dir}/curtailment_monthly.csv")
-    if len(hp_curtailment_total) > 0:
-        hp_curtailment_total.to_csv(f"{output_dir}/hp_curtailment_total.csv")
-    if len(cp_curtailment_total) > 0:
-        cp_curtailment_total.to_csv(f"{output_dir}/cp_curtailment_total.csv")
-
-    print(f"✓ Detailed data saved to {output_dir}/")
-
-    return results
+    return edisgo.timeseries.generators_active_power[gen_cols]
 
 
 def create_network_gif(
@@ -322,9 +99,7 @@ def plot_network(
     norm_buses = mcolors.Normalize(vmin=0.0, vmax=0.3)
 
     # --- (Curtailment logic and bus_sizes calculation) ---
-    curt_14a = analyze_curtailment_results(edisgo, output_dir="results_14a")[
-        "curtailment_data"
-    ].T
+    curt_14a = get_curtailment_data(edisgo).T
 
     # Clean up index names to match load names
     curt_14a["load"] = curt_14a.index
@@ -444,7 +219,7 @@ def run_optimization_14a(edisgo):
     return edisgo
 
 
-grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_model_pypsa"
+grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
 
 edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 2))
 mv_grid_geom = gpd.read_file(
