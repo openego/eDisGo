@@ -405,7 +405,8 @@ def populate_edisgo_from_pypsa_csv(
 
     # --- Storage units ------------------------------------------------- #
     stor_raw = _read(folder, "storage_units.csv")
-
+    if "control" not in stor_raw.columns:
+        stor_raw["control"] = "PQ"  # default control mode if not specified
     stor = _keep_and_rename(stor_raw, STORAGE_RENAME)
     stor["mv_grid_id"] = mv_grid_id
     topo.storage_units_df = stor
