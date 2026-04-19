@@ -295,7 +295,7 @@ edisgo.set_time_series_reactive_power_control()
 edisgo = run_optimization_14a(edisgo)
 edisgo.analyze()
 
-# ── Slack diagnosis ────────────────────────────────────────────────────────────
+# ── Slack diagnosis ──────────────────────────────────────────────────────────
 slacks = edisgo.opf_results.grid_slacks_t
 print("\n=== OPF Slack Diagnosis (v5) ===")
 for name, df in [
@@ -306,7 +306,7 @@ for name, df in [
 ]:
     total = df.abs().sum(axis=1)
     if (total > 5e-3).any():
-        print(f"  {name}: {total:.4f} MW  ← NON-ZERO")
+        print(f"  {name}: {total.sum():.4f} MW  ← NON-ZERO")
     else:
         print(f"  {name}: 0 (not used)")
 
@@ -316,11 +316,18 @@ print(f"  Min:  {v.min().min():.4f} p.u.")
 print(f"  Max:  {v.max().max():.4f} p.u.")
 viol = (v < 0.9) | (v > 1.1)
 if viol.any().any():
-    print(f"  Violations:{v.where(viol).stack().dropna().to_string()}")
+    print(f"  Violations:{viol.sum().sum()}")
     print()
 else:
     print("  No voltage violations.")
-# ── End diagnosis ──────────────────────────────────────────────────────────────
+# ── End diagnosis ────────────────────────────────────────────────────────────
+print("\n=== 14a analysis ===")
+gen = edisgo.topology.generators_df
+gen_t = edisgo.timeseries.generators_active_power
+gen_14a  = gen[gen.index.str.contains("14a")]
+gen_t_14a = gen_t.loc[:,gen_14a.index]
+print(f"Total use of 14a:{gen_t_14a.sum().sum()}")
+print("\n=== end 14a analysis ===")
 
 # Plot
 for ts in edisgo.timeseries.timeindex:
