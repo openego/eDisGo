@@ -1430,7 +1430,7 @@ def integrate_charging_parks(edisgo_obj):
     )
     
 
-def integrate_charging_parks_14a(edisgo_obj):
+def integrate_charging_parks_14a(edisgo_obj, ignore_within_grid=True):
     """
     14a variant of integrate_charging_parks.
     
@@ -1439,6 +1439,21 @@ def integrate_charging_parks_14a(edisgo_obj):
     from collections import defaultdict
 
     charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
+
+    # if ignore_within_grid:
+    #     print("[EV][WARN] Ignoring within_grid filter for potential charging parks.")
+    #     designated_charging_parks = [
+    #         cp
+    #         for cp in charging_parks
+    #         if cp.designated_charging_point_capacity > 0
+    #     ]
+    # else:
+    #     designated_charging_parks = [
+    #         cp
+    #         for cp in charging_parks
+    #         if (cp.designated_charging_point_capacity > 0) and cp.within_grid
+    #     ]
+        
     designated_charging_parks = [
         cp
         for cp in charging_parks
