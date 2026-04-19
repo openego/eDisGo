@@ -224,7 +224,7 @@ def run_optimization_14a(edisgo):
 
 grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
 
-edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 2))
+edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 23))
 mv_grid_geom = gpd.read_file(
     "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
 )
@@ -294,6 +294,33 @@ edisgo.set_time_series_reactive_power_control()
 
 edisgo = run_optimization_14a(edisgo)
 edisgo.analyze()
+
+# ── Slack diagnosis ────────────────────────────────────────────────────────────
+slacks = edisgo.opf_results.grid_slacks_t
+print("\n=== OPF Slack Diagnosis (v5) ===")
+for name, df in [
+    ("gen_nd_crt  (renewable curtailment)", slacks.gen_nd_crt),
+    ("gen_d_crt   (disp. gen curtailment)", slacks.gen_d_crt),
+    ("load_shed   (load shedding)",         slacks.load_shedding),
+    ("hp_shed     (HP load shedding)",      slacks.hp_load_shedding),
+]:
+    total = df.abs().sum(axis=1)
+    if (total > 5e-3).any():
+        print(f"  {name}: {total:.4f} MW  ← NON-ZERO")
+    else:
+        print(f"  {name}: 0 (not used)")
+
+print("\n=== Voltage after OPF (edisgo.results.v_res) ===")
+v = edisgo.results.v_res
+print(f"  Min:  {v.min().min():.4f} p.u.")
+print(f"  Max:  {v.max().max():.4f} p.u.")
+viol = (v < 0.9) | (v > 1.1)
+if viol.any().any():
+    print(f"  Violations:{v.where(viol).stack().dropna().to_string()}")
+    print()
+else:
+    print("  No voltage violations.")
+# ── End diagnosis ──────────────────────────────────────────────────────────────
 
 # Plot
 for ts in edisgo.timeseries.timeindex:
