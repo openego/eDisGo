@@ -622,7 +622,7 @@ def from_powermodels(
                 for t in timesteps
             ]
         results = pd.DataFrame(index=timesteps, columns=names, data=data)
-        if (flex == "gen_nd") & (pm["nw"]["1"]["opf_version"] in [3, 4]):
+        if (flex == "gen_nd") & (pm["nw"]["1"]["opf_version"] in [2, 3, 4, 5]):
             edisgo_object.timeseries._generators_active_power.loc[:, names] = (
                 edisgo_object.timeseries.generators_active_power.loc[:, names].values
                 - results[names].values
