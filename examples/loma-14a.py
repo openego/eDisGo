@@ -92,11 +92,14 @@ def plot_network(
     norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
 
     # 2. Prepare bus data
-    # Calculating voltage deviation from nominal (1.0 p.u.)
-    bus_colors = (1 - edisgo.results.v_res.T[snapshot]).apply(abs)
+    # Actual voltage in p.u.; diverging norm centered at nominal 1.0 p.u.
+    bus_colors = edisgo.results.v_res.T[snapshot]
 
-    # Voltage limits (adjust vmin/vmax based on your bus_colors results)
-    norm_buses = mcolors.Normalize(vmin=0.0, vmax=0.3)
+    # TwoSlopeNorm: purple = undervoltage (<1), blue = nominal (1), red = overvoltage (>1)
+    norm_buses = mcolors.TwoSlopeNorm(vmin=0.9, vcenter=1.0, vmax=1.1)
+    voltage_cmap = mcolors.LinearSegmentedColormap.from_list(
+        "voltage", ["purple", "blue", "red"]
+    )
 
     # --- (Curtailment logic and bus_sizes calculation) ---
     curt_14a = get_curtailment_data(edisgo).T
@@ -129,7 +132,7 @@ def plot_network(
         bus_colors=bus_colors,
         bus_alpha=1,
         bus_sizes=bus_sizes,
-        bus_cmap="jet",
+        bus_cmap=voltage_cmap,
         bus_norm=norm_buses,
         line_colors=loading_relative,
         line_widths=1.6,
@@ -156,7 +159,7 @@ def plot_network(
     cb_lines.set_label("Line Loading [relative]", fontsize=8)
 
     # --- COLORBAR 2: BUS VOLTAGE (RIGHT SIDE) ---
-    sm_buses = plt.cm.ScalarMappable(cmap="jet", norm=norm_buses)
+    sm_buses = plt.cm.ScalarMappable(cmap=voltage_cmap, norm=norm_buses)
     # Default location is right
     cb_buses = fig.colorbar(
         sm_buses,
@@ -166,7 +169,7 @@ def plot_network(
         pad=0.02,
         aspect=20,
     )
-    cb_buses.set_label("Voltage Deviation |1 - V| [p.u.]", fontsize=8)
+    cb_buses.set_label("Bus Voltage [p.u.]  — blue: under, yellow: nominal, red: over", fontsize=8)
 
     if save:
         os.makedirs("plots", exist_ok=True)
