@@ -119,17 +119,17 @@ function objective_min_losses_14a_only(pm::AbstractBFModelEdisgo)
     # §14a virtual generators for HPs and CPs
     p_hp14a = Dict(n => get(PowerModels.var(pm, n), :p_hp14a, Dict()) for n in nws)
     p_cp14a = Dict(n => get(PowerModels.var(pm, n), :p_cp14a, Dict()) for n in nws)
+    pgc = Dict(n => PowerModels.var(pm, n, :pgc) for n in nws)
 
-    factor_14a = 1e12  # EXTREME penalty - §14a only as last option
+    factor_14a = 1e12    # §14a curtailment: preferred flexibility, high penalty to minimise use
+    factor_pgc  = 1e13   # renewable curtailment: last resort, penalised above §14a
     println("factor_14a = ", factor_14a)
-    factor_feasibility = 1e8  # Extreme penalty - slacks should be zero in normal operation
+    println("factor_pgc  = ", factor_pgc)
 
     return JuMP.@objective(pm.model, Min,
-        # Primary: minimize line losses
-        # 0.4 * sum(sum(ccm[n][b] * r[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)
-        # Secondary: minimize §14a curtailment usage
         + factor_14a * sum(sum(p_hp14a[n][i] for i in keys(p_hp14a[n])) for n in nws)  # §14a HP curtailment
         + factor_14a * sum(sum(p_cp14a[n][i] for i in keys(p_cp14a[n])) for n in nws)  # §14a CP curtailment
+        + factor_pgc  * sum(sum(pgc[n][i]    for i in keys(PowerModels.ref(pm, 1, :gen_nd))) for n in nws)  # renewable curtailment (last resort)
     )
 end
 

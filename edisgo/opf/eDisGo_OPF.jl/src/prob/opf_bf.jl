@@ -44,8 +44,9 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
                 PowerModels.var(pm, n)[:phs] = Dict{Int, JuMP.VariableRef}()
                 PowerModels.var(pm, n)[:pdsm] = Dict{Int, JuMP.VariableRef}()
 
-                # Fix ALL feasibility slacks to 0: if §14a alone is not sufficient,
-                # the model must become infeasible (no hidden load shedding allowed)
+                # Fix load/HP/CP/gen feasibility slacks to 0: no hidden shedding allowed.
+                # pgc (renewable curtailment) is left free so overvoltage from excess
+                # generation can be resolved when §14a alone is insufficient.
                 for i in PowerModels.ids(pm, :load, nw=n)
                     JuMP.fix(PowerModels.var(pm, n, :pds, i), 0.0; force=true)
                 end
@@ -57,9 +58,6 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
                 end
                 for i in PowerModels.ids(pm, :gen, nw=n)
                     JuMP.fix(PowerModels.var(pm, n, :pgens, i), 0.0; force=true)
-                end
-                for i in PowerModels.ids(pm, :gen_nd, nw=n)
-                    JuMP.fix(PowerModels.var(pm, n, :pgc, i), 0.0; force=true)
                 end
             else
                 eDisGo_OPF.variable_battery_storage(pm, nw=n)  # Eq. (3.11) und (3.12)
