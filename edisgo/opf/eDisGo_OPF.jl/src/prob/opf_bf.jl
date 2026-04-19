@@ -44,21 +44,9 @@ function build_mn_opf_bf_flex(pm::AbstractBFModelEdisgo)
                 PowerModels.var(pm, n)[:phs] = Dict{Int, JuMP.VariableRef}()
                 PowerModels.var(pm, n)[:pdsm] = Dict{Int, JuMP.VariableRef}()
 
-                # Fix load/HP/CP/gen feasibility slacks to 0: no hidden shedding allowed.
-                # pgc (renewable curtailment) is left free so overvoltage from excess
-                # generation can be resolved when §14a alone is insufficient.
-                for i in PowerModels.ids(pm, :load, nw=n)
-                    JuMP.fix(PowerModels.var(pm, n, :pds, i), 0.0; force=true)
-                end
-                for i in PowerModels.ids(pm, :heatpumps, nw=n)
-                    JuMP.fix(PowerModels.var(pm, n, :phps, i), 0.0; force=true)
-                end
-                for i in PowerModels.ids(pm, :electromobility, nw=n)
-                    JuMP.fix(PowerModels.var(pm, n, :pcps, i), 0.0; force=true)
-                end
-                for i in PowerModels.ids(pm, :gen, nw=n)
-                    JuMP.fix(PowerModels.var(pm, n, :pgens, i), 0.0; force=true)
-                end
+                # All slacks are left free in v5 — they carry extreme objective penalties
+                # (see objective_min_losses_14a_only) so the solver uses them only as a
+                # last resort when no generation-side or §14a action can satisfy grid limits.
             else
                 eDisGo_OPF.variable_battery_storage(pm, nw=n)  # Eq. (3.11) und (3.12)
                 eDisGo_OPF.variable_heat_storage(pm, nw=n)  # Eq. (3.24)
