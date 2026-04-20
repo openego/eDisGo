@@ -19,6 +19,8 @@ from edisgo.io.db import engine as egon_engine
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
 from edisgo.tools.config import Config
 
+from edisgo.tools.loma_tools import _get_intersecting_mv_grid_ids_from_shapefile
+
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
 
@@ -1428,9 +1430,61 @@ def integrate_charging_parks(edisgo_obj):
         data=edisgo_ids,
         index=charging_park_ids,
     )
-    
 
-def integrate_charging_parks_14a(edisgo_obj, ignore_within_grid=True):
+# Helper function for 14a functions
+# def _get_intersecting_mv_grid_ids_from_shapefile(
+#     edisgo_obj: EDisGo,
+#     engine: Engine,
+#     shapefile_path: str,
+# ):
+#     """
+#     Determine all mv_grid_ids whose charging infrastructure intersects the given shapefile.
+#     This is used as a common spatial selector for both cars and charging parks.
+#     """
+#     from sqlalchemy import func
+
+#     if shapefile_path is None:
+#         raise ValueError("shapefile_path must be provided.")
+
+#     config = Config()
+#     (egon_emob_charging_infrastructure,) = config.import_tables_from_oep(
+#         engine, ["egon_emob_charging_infrastructure"], "grid"
+#     )
+
+#     local_shape = gpd.read_file(shapefile_path)
+
+#     with session_scope_egon_data(engine) as session:
+#         srid = get_srid_of_db_table(session, egon_emob_charging_infrastructure.geometry)
+
+#         local_shape = local_shape.to_crs(f"EPSG:{srid}")
+#         shape_union = local_shape.unary_union
+#         shape_wkt = shape_union.wkt
+
+#         query = (
+#             session.query(egon_emob_charging_infrastructure.mv_grid_id)
+#             .filter(
+#                 func.ST_Intersects(
+#                     egon_emob_charging_infrastructure.geometry,
+#                     func.ST_GeomFromText(shape_wkt, srid),
+#                 )
+#             )
+#             .distinct()
+#         )
+
+#         mv_grid_ids = pd.read_sql(sql=query.statement, con=session.bind)[
+#             "mv_grid_id"
+#         ].tolist()
+
+#     mv_grid_ids = sorted(set(mv_grid_ids))
+
+#     if len(mv_grid_ids) == 0:
+#         logger.warning(
+#             "No intersecting mv_grid_ids found for shapefile %s.", shapefile_path
+#         )
+
+#     return mv_grid_ids
+
+def integrate_charging_parks_14a(edisgo_obj):
     """
     14a variant of integrate_charging_parks.
     
@@ -1439,20 +1493,6 @@ def integrate_charging_parks_14a(edisgo_obj, ignore_within_grid=True):
     from collections import defaultdict
 
     charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
-
-    # if ignore_within_grid:
-    #     print("[EV][WARN] Ignoring within_grid filter for potential charging parks.")
-    #     designated_charging_parks = [
-    #         cp
-    #         for cp in charging_parks
-    #         if cp.designated_charging_point_capacity > 0
-    #     ]
-    # else:
-    #     designated_charging_parks = [
-    #         cp
-    #         for cp in charging_parks
-    #         if (cp.designated_charging_point_capacity > 0) and cp.within_grid
-    #     ]
         
     designated_charging_parks = [
         cp
@@ -1503,7 +1543,7 @@ def integrate_charging_parks_14a(edisgo_obj, ignore_within_grid=True):
             charging_park_ids.append(cp.id)
             edisgo_ids.append(edisgo_id)
 
-            if i % 500 == 0:
+            if i % 1000 == 0:
                 avg_park = stats["parks"]["total_time"] / stats["parks"]["count"]
                 print(f"[{i:>5}/{len(designated_charging_parks)}] last={park_dt:8.4f}s | avg={avg_park:8.4f}s")
 
@@ -1526,16 +1566,9 @@ def integrate_charging_parks_14a(edisgo_obj, ignore_within_grid=True):
         index=charging_park_ids,
     )
     
-    ### temp begin
-    print("successful returned ids:", len(edisgo_ids))
-    print("unique returned ids:", len(set(edisgo_ids)))
-    print("none returns:", stats["integrate_component_based_on_geolocation_14a"]["count"] - len(edisgo_ids))
-    ### temp end
-    
     if stats["parks"]["count"] > 0:
         print(f"Total parks: {stats['parks']['count']}")
         print(f"Total time: {total_dt:.4f}s")
-        print(f"Avg park:   {stats['parks']['total_time'] / stats['parks']['count']:.6f}s")
 
 def import_electromobility_from_oedb(
     edisgo_obj: EDisGo,
@@ -1707,7 +1740,77 @@ def potential_charging_parks_from_oedb(
     return gdf.assign(ags=0)
 
 
-def potential_charging_parks_from_oedb_14a( #CHANGED#14a
+# def potential_charging_parks_from_oedb_14a( #CHANGED#14a
+#     edisgo_obj: EDisGo,
+#     engine: Engine,
+#     shapefile_path: str | None = None,
+# ):
+#     """
+#     14a variant of potential_charging_parks_from_oedb.
+
+#     """
+#     from sqlalchemy import func
+
+#     if shapefile_path is None:
+#         raise ValueError("shapefile_path must be provided for spatial filtering.")
+    
+#     config = Config()
+#     (egon_emob_charging_infrastructure,) = config.import_tables_from_oep(
+#         engine, ["egon_emob_charging_infrastructure"], "grid"
+#     )
+
+#     crs = edisgo_obj.topology.grid_district["srid"]
+
+#     # ---- Load and prepare shapefile geometry ----
+#     local_shape = gpd.read_file(shapefile_path)
+
+#     with session_scope_egon_data(engine) as session:
+#         srid = get_srid_of_db_table(session, egon_emob_charging_infrastructure.geometry)
+
+#         # Reproject shapefile to DB CRS
+#         local_shape = local_shape.to_crs(f"EPSG:{srid}")
+#         shape_union = local_shape.unary_union
+#         shape_wkt = shape_union.wkt
+
+#         # ---- Spatial filter happens HERE in PostGIS ----
+#         query = session.query(
+#             egon_emob_charging_infrastructure.cp_id,
+#             egon_emob_charging_infrastructure.use_case,
+#             egon_emob_charging_infrastructure.weight.label("user_centric_weight"),
+#             egon_emob_charging_infrastructure.mv_grid_id,
+#             egon_emob_charging_infrastructure.geometry.label("geom"),
+#         ).filter(
+#             # func.ST_Intersects(                               #CHNAGED14a
+#             #     egon_emob_charging_infrastructure.geometry,
+#             #     func.ST_GeomFromText(shape_wkt, srid)
+#             # )
+#             func.ST_Within(
+#                 egon_emob_charging_infrastructure.geometry,
+#                 func.ST_GeomFromText(shape_wkt, srid)
+#             )   
+#         )
+
+#         gdf = gpd.read_postgis(
+#             sql=query.statement,
+#             con=session.bind,
+#             geom_col="geom",
+#             crs=f"EPSG:{srid}",
+#             index_col="cp_id",
+#         )
+        
+#         #gdf sortieren für reproduzierbarkeit
+#         gdf = gdf.to_crs(crs).assign(ags=0)
+
+#         gdf = gdf.sort_values(
+#             by=["use_case", "mv_grid_id", "user_centric_weight"],
+#             ascending=[True, True, False],
+#             kind="mergesort",
+#         )
+
+#     return gdf.sort_index()
+#     #return gdf.to_crs(crs).assign(ags=0)
+
+def potential_charging_parks_from_oedb_14a(
     edisgo_obj: EDisGo,
     engine: Engine,
     shapefile_path: str | None = None,
@@ -1715,12 +1818,14 @@ def potential_charging_parks_from_oedb_14a( #CHANGED#14a
     """
     14a variant of potential_charging_parks_from_oedb.
 
+    Test variant:
+    Do NOT filter charging parks directly by shapefile geometry.
+    Instead, determine intersecting mv_grid_ids from the shapefile and then
+    load all charging parks belonging to those mv_grid_ids.
     """
-    from sqlalchemy import func
-
     if shapefile_path is None:
-        raise ValueError("shapefile_path must be provided for spatial filtering.")
-    
+        raise ValueError("shapefile_path must be provided.")
+
     config = Config()
     (egon_emob_charging_infrastructure,) = config.import_tables_from_oep(
         engine, ["egon_emob_charging_infrastructure"], "grid"
@@ -1728,18 +1833,21 @@ def potential_charging_parks_from_oedb_14a( #CHANGED#14a
 
     crs = edisgo_obj.topology.grid_district["srid"]
 
-    # ---- Load and prepare shapefile geometry ----
-    local_shape = gpd.read_file(shapefile_path)
+    mv_grid_ids_in_grid = _get_intersecting_mv_grid_ids_from_shapefile(
+        engine=engine,
+        shapefile_path=shapefile_path,
+    )
+
+    if not mv_grid_ids_in_grid:
+        return gpd.GeoDataFrame(
+            columns=["use_case", "user_centric_weight", "mv_grid_id", "geometry", "ags"],
+            geometry="geometry",
+            crs=f"EPSG:{crs}",
+        )
 
     with session_scope_egon_data(engine) as session:
         srid = get_srid_of_db_table(session, egon_emob_charging_infrastructure.geometry)
 
-        # Reproject shapefile to DB CRS
-        local_shape = local_shape.to_crs(f"EPSG:{srid}")
-        shape_union = local_shape.unary_union
-        shape_wkt = shape_union.wkt
-
-        # ---- Spatial filter happens HERE in PostGIS ----
         query = session.query(
             egon_emob_charging_infrastructure.cp_id,
             egon_emob_charging_infrastructure.use_case,
@@ -1747,14 +1855,7 @@ def potential_charging_parks_from_oedb_14a( #CHANGED#14a
             egon_emob_charging_infrastructure.mv_grid_id,
             egon_emob_charging_infrastructure.geometry.label("geom"),
         ).filter(
-            # func.ST_Intersects(                               #CHNAGED14a
-            #     egon_emob_charging_infrastructure.geometry,
-            #     func.ST_GeomFromText(shape_wkt, srid)
-            # )
-            func.ST_Within(
-                egon_emob_charging_infrastructure.geometry,
-                func.ST_GeomFromText(shape_wkt, srid)
-            )   
+            egon_emob_charging_infrastructure.mv_grid_id.in_(mv_grid_ids_in_grid)
         )
 
         gdf = gpd.read_postgis(
@@ -1764,19 +1865,22 @@ def potential_charging_parks_from_oedb_14a( #CHANGED#14a
             crs=f"EPSG:{srid}",
             index_col="cp_id",
         )
-        
-        #gdf sortieren für reproduzierbarkeit
-        gdf = gdf.to_crs(crs).assign(ags=0)
 
-        gdf = gdf.sort_values(
-            by=["use_case", "mv_grid_id", "user_centric_weight"],
-            ascending=[True, True, False],
-            kind="mergesort",
-        )
-        
+    gdf = gdf.to_crs(crs).assign(ags=0)
+
+    gdf = gdf.sort_values(
+        by=["use_case", "mv_grid_id", "user_centric_weight"],
+        ascending=[True, True, False],
+        kind="mergesort",
+    )
+
+    logger.info(
+        "Loaded %s charging parks from intersecting mv_grid_ids: %s",
+        len(gdf),
+        mv_grid_ids_in_grid,
+    )
+
     return gdf.sort_index()
-    #return gdf.to_crs(crs).assign(ags=0)
-
 
 def charging_processes_from_oedb(
     edisgo_obj: EDisGo, engine: Engine, scenario: str, **kwargs
@@ -1864,7 +1968,7 @@ def charging_processes_from_oedb(
     # make sure count starts at 0
     if df.park_start_timesteps.min() == 1:
         df.loc[:, ["park_start_timesteps", "park_end_timesteps"]] -= 1
-
+    
     return df.assign(
         ags=0,
         park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
@@ -1873,16 +1977,161 @@ def charging_processes_from_oedb(
     ).astype(DTYPES["charging_processes_df"])
 
 
-def charging_processes_from_oedb_14a( #CHANGED#14a
+# def charging_processes_from_oedb_14a( #CHANGED#14a
+#     edisgo_obj: EDisGo,
+#     engine: Engine,
+#     scenario: str,
+#     shapefile_path: str | None = None,
+#     **kwargs
+# ):
+#     """
+#     14a variant of charging_processes_from_oedb.
+
+#     """
+#     if not engine:
+#         engine = egon_engine()
+
+#     config = Config()
+#     egon_ev_mv_grid_district, egon_ev_trip = config.import_tables_from_oep(
+#         engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
+#     )
+
+#     # ------------------------------------------------------------
+#     # 1) Lade reales MV-Grid-Polygon
+#     # ------------------------------------------------------------
+#     if shapefile_path:
+#         # Lade Parks aus OEDB
+#         charging_parks = potential_charging_parks_from_oedb_14a(
+#             edisgo_obj=edisgo_obj,
+#             engine=engine,
+#             shapefile_path=shapefile_path,
+#         )
+#         # Nur die mv_grid_ids der Parks innerhalb des Polygon verwenden
+#         if charging_parks.empty:
+#             print("WARNING: Keine Parks innerhalb des Shapefile-Netzes gefunden!")
+#             mv_grid_ids_in_grid = []
+#         else:
+#             mv_grid_ids_in_grid = charging_parks['mv_grid_id'].unique()
+
+#         print("INFO: mv_grid_ids_in_grid:", mv_grid_ids_in_grid)
+#     else:
+#         mv_grid_ids_in_grid = [edisgo_obj.topology.id]
+#     # ------------------------------------------------------------
+#     # 2) EV-Pool für die ausgewählten MV-Grids
+#     # ------------------------------------------------------------
+#     scenario_variation = {"eGon2035": "NEP C 2035", "eGon100RE": "Reference 2050"}
+#     with session_scope_egon_data(engine) as session:
+#         query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
+#             egon_ev_mv_grid_district.scenario == scenario,
+#             egon_ev_mv_grid_district.scenario_variation == scenario_variation[scenario],
+#             egon_ev_mv_grid_district.bus_id.in_(mv_grid_ids_in_grid),
+#         )
+#         pool_df = pd.read_sql(sql=query.statement, con=engine)
+
+#         if pool_df.empty:
+#             print("WARNING: EV-Pool für die gewählten MV-Grids ist leer!")
+
+#         pool = Counter(pool_df.egon_ev_pool_ev_id)
+
+#     # ------------------------------------------------------------
+#     # 3) Lade EV-Trips
+#     # ------------------------------------------------------------
+#     with session_scope_egon_data(engine) as session:
+#         query = session.query(
+#             egon_ev_trip.egon_ev_pool_ev_id.label("car_id"),
+#             egon_ev_trip.use_case,
+#             egon_ev_trip.location.label("destination"),
+#             egon_ev_trip.charging_capacity_nominal.label("nominal_charging_capacity_kW"),
+#             egon_ev_trip.charging_capacity_grid.label("grid_charging_capacity_kW"),
+#             egon_ev_trip.charging_demand.label("chargingdemand_kWh"),
+#             egon_ev_trip.park_start.label("park_start_timesteps"),
+#             egon_ev_trip.park_end.label("park_end_timesteps"),
+#         ).filter(
+#             egon_ev_trip.scenario == scenario,
+#             egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
+#         )       
+#         if kwargs.get("mode_parking_times", "frugal") == "frugal":
+#             query = query.filter(egon_ev_trip.charging_demand > 0)
+
+#         ev_trips_df = pd.read_sql(sql=query.statement, con=engine)
+        
+#         #ev tips sortieren für reproduzierbarkeit
+#         ev_trips_df = ev_trips_df.sort_values(
+#             by=[
+#                 "car_id",
+#                 "park_start_timesteps",
+#                 "park_end_timesteps",
+#                 "use_case",
+#                 "destination",
+#                 "nominal_charging_capacity_kW",
+#             ],
+#             ascending=[True, True, True, True, True, True],
+#             kind="mergesort",
+#         ).reset_index(drop=True)
+        
+#         print("INFO: Unique car_ids:", ev_trips_df.car_id.nunique())
+
+#     # ------------------------------------------------------------
+#     # 4) Dupliziere EVs für mehrfaches Auftreten im Pool
+#     # ------------------------------------------------------------
+#     df_list = []
+#     last_id = 0
+#     n_max = max(pool.values()) if pool else 0
+#     for i in range(n_max, 0, -1):
+#         evs = sorted([ev_id for ev_id, count in pool.items() if count >= i])
+#         df = ev_trips_df.loc[ev_trips_df.car_id.isin(evs)].copy()
+#         mapping = {ev: count + last_id for count, ev in enumerate(evs)}
+#         df.car_id = df.car_id.map(mapping)
+#         last_id = max(mapping.values()) + 1
+#         df_list.append(df)
+
+#     df = pd.concat(df_list, ignore_index=True) if df_list else pd.DataFrame()
+
+#     # make sure count starts at 0
+#     if not df.empty and df.park_start_timesteps.min() == 1:
+#         df.loc[:, ["park_start_timesteps", "park_end_timesteps"]] -= 1
+
+#     # final formatting
+#     if not df.empty:
+#         df = df.assign(
+#             ags=0,
+#             park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
+#             charging_park_id=np.nan,
+#             charging_point_id=np.nan,
+#         ).astype(DTYPES["charging_processes_df"])
+#     else:
+#         df = pd.DataFrame(columns=DTYPES["charging_processes_df"].keys())
+    
+#     #sortieren für reproduzierbarkeit
+#     if not df.empty:
+#         df = df.sort_values(
+#             by=[
+#                 "car_id",
+#                 "park_start_timesteps",
+#                 "park_end_timesteps",
+#                 "use_case",
+#                 "destination",
+#                 "nominal_charging_capacity_kW",
+#             ],
+#             ascending=[True, True, True, True, True, True],
+#             kind="mergesort",
+#         ).reset_index(drop=True)
+    
+#     print("INFO: Final car_ids:", df.car_id.nunique())
+
+#     return df
+
+def charging_processes_from_oedb_14a(
     edisgo_obj: EDisGo,
     engine: Engine,
     scenario: str,
     shapefile_path: str | None = None,
-    **kwargs
+    **kwargs,
 ):
     """
     14a variant of charging_processes_from_oedb.
 
+    Uses the same intersecting mv_grid_ids as potential_charging_parks_from_oedb_14a.
     """
     if not engine:
         engine = egon_engine()
@@ -1892,30 +2141,17 @@ def charging_processes_from_oedb_14a( #CHANGED#14a
         engine, ["egon_ev_mv_grid_district", "egon_ev_trip"], "demand"
     )
 
-    # ------------------------------------------------------------
-    # 1) Lade reales MV-Grid-Polygon
-    # ------------------------------------------------------------
     if shapefile_path:
-        # Lade Parks aus OEDB
-        charging_parks = potential_charging_parks_from_oedb_14a(
-            edisgo_obj=edisgo_obj,
+        mv_grid_ids_in_grid = _get_intersecting_mv_grid_ids_from_shapefile(
             engine=engine,
             shapefile_path=shapefile_path,
         )
-        # Nur die mv_grid_ids der Parks innerhalb des Polygon verwenden
-        if charging_parks.empty:
-            print("WARNING: Keine Parks innerhalb des Shapefile-Netzes gefunden!")
-            mv_grid_ids_in_grid = []
-        else:
-            mv_grid_ids_in_grid = charging_parks['mv_grid_id'].unique()
-
         print("INFO: mv_grid_ids_in_grid:", mv_grid_ids_in_grid)
     else:
         mv_grid_ids_in_grid = [edisgo_obj.topology.id]
-    # ------------------------------------------------------------
-    # 2) EV-Pool für die ausgewählten MV-Grids
-    # ------------------------------------------------------------
+
     scenario_variation = {"eGon2035": "NEP C 2035", "eGon100RE": "Reference 2050"}
+
     with session_scope_egon_data(engine) as session:
         query = session.query(egon_ev_mv_grid_district.egon_ev_pool_ev_id).filter(
             egon_ev_mv_grid_district.scenario == scenario,
@@ -1929,9 +2165,6 @@ def charging_processes_from_oedb_14a( #CHANGED#14a
 
         pool = Counter(pool_df.egon_ev_pool_ev_id)
 
-    # ------------------------------------------------------------
-    # 3) Lade EV-Trips
-    # ------------------------------------------------------------
     with session_scope_egon_data(engine) as session:
         query = session.query(
             egon_ev_trip.egon_ev_pool_ev_id.label("car_id"),
@@ -1945,13 +2178,13 @@ def charging_processes_from_oedb_14a( #CHANGED#14a
         ).filter(
             egon_ev_trip.scenario == scenario,
             egon_ev_trip.egon_ev_pool_ev_id.in_(pool.keys()),
-        )       
+        )
+
         if kwargs.get("mode_parking_times", "frugal") == "frugal":
             query = query.filter(egon_ev_trip.charging_demand > 0)
 
         ev_trips_df = pd.read_sql(sql=query.statement, con=engine)
-        
-        #ev tips sortieren für reproduzierbarkeit
+
         ev_trips_df = ev_trips_df.sort_values(
             by=[
                 "car_id",
@@ -1964,15 +2197,14 @@ def charging_processes_from_oedb_14a( #CHANGED#14a
             ascending=[True, True, True, True, True, True],
             kind="mergesort",
         ).reset_index(drop=True)
-        
+
         print("INFO: Unique car_ids:", ev_trips_df.car_id.nunique())
 
-    # ------------------------------------------------------------
-    # 4) Dupliziere EVs für mehrfaches Auftreten im Pool
-    # ------------------------------------------------------------
+    # duplicate EVs that were chosen more than once from EV pool
     df_list = []
     last_id = 0
     n_max = max(pool.values()) if pool else 0
+
     for i in range(n_max, 0, -1):
         evs = sorted([ev_id for ev_id, count in pool.items() if count >= i])
         df = ev_trips_df.loc[ev_trips_df.car_id.isin(evs)].copy()
@@ -1981,38 +2213,21 @@ def charging_processes_from_oedb_14a( #CHANGED#14a
         last_id = max(mapping.values()) + 1
         df_list.append(df)
 
-    df = pd.concat(df_list, ignore_index=True) if df_list else pd.DataFrame()
+    if not df_list:
+        return pd.DataFrame(columns=COLUMNS["charging_processes_df"] + ["charging_park_id", "charging_point_id"]).astype(
+            {**DTYPES["charging_processes_df"]}
+        )
 
-    # make sure count starts at 0
-    if not df.empty and df.park_start_timesteps.min() == 1:
+    df = pd.concat(df_list, ignore_index=True)
+
+    if df.park_start_timesteps.min() == 1:
         df.loc[:, ["park_start_timesteps", "park_end_timesteps"]] -= 1
 
-    # final formatting
-    if not df.empty:
-        df = df.assign(
-            ags=0,
-            park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
-            charging_park_id=np.nan,
-            charging_point_id=np.nan,
-        ).astype(DTYPES["charging_processes_df"])
-    else:
-        df = pd.DataFrame(columns=DTYPES["charging_processes_df"].keys())
-    
-    #sortieren für reproduzierbarkeit
-    if not df.empty:
-        df = df.sort_values(
-            by=[
-                "car_id",
-                "park_start_timesteps",
-                "park_end_timesteps",
-                "use_case",
-                "destination",
-                "nominal_charging_capacity_kW",
-            ],
-            ascending=[True, True, True, True, True, True],
-            kind="mergesort",
-        ).reset_index(drop=True)
-    
     print("INFO: Final car_ids:", df.car_id.nunique())
 
-    return df
+    return df.assign(
+        ags=0,
+        park_time_timesteps=df.park_end_timesteps - df.park_start_timesteps + 1,
+        charging_park_id=np.nan,
+        charging_point_id=np.nan,
+    ).astype(DTYPES["charging_processes_df"])

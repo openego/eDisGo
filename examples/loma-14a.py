@@ -1,8 +1,6 @@
 import os
 
 from datetime import datetime
-from pathlib import Path
-
 import contextily as ctx
 import geopandas as gpd
 import imageio.v2 as imageio
@@ -13,243 +11,22 @@ import pandas as pd
 from edisgo import EDisGo
 
 
-def analyze_curtailment_results(edisgo, output_dir="results_14a"):
+def get_curtailment_data(edisgo):
     """
-    Analyze §14a curtailment results and generate statistics.
+    Return the §14a virtual generator curtailment time series.
 
-    Parameters
-    ----------
-    edisgo : EDisGo
-        EDisGo object with optimization results
-    output_dir : str
-        Directory to save results
-
-    Returns
-    -------
-    dict
-        Dictionary with analysis results
+    Returns a DataFrame of generators_active_power columns corresponding to
+    hp_14a_support and cp_14a_support virtual generators, transposed so that
+    the index is the generator name (ready for bus mapping).
     """
-    print(f"\n{'='*80}")
-    print("📊 Analyzing §14a Curtailment Results")
-    print(f"{'='*80}")
-
-    # Create output directory
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-    # Get curtailment data for both heat pumps and charging points
-    hp_gen_cols = [
+    gen_cols = [
         col
         for col in edisgo.timeseries.generators_active_power.columns
         if "hp_14a_support" in col
+        or "cp_14a_support" in col
+        or "charging_point_14a_support" in col
     ]
-    cp_gen_cols = [
-        col
-        for col in edisgo.timeseries.generators_active_power.columns
-        if "cp_14a_support" in col or "charging_point_14a_support" in col
-    ]
-
-    all_gen_cols = hp_gen_cols + cp_gen_cols
-
-    if len(all_gen_cols) == 0:
-        print("⚠ WARNING: No §14a virtual generators found in results!")
-        return {}
-
-    curtailment = edisgo.timeseries.generators_active_power[all_gen_cols]
-
-    # Get heat pump and charging point load data
-    heat_pumps = edisgo.topology.loads_df[
-        edisgo.topology.loads_df["type"] == "heat_pump"
-    ]
-    charging_points = edisgo.topology.loads_df[
-        edisgo.topology.loads_df["type"] == "charging_point"
-    ]
-
-    all_flexible_loads = pd.concat([heat_pumps, charging_points])
-    flexible_loads = edisgo.timeseries.loads_active_power[
-        all_flexible_loads.index
-    ]
-
-    # Separate for detailed analysis
-    hp_loads = (
-        edisgo.timeseries.loads_active_power[heat_pumps.index]
-        if len(heat_pumps) > 0
-        else pd.DataFrame()
-    )
-    cp_loads = (
-        edisgo.timeseries.loads_active_power[charging_points.index]
-        if len(charging_points) > 0
-        else pd.DataFrame()
-    )
-
-    # Calculate statistics
-    total_curtailment = curtailment.sum().sum()
-    total_flexible_load = flexible_loads.sum().sum()
-    total_hp_load = hp_loads.sum().sum() if len(hp_loads) > 0 else 0
-    total_cp_load = cp_loads.sum().sum() if len(cp_loads) > 0 else 0
-    curtailment_percentage = (
-        (total_curtailment / total_flexible_load * 100)
-        if total_flexible_load > 0
-        else 0
-    )
-
-    flexible_curtailment_total = curtailment.sum()
-    curtailed_units = flexible_curtailment_total[
-        flexible_curtailment_total > 0
-    ]
-
-    # Separate HP and CP curtailment
-    hp_curtailment_total = (
-        curtailment[hp_gen_cols].sum() if len(hp_gen_cols) > 0 else pd.Series()
-    )
-    cp_curtailment_total = (
-        curtailment[cp_gen_cols].sum() if len(cp_gen_cols) > 0 else pd.Series()
-    )
-    curtailed_hps = (
-        hp_curtailment_total[hp_curtailment_total > 0]
-        if len(hp_curtailment_total) > 0
-        else pd.Series()
-    )
-    curtailed_cps = (
-        cp_curtailment_total[cp_curtailment_total > 0]
-        if len(cp_curtailment_total) > 0
-        else pd.Series()
-    )
-
-    # Time series statistics
-    curtailment_per_timestep = curtailment.sum(axis=1)
-    max_curtailment_timestep = curtailment_per_timestep.idxmax()
-    max_curtailment_value = curtailment_per_timestep.max()
-
-    # Daily statistics
-    curtailment_daily = curtailment_per_timestep.resample("D").sum()
-
-    # Monthly statistics
-    curtailment_monthly = curtailment_per_timestep.resample("M").sum()
-
-    results = {
-        "total_curtailment_MWh": total_curtailment,
-        "total_flexible_load_MWh": total_flexible_load,
-        "total_hp_load_MWh": total_hp_load,
-        "total_cp_load_MWh": total_cp_load,
-        "curtailment_percentage": curtailment_percentage,
-        "num_virtual_gens": len(all_gen_cols),
-        "num_hp_gens": len(hp_gen_cols),
-        "num_cp_gens": len(cp_gen_cols),
-        "num_curtailed_hps": len(curtailed_hps),
-        "num_curtailed_cps": len(curtailed_cps),
-        "max_curtailment_MW": curtailment.max().max(),
-        "max_curtailment_timestep": max_curtailment_timestep,
-        "max_curtailment_value_MW": max_curtailment_value,
-        "curtailment_per_timestep": curtailment_per_timestep,
-        "curtailment_daily": curtailment_daily,
-        "curtailment_monthly": curtailment_monthly,
-        "curtailment_data": curtailment,
-        "hp_curtailment_data": (
-            curtailment[hp_gen_cols]
-            if len(hp_gen_cols) > 0
-            else pd.DataFrame()
-        ),
-        "cp_curtailment_data": (
-            curtailment[cp_gen_cols]
-            if len(cp_gen_cols) > 0
-            else pd.DataFrame()
-        ),
-        "hp_loads": hp_loads,
-        "cp_loads": cp_loads,
-        "flexible_loads": flexible_loads,
-        "hp_curtailment_total": hp_curtailment_total,
-        "cp_curtailment_total": cp_curtailment_total,
-        "curtailed_hps": curtailed_hps,
-        "curtailed_cps": curtailed_cps,
-    }
-
-    # Print summary
-    print("\n📈 Summary Statistics:")
-    print(
-        f"  Virtual generators: {len(all_gen_cols)} (HPs: {len(hp_gen_cols)}, CPs: {len(cp_gen_cols)})"
-    )
-    print(f"  Heat pumps curtailed: {len(curtailed_hps)} / {len(heat_pumps)}")
-    print(
-        f"  Charging points curtailed: {len(curtailed_cps)} / {len(charging_points)}"
-    )
-    print(f"  Total curtailment: {total_curtailment:.2f} MWh")
-    print(
-        f"  Total flexible load: {total_flexible_load:.2f} MWh (HP: {total_hp_load:.2f}, CP: {total_cp_load:.2f})"
-    )
-    print(f"  Curtailment ratio: {curtailment_percentage:.2f}%")
-    print(f"  Max curtailment: {curtailment.max().max():.4f} MW")
-    print(
-        f"  Max total curtailment (timestep): {max_curtailment_value:.4f} MW at {max_curtailment_timestep}"
-    )
-
-    if len(curtailed_hps) > 0:
-        print("\n  Top 5 curtailed heat pumps:")
-        for i, (hp, value) in enumerate(
-            curtailed_hps.sort_values(ascending=False).head().items(), 1
-        ):
-            hp_name = hp.replace("hp_14a_support_", "")
-            print(f"    {i}. {hp_name}: {value:.4f} MWh")
-
-    if len(curtailed_cps) > 0:
-        print("\n  Top 5 curtailed charging points:")
-        for i, (cp, value) in enumerate(
-            curtailed_cps.sort_values(ascending=False).head().items(), 1
-        ):
-            cp_name = cp.replace("cp_14a_support_", "").replace(
-                "charging_point_14a_support_", ""
-            )
-            print(f"    {i}. {cp_name}: {value:.4f} MWh")
-
-    # Save statistics to CSV
-    stats_df = pd.DataFrame(
-        {
-            "Metric": [
-                "Total Curtailment (MWh)",
-                "Total Flexible Load (MWh)",
-                "Total HP Load (MWh)",
-                "Total CP Load (MWh)",
-                "Curtailment Percentage (%)",
-                "Virtual Generators (Total)",
-                "Virtual Generators (HPs)",
-                "Virtual Generators (CPs)",
-                "Curtailed HPs",
-                "Curtailed CPs",
-                "Max Curtailment (MW)",
-                "Max Total Curtailment (MW)",
-            ],
-            "Value": [
-                f"{total_curtailment:.2f}",
-                f"{total_flexible_load:.2f}",
-                f"{total_hp_load:.2f}",
-                f"{total_cp_load:.2f}",
-                f"{curtailment_percentage:.2f}",
-                len(all_gen_cols),
-                len(hp_gen_cols),
-                len(cp_gen_cols),
-                len(curtailed_hps),
-                len(curtailed_cps),
-                f"{curtailment.max().max():.4f}",
-                f"{max_curtailment_value:.4f}",
-            ],
-        }
-    )
-    stats_df.to_csv(f"{output_dir}/summary_statistics.csv", index=False)
-    print(
-        f"\n✓ Summary statistics saved to {output_dir}/summary_statistics.csv"
-    )
-
-    # Save detailed curtailment data
-    curtailment.to_csv(f"{output_dir}/curtailment_timeseries.csv")
-    curtailment_daily.to_csv(f"{output_dir}/curtailment_daily.csv")
-    curtailment_monthly.to_csv(f"{output_dir}/curtailment_monthly.csv")
-    if len(hp_curtailment_total) > 0:
-        hp_curtailment_total.to_csv(f"{output_dir}/hp_curtailment_total.csv")
-    if len(cp_curtailment_total) > 0:
-        cp_curtailment_total.to_csv(f"{output_dir}/cp_curtailment_total.csv")
-
-    print(f"✓ Detailed data saved to {output_dir}/")
-
-    return results
+    return edisgo.timeseries.generators_active_power[gen_cols]
 
 
 def create_network_gif(
@@ -315,16 +92,17 @@ def plot_network(
     norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
 
     # 2. Prepare bus data
-    # Calculating voltage deviation from nominal (1.0 p.u.)
-    bus_colors = (1 - edisgo.results.v_res.T[snapshot]).apply(abs)
+    # Actual voltage in p.u.; diverging norm centered at nominal 1.0 p.u.
+    bus_colors = edisgo.results.v_res.T[snapshot]
 
-    # Voltage limits (adjust vmin/vmax based on your bus_colors results)
-    norm_buses = mcolors.Normalize(vmin=0.0, vmax=0.3)
+    # TwoSlopeNorm: purple = undervoltage (<1), blue = nominal (1), red = overvoltage (>1)
+    norm_buses = mcolors.TwoSlopeNorm(vmin=0.9, vcenter=1.0, vmax=1.1)
+    voltage_cmap = mcolors.LinearSegmentedColormap.from_list(
+        "voltage", ["purple", "blue", "red"]
+    )
 
     # --- (Curtailment logic and bus_sizes calculation) ---
-    curt_14a = analyze_curtailment_results(edisgo, output_dir="results_14a")[
-        "curtailment_data"
-    ].T
+    curt_14a = get_curtailment_data(edisgo).T
 
     # Clean up index names to match load names
     curt_14a["load"] = curt_14a.index
@@ -354,7 +132,7 @@ def plot_network(
         bus_colors=bus_colors,
         bus_alpha=1,
         bus_sizes=bus_sizes,
-        bus_cmap="jet",
+        bus_cmap=voltage_cmap,
         bus_norm=norm_buses,
         line_colors=loading_relative,
         line_widths=1.6,
@@ -381,7 +159,7 @@ def plot_network(
     cb_lines.set_label("Line Loading [relative]", fontsize=8)
 
     # --- COLORBAR 2: BUS VOLTAGE (RIGHT SIDE) ---
-    sm_buses = plt.cm.ScalarMappable(cmap="jet", norm=norm_buses)
+    sm_buses = plt.cm.ScalarMappable(cmap=voltage_cmap, norm=norm_buses)
     # Default location is right
     cb_buses = fig.colorbar(
         sm_buses,
@@ -391,7 +169,7 @@ def plot_network(
         pad=0.02,
         aspect=20,
     )
-    cb_buses.set_label("Voltage Deviation |1 - V| [p.u.]", fontsize=8)
+    cb_buses.set_label("Bus Voltage [p.u.]  — blue: under, yellow: nominal, red: over", fontsize=8)
 
     if save:
         os.makedirs("plots", exist_ok=True)
@@ -444,17 +222,22 @@ def run_optimization_14a(edisgo):
     return edisgo
 
 
-#grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_model_pypsa"
+#grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
+
+# Whole husum paths
 grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_model_pypsa"
+path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MV_grid_district/husum_district.shp"
+
+# MGB paths
+#grid_path = "/home/paul/LoMa/MGB_2035_model_pypsa"
+#path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MGB_district"
 
 edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 167))
 
-# mv_grid_geom = gpd.read_file(
-#     "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
-# )
-# mv_grid_geom = mv_grid_geom.to_crs(4326)
+mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
+edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
+edisgo.topology.grid_district["srid"] = 4326
 
-# edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
 # edisgo.topology.check_integrity()
 # pypsa_n = edisgo.to_pypsa()
 # edisgo.analyze()
@@ -479,14 +262,14 @@ from edisgo.tools.loma_tools import (
     buses_with_existing_loads,
 )
 
-path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MV_grid_district/husum_district.shp"
-output_dir = "/home/paul/LoMa/test/shapes"
-
-mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
-edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
-edisgo.topology.grid_district["srid"] = 4326
-
+# -------------------------
 # Import + distribute + integrate EV data (creates new charging points) 
+# -------------------------
+'''
+After this function there are no time series yet. Only charging points and 
+a overall demand which is then transferred into a time series in 
+apply_charging_strategy.
+'''
 edisgo.import_electromobility_14a( 
     scenario="eGon2035",
     import_electromobility_data_kwds={
@@ -495,32 +278,33 @@ edisgo.import_electromobility_14a(
 )
 
 # -------------------------
-# Fix loads_reactive_power:
-# Make it explicitly consistent with the current timeindex before charging strategy
-# -------------------------
-ti = edisgo.timeseries.timeindex
-edisgo.timeseries.loads_reactive_power = pd.DataFrame(index=ti)
-
-# -------------------------
 # Apply charging strategy (writes time series for the new integrated charging points from eDisGo)
 # -------------------------
+'''
+Without the preparation of Q before charging strategy I got an error while 
+apply_charging_strategy which was caused by deviating time index.
+After this step only the charging point from eDisGo have a time series.
+'''
+# Prepare Q before charging strategy
+ti = edisgo.timeseries.timeindex
+lap_cols = edisgo.timeseries.loads_active_power.columns
+
+edisgo.timeseries.loads_reactive_power = pd.DataFrame(
+    0.0,
+    index=ti,
+    columns=lap_cols,
+)
+
 edisgo.apply_charging_strategy(strategy="dumb")
 
-#temp
-print("\n--- CHECK AFTER CHARGING STRATEGY ---")
-cp_topology = edisgo.topology.loads_df.index[
-    edisgo.topology.loads_df["type"] == "charging_point"
-]
-cp_missing = cp_topology.difference(edisgo.timeseries.loads_active_power.columns)
-
-print("CPs in topology:", len(cp_topology))
-print("CPs missing in active power:", len(cp_missing))
-if len(cp_missing):
-    print("first missing:", cp_missing[:20].tolist())
-#temp
-
+# -------------------------
 # Transfer time series from new eDisGo CPs to existing CPs
-# Existing cp will get 'matched' with new cp by nearest bus location and p_set within a tolerance
+# -------------------------
+'''
+This step then finally transfers the time series from suitable eDisGo 
+charging_points to Existing_ und Additional_ charging points which are 
+created on the LoMa side.
+'''
 ev_match_results = transfer_ts_from_new_to_existing_cp(
     edisgo,
     existing_markers=("Existing", "Additional"),
@@ -530,47 +314,37 @@ ev_match_results = transfer_ts_from_new_to_existing_cp(
     tol_2=0.9,   
 )
 
-#temp
-print("\n--- CHECK AFTER MATCHING / BEFORE REACTIVE CONTROL ---")
-cp_topology = edisgo.topology.loads_df.index[
-    edisgo.topology.loads_df["type"] == "charging_point"
-]
-cp_missing = cp_topology.difference(edisgo.timeseries.loads_active_power.columns)
-
-print("CPs in topology:", len(cp_topology))
-print("CPs missing in active power:", len(cp_missing))
-if len(cp_missing):
-    print("first missing:", cp_missing[:20].tolist())
-#temp
-
-edisgo.set_time_series_reactive_power_control()
-
 # ============================================================
-# Utilities for sensitivity analysis/chaning the amount of cp/hp
-# - supports charging points and heat pumps
+# Optional Utilities for sensitivity analysis/chaning the amount of cp/hp
 # - target by absolute value or relative percentage
 # - Only use one option at a time (traget_total, percentage)
-# - for charging points: existing ones are removed last
-# - duplicates/removes topology rows + power-flow time series
 # ============================================================
+'''
+In this step the total amount of charging points or heat pumps can be adjusted.
+Either by percentage or by a total amount including the infrastructure from
+LoMa. When deleting CP/HP there is an option to export the deleted ones.
+New CP/HP will have 'dup' in their name.
+'''
+output_dir = "/home/paul/LoMa/test/shapes"
+
 cp_eligible_buses = buses_with_existing_loads(edisgo)
 hp_eligible_buses = buses_with_existing_loads(edisgo)
 
-# change_cp_amount = set_charging_points_to_target(
-#     edisgo,
-#     #target_total=1000, # sets total amount of CP to 1000
-#     #percentage=0.10, # increases total amount of CP by 10%
-#     #percentage=-0.10, # decreases total amount of CP by 10%
-#     eligible_buses=cp_eligible_buses,
-#     existing_marker="Existing",
-#     add_tracking_columns=False,
-#     export_removed=True, # only applies when negative percentage for debugging
-#     export_dir=output_dir, # only applies when negative percentage for debugging
-# )
+change_cp_amount = set_charging_points_to_target(
+    edisgo,
+    target_total=500, # sets total amount of CP to 1000
+    #percentage=0.10, # increases total amount of CP by 10%
+    #percentage=-0.10, # decreases total amount of CP by 10%
+    eligible_buses=cp_eligible_buses,
+    removal_priority=["Additional", "Existing"],
+    add_tracking_columns=False,
+    export_removed=True, # only applies when negative percentage for debugging
+    export_dir=output_dir, # only applies when negative percentage for debugging
+)
 
 # change_hp_amount = set_heat_pumps_to_target(
 #     edisgo,
-#     #target_total=500, # sets total amount of HP to 500
+#     target_total=50, # sets total amount of HP to 50
 #     #percentage=0.10, # increases total amount of CP by 10%
 #     #percentage=-0.10, # decreases total amount of CP by 10%
 #     eligible_buses=hp_eligible_buses,
@@ -579,15 +353,10 @@ hp_eligible_buses = buses_with_existing_loads(edisgo)
 #     export_dir=output_dir, # only applies when negative percentage for debugging
 # )
 
-# edisgo.topology.loads_df = edisgo.topology.loads_df[
-#     edisgo.topology.loads_df.type != "charging_point"
-# ]
-
 
 # ==========================
 # Graphs
 # ==========================
-import pandas as pd
 
 # ============================================================
 # Common CP selection + classification
@@ -853,428 +622,6 @@ plt.legend()
 plt.tight_layout()
 plt.show()
 
-# ==========================
-# EV Exports
-# ==========================
-from shapely.geometry import Point
-output_dir="/home/paul/LoMa/test/shapes"
-
-def export_emob_debug_data(edisgo_obj, output_dir=output_dir):
-    """
-    Exports all relevant electromobility DataFrames from an EDisGo object
-    to CSV and GeoPackage (WKT for geometries) for debugging.
-
-    Parameters
-    ----------
-    edisgo_obj : EDisGo
-    output_dir : str
-        Directory where the exported files will be saved.
-    """
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # ---- Charging processes ----
-    df = edisgo_obj.electromobility.charging_processes_df
-    if df is not None and not df.empty:
-
-        df.to_csv(os.path.join(output_dir, "charging_processes.csv"), index=False)
-        print("[EXPORT] Exported charging_processes.csv")
-    else:
-        print("[EXPORT][ERROR] charging_processes_df is empty, skipping export.")
-
-
-    # ---- SimBeV config ----
-    df = edisgo_obj.electromobility.simbev_config_df
-    if df is not None and not df.empty:
-        df.to_csv(os.path.join(output_dir, "simbev_config.csv"), index=False)
-        print("[EXPORT] Exported simbev_config.csv")
-    else:
-        print("[EXPORT][ERROR] simbev_config_df is empty, skipping export.")
-
-    # ---- Potential charging parks ----
-    gdf = edisgo_obj.electromobility.potential_charging_parks_gdf
-    if gdf is not None and not gdf.empty:
-        # Konvertiere alle Geometriespalten in WKT
-        geom_cols = gdf.select_dtypes(include="geometry").columns
-        for col in geom_cols:
-            gdf[col] = gdf[col].apply(lambda x: x.wkt if x is not None else None)
-
-        # Speichere als CSV (GPKG geht nur mit einer Geometriespalte)
-        gdf.to_csv(os.path.join(output_dir, "potential_charging_parks.csv"), index=False)
-        print("[EXPORT] Exported potential_charging_parks.csv with WKT geometries")
-    else:
-        print("[EXPORT][ERROR] potential_charging_parks_gdf is empty, skipping export.")
-
-    print(f"[EXPORT] All exports saved to {output_dir}")
-
-def clean_point_geometry_gdf(edisgo):
-    import geopandas as gpd
-    import pandas as pd
-    from shapely import wkt
-
-    gdf = edisgo.electromobility.potential_charging_parks_gdf.copy()
-
-    # WKT -> echte Geometrie
-    gdf["geometry"] = gdf["geometry"].apply(wkt.loads)
-
-    # Alles neu und sauber aufsetzen
-    df = pd.DataFrame(gdf.drop(columns="geometry"))
-
-    clean_gdf = gpd.GeoDataFrame(
-        df,
-        geometry=gdf["geometry"],
-        crs="EPSG:4326"
-    )
-
-    return clean_gdf
-
-def export_parks_points_shapefile(edisgo, output_dir=output_dir):
-    gdf = clean_point_geometry_gdf(edisgo)
-
-    shp_path = f"{output_dir}/potential_charging_parks_points.shp"
-    gdf.to_file(shp_path, driver="ESRI Shapefile")
-
-    print("[EXPORT] Shapefile written to:", shp_path)
-
-def export_integrated_charging_points_shapefile(edisgo, output_dir=output_dir):
-    """
-    Export all actually integrated charging points as a shapefile
-    using the REAL bus coordinates they were connected to.
-
-    This shows the true grid connection location chosen by eDisGo.
-    """
-
-    import os
-    import geopandas as gpd
-
-    os.makedirs(output_dir, exist_ok=True)
-
-    loads = edisgo.topology.loads_df.copy()
-
-    # Nur Charging Points
-    cp_df = loads[loads["type"] == "charging_point"].copy()
-
-    if cp_df.empty:
-        print("[EXPORT][ERROR] No integrated charging points found.")
-        return
-
-    # Bus-Koordinaten anhängen
-    buses = edisgo.topology.buses_df[["x", "y"]]
-    cp_df = cp_df.join(buses, on="bus")
-
-    # Geometrie aus Bus-Koordinaten
-    cp_df["geometry"] = cp_df.apply(
-        lambda row: Point(row["x"], row["y"]), axis=1
-    )
-
-    gdf = gpd.GeoDataFrame(cp_df, geometry="geometry", crs="EPSG:4326")
-
-    shp_path = os.path.join(output_dir, "integrated_charging_points_grid_connection.shp")
-    gdf.to_file(shp_path, driver="ESRI Shapefile")
-
-    print(f"[EXPORT] Integrated charging points exported: {len(gdf)}")
-    print(f"[EXPORT] Shapefile written to: {shp_path}")
-
-def export_ev_profiles_one_week(
-    edisgo,
-    out_dir: str,
-    *,
-    fname_prefix: str = "ev_profiles_week",
-):
-    """
-    Export weekly CP time series (P, optional Q) for ALL charging points in the current run.
-    Exports:
-      - {prefix}_active_power_MW.csv   (index=time, columns=cp_id)
-      - {prefix}_meta.csv             (per-CP metadata)
-    """
-    os.makedirs(out_dir, exist_ok=True)
-
-    # --- select charging_point loads from topology ---
-    loads_df = edisgo.topology.loads_df
-    cp_topology = loads_df[loads_df["type"] == "charging_point"].copy()
-    cp_ids_topology = cp_topology.index
-
-    # --- intersect with TS columns (robust) ---
-    tsP = edisgo.timeseries.loads_active_power
-    cp_ids = cp_ids_topology.intersection(tsP.columns)
-
-    missing = cp_ids_topology.difference(tsP.columns)
-
-    # --- slice exactly the currently configured timeindex (your week @ 15min after resample) ---
-    # (This is already the week if you ran set_timeindex(TIMEINDEX_ONE_WEEK) and resample_timeseries())
-    evP_week = tsP.loc[edisgo.timeseries.timeindex, cp_ids].copy()
-
-    # --- export P in MW (native) ---
-    path_mw = os.path.join(out_dir, f"{fname_prefix}_active_power_MW.csv")
-    evP_week.to_csv(path_mw, index=True)
-    print(f"[EXPORT] Wrote: {path_mw}")
-
-    # --- metadata export (per CP) ---
-    buses = edisgo.topology.buses_df[["x", "y", "v_nom"]].copy()
-
-    meta = cp_topology.loc[cp_ids, ["bus", "p_set"]].copy()
-    meta = meta.join(buses, on="bus", how="left")
-
-    # Use case from name convention (Charging_Point_*_{home/work/public/hpc}_*)
-    def _use_case_from_id(cp_id: str) -> str:
-        s = str(cp_id).lower()
-        for uc in ["home", "work", "public", "hpc"]:
-            if f"_{uc}_" in s:
-                return uc
-        return "unknown"
-
-    meta["use_case"] = [ _use_case_from_id(i) for i in meta.index ]
-    meta["voltage_level"] = meta["v_nom"].apply(lambda x: "LV" if pd.notna(x) and float(x) <= 1 else "MV")
-
-    path_meta = os.path.join(out_dir, f"{fname_prefix}_meta.csv")
-    meta.to_csv(path_meta, index=True)
-    print(f"[EXPORT] Wrote: {path_meta}")
-
-    return {
-        "cp_ids_exported": cp_ids.tolist(),
-        "cp_ids_missing_ts": missing.tolist(),
-        "paths": {
-            "P_MW": path_mw,
-            "meta": path_meta,
-        },
-    }
-
-# Choose an output folder (reuse your existing output_dir or make a subfolder)
-ev_export_dir = os.path.join(output_dir, "ev_profiles")
-export_ev_profiles_one_week(
-    edisgo,
-    out_dir=ev_export_dir,
-    fname_prefix="ev_profiles_week_2023_01_01",
-)
-
-export_emob_debug_data(edisgo) #CSV (simbev_config, potential_charging_parks, charging_processes)
-
-export_parks_points_shapefile(edisgo) # only point geometries of potential charging parks
-
-export_integrated_charging_points_shapefile(edisgo)
-
-# ==========================
-# Heat pump exports + plots
-# ==========================
-def export_hp_profiles_one_week(
-    edisgo,
-    out_dir: str,
-    *,
-    fname_prefix: str = "hp_profiles_week",
-):
-    """
-    Export weekly HP time series (P, optional Q) for ALL heat pumps in the current run.
-
-    Exports:
-      - {prefix}_active_power_MW.csv
-      - {prefix}_meta.csv
-    """
-    os.makedirs(out_dir, exist_ok=True)
-
-    # --- select heat pump loads from topology ---
-    loads_df = edisgo.topology.loads_df
-    hp_topology = loads_df[loads_df["type"] == "heat_pump"].copy()
-    hp_ids_topology = hp_topology.index
-
-    # --- intersect with TS columns ---
-    tsP = edisgo.timeseries.loads_active_power
-    hp_ids = hp_ids_topology.intersection(tsP.columns)
-
-    missing = hp_ids_topology.difference(tsP.columns)
-
-    # --- active power export ---
-    hpP_week = tsP.loc[edisgo.timeseries.timeindex, hp_ids].copy()
-    path_p_mw = os.path.join(out_dir, f"{fname_prefix}_active_power_MW.csv")
-    hpP_week.to_csv(path_p_mw, index=True)
-    print(f"[EXPORT][HP] Wrote: {path_p_mw}")
-
-    # --- metadata export ---
-    buses = edisgo.topology.buses_df[["x", "y", "v_nom"]].copy()
-
-    meta = hp_topology.loc[hp_ids].copy()
-    keep_cols = [c for c in ["bus", "p_set"] if c in meta.columns]
-    meta = meta[keep_cols].join(buses, on="bus", how="left")
-
-    meta["is_duplicate"] = meta.index.astype(str).str.startswith("hp_dup_")
-    meta["voltage_level"] = meta["v_nom"].apply(
-        lambda x: "LV" if pd.notna(x) and float(x) <= 1 else "MV"
-    )
-
-    # optional provenance columns if you used add_tracking_columns=True
-    for col in ["source_load_id", "is_duplicate"]:
-        if col in hp_topology.columns and col not in meta.columns:
-            meta[col] = hp_topology.loc[hp_ids, col]
-
-    path_meta = os.path.join(out_dir, f"{fname_prefix}_meta.csv")
-    meta.to_csv(path_meta, index=True)
-    print(f"[EXPORT][HP] Wrote: {path_meta}")
-
-    return {
-        "hp_ids_exported": hp_ids.tolist(),
-        "hp_ids_missing_ts": missing.tolist(),
-        "paths": {
-            "P_MW": path_p_mw,
-            "meta": path_meta,
-        },
-    }
-
-
-def export_integrated_heat_pumps_shapefile(edisgo, output_dir):
-    """
-    Export all heat pumps as a shapefile using their connected bus coordinates.
-    Includes duplicated heat pumps as long as type == 'heat_pump'.
-    """
-    os.makedirs(output_dir, exist_ok=True)
-
-    loads = edisgo.topology.loads_df.copy()
-    hp_df = loads[loads["type"] == "heat_pump"].copy()
-
-    if hp_df.empty:
-        print("[EXPORT][ERROR][HP] No heat pumps found.")
-        return
-
-    buses = edisgo.topology.buses_df[["x", "y"]]
-    hp_df = hp_df.join(buses, on="bus", how="left")
-
-    hp_df["geometry"] = hp_df.apply(
-        lambda row: Point(row["x"], row["y"]), axis=1
-    )
-
-    gdf = gpd.GeoDataFrame(hp_df, geometry="geometry", crs="EPSG:4326")
-
-    shp_path = os.path.join(output_dir, "integrated_heat_pumps_grid_connection.shp")
-    gdf.to_file(shp_path, driver="ESRI Shapefile")
-
-    print(f"[EXPORT][HP] Integrated heat pumps exported: {len(gdf)}")
-    print(f"[EXPORT][HP] Shapefile written to: {shp_path}")
-
-
-def plot_heat_pump_profiles_comparison(
-    edisgo,
-    *,
-    original_prefixes=None,
-    duplicate_prefix: str = "hp_dup_",
-    title_suffix: str = "",
-):
-    """
-    Plot aggregated HP profiles split into:
-      - original/status-quo HPs (identified by prefixes)
-      - duplicated HPs (identified by duplicate_prefix)
-      - all remaining HPs
-
-    Produces:
-      1) energy-normalized plot
-      2) absolute aggregated load plot
-    """
-    if original_prefixes is None:
-        # adapt this if your original HP naming scheme is known
-        original_prefixes = ["Heat_Pump", "Existing_Heat_Pump"]
-
-    hp_ids = edisgo.topology.loads_df.index[edisgo.topology.loads_df["type"] == "heat_pump"]
-    hp_ts = edisgo.timeseries.loads_active_power.loc[
-        :, hp_ids.intersection(edisgo.timeseries.loads_active_power.columns)
-    ].copy()
-
-    # --- grouping ---
-    original_cols = [
-        c for c in hp_ts.columns
-        if any(str(c).startswith(pref) for pref in original_prefixes)
-    ]
-    duplicated_cols = [c for c in hp_ts.columns if str(c).startswith(duplicate_prefix)]
-    other_cols = [c for c in hp_ts.columns if c not in original_cols and c not in duplicated_cols]
-
-    print(f"Original HPs:   {len(original_cols)}")
-    print(f"Other HPs:      {len(other_cols)}")
-    print(f"Duplicated HPs: {len(duplicated_cols)}")
-
-    # --- aggregate ---
-    group_original = hp_ts[original_cols].sum(axis=1) if original_cols else None
-    group_other = hp_ts[other_cols].sum(axis=1) if other_cols else None
-    group_dup = hp_ts[duplicated_cols].sum(axis=1) if duplicated_cols else None
-
-    dt = 1.0  # 60 min resolution
-
-    if group_original is not None:
-        E_original = group_original.sum() * dt
-        print(f"Energy original HPs:   {E_original:.1f} MWh")
-
-    if group_other is not None:
-        E_other = group_other.sum() * dt
-        print(f"Energy other HPs:      {E_other:.1f} MWh")
-
-    if group_dup is not None:
-        E_dup = group_dup.sum() * dt
-        print(f"Energy duplicated HPs: {E_dup:.1f} MWh")
-
-    def normalize_to_energy(series, energy_mwh, target_mwh=100.0):
-        if series is None or energy_mwh == 0:
-            return None
-        return series * (target_mwh / energy_mwh)
-
-    E_target = 100.0
-    group_original_norm = normalize_to_energy(group_original, E_original, E_target) if group_original is not None else None
-    group_other_norm = normalize_to_energy(group_other, E_other, E_target) if group_other is not None else None
-    group_dup_norm = normalize_to_energy(group_dup, E_dup, E_target) if group_dup is not None else None
-
-    # --- plot normalized ---
-    plt.figure(figsize=(12, 5))
-
-    if group_original_norm is not None:
-        plt.plot(group_original_norm, label=f"Original HPs ({len(original_cols)})")
-    if group_other_norm is not None:
-        plt.plot(group_other_norm, label=f"Other HPs ({len(other_cols)})")
-    if group_dup_norm is not None:
-        plt.plot(group_dup_norm, label=f"Duplicated HPs ({len(duplicated_cols)})")
-
-    plt.title(f"Heat pump timeseries (Energy-normalized){title_suffix}")
-    plt.ylabel("Power [MW]")
-    plt.xlabel("Time")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-    # --- plot absolute ---
-    plt.figure(figsize=(12, 5))
-
-    if group_original is not None:
-        plt.plot(group_original, label=f"Original HPs ({len(original_cols)})")
-    if group_other is not None:
-        plt.plot(group_other, label=f"Other HPs ({len(other_cols)})")
-    if group_dup is not None:
-        plt.plot(group_dup, label=f"Duplicated HPs ({len(duplicated_cols)})")
-
-    plt.title(f"Heat pump timeseries (Aggregated absolute load){title_suffix}")
-    plt.ylabel("Power [MW]")
-    plt.xlabel("Time")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
-
-    return {
-        "original_ids": original_cols,
-        "other_ids": other_cols,
-        "duplicated_ids": duplicated_cols,
-    }
-
-hp_export_dir = os.path.join(output_dir, "hp_profiles")
-
-hp_export_info = export_hp_profiles_one_week(
-    edisgo,
-    out_dir=hp_export_dir,
-    fname_prefix="hp_profiles_week_2023_01_01",
-)
-
-export_integrated_heat_pumps_shapefile(
-    edisgo,
-    output_dir=output_dir,
-)
-
-hp_groups = plot_heat_pump_profiles_comparison(
-    edisgo,
-    # adapt prefixes if your original HP IDs follow another naming scheme
-    original_prefixes=["heat_load"],
-    duplicate_prefix="hp_dup_",
-    title_suffix="",
-)
 ############################ EV INTEGRATION PART ##############################
 
 # Set Zero active power for batteries (let the OPF optimize dispatch freely)
@@ -1318,6 +665,40 @@ edisgo.set_time_series_reactive_power_control()
 
 edisgo = run_optimization_14a(edisgo)
 edisgo.analyze()
+
+# ── Slack diagnosis ──────────────────────────────────────────────────────────
+slacks = edisgo.opf_results.grid_slacks_t
+print("\n=== OPF Slack Diagnosis (v5) ===")
+for name, df in [
+    ("gen_nd_crt  (renewable curtailment)", slacks.gen_nd_crt),
+    ("gen_d_crt   (disp. gen curtailment)", slacks.gen_d_crt),
+    ("load_shed   (load shedding)",         slacks.load_shedding),
+    ("hp_shed     (HP load shedding)",      slacks.hp_load_shedding),
+]:
+    total = df.abs().sum(axis=1)
+    if (total > 5e-3).any():
+        print(f"  {name}: {total.sum():.4f} MW  ← NON-ZERO")
+    else:
+        print(f"  {name}: 0 (not used)")
+
+print("\n=== Voltage after OPF (edisgo.results.v_res) ===")
+v = edisgo.results.v_res
+print(f"  Min:  {v.min().min():.4f} p.u.")
+print(f"  Max:  {v.max().max():.4f} p.u.")
+viol = (v < 0.9) | (v > 1.1)
+if viol.any().any():
+    print(f"  Violations:{viol.sum().sum()}")
+    print()
+else:
+    print("  No voltage violations.")
+# ── End diagnosis ────────────────────────────────────────────────────────────
+print("\n=== 14a analysis ===")
+gen = edisgo.topology.generators_df
+gen_t = edisgo.timeseries.generators_active_power
+gen_14a  = gen[gen.index.str.contains("14a")]
+gen_t_14a = gen_t.loc[:,gen_14a.index]
+print(f"Total use of 14a:{gen_t_14a.sum().sum()}")
+print("\n=== end 14a analysis ===")
 
 # Plot
 for ts in edisgo.timeseries.timeindex:

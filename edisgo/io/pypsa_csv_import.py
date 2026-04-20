@@ -405,7 +405,8 @@ def populate_edisgo_from_pypsa_csv(
 
     # --- Storage units ------------------------------------------------- #
     stor_raw = _read(folder, "storage_units.csv")
-
+    if "control" not in stor_raw.columns:
+        stor_raw["control"] = "PQ"  # default control mode if not specified
     stor = _keep_and_rename(stor_raw, STORAGE_RENAME)
     stor["mv_grid_id"] = mv_grid_id
     topo.storage_units_df = stor
@@ -429,9 +430,15 @@ def populate_edisgo_from_pypsa_csv(
     # the CSV reader level — only the requested rows are loaded into memory.
 
     # Active power - generators
+    # generators-p_max_pu.csv stores values in pu relative to p_nom;
+    # eDisGo expects MW, so multiply by p_nom for each generator.
     gen_p = _read_ts(folder, "generators-p_max_pu.csv", ts_slice)
     if not gen_p.empty:
-        ts.generators_active_power = _assign_timeseries(gen_p, timeindex)
+        gen_p_mw = _assign_timeseries(gen_p, timeindex)
+        p_nom = topo.generators_df["p_nom"]
+        common = gen_p_mw.columns.intersection(p_nom.index)
+        gen_p_mw[common] = gen_p_mw[common] * p_nom[common]
+        ts.generators_active_power = gen_p_mw
 
     # Reactive power - generators (optional)
     gen_q = _read_ts(folder, "generators-q_set.csv", ts_slice)

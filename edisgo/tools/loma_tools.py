@@ -6,6 +6,13 @@ import pandas as pd
 from shapely.geometry import Point
 from shapely.strtree import STRtree
 
+from edisgo.tools.config import Config
+from sqlalchemy.engine.base import Engine
+from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
+import logging
+
+logger = logging.getLogger(__name__)
+
 # ==========================
 # Transferring timeseries from new edisgo cp to matched existing/additional cp
 # ==========================
@@ -16,12 +23,7 @@ def transfer_ts_from_new_to_existing_cp(
     radius_1=2000.0,
     tol_1=0.15,
     radius_2=2000.0,
-    #tol_2=0.25,
     tol_2=0.9,
-    # radius_3=2000.0,
-    # tol_3=0.50,
-    # radius_4=2000.0,
-    # tol_4=0.9,
     metric_epsg=32632,
     keep_existing_bus_and_pset=True,
     drop_new=True,
@@ -54,10 +56,6 @@ def transfer_ts_from_new_to_existing_cp(
         tol_1=tol_1,
         radius_2=radius_2,
         tol_2=tol_2,
-        # radius_3=radius_3,
-        # tol_3=tol_3,
-        # radius_4=radius_4,
-        # tol_4=tol_4,
     )
 
     _transfer_ts_and_replace_new_with_existing(
@@ -109,476 +107,6 @@ def _cp_points_gdf(
 # --------------------------
 # Matching EXISTING -> NEW by nearest bus location + p_set tolerance
 # --------------------------
-# def _match_four_step_nearest(
-#     existing_m: gpd.GeoDataFrame,
-#     new_m: gpd.GeoDataFrame,
-#     *,
-#     radius_1=2000.0,
-#     tol_1=0.15,
-#     radius_2=2000.0,
-#     tol_2=0.25,
-#     radius_3=2000.0,
-#     tol_3=0.50,
-#     radius_4=2000.0,
-#     tol_4=0.90,
-# ):
-
-#     new_ids = np.array(new_m.index.to_list())
-#     new_geoms = np.array(new_m.geometry.values, dtype=object)
-
-#     tree = STRtree(new_geoms)
-
-#     new_pset = new_m["p_set"].astype(float)
-#     ex_pset = existing_m["p_set"].astype(float)
-
-#     used_new = set()
-#     phase2_matches = []
-#     phase3_matches = []
-#     phase4_matches = []
-
-#     def _pass(existing_ids, max_radius_m, pset_tol, phase):
-#         pass_matches = []
-#         pass_unmatched = []
-
-#         for ex_id in existing_ids:
-#             ex_geom = existing_m.loc[ex_id].geometry
-#             p_ex = float(ex_pset.loc[ex_id])
-
-#             idxs = tree.query(ex_geom.buffer(max_radius_m))
-#             if idxs is None or len(idxs) == 0:
-#                 pass_unmatched.append(ex_id)
-#                 continue
-
-#             p_lo, p_hi = p_ex * (1 - pset_tol), p_ex * (1 + pset_tol)
-
-#             best = None
-#             for j in idxs:
-#                 new_id = new_ids[j]
-
-#                 if new_id in used_new:
-#                     continue
-
-#                 p_new = float(new_pset.loc[new_id])
-#                 if not (p_lo <= p_new <= p_hi):
-#                     continue
-
-#                 dist = float(ex_geom.distance(new_geoms[j]))
-
-#                 if (best is None) or (dist < best[0]):
-#                     best = (dist, new_id)
-
-#             if best is None:
-#                 pass_unmatched.append(ex_id)
-#             else:
-#                 dist_best, new_best = best
-#                 used_new.add(new_best)
-
-#                 tup = (ex_id, new_best, dist_best)
-#                 pass_matches.append(tup)
-
-#                 if phase == 2:
-#                     phase2_matches.append(tup)
-#                 elif phase == 3:
-#                     phase3_matches.append(tup)
-#                 elif phase == 4:
-#                     phase4_matches.append(tup)
-
-#         return pass_matches, pass_unmatched
-
-#     # ---- Phase 1 ----
-#     m1, u1 = _pass(list(existing_m.index), radius_1, tol_1, phase=1)
-
-#     # ---- Phase 2 ----
-#     m2, u2 = _pass(u1, radius_2, tol_2, phase=2)
-
-#     # ---- Phase 3 ----
-#     m3, u3 = _pass(u2, radius_3, tol_3, phase=3)
-
-#     # ---- Phase 4 ----
-#     m4, u4 = _pass(u3, radius_4, tol_4, phase=4)
-
-#     matches = m1 + m2 + m3 + m4
-#     unused_new = [i for i in new_ids.tolist() if i not in used_new]
-
-#     def _log_phase(phase_name, phase_matches, tol):
-#         print(f"[EV] {phase_name} matches (p_set tol={tol}): {len(phase_matches)}")
-#         for i, (ex_id, new_id, dist) in enumerate(phase_matches, 1):
-#             bus = existing_m.loc[ex_id, "bus"]
-#             p_ex = float(existing_m.loc[ex_id, "p_set"])
-#             p_new = float(new_m.loc[new_id, "p_set"])
-#             rel_dev = (p_new / p_ex - 1.0) if p_ex != 0 else float('nan')
-#             print(
-#                 f"[EV] [{phase_name.upper()}][{i}] "
-#                 f"{ex_id} (bus={bus}, p_set_old={p_ex:.6f}) "
-#                 f"-> {new_id} (p_set_new={p_new:.6f})  "
-#                 f"dist={dist:.1f} m  rel_dev={rel_dev:+.2%}"
-#             )
-            
-#     _log_phase("Phase 2", phase2_matches, tol_2)
-#     _log_phase("Phase 3", phase3_matches, tol_3)
-#     _log_phase("Phase 4", phase4_matches, tol_4)
-    
-#     # # Phase 2 logging
-#     # print(f"[EV] Phase 2 matches (p_set tol={tol_2}): {len(phase2_matches)}")
-#     # for i, (ex_id, new_id, dist) in enumerate(phase2_matches, 1):
-#     #     bus = existing_m.loc[ex_id, "bus"]
-#     #     print(f"[EV] [PHASE 2][{i}] {ex_id} (bus={bus}) -> {new_id}  dist={dist:.1f} m")
-
-#     # # Phase 3 logging
-#     # print(f"[EV] Phase 3 matches (p_set tol={tol_3}): {len(phase3_matches)}")
-#     # for i, (ex_id, new_id, dist) in enumerate(phase3_matches, 1):
-#     #     bus = existing_m.loc[ex_id, "bus"]
-#     #     print(f"[EV] [PHASE 3][{i}] {ex_id} (bus={bus}) -> {new_id}  dist={dist:.1f} m")
-
-#     # # Phase 4 logging
-#     # print(f"[EV] Phase 4 matches (p_set tol={tol_4}): {len(phase4_matches)}")
-#     # for i, (ex_id, new_id, dist) in enumerate(phase4_matches, 1):
-#     #     bus = existing_m.loc[ex_id, "bus"]
-#     #     print(f"[EV] [PHASE 4][{i}] {ex_id} (bus={bus}) -> {new_id}  dist={dist:.1f} m")
-
-#     # Unmatched logging
-#     print(f"[EV] Unmatched existing CPs after Phase 4: {len(u4)}")
-#     for i, ex_id in enumerate(u4, 1):
-#         bus = existing_m.loc[ex_id, "bus"]
-#         print(f"[EV] [UNMATCHED][{i}] {ex_id} (bus={bus})")
-
-#     return matches, u4, unused_new
-
-
-# def _match_four_step_nearest(
-#     existing_m: gpd.GeoDataFrame,
-#     new_m: gpd.GeoDataFrame,
-#     *,
-#     radius_1=2000.0,
-#     tol_1=0.15,
-#     radius_2=2000.0,
-#     tol_2=0.25,
-#     radius_3=2000.0,
-#     tol_3=0.50,
-#     radius_4=2000.0,
-#     tol_4=0.90,
-# ):
-#     new_ids = np.array(new_m.index.to_list())
-#     new_geoms = np.array(new_m.geometry.values, dtype=object)
-
-#     tree = STRtree(new_geoms)
-
-#     new_pset = new_m["p_set"].astype(float)
-#     ex_pset = existing_m["p_set"].astype(float)
-
-#     used_new = set()
-#     phase2_matches = []
-#     phase3_matches = []
-#     phase4_matches = []
-
-#     def _pass(existing_ids, max_radius_m, pset_tol, phase):
-#         pass_matches = []
-#         pass_unmatched = []
-
-#         for ex_id in existing_ids:
-#             ex_geom = existing_m.loc[ex_id].geometry
-#             p_ex = float(ex_pset.loc[ex_id])
-
-#             idxs = tree.query(ex_geom.buffer(max_radius_m))
-#             if idxs is None or len(idxs) == 0:
-#                 pass_unmatched.append(ex_id)
-#                 continue
-
-#             p_lo, p_hi = p_ex * (1 - pset_tol), p_ex * (1 + pset_tol)
-
-#             best = None
-#             for j in idxs:
-#                 new_id = new_ids[j]
-
-#                 if new_id in used_new:
-#                     continue
-
-#                 p_new = float(new_pset.loc[new_id])
-#                 if not (p_lo <= p_new <= p_hi):
-#                     continue
-
-#                 dist = float(ex_geom.distance(new_geoms[j]))
-
-#                 if dist > max_radius_m:
-#                     continue
-
-#                 if (best is None) or (dist < best[0]):
-#                     best = (dist, new_id)
-
-#             if best is None:
-#                 pass_unmatched.append(ex_id)
-#             else:
-#                 dist_best, new_best = best
-#                 used_new.add(new_best)
-
-#                 tup = (ex_id, new_best, dist_best)
-#                 pass_matches.append(tup)
-
-#                 if phase == 2:
-#                     phase2_matches.append(tup)
-#                 elif phase == 3:
-#                     phase3_matches.append(tup)
-#                 elif phase == 4:
-#                     phase4_matches.append(tup)
-
-#         return pass_matches, pass_unmatched
-
-#     m1, u1 = _pass(list(existing_m.index), radius_1, tol_1, phase=1)
-#     m2, u2 = _pass(u1, radius_2, tol_2, phase=2)
-#     m3, u3 = _pass(u2, radius_3, tol_3, phase=3)
-#     m4, u4 = _pass(u3, radius_4, tol_4, phase=4)
-
-#     matches = m1 + m2 + m3 + m4
-#     unused_new = [i for i in new_ids.tolist() if i not in used_new]
-
-#     def _log_phase(phase_name, phase_matches, tol):
-#         print(f"[EV] {phase_name} matches (p_set tol={tol}): {len(phase_matches)}")
-#         for i, (ex_id, new_id, dist) in enumerate(phase_matches, 1):
-#             bus = existing_m.loc[ex_id, "bus"]
-#             p_ex = float(existing_m.loc[ex_id, "p_set"])
-#             p_new = float(new_m.loc[new_id, "p_set"])
-#             rel_dev = (p_new / p_ex - 1.0) if p_ex != 0 else float("nan")
-
-#             print(
-#                 f"[EV] [{phase_name.upper()}][{i}] "
-#                 f"{ex_id} (bus={bus}, p_set_old={p_ex:.6f}) "
-#                 f"-> {new_id} (p_set_new={p_new:.6f})  "
-#                 f"dist={dist:.1f} m  rel_dev={rel_dev:+.2%}"
-#             )
-
-#     _log_phase("Phase 2", phase2_matches, tol_2)
-#     _log_phase("Phase 3", phase3_matches, tol_3)
-#     _log_phase("Phase 4", phase4_matches, tol_4)
-
-#     print(f"[EV] Unmatched existing CPs after Phase 4: {len(u4)}")
-#     for i, ex_id in enumerate(u4, 1):
-#         bus = existing_m.loc[ex_id, "bus"]
-#         p_ex = float(existing_m.loc[ex_id, "p_set"])
-#         print(f"[EV] [UNMATCHED][{i}] {ex_id} (bus={bus}, p_set_old={p_ex:.6f})")
-
-#     return matches, u4, unused_new
-
-# # --------------------------
-# # Matching EXISTING -> NEW by nearest bus location + p_set tolerance
-# # Phase 1: greedy
-# # Phase 2-4: global assignment on remaining candidates
-# # --------------------------
-# def _match_four_step_nearest(
-#     existing_m: gpd.GeoDataFrame,
-#     new_m: gpd.GeoDataFrame,
-#     *,
-#     radius_1=2000.0,
-#     tol_1=0.15,
-#     radius_2=2000.0,
-#     tol_2=0.25,
-#     radius_3=2000.0,
-#     tol_3=0.50,
-#     radius_4=2000.0,
-#     tol_4=0.90,
-# ):
-#     from scipy.optimize import linear_sum_assignment
-
-#     new_ids = np.array(new_m.index.to_list(), dtype=object)
-#     new_geoms = np.array(new_m.geometry.values, dtype=object)
-
-#     tree = STRtree(new_geoms)
-
-#     new_pset = new_m["p_set"].astype(float)
-#     ex_pset = existing_m["p_set"].astype(float)
-
-#     used_new = set()
-
-#     phase1_matches = []
-#     phase2_matches = []
-#     phase3_matches = []
-#     phase4_matches = []
-
-#     def _candidate_pairs(existing_ids, max_radius_m, pset_tol):
-#         """
-#         Build all admissible candidate pairs:
-#         existing_id -> new_id within radius and p_set tolerance, excluding already used new_ids.
-#         """
-#         pairs = []
-
-#         for ex_id in existing_ids:
-#             ex_geom = existing_m.loc[ex_id].geometry
-#             p_ex = float(ex_pset.loc[ex_id])
-
-#             idxs = tree.query(ex_geom.buffer(max_radius_m))
-#             if idxs is None or len(idxs) == 0:
-#                 continue
-
-#             p_lo, p_hi = p_ex * (1 - pset_tol), p_ex * (1 + pset_tol)
-
-#             for j in idxs:
-#                 new_id = new_ids[j]
-
-#                 if new_id in used_new:
-#                     continue
-
-#                 p_new = float(new_pset.loc[new_id])
-#                 if not (p_lo <= p_new <= p_hi):
-#                     continue
-
-#                 dist = float(ex_geom.distance(new_geoms[j]))
-#                 rel_dev = abs(p_new / p_ex - 1.0) if p_ex != 0 else 0.0
-
-#                 pairs.append((ex_id, new_id, dist, rel_dev))
-
-#         return pairs
-
-#     def _greedy_pass(existing_ids, max_radius_m, pset_tol, phase_name):
-#         """
-#         Greedy nearest match, used only for Phase 1.
-#         """
-#         pass_matches = []
-#         pass_unmatched = []
-
-#         for ex_id in existing_ids:
-#             ex_geom = existing_m.loc[ex_id].geometry
-#             p_ex = float(ex_pset.loc[ex_id])
-
-#             idxs = tree.query(ex_geom.buffer(max_radius_m))
-#             if idxs is None or len(idxs) == 0:
-#                 pass_unmatched.append(ex_id)
-#                 continue
-
-#             p_lo, p_hi = p_ex * (1 - pset_tol), p_ex * (1 + pset_tol)
-
-#             best = None
-#             for j in idxs:
-#                 new_id = new_ids[j]
-
-#                 if new_id in used_new:
-#                     continue
-
-#                 p_new = float(new_pset.loc[new_id])
-#                 if not (p_lo <= p_new <= p_hi):
-#                     continue
-
-#                 dist = float(ex_geom.distance(new_geoms[j]))
-#                 rel_dev = abs(p_new / p_ex - 1.0) if p_ex != 0 else 0.0
-
-#                 # primary weight: distance, secondary: p_set deviation
-#                 dist_norm = dist / max_radius_m
-#                 pset_norm = rel_dev / pset_tol if pset_tol > 0 else rel_dev
-#                 score = 0.8 * dist_norm + 0.2 * pset_norm
-#                 cand = (score, dist, new_id)
-
-#                 if best is None or cand < best:
-#                     best = cand
-
-#             if best is None:
-#                 pass_unmatched.append(ex_id)
-#             else:
-#                 dist_best, rel_dev_best, new_best = best
-#                 used_new.add(new_best)
-#                 tup = (ex_id, new_best, dist_best)
-#                 pass_matches.append(tup)
-
-#         return pass_matches, pass_unmatched
-
-#     def _global_pass(existing_ids, max_radius_m, pset_tol, phase_name):
-#         """
-#         Global bipartite assignment for remaining unmatched existing CPs.
-#         Objective: primarily minimize p_set deviation, secondarily distance.
-#         """
-#         pairs = _candidate_pairs(existing_ids, max_radius_m, pset_tol)
-
-#         if len(existing_ids) == 0:
-#             return [], []
-
-#         if len(pairs) == 0:
-#             return [], list(existing_ids)
-
-#         ex_list = list(existing_ids)
-#         new_list = sorted({new_id for _, new_id, _, _ in pairs})
-
-#         ex_pos = {ex_id: i for i, ex_id in enumerate(ex_list)}
-#         new_pos = {new_id: j for j, new_id in enumerate(new_list)}
-
-#         BIG = 1e12
-#         # weight distance strongly, rel_dev only as tie-breaker
-#         cost = np.full((len(ex_list), len(new_list)), BIG, dtype=float)
-
-#         for ex_id, new_id, dist, rel_dev in pairs:
-#             i = ex_pos[ex_id]
-#             j = new_pos[new_id]
-#             # primary weight: p_set deviation, secondary: distance
-#             dist_norm = dist / max_radius_m
-#             pset_norm = rel_dev / pset_tol if pset_tol > 0 else rel_dev
-#             score = 0.3 * dist_norm + 0.7 * pset_norm
-#             if score < cost[i, j]:
-#                 cost[i, j] = score
-
-#         row_ind, col_ind = linear_sum_assignment(cost)
-
-#         pass_matches = []
-#         matched_existing = set()
-
-#         for i, j in zip(row_ind, col_ind):
-#             if cost[i, j] >= BIG:
-#                 continue
-
-#             ex_id = ex_list[i]
-#             new_id = new_list[j]
-
-#             ex_geom = existing_m.loc[ex_id].geometry
-#             new_geom = new_m.loc[new_id].geometry
-#             dist = float(ex_geom.distance(new_geom))
-
-#             used_new.add(new_id)
-#             matched_existing.add(ex_id)
-#             pass_matches.append((ex_id, new_id, dist))
-
-#         pass_unmatched = [ex_id for ex_id in ex_list if ex_id not in matched_existing]
-#         return pass_matches, pass_unmatched
-
-#     def _log_phase(phase_name, phase_matches, tol):
-#         print(f"[EV] {phase_name} matches (p_set tol={tol}): {len(phase_matches)}")
-#         for i, (ex_id, new_id, dist) in enumerate(phase_matches, 1):
-#             bus = existing_m.loc[ex_id, "bus"]
-#             p_ex = float(existing_m.loc[ex_id, "p_set"])
-#             p_new = float(new_m.loc[new_id, "p_set"])
-#             rel_dev = (p_new / p_ex - 1.0) if p_ex != 0 else float("nan")
-#             print(
-#                 f"[EV] [{phase_name.upper()}][{i}] "
-#                 f"{ex_id} (bus={bus}, p_set_old={p_ex:.6f}) "
-#                 f"-> {new_id} (p_set_new={p_new:.6f})  "
-#                 f"dist={dist:.1f} m  rel_dev={rel_dev:+.2%}"
-#             )
-
-#     # ---- Phase 1: greedy ----
-#     m1, u1 = _greedy_pass(list(existing_m.index), radius_1, tol_1, "Phase 1")
-#     phase1_matches.extend(m1)
-
-#     # ---- Phase 2: global ----
-#     m2, u2 = _global_pass(u1, radius_2, tol_2, "Phase 2")
-#     phase2_matches.extend(m2)
-
-#     # ---- Phase 3: global ----
-#     m3, u3 = _global_pass(u2, radius_3, tol_3, "Phase 3")
-#     phase3_matches.extend(m3)
-
-#     # ---- Phase 4: global ----
-#     m4, u4 = _global_pass(u3, radius_4, tol_4, "Phase 4")
-#     phase4_matches.extend(m4)
-
-#     matches = m1 + m2 + m3 + m4
-#     unused_new = [i for i in new_ids.tolist() if i not in used_new]
-
-#     _log_phase("Phase 2", phase2_matches, tol_2)
-#     _log_phase("Phase 3", phase3_matches, tol_3)
-#     _log_phase("Phase 4", phase4_matches, tol_4)
-
-#     print(f"[EV] Unmatched existing CPs after Phase 4: {len(u4)}")
-#     for i, ex_id in enumerate(u4, 1):
-#         bus = existing_m.loc[ex_id, "bus"]
-#         p_ex = float(existing_m.loc[ex_id, "p_set"])
-#         print(f"[EV] [UNMATCHED][{i}] {ex_id} (bus={bus}, p_set_old={p_ex:.6f})")
-
-#     return matches, u4, unused_new
-
 def _match_two_step_nearest(
     existing_m: gpd.GeoDataFrame,
     new_m: gpd.GeoDataFrame,
@@ -860,7 +388,6 @@ def _transfer_ts_and_replace_new_with_existing(
 # ============================================================
 # Basic helpers
 # ============================================================
-
 def _make_unique_load_id(existing_index, base_name):
     """
     Create a unique load ID not yet present in loads_df.index.
@@ -873,13 +400,11 @@ def _make_unique_load_id(existing_index, base_name):
         i += 1
     return f"{base_name}_{i}"
 
-
 def buses_with_existing_loads(edisgo):
     """
     Return buses that already host at least one load.
     """
     return edisgo.topology.loads_df["bus"].dropna().unique()
-
 
 def buses_with_same_load_type(edisgo, load_type):
     """
@@ -888,14 +413,12 @@ def buses_with_same_load_type(edisgo, load_type):
     df = edisgo.topology.loads_df
     return df.loc[df["type"] == load_type, "bus"].dropna().unique()
 
-
 def get_load_ids_by_type(edisgo, load_type):
     """
     Return all load IDs of one load type.
     """
     loads_df = edisgo.topology.loads_df
     return loads_df.index[loads_df["type"] == load_type].tolist()
-
 
 def split_ids_by_marker(load_ids, marker="Existing"):
     """
@@ -925,7 +448,6 @@ def split_ids_by_marker(load_ids, marker="Existing"):
     marked_ids = [i for i in load_ids if marker in str(i)]
     unmarked_ids = [i for i in load_ids if marker not in str(i)]
     return marked_ids, unmarked_ids
-
 
 def _resolve_target_total(current_count, *, target_total=None, percentage=None):
     """
@@ -960,11 +482,9 @@ def _resolve_target_total(current_count, *, target_total=None, percentage=None):
     desired_total = int(round(current_count * (1 + percentage)))
     return max(0, desired_total)
 
-
 # ============================================================
 # Selection logic
 # ============================================================
-
 def _select_keep_ids(
     candidate_ids,
     *,
@@ -988,29 +508,38 @@ def _select_keep_ids(
 
     return rng.choice(np.array(candidate_ids), size=target_total, replace=False).tolist()
 
-
-def _select_keep_ids_remove_marked_last(
+def _select_keep_ids_by_removal_priority(
     candidate_ids,
     *,
     target_total,
     seed=42,
-    marker="Existing",
+    removal_priority=None,
 ):
     """
-    Select IDs to keep such that IDs containing `marker` are removed last.
+    Select IDs to keep such that removal happens in priority stages.
 
-    Logic:
-    - first keep all marked IDs if possible (e.g. existing charging points)
-    - remaining slots are filled randomly from unmarked IDs
-    - if target_total is smaller than number of marked IDs,
-      keep a random subset of marked IDs only
+    Removal order:
+    1. IDs without any marker
+    2. IDs matching earlier markers in `removal_priority`
+    3. IDs matching later markers in `removal_priority`
+
+    Example
+    -------
+    removal_priority = ["Additional", "Existing"]
+
+    -> removal order:
+       - no marker
+       - "Additional"
+       - "Existing"
 
     Parameters
     ----------
     candidate_ids : list[str]
     target_total : int
     seed : int
-    marker : str | None
+    removal_priority : list[str] | None
+        Markers ordered from earlier removable to later removable.
+        Later entries are protected longer.
 
     Returns
     -------
@@ -1029,28 +558,45 @@ def _select_keep_ids_remove_marked_last(
     if target_total == 0:
         return []
 
-    marked_ids, unmarked_ids = split_ids_by_marker(candidate_ids, marker=marker)
-
-    # No marker logic available -> fully random
-    if marker is None or len(marked_ids) == 0:
+    if not removal_priority:
         return rng.choice(np.array(candidate_ids), size=target_total, replace=False).tolist()
 
-    # If target smaller than number of marked IDs, only marked IDs survive
-    if target_total <= len(marked_ids):
-        return rng.choice(np.array(marked_ids), size=target_total, replace=False).tolist()
+    # Buckets:
+    # bucket 0 = IDs without any marker
+    # bucket 1 = first marker in removal_priority
+    # bucket 2 = second marker in removal_priority
+    # ...
+    buckets = {i: [] for i in range(len(removal_priority) + 1)}
 
-    keep_ids = list(marked_ids)
-    remaining = target_total - len(marked_ids)
+    for load_id in candidate_ids:
+        load_id_str = str(load_id)
 
-    if remaining >= len(unmarked_ids):
-        keep_ids.extend(unmarked_ids)
-    elif remaining > 0:
-        keep_ids.extend(
-            rng.choice(np.array(unmarked_ids), size=remaining, replace=False).tolist()
-        )
+        matched_bucket = 0
+        for i, marker in enumerate(removal_priority, start=1):
+            if marker in load_id_str:
+                matched_bucket = i
+        buckets[matched_bucket].append(load_id)
+
+    # Keep from highest protection bucket first
+    keep_ids = []
+    remaining = target_total
+
+    for bucket_idx in range(len(removal_priority), -1, -1):
+        bucket_ids = buckets[bucket_idx]
+
+        if remaining <= 0:
+            break
+
+        if remaining >= len(bucket_ids):
+            keep_ids.extend(bucket_ids)
+            remaining -= len(bucket_ids)
+        else:
+            keep_ids.extend(
+                rng.choice(np.array(bucket_ids), size=remaining, replace=False).tolist()
+            )
+            remaining = 0
 
     return keep_ids
-
 
 def _select_source_ids_for_duplication(
     candidate_ids,
@@ -1072,11 +618,9 @@ def _select_source_ids_for_duplication(
 
     return rng.choice(np.array(candidate_ids), size=n_add, replace=True)
 
-
 # ============================================================
 # Topology / time-series write helpers
 # ============================================================
-
 def _duplicate_loads_from_source_ids(
     edisgo,
     *,
@@ -1174,7 +718,6 @@ def _duplicate_loads_from_source_ids(
 
     return new_ids
 
-
 def export_removed_loads_report(
     edisgo,
     removed_ids,
@@ -1217,7 +760,6 @@ def export_removed_loads_report(
         "removed_ids": removed_ids,
     }
 
-
 def _remove_load_ids(
     edisgo,
     remove_ids,
@@ -1258,11 +800,9 @@ def _remove_load_ids(
 
     return remove_ids
 
-
 # ============================================================
 # Main generic function
 # ============================================================
-
 def set_loads_to_target(
     edisgo,
     *,
@@ -1279,7 +819,7 @@ def set_loads_to_target(
     export_prefix=None,
     name_prefix=None,
     remove_marked_last=True,
-    removal_marker=None,
+    removal_priority=None,
 ):
     """
     Set final number of loads of one type to a target value.
@@ -1322,10 +862,13 @@ def set_loads_to_target(
     export_prefix : str | None
     name_prefix : str | None
     remove_marked_last : bool
-        If True, IDs containing `removal_marker` are kept as long as possible
-        during reduction
-    removal_marker : str | None
-        Marker used only for reduction prioritization
+        If True, removal follows staged priority.
+    removal_priority : list[str] | None
+        Markers ordered from earlier removable to later removable.
+        Example:
+        ["Additional", "Existing"]
+        means:
+        no marker -> Additional -> Existing
     """
     current_ids = get_load_ids_by_type(edisgo, load_type)
     current_count = len(current_ids)
@@ -1358,11 +901,11 @@ def set_loads_to_target(
     # reduction
     if desired_total < current_count:
         if remove_marked_last:
-            keep_ids = _select_keep_ids_remove_marked_last(
+            keep_ids = _select_keep_ids_by_removal_priority(
                 current_ids,
                 target_total=desired_total,
                 seed=seed,
-                marker=removal_marker,
+                removal_priority=removal_priority,
             )
         else:
             keep_ids = _select_keep_ids(
@@ -1426,11 +969,9 @@ def set_loads_to_target(
         "final_count": final_count,
     }
 
-
 # ============================================================
 # Convenience wrappers: charging points
 # ============================================================
-
 def set_charging_points_to_target(
     edisgo,
     *,
@@ -1438,7 +979,7 @@ def set_charging_points_to_target(
     percentage=None,
     seed=42,
     eligible_buses=None,
-    existing_marker="Existing",
+    removal_priority=None,
     remove_existing_last=True,
     avoid_source_bus=False,
     add_tracking_columns=False,
@@ -1448,11 +989,17 @@ def set_charging_points_to_target(
     """
     Set charging points to a final target count.
 
-    Important:
+    Important
+    ---------
     - when increasing: no existing/new priority is applied
-    - when reducing: CPs whose IDs contain `existing_marker`
-      are removed last
+    - when reducing: removal follows staged priority
+
+    Default removal order:
+    no marker -> Additional -> Existing
     """
+    if removal_priority is None:
+        removal_priority = ["Additional", "Existing"]
+
     return set_loads_to_target(
         edisgo,
         load_type="charging_point",
@@ -1468,14 +1015,12 @@ def set_charging_points_to_target(
         export_prefix="removed_charging_points",
         name_prefix="cp_dup",
         remove_marked_last=remove_existing_last,
-        removal_marker=existing_marker,
+        removal_priority=removal_priority,
     )
-
 
 # ============================================================
 # Convenience wrappers: heat pumps
 # ============================================================
-
 def set_heat_pumps_to_target(
     edisgo,
     *,
@@ -1511,3 +1056,56 @@ def set_heat_pumps_to_target(
         remove_marked_last=False,
         removal_marker=None,
     )
+
+
+# Helper function for 14a functions
+def _get_intersecting_mv_grid_ids_from_shapefile(
+    engine: Engine,
+    shapefile_path: str,
+):
+    """
+    Determine all mv_grid_ids whose charging infrastructure intersects the given shapefile.
+    This is used as a common spatial selector for both cars and charging parks.
+    """
+    from sqlalchemy import func
+
+    if shapefile_path is None:
+        raise ValueError("shapefile_path must be provided.")
+
+    config = Config()
+    (egon_emob_charging_infrastructure,) = config.import_tables_from_oep(
+        engine, ["egon_emob_charging_infrastructure"], "grid"
+    )
+
+    local_shape = gpd.read_file(shapefile_path)
+
+    with session_scope_egon_data(engine) as session:
+        srid = get_srid_of_db_table(session, egon_emob_charging_infrastructure.geometry)
+
+        local_shape = local_shape.to_crs(f"EPSG:{srid}")
+        shape_union = local_shape.unary_union
+        shape_wkt = shape_union.wkt
+
+        query = (
+            session.query(egon_emob_charging_infrastructure.mv_grid_id)
+            .filter(
+                func.ST_Intersects(
+                    egon_emob_charging_infrastructure.geometry,
+                    func.ST_GeomFromText(shape_wkt, srid),
+                )
+            )
+            .distinct()
+        )
+
+        mv_grid_ids = pd.read_sql(sql=query.statement, con=session.bind)[
+            "mv_grid_id"
+        ].tolist()
+
+    mv_grid_ids = sorted(set(mv_grid_ids))
+
+    if len(mv_grid_ids) == 0:
+        logger.warning(
+            "No intersecting mv_grid_ids found for shapefile %s.", shapefile_path
+        )
+
+    return mv_grid_ids
