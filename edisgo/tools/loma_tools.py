@@ -9,9 +9,6 @@ from shapely.strtree import STRtree
 from edisgo.tools.config import Config
 from sqlalchemy.engine.base import Engine
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
-import logging
-
-logger = logging.getLogger(__name__)
 
 # ==========================
 # Transferring timeseries from new edisgo cp to matched existing/additional cp
@@ -1104,7 +1101,7 @@ def _get_intersecting_mv_grid_ids_from_shapefile(
     mv_grid_ids = sorted(set(mv_grid_ids))
 
     if len(mv_grid_ids) == 0:
-        logger.warning(
+        print(
             "No intersecting mv_grid_ids found for shapefile %s.", shapefile_path
         )
 
