@@ -1440,13 +1440,35 @@ def integrate_charging_parks_14a(edisgo_obj):
     from collections import defaultdict
 
     charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
-        
+    
+    #temp1
+    total_parks = len(charging_parks)
+    
+    parks_demand_gt_0 = [
+        cp for cp in charging_parks
+        if cp.designated_charging_point_capacity > 0
+    ]
+    parks_within_grid = [
+        cp for cp in charging_parks
+        if cp.within_grid
+    ]
+    #temp2
+    
     designated_charging_parks = [
         cp
         for cp in charging_parks
         if (cp.designated_charging_point_capacity > 0) and cp.within_grid
     ]
 
+    #temp1    
+    print("\nCharging park filter check (14a)")
+    print("-" * 44)
+    print(f"{'Total parks in all mv_grid_ids':<30}{total_parks:>6}")
+    print(f"{'CP with Demand > 0':<30}{len(parks_demand_gt_0):>6}")
+    print(f"{'CP within grid':<30}{len(parks_within_grid):>6}")
+    print(f"{'Designated CP (both true)':<30}{len(designated_charging_parks):>6}")
+    #temp2
+    
     charging_park_ids = []
     edisgo_ids = []
     comp_type = "charging_point"
@@ -1457,10 +1479,9 @@ def integrate_charging_parks_14a(edisgo_obj):
     }
     voltage_level_counter = defaultdict(int)
 
-    print("\n\n=========== START INTEGRATING CHARGING PARKS (_14a) ===========\n")
-    print(f"Designated charging parks: {len(designated_charging_parks)}\n")
-
-    total_start = time.perf_counter()
+    print("\nIntegrating charging parks (14a)")
+    print("-" * 44)
+    print(f"{'Designated parks':<30}{len(designated_charging_parks):>6}\n")
 
     for i, cp in enumerate(designated_charging_parks, start=1):
         park_start = time.perf_counter()
@@ -1490,7 +1511,7 @@ def integrate_charging_parks_14a(edisgo_obj):
             charging_park_ids.append(cp.id)
             edisgo_ids.append(edisgo_id)
 
-            if i % 1000 == 0:
+            if i % 500 == 0:
                 avg_park = stats["parks"]["total_time"] / stats["parks"]["count"]
                 print(f"[{i:>5}/{len(designated_charging_parks)}] last={park_dt:8.4f}s | avg={avg_park:8.4f}s")
 
@@ -1502,20 +1523,16 @@ def integrate_charging_parks_14a(edisgo_obj):
             print("Exception:                      ", e)
             print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n")
             raise
-
-    total_dt = time.perf_counter() - total_start
-
-    print("\n=========== FINISHED INTEGRATING CHARGING PARKS (_14a) ===========\n")
+    
+    print("\nIntegration finished (14a)")
+    print("-" * 44)
+    print(f"{'Integrated parks':<30}{len(charging_park_ids):>6}")
 
     edisgo_obj.electromobility.integrated_charging_parks_df = pd.DataFrame(
         columns=COLUMNS["integrated_charging_parks_df"],
         data=edisgo_ids,
         index=charging_park_ids,
     )
-    
-    if stats["parks"]["count"] > 0:
-        print(f"Total parks: {stats['parks']['count']}")
-        print(f"Total time: {total_dt:.4f}s")
 
 def import_electromobility_from_oedb(
     edisgo_obj: EDisGo,
@@ -1694,10 +1711,12 @@ def potential_charging_parks_from_oedb_14a(
     """
     14a variant of potential_charging_parks_from_oedb.
 
-    Test variant:
-    Do NOT filter charging parks directly by shapefile geometry.
+    Does not filter charging parks directly by shapefile geometry.
     Instead, determine intersecting mv_grid_ids from the shapefile and then
     load all charging parks belonging to those mv_grid_ids.
+    
+    Later on in integrate_charging_parks_14a only the charging parks that are 
+    within_grid are kept.
     """
     if shapefile_path is None:
         raise ValueError("shapefile_path must be provided.")

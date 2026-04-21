@@ -238,9 +238,9 @@ mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
 edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
 edisgo.topology.grid_district["srid"] = 4326
 
-# edisgo.topology.check_integrity()
-# pypsa_n = edisgo.to_pypsa()
-# edisgo.analyze()
+edisgo.topology.check_integrity()
+pypsa_n = edisgo.to_pypsa()
+edisgo.analyze()
 
 ############################# MANUAL FIXES ####################################
 edisgo.topology.generators_df = edisgo.topology.generators_df[
@@ -262,6 +262,16 @@ from edisgo.tools.loma_tools import (
     buses_with_existing_loads,
 )
 
+#Temporary Check: Amount of CPs before importing eDisGo CPs
+names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
+print({
+    "existing": names.str.contains("Existing", case=False).sum(),
+    "additional": names.str.contains("Additional", case=False).sum(),
+    "rest": (~(names.str.contains("Existing", case=False) |
+               names.str.contains("Additional", case=False))).sum(),
+    "total": len(names)
+})
+
 # -------------------------
 # Import + distribute + integrate EV data (creates new charging points) 
 # -------------------------
@@ -269,6 +279,10 @@ from edisgo.tools.loma_tools import (
 After this function there are no time series yet. Only charging points and 
 a overall demand which is then transferred into a time series in 
 apply_charging_strategy.
+
+Note: Afterwards there should be the Existing CP (411) and Additional CP (589) 
+from the LoMa side for the 2035 scenario and all new eDisGo CP (for whole Husum 
+there should be 2337). So the total should be 3337. 
 '''
 edisgo.import_electromobility_14a( 
     scenario="eGon2035",
@@ -277,13 +291,25 @@ edisgo.import_electromobility_14a(
     },
 )
 
+#Temporary Check: Amount of CPs after importing eDisGo CPs
+names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
+print({
+    "existing": names.str.contains("Existing", case=False).sum(),
+    "additional": names.str.contains("Additional", case=False).sum(),
+    "rest": (~(names.str.contains("Existing", case=False) |
+               names.str.contains("Additional", case=False))).sum(),
+    "total": len(names)
+})
+
 # -------------------------
-# Apply charging strategy (writes time series for the new integrated charging points from eDisGo)
+# Apply charging strategy 
 # -------------------------
 '''
+This step created the time series for the new eDisGo charging points.
 Without the preparation of Q before charging strategy I got an error while 
-apply_charging_strategy which was caused by deviating time index.
-After this step only the charging point from eDisGo have a time series.
+apply_charging_strategy which was caused by a deviating time index.
+
+Note: After this step ONLY the charging points from eDisGo have a time series.
 '''
 # Prepare Q before charging strategy
 ti = edisgo.timeseries.timeindex
@@ -304,6 +330,10 @@ edisgo.apply_charging_strategy(strategy="dumb")
 This step then finally transfers the time series from suitable eDisGo 
 charging_points to Existing_ und Additional_ charging points which are 
 created on the LoMa side.
+
+Note: After this step there should be 411 Existing CP and 589 Additional for
+the 2035 scenario and 1337 eDisGo CP as 1000 of those were used for matching
+and transferring the time series and deleted afterwards.
 '''
 ev_match_results = transfer_ts_from_new_to_existing_cp(
     edisgo,
@@ -313,6 +343,16 @@ ev_match_results = transfer_ts_from_new_to_existing_cp(
     radius_2=2000.0,
     tol_2=0.9,   
 )
+
+#Temporary Check: Amount of CPs fter transferring time series 
+names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
+print({
+    "existing": names.str.contains("Existing", case=False).sum(),
+    "additional": names.str.contains("Additional", case=False).sum(),
+    "rest": (~(names.str.contains("Existing", case=False) |
+               names.str.contains("Additional", case=False))).sum(),
+    "total": len(names)
+})
 
 # ============================================================
 # Optional Utilities for sensitivity analysis/chaning the amount of cp/hp
@@ -324,23 +364,27 @@ In this step the total amount of charging points or heat pumps can be adjusted.
 Either by percentage or by a total amount including the infrastructure from
 LoMa. When deleting CP/HP there is an option to export the deleted ones.
 New CP/HP will have 'dup' in their name.
+
+Note: for the 2035 scenario the target total would need to be set to 1000.
+CPs with the marker Additional and Existing in their name will be removed last.
+This way only the remaining 1337 eDisGo CP would be deleted.
 '''
 output_dir = "/home/paul/LoMa/test/shapes"
 
 cp_eligible_buses = buses_with_existing_loads(edisgo)
 hp_eligible_buses = buses_with_existing_loads(edisgo)
 
-# change_cp_amount = set_charging_points_to_target(
-#     edisgo,
-#     target_total=500, # sets total amount of CP to 1000
-#     #percentage=0.10, # increases total amount of CP by 10%
-#     #percentage=-0.10, # decreases total amount of CP by 10%
-#     eligible_buses=cp_eligible_buses,
-#     removal_priority=["Additional", "Existing"],
-#     add_tracking_columns=False,
-#     export_removed=True, # only applies when negative percentage for debugging
-#     export_dir=output_dir, # only applies when negative percentage for debugging
-# )
+change_cp_amount = set_charging_points_to_target(
+    edisgo,
+    target_total=1000, # sets total amount of CP to 1000
+    #percentage=0.10, # increases total amount of CP by 10%
+    #percentage=-0.10, # decreases total amount of CP by 10%
+    eligible_buses=cp_eligible_buses,
+    removal_priority=["Additional", "Existing"],
+    add_tracking_columns=False,
+    export_removed=True, # only applies when there are deleted CP
+    export_dir=output_dir, # only applies when there are deleted CP
+)
 
 # change_hp_amount = set_heat_pumps_to_target(
 #     edisgo,
@@ -349,9 +393,19 @@ hp_eligible_buses = buses_with_existing_loads(edisgo)
 #     #percentage=-0.10, # decreases total amount of CP by 10%
 #     eligible_buses=hp_eligible_buses,
 #     add_tracking_columns=False,
-#     export_removed=True, # only applies when negative percentage for debugging
-#     export_dir=output_dir, # only applies when negative percentage for debugging
+#     export_removed=True, # only applies when there are deleted HP
+#     export_dir=output_dir, # only applies when there are deleted HP
 # )
+
+#Temporary Check: Amount of CPs after total amount changed
+names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
+print({
+    "existing": names.str.contains("Existing", case=False).sum(),
+    "additional": names.str.contains("Additional", case=False).sum(),
+    "rest": (~(names.str.contains("Existing", case=False) |
+               names.str.contains("Additional", case=False))).sum(),
+    "total": len(names)
+})
 
 ############################ EV INTEGRATION PART ##############################
 
