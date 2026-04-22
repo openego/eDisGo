@@ -829,9 +829,9 @@ def set_loads_to_target(
     - duplicates are created from the full current population
     - no existing/new priority is applied
 
-    Reduction logic: remove_marked_last
-    - default (False): fully random removal
-    - optional (True): IDs containing `removal_marker` are removed last
+    Reduction logic:
+    - remove_marked_last=False: fully random removal
+    - remove_marked_last=True: staged removal according to `removal_priority`
 
     Parameters
     ----------
@@ -1051,7 +1051,7 @@ def set_heat_pumps_to_target(
         export_prefix=f"removed_{hp_type}",
         name_prefix="hp_dup",
         remove_marked_last=False,
-        removal_marker=None,
+        removal_priority=None,
     )
 
 
