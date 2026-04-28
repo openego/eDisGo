@@ -181,6 +181,73 @@ def plot_network(
         plt.show()
 
 
+def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = True):
+    """
+    Plot 2: Aggregate CP + HP load before and after §14a curtailment for a 24h day.
+
+    Parameters
+    ----------
+    day : str
+        Date string, e.g. "2035-01-15".
+    """
+    ti = edisgo.timeseries.timeindex
+    day_ti = ti[ti.normalize() == pd.Timestamp(day)]
+
+    loads_df = edisgo.topology.loads_df
+    cp_loads   = loads_df[loads_df["type"] == "charging_point"].index
+    hp_loads   = loads_df[loads_df["type"] == "heat_pump"].index
+    conv_loads = loads_df[loads_df["type"] == "conventional_load"].index
+
+    lap = edisgo.timeseries.loads_active_power
+    cp_ts   = lap[[c for c in cp_loads   if c in lap.columns]].loc[day_ti].sum(axis=1)
+    hp_ts   = lap[[c for c in hp_loads   if c in lap.columns]].loc[day_ti].sum(axis=1)
+    conv_ts = lap[[c for c in conv_loads if c in lap.columns]].loc[day_ti].sum(axis=1)
+
+    curt = get_curtailment_data(edisgo).loc[day_ti]
+    cp_curt = curt[
+        [c for c in curt.columns if "cp_14a_support" in c or "charging_point_14a_support" in c]
+    ].sum(axis=1)
+    hp_curt = curt[
+        [c for c in curt.columns if "hp_14a_support" in c]
+    ].sum(axis=1)
+
+    cp_opt = cp_ts - cp_curt
+    hp_opt = hp_ts - hp_curt
+
+    # Stacked bottom-up: conventional → HP opt → CP opt → HP curt → CP curt
+    stack_conv          = conv_ts.values
+    stack_conv_hp       = (conv_ts + hp_opt).values
+    stack_conv_hp_cp    = (conv_ts + hp_opt + cp_opt).values
+    stack_with_hp_curt  = (conv_ts + hp_ts  + cp_opt).values   # + HP curtailment
+    original_total      = (conv_ts + hp_ts  + cp_ts).values    # + CP curtailment
+
+    hours = [t.hour for t in day_ti]
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+
+    ax.fill_between(hours, 0,                stack_conv,         alpha=0.6,  color="gray",          label="Conventional load")
+    ax.fill_between(hours, stack_conv,        stack_conv_hp,      alpha=0.6,  color="mediumseagreen", label="Heat pumps (optimized)")
+    ax.fill_between(hours, stack_conv_hp,     stack_conv_hp_cp,   alpha=0.6,  color="steelblue",      label="Charging points (optimized)")
+    ax.fill_between(hours, stack_conv_hp_cp,  stack_with_hp_curt, alpha=0.55, color="mediumseagreen", label="§14a HP curtailment", hatch="////", edgecolor="darkgreen")
+    ax.fill_between(hours, stack_with_hp_curt, original_total,    alpha=0.55, color="steelblue",      label="§14a CP curtailment", hatch="////", edgecolor="darkblue")
+    ax.plot(hours, original_total, color="black", linewidth=1.5, linestyle="--", label="Original total (unoptimized)")
+
+    ax.set_xlabel("Hour of day")
+    ax.set_ylabel("Active Power [MW]")
+    ax.set_title(f"§14a Impact on Load by Type — {day}")
+    ax.set_xticks(range(24))
+    ax.legend(loc="upper left")
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    if save:
+        os.makedirs("plots", exist_ok=True)
+        plt.savefig(f"plots/load_before_after_{day}.png", dpi=300, bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.close()
+
+
 def run_optimization_14a(edisgo):
     """
     Run optimization with §14a curtailment enabled.
@@ -225,14 +292,14 @@ def run_optimization_14a(edisgo):
 #grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
 
 # Whole husum paths
-grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_model_pypsa"
-path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MV_grid_district/husum_district.shp"
+grid_path = "/home/carlos/LoMa/exec_folder/results/Husum_SLP_CP_pypsa"
+path_husum_district_shp = "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
 
 # MGB paths
 #grid_path = "/home/paul/LoMa/MGB_2035_model_pypsa"
 #path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MGB_district"
 
-edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 167))
+edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 23))
 
 mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
 edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
@@ -376,7 +443,7 @@ hp_eligible_buses = buses_with_existing_loads(edisgo)
 
 change_cp_amount = set_charging_points_to_target(
     edisgo,
-    target_total=1000, # sets total amount of CP to 1000
+    target_total=100, # sets total amount of CP to 1000
     #percentage=0.10, # increases total amount of CP by 10%
     #percentage=-0.10, # decreases total amount of CP by 10%
     eligible_buses=cp_eligible_buses,
@@ -386,16 +453,16 @@ change_cp_amount = set_charging_points_to_target(
     export_dir=output_dir, # only applies when there are deleted CP
 )
 
-# change_hp_amount = set_heat_pumps_to_target(
-#     edisgo,
-#     target_total=50, # sets total amount of HP to 50
-#     #percentage=0.10, # increases total amount of CP by 10%
-#     #percentage=-0.10, # decreases total amount of CP by 10%
-#     eligible_buses=hp_eligible_buses,
-#     add_tracking_columns=False,
-#     export_removed=True, # only applies when there are deleted HP
-#     export_dir=output_dir, # only applies when there are deleted HP
-# )
+change_hp_amount = set_heat_pumps_to_target(
+    edisgo,
+    target_total=100, # sets total amount of HP to 50
+    #percentage=0.10, # increases total amount of CP by 10%
+    #percentage=-0.10, # decreases total amount of CP by 10%
+    eligible_buses=hp_eligible_buses,
+    add_tracking_columns=False,
+    export_removed=True, # only applies when there are deleted HP
+    export_dir=output_dir, # only applies when there are deleted HP
+)
 
 #Temporary Check: Amount of CPs after total amount changed
 names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
@@ -485,17 +552,27 @@ gen_t_14a = gen_t.loc[:,gen_14a.index]
 print(f"Total use of 14a:{gen_t_14a.sum().sum()}")
 print("\n=== end 14a analysis ===")
 
-# Plot
-for ts in edisgo.timeseries.timeindex:
-    plot_network(edisgo, show=False, snapshot=str(ts))
-create_network_gif(duration=500)
 
-# edisgo.results.v_res
-# edisgo.results.s_res
+# # Create gif
+# for ts in edisgo.timeseries.timeindex:
+#     plot_network(edisgo, show=False, snapshot=str(ts))
+# create_network_gif(duration=500)
 
-# load_t = edisgo.timeseries.loads_active_power
-# g = edisgo.topology.generators_df
-# gt = edisgo.timeseries.generators_active_power
-# lines = edisgo.topology.lines_df
 
-# demand_q = edisgo.timeseries.loads_reactive_power
+# ── Presentation plots ───────────────────────────────────────────────────────
+# Select days that have non-trivial §14a curtailment (threshold: 1 kW total)
+curt_daily = (
+    get_curtailment_data(edisgo)
+    .groupby(edisgo.timeseries.timeindex.normalize())
+    .sum()
+    .sum(axis=1)
+)
+active_days = curt_daily[curt_daily > 1e-3].index.strftime("%Y-%m-%d").tolist()
+
+print(f"\n=== Days with §14a curtailment: {active_days} ===")
+
+for day in active_days:
+    print(f"  Plotting {day}...")
+    plot_load_before_after(edisgo, day=day, show=False, save=True)
+
+print(f"Saved plots to ./plots/")
