@@ -1051,7 +1051,6 @@ def set_heat_pumps_to_target(
         export_prefix=f"removed_{hp_type}",
         name_prefix="hp_dup",
         remove_marked_last=False,
-        removal_marker=None,
     )
 
 
