@@ -4,6 +4,16 @@ import geopandas as gpd
 import pandas as pd
 
 from edisgo import EDisGo
+from edisgo.tools.loma_tools import (
+    buses_with_existing_loads,
+    create_network_gif,
+    get_curtailment_data,
+    plot_load_before_after,
+    plot_network,
+    set_charging_points_to_target,
+    set_heat_pumps_to_target,
+    transfer_ts_from_new_to_existing_cp,
+)
 
 
 def run_optimization_14a(edisgo):
@@ -82,17 +92,6 @@ edisgo.topology.buses_df = edisgo.topology.buses_df[
 ]
 
 ############################ EV INTEGRATION PART ##############################
-from edisgo.tools.loma_tools import (
-    buses_with_existing_loads,
-    create_network_gif,
-    get_curtailment_data,
-    plot_load_before_after,
-    plot_network,
-    set_charging_points_to_target,
-    set_heat_pumps_to_target,
-    transfer_ts_from_new_to_existing_cp,
-)
-
 # Temporary Check: Amount of CPs before importing eDisGo CPs
 names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
 print(
