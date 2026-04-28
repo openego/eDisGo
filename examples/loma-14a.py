@@ -255,95 +255,98 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir):
     edisgo.set_time_series_reactive_power_control()
 
 
-# grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
+def main():
+    # grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
 
-# Whole husum paths
-grid_path = "/home/carlos/LoMa/exec_folder/results/Husum_SLP_CP_pypsa"
-path_husum_district_shp = (
-    "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
-)
+    # Whole husum paths
+    # grid_path = "/home/carlos/LoMa/exec_folder/results/Husum_SLP_CP_pypsa"
+    # path_husum_district_shp = (
+    #     "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
+    # )
 
-# MGB paths
-# grid_path = "/home/paul/LoMa/MGB_2035_model_pypsa"
-# path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MGB_district"
+    #MGB paths
+    grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_SLP_CP_pypsa"
+    path_husum_district_shp = "/home/carlos/LoMa/exec_folder/MGB_district"
 
-edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 23))
+    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 23))
 
-mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
-edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
-edisgo.topology.grid_district["srid"] = 4326
+    mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
+    edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
+    edisgo.topology.grid_district["srid"] = 4326
 
-edisgo.topology.check_integrity()
-pypsa_n = edisgo.to_pypsa()
-edisgo.analyze()
+    edisgo.topology.check_integrity()
+    pypsa_n = edisgo.to_pypsa()
+    edisgo.analyze()
 
-output_dir = "/home/paul/LoMa/test/shapes"
+    output_dir = "/home/carlos/LoMa/output_edisgo"
 
-prepare_edisgo_for_14a(
-    edisgo,
-    shapefile_path=path_husum_district_shp,
-    output_dir=output_dir,
-)
+    prepare_edisgo_for_14a(
+        edisgo,
+        shapefile_path=path_husum_district_shp,
+        output_dir=output_dir,
+    )
 
+    edisgo = run_optimization_14a(edisgo)
+    edisgo.analyze()
 
-edisgo = run_optimization_14a(edisgo)
-edisgo.analyze()
+    # ── Slack diagnosis ──────────────────────────────────────────────────────────
+    slacks = edisgo.opf_results.grid_slacks_t
+    print("\n=== OPF Slack Diagnosis (v5) ===")
+    for name, df in [
+        ("gen_nd_crt  (renewable curtailment)", slacks.gen_nd_crt),
+        ("gen_d_crt   (disp. gen curtailment)", slacks.gen_d_crt),
+        ("load_shed   (load shedding)", slacks.load_shedding),
+        ("hp_shed     (HP load shedding)", slacks.hp_load_shedding),
+    ]:
+        total = df.abs().sum(axis=1)
+        if (total > 5e-3).any():
+            print(f"  {name}: {total.sum():.4f} MW  ← NON-ZERO")
+        else:
+            print(f"  {name}: 0 (not used)")
 
-# ── Slack diagnosis ──────────────────────────────────────────────────────────
-slacks = edisgo.opf_results.grid_slacks_t
-print("\n=== OPF Slack Diagnosis (v5) ===")
-for name, df in [
-    ("gen_nd_crt  (renewable curtailment)", slacks.gen_nd_crt),
-    ("gen_d_crt   (disp. gen curtailment)", slacks.gen_d_crt),
-    ("load_shed   (load shedding)", slacks.load_shedding),
-    ("hp_shed     (HP load shedding)", slacks.hp_load_shedding),
-]:
-    total = df.abs().sum(axis=1)
-    if (total > 5e-3).any():
-        print(f"  {name}: {total.sum():.4f} MW  ← NON-ZERO")
+    print("\n=== Voltage after OPF (edisgo.results.v_res) ===")
+    v = edisgo.results.v_res
+    print(f"  Min:  {v.min().min():.4f} p.u.")
+    print(f"  Max:  {v.max().max():.4f} p.u.")
+    viol = (v < 0.9) | (v > 1.1)
+    if viol.any().any():
+        print(f"  Violations:{viol.sum().sum()}")
+        print()
     else:
-        print(f"  {name}: 0 (not used)")
+        print("  No voltage violations.")
+    # ── End diagnosis ────────────────────────────────────────────────────────────
 
-print("\n=== Voltage after OPF (edisgo.results.v_res) ===")
-v = edisgo.results.v_res
-print(f"  Min:  {v.min().min():.4f} p.u.")
-print(f"  Max:  {v.max().max():.4f} p.u.")
-viol = (v < 0.9) | (v > 1.1)
-if viol.any().any():
-    print(f"  Violations:{viol.sum().sum()}")
-    print()
-else:
-    print("  No voltage violations.")
-# ── End diagnosis ────────────────────────────────────────────────────────────
-print("\n=== 14a analysis ===")
-gen = edisgo.topology.generators_df
-gen_t = edisgo.timeseries.generators_active_power
-gen_14a = gen[gen.index.str.contains("14a")]
-gen_t_14a = gen_t.loc[:, gen_14a.index]
-print(f"Total use of 14a:{gen_t_14a.sum().sum()}")
-print("\n=== end 14a analysis ===")
+    print("\n=== 14a analysis ===")
+    gen = edisgo.topology.generators_df
+    gen_t = edisgo.timeseries.generators_active_power
+    gen_14a = gen[gen.index.str.contains("14a")]
+    gen_t_14a = gen_t.loc[:, gen_14a.index]
+    print(f"Total use of 14a:{gen_t_14a.sum().sum()}")
+    print("\n=== end 14a analysis ===")
+
+    # # Create gif
+    # for ts in edisgo.timeseries.timeindex:
+    #     plot_network(edisgo, show=False, snapshot=str(ts))
+    # create_network_gif(duration=500)
+
+    # ── Presentation plots ───────────────────────────────────────────────────────
+    # Select days that have non-trivial §14a curtailment (threshold: 1 kW total)
+    curt_daily = (
+        get_curtailment_data(edisgo)
+        .groupby(edisgo.timeseries.timeindex.normalize())
+        .sum()
+        .sum(axis=1)
+    )
+    active_days = curt_daily[curt_daily > 1e-3].index.strftime("%Y-%m-%d").tolist()
+
+    print(f"\n=== Days with §14a curtailment: {active_days} ===")
+
+    for day in active_days:
+        print(f"  Plotting {day}...")
+        plot_load_before_after(edisgo, day=day, show=False, save=True)
+
+    print(f"Saved plots to ./plots/")
 
 
-# # Create gif
-# for ts in edisgo.timeseries.timeindex:
-#     plot_network(edisgo, show=False, snapshot=str(ts))
-# create_network_gif(duration=500)
-
-
-# ── Presentation plots ───────────────────────────────────────────────────────
-# Select days that have non-trivial §14a curtailment (threshold: 1 kW total)
-curt_daily = (
-    get_curtailment_data(edisgo)
-    .groupby(edisgo.timeseries.timeindex.normalize())
-    .sum()
-    .sum(axis=1)
-)
-active_days = curt_daily[curt_daily > 1e-3].index.strftime("%Y-%m-%d").tolist()
-
-print(f"\n=== Days with §14a curtailment: {active_days} ===")
-
-for day in active_days:
-    print(f"  Plotting {day}...")
-    plot_load_before_after(edisgo, day=day, show=False, save=True)
-
-print(f"Saved plots to ./plots/")
+if __name__ == "__main__":
+    main()
