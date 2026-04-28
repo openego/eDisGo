@@ -110,26 +110,38 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
 end
 
 # OPF Version 5: Minimize line losses, use ONLY §14a curtailment as flexibility
-# All feasibility slacks are fixed to 0 in opf_bf.jl — if §14a is not sufficient, model is infeasible
+# OPF Version 5: §14a as primary flexibility; generation curtailment and load shedding
+# as escalating last resorts so the model always finds a feasible solution.
+# Inspect pds/phps/pcps in the results — non-zero values signal a pre-existing grid violation.
 function objective_min_losses_14a_only(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
-    ccm = Dict(n => PowerModels.var(pm, n, :ccm) for n in nws)
-    r = Dict(n => Dict(i => get(branch, "br_r", 1.0) for (i,branch) in PowerModels.ref(pm, n, :branch))  for n in nws)
 
-    # §14a virtual generators for HPs and CPs
     p_hp14a = Dict(n => get(PowerModels.var(pm, n), :p_hp14a, Dict()) for n in nws)
     p_cp14a = Dict(n => get(PowerModels.var(pm, n), :p_cp14a, Dict()) for n in nws)
+    pgc   = Dict(n => PowerModels.var(pm, n, :pgc)   for n in nws)
+    pgens = Dict(n => PowerModels.var(pm, n, :pgens)  for n in nws)
+    pds   = Dict(n => PowerModels.var(pm, n, :pds)    for n in nws)
+    phps  = Dict(n => PowerModels.var(pm, n, :phps)   for n in nws)
+    pcps  = Dict(n => PowerModels.var(pm, n, :pcps)   for n in nws)
 
-    factor_14a = 1e12  # EXTREME penalty - §14a only as last option
-    println("factor_14a = ", factor_14a)
-    factor_feasibility = 1e8  # Extreme penalty - slacks should be zero in normal operation
+    factor_14a   = 1e4   # §14a curtailment: primary flexibility
+    factor_pgc   = 1e5   # non-dispatchable curtailment: second resort
+    factor_pgens = 1e5   # dispatchable curtailment: third resort (same tier as pgc)
+    factor_shed  = 1e8   # load/HP/CP shedding: absolute last resort
+
+    println("factor_14a   = ", factor_14a)
+    println("factor_pgc   = ", factor_pgc)
+    println("factor_pgens = ", factor_pgens)
+    println("factor_shed  = ", factor_shed)
 
     return JuMP.@objective(pm.model, Min,
-        # Primary: minimize line losses
-        # 0.4 * sum(sum(ccm[n][b] * r[n][b] for (b,i,j) in PowerModels.ref(pm, n, :arcs_from)) for n in nws)
-        # Secondary: minimize §14a curtailment usage
-        + factor_14a * sum(sum(p_hp14a[n][i] for i in keys(p_hp14a[n])) for n in nws)  # §14a HP curtailment
-        + factor_14a * sum(sum(p_cp14a[n][i] for i in keys(p_cp14a[n])) for n in nws)  # §14a CP curtailment
+        + factor_14a   * sum(sum(p_hp14a[n][i] for i in keys(p_hp14a[n])) for n in nws)
+        + factor_14a   * sum(sum(p_cp14a[n][i] for i in keys(p_cp14a[n])) for n in nws)
+        + factor_pgc   * sum(sum(pgc[n][i]   for i in keys(PowerModels.ref(pm, 1, :gen_nd))) for n in nws)
+        + factor_pgens * sum(sum(pgens[n][i]  for i in keys(PowerModels.ref(pm, 1, :gen)))   for n in nws)
+        + factor_shed  * sum(sum(pds[n][i]    for i in keys(PowerModels.ref(pm, 1, :load)))  for n in nws)
+        + factor_shed  * sum(sum(phps[n][i]   for i in keys(PowerModels.ref(pm, 1, :heatpumps))) for n in nws)
+        + factor_shed  * sum(sum(pcps[n][i]   for i in keys(PowerModels.ref(pm, 1, :electromobility))) for n in nws)
     )
 end
 

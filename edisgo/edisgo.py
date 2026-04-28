@@ -35,7 +35,7 @@ from edisgo.io.db import engine as egon_engine
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
-    distribute_charging_demand_14a, #engine
+    distribute_charging_demand_14a,
     import_electromobility_from_dir,
     import_electromobility_from_oedb,
     import_electromobility_from_oedb_14a,
@@ -174,18 +174,22 @@ class EDisGo:
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
-        self.import_ding0_grid(
-            path=kwargs.get("ding0_grid", None),
-            legacy_ding0_grids=kwargs.get("legacy_ding0_grids", True),
-        )
+        if kwargs.get("ding0_grid", None) is not None:
+            self.import_ding0_grid(
+                path=kwargs.get("ding0_grid", None),
+                legacy_ding0_grids=kwargs.get("legacy_ding0_grids", True),
+            )
+        elif kwargs.get("pypsa_csv_dir", None) is not None:
+            self.import_pypsa_csv(kwargs.get("pypsa_csv_dir"),
+                                  snapshot_range=kwargs.get("snapshot_range"))
         self.legacy_grids = kwargs.get("legacy_ding0_grids", True)
-
         # instantiate other data classes
         self.results = Results(self)
         self.opf_results = OPFResults()
-        self.timeseries = timeseries.TimeSeries(
-            timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
-        )
+        if kwargs.get("pypsa_csv_dir", None) is None:
+            self.timeseries = timeseries.TimeSeries(
+                timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
+            )
         self.electromobility = Electromobility(edisgo_obj=self)
         self.heat_pump = HeatPump()
         self.dsm = DSM()
@@ -3564,6 +3568,16 @@ class EDisGo:
             )
 
         return cpy
+
+    def import_pypsa_csv(self, path, snapshot_range):
+        """
+        Imports grid topology and timeseries from a PyPSA CSV export.
+        """
+        # Lazy import to avoid circular dependencies
+        from edisgo.io.pypsa_csv_import import populate_edisgo_from_pypsa_csv
+
+        if path is not None:
+            populate_edisgo_from_pypsa_csv(self, path, snapshot_range=snapshot_range)
 
 
 def import_edisgo_from_pickle(filename, path=""):
