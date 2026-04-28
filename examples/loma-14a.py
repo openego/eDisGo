@@ -227,7 +227,9 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir):
         edisgo.topology.buses_df.index != "HV_dummy_bus"
     ]
 
-    integrate_ev_and_hp_for_14a(edisgo, shapefile_path=shapefile_path, output_dir=output_dir)
+    integrate_ev_and_hp_for_14a(
+        edisgo, shapefile_path=shapefile_path, output_dir=output_dir
+    )
 
     # Set Zero active power for batteries (let the OPF optimize dispatch freely)
     storage_names = edisgo.topology.storage_units_df.index
@@ -239,9 +241,7 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir):
     )
 
     hp_names = list(
-        edisgo.topology.loads_df[
-            edisgo.topology.loads_df["type"] == "heat_pump"
-        ].index
+        edisgo.topology.loads_df[edisgo.topology.loads_df["type"] == "heat_pump"].index
     )
     timeindex = edisgo.timeseries.timeindex
     cop = 3.0  # flat synthetic COP
@@ -250,7 +250,9 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir):
         index=timeindex,
         columns=hp_names,
     )
-    edisgo.heat_pump.heat_demand_df = edisgo.timeseries.loads_active_power[hp_names] * cop
+    edisgo.heat_pump.heat_demand_df = (
+        edisgo.timeseries.loads_active_power[hp_names] * cop
+    )
 
     edisgo.set_time_series_reactive_power_control()
 
@@ -264,7 +266,7 @@ def main():
     #     "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
     # )
 
-    #MGB paths
+    # MGB paths
     grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_SLP_CP_pypsa"
     path_husum_district_shp = "/home/carlos/LoMa/exec_folder/MGB_district"
 
