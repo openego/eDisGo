@@ -1653,7 +1653,7 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
     p_min_14a = curtailment_14a.get("min_power_mw", curtailment_14a.get("max_power_mw", 0.0042))  # MW
     max_hours_per_day = curtailment_14a.get("max_hours_per_day", hours_limit_14a)  # hours per day
     specific_components = curtailment_14a.get("components", [])  # empty list = all eligible HPs
-
+    
     # Filter heat pumps if specific components are defined
     if len(specific_components) > 0:
         hps_14a = np.intersect1d(flexible_hps, specific_components)
@@ -1710,6 +1710,13 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
         
         # Nominal power of HP
         p_nominal = hp_p_nom[hp_name]  # MW
+        
+        if p_nominal > 0.011: 
+            breakpoint()
+            p_min_14a = p_nominal * 0.40
+        else:
+            p_min_14a = 0.0042
+
 
         # Maximum support = difference between nominal and §14a limit
         # ============================================================
@@ -1720,7 +1727,7 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
         # - §14a minimum: 4.2 kW
         # - Maximum curtailment: 10 - 4.2 = 5.8 kW
         # - Virtual generator: 0 to 5.8 kW (reduces net load from 10 → 4.2 kW)
-        #
+        # - for HP's bigger than 11 kW the load can be reduced up to 40 % of the nominal capacity
         # Julia constraint enforces: net_load = original_load - virtual_gen >= 4.2 kW
         # Guaranteed > 0 because hps_eligible filtered out HPs with p_nominal <= p_min_14a
         p_max_support = p_nominal - p_min_14a
