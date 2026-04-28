@@ -1,6 +1,10 @@
 import os
 
+import contextily as ctx
 import geopandas as gpd
+import imageio.v2 as imageio
+import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from shapely.geometry import Point
@@ -1106,3 +1110,246 @@ def _get_intersecting_mv_grid_ids_from_shapefile(
         )
 
     return mv_grid_ids
+
+
+# ==========================
+# §14a visualization and curtailment utilities
+# ==========================
+
+
+def get_curtailment_data(edisgo):
+    """
+    Return the §14a virtual generator curtailment time series.
+
+    Returns a DataFrame of generators_active_power columns corresponding to
+    hp_14a_support and cp_14a_support virtual generators, transposed so that
+    the index is the generator name (ready for bus mapping).
+    """
+    gen_cols = [
+        col
+        for col in edisgo.timeseries.generators_active_power.columns
+        if "hp_14a_support" in col
+        or "cp_14a_support" in col
+        or "charging_point_14a_support" in col
+    ]
+    return edisgo.timeseries.generators_active_power[gen_cols]
+
+
+def create_network_gif(
+    folder_path="./plots", output_name="network_evolution.gif", duration=1
+):
+    """
+    Creates a GIF from PNG files in a folder.
+    duration: time in seconds between frames
+    """
+    images = []
+
+    files = [
+        f
+        for f in os.listdir(folder_path)
+        if f.endswith(".png") and f.startswith("grid_analysis_")
+    ]
+    files.sort()
+
+    print(f"Found {len(files)} frames. Processing...")
+
+    for filename in files:
+        file_path = os.path.join(folder_path, filename)
+        images.append(imageio.imread(file_path))
+        print(f"Added: {filename}")
+
+    imageio.mimsave(output_name, images, duration=duration, loop=0)
+    print(f"Success! GIF saved as {output_name}")
+
+
+def plot_network(
+    edisgo,
+    snapshot: str = "2035-01-15 09:00:00",
+    show: bool = True,
+    save: bool = True,
+    base_bus_size=0.000000002,
+):
+    results = edisgo.results
+
+    n = edisgo.to_pypsa()
+
+    coords = edisgo.topology.buses_df[["x", "y"]]
+    coords = coords.reindex(n.buses.index)
+    n.buses["x"] = coords["x"].values
+    n.buses["y"] = coords["y"].values
+
+    line_columns = n.lines.index
+    loading_relative = results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
+
+    v_min, v_max = 0.0, 1.0
+    norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
+
+    bus_colors = edisgo.results.v_res.T[snapshot]
+
+    norm_buses = mcolors.TwoSlopeNorm(vmin=0.9, vcenter=1.0, vmax=1.1)
+    voltage_cmap = mcolors.LinearSegmentedColormap.from_list(
+        "voltage", ["purple", "blue", "red"]
+    )
+
+    curt_14a = get_curtailment_data(edisgo).T
+    curt_14a["load"] = curt_14a.index
+    curt_14a["load"] = curt_14a["load"].apply(
+        lambda x: x.replace("cp_14a_support_", "").replace("hp_14a_support_", "")
+    )
+    curt_14a["bus"] = curt_14a["load"].map(edisgo.topology.loads_df["bus"])
+    grouped_14a = curt_14a.groupby("bus").sum()
+    grouped_14a.columns = grouped_14a.columns.map(str)
+
+    bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.000001)
+    bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
+
+    fig, ax = plt.subplots(figsize=(12, 8))
+
+    n.plot(
+        margin=0.05,
+        ax=ax,
+        geomap=False,
+        bus_colors=bus_colors,
+        bus_alpha=1,
+        bus_sizes=bus_sizes,
+        bus_cmap=voltage_cmap,
+        bus_norm=norm_buses,
+        line_colors=loading_relative,
+        line_widths=1.6,
+        line_cmap="jet",
+        line_norm=norm_lines,
+        title=f"Grid Analysis: {snapshot}",
+        geometry=False,
+    )
+
+    ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
+
+    sm_lines = plt.cm.ScalarMappable(cmap="jet", norm=norm_lines)
+    cb_lines = fig.colorbar(
+        sm_lines, ax=ax, orientation="vertical", location="left", pad=0.08, aspect=20
+    )
+    cb_lines.set_label("Line Loading [relative]", fontsize=8)
+
+    sm_buses = plt.cm.ScalarMappable(cmap=voltage_cmap, norm=norm_buses)
+    cb_buses = fig.colorbar(
+        sm_buses, ax=ax, orientation="vertical", location="right", pad=0.02, aspect=20
+    )
+    cb_buses.set_label(
+        "Bus Voltage [p.u.]  — blue: under, yellow: nominal, red: over", fontsize=8
+    )
+
+    if save:
+        os.makedirs("plots", exist_ok=True)
+        plt.savefig(f"plots/grid_analysis_{snapshot}.png", dpi=300, bbox_inches="tight")
+
+    if show:
+        plt.show()
+
+
+def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = True):
+    """
+    Plot aggregate CP + HP load before and after §14a curtailment for a 24h day.
+
+    Parameters
+    ----------
+    day : str
+        Date string, e.g. "2035-01-15".
+    """
+    ti = edisgo.timeseries.timeindex
+    day_ti = ti[ti.normalize() == pd.Timestamp(day)]
+
+    loads_df = edisgo.topology.loads_df
+    cp_loads = loads_df[loads_df["type"] == "charging_point"].index
+    hp_loads = loads_df[loads_df["type"] == "heat_pump"].index
+    conv_loads = loads_df[loads_df["type"] == "conventional_load"].index
+
+    lap = edisgo.timeseries.loads_active_power
+    cp_ts = lap[[c for c in cp_loads if c in lap.columns]].loc[day_ti].sum(axis=1)
+    hp_ts = lap[[c for c in hp_loads if c in lap.columns]].loc[day_ti].sum(axis=1)
+    conv_ts = lap[[c for c in conv_loads if c in lap.columns]].loc[day_ti].sum(axis=1)
+
+    curt = get_curtailment_data(edisgo).loc[day_ti]
+    cp_curt = curt[
+        [
+            c
+            for c in curt.columns
+            if "cp_14a_support" in c or "charging_point_14a_support" in c
+        ]
+    ].sum(axis=1)
+    hp_curt = curt[[c for c in curt.columns if "hp_14a_support" in c]].sum(axis=1)
+
+    cp_opt = cp_ts - cp_curt
+    hp_opt = hp_ts - hp_curt
+
+    stack_conv = conv_ts.values
+    stack_conv_hp = (conv_ts + hp_opt).values
+    stack_conv_hp_cp = (conv_ts + hp_opt + cp_opt).values
+    stack_with_hp_curt = (conv_ts + hp_ts + cp_opt).values
+    original_total = (conv_ts + hp_ts + cp_ts).values
+
+    hours = [t.hour for t in day_ti]
+
+    fig, ax = plt.subplots(figsize=(12, 5))
+
+    ax.fill_between(
+        hours, 0, stack_conv, alpha=0.6, color="gray", label="Conventional load"
+    )
+    ax.fill_between(
+        hours,
+        stack_conv,
+        stack_conv_hp,
+        alpha=0.6,
+        color="mediumseagreen",
+        label="Heat pumps (optimized)",
+    )
+    ax.fill_between(
+        hours,
+        stack_conv_hp,
+        stack_conv_hp_cp,
+        alpha=0.6,
+        color="steelblue",
+        label="Charging points (optimized)",
+    )
+    ax.fill_between(
+        hours,
+        stack_conv_hp_cp,
+        stack_with_hp_curt,
+        alpha=0.55,
+        color="mediumseagreen",
+        label="§14a HP curtailment",
+        hatch="////",
+        edgecolor="darkgreen",
+    )
+    ax.fill_between(
+        hours,
+        stack_with_hp_curt,
+        original_total,
+        alpha=0.55,
+        color="steelblue",
+        label="§14a CP curtailment",
+        hatch="////",
+        edgecolor="darkblue",
+    )
+    ax.plot(
+        hours,
+        original_total,
+        color="black",
+        linewidth=1.5,
+        linestyle="--",
+        label="Original total (unoptimized)",
+    )
+
+    ax.set_xlabel("Hour of day")
+    ax.set_ylabel("Active Power [MW]")
+    ax.set_title(f"§14a Impact on Load by Type — {day}")
+    ax.set_xticks(range(24))
+    ax.legend(loc="upper left")
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+
+    if save:
+        os.makedirs("plots", exist_ok=True)
+        plt.savefig(f"plots/load_before_after_{day}.png", dpi=300, bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.close()
