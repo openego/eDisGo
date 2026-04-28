@@ -1,6 +1,7 @@
 import os
 
 from datetime import datetime
+
 import contextily as ctx
 import geopandas as gpd
 import imageio.v2 as imageio
@@ -83,9 +84,7 @@ def plot_network(
     lines_t = results.s_res.loc[:, line_columns]
 
     # 1. Define limits for line loading
-    loading_relative = (
-        results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
-    )
+    loading_relative = results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
 
     # 1. Limits für Farbskala (jetzt auf 0% - 100% bezogen)
     v_min, v_max = 0.0, 1.0
@@ -107,9 +106,7 @@ def plot_network(
     # Clean up index names to match load names
     curt_14a["load"] = curt_14a.index
     curt_14a["load"] = curt_14a["load"].apply(
-        lambda x: x.replace("cp_14a_support_", "").replace(
-            "hp_14a_support_", ""
-        )
+        lambda x: x.replace("cp_14a_support_", "").replace("hp_14a_support_", "")
     )
 
     # Map loads to their respective buses and aggregate curtailment per bus
@@ -169,13 +166,13 @@ def plot_network(
         pad=0.02,
         aspect=20,
     )
-    cb_buses.set_label("Bus Voltage [p.u.]  — blue: under, yellow: nominal, red: over", fontsize=8)
+    cb_buses.set_label(
+        "Bus Voltage [p.u.]  — blue: under, yellow: nominal, red: over", fontsize=8
+    )
 
     if save:
         os.makedirs("plots", exist_ok=True)
-        plt.savefig(
-            f"plots/grid_analysis_{snapshot}.png", dpi=300, bbox_inches="tight"
-        )
+        plt.savefig(f"plots/grid_analysis_{snapshot}.png", dpi=300, bbox_inches="tight")
 
     if show:
         plt.show()
@@ -194,43 +191,86 @@ def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = Tru
     day_ti = ti[ti.normalize() == pd.Timestamp(day)]
 
     loads_df = edisgo.topology.loads_df
-    cp_loads   = loads_df[loads_df["type"] == "charging_point"].index
-    hp_loads   = loads_df[loads_df["type"] == "heat_pump"].index
+    cp_loads = loads_df[loads_df["type"] == "charging_point"].index
+    hp_loads = loads_df[loads_df["type"] == "heat_pump"].index
     conv_loads = loads_df[loads_df["type"] == "conventional_load"].index
 
     lap = edisgo.timeseries.loads_active_power
-    cp_ts   = lap[[c for c in cp_loads   if c in lap.columns]].loc[day_ti].sum(axis=1)
-    hp_ts   = lap[[c for c in hp_loads   if c in lap.columns]].loc[day_ti].sum(axis=1)
+    cp_ts = lap[[c for c in cp_loads if c in lap.columns]].loc[day_ti].sum(axis=1)
+    hp_ts = lap[[c for c in hp_loads if c in lap.columns]].loc[day_ti].sum(axis=1)
     conv_ts = lap[[c for c in conv_loads if c in lap.columns]].loc[day_ti].sum(axis=1)
 
     curt = get_curtailment_data(edisgo).loc[day_ti]
     cp_curt = curt[
-        [c for c in curt.columns if "cp_14a_support" in c or "charging_point_14a_support" in c]
+        [
+            c
+            for c in curt.columns
+            if "cp_14a_support" in c or "charging_point_14a_support" in c
+        ]
     ].sum(axis=1)
-    hp_curt = curt[
-        [c for c in curt.columns if "hp_14a_support" in c]
-    ].sum(axis=1)
+    hp_curt = curt[[c for c in curt.columns if "hp_14a_support" in c]].sum(axis=1)
 
     cp_opt = cp_ts - cp_curt
     hp_opt = hp_ts - hp_curt
 
     # Stacked bottom-up: conventional → HP opt → CP opt → HP curt → CP curt
-    stack_conv          = conv_ts.values
-    stack_conv_hp       = (conv_ts + hp_opt).values
-    stack_conv_hp_cp    = (conv_ts + hp_opt + cp_opt).values
-    stack_with_hp_curt  = (conv_ts + hp_ts  + cp_opt).values   # + HP curtailment
-    original_total      = (conv_ts + hp_ts  + cp_ts).values    # + CP curtailment
+    stack_conv = conv_ts.values
+    stack_conv_hp = (conv_ts + hp_opt).values
+    stack_conv_hp_cp = (conv_ts + hp_opt + cp_opt).values
+    stack_with_hp_curt = (conv_ts + hp_ts + cp_opt).values  # + HP curtailment
+    original_total = (conv_ts + hp_ts + cp_ts).values  # + CP curtailment
 
     hours = [t.hour for t in day_ti]
 
     fig, ax = plt.subplots(figsize=(12, 5))
 
-    ax.fill_between(hours, 0,                stack_conv,         alpha=0.6,  color="gray",          label="Conventional load")
-    ax.fill_between(hours, stack_conv,        stack_conv_hp,      alpha=0.6,  color="mediumseagreen", label="Heat pumps (optimized)")
-    ax.fill_between(hours, stack_conv_hp,     stack_conv_hp_cp,   alpha=0.6,  color="steelblue",      label="Charging points (optimized)")
-    ax.fill_between(hours, stack_conv_hp_cp,  stack_with_hp_curt, alpha=0.55, color="mediumseagreen", label="§14a HP curtailment", hatch="////", edgecolor="darkgreen")
-    ax.fill_between(hours, stack_with_hp_curt, original_total,    alpha=0.55, color="steelblue",      label="§14a CP curtailment", hatch="////", edgecolor="darkblue")
-    ax.plot(hours, original_total, color="black", linewidth=1.5, linestyle="--", label="Original total (unoptimized)")
+    ax.fill_between(
+        hours, 0, stack_conv, alpha=0.6, color="gray", label="Conventional load"
+    )
+    ax.fill_between(
+        hours,
+        stack_conv,
+        stack_conv_hp,
+        alpha=0.6,
+        color="mediumseagreen",
+        label="Heat pumps (optimized)",
+    )
+    ax.fill_between(
+        hours,
+        stack_conv_hp,
+        stack_conv_hp_cp,
+        alpha=0.6,
+        color="steelblue",
+        label="Charging points (optimized)",
+    )
+    ax.fill_between(
+        hours,
+        stack_conv_hp_cp,
+        stack_with_hp_curt,
+        alpha=0.55,
+        color="mediumseagreen",
+        label="§14a HP curtailment",
+        hatch="////",
+        edgecolor="darkgreen",
+    )
+    ax.fill_between(
+        hours,
+        stack_with_hp_curt,
+        original_total,
+        alpha=0.55,
+        color="steelblue",
+        label="§14a CP curtailment",
+        hatch="////",
+        edgecolor="darkblue",
+    )
+    ax.plot(
+        hours,
+        original_total,
+        color="black",
+        linewidth=1.5,
+        linestyle="--",
+        label="Original total (unoptimized)",
+    )
 
     ax.set_xlabel("Hour of day")
     ax.set_ylabel("Active Power [MW]")
@@ -289,15 +329,17 @@ def run_optimization_14a(edisgo):
     return edisgo
 
 
-#grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
+# grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
 
 # Whole husum paths
 grid_path = "/home/carlos/LoMa/exec_folder/results/Husum_SLP_CP_pypsa"
-path_husum_district_shp = "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
+path_husum_district_shp = (
+    "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
+)
 
 # MGB paths
-#grid_path = "/home/paul/LoMa/MGB_2035_model_pypsa"
-#path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MGB_district"
+# grid_path = "/home/paul/LoMa/MGB_2035_model_pypsa"
+# path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MGB_district"
 
 edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 23))
 
@@ -323,26 +365,32 @@ edisgo.topology.buses_df = edisgo.topology.buses_df[
 
 ############################ EV INTEGRATION PART ##############################
 from edisgo.tools.loma_tools import (
-    transfer_ts_from_new_to_existing_cp,
+    buses_with_existing_loads,
     set_charging_points_to_target,
     set_heat_pumps_to_target,
-    buses_with_existing_loads,
+    transfer_ts_from_new_to_existing_cp,
 )
 
-#Temporary Check: Amount of CPs before importing eDisGo CPs
+# Temporary Check: Amount of CPs before importing eDisGo CPs
 names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-print({
-    "existing": names.str.contains("Existing", case=False).sum(),
-    "additional": names.str.contains("Additional", case=False).sum(),
-    "rest": (~(names.str.contains("Existing", case=False) |
-               names.str.contains("Additional", case=False))).sum(),
-    "total": len(names)
-})
+print(
+    {
+        "existing": names.str.contains("Existing", case=False).sum(),
+        "additional": names.str.contains("Additional", case=False).sum(),
+        "rest": (
+            ~(
+                names.str.contains("Existing", case=False)
+                | names.str.contains("Additional", case=False)
+            )
+        ).sum(),
+        "total": len(names),
+    }
+)
 
 # -------------------------
-# Import + distribute + integrate EV data (creates new charging points) 
+# Import + distribute + integrate EV data (creates new charging points)
 # -------------------------
-'''
+"""
 After this function there are no time series yet. Only charging points and 
 a overall demand which is then transferred into a time series in 
 apply_charging_strategy.
@@ -350,34 +398,38 @@ apply_charging_strategy.
 Note: Afterwards there should be the Existing CP (411) and Additional CP (589) 
 from the LoMa side for the 2035 scenario and all new eDisGo CP (for whole Husum 
 there should be 2337). So the total should be 3337. 
-'''
-edisgo.import_electromobility_14a( 
+"""
+edisgo.import_electromobility_14a(
     scenario="eGon2035",
-    import_electromobility_data_kwds={
-        "shapefile_path": path_husum_district_shp
-    },
+    import_electromobility_data_kwds={"shapefile_path": path_husum_district_shp},
 )
 
-#Temporary Check: Amount of CPs after importing eDisGo CPs
+# Temporary Check: Amount of CPs after importing eDisGo CPs
 names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-print({
-    "existing": names.str.contains("Existing", case=False).sum(),
-    "additional": names.str.contains("Additional", case=False).sum(),
-    "rest": (~(names.str.contains("Existing", case=False) |
-               names.str.contains("Additional", case=False))).sum(),
-    "total": len(names)
-})
+print(
+    {
+        "existing": names.str.contains("Existing", case=False).sum(),
+        "additional": names.str.contains("Additional", case=False).sum(),
+        "rest": (
+            ~(
+                names.str.contains("Existing", case=False)
+                | names.str.contains("Additional", case=False)
+            )
+        ).sum(),
+        "total": len(names),
+    }
+)
 
 # -------------------------
-# Apply charging strategy 
+# Apply charging strategy
 # -------------------------
-'''
+"""
 This step created the time series for the new eDisGo charging points.
 Without the preparation of Q before charging strategy I got an error while 
 apply_charging_strategy which was caused by a deviating time index.
 
 Note: After this step ONLY the charging points from eDisGo have a time series.
-'''
+"""
 # Prepare Q before charging strategy
 ti = edisgo.timeseries.timeindex
 lap_cols = edisgo.timeseries.loads_active_power.columns
@@ -393,7 +445,7 @@ edisgo.apply_charging_strategy(strategy="dumb")
 # -------------------------
 # Transfer time series from new eDisGo CPs to existing CPs
 # -------------------------
-'''
+"""
 This step then finally transfers the time series from suitable eDisGo 
 charging_points to Existing_ und Additional_ charging points which are 
 created on the LoMa side.
@@ -401,32 +453,38 @@ created on the LoMa side.
 Note: After this step there should be 411 Existing CP and 589 Additional for
 the 2035 scenario and 1337 eDisGo CP as 1000 of those were used for matching
 and transferring the time series and deleted afterwards.
-'''
+"""
 ev_match_results = transfer_ts_from_new_to_existing_cp(
     edisgo,
     existing_markers=("Existing", "Additional"),
     radius_1=2000.0,
     tol_1=0.15,
     radius_2=2000.0,
-    tol_2=0.9,   
+    tol_2=0.9,
 )
 
-#Temporary Check: Amount of CPs fter transferring time series 
+# Temporary Check: Amount of CPs fter transferring time series
 names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-print({
-    "existing": names.str.contains("Existing", case=False).sum(),
-    "additional": names.str.contains("Additional", case=False).sum(),
-    "rest": (~(names.str.contains("Existing", case=False) |
-               names.str.contains("Additional", case=False))).sum(),
-    "total": len(names)
-})
+print(
+    {
+        "existing": names.str.contains("Existing", case=False).sum(),
+        "additional": names.str.contains("Additional", case=False).sum(),
+        "rest": (
+            ~(
+                names.str.contains("Existing", case=False)
+                | names.str.contains("Additional", case=False)
+            )
+        ).sum(),
+        "total": len(names),
+    }
+)
 
 # ============================================================
 # Optional Utilities for sensitivity analysis/chaning the amount of cp/hp
 # - target by absolute value or relative percentage
 # - Only use one option at a time (traget_total, percentage)
 # ============================================================
-'''
+"""
 In this step the total amount of charging points or heat pumps can be adjusted.
 Either by percentage or by a total amount including the infrastructure from
 LoMa. When deleting CP/HP there is an option to export the deleted ones.
@@ -435,7 +493,7 @@ New CP/HP will have 'dup' in their name.
 Note: for the 2035 scenario the target total would need to be set to 1000.
 CPs with the marker Additional and Existing in their name will be removed last.
 This way only the remaining 1337 eDisGo CP would be deleted.
-'''
+"""
 output_dir = "/home/paul/LoMa/test/shapes"
 
 cp_eligible_buses = buses_with_existing_loads(edisgo)
@@ -443,36 +501,42 @@ hp_eligible_buses = buses_with_existing_loads(edisgo)
 
 change_cp_amount = set_charging_points_to_target(
     edisgo,
-    target_total=100, # sets total amount of CP to 1000
-    #percentage=0.10, # increases total amount of CP by 10%
-    #percentage=-0.10, # decreases total amount of CP by 10%
+    target_total=100,  # sets total amount of CP to 1000
+    # percentage=0.10, # increases total amount of CP by 10%
+    # percentage=-0.10, # decreases total amount of CP by 10%
     eligible_buses=cp_eligible_buses,
     removal_priority=["Additional", "Existing"],
     add_tracking_columns=False,
-    export_removed=True, # only applies when there are deleted CP
-    export_dir=output_dir, # only applies when there are deleted CP
+    export_removed=True,  # only applies when there are deleted CP
+    export_dir=output_dir,  # only applies when there are deleted CP
 )
 
 change_hp_amount = set_heat_pumps_to_target(
     edisgo,
-    target_total=100, # sets total amount of HP to 50
-    #percentage=0.10, # increases total amount of CP by 10%
-    #percentage=-0.10, # decreases total amount of CP by 10%
+    target_total=100,  # sets total amount of HP to 50
+    # percentage=0.10, # increases total amount of CP by 10%
+    # percentage=-0.10, # decreases total amount of CP by 10%
     eligible_buses=hp_eligible_buses,
     add_tracking_columns=False,
-    export_removed=True, # only applies when there are deleted HP
-    export_dir=output_dir, # only applies when there are deleted HP
+    export_removed=True,  # only applies when there are deleted HP
+    export_dir=output_dir,  # only applies when there are deleted HP
 )
 
-#Temporary Check: Amount of CPs after total amount changed
+# Temporary Check: Amount of CPs after total amount changed
 names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-print({
-    "existing": names.str.contains("Existing", case=False).sum(),
-    "additional": names.str.contains("Additional", case=False).sum(),
-    "rest": (~(names.str.contains("Existing", case=False) |
-               names.str.contains("Additional", case=False))).sum(),
-    "total": len(names)
-})
+print(
+    {
+        "existing": names.str.contains("Existing", case=False).sum(),
+        "additional": names.str.contains("Additional", case=False).sum(),
+        "rest": (
+            ~(
+                names.str.contains("Existing", case=False)
+                | names.str.contains("Additional", case=False)
+            )
+        ).sum(),
+        "total": len(names),
+    }
+)
 
 ############################ EV INTEGRATION PART ##############################
 
@@ -505,9 +569,7 @@ edisgo.heat_pump.cop_df = pd.DataFrame(
 # Heat demand = electrical active power * COP
 # This means the thermal constraint is always just-met,
 # so it won't add any extra restriction beyond what the electrical side already imposes
-edisgo.heat_pump.heat_demand_df = (
-    edisgo.timeseries.loads_active_power[hp_names] * cop
-)
+edisgo.heat_pump.heat_demand_df = edisgo.timeseries.loads_active_power[hp_names] * cop
 ###
 
 # set reactive power time series
@@ -524,8 +586,8 @@ print("\n=== OPF Slack Diagnosis (v5) ===")
 for name, df in [
     ("gen_nd_crt  (renewable curtailment)", slacks.gen_nd_crt),
     ("gen_d_crt   (disp. gen curtailment)", slacks.gen_d_crt),
-    ("load_shed   (load shedding)",         slacks.load_shedding),
-    ("hp_shed     (HP load shedding)",      slacks.hp_load_shedding),
+    ("load_shed   (load shedding)", slacks.load_shedding),
+    ("hp_shed     (HP load shedding)", slacks.hp_load_shedding),
 ]:
     total = df.abs().sum(axis=1)
     if (total > 5e-3).any():
@@ -547,8 +609,8 @@ else:
 print("\n=== 14a analysis ===")
 gen = edisgo.topology.generators_df
 gen_t = edisgo.timeseries.generators_active_power
-gen_14a  = gen[gen.index.str.contains("14a")]
-gen_t_14a = gen_t.loc[:,gen_14a.index]
+gen_14a = gen[gen.index.str.contains("14a")]
+gen_t_14a = gen_t.loc[:, gen_14a.index]
 print(f"Total use of 14a:{gen_t_14a.sum().sum()}")
 print("\n=== end 14a analysis ===")
 
