@@ -645,7 +645,7 @@ def from_powermodels(
                               "bus": bus_name,
                               "control": "PQ",
                               }
-                        print(f"Generator {gen_name} has been implemented ✓")
+            print(f"{len(names)} 14a generators for HPs has been implemented ✓")
         elif flex == "gen_cp_14a":
             # §14a virtual generators for CPs: write as positive generation
             print(f"    → Writing {len(names)} gen_cp_14a generators to generators_active_power")
@@ -666,8 +666,8 @@ def from_powermodels(
                               "bus": bus_name,
                               "control": "PQ",
                               }
-                        print(f"Generator {gen_name} has been implemented ✓")
-
+                        
+            print(f"{len(names)} 14a generators for CPs has been implemented ✓")
         elif flex in ["heatpumps", "electromobility"]:
             edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
                 names
@@ -1712,7 +1712,6 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
         p_nominal = hp_p_nom[hp_name]  # MW
         
         if p_nominal > 0.011: 
-            breakpoint()
             p_min_14a = p_nominal * 0.40
         else:
             p_min_14a = 0.0042
