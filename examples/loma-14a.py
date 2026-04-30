@@ -10,8 +10,10 @@ from edisgo.tools.loma_tools import (
     get_curtailment_data,
     plot_load_before_after,
     plot_network,
+    plot_storage_dispatch,
     set_charging_points_to_target,
     set_heat_pumps_to_target,
+    set_storage_timeseries_bus_level,
     transfer_ts_from_new_to_existing_cp,
 )
 
@@ -231,14 +233,7 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir):
         edisgo, shapefile_path=shapefile_path, output_dir=output_dir
     )
 
-    # Set Zero active power for batteries (let the OPF optimize dispatch freely)
-    storage_names = edisgo.topology.storage_units_df.index
-    timeindex = edisgo.timeseries.timeindex
-    edisgo.timeseries.storage_units_active_power = pd.DataFrame(
-        0.0,
-        index=timeindex,
-        columns=storage_names,
-    )
+    set_storage_timeseries_bus_level(edisgo)
 
     hp_names = list(
         edisgo.topology.loads_df[edisgo.topology.loads_df["type"] == "heat_pump"].index
@@ -291,7 +286,7 @@ def main():
     edisgo = run_optimization_14a(edisgo)
     edisgo.analyze()
 
-    # ── Slack diagnosis ──────────────────────────────────────────────────────────
+    # ────────────────────────── Slack diagnosis ──────────────────────────────
     slacks = edisgo.opf_results.grid_slacks_t
     print("\n=== OPF Slack Diagnosis (v5) ===")
     for name, df in [
@@ -316,7 +311,7 @@ def main():
         print()
     else:
         print("  No voltage violations.")
-    # ── End diagnosis ────────────────────────────────────────────────────────────
+    # ────────────────────────── End diagnosis ────────────────────────────────
 
     print("\n=== 14a analysis ===")
     gen = edisgo.topology.generators_df
@@ -349,6 +344,8 @@ def main():
 
     print(f"Saved plots to ./plots/")
 
+    return edisgo
+
 
 if __name__ == "__main__":
-    main()
+    edisgo = main()

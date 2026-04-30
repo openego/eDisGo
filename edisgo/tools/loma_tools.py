@@ -1,3 +1,4 @@
+import logging
 import os
 
 import contextily as ctx
@@ -10,9 +11,13 @@ import pandas as pd
 from shapely.geometry import Point
 from shapely.strtree import STRtree
 
-from edisgo.tools.config import Config
 from sqlalchemy.engine.base import Engine
+
+from edisgo.flex_opt.battery_storage_operation import _reference_operation
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
+from edisgo.tools.config import Config
+
+logger = logging.getLogger(__name__)
 
 # ==========================
 # Transferring timeseries from new edisgo cp to matched existing/additional cp
@@ -1113,6 +1118,120 @@ def _get_intersecting_mv_grid_ids_from_shapefile(
 
 
 # ==========================
+# Storage timeseries
+# ==========================
+
+
+def set_storage_timeseries_bus_level(edisgo, soe_init=0.0, freq=None):
+    """
+    Set storage unit active power time series based on bus-level net balance.
+
+    Charges when total generation at the bus exceeds total demand (surplus),
+    discharges when demand exceeds total generation (deficit). The battery
+    never exchanges energy with the grid — it only covers local surpluses and
+    deficits at its own bus.
+
+    When multiple storage units share a bus the net balance signal is split
+    proportionally by p_nom so that their combined power never exceeds the
+    available surplus or deficit.
+
+    Parameters
+    ----------
+    edisgo : EDisGo
+    soe_init : float
+        Initial state of energy in MWh for all storage units. Default: 0.
+    freq : float or None
+        Timestep length in hours (e.g. 1.0 for hourly, 0.25 for 15-min).
+        Inferred from timeindex when None.
+    """
+    stor_df = edisgo.topology.storage_units_df.copy()
+    if stor_df.empty:
+        return
+
+    timeindex = edisgo.timeseries.timeindex
+
+    if freq is None:
+        freq = (
+            (timeindex[1] - timeindex[0]).total_seconds() / 3600
+            if len(timeindex) > 1
+            else 1.0
+        )
+
+    for col in ("efficiency_store", "efficiency_dispatch"):
+        if col not in stor_df.columns:
+            stor_df[col] = float("nan")
+        mask = stor_df[col].isna()
+        if mask.any():
+            logger.warning(
+                f"'{col}' not set for storage units {stor_df.index[mask].tolist()}. "
+                "Defaulting to 0.95."
+            )
+            stor_df.loc[mask, col] = 0.95
+
+    gen_df = edisgo.topology.generators_df
+    load_df = edisgo.topology.loads_df
+    gen_ts = edisgo.timeseries.generators_active_power
+    load_ts = edisgo.timeseries.loads_active_power
+
+    def _bus_sum(component_df, ts):
+        result = {}
+        for bus, group in component_df.groupby("bus"):
+            cols = [c for c in group.index if c in ts.columns]
+            result[bus] = ts[cols].sum(axis=1) if cols else pd.Series(0.0, index=timeindex)
+        return result
+
+    all_gen_at_bus = _bus_sum(gen_df, gen_ts)
+    demand_at_bus = _bus_sum(load_df, load_ts)
+
+    storage_ts_dict = {}
+    for bus, bus_stor in stor_df.groupby("bus"):
+        net_signal = all_gen_at_bus.get(
+            bus, pd.Series(0.0, index=timeindex)
+        ) - demand_at_bus.get(bus, pd.Series(0.0, index=timeindex))
+
+        if all_gen_at_bus.get(bus, pd.Series(0.0, index=timeindex)).abs().sum() == 0:
+            logger.warning(
+                f"Bus {bus} has no generation. "
+                f"Storage units {bus_stor.index.tolist()} will remain at zero dispatch."
+            )
+
+        total_p_nom = bus_stor["p_nom"].sum()
+        for stor_name, stor_data in bus_stor.iterrows():
+            if pd.isna(stor_data["max_hours"]):
+                raise ValueError(
+                    f"'max_hours' not set for storage unit {stor_name}."
+                )
+            scale = stor_data["p_nom"] / total_p_nom
+            result = _reference_operation(
+                df=pd.DataFrame({"feedin_minus_demand": net_signal * scale}),
+                soe_init=soe_init,
+                soe_max=stor_data["p_nom"] * stor_data["max_hours"],
+                storage_p_nom=stor_data["p_nom"],
+                freq=freq,
+                efficiency_store=stor_data["efficiency_store"],
+                efficiency_dispatch=stor_data["efficiency_dispatch"],
+            )
+            storage_ts_dict[stor_name] = result["storage_power"]
+
+    edisgo.timeseries.storage_units_active_power = pd.DataFrame(
+        storage_ts_dict, index=timeindex
+    )
+
+    edisgo.set_time_series_reactive_power_control(
+        generators_parametrisation=None,
+        loads_parametrisation=None,
+        storage_units_parametrisation=pd.DataFrame(
+            {
+                "components": [stor_df.index.tolist()],
+                "mode": ["default"],
+                "power_factor": ["default"],
+            },
+            index=[1],
+        ),
+    )
+
+
+# ==========================
 # §14a visualization and curtailment utilities
 # ==========================
 
@@ -1244,6 +1363,103 @@ def plot_network(
 
     if show:
         plt.show()
+
+
+def plot_storage_dispatch(
+    edisgo, day: str = None, show: bool = True, save: bool = True
+):
+    """
+    Plot total solar + wind generation against total storage charge/discharge.
+
+    Two subplots sharing the x-axis:
+      - Top: stacked solar and wind generation.
+      - Bottom: storage discharge (positive) and charging (negative, shown below zero).
+
+    Parameters
+    ----------
+    edisgo : EDisGo
+    day : str or None
+        Date string e.g. "2035-01-15". If None, all snapshots are shown.
+    show : bool
+    save : bool
+    """
+    ti = edisgo.timeseries.timeindex
+    if day is not None:
+        ti = ti[ti.normalize() == pd.Timestamp(day)]
+
+    gen_df = edisgo.topology.generators_df
+    gen_ts = edisgo.timeseries.generators_active_power
+    stor_ts = edisgo.timeseries.storage_units_active_power
+
+    solar_cols = [
+        g
+        for g in gen_df[gen_df["type"] == "solar"].index
+        if g in gen_ts.columns
+    ]
+    wind_cols = [
+        g
+        for g in gen_df[gen_df["type"] == "wind"].index
+        if g in gen_ts.columns
+    ]
+    solar = gen_ts[solar_cols].loc[ti].sum(axis=1)
+    wind = gen_ts[wind_cols].loc[ti].sum(axis=1)
+
+    if stor_ts is not None and not stor_ts.empty:
+        stor = stor_ts.loc[ti].sum(axis=1)
+    else:
+        stor = pd.Series(0.0, index=ti)
+    discharge = stor.clip(lower=0)
+    charge = stor.clip(upper=0)
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
+
+    ax1.fill_between(ti, 0, solar.values, alpha=0.75, color="gold", label="Solar")
+    ax1.fill_between(
+        ti,
+        solar.values,
+        (solar + wind).values,
+        alpha=0.75,
+        color="steelblue",
+        label="Wind",
+    )
+    ax1.set_ylabel("Generation [MW]")
+    ax1.legend(loc="upper right")
+    ax1.grid(True, alpha=0.3)
+
+    ax2.fill_between(
+        ti, 0, discharge.values, alpha=0.75, color="darkorange", label="Discharge"
+    )
+    ax2.fill_between(
+        ti, 0, charge.values, alpha=0.75, color="mediumpurple", label="Charge"
+    )
+    ax2.axhline(0, color="black", linewidth=0.6)
+    ax2.set_ylabel("Storage Power [MW]")
+    ax2.legend(loc="upper right")
+    ax2.grid(True, alpha=0.3)
+
+    if day is not None:
+        ax2.set_xlabel("Hour of day")
+        fig.autofmt_xdate(rotation=0)
+        ax2.xaxis.set_major_formatter(
+            plt.matplotlib.dates.DateFormatter("%H:%M")
+        )
+    else:
+        ax2.set_xlabel("Timestamp")
+        fig.autofmt_xdate(rotation=45)
+
+    title = f"Generation vs Storage Dispatch — {day if day else 'all snapshots'}"
+    fig.suptitle(title)
+    plt.tight_layout()
+
+    if save:
+        os.makedirs("plots", exist_ok=True)
+        label = day if day else "all"
+        plt.savefig(
+            f"plots/storage_dispatch_{label}.png", dpi=300, bbox_inches="tight"
+        )
+    if show:
+        plt.show()
+    plt.close()
 
 
 def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = True):
