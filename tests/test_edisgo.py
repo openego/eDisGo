@@ -164,6 +164,21 @@ class TestEDisGo:
             storage_units_ts, self.edisgo.timeseries.storage_units_reactive_power
         )
 
+    def test_set_time_series_active_power_predefined_oedb_auto_sets_timeindex(self):
+        # Test that timeindex is automatically set when importing predefined time series
+        # and no timeindex is provided
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        # Ensure timeindex is empty initially
+        assert edisgo.timeseries.timeindex.empty
+        # Call set_time_series_active_power_predefined with demandlib data (local)
+        edisgo.set_time_series_active_power_predefined(
+            conventional_loads_ts="demandlib",
+        )
+        # Check that timeindex is now set to the default year (2011) with 8760 hours
+        assert not edisgo.timeseries.timeindex.empty
+        assert edisgo.timeseries.timeindex.year.unique()[0] == 2011
+        assert len(edisgo.timeseries.timeindex) == 8760
+
     def test_set_time_series_worst_case_analysis(self):
         self.edisgo.set_time_series_worst_case_analysis(
             cases="load_case", generators_names=["Generator_1"], loads_names=[]
@@ -285,6 +300,29 @@ class TestEDisGo:
             2,
             len(fluctuating_gens),
         )
+
+    @pytest.mark.slow
+    def test_set_time_series_active_power_predefined_oedb_auto_sets_timeindex(
+        self,
+    ):
+        edisgo_object = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path,
+            legacy_ding0_grids=False,
+        )
+
+        edisgo_object.set_time_series_active_power_predefined(
+            conventional_loads_ts="oedb",
+            fluctuating_generators_ts="oedb",
+            scenario="eGon2035",
+            engine=pytest.engine,
+            conventional_loads_names=[
+                "Load_mvgd_33535_lvgd_1164210000_244_residential"
+            ],
+        )
+
+        assert not edisgo_object.timeseries.timeindex.empty
+        assert edisgo_object.timeseries.timeindex[0].year == 2035
+        assert edisgo_object.timeseries.timeindex.shape == (8760,)
 
     def test_set_time_series_reactive_power_control(self):
         # set active power time series for fixed cosphi
