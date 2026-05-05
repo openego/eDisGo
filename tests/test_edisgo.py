@@ -383,16 +383,8 @@ class TestEDisGo:
     @pytest.mark.slow
     def test_generator_import(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
-        try:
-            edisgo.import_generators("nep2035")
-            assert len(edisgo.topology.generators_df) == 524
-        except Exception as e:
-            if "Table does not exist" in str(e) or "HTTP 404" in str(e):
-                pytest.skip(
-                    "Database table not accessible (requires external database connection)"
-                )
-            else:
-                raise
+        edisgo.import_generators("nep2035")
+        assert len(edisgo.topology.generators_df) == 524
 
     def test_analyze(self, caplog):
         self.setup_worst_case_time_series()
@@ -1569,6 +1561,9 @@ class TestEDisGo:
         dirs_in_save_dir = os.listdir(save_dir)
         assert len(dirs_in_save_dir) == 4
         assert "configs.json" in dirs_in_save_dir
+        timeseries_dir = os.path.join(save_dir, "timeseries")
+        assert os.path.exists(timeseries_dir)
+        assert "timeindex_worst_cases.csv" in os.listdir(timeseries_dir)
 
         shutil.rmtree(save_dir)
 
@@ -1600,7 +1595,7 @@ class TestEDisGo:
         zip = ZipFile(zip_file)
         files = zip.namelist()
         zip.close()
-        assert len(files) == 28
+        assert len(files) == 29
 
         os.remove(zip_file)
 
