@@ -61,21 +61,6 @@ def run_optimization_14a(edisgo):
 
 def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir):
     """Import EV charging points, apply charging strategy, and adjust CP/HP counts."""
-    # Temporary Check: Amount of CPs before importing eDisGo CPs
-    names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-    print(
-        {
-            "existing": names.str.contains("Existing", case=False).sum(),
-            "additional": names.str.contains("Additional", case=False).sum(),
-            "rest": (
-                ~(
-                    names.str.contains("Existing", case=False)
-                    | names.str.contains("Additional", case=False)
-                )
-            ).sum(),
-            "total": len(names),
-        }
-    )
 
     """
     After this function there are no time series yet. Only charging points and
@@ -91,21 +76,6 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir):
         import_electromobility_data_kwds={"shapefile_path": shapefile_path},
     )
 
-    # Temporary Check: Amount of CPs after importing eDisGo CPs
-    names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-    print(
-        {
-            "existing": names.str.contains("Existing", case=False).sum(),
-            "additional": names.str.contains("Additional", case=False).sum(),
-            "rest": (
-                ~(
-                    names.str.contains("Existing", case=False)
-                    | names.str.contains("Additional", case=False)
-                )
-            ).sum(),
-            "total": len(names),
-        }
-    )
 
     """
     This step created the time series for the new eDisGo charging points.
@@ -125,6 +95,21 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir):
 
     edisgo.apply_charging_strategy(strategy="dumb")
 
+    # Apply EV charging efficiency correction    
+    ev_charging_efficiency = 0.9
+    
+    lap = edisgo.timeseries.loads_active_power.copy()
+    
+    cp_names_before_transfer = edisgo.topology.loads_df.query(
+        "type == 'charging_point'"
+    ).index.intersection(lap.columns)
+    
+    lap.loc[:, cp_names_before_transfer] = (
+        lap.loc[:, cp_names_before_transfer] * ev_charging_efficiency
+    )
+    edisgo.timeseries.loads_active_power = lap
+
+        
     """
     This step then finally transfers the time series from suitable eDisGo
     charging_points to Existing_ und Additional_ charging points which are
@@ -141,22 +126,6 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir):
         tol_1=0.15,
         radius_2=2000.0,
         tol_2=0.9,
-    )
-
-    # Temporary Check: Amount of CPs after transferring time series
-    names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-    print(
-        {
-            "existing": names.str.contains("Existing", case=False).sum(),
-            "additional": names.str.contains("Additional", case=False).sum(),
-            "rest": (
-                ~(
-                    names.str.contains("Existing", case=False)
-                    | names.str.contains("Additional", case=False)
-                )
-            ).sum(),
-            "total": len(names),
-        }
     )
 
     # ============================================================
@@ -179,7 +148,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir):
 
     set_charging_points_to_target(
         edisgo,
-        target_total=100,  # sets total amount of CP to 1000
+        target_total=1500,  # sets total amount of CP to 1000
         # percentage=0.10, # increases total amount of CP by 10%
         # percentage=-0.10, # decreases total amount of CP by 10%
         eligible_buses=cp_eligible_buses,
@@ -191,29 +160,13 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir):
 
     set_heat_pumps_to_target(
         edisgo,
-        target_total=100,  # sets total amount of HP to 50
+        target_total=1500,  # sets total amount of HP to 50
         # percentage=0.10, # increases total amount of HP by 10%
         # percentage=-0.10, # decreases total amount of HP by 10%
         eligible_buses=hp_eligible_buses,
         add_tracking_columns=False,
         export_removed=True,  # only applies when there are deleted HP
         export_dir=output_dir,  # only applies when there are deleted HP
-    )
-
-    # Temporary Check: Amount of CPs after total amount changed
-    names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-    print(
-        {
-            "existing": names.str.contains("Existing", case=False).sum(),
-            "additional": names.str.contains("Additional", case=False).sum(),
-            "rest": (
-                ~(
-                    names.str.contains("Existing", case=False)
-                    | names.str.contains("Additional", case=False)
-                )
-            ).sum(),
-            "total": len(names),
-        }
     )
 
 
@@ -256,14 +209,14 @@ def main():
     # grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
 
     # Whole husum paths
-    # grid_path = "/home/carlos/LoMa/exec_folder/results/Husum_SLP_CP_pypsa"
-    # path_husum_district_shp = (
-    #     "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
-    # )
+    grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_model_pypsa"
+    path_husum_district_shp = (
+        "/home/paul/LoMa/loma-repo/data/Input_files/MV_grid_district/husum_district.shp"
+    )
 
     # MGB paths
-    grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_SLP_CP_pypsa"
-    path_husum_district_shp = "/home/carlos/LoMa/exec_folder/MGB_district"
+    # grid_path = "/home/paul/LoMa/MGB_2035_model_pypsa"
+    # path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MGB_district"
 
     edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 23))
 
@@ -275,7 +228,7 @@ def main():
     pypsa_n = edisgo.to_pypsa()
     edisgo.analyze()
 
-    output_dir = "/home/carlos/LoMa/output_edisgo"
+    output_dir = "/home/paul/LoMa/test/edisgo_output"
 
     prepare_edisgo_for_14a(
         edisgo,
