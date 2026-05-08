@@ -219,6 +219,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir):
 
 def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir):
     """Apply topology fixes, EV integration, and pre-optimization setup."""
+
     edisgo.topology.generators_df = edisgo.topology.generators_df[
         edisgo.topology.generators_df.index != "HV_dummy_gen_slack"
     ]
@@ -226,7 +227,8 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir):
         edisgo.topology.buses_df.v_nom <= 20
     ]
     edisgo.topology.buses_df = edisgo.topology.buses_df[
-        edisgo.topology.buses_df.index != "HV_dummy_bus"
+        (edisgo.topology.buses_df.index != "HV_dummy_bus") &
+        (edisgo.topology.buses_df.index != "bus_20111_HV")
     ]
 
     integrate_ev_and_hp_for_14a(
@@ -255,17 +257,17 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir):
 def main():
     # grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
 
-    # Whole husum paths
-    # grid_path = "/home/carlos/LoMa/exec_folder/results/Husum_SLP_CP_pypsa"
-    # path_husum_district_shp = (
-    #     "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
-    # )
+    # Whole Husum paths
+    grid_path = "/home/carlos/LoMa/exec_folder/results/Whole_Husum_model_pypsa"
+    path_husum_district_shp = (
+        "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
+    )
 
     # MGB paths
-    grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_SLP_CP_pypsa"
-    path_husum_district_shp = "/home/carlos/LoMa/exec_folder/MGB_district"
+    # grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_SLP_CP_pypsa"
+    # path_husum_district_shp = "/home/carlos/LoMa/exec_folder/MGB_district"
 
-    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 23))
+    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 2))
 
     mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
     edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
@@ -342,7 +344,7 @@ def main():
         print(f"  Plotting {day}...")
         plot_load_before_after(edisgo, day=day, show=False, save=True)
 
-    print(f"Saved plots to ./plots/")
+    print("Saved plots to ./plots/")
 
     return edisgo
 
