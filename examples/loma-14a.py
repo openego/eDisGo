@@ -59,7 +59,7 @@ def run_optimization_14a(edisgo):
     return edisgo
 
 
-def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir):
+def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_days=None):
     """Import EV charging points, apply charging strategy, and adjust CP/HP counts."""
     # Temporary Check: Amount of CPs before importing eDisGo CPs
     names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
@@ -114,6 +114,20 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir):
 
     Note: After this step ONLY the charging points from eDisGo have a time series.
     """
+    # Optionally limit simulated days so apply_charging_strategy is faster.
+    # charging_strategies.py filters events via park_start_timesteps <= len_ts,
+    # where len_ts = simulated_days * 24*60 / stepsize, so a shorter day count
+    # proportionally reduces both the event set and the dummy_ts array size.
+    _orig_days = None
+    if setup_days is not None:
+        _orig_days = int(edisgo.electromobility.simbev_config_df.at[0, "days"])
+        _capped = min(setup_days, _orig_days)
+        edisgo.electromobility.simbev_config_df.at[0, "days"] = _capped
+        print(
+            f"[integrate_ev_and_hp] setup_days={setup_days}: "
+            f"using {_capped} of {_orig_days} simulated days for charging strategy"
+        )
+
     # Prepare Q before charging strategy
     ti = edisgo.timeseries.timeindex
     lap_cols = edisgo.timeseries.loads_active_power.columns
@@ -124,6 +138,9 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir):
     )
 
     edisgo.apply_charging_strategy(strategy="dumb")
+
+    if _orig_days is not None:
+        edisgo.electromobility.simbev_config_df.at[0, "days"] = _orig_days
 
     """
     This step then finally transfers the time series from suitable eDisGo
