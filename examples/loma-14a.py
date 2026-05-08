@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 
 import geopandas as gpd
@@ -59,7 +60,72 @@ def run_optimization_14a(edisgo):
     return edisgo
 
 
-def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_days=None):
+_EMOB_CACHE_FILES = [
+    "charging_processes_df.pkl",
+    "potential_charging_parks_gdf.pkl",
+    "simbev_config_df.pkl",
+    "integrated_charging_parks_df.pkl",
+    "new_cp_loads_df.pkl",
+]
+
+
+def _emob_cache_exists(cache_dir):
+    return all(os.path.exists(os.path.join(cache_dir, f)) for f in _EMOB_CACHE_FILES)
+
+
+def _save_emob_cache(edisgo, cache_dir):
+    os.makedirs(cache_dir, exist_ok=True)
+    emob = edisgo.electromobility
+
+    emob.charging_processes_df.to_pickle(
+        os.path.join(cache_dir, "charging_processes_df.pkl")
+    )
+    emob.potential_charging_parks_gdf.to_pickle(
+        os.path.join(cache_dir, "potential_charging_parks_gdf.pkl")
+    )
+    emob.simbev_config_df.to_pickle(
+        os.path.join(cache_dir, "simbev_config_df.pkl")
+    )
+    emob.integrated_charging_parks_df.to_pickle(
+        os.path.join(cache_dir, "integrated_charging_parks_df.pkl")
+    )
+
+    edisgo_cp_ids = set(emob.integrated_charging_parks_df["edisgo_id"].dropna())
+    new_cp_rows = edisgo.topology.loads_df[
+        edisgo.topology.loads_df.index.isin(edisgo_cp_ids)
+    ]
+    new_cp_rows.to_pickle(os.path.join(cache_dir, "new_cp_loads_df.pkl"))
+
+    print(f"[emob cache] Saved to {cache_dir}")
+
+
+def _load_emob_cache(edisgo, cache_dir):
+    emob = edisgo.electromobility
+
+    emob.charging_processes_df = pd.read_pickle(
+        os.path.join(cache_dir, "charging_processes_df.pkl")
+    )
+    emob.potential_charging_parks_gdf = pd.read_pickle(
+        os.path.join(cache_dir, "potential_charging_parks_gdf.pkl")
+    )
+    emob.simbev_config_df = pd.read_pickle(
+        os.path.join(cache_dir, "simbev_config_df.pkl")
+    )
+    emob.integrated_charging_parks_df = pd.read_pickle(
+        os.path.join(cache_dir, "integrated_charging_parks_df.pkl")
+    )
+
+    new_cp_rows = pd.read_pickle(os.path.join(cache_dir, "new_cp_loads_df.pkl"))
+    missing = new_cp_rows.index.difference(edisgo.topology.loads_df.index)
+    if len(missing) > 0:
+        edisgo.topology.loads_df = pd.concat(
+            [edisgo.topology.loads_df, new_cp_rows.loc[missing]]
+        )
+
+    print(f"[emob cache] Loaded from {cache_dir} ({len(new_cp_rows)} eDisGo CPs restored)")
+
+
+def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_days=None, cache_dir=None):
     """Import EV charging points, apply charging strategy, and adjust CP/HP counts."""
     # Temporary Check: Amount of CPs before importing eDisGo CPs
     names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
@@ -86,10 +152,15 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     from the LoMa side for the 2035 scenario and all new eDisGo CP (for whole Husum
     there should be 2337). So the total should be 3337.
     """
-    edisgo.import_electromobility_14a(
-        scenario="eGon2035",
-        import_electromobility_data_kwds={"shapefile_path": shapefile_path},
-    )
+    if cache_dir is not None and _emob_cache_exists(cache_dir):
+        _load_emob_cache(edisgo, cache_dir)
+    else:
+        edisgo.import_electromobility_14a(
+            scenario="eGon2035",
+            import_electromobility_data_kwds={"shapefile_path": shapefile_path},
+        )
+        if cache_dir is not None:
+            _save_emob_cache(edisgo, cache_dir)
 
     # Temporary Check: Amount of CPs after importing eDisGo CPs
     names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
@@ -196,7 +267,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
 
     set_charging_points_to_target(
         edisgo,
-        target_total=100,  # sets total amount of CP to 1000
+        target_total=1000,  # sets total amount of CP to 1000
         # percentage=0.10, # increases total amount of CP by 10%
         # percentage=-0.10, # decreases total amount of CP by 10%
         eligible_buses=cp_eligible_buses,
@@ -208,7 +279,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
 
     set_heat_pumps_to_target(
         edisgo,
-        target_total=100,  # sets total amount of HP to 50
+        target_total=2100,  # sets total amount of HP to 50
         # percentage=0.10, # increases total amount of HP by 10%
         # percentage=-0.10, # decreases total amount of HP by 10%
         eligible_buses=hp_eligible_buses,
@@ -234,7 +305,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     )
 
 
-def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir):
+def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None, setup_days=None):
     """Apply topology fixes, EV integration, and pre-optimization setup."""
 
     edisgo.topology.generators_df = edisgo.topology.generators_df[
@@ -249,7 +320,11 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir):
     ]
 
     integrate_ev_and_hp_for_14a(
-        edisgo, shapefile_path=shapefile_path, output_dir=output_dir
+        edisgo,
+        shapefile_path=shapefile_path,
+        output_dir=output_dir,
+        cache_dir=cache_dir,
+        setup_days=setup_days,
     )
 
     set_storage_timeseries_bus_level(edisgo)
@@ -275,7 +350,7 @@ def main():
     # grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
 
     # Whole Husum paths
-    grid_path = "/home/carlos/LoMa/exec_folder/results/Whole_Husum_model_pypsa"
+    grid_path = "/home/carlos/LoMa/exec_folder/results/Husum_model_pypsa_cable_tyes"
     path_husum_district_shp = (
         "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
     )
@@ -300,6 +375,8 @@ def main():
         edisgo,
         shapefile_path=path_husum_district_shp,
         output_dir=output_dir,
+        cache_dir="/home/carlos/LoMa/emob_cache/husum_eGon2035",
+        setup_days=2,
     )
 
     edisgo = run_optimization_14a(edisgo)
