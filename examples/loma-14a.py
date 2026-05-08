@@ -376,7 +376,7 @@ def main():
         shapefile_path=path_husum_district_shp,
         output_dir=output_dir,
         cache_dir="/home/carlos/LoMa/emob_cache/husum_eGon2035",
-        setup_days=2,
+        setup_days=None,
     )
 
     edisgo = run_optimization_14a(edisgo)
