@@ -262,32 +262,45 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     CPs with the marker Additional and Existing in their name will be removed last.
     This way only the remaining 1337 eDisGo CP would be deleted.
     """
-    cp_eligible_buses = buses_with_existing_loads(edisgo)
-    hp_eligible_buses = buses_with_existing_loads(edisgo)
+    # Compute CP eligible buses for CP scaling
+    valid_buses = set(edisgo.topology.buses_df.index)
 
+    cp_eligible_buses = [
+        bus for bus in buses_with_existing_loads(edisgo)
+        if bus in valid_buses
+    ]
+    
     set_charging_points_to_target(
         edisgo,
-        target_total=1000,  # sets total amount of CP to 1000
+        target_total=1000, # sets total amount of CP
         # percentage=0.10, # increases total amount of CP by 10%
         # percentage=-0.10, # decreases total amount of CP by 10%
         eligible_buses=cp_eligible_buses,
         removal_priority=["Additional", "Existing"],
         add_tracking_columns=False,
-        export_removed=True,  # only applies when there are deleted CP
-        export_dir=output_dir,  # only applies when there are deleted CP
+        export_removed=False,
+        export_dir=output_dir,
     )
+
+    # Recompute HP eligible buses after CP scaling
+    valid_buses = set(edisgo.topology.buses_df.index)
+    
+    hp_eligible_buses = [
+        bus for bus in buses_with_existing_loads(edisgo)
+        if bus in valid_buses
+    ]
 
     set_heat_pumps_to_target(
         edisgo,
-        target_total=2100,  # sets total amount of HP to 50
+        target_total=2100,  # sets total amount of HP
         # percentage=0.10, # increases total amount of HP by 10%
         # percentage=-0.10, # decreases total amount of HP by 10%
         eligible_buses=hp_eligible_buses,
         add_tracking_columns=False,
-        export_removed=True,  # only applies when there are deleted HP
+        export_removed=False,  # only applies when there are deleted HP
         export_dir=output_dir,  # only applies when there are deleted HP
     )
-
+    
     # Temporary Check: Amount of CPs after total amount changed
     names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
     print(
@@ -347,17 +360,20 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
 
 
 def main():
-    # grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_quo_model_pypsa"
-
+    # General Paths
+    output_dir = "/home/paul/LoMa/test/edisgo_output"
+    emob_cache_dir = "/home/paul/LoMa/loma-repo/emob_cache/husum_eGon2035"
+    
     # Whole Husum paths
-    grid_path = "/home/carlos/LoMa/exec_folder/results/Husum_model_pypsa_cable_tyes"
+    # grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_model_pypsa_SQ" # Status-Quo
+    grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_model_pypsa_2035" # 2035
     path_husum_district_shp = (
-        "/home/carlos/LoMa/exec_folder/data/Input_files/MV_grid_district/husum_district.shp"
+        "/home/paul/LoMa/loma-repo/data/Input_files/MV_grid_district/husum_district.shp"
     )
 
     # MGB paths
-    # grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_SLP_CP_pypsa"
-    # path_husum_district_shp = "/home/carlos/LoMa/exec_folder/MGB_district"
+    # grid_path = ""
+    # path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MGB_district"
 
     edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 2))
 
@@ -369,13 +385,11 @@ def main():
     pypsa_n = edisgo.to_pypsa()
     edisgo.analyze()
 
-    output_dir = "/home/carlos/LoMa/output_edisgo"
-
     prepare_edisgo_for_14a(
         edisgo,
         shapefile_path=path_husum_district_shp,
         output_dir=output_dir,
-        cache_dir="/home/carlos/LoMa/emob_cache/husum_eGon2035",
+        cache_dir=emob_cache_dir,
         setup_days=None,
     )
 
@@ -445,3 +459,32 @@ def main():
 
 if __name__ == "__main__":
     edisgo = main()
+    
+    # # ── Temporary export of final charging point locations ─────────────────────
+    # output_dir = "/home/paul/LoMa/test/edisgo_output"
+    
+    # cp_df = edisgo.topology.loads_df[
+    #     edisgo.topology.loads_df["type"] == "charging_point"
+    # ].copy()
+    
+    # cp_df = cp_df.join(
+    #     edisgo.topology.buses_df[["x", "y"]],
+    #     on="bus",
+    # )
+    
+    # cp_df = cp_df.dropna(subset=["x", "y"])
+    
+    # cp_gdf = gpd.GeoDataFrame(
+    #     cp_df.reset_index(names="cp_id"),
+    #     geometry=gpd.points_from_xy(cp_df["x"], cp_df["y"]),
+    #     crs="EPSG:4326",
+    # )
+    
+    # cp_export_path = os.path.join(
+    #     output_dir,
+    #     "charging_point_locations_after_opf.shp",
+    # )
+    
+    # cp_gdf.to_file(cp_export_path)
+    
+    # print(f"Exported {len(cp_gdf)} charging point locations to {cp_export_path}")

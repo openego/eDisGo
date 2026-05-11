@@ -350,15 +350,17 @@ def _transfer_ts_and_replace_new_with_existing(
         # keep existing bus+p_set: do NOT touch those columns
         if keep_existing_bus_and_pset and existing_id in edisgo.topology.loads_df.index:
             edisgo.topology.loads_df.at[existing_id, "type"] = "charging_point"
-
+            
         # --- remove NEW load + TS to keep CP count constant ---
         if drop_new and (new_id in edisgo.topology.loads_df.index):
             if new_id in edisgo.timeseries.loads_active_power.columns:
                 edisgo.timeseries.drop_component_time_series("loads_active_power", [new_id])
+        
             if new_id in edisgo.timeseries.loads_reactive_power.columns:
                 edisgo.timeseries.drop_component_time_series("loads_reactive_power", [new_id])
-
-            edisgo.remove_component("load", new_id)
+        
+            # Remove only the load row, keep the connected bus in buses_df
+            edisgo.topology.loads_df = edisgo.topology.loads_df.drop(index=new_id)
 
     edisgo.electromobility.integrated_charging_parks_df = icp
 
@@ -754,7 +756,10 @@ def _remove_load_ids(
     export_prefix=None,
 ):
     """
-    Remove specified loads from topology and time series.
+    Remove specified loads from topology and time series, but keep buses.
+
+    This intentionally does not call edisgo.remove_component("load", ...)
+    because remove_component may also remove now-empty buses.
     """
     if not remove_ids:
         return []
@@ -770,20 +775,40 @@ def _remove_load_ids(
             file_prefix=export_prefix or "removed_loads",
         )
 
-    p_cols = [i for i in remove_ids if i in edisgo.timeseries.loads_active_power.columns]
-    q_cols = [i for i in remove_ids if i in edisgo.timeseries.loads_reactive_power.columns]
+    p_cols = [
+        i for i in remove_ids
+        if i in edisgo.timeseries.loads_active_power.columns
+    ]
+    q_cols = [
+        i for i in remove_ids
+        if i in edisgo.timeseries.loads_reactive_power.columns
+    ]
 
     if p_cols:
-        edisgo.timeseries.drop_component_time_series("loads_active_power", p_cols)
+        edisgo.timeseries.drop_component_time_series(
+            "loads_active_power",
+            p_cols,
+        )
 
     if q_cols:
-        edisgo.timeseries.drop_component_time_series("loads_reactive_power", q_cols)
+        edisgo.timeseries.drop_component_time_series(
+            "loads_reactive_power",
+            q_cols,
+        )
 
-    for i in remove_ids:
-        if i in edisgo.topology.loads_df.index:
-            edisgo.remove_component("load", i)
+    # Important: remove only the load rows, keep buses untouched
+    existing_remove_ids = [
+        i for i in remove_ids
+        if i in edisgo.topology.loads_df.index
+    ]
+
+    if existing_remove_ids:
+        edisgo.topology.loads_df = edisgo.topology.loads_df.drop(
+            index=existing_remove_ids
+        )
 
     return remove_ids
+
 
 # ============================================================
 # Main generic function
