@@ -1680,7 +1680,7 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
         excluded_hps = set(hps_14a) - set(hps_eligible)
         logger.warning(
             f"Excluded {len(excluded_hps)} heat pump(s) from §14a curtailment due to "
-            f"nominal power <= {p_min_14a*1000:.1f} kW: {excluded_hps}"
+            f"nominal power <= {p_min_14a*1000:.1f} kW"
         )
     
     if len(hps_eligible) == 0:
@@ -1821,7 +1821,7 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
         excluded_cps = set(cps_14a) - set(cps_eligible)
         logger.warning(
             f"Excluded {len(excluded_cps)} charging point(s) from §14a curtailment due to "
-            f"nominal power <= {p_min_14a*1000:.1f} kW: {excluded_cps}"
+            f"nominal power <= {p_min_14a*1000:.1f} kW"
         )
     
     if len(cps_eligible) == 0:
