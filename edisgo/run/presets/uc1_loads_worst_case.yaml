@@ -1,0 +1,32 @@
+_comment: |
+  UC1 — worst-case flexibility loads:
+  load grid, base-reinforce (generators only), then import flex assets
+  (heat pumps, home batteries, DSM, electromobility) and apply worst-case
+  time series before a final reinforce. Cost delta = extra reinforcement
+  caused by the new assets under worst-case conditions.
+
+_workflow:
+  - setup_grid: load ding0 topology, import generators
+  - base_reinforce: worst-case TS + reinforce + reset equipment_changes
+  - import_heat_pumps: from egon_data
+  - import_home_batteries: from egon_data
+  - import_dsm: from egon_data
+  - import_electromobility: from egon_data (dumb charging)
+  - worst_case_ts: synthetic worst case incl. new assets
+  - reactive_power: fix reactive power control
+  - reinforce: final reinforcement — delta only
+  - save: persist topology + results
+
+scenario: eGon2035
+
+pipeline:
+  - setup_grid: {import_generators: true}
+  - base_reinforce
+  - import_heat_pumps
+  - import_home_batteries
+  - import_dsm
+  - import_electromobility: {charging_strategy: dumb}
+  - worst_case_ts
+  - reactive_power
+  - reinforce
+  - save

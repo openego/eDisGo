@@ -232,6 +232,27 @@ class EDisGo:
     def config(self, kwargs):
         self._config = Config(**kwargs)
 
+    def run_pipeline(self, config):
+        """
+        Run a YAML/JSON task pipeline on this EDisGo instance.
+
+        See :mod:`edisgo.run` for the config schema and task list.
+
+        Parameters
+        ----------
+        config : str, :class:`pathlib.Path`, or dict
+            Pipeline config as path to a YAML/JSON file or as a dict.
+
+        Returns
+        -------
+        :class:`~.EDisGo`
+            The EDisGo instance after the pipeline has run.
+
+        """
+        from edisgo.run import _run_pipeline_on
+
+        return _run_pipeline_on(self, config)
+
     def import_ding0_grid(self, path, legacy_ding0_grids=True):
         """
         Import ding0 topology data from csv files in the format as

@@ -1,0 +1,25 @@
+"""
+Task implementations for the eDisGo pipeline runner.
+
+Importing this package as a side effect registers every task defined
+in its submodules with :func:`edisgo.run.registry.register_task`, so
+that the runner sees them at execution time. The submodules are:
+
+* :mod:`.grid` — ``setup_grid``, ``load_from_base``
+* :mod:`.timeseries` — ``worst_case_ts``, ``oedb_ts``, ``manual_ts``,
+  ``set_timeindex``, ``reactive_power``
+* :mod:`.flex` — flex imports
+  (``import_heat_pumps``, ``import_home_batteries``, ``import_dsm``,
+  ``import_electromobility``, ``import_generators``) and operating
+  strategies (``apply_charging_strategy``,
+  ``apply_heat_pump_strategy``)
+* :mod:`.analysis` — ``check_integrity``, ``analyze``, ``reinforce``,
+  ``base_reinforce``, ``optimize``
+* :mod:`.io` — ``save``, ``load_charging_from_files``
+
+Task signature convention: ``(edisgo, ctx, **params)``. A task may
+mutate ``edisgo`` in place and/or return a new EDisGo instance (the
+returned value, if non-None, replaces the current one in the runner's
+loop).
+"""
+from edisgo.run.tasks import analysis, flex, grid, io, timeseries  # noqa: F401

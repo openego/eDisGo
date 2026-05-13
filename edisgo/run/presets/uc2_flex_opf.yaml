@@ -1,0 +1,43 @@
+_comment: |
+  UC2 — OPF with full flexibility:
+  Like UC1 but loads real egon_data time series (oedb) and runs a
+  powermodels OPF over flexibilities (heat pumps, EV, DSM, storage)
+  before the final reinforce. Cost delta = extra reinforcement needed
+  under optimal flex dispatch.
+
+_workflow:
+  - setup_grid: load ding0 topology, import generators
+  - base_reinforce: worst-case TS + reinforce + reset equipment_changes
+  - import_heat_pumps: from egon_data
+  - import_home_batteries: from egon_data
+  - import_dsm: from egon_data
+  - import_electromobility: from egon_data (dumb charging, flex bands)
+  - oedb_ts: real wind/solar + load time series (168 h, 2035)
+  - apply_heat_pump_strategy: uncontrolled (overwritten by OPF)
+  - reactive_power
+  - check_integrity
+  - optimize: pm_optimize with flex assets (SOC, opf v2)
+  - reinforce: final reinforcement
+  - save
+
+scenario: eGon2035
+
+pipeline:
+  - setup_grid: {import_generators: true}
+  - base_reinforce
+  - import_heat_pumps
+  - import_home_batteries
+  - import_dsm
+  - import_electromobility: {charging_strategy: dumb}
+  - oedb_ts:
+      timeindex: {start: "2035-01-01", periods: 168, freq: h}
+      dispatchable: {other: 0.7}
+  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - reactive_power
+  - check_integrity
+  - optimize:
+      flexible: [heat_pumps, storage]
+      method: soc
+      opf_version: 2
+  - reinforce
+  - save
