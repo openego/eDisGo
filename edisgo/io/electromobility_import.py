@@ -1823,7 +1823,14 @@ def charging_processes_from_oedb(
         )
 
         pool = Counter(pd.read_sql(sql=query.statement, con=engine).egon_ev_pool_ev_id)
-
+    # Fix: no EVs in this grid → skip OEP query
+    if len(pool) == 0:
+          return pd.DataFrame(columns=[
+              "car_id", "use_case", "destination",
+              "nominal_charging_capacity_kW", "grid_charging_capacity_kW",
+              "chargingdemand_kWh", "park_start_timesteps", "park_end_timesteps",
+              "ags", "park_time_timesteps", "charging_park_id", "charging_point_id",
+          ]).astype(DTYPES["charging_processes_df"])
     # get charging processes for each EV ID
     with session_scope_egon_data(engine) as session:
         query = session.query(

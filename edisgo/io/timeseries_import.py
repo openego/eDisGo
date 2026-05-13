@@ -1006,6 +1006,9 @@ def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
         & (edisgo_obj.topology.loads_df.sector == "cts")
     ]
     cts_building_ids = cts_loads.building_id.dropna().unique()
+    if len(cts_building_ids) == 0:
+        return pd.DataFrame()
+    
     with session_scope_egon_data(engine) as session:
         query = session.query(
             egon_map_zensus_mvgd_buildings.building_id,
