@@ -1,0 +1,179 @@
+"""
+Input/output tasks — persisting results and ingesting external files.
+
+* :func:`task_save` (``save``) — persist topology, time series, and
+  results to disk (directory or zip). Also publishes the artifact
+  path into ``ctx.stage_artifacts`` so a later stage can
+  ``load_from:``.
+* :func:`task_load_charging_from_files`
+  (``load_charging_from_files``) — R4MU-specific placeholder for
+  integrating scenario charging stations from a directory of CSV /
+  GeoPackage files; implementation is deferred until needed.
+"""
+from __future__ import annotations
+
+import os
+
+from edisgo.run.registry import register_task
+
+
+@register_task("save")
+def task_save(edisgo, ctx, *, directory=None, save_topology=True,
+              save_timeseries=True, save_results=True,
+              save_electromobility=None, save_opf_results=False,
+              save_heatpump=None, save_overlying_grid=False,
+              save_dsm=None, archive=False, archive_type="zip",
+              reduce_memory=False, parameters=None):
+    """
+    Save the current EDisGo state to disk.
+
+    If ``directory`` is not given, the artifact is written under
+    ``ctx.results_dir / <stage_name>`` so every stage gets its own
+    subdirectory. When ``archive=True`` the result is a single zip;
+    the artifact path (including ``.zip``) is recorded in
+    ``ctx.stage_artifacts[<stage_name>]`` so a downstream stage can
+    declare ``load_from: <stage_name>``.
+
+    Flags drive smart defaults for the optional ``save_*`` switches:
+    if flex data is absent (per ``ctx.flags``), saving it is skipped.
+
+    Parameters
+    ----------
+    edisgo : edisgo.EDisGo
+        EDisGo instance to persist.
+    ctx : RunContext
+        Run context. Uses ``ctx.results_dir``, ``ctx.current_stage``,
+        and reads ``has_heat_pumps`` / ``has_dsm`` /
+        ``has_electromobility`` flags.
+    directory : str, optional
+        Absolute target directory. If omitted, derived from
+        ``ctx.results_dir / ctx.current_stage``.
+    save_topology : bool, optional
+        Write the topology CSVs. Default ``True``.
+    save_timeseries : bool, optional
+        Write time-series CSVs. Default ``True``.
+    save_results : bool, optional
+        Write the results CSVs (equipment changes, expansion costs,
+        etc.). Default ``True``.
+    save_electromobility : bool or None, optional
+        If ``None``, auto-enabled iff
+        ``ctx.flags['has_electromobility']`` is truthy.
+    save_opf_results : bool, optional
+        Write OPF results if present.
+    save_heatpump : bool or None, optional
+        If ``None``, auto-enabled iff ``ctx.flags['has_heat_pumps']``
+        is truthy.
+    save_overlying_grid : bool, optional
+        Write overlying-grid (eTraGo) specs if present.
+    save_dsm : bool or None, optional
+        If ``None``, auto-enabled iff ``ctx.flags['has_dsm']`` is
+        truthy.
+    archive : bool, optional
+        Pack the directory into a single ``.zip`` archive.
+    archive_type : str, optional
+        Archive format (currently only ``"zip"``).
+    reduce_memory : bool, optional
+        Downcast float time-series to ``float32`` to save disk.
+    parameters : dict, optional
+        Fine-grained selection of which results fields to write,
+        e.g. ``{"grid_expansion_results": ["equipment_changes"]}``.
+
+    Returns
+    -------
+    edisgo.EDisGo
+        The unchanged EDisGo instance.
+
+    Raises
+    ------
+    ValueError
+        If no ``directory`` is given and ``ctx.results_dir`` is also
+        unset.
+
+    """
+    if directory is None:
+        if ctx.results_dir is None:
+            raise ValueError(
+                "Task 'save' needs a 'directory' parameter or "
+                "config.results.directory."
+            )
+        stage = ctx.current_stage or "main"
+        directory = os.path.join(str(ctx.results_dir), stage)
+
+    if save_heatpump is None:
+        save_heatpump = ctx.flags.get("has_heat_pumps", False)
+    if save_dsm is None:
+        save_dsm = ctx.flags.get("has_dsm", False)
+    if save_electromobility is None:
+        save_electromobility = ctx.flags.get("has_electromobility", False)
+
+    kwargs = dict(
+        directory=directory,
+        save_topology=save_topology,
+        save_timeseries=save_timeseries,
+        save_results=save_results,
+        save_electromobility=save_electromobility,
+        save_opf_results=save_opf_results,
+        save_heatpump=save_heatpump,
+        save_overlying_grid=save_overlying_grid,
+        save_dsm=save_dsm,
+    )
+    if archive:
+        kwargs["archive"] = True
+        kwargs["archive_type"] = archive_type
+    if reduce_memory:
+        kwargs["reduce_memory"] = True
+    if parameters is not None:
+        kwargs["parameters"] = parameters
+
+    edisgo.save(**kwargs)
+
+    saved_path = directory + (".zip" if archive else "")
+    if ctx.current_stage:
+        ctx.stage_artifacts[ctx.current_stage] = saved_path
+    ctx.flags["last_saved"] = saved_path
+    return edisgo
+
+
+@register_task("load_charging_from_files")
+def task_load_charging_from_files(edisgo, ctx, *, charging_dir,
+                                  use_case_to_sector=None,
+                                  mv_threshold_kw=100.0):
+    """
+    Integrate scenario charging stations from files (R4MU workflow).
+
+    PLACEHOLDER — the full implementation lives in eGo's
+    ``_run_edisgo_task_load_charging_from_files`` and needs to be
+    ported when R4MU is prioritised. The eGo version reads a
+    GeoPackage / CSV of charging locations, filters by the MV grid
+    district geometry, and integrates them into the topology via
+    :func:`find_nearest_bus` / ``integrate_component_based_on_geolocation``
+    with a use-case-to-sector mapping and an MV/LV connection
+    threshold.
+
+    Parameters
+    ----------
+    edisgo : edisgo.EDisGo
+        EDisGo instance to modify in place.
+    ctx : RunContext
+        Run context.
+    charging_dir : str
+        Directory containing the charging-station source files.
+    use_case_to_sector : dict, optional
+        Maps raw use-case labels (``"home_detached"`` etc.) to
+        eDisGo sector names (``"home"``, ``"work"``, …).
+    mv_threshold_kw : float, optional
+        Capacity threshold above which stations connect to an MV
+        bus; below connect to LV.
+
+    Raises
+    ------
+    NotImplementedError
+        Always — port the eGo implementation before using.
+
+    """
+    raise NotImplementedError(
+        "Task 'load_charging_from_files' is a placeholder port from "
+        "eGo R4MU. Port the logic from eGo's "
+        "_run_edisgo_task_load_charging_from_files when R4MU is "
+        "needed."
+    )
