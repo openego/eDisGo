@@ -1707,7 +1707,6 @@ def _build_gen_hp_14a_support(psa_net, pm, edisgo_obj, s_base, flexible_hps, cur
     for hp_i, hp_name in enumerate(hps_eligible):
         # Bus of the heat pump
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus[hp_name])
-        
         # Nominal power of HP
         p_nominal = hp_p_nom[hp_name]  # MW
         
@@ -1844,6 +1843,12 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
         
         # Nominal power of CP
         p_nominal = cp_p_nom[cp_name]  # MW
+        
+        if p_nominal > 0.011: 
+            p_min_14a = p_nominal * 0.40
+        else:
+            p_min_14a = 0.0042
+
         
         # Maximum support = difference between nominal and §14a limit
         # This is how much the load can be virtually reduced
