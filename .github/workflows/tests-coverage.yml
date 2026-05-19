@@ -139,7 +139,7 @@ jobs:
       # Julia is only needed on Linux
       - name: Set up Julia
         if: runner.os == 'Linux'
-        uses: julia-actions/setup-julia@v2
+        uses: julia-actions/setup-julia@v3
         with:
           version: "1.6"
 
@@ -153,7 +153,7 @@ jobs:
       # Windows package installation via Conda environment file
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
-        uses: conda-incubator/setup-miniconda@v3
+        uses: conda-incubator/setup-miniconda@v4
         with:
           miniconda-version: "latest"
           activate-environment: edisgo_env

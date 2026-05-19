@@ -181,6 +181,14 @@ OEP Database (Standard)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The OEP database provides the egon-data interface and is the default data source.
+No ``engine`` argument is required — when omitted, a default OEP engine is created
+automatically. The following methods support this behaviour:
+:meth:`~.edisgo.EDisGo.set_time_series_active_power_predefined`,
+:meth:`~.edisgo.EDisGo.import_generators`,
+:meth:`~.edisgo.EDisGo.import_electromobility`,
+:meth:`~.edisgo.EDisGo.import_heat_pumps`,
+:meth:`~.edisgo.EDisGo.import_dsm`, and
+:meth:`~.edisgo.EDisGo.import_home_batteries`.
 
 Example
 ^^^^^^^
