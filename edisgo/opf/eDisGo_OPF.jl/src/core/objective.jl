@@ -109,6 +109,30 @@ function objective_min_losses_slacks_OG(pm::AbstractBFModelEdisgo)
     )
 end
 
+# OPF Version 5: Minimize CP curtailment (pcps) with emergency load shedding (pds)
+# pcps = CP load shedding slack (Kosten 1.0) — die eigentliche Optimierungsvariable
+# pds = Load shedding slack (Kosten 1e8) — nur für Basisnetz-Feasibility
+# pgc, pgens, phps = andere Slacks (Kosten 1e8) — Notfall-Feasibility
+function objective_min_cp_curtailment(pm::AbstractBFModelEdisgo)
+    nws = PowerModels.nw_ids(pm)
+    pcps = Dict(n => PowerModels.var(pm, n, :pcps) for n in nws)
+    pds = Dict(n => PowerModels.var(pm, n, :pds) for n in nws)
+    pgc = Dict(n => PowerModels.var(pm, n, :pgc) for n in nws)
+    pgens = Dict(n => PowerModels.var(pm, n, :pgens) for n in nws)
+    phps = Dict(n => PowerModels.var(pm, n, :phps) for n in nws)
+
+    factor_cp = 1.0    # CP-Abregelung: günstig (das IST die Aufnahmefähigkeit)
+    factor_emergency = 1e8   # Alle anderen Slacks: extrem teuer (nur Notfall)
+
+    return JuMP.@objective(pm.model, Min,
+        factor_cp  * sum(sum(pcps[n][i] for i in keys(PowerModels.ref(pm, 1, :electromobility))) for n in nws)
+        + factor_emergency * sum(sum(pds[n][i] for i in keys(PowerModels.ref(pm, 1, :load))) for n in nws)
+        + factor_emergency * sum(sum(pgc[n][i] for i in keys(PowerModels.ref(pm, 1, :gen_nd))) for n in nws)
+        + factor_emergency * sum(sum(pgens[n][i] for i in keys(PowerModels.ref(pm, 1, :gen))) for n in nws)
+        + factor_emergency * sum(sum(phps[n][i] for i in keys(PowerModels.ref(pm, 1, :heatpumps))) for n in nws)
+    )
+end
+
 # OPF Version 3 (alternative): Minimize line losses, maximal line loading and HV slacks (with overlying grid)
 function objective_min_line_loading_max_OG(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)

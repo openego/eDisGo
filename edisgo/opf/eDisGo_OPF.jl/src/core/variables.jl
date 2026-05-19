@@ -395,6 +395,39 @@ function variable_cp_energy(pm::AbstractPowerModel; nw::Int=nw_id_default, bound
     report && PowerModels.sol_component_value(pm, nw, :electromobility, :cpe, PowerModels.ids(pm, nw, :electromobility), cpe)
 end
 
+"OPF V5: Heat pump power fixed to pd/cop (keine Flexibilität)"
+function variable_heat_pump_power_fixed(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    php = PowerModels.var(pm, nw)[:php] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :heatpumps)], base_name="$(nw)_php")
+    for (i, hp) in PowerModels.ref(pm, nw, :heatpumps)
+        p_demand = hp["pd"] / hp["cop"]
+        JuMP.fix(php[i], p_demand; force=true)
+    end
+    report && PowerModels.sol_component_value(pm, nw, :heatpumps, :php, PowerModels.ids(pm, nw, :heatpumps), php)
+end
+
+"OPF V5: CP power fixed to pd (voller Ladebedarf, Reduktion über pcps)"
+function variable_cp_power_fixed(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    if !haskey(PowerModels.ref(pm, nw), :electromobility) || isempty(PowerModels.ref(pm, nw, :electromobility))
+        PowerModels.var(pm, nw)[:pcp] = Dict{Int, JuMP.VariableRef}()
+        PowerModels.var(pm, nw)[:cpe] = Dict{Int, JuMP.VariableRef}()
+        return
+    end
+    pcp = PowerModels.var(pm, nw)[:pcp] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :electromobility)], base_name="$(nw)_pcp")
+    for (i, cp) in PowerModels.ref(pm, nw, :electromobility)
+        JuMP.fix(pcp[i], cp["pd"]; force=true)
+    end
+    report && PowerModels.sol_component_value(pm, nw, :electromobility, :pcp, PowerModels.ids(pm, nw, :electromobility), pcp)
+
+    cpe = PowerModels.var(pm, nw)[:cpe] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :electromobility)], base_name="$(nw)_cpe")
+    for (i, cp) in PowerModels.ref(pm, nw, :electromobility)
+        JuMP.fix(cpe[i], 0.5 * (cp["e_min"] + cp["e_max"]); force=true)
+    end
+    report && PowerModels.sol_component_value(pm, nw, :electromobility, :cpe, PowerModels.ids(pm, nw, :electromobility), cpe)
+end
+
 "§14a virtual generator continuous variables for curtailment support power"
 function variable_gen_hp_14a_power(pm::AbstractPowerModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     p_hp14a = PowerModels.var(pm, nw)[:p_hp14a] = JuMP.@variable(pm.model,

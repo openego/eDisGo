@@ -73,7 +73,7 @@ function optimize_edisgo()
         # SOC hat optimale Ladeleistung je CP bestimmt (z.B. 32 kW statt 500 GW).
         # Koeffizientenrange sinkt von [7e-9, 5e+8] auf [7e-9, ~0.05] -> Ipopt konvergiert.
         println("Adjusting CP bounds for NC based on SOC solution (scaling fix)...")
-        for (nw_id, network) in data_edisgo_mn["nw"]
+        for (_, network) in data_edisgo_mn["nw"]
           # 1. CP-Ladeleistung: p_max = SOC-optimaler Wert * 10 (genug Spielraum fuer NC-Physik)
           # 10x statt 1%: NC braucht Umverteilungsfreiheit zwischen CPs (sonst LOCALLY_INFEASIBLE)
           for (cp_id, cp) in get(network, "electromobility", Dict())
@@ -82,7 +82,7 @@ function optimize_edisgo()
             end
           end
           # 2. Para 14a-Generatoren: pmax = SOC-optimaler Wert * 10
-          for (gen_id, gen) in get(network, "gen_cp_14a", Dict())
+          for (_, gen) in get(network, "gen_cp_14a", Dict())
             if haskey(gen, "p")
               gen["pmax"] = min(max(gen["p"] * 10.0, get(gen, "pmin", 0.0)), gen["pmax"])
             end

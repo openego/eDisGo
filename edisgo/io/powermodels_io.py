@@ -139,7 +139,7 @@ def to_powermodels(
 
     pm["flexibilities"] = opf_flex
     logger.info("Transforming busses into PowerModels dictionary format.")
-    _build_bus(psa_net, edisgo_object, pm, flexible_storage_units)
+    _build_bus(psa_net, edisgo_object, pm, flexible_storage_units, opf_version=opf_version)
     logger.info("Transforming generators into PowerModels dictionary format.")
     _build_gen(edisgo_object, psa_net, pm, flexible_storage_units, s_base)
     logger.info(
@@ -153,13 +153,15 @@ def to_powermodels(
         )
     if len(flexible_cps) > 0:
         logger.info("Transforming charging points into PowerModels dictionary format.")
-        flexible_cps = _build_electromobility(
-            edisgo_object,
-            psa_net,
-            pm,
-            s_base,
-            flexible_cps,
-        )
+        if opf_version == 5:
+            # V5: Vereinfachte Electromobility — nur pd/bus, keine Flexibility Bands
+            flexible_cps = _build_electromobility_v5(
+                edisgo_object, psa_net, pm, s_base, flexible_cps,
+            )
+        else:
+            flexible_cps = _build_electromobility(
+                edisgo_object, psa_net, pm, s_base, flexible_cps,
+            )
 
     # Only flexible heat pumps (with thermal data) go into PowerModels dict
     # §14a does NOT apply to heat pumps — only to charging points
@@ -556,7 +558,7 @@ def from_powermodels(
     )
     edisgo_object.opf_results.heat_storage_t.p_slack = df
 
-    if pm["nw"]["1"]["opf_version"] in [2, 4]:
+    if pm["nw"]["1"]["opf_version"] in [2, 4, 5]:
         slacks = [
             ("gen", "pgens"),
             ("gen_nd", "pgc"),
@@ -566,10 +568,21 @@ def from_powermodels(
             ("heatpumps", "phps2"),
         ]
         for comp, var in slacks:
+            # Debug: check if variable exists in solution
+            first_nw = list(pm["nw"].keys())[0]
+            first_comp_keys = list(pm["nw"][first_nw].get(comp, {}).keys())
+            if first_comp_keys:
+                first_id = first_comp_keys[0]
+                comp_data = pm["nw"][first_nw][comp][first_id]
+                has_var = var in comp_data
+                logger.info(f"Slack {comp}/{var}: has_var={has_var}, keys={sorted(comp_data.keys())[:10]}")
+            else:
+                logger.info(f"Slack {comp}/{var}: no components found")
             # save slacks to edisgo object
             df = _result_df(
                 pm, comp, var, timesteps, edisgo_object.timeseries.timeindex, s_base
             )
+            logger.info(f"  → DataFrame shape: {df.shape}, sum={df.values.sum():.6f}")
             if comp == "gen":
                 edisgo_object.opf_results.grid_slacks_t.gen_d_crt = df
             elif comp == "gen_nd":
@@ -583,6 +596,22 @@ def from_powermodels(
                     edisgo_object.opf_results.grid_slacks_t.hp_load_shedding = df
                 elif var == "phps2":
                     edisgo_object.opf_results.grid_slacks_t.hp_operation_slack = df
+
+    # OPF V5: pcps von CP-Timeseries abziehen (effektive Leistung = pcp - pcps = pd - pcps)
+    if pm["nw"]["1"]["opf_version"] == 5:
+        cp_load_shedding = edisgo_object.opf_results.grid_slacks_t.cp_load_shedding
+        if cp_load_shedding is not None and not cp_load_shedding.empty:
+            # Finde CP-Namen in den Timeseries
+            cp_names = [c for c in cp_load_shedding.columns
+                       if c in edisgo_object.timeseries._loads_active_power.columns]
+            if cp_names:
+                edisgo_object.timeseries._loads_active_power.loc[:, cp_names] -= \
+                    cp_load_shedding.loc[:, cp_names].values
+                logger.info(f"V5: pcps von {len(cp_names)} CP-Timeseries abgezogen")
+            else:
+                logger.warning("V5: Keine übereinstimmenden CP-Namen zwischen pcps und Timeseries!")
+        else:
+            logger.warning("V5: Keine pcps-Daten für Timeseries-Korrektur verfügbar!")
 
     # save line flows and currents to edisgo object
     for variable in ["pf", "qf", "ccm"]:
@@ -652,7 +681,7 @@ def _init_pm():
     return pm
 
 
-def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
+def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units, opf_version=1):
     """
     Build bus dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'.
@@ -688,24 +717,33 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
         station_v_drop = cfg_vd["mv_lv_station_max_v_drop"]
 
         mv_ref = 1.0 + hv_mv_offset
-        # Sicherheitspuffer: OPF-Grenzen etwas enger als Check-Grenzen setzen,
-        # damit numerische Toleranz und Solver-Ungenauigkeiten keine Verletzungen erzeugen
-        mv_margin = 0.002
-        lv_margin = 0.005
-        mv_vmax = min(mv_ref + mv_v_rise + hv_mv_ctrl, 1.1) - mv_margin
-        mv_vmin = max(mv_ref - mv_v_drop - hv_mv_ctrl, 0.9) + mv_margin
-        lv_vmax = min(
-            mv_ref + mv_v_rise + station_v_rise + lv_v_rise + hv_mv_ctrl, 1.1
-        ) - lv_margin
-        lv_vmin = max(
-            mv_ref - mv_v_drop - station_v_drop - lv_v_drop - hv_mv_ctrl, 0.9
-        ) + lv_margin
-
-        # Kaskadierte Grenzen fuer MV/LV-Trafo-Sekundaerseiten (LV-Sammelschienen):
-        # check_tech_constraints prueft diese Busse relativ zur MV-Spannung (v_mv - 0.02),
-        # daher muessen die OPF-Grenzen an mv_vmin verankert sein und nicht am worst-case-Stapel.
-        station_vmin = mv_vmin - station_v_drop   # = 0.987 - 0.02 = 0.967
-        station_vmax = min(mv_vmax + station_v_rise, lv_vmax)  # = min(1.048+0.015, 1.095) = 1.063
+        # V5: Spannungsgrenzen auf ±10% lockern — BF-Formulierung weicht leicht von AC PF ab,
+        # was bei engen Grenzen pds-Slacks für Basislasten auslöst. Enforcement-Schritt fängt
+        # echte Verletzungen ab (AC PF Prüfung mit realen Grenzen).
+        # V1-V4: enger Puffer damit SOC-Relaxation keine Phantomverletzungen erzeugt.
+        if opf_version == 5:
+            mv_vmax = 1.1
+            mv_vmin = 0.9
+            lv_vmax = 1.1
+            lv_vmin = 0.9
+            station_vmax = 1.1
+            station_vmin = 0.9
+        else:
+            mv_margin = 0.002
+            lv_margin = 0.005
+            mv_vmax = min(mv_ref + mv_v_rise + hv_mv_ctrl, 1.1) - mv_margin
+            mv_vmin = max(mv_ref - mv_v_drop - hv_mv_ctrl, 0.9) + mv_margin
+            lv_vmax = min(
+                mv_ref + mv_v_rise + station_v_rise + lv_v_rise + hv_mv_ctrl, 1.1
+            ) - lv_margin
+            lv_vmin = max(
+                mv_ref - mv_v_drop - station_v_drop - lv_v_drop - hv_mv_ctrl, 0.9
+            ) + lv_margin
+            # Kaskadierte Grenzen fuer MV/LV-Trafo-Sekundaerseiten (LV-Sammelschienen):
+            # check_tech_constraints prueft diese Busse relativ zur MV-Spannung (v_mv - 0.02),
+            # daher muessen die OPF-Grenzen an mv_vmin verankert sein und nicht am worst-case-Stapel.
+            station_vmin = mv_vmin - station_v_drop   # = 0.987 - 0.02 = 0.967
+            station_vmax = min(mv_vmax + station_v_rise, lv_vmax)  # = min(1.048+0.015, 1.095) = 1.063
 
         # Trafo-Sekundaerseiten identifizieren (LV-Sammelschienen der MV/LV-Trafos)
         mv_lv_secondary_buses = set(psa_net.transformers.bus1.values)
@@ -997,7 +1035,9 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             "b_fr": branches.b_pu.iloc[branch_i] / 2 * s_base,
             "shift": shift.iloc[branch_i],
             "br_status": 1.0,
-            "rate_a": branches.s_nom.iloc[branch_i].real / s_base * 0.95,
+            "rate_a": branches.s_nom.iloc[branch_i].real / s_base * (
+                1.01 if pm.get("opf_version") == 5 else 0.95
+            ),
             "rate_b": 250 / s_base,
             "rate_c": 250 / s_base,
             "angmin": -np.pi / 6,
@@ -1293,6 +1333,38 @@ def _build_battery_storage(
             "status": True,
             "index": stor_i + 1,
         }
+
+
+def _build_electromobility_v5(edisgo_obj, psa_net, pm, s_base, flexible_cps):
+    """
+    Build simplified electromobility dict for OPF V5.
+    No flexibility bands needed — pcp is fixed to pd, pcps is the optimization variable.
+    """
+    emob_df = psa_net.loads.loc[flexible_cps]
+    for cp_i in np.arange(len(emob_df.index)):
+        idx_bus = _mapping(psa_net, edisgo_obj, emob_df.bus.iloc[cp_i])
+        pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "charging_point")
+        # p_max = nominale Leistung des CPs (aus loads_df p_set)
+        p_nom = emob_df.p_set.iloc[cp_i]
+        pm["electromobility"][str(cp_i + 1)] = {
+            "pd": 0,  # wird in _update_data_mn überschrieben mit Zeitreihen-Wert
+            "qd": 0,
+            "pf": pf,
+            "sign": sign,
+            "p_min": 0,
+            "p_max": p_nom / s_base,
+            "q_min": 0,
+            "q_max": 0,
+            "e_min": 0,
+            "e_max": 0,
+            "energy": 0,
+            "eta": 0.9,
+            "cp_bus": idx_bus,
+            "name": emob_df.index[cp_i],
+            "index": cp_i + 1,
+        }
+    logger.info(f"V5: {len(emob_df)} CPs als vereinfachte Electromobility aufgebaut.")
+    return flexible_cps
 
 
 def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
@@ -2248,33 +2320,46 @@ def _build_component_timeseries(
             }
     elif kind == "electromobility":
         if len(flexible_cps) > 0:
-            p_set = (
-                edisgo_obj.electromobility.flexibility_bands["upper_power"][
-                    flexible_cps
-                ]
-                / s_base
-            ).round(20)
-            e_min = (
-                edisgo_obj.electromobility.flexibility_bands["lower_energy"][
-                    flexible_cps
-                ]
-                / s_base
-            ).round(20)
-            e_max = (
-                edisgo_obj.electromobility.flexibility_bands["upper_energy"][
-                    flexible_cps
-                ]
-                / s_base
-            ).round(20)
-            for comp in flexible_cps:
-                comp_i = _mapping(
-                    psa_net, edisgo_obj, comp, kind, flexible_cps=flexible_cps
-                )
-                pm_comp[str(comp_i)] = {
-                    "p_max": p_set[comp].values.tolist(),
-                    "e_min": e_min[comp].values.tolist(),
-                    "e_max": e_max[comp].values.tolist(),
-                }
+            if pm.get("opf_version") == 5:
+                # V5: Vereinfachte Electromobility — pd aus loads_t.p_set
+                p_set = (
+                    psa_net.loads_t.p_set[flexible_cps] / s_base
+                ).round(20)
+                for comp in flexible_cps:
+                    comp_i = _mapping(
+                        psa_net, edisgo_obj, comp, kind, flexible_cps=flexible_cps
+                    )
+                    pm_comp[str(comp_i)] = {
+                        "pd": p_set[comp].values.tolist(),
+                    }
+            else:
+                p_set = (
+                    edisgo_obj.electromobility.flexibility_bands["upper_power"][
+                        flexible_cps
+                    ]
+                    / s_base
+                ).round(20)
+                e_min = (
+                    edisgo_obj.electromobility.flexibility_bands["lower_energy"][
+                        flexible_cps
+                    ]
+                    / s_base
+                ).round(20)
+                e_max = (
+                    edisgo_obj.electromobility.flexibility_bands["upper_energy"][
+                        flexible_cps
+                    ]
+                    / s_base
+                ).round(20)
+                for comp in flexible_cps:
+                    comp_i = _mapping(
+                        psa_net, edisgo_obj, comp, kind, flexible_cps=flexible_cps
+                    )
+                    pm_comp[str(comp_i)] = {
+                        "p_max": p_set[comp].values.tolist(),
+                        "e_min": e_min[comp].values.tolist(),
+                        "e_max": e_max[comp].values.tolist(),
+                    }
     elif kind == "heatpumps":
         if len(flexible_hps) > 0:
             p_set = (edisgo_obj.heat_pump.heat_demand_df[flexible_hps] / s_base).round(
