@@ -24,16 +24,21 @@ _workflow:
 scenario: eGon2035
 grid:
   ding0_path: "/home/gurobi/.ding0/2024-07-25T17:38:34_new_planning_new_edisgo/ding0_grids/32377"
+  # grid path should be set in run file
   legacy_ding0_grids: false
+  # legacy parameter too
 
 database:
   ssh:
     enabled: false
 
 timeindex: {start: "2035-01-01", periods: 24, freq: h}
+# only set in preset, not set in run-functions (eDisGo and eGo)
 
 results:
   directory: results/uc4_example
+# actually all parameters
+
 
 pipeline:
   - setup_grid
@@ -42,6 +47,7 @@ pipeline:
   - import_home_batteries
   - import_heat_pumps
   - import_dsm
+  # where is decided, which electromobility use cases are used?
   - import_electromobility: {charging_strategy: dumb, flexibility_bands_ucs : ["home", "work", "public", "hpc"]}
   - apply_heat_pump_strategy: {strategy: uncontrolled}
   - oedb_ts:
@@ -49,6 +55,7 @@ pipeline:
   - reactive_power
   - check_integrity
   - optimize:
+      # where is decided which flexibilities are used in the OPF?
       flexible: [heat_pumps, storage, charging_points, dsm]
       method: soc
       opf_version: 2
