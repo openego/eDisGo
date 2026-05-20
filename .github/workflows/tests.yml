@@ -32,7 +32,6 @@ jobs:
             --runslow \
             --runonlinux
 
-
       - name: Run non-fast tests
         run: |
           python tests/run_tests_from_file.py ci/non_fast_tests.txt
@@ -63,4 +62,4 @@ jobs:
         run: |
           python -m pytest -vv \
              --runslow \
-             --runonlinux 
+             --runonlinux
