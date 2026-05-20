@@ -10,6 +10,8 @@ from edisgo import EDisGo
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_grid import reinforce_grid, run_separate_lv_grids
 
+pytestmark = pytest.mark.fast
+
 
 class TestReinforceGrid:
     """

@@ -389,7 +389,8 @@ class TestEDisGo:
         except Exception as e:
             if "Table does not exist" in str(e) or "HTTP 404" in str(e):
                 pytest.skip(
-                    "Database table not accessible (requires external database connection)"
+                    "Database table not accessible "
+                    "(requires external database connection)"
                 )
             else:
                 raise

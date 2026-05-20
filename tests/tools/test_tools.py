@@ -18,6 +18,7 @@ class TestTools:
         self.timesteps = self.edisgo.timeseries.timeindex
         self.edisgo.analyze()
 
+    @pytest.mark.fast
     def test_calculate_line_reactance(self):
         # test single line
         data = tools.calculate_line_reactance(2, 3, 1)
@@ -30,6 +31,7 @@ class TestTools:
         data = tools.calculate_line_reactance(np.array([2, 3]), 3, 2)
         assert_allclose(data, np.array([1.88496 / 2, 2.82743 / 2]), rtol=1e-5)
 
+    @pytest.mark.fast
     def test_calculate_voltage_diff_pu_per_line(self):
         correct_value_positive_sign = 0.03261946832784687
         correct_value_negative_sign = 0.06008053167215312
@@ -128,6 +130,7 @@ class TestTools:
         )
         assert np.isclose(data, 0.0173, rtol=1e-2)
 
+    @pytest.mark.fast
     def test_calculate_voltage_diff_pu_per_line_from_type(self):
         correct_value_negative_sign = 0.4916578234319946 * 1e-2
         correct_value_positive_sign = 0.017583421765680056
@@ -208,6 +211,7 @@ class TestTools:
         )
         assert np.isclose(data, correct_value_positive_sign / 2)
 
+    @pytest.mark.fast
     def test_calculate_line_resistance(self):
         # test single line
         data = tools.calculate_line_resistance(2, 3, 1)
@@ -220,6 +224,7 @@ class TestTools:
         data = tools.calculate_line_resistance(np.array([2, 3]), 3, 2)
         assert_array_equal(data, np.array([3, 4.5]))
 
+    @pytest.mark.fast
     def test_calculate_line_susceptance(self):
         # test single line
         assert np.isclose(tools.calculate_line_susceptance(2, 3, 1), 0.00188495559)
@@ -228,6 +233,7 @@ class TestTools:
         # test line with c = 0
         assert np.isclose(tools.calculate_line_susceptance(0, 3, 1), 0)
 
+    @pytest.mark.fast
     def test_calculate_apparent_power(self):
         # test single line
         data = tools.calculate_apparent_power(20, 30, 1)
@@ -248,6 +254,7 @@ class TestTools:
         )
         assert_allclose(data, np.array([1039.23 * 2, 1558.84 * 3]), rtol=1e-5)
 
+    @pytest.mark.fast
     def test_drop_duplicated_indices(self):
         test_df = pd.DataFrame(
             data={
@@ -261,6 +268,7 @@ class TestTools:
         assert len(check_df.index) == 2
         assert (check_df.loc[0, :] == [3, 5, 6]).all()
 
+    @pytest.mark.fast
     def test_drop_duplicated_columns(self):
         test_df = pd.DataFrame(
             data={
@@ -274,6 +282,7 @@ class TestTools:
         assert len(check_df.columns) == 2
         assert (check_df.loc[:, "a"] == [4, 5, 6]).all()
 
+    @pytest.mark.fast
     def test_select_cable(self):
         # no length given
         cable_data, num_parallel_cables = tools.select_cable(
@@ -372,6 +381,7 @@ class TestTools:
                 "'heat_pump' or 'storage_unit'."
             )
 
+    @pytest.mark.fast
     def test_get_downstream_buses(self):
         # ######## test with LV bus ########
         buses_downstream = tools.get_downstream_buses(
@@ -391,20 +401,24 @@ class TestTools:
         assert len(buses_downstream) == len(lv_grid.buses_df) + 4
         assert all([_ in buses_downstream for _ in lv_grid.buses_df.index])
 
+    @pytest.mark.fast
     def test_get_path_length_to_station(self):
         # ToDo implement
         pass
 
+    @pytest.mark.fast
     def test_assign_voltage_level_to_component(self):
         # ToDo implement
         pass
 
+    @pytest.mark.fast
     def test_determine_grid_integration_voltage_level(self):
         assert tools.determine_grid_integration_voltage_level(self.edisgo, 0.05) == 7
         assert tools.determine_grid_integration_voltage_level(self.edisgo, 0.2) == 6
         assert tools.determine_grid_integration_voltage_level(self.edisgo, 1.5) == 5
         assert tools.determine_grid_integration_voltage_level(self.edisgo, 16) == 4
 
+    @pytest.mark.fast
     def test_determine_bus_voltage_level(self):
         bus_mv_station = "Bus_MVStation_1"
         bus_mv = "Bus_GeneratorFluctuating_7"
@@ -431,6 +445,7 @@ class TestTools:
         assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_6) == 6
         assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_7) == 7
 
+    @pytest.mark.fast
     def test_get_weather_cells_intersecting_with_grid_district(self):
         weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
             self.edisgo
@@ -455,6 +470,7 @@ class TestTools:
         assert 11051 in weather_cells
         assert 11052 in weather_cells
 
+    @pytest.mark.fast
     def test_add_line_susceptance(self):
         assert self.edisgo.topology.lines_df.loc["Line_10006", "b"] == 0
         assert self.edisgo.topology.lines_df.loc["Line_50000002", "b"] == 0
@@ -487,6 +503,7 @@ class TestTools:
             "Line_50000002", "b"
         ] == tools.calculate_line_susceptance(0.25, 0.03, 1)
 
+    @pytest.mark.fast
     def test_reduce_memory_usage(self):
         # ToDo implement
         pass

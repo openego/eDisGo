@@ -4,6 +4,8 @@ import pytest
 from edisgo import EDisGo
 from edisgo.flex_opt.heat_pump_operation import operating_strategy
 
+pytestmark = pytest.mark.fast
+
 
 class TestHeatPumpOperation:
     @classmethod

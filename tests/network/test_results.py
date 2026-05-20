@@ -2,9 +2,12 @@ import os
 import shutil
 
 import pandas as pd
+import pytest
 
 from edisgo.network.results import Results
 from edisgo.tools.config import Config
+
+pytestmark = pytest.mark.fast
 
 
 class TestResults:

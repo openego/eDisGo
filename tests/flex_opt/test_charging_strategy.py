@@ -4,6 +4,8 @@ import pytest
 from edisgo.edisgo import EDisGo
 from edisgo.flex_opt.charging_strategies import charging_strategy
 
+pytestmark = pytest.mark.fast
+
 
 class TestChargingStrategy:
     """
@@ -128,7 +130,6 @@ class TestChargingStrategy:
 
         # store baseline time series for both parks
         loads_before = ts._loads_active_power.copy()
-        ts_a_before = loads_before[edisgo_id_a].copy()
         ts_b_before = loads_before[edisgo_id_b].copy()
 
         # 1) apply a strategy only to park A
@@ -152,7 +153,6 @@ class TestChargingStrategy:
 
         loads_after_second = ts._loads_active_power
         ts_a_after_second = loads_after_second[edisgo_id_a].copy()
-        ts_b_after_second = loads_after_second[edisgo_id_b].copy()
 
         # park A must not be changed by the second call that targets only park B
         pd.testing.assert_series_equal(

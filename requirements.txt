@@ -1,0 +1,7 @@
+pytest
+matplotlib
+numpy==1.26.4
+pandas==2.2.2
+pytest-notebook
+
+# Abbrechen laufender Workflows bei neuem Push auf denselben Branch  Test test
