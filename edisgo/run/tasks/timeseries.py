@@ -12,6 +12,7 @@ attached to the EDisGo object. The order inside a stage matters:
    control — this MUST come last because it overwrites whatever
    reactive power was set by the earlier steps.
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -20,9 +21,15 @@ from edisgo.run.registry import register_task
 
 
 @register_task("worst_case_ts")
-def task_worst_case_ts(edisgo, ctx, *, cases=None,
-                       generators_names=None, loads_names=None,
-                       storage_units_names=None):
+def task_worst_case_ts(
+    edisgo,
+    ctx,
+    *,
+    cases=None,
+    generators_names=None,
+    loads_names=None,
+    storage_units_names=None,
+):
     """
     Set synthetic worst-case active-power time series.
 
@@ -62,8 +69,7 @@ def task_worst_case_ts(edisgo, ctx, *, cases=None,
 
 
 @register_task("set_timeindex")
-def task_set_timeindex(edisgo, ctx, *, start, periods=None, end=None,
-                       freq="h"):
+def task_set_timeindex(edisgo, ctx, *, start, periods=None, end=None, freq="h"):
     """
     Set the time index on the EDisGo object.
 
@@ -98,22 +104,32 @@ def task_set_timeindex(edisgo, ctx, *, start, periods=None, end=None,
         If neither ``periods`` nor ``end`` is provided.
 
     """
+    from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
+
     if end is not None:
         timeindex = pd.date_range(start=start, end=end, freq=freq)
     else:
         if periods is None:
-            raise ValueError(
-                "set_timeindex needs either 'periods' or 'end'."
-            )
+            raise ValueError("set_timeindex needs either 'periods' or 'end'.")
         timeindex = pd.date_range(start=start, periods=periods, freq=freq)
-    edisgo.set_timeindex(timeindex)
+    if edisgo.timeseries.timeindex.empty:
+        edisgo.set_timeindex(timeindex)
+    else:
+        reduce_timeseries_data_to_given_timeindex(edisgo, timeindex)
     return edisgo
 
 
 @register_task("oedb_ts")
-def task_oedb_ts(edisgo, ctx, *, timeindex=None, dispatchable=None,
-                 fluctuating="oedb", conventional_loads="oedb",
-                 charging_points_ts=None):
+def task_oedb_ts(
+    edisgo,
+    ctx,
+    *,
+    timeindex=None,
+    dispatchable=None,
+    fluctuating="oedb",
+    conventional_loads="oedb",
+    charging_points_ts=None,
+):
     """
     Set active-power time series from egon_data (OEP) plus overrides.
 
@@ -174,9 +190,7 @@ def task_oedb_ts(edisgo, ctx, *, timeindex=None, dispatchable=None,
     conv_loads_names = None
     if conventional_loads == "oedb":
         conv_loads_names = edisgo.topology.loads_df.loc[
-            ~edisgo.topology.loads_df.type.isin(
-                ["heat_pump", "charging_point"]
-            )
+            ~edisgo.topology.loads_df.type.isin(["heat_pump", "charging_point"])
         ].index.tolist()
 
     edisgo.set_time_series_active_power_predefined(
@@ -186,27 +200,34 @@ def task_oedb_ts(edisgo, ctx, *, timeindex=None, dispatchable=None,
         dispatchable_generators_ts=dispatchable_df,
         charging_points_ts=charging_points_ts,
         scenario=ctx.scenario,
-        engine=ctx.ensure_engine() if fluctuating == "oedb"
-        or conventional_loads == "oedb" else None,
+        engine=ctx.ensure_engine()
+        if fluctuating == "oedb" or conventional_loads == "oedb"
+        else None,
     )
 
     su_names = edisgo.topology.storage_units_df.index
     if len(su_names) > 0 and edisgo.timeseries.storage_units_active_power.empty:
         edisgo.timeseries.storage_units_active_power = pd.DataFrame(
-            0.0, index=edisgo.timeseries.timeindex, columns=su_names,
+            0.0,
+            index=edisgo.timeseries.timeindex,
+            columns=su_names,
         )
     ctx.flags["timeseries_set"] = True
     return edisgo
 
 
 @register_task("manual_ts")
-def task_manual_ts(edisgo, ctx, *,
-                   generators_active_power=None,
-                   generators_reactive_power=None,
-                   loads_active_power=None,
-                   loads_reactive_power=None,
-                   storage_units_active_power=None,
-                   storage_units_reactive_power=None):
+def task_manual_ts(
+    edisgo,
+    ctx,
+    *,
+    generators_active_power=None,
+    generators_reactive_power=None,
+    loads_active_power=None,
+    loads_reactive_power=None,
+    storage_units_active_power=None,
+    storage_units_reactive_power=None,
+):
     """
     Set active/reactive power time series from explicit DataFrames.
 
@@ -240,6 +261,7 @@ def task_manual_ts(edisgo, ctx, *,
         The modified EDisGo instance.
 
     """
+
     def _as_df(obj):
         return pd.DataFrame(obj) if obj is not None else None
 
@@ -256,10 +278,15 @@ def task_manual_ts(edisgo, ctx, *,
 
 
 @register_task("reactive_power")
-def task_reactive_power(edisgo, ctx, *, control="fixed_cosphi",
-                        generators_parametrisation="default",
-                        loads_parametrisation="default",
-                        storage_units_parametrisation="default"):
+def task_reactive_power(
+    edisgo,
+    ctx,
+    *,
+    control="fixed_cosphi",
+    generators_parametrisation="default",
+    loads_parametrisation="default",
+    storage_units_parametrisation="default",
+):
     """
     Apply reactive-power control on top of the active-power time series.
 

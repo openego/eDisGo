@@ -27,6 +27,7 @@ Two entry points are exposed:
 * :func:`_run_pipeline_on` — starts from an existing EDisGo instance;
   used by :meth:`edisgo.EDisGo.run_pipeline`.
 """
+
 from __future__ import annotations
 
 import logging
@@ -43,7 +44,7 @@ from edisgo.run.validator import _split_step, validate
 logger = logging.getLogger("edisgo.run.runner")
 
 
-def run_edisgo(config) -> Any:
+def run_edisgo(config, overlying_grid_data=None) -> Any:
     """
     Run an eDisGo pipeline from a YAML/JSON config or dict.
 
@@ -66,10 +67,10 @@ def run_edisgo(config) -> Any:
         stage.
 
     """
-    return _run_pipeline_on(None, config)
+    return _run_pipeline_on(None, config, overlying_grid_data=overlying_grid_data)
 
 
-def _run_pipeline_on(edisgo, config):
+def _run_pipeline_on(edisgo, config, overlying_grid_data=None):
     """
     Internal runner shared by :func:`run_edisgo` and the EDisGo method.
 
@@ -97,6 +98,7 @@ def _run_pipeline_on(edisgo, config):
     cfg = load_config(config)
     validate(cfg)
     ctx = _build_context(cfg)
+    ctx.overlying_grid_data = overlying_grid_data
 
     for stage in cfg["stages"]:
         ctx.current_stage = stage["name"]

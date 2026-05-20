@@ -23,7 +23,7 @@ _workflow:
 
 scenario: eGon2035
 grid:
-  ding0_path: "/home/gurobi/.ding0/2024-07-25T17:38:34_new_planning_new_edisgo/ding0_grids/32377"
+  ding0_path: "/path/to/ding0_grid"
   # grid path should be set in run file
   legacy_ding0_grids: false
   # legacy parameter too
@@ -48,10 +48,13 @@ pipeline:
   - import_heat_pumps
   - import_dsm
   # where is decided, which electromobility use cases are used?
-  - import_electromobility: {charging_strategy: dumb, flexibility_bands_ucs : ["home", "work", "public", "hpc"]}
-  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - import_electromobility: {charging_strategy: null, flexibility_bands_ucs : ["home", "work", "public", "hpc"]}
   - oedb_ts:
       dispatchable: {other: 0.7}
+      timeindex: {start: "2035-01-01", periods: 24, freq: h}
+  - apply_charging_strategy: {strategy: dumb}
+  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - import_overlying_grid_data
   - reactive_power
   - check_integrity
   - optimize:
