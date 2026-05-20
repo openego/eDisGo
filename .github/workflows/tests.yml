@@ -1,4 +1,4 @@
-name: Run Fast Tests on Push__only
+name: Run Fast Tests on Push_only
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   fast-tests:
-    runs-on: ubuntu-latest
+     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
 
     steps:
       - name: Checkout code
@@ -38,7 +38,8 @@ jobs:
           python tests/run_tests_from_file.py ci/non_fast_tests.txt
 
   full-tests:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
+
     runs-on: ubuntu-latest
 
     steps:
@@ -62,8 +63,4 @@ jobs:
         run: |
           python -m pytest -vv \
              --runslow \
-             --runonlinux \
-             --junitxml=full-report.xml \
-             --html=full-report.html \
-             --self-contained-html \
-             > full-output.txt 2>&1
+             --runonlinux 
