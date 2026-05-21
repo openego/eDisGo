@@ -262,6 +262,14 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
     # CSVs may use a different year — shift year then reindex
     edisgo_ti = edisgo.timeseries.timeindex
     if not edisgo_ti.empty:
+        # SOC needs one extra step at the end (end-of-period state)
+        ti_freq = edisgo_ti.freq or (edisgo_ti[1] - edisgo_ti[0])
+        edisgo_ti_plus1 = edisgo_ti.union([edisgo_ti[-1] + ti_freq])
+        soc_attrs = {
+            "storage_units_soc",
+            "thermal_storage_units_decentral_soc",
+            "thermal_storage_units_central_soc",
+        }
         for attr in edisgo.overlying_grid._attributes:
             ts = getattr(edisgo.overlying_grid, attr)
             if ts.empty:
@@ -270,10 +278,8 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
             edisgo_year = edisgo_ti[0].year
             if csv_year != edisgo_year:
                 ts.index = ts.index + pd.DateOffset(years=edisgo_year - csv_year)
-            if isinstance(ts, pd.Series):
-                setattr(edisgo.overlying_grid, attr, ts.reindex(edisgo_ti))
-            else:
-                setattr(edisgo.overlying_grid, attr, ts.reindex(edisgo_ti))
+            target_ti = edisgo_ti_plus1 if attr in soc_attrs else edisgo_ti
+            setattr(edisgo.overlying_grid, attr, ts.reindex(target_ti))
 
     # load dispatchable generator and renewables time series from the same dir
     disp_path = os.path.join(

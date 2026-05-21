@@ -250,10 +250,10 @@ def from_powermodels(
         Base value of apparent power for per unit system.
         Default: 1 MVA.
     """
-    if type(pm_results) == str:
+    if isinstance(pm_results, str):
         with open(pm_results) as f:
             pm = json.loads(json.load(f))
-    elif type(pm_results) == dict:
+    elif isinstance(pm_results, dict):
         pm = pm_results
     else:
         raise ValueError(
@@ -306,17 +306,20 @@ def from_powermodels(
             ]
         results = pd.DataFrame(index=timesteps, columns=names, data=data)
         if (flex == "gen_nd") & (pm["nw"]["1"]["opf_version"] in [3, 4]):
-            edisgo_object.timeseries._generators_active_power.loc[:, names] = (
+            ti = edisgo_object.timeseries.timeindex
+            edisgo_object.timeseries._generators_active_power.loc[ti, names] = (
                 edisgo_object.timeseries.generators_active_power.loc[:, names].values
                 - results[names].values
             )
         elif flex in ["heatpumps", "electromobility"]:
-            edisgo_object.timeseries._loads_active_power.loc[:, names] = results[
+            ti = edisgo_object.timeseries.timeindex
+            edisgo_object.timeseries._loads_active_power.loc[ti, names] = results[
                 names
             ].values
         elif flex == "dsm":
-            edisgo_object.timeseries._loads_active_power.loc[:, names] = (
-                edisgo_object.timeseries._loads_active_power.loc[:, names].values
+            ti = edisgo_object.timeseries.timeindex
+            edisgo_object.timeseries._loads_active_power.loc[ti, names] = (
+                edisgo_object.timeseries._loads_active_power.loc[ti, names].values
                 + results[names].values
             )
         elif flex == "storage":
@@ -328,8 +331,9 @@ def from_powermodels(
                         data=results[names].values,
                     )
                 else:
+                    ti = edisgo_object.timeseries.timeindex
                     edisgo_object.timeseries._storage_units_active_power.loc[
-                        :, names
+                        ti, names
                     ] = results[names].values
             except AttributeError:
                 setattr(
@@ -787,8 +791,8 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             # only modify r, x and l values if min value is too small
             branches[par] = val.clip(lower=min_value)
             logger.warning(
-                f"Min value of {text} is too small. Lowest {100 * quant}% of {text} values will be set "
-                f"to {min_value} {unit}"
+                f"Min value of {text} is too small. Lowest {100 * quant}% of "
+                f"{text} values will be set to {min_value} {unit}"
             )
 
     for branch_i in np.arange(len(branches.index)):
@@ -933,8 +937,8 @@ def _build_load(
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "charging_point")
         else:
             logger.warning(
-                f"No type specified for load {loads_df.index[load_i]}. Power factor and sign will"
-                "be set for conventional load."
+                f"No type specified for load {loads_df.index[load_i]}. "
+                "Power factor and sign will be set for conventional load."
             )
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "conventional_load")
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
@@ -1219,9 +1223,10 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     comparison = (heat_df2[hp_p_nom.index] > hp_cop * hp_p_nom.squeeze()).any()
     if comparison.any():
         logger.warning(
-            "Heat demand is higher than rated heatpump power"
-            f" of heatpumps: {comparison.index[comparison.values].values}. Demand can not be covered if no sufficient"
-            " heat storage capacities are available."
+            "Heat demand is higher than rated heatpump power of heatpumps: "
+            f"{comparison.index[comparison.values].values}. "
+            "Demand can not be covered if no sufficient heat storage "
+            "capacities are available."
         )
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus.iloc[hp_i])
