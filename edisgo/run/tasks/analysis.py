@@ -21,6 +21,7 @@ In addition:
   produce a "base" grid whose subsequent reinforce costs reflect
   only a scenario overlay.
 """
+
 from __future__ import annotations
 
 import pandas as pd
@@ -55,8 +56,15 @@ def task_check_integrity(edisgo, ctx):
 
 
 @register_task("analyze")
-def task_analyze(edisgo, ctx, *, mode=None, timesteps=None,
-                 raise_not_converged=False, troubleshooting_mode=None):
+def task_analyze(
+    edisgo,
+    ctx,
+    *,
+    mode=None,
+    timesteps=None,
+    raise_not_converged=False,
+    troubleshooting_mode=None,
+):
     """
     Run AC power flow over the active time series.
 
@@ -97,18 +105,26 @@ def task_analyze(edisgo, ctx, *, mode=None, timesteps=None,
         ctx.flags["not_converged_steps"] = len(not_converged)
         if len(not_converged) > 0:
             ctx.logger.warning(
-                f"Power flow did not converge for {len(not_converged)} "
-                f"time steps."
+                f"Power flow did not converge for {len(not_converged)} time steps."
             )
     return edisgo
 
 
 @register_task("reinforce")
-def task_reinforce(edisgo, ctx, *, timesteps_pfa=None, reduced_analysis=False,
-                   copy_grid=False, max_while_iterations=20,
-                   split_voltage_band=True, mode=None,
-                   without_generator_import=False, n_minus_one=False,
-                   catch_convergence_problems=False):
+def task_reinforce(
+    edisgo,
+    ctx,
+    *,
+    timesteps_pfa=None,
+    reduced_analysis=False,
+    copy_grid=False,
+    max_while_iterations=20,
+    split_voltage_band=True,
+    mode=None,
+    without_generator_import=False,
+    n_minus_one=False,
+    catch_convergence_problems=False,
+):
     """
     Run iterative grid reinforcement.
 
@@ -167,8 +183,9 @@ def task_reinforce(edisgo, ctx, *, timesteps_pfa=None, reduced_analysis=False,
 
 
 @register_task("base_reinforce")
-def task_base_reinforce(edisgo, ctx, *, cases=None,
-                        reset_equipment_changes=True, save_artifact=True):
+def task_base_reinforce(
+    edisgo, ctx, *, cases=None, reset_equipment_changes=True, save_artifact=True
+):
     """
     Produce a base-reinforced grid and reset the cost accumulator.
 
@@ -242,10 +259,20 @@ def task_base_reinforce(edisgo, ctx, *, cases=None,
 
 
 @register_task("optimize")
-def task_optimize(edisgo, ctx, *, flexible=None, flexible_cps=None,
-                  flexible_hps=None, flexible_loads=None,
-                  flexible_storage_units=None,  opf_version=2, method="soc",
-                  warm_start=False, s_base=1):
+def task_optimize(
+    edisgo,
+    ctx,
+    *,
+    flexible=None,
+    flexible_cps=None,
+    flexible_hps=None,
+    flexible_loads=None,
+    flexible_storage_units=None,
+    opf_version=2,
+    method="soc",
+    warm_start=False,
+    s_base=1,
+):
     """
     Run a powermodels optimal-power-flow (OPF) over flexibilities.
 
@@ -304,15 +331,23 @@ def task_optimize(edisgo, ctx, *, flexible=None, flexible_cps=None,
         ].index.tolist()
     if flexible_storage_units is None and "storage" in flexible:
         flexible_storage_units = edisgo.topology.storage_units_df.index.tolist()
-    if flexible_loads is not None and "dsm" in flexbile:
-        flexible_loads   = edisgo.dsm.p_min.columns.values
+    if flexible_loads is None and "dsm" in flexible:
+        flexible_loads = edisgo.dsm.p_min.columns.values
 
+    if flexible_cps is None:
+        flexible_cps = []
+    if flexible_hps is None:
+        flexible_hps = []
+    if flexible_loads is None:
+        flexible_loads = []
+    if flexible_storage_units is None:
+        flexible_storage_units = []
 
     edisgo.pm_optimize(
-        flexible_cps=flexible_cps or [],
-        flexible_hps=flexible_hps or [],
-        flexible_loads=flexible_loads or [],
-        flexible_storage_units=flexible_storage_units or [],
+        flexible_cps=flexible_cps,
+        flexible_hps=flexible_hps,
+        flexible_loads=flexible_loads,
+        flexible_storage_units=flexible_storage_units,
         opf_version=opf_version,
         method=method,
         warm_start=warm_start,
