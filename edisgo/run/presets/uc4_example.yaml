@@ -58,7 +58,7 @@ pipeline:
   - optimize:
       flexible: [heat_pumps, storage, charging_points, dsm]
       method: soc
-      opf_version: 2
+      opf_version: 3
   - reinforce
   - save:
       archive: true
