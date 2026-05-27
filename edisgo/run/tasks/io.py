@@ -196,29 +196,35 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
     """
     Import overlying grid data into the EDisGo instance.
 
-    When ``overlying_grid_data`` is a dict of DataFrames (as returned by
-    ``get_etrago_results_per_bus``), the overlying-grid attributes and
-    dispatchable/fluctuating generator time series are set from it.
+    Behavior controlled by ``ctx.raw_config['overlying_grid']``:
 
-    When ``overlying_grid_path`` is a directory path, the overlying-grid
-    attributes are loaded from CSV files in that directory, and
-    ``dispatchable_generators_active_power.csv`` /
-    ``renewables_potential.csv`` are applied as generator time series
-    if present.
+    * ``enabled`` (bool) — master switch. Falsy → task no-ops.
+    * ``source`` (str) — ``"etrago"`` or ``"csv"``.
 
-    Falls back to ``ctx.raw_config['eDisGo']['overlying_grid_source']``
-    as the directory path when neither argument is given.
+    ``source: etrago`` consumes ``ctx.overlying_grid_data`` (a dict of
+    DataFrames as returned by ``get_etrago_results_per_bus``), injected
+    via the ``overlying_grid_data=`` kwarg of
+    :func:`edisgo.run.run_edisgo`. Sets overlying-grid attributes and
+    dispatchable/fluctuating generator time series from it.
+
+    ``source: csv`` loads overlying-grid attributes from CSVs in
+    ``overlying_grid.path`` (full directory path for ONE grid — same
+    leaf-dir convention as ``grid.ding0_path``; callers handling many
+    grids must compose the per-grid subdirectory themselves).
+    ``dispatchable_generators_active_power.csv`` and
+    ``renewables_potential.csv``, if present in that dir, are applied
+    as generator time series.
 
     Parameters
     ----------
     edisgo : edisgo.EDisGo
         EDisGo instance to modify in place.
     ctx : RunContext
-        Run context.
+        Run context. Reads ``raw_config['overlying_grid']`` and
+        ``overlying_grid_data`` attribute.
     overlying_grid_path : str, optional
-        Directory containing overlying-grid CSV files.
-    overlying_grid_data : dict, optional
-        Dict of DataFrames as returned by ``get_etrago_results_per_bus``.
+        CSV directory override (takes precedence over
+        ``overlying_grid.path`` from the config) when ``source='csv'``.
 
     Returns
     -------
@@ -228,33 +234,38 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
     """
     import pandas as pd
     
+    og_cfg = ctx.raw_config.get("overlying_grid") or {}
+    if not og_cfg.get("enabled"):
+        return edisgo
+
+    source = og_cfg.get("source")
     overlying_grid_data = getattr(ctx, "overlying_grid_data", None)
 
-    if overlying_grid:
-        
-
-        if overlying_grid_data is not None:
-            # eTraGo results dict — set standard overlying-grid attributes
-            for attr in edisgo.overlying_grid._attributes:
-                if attr in overlying_grid_data:
-                    setattr(edisgo.overlying_grid, attr, overlying_grid_data[attr])
-            # set generator time series
-            edisgo.set_time_series_active_power_predefined(
-                dispatchable_generators_ts=overlying_grid_data.get(
-                    "dispatchable_generators_active_power"
-                ),
-                fluctuating_generators_ts=overlying_grid_data.get("renewables_potential"),
+    if source == "etrago":
+        if overlying_grid_data is None:
+            ctx.logger.warning(
+                "task 'import_overlying_grid_data': source='etrago' but no "
+                "overlying_grid_data passed to run_edisgo — skipping."
             )
             return edisgo
+        for attr in edisgo.overlying_grid._attributes:
+            if attr in overlying_grid_data:
+                setattr(edisgo.overlying_grid, attr, overlying_grid_data[attr])
+        edisgo.set_time_series_active_power_predefined(
+            dispatchable_generators_ts=overlying_grid_data.get(
+                "dispatchable_generators_active_power"
+            ),
+            fluctuating_generators_ts=overlying_grid_data.get("renewables_potential"),
+        )
+        return edisgo
 
-        # resolve path: explicit arg → runner config overlying_grid.path → skip
+    if source == "csv":
         if overlying_grid_path is None:
-            overlying_grid_path = (ctx.raw_config.get("overlying_grid_path") or {}).get("path")
-
+            overlying_grid_path = og_cfg.get("path")
         if overlying_grid_path is None:
             ctx.logger.warning(
-                "task 'import_overlying_grid_data': no overlying_grid_data or "
-                "overlying_grid_path provided — skipping."
+                "task 'import_overlying_grid_data': source='csv' but no "
+                "overlying_grid.path configured — skipping."
             )
             return edisgo
 
@@ -320,5 +331,10 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
                 dispatchable_generators_ts=disp_ts,
                 fluctuating_generators_ts=pot_ts,
             )
+        return edisgo
 
+    ctx.logger.warning(
+        f"task 'import_overlying_grid_data': unknown source={source!r} "
+        "(expected 'etrago' or 'csv') — skipping."
+    )
     return edisgo

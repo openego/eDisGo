@@ -31,7 +31,9 @@ database:
 timeindex: {start: "2035-01-01", periods: 24, freq: h}
 
 overlying_grid:
-  path: "/path/to/overlying_grid_csv_dir"
+  enabled: false                              # master switch — set true to activate import_overlying_grid_data
+  source: csv                                 # "csv" (load from path) or "etrago" (consume overlying_grid_data kwarg)
+  path: "/path/to/overlying_grid_csv_dir"     # required when source == csv; full leaf dir for ONE grid (like ding0_path)
 
 results:
   directory: results/uc4_example
@@ -56,7 +58,7 @@ pipeline:
   - optimize:
       flexible: [heat_pumps, storage, charging_points, dsm]
       method: soc
-      opf_version: 3
+      opf_version: 2
   - reinforce
   - save:
       archive: true

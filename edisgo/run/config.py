@@ -399,6 +399,8 @@ def _adapt_ego_legacy(cfg: dict) -> dict:
         "grid": {"ding0_path": edisgo_cfg.get("grid_path")},
         "results": {"directory": edisgo_cfg.get("results")},
         "pipeline": mapped,
+        "overlying_grid": {"path": edisgo_cfg.get("overlying_grid_source")},
+        "overlying_grid": {"selection": edisgo_cfg.get("overlying_grid")}
     }
     if "database" in cfg:
         adapted["database"] = cfg["database"]
