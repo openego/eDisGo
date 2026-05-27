@@ -1015,8 +1015,17 @@ def _build_battery_storage(
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
     if not edisgo_obj.overlying_grid.storage_units_soc.empty:
+        # Select relevant timesteps
+        timesteps = edisgo_obj.timeseries.timeindex.union(
+            [
+                edisgo_obj.timeseries.timeindex[-1]
+                + edisgo_obj.timeseries.timeindex.freq
+            ]
+        )
+        if edisgo_obj.overlying_grid.storage_units_soc.index[0].year==2011:
+            timesteps = timesteps.map(lambda t: t.replace(year=2011))
         data = pd.concat(
-            [edisgo_obj.overlying_grid.storage_units_soc]
+            [edisgo_obj.overlying_grid.storage_units_soc.loc[timesteps]]
             * len(edisgo_obj.topology.storage_units_df),
             axis=1,
         ).values
