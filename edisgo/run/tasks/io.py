@@ -235,14 +235,30 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
         for attr in edisgo.overlying_grid._attributes:
             if attr in overlying_grid_data:
                 setattr(edisgo.overlying_grid, attr, overlying_grid_data[attr])
+
+        if not overlying_grid_data.get(
+            "dispatchable_generators_active_power"
+        ).empty:
         # set generator time series
-        edisgo.set_time_series_active_power_predefined(
-            dispatchable_generators_ts=overlying_grid_data.get(
-                "dispatchable_generators_active_power"
-            ),
-            fluctuating_generators_ts=overlying_grid_data.get("renewables_potential"),
-        )
-        return edisgo
+            edisgo.set_time_series_active_power_predefined(
+                dispatchable_generators_ts=overlying_grid_data.get(
+                    "dispatchable_generators_active_power"
+                ),
+            )
+        if not overlying_grid_data.get("renewables_potential").empty:
+            pot_ts = overlying_grid_data.get("renewables_potential")
+            edisgo_ti = edisgo.timeseries.timeindex
+            csv_year = pot_ts.index[0].year
+            edisgo_year = edisgo_ti[0].year
+            if csv_year != edisgo_year:
+                pot_ts.index = pot_ts.index + pd.DateOffset(
+                    years=edisgo_year - csv_year
+                )
+            pot_ts = pot_ts.reindex(edisgo_ti)
+
+            edisgo.set_time_series_active_power_predefined(
+                fluctuating_generators_ts=pot_ts,
+            )
 
     # resolve path: explicit arg → runner config overlying_grid.path → skip
     if overlying_grid_path is None:
@@ -255,8 +271,9 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
         )
         return edisgo
 
-    # load overlying-grid attributes from CSV directory
-    edisgo.overlying_grid.from_csv(overlying_grid_path)
+    if overlying_grid_data is None:
+        # load overlying-grid attributes from CSV directory
+        edisgo.overlying_grid.from_csv(overlying_grid_path)
 
     # reindex overlying-grid attributes to match edisgo timeindex
     # CSVs may use a different year — shift year then reindex
@@ -281,41 +298,43 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
             target_ti = edisgo_ti_plus1 if attr in soc_attrs else edisgo_ti
             setattr(edisgo.overlying_grid, attr, ts.reindex(target_ti))
 
-    # load dispatchable generator and renewables time series from the same dir
-    disp_path = os.path.join(
-        overlying_grid_path, "dispatchable_generators_active_power.csv"
-    )
-    if os.path.isfile(disp_path):
-        disp_ts = pd.read_csv(disp_path, index_col=0, parse_dates=True)
-        if not edisgo_ti.empty:
-            csv_year = disp_ts.index[0].year
-            edisgo_year = edisgo_ti[0].year
-            if csv_year != edisgo_year:
-                disp_ts.index = disp_ts.index + pd.DateOffset(
-                    years=edisgo_year - csv_year
-                )
-            disp_ts = disp_ts.reindex(edisgo_ti)
-    else:
-        disp_ts = None
-
-    pot_path = os.path.join(overlying_grid_path, "renewables_potential.csv")
-    if os.path.isfile(pot_path):
-        pot_ts = pd.read_csv(pot_path, index_col=0, parse_dates=True)
-        if not edisgo_ti.empty:
-            csv_year = pot_ts.index[0].year
-            edisgo_year = edisgo_ti[0].year
-            if csv_year != edisgo_year:
-                pot_ts.index = pot_ts.index + pd.DateOffset(
-                    years=edisgo_year - csv_year
-                )
-            pot_ts = pot_ts.reindex(edisgo_ti)
-    else:
-        pot_ts = None
-
-    if disp_ts is not None or pot_ts is not None:
-        edisgo.set_time_series_active_power_predefined(
-            dispatchable_generators_ts=disp_ts,
-            fluctuating_generators_ts=pot_ts,
+    if overlying_grid_data is None:
+        # load dispatchable generator and renewables time series from the same dir
+        disp_path = os.path.join(
+            overlying_grid_path, "dispatchable_generators_active_power.csv"
         )
+        if os.path.isfile(disp_path):
+            disp_ts = pd.read_csv(disp_path, index_col=0, parse_dates=True)
+            if not edisgo_ti.empty:
+                csv_year = disp_ts.index[0].year
+                edisgo_year = edisgo_ti[0].year
+                if csv_year != edisgo_year:
+                    disp_ts.index = disp_ts.index + pd.DateOffset(
+                        years=edisgo_year - csv_year
+                    )
+                disp_ts = disp_ts.reindex(edisgo_ti)
+        else:
+            disp_ts = None
+
+        pot_path = os.path.join(overlying_grid_path, "renewables_potential.csv")
+        if os.path.isfile(pot_path):
+            pot_ts = pd.read_csv(pot_path, index_col=0, parse_dates=True)
+            if not edisgo_ti.empty:
+                csv_year = pot_ts.index[0].year
+                edisgo_year = edisgo_ti[0].year
+                if csv_year != edisgo_year:
+                    pot_ts.index = pot_ts.index + pd.DateOffset(
+                        years=edisgo_year - csv_year
+                    )
+                pot_ts = pot_ts.reindex(edisgo_ti)
+        else:
+            pot_ts = None
+
+
+        if disp_ts is not None or pot_ts is not None:
+            edisgo.set_time_series_active_power_predefined(
+                dispatchable_generators_ts=disp_ts,
+                fluctuating_generators_ts=pot_ts,
+            )
 
     return edisgo
