@@ -1015,8 +1015,17 @@ def _build_battery_storage(
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
     if not edisgo_obj.overlying_grid.storage_units_soc.empty:
+        # Select relevant timesteps
+        timesteps = edisgo_obj.timeseries.timeindex.union(
+            [
+                edisgo_obj.timeseries.timeindex[-1]
+                + edisgo_obj.timeseries.timeindex.freq
+            ]
+        )
+        if edisgo_obj.overlying_grid.storage_units_soc.index[0].year==2011:
+            timesteps = timesteps.map(lambda t: t.replace(year=2011))
         data = pd.concat(
-            [edisgo_obj.overlying_grid.storage_units_soc]
+            [edisgo_obj.overlying_grid.storage_units_soc.loc[timesteps]]
             * len(edisgo_obj.topology.storage_units_df),
             axis=1,
         ).values
@@ -1593,11 +1602,18 @@ def _build_hv_requirements(
     )
 
     for i in np.arange(len(opf_flex)):
-        pm["HV_requirements"][str(i + 1)] = {
-            "P": hv_flex_dict[opf_flex[i]].iloc[0],
-            "name": opf_flex[i],
-            "count": count,
-        }
+        if type(hv_flex_dict[opf_flex[i]]) == pd.DataFrame:
+            pm["HV_requirements"][str(i + 1)] = {
+                "P": hv_flex_dict[opf_flex[i]].sum(axis=1).iloc[0],
+                "name": opf_flex[i],
+                "count": count,
+            }
+        else:
+            pm["HV_requirements"][str(i + 1)] = {
+                "P": hv_flex_dict[opf_flex[i]].iloc[0],
+                "name": opf_flex[i],
+                "count": count,
+            }
 
 
 def _build_timeseries(
@@ -1923,9 +1939,14 @@ def _build_component_timeseries(
 
     if (kind == "HV_requirements") & (pm["opf_version"] in [3, 4]):
         for i in np.arange(len(opf_flex)):
-            pm_comp[(str(i + 1))] = {
-                "P": hv_flex_dict[opf_flex[i]].round(20).tolist(),
-            }
+            if type(hv_flex_dict[opf_flex[i]])==pd.DataFrame:
+                pm_comp[(str(i + 1))] = {
+                    "P": hv_flex_dict[opf_flex[i]].sum(axis=1).round(20).tolist(),
+                }
+            else:
+                pm_comp[(str(i + 1))] = {
+                    "P": hv_flex_dict[opf_flex[i]].round(20).tolist(),
+                }
 
     pm["time_series"][kind] = pm_comp
 
