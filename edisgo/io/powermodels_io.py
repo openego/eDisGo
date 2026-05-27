@@ -1602,11 +1602,18 @@ def _build_hv_requirements(
     )
 
     for i in np.arange(len(opf_flex)):
-        pm["HV_requirements"][str(i + 1)] = {
-            "P": hv_flex_dict[opf_flex[i]].iloc[0],
-            "name": opf_flex[i],
-            "count": count,
-        }
+        if type(hv_flex_dict[opf_flex[i]]) == pd.DataFrame:
+            pm["HV_requirements"][str(i + 1)] = {
+                "P": hv_flex_dict[opf_flex[i]].sum(axis=1).iloc[0],
+                "name": opf_flex[i],
+                "count": count,
+            }
+        else:
+            pm["HV_requirements"][str(i + 1)] = {
+                "P": hv_flex_dict[opf_flex[i]].iloc[0],
+                "name": opf_flex[i],
+                "count": count,
+            }
 
 
 def _build_timeseries(
@@ -1932,9 +1939,14 @@ def _build_component_timeseries(
 
     if (kind == "HV_requirements") & (pm["opf_version"] in [3, 4]):
         for i in np.arange(len(opf_flex)):
-            pm_comp[(str(i + 1))] = {
-                "P": hv_flex_dict[opf_flex[i]].round(20).tolist(),
-            }
+            if type(hv_flex_dict[opf_flex[i]])==pd.DataFrame:
+                pm_comp[(str(i + 1))] = {
+                    "P": hv_flex_dict[opf_flex[i]].sum(axis=1).round(20).tolist(),
+                }
+            else:
+                pm_comp[(str(i + 1))] = {
+                    "P": hv_flex_dict[opf_flex[i]].round(20).tolist(),
+                }
 
     pm["time_series"][kind] = pm_comp
 
