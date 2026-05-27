@@ -365,13 +365,22 @@ def from_powermodels(
         # calculate relative error
         df2 = deepcopy(df)
         for flex in df2.columns:
-            abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
-            rel_error = [
-                abs_error[i] / hv_flex_dict[flex].iloc[i]
-                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
-                else 0
-                for i in range(len(abs_error))
-            ]
+            if type(hv_flex_dict[flex]) == pd.Series:
+                abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
+                rel_error = [
+                    abs_error[i] / hv_flex_dict[flex].iloc[i]
+                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
+                    else 0
+                    for i in range(len(abs_error))
+                ]
+            else:
+                abs_error = abs(df2[flex].values - hv_flex_dict[flex].sum(axis=1).values)
+                rel_error = [
+                    abs_error[i] / hv_flex_dict[flex].sum(axis=1).iloc[i]
+                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].sum(axis=1).iloc[i] != 0))
+                    else 0
+                    for i in range(len(abs_error))
+                ]
             df2[flex] = rel_error
         # write results to edisgo object
         edisgo_object.opf_results.overlying_grid = pd.DataFrame(
