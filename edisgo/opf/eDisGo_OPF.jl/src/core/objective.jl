@@ -112,7 +112,7 @@ end
 # OPF Version 5: Minimize line losses, use ONLY §14a curtailment as flexibility
 # OPF Version 5: §14a as primary flexibility; generation curtailment and load shedding
 # as escalating last resorts so the model always finds a feasible solution.
-# Inspect pds/phps/pcps in the results — non-zero values signal a pre-existing grid violation.
+# Inspect pds/phps/pcps in the results — non-zero values signal a pre-existing grid violation.q
 function objective_min_losses_14a_only(pm::AbstractBFModelEdisgo)
     nws = PowerModels.nw_ids(pm)
 
@@ -124,10 +124,10 @@ function objective_min_losses_14a_only(pm::AbstractBFModelEdisgo)
     phps  = Dict(n => PowerModels.var(pm, n, :phps)   for n in nws)
     pcps  = Dict(n => PowerModels.var(pm, n, :pcps)   for n in nws)
 
-    factor_14a   = 1e4   # §14a curtailment: primary flexibility
-    factor_pgc   = 1e5   # non-dispatchable curtailment: second resort
-    factor_pgens = 1e5   # dispatchable curtailment: third resort (same tier as pgc)
-    factor_shed  = 1e8   # load/HP/CP shedding: absolute last resort
+    factor_14a   = 1e8     # §14a curtailment: primary flexibility
+    factor_pgc   = 1e9     # non-dispatchable curtailment: second resort
+    factor_pgens = 1e9     # dispatchable curtailment: third resort (same tier as pgc)
+    factor_shed  = 1e10     # load/HP/CP shedding: absolute last resort
 
     println("factor_14a   = ", factor_14a)
     println("factor_pgc   = ", factor_pgc)
