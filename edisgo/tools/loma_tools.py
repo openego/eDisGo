@@ -1403,22 +1403,131 @@ def get_curtailment_data(edisgo):
     return edisgo.timeseries.generators_active_power[gen_cols]
 
 
+def analyze_14a_activations(edisgo, pre_opt_line_loading, *, threshold_kw=0.5):
+    """
+    Correlate §14a generator activations with pre-optimization grid state.
+
+    For each timestep where total §14a activation exceeds threshold_kw, this
+    function reports the grid state BEFORE optimization so that genuine
+    overload-driven activations can be distinguished from spurious ones.
+
+    Usage
+    -----
+    Run edisgo.analyze() BEFORE optimization and pass the results here::
+
+        edisgo.analyze()
+        pre_opt_loading = edisgo.results.s_res.copy()
+
+        edisgo.pm_optimize(opf_version=5, curtailment_14a=True)
+
+        report = analyze_14a_activations(edisgo, pre_opt_loading)
+
+    Parameters
+    ----------
+    edisgo : EDisGo
+        EDisGo object after optimization (§14a generators in timeseries).
+    pre_opt_line_loading : pd.DataFrame
+        Line loading results from edisgo.results.s_res BEFORE optimization.
+        Index: timeindex, columns: line names, values: loading in p.u.
+    threshold_kw : float
+        Minimum total §14a activation per timestep to include (kW). Filters
+        near-zero MILP numerical noise. Default 0.5 kW.
+
+    Returns
+    -------
+    pd.DataFrame
+        One row per active timestep with columns:
+        - 14a_total_mw           : total §14a activation [MW]
+        - 14a_hp_mw              : HP share of §14a [MW]
+        - 14a_cp_mw              : CP share of §14a [MW]
+        - n_active_generators    : number of §14a generators active
+        - max_line_loading_pre   : highest line loading before OPF [p.u.]
+        - n_lines_overloaded_pre : lines above 1.0 p.u. before OPF
+        - most_loaded_line_pre   : name of the most loaded line before OPF
+        - has_pre_overload       : True if any line exceeded 1.0 p.u. before OPF
+        - top_generators         : list of (name, MW) for top-3 active generators
+    """
+    curt = get_curtailment_data(edisgo)
+    if curt.empty:
+        print("[analyze_14a] No §14a generator data found in timeseries.")
+        return pd.DataFrame()
+
+    threshold_mw = threshold_kw / 1000.0
+    curt_total = curt.sum(axis=1)
+    active_ts = curt_total[curt_total > threshold_mw]
+
+    if active_ts.empty:
+        print(f"[analyze_14a] No §14a activations above {threshold_kw} kW found.")
+        return pd.DataFrame()
+
+    hp_cols = [c for c in curt.columns if "hp_14a_support" in c]
+    cp_cols = [c for c in curt.columns if "cp_14a_support" in c or "charging_point_14a_support" in c]
+
+    rows = []
+    for ts in active_ts.index:
+        ts_curt = curt.loc[ts]
+
+        top3 = ts_curt.nlargest(3)
+        top_gens = [(g, round(float(v), 6)) for g, v in top3[top3 > threshold_mw].items()]
+
+        row = {
+            "timestamp": ts,
+            "14a_total_mw": round(float(curt_total[ts]), 6),
+            "14a_hp_mw": round(float(ts_curt[hp_cols].sum()), 6),
+            "14a_cp_mw": round(float(ts_curt[cp_cols].sum()), 6),
+            "n_active_generators": int((ts_curt > threshold_mw).sum()),
+            "top_generators": top_gens,
+        }
+
+        if pre_opt_line_loading is not None and ts in pre_opt_line_loading.index:
+            ts_loading = pre_opt_line_loading.loc[ts]
+            max_idx = ts_loading.idxmax()
+            row["max_line_loading_pre"] = round(float(ts_loading.max()), 4)
+            row["n_lines_overloaded_pre"] = int((ts_loading > 1.0).sum())
+            row["most_loaded_line_pre"] = str(max_idx)
+            row["has_pre_overload"] = bool((ts_loading > 1.0).any())
+        else:
+            row["max_line_loading_pre"] = float("nan")
+            row["n_lines_overloaded_pre"] = 0
+            row["most_loaded_line_pre"] = "n/a (no pre-opt data)"
+            row["has_pre_overload"] = False
+
+        rows.append(row)
+
+    df = pd.DataFrame(rows).set_index("timestamp")
+
+    n_total = len(df)
+    n_with_overload = int(df["has_pre_overload"].sum())
+    n_spurious = n_total - n_with_overload
+
+    print(f"\n[analyze_14a] §14a Activation Report (threshold={threshold_kw} kW)")
+    print(f"  Active timesteps total:          {n_total}")
+    print(f"  With pre-opt overload (expected):{n_with_overload:>4}  ({100*n_with_overload/n_total:.0f}%)")
+    print(f"  Without pre-opt overload (check):{n_spurious:>4}  ({100*n_spurious/n_total:.0f}%)")
+    print(f"  Max §14a activation:             {df['14a_total_mw'].max()*1000:.2f} kW")
+    print(f"  Mean §14a activation:            {df['14a_total_mw'].mean()*1000:.2f} kW")
+    if n_spurious > 0:
+        spurious = df[~df["has_pre_overload"]]
+        print(f"\n  [!] Spurious activations detected:")
+        print(f"      Max activation:  {spurious['14a_total_mw'].max()*1000:.2f} kW")
+        print(f"      Mean activation: {spurious['14a_total_mw'].mean()*1000:.2f} kW")
+        print(f"      Max line loading at those timesteps: "
+              f"{spurious['max_line_loading_pre'].max()*100:.1f}%")
+        print(f"      (Activations close to 100% line loading may still be genuine")
+        print(f"       due to branch-flow model conservatism vs. full power flow.)")
+
+    return df
+
+
 def create_network_gif(
     folder_path="./plots", output_name="network_evolution.gif", duration=1
 ):
-    """
-    Creates a GIF from PNG files in a folder.
-    duration: time in seconds between frames
-    """
     images = []
-
     files = [
-        f
-        for f in os.listdir(folder_path)
+        f for f in os.listdir(folder_path)
         if f.endswith(".png") and f.startswith("grid_analysis_")
     ]
     files.sort()
-
     print(f"Found {len(files)} frames. Processing...")
 
     for filename in files:
@@ -1435,25 +1544,23 @@ def plot_network(
     snapshot: str = "2035-01-15 09:00:00",
     show: bool = True,
     save: bool = True,
-    base_bus_size=0.000000002,
+    base_bus_size=0.00000002,
+    output_folder: str = "plots",
+    focus_bus: str = None,       # <-- neu: Bus-Name als String
+    focus_radius: float = 0.02,  # <-- neu: Radius in Grad (lon/lat)
 ):
     results = edisgo.results
-
     n = edisgo.to_pypsa()
 
-    coords = edisgo.topology.buses_df[["x", "y"]]
-    coords = coords.reindex(n.buses.index)
+    coords = edisgo.topology.buses_df[["x", "y"]].reindex(n.buses.index)
     n.buses["x"] = coords["x"].values
     n.buses["y"] = coords["y"].values
 
     line_columns = n.lines.index
     loading_relative = results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
 
-    v_min, v_max = 0.0, 1.0
-    norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
-
+    norm_lines = mcolors.Normalize(vmin=0.0, vmax=1.0)
     bus_colors = edisgo.results.v_res.T[snapshot]
-
     norm_buses = mcolors.TwoSlopeNorm(vmin=0.9, vcenter=1.0, vmax=1.1)
     voltage_cmap = mcolors.LinearSegmentedColormap.from_list(
         "voltage",
@@ -1473,47 +1580,47 @@ def plot_network(
     bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
 
     fig, ax = plt.subplots(figsize=(12, 8))
-
     n.plot(
-        margin=0.05,
-        ax=ax,
-        geomap=False,
-        bus_colors=bus_colors,
-        bus_alpha=1,
-        bus_sizes=bus_sizes,
-        bus_cmap=voltage_cmap,
-        bus_norm=norm_buses,
-        line_colors=loading_relative,
-        line_widths=1.6,
-        line_cmap="jet",
-        line_norm=norm_lines,
-        title=f"Grid Analysis: {snapshot}",
-        geometry=False,
+        margin=0.05, ax=ax, geomap=False,
+        bus_colors=bus_colors, bus_alpha=1, bus_sizes=bus_sizes,
+        bus_cmap=voltage_cmap, bus_norm=norm_buses,
+        line_colors=loading_relative, line_widths=1.6,
+        line_cmap="jet", line_norm=norm_lines,
+        title=f"Grid Analysis: {snapshot}", geometry=False,
     )
-
     ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
 
     sm_lines = plt.cm.ScalarMappable(cmap="jet", norm=norm_lines)
-    cb_lines = fig.colorbar(
-        sm_lines, ax=ax, orientation="vertical", location="left", pad=0.08, aspect=20
-    )
+    cb_lines = fig.colorbar(sm_lines, ax=ax, orientation="vertical", location="left", pad=0.08, aspect=20)
     cb_lines.set_label("Line Loading [relative]", fontsize=8)
 
     sm_buses = plt.cm.ScalarMappable(cmap=voltage_cmap, norm=norm_buses)
-    cb_buses = fig.colorbar(
-        sm_buses, ax=ax, orientation="vertical", location="right", pad=0.02, aspect=20
-    )
-    cb_buses.set_label(
-        "Bus Voltage [p.u.]  — navy: under, green: nominal, red: over", fontsize=8
-    )
+
+    cb_buses = fig.colorbar(sm_buses, ax=ax, orientation="vertical", location="right", pad=0.02, aspect=20)
+    cb_buses.set_label("Bus Voltage [p.u.] — blue: under, yellow: nominal, red: over", fontsize=8)
+
+    # Zoom um focus_bus
+    if focus_bus is not None:
+        if focus_bus not in n.buses.index:
+            raise ValueError(f"Bus '{focus_bus}' nicht im Netz gefunden.")
+        
+        bx = n.buses.loc[focus_bus, "x"]
+        by = n.buses.loc[focus_bus, "y"]
+        
+        ax.set_xlim(bx - focus_radius, bx + focus_radius)
+        ax.set_ylim(by - focus_radius, by + focus_radius)
+        ax.set_title(f"Grid Analysis: {snapshot} — Zoom: {focus_bus}")
+
 
     if save:
-        os.makedirs("plots", exist_ok=True)
-        plt.savefig(f"plots/grid_analysis_{snapshot}.png", dpi=300, bbox_inches="tight")
-
+        os.makedirs(output_folder, exist_ok=True)
+        plt.savefig(
+            os.path.join(output_folder, f"grid_analysis_{snapshot}.png"),
+            dpi=300, bbox_inches="tight"
+        )
     if show:
         plt.show()
-
+    plt.close(fig) 
 
 def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True):
     """Plot load composition per bus (CP, HP, conventional) as pie charts on the grid."""
