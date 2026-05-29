@@ -22,6 +22,39 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _validate_transformer_uniqueness(edisgo_obj, voltage_level="lv"):
+    """
+    Validate that all transformer names in topology are unique.
+    
+    This check prevents the PyPSA error: "Error, new components for Transformer are not unique"
+    
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    voltage_level : str
+        "lv" for MV/LV transformers or "mv" for HV/MV transformers
+        
+    Raises
+    ------
+    ValueError
+        If duplicate transformer names are found.
+    """
+    if voltage_level == "lv":
+        df = edisgo_obj.topology.transformers_df
+    else:
+        df = edisgo_obj.topology.transformers_hvmv_df
+    
+    duplicates = df.index[df.index.duplicated()].tolist()
+    if duplicates:
+        raise ValueError(
+            f"CRITICAL: Duplicate transformer names found in {voltage_level} network: {duplicates}. "
+            f"This causes PyPSA error 'new components for Transformer are not unique'. "
+            f"Full index: {df.index.tolist()}"
+        )
+    
+    logger.debug(f"✓ Transformer uniqueness check passed ({voltage_level}): {len(df)} unique transformers")
+
+
 def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
     """
     Reinforce MV/LV substations due to overloading issues.
@@ -59,6 +92,9 @@ def reinforce_mv_lv_station_overloading(edisgo_obj, critical_stations):
     transformers_changes = _reinforce_station_overloading(
         edisgo_obj, critical_stations, voltage_level="lv"
     )
+
+    # Validate uniqueness after reinforcement
+    _validate_transformer_uniqueness(edisgo_obj, voltage_level="lv")
 
     if transformers_changes["added"]:
         logger.debug(
@@ -106,6 +142,9 @@ def reinforce_hv_mv_station_overloading(edisgo_obj, critical_stations):
     transformers_changes = _reinforce_station_overloading(
         edisgo_obj, critical_stations, voltage_level="mv"
     )
+
+    # Validate uniqueness after reinforcement
+    _validate_transformer_uniqueness(edisgo_obj, voltage_level="mv")
 
     if transformers_changes["added"]:
         logger.debug("==> MV station has been reinforced due to overloading issues.")
@@ -180,6 +219,13 @@ def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level)
         )
 
     transformers_changes = {"added": {}, "removed": {}}
+    
+    # Get globally existing transformer names to ensure uniqueness
+    if voltage_level == "lv":
+        existing_trafo_names = edisgo_obj.topology.transformers_df.index.tolist()
+    else:
+        existing_trafo_names = edisgo_obj.topology.transformers_hvmv_df.index.tolist()
+    
     for station in critical_stations.index:
         grid = critical_stations.at[station, "grid"]
         # list of maximum power of each transformer in the station
@@ -203,8 +249,16 @@ def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level)
             ]
             name = new_transformers.index[0].split("_")
             name.insert(-1, "reinforced")
-            name[-1] = len(grid.transformers_df) + 1
-            new_transformers.index = ["_".join([str(_) for _ in name])]
+            
+            # BUGFIX: Find unique name by checking against ALL existing transformers
+            counter = 1
+            new_name = "_".join([str(_) for _ in name[:-1]] + [str(counter)])
+            while new_name in existing_trafo_names:
+                counter += 1
+                new_name = "_".join([str(_) for _ in name[:-1]] + [str(counter)])
+            
+            new_transformers.index = [new_name]
+            existing_trafo_names.append(new_name)
 
             # add new transformer to list of added transformers
             transformers_changes["added"][station] = [new_transformers.index[0]]
@@ -226,9 +280,16 @@ def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level)
 
             index = []
 
+            # BUGFIX: Generate unique names for all new transformers
+            counter = 1
             for i in range(number_transformers):
-                name[-1] = i + 1
-                index.append("_".join([str(_) for _ in name]))
+                new_name = "_".join([str(_) for _ in name[:-1]] + [str(counter)])
+                while new_name in existing_trafo_names:
+                    counter += 1
+                    new_name = "_".join([str(_) for _ in name[:-1]] + [str(counter)])
+                index.append(new_name)
+                existing_trafo_names.append(new_name)
+                counter += 1
 
             if number_transformers > 1:
                 new_transformers = duplicated_transformer.iloc[
