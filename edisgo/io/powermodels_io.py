@@ -635,7 +635,7 @@ def from_powermodels(
                 names
             ].values
             #implement 14a-gens in topology dataframe
-            for gen_name in names:
+            for gen_name in names:          
                   load_name = gen_name.replace("hp_14a_support_", "")
                   bus_name = edisgo_object.topology.loads_df.loc[load_name].bus
                   if gen_name not in edisgo_object.topology.generators_df.index:
@@ -1844,11 +1844,11 @@ def _build_gen_cp_14a_support(psa_net, pm, edisgo_obj, s_base, all_cps, curtailm
         # Nominal power of CP
         p_nominal = cp_p_nom[cp_name]  # MW
         
-        if p_nominal > 0.011: 
-            p_min_14a = p_nominal * 0.40
-        else:
-            p_min_14a = 0.0042
-
+       # if p_nominal > 0.011: 
+          #  p_min_14a = p_nominal * 0.40
+      #  else:
+          #  p_min_14a = 0.0042
+        p_min_14a = 0.0042
         
         # Maximum support = difference between nominal and §14a limit
         # This is how much the load can be virtually reduced
