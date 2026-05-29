@@ -1584,7 +1584,7 @@ def plot_network(
         margin=0.05, ax=ax, geomap=False,
         bus_colors=bus_colors, bus_alpha=1, bus_sizes=bus_sizes,
         bus_cmap=voltage_cmap, bus_norm=norm_buses,
-        line_colors=loading_relative, line_widths=0.5,
+        line_colors=loading_relative, line_widths=1.6,
         line_cmap="jet", line_norm=norm_lines,
         title=f"Grid Analysis: {snapshot}", geometry=False,
     )
@@ -1610,6 +1610,7 @@ def plot_network(
         ax.set_xlim(bx - focus_radius, bx + focus_radius)
         ax.set_ylim(by - focus_radius, by + focus_radius)
         ax.set_title(f"Grid Analysis: {snapshot} — Zoom: {focus_bus}")
+
 
 
     if save:
@@ -1760,6 +1761,18 @@ def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True):
 
     plt.close(fig)
 
+=======
+
+    if save:
+        os.makedirs(output_folder, exist_ok=True)
+        plt.savefig(
+            os.path.join(output_folder, f"grid_analysis_{snapshot}.png"),
+            dpi=300, bbox_inches="tight"
+        )
+    if show:
+        plt.show()
+    plt.close(fig) 
+>>>>>>> a2535e6f (Adjust plot function for final Husum results)
 
 def plot_storage_dispatch(
     edisgo, day: str = None, show: bool = True, save: bool = True
