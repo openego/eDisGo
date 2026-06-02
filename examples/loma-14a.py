@@ -127,21 +127,6 @@ def _load_emob_cache(edisgo, cache_dir):
 
 def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_days=None, cache_dir=None):
     """Import EV charging points, apply charging strategy, and adjust CP/HP counts."""
-    # Temporary Check: Amount of CPs before importing eDisGo CPs
-    names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-    print(
-        {
-            "existing": names.str.contains("Existing", case=False).sum(),
-            "additional": names.str.contains("Additional", case=False).sum(),
-            "rest": (
-                ~(
-                    names.str.contains("Existing", case=False)
-                    | names.str.contains("Additional", case=False)
-                )
-            ).sum(),
-            "total": len(names),
-        }
-    )
 
     """
     After this function there are no time series yet. Only charging points and
@@ -162,21 +147,6 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
         if cache_dir is not None:
             _save_emob_cache(edisgo, cache_dir)
 
-    # Temporary Check: Amount of CPs after importing eDisGo CPs
-    names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-    print(
-        {
-            "existing": names.str.contains("Existing", case=False).sum(),
-            "additional": names.str.contains("Additional", case=False).sum(),
-            "rest": (
-                ~(
-                    names.str.contains("Existing", case=False)
-                    | names.str.contains("Additional", case=False)
-                )
-            ).sum(),
-            "total": len(names),
-        }
-    )
 
     """
     This step created the time series for the new eDisGo charging points.
@@ -210,6 +180,21 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
 
     edisgo.apply_charging_strategy(strategy="dumb")
 
+    # Apply EV charging efficiency correction    
+    ev_charging_efficiency = 0.9
+    
+    lap = edisgo.timeseries.loads_active_power.copy()
+    
+    cp_names_before_transfer = edisgo.topology.loads_df.query(
+        "type == 'charging_point'"
+    ).index.intersection(lap.columns)
+    
+    lap.loc[:, cp_names_before_transfer] = (
+        lap.loc[:, cp_names_before_transfer] * ev_charging_efficiency
+    )
+    edisgo.timeseries.loads_active_power = lap
+
+        
     if _orig_days is not None:
         edisgo.electromobility.simbev_config_df.at[0, "days"] = _orig_days
 
@@ -229,22 +214,6 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
         tol_1=0.15,
         radius_2=2000.0,
         tol_2=0.9,
-    )
-
-    # Temporary Check: Amount of CPs after transferring time series
-    names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-    print(
-        {
-            "existing": names.str.contains("Existing", case=False).sum(),
-            "additional": names.str.contains("Additional", case=False).sum(),
-            "rest": (
-                ~(
-                    names.str.contains("Existing", case=False)
-                    | names.str.contains("Additional", case=False)
-                )
-            ).sum(),
-            "total": len(names),
-        }
     )
 
     # ============================================================
@@ -272,7 +241,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     
     set_charging_points_to_target(
         edisgo,
-        target_total=1000, # sets total amount of CP
+        target_total=1000,  # sets total amount of CP to 1000
         # percentage=0.10, # increases total amount of CP by 10%
         # percentage=-0.10, # decreases total amount of CP by 10%
         eligible_buses=cp_eligible_buses,
@@ -292,29 +261,13 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
 
     set_heat_pumps_to_target(
         edisgo,
-        target_total=2100,  # sets total amount of HP
+        target_total=2600,  # sets total amount of HP
         # percentage=0.10, # increases total amount of HP by 10%
         # percentage=-0.10, # decreases total amount of HP by 10%
         eligible_buses=hp_eligible_buses,
         add_tracking_columns=False,
         export_removed=False,  # only applies when there are deleted HP
         export_dir=output_dir,  # only applies when there are deleted HP
-    )
-    
-    # Temporary Check: Amount of CPs after total amount changed
-    names = edisgo.topology.loads_df.query("type == 'charging_point'").index.astype(str)
-    print(
-        {
-            "existing": names.str.contains("Existing", case=False).sum(),
-            "additional": names.str.contains("Additional", case=False).sum(),
-            "rest": (
-                ~(
-                    names.str.contains("Existing", case=False)
-                    | names.str.contains("Additional", case=False)
-                )
-            ).sum(),
-            "total": len(names),
-        }
     )
 
 
