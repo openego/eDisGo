@@ -66,32 +66,6 @@ function constraint_hp_14a_min_net_load(pm::AbstractBFModelEdisgo, i::Int, nw::I
 
     # Maximum support capacity
     p_max_support = gen_hp14a["pmax"]
-    
-    # --- DEBUG PRINT START ---
-    if i == 12 # ID bei Bedarf anpassen
-        println("\n[DEBUG §14a Min Net Load | NW $nw | HP $i]")
-        println("  > hp_idx:        $hp_idx")
-        println("  > php (Var):     $(php)")
-        println("  > p_hp14a (Var): $(p_hp14a)")
-        println("  > p_min_14a:     $p_min_14a")
-        println("  > p_max_support: $p_max_support")
-        println(keys(gen_hp14a))
-        #println("  > Aktuelle Last (pd p.u.): ", gen_hp14a["pd"])
-        #println(" > Last: $(gen_hp14a["pd"])")
-        
-        if p_max_support >= 1e-6
-            z_hp14a = PowerModels.var(pm, nw, :z_hp14a, i)
-            M = p_max_support + p_min_14a
-            println("  > z_hp14a (Var): $(z_hp14a)")
-            println("  > Big-M:         $M")
-            # Zeigt die mathematische Formel der Constraint vor der Lösung
-            println("  > Constraint:    php - p_hp14a >= $p_min_14a - $M * (1 - z_hp14a)")
-        else
-            println("  > Status:        Small HP (Constraint: p_hp14a == 0)")
-        end
-        println("-"^40)
-    end
-    # --- DEBUG PRINT ENDE ---
 
     if p_max_support < 1e-6
         # Heat pump too small for §14a curtailment, disable virtual generator

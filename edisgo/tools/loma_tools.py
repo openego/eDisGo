@@ -8,8 +8,8 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.spatial import cKDTree as _cKDTree
 from shapely.geometry import Point
-from shapely.strtree import STRtree
 
 from sqlalchemy.engine.base import Engine
 
@@ -127,12 +127,15 @@ def _match_two_step_nearest(
     from scipy.optimize import linear_sum_assignment
 
     new_ids = np.array(new_m.index.to_list(), dtype=object)
-    new_geoms = np.array(new_m.geometry.values, dtype=object)
 
-    tree = STRtree(new_geoms)
-
-    new_pset = new_m["p_set"].astype(float)
-    ex_pset = existing_m["p_set"].astype(float)
+    # Projected (metric) coordinate arrays — Euclidean distance is exact here.
+    new_xy = np.column_stack([new_m.geometry.x.values, new_m.geometry.y.values])
+    ex_xy  = np.column_stack([existing_m.geometry.x.values, existing_m.geometry.y.values])
+    new_pset_arr = new_m["p_set"].values.astype(float)
+    ex_pset_arr  = existing_m["p_set"].values.astype(float)
+    _ex_gdf_pos = {label: i for i, label in enumerate(existing_m.index)}
+    _new_gdf_pos = {label: i for i, label in enumerate(new_m.index)}
+    kd_tree = _cKDTree(new_xy)
 
     used_new = set()
 
@@ -140,41 +143,30 @@ def _match_two_step_nearest(
     phase2_matches = []
 
     def _candidate_pairs(existing_ids, max_radius_m, pset_tol):
-        """
-        Build all admissible candidate pairs for the current phase.
-
-        Note:
-        tree.query(ex_geom.buffer(max_radius_m)) is used only as a coarse
-        spatial preselection via bounding-box intersection.
-        We intentionally do NOT apply a hard dist <= max_radius_m cutoff here,
-        because slightly more distant candidates are allowed as fallback.
-        """
+        """Build all admissible candidate pairs for the given existing IDs."""
         pairs = []
-
         for ex_id in existing_ids:
-            ex_geom = existing_m.loc[ex_id].geometry
-            p_ex = float(ex_pset.loc[ex_id])
+            i = _ex_gdf_pos[ex_id]
+            ex_coord = ex_xy[i]
+            p_ex = ex_pset_arr[i]
 
-            idxs = tree.query(ex_geom.buffer(max_radius_m))
-            if idxs is None or len(idxs) == 0:
+            cand_js = np.array(kd_tree.query_ball_point(ex_coord, r=max_radius_m), dtype=int)
+            if len(cand_js) == 0:
                 continue
 
             p_lo, p_hi = p_ex * (1 - pset_tol), p_ex * (1 + pset_tol)
+            pset_ok = (new_pset_arr[cand_js] >= p_lo) & (new_pset_arr[cand_js] <= p_hi)
+            not_used = np.array([new_ids[j] not in used_new for j in cand_js])
+            valid = cand_js[pset_ok & not_used]
+            if len(valid) == 0:
+                continue
 
-            for j in idxs:
+            dists = np.linalg.norm(new_xy[valid] - ex_coord, axis=1)
+            for k, j in enumerate(valid):
                 new_id = new_ids[j]
-
-                if new_id in used_new:
-                    continue
-
-                p_new = float(new_pset.loc[new_id])
-                if not (p_lo <= p_new <= p_hi):
-                    continue
-
-                dist = float(ex_geom.distance(new_geoms[j]))
+                p_new = float(new_pset_arr[j])
                 rel_dev = abs(p_new / p_ex - 1.0) if p_ex != 0 else 0.0
-
-                pairs.append((ex_id, new_id, dist, rel_dev))
+                pairs.append((ex_id, new_id, float(dists[k]), rel_dev))
 
         return pairs
 
@@ -189,42 +181,31 @@ def _match_two_step_nearest(
         pass_unmatched = []
 
         for ex_id in existing_ids:
-            ex_geom = existing_m.loc[ex_id].geometry
-            p_ex = float(ex_pset.loc[ex_id])
+            i = _ex_gdf_pos[ex_id]
+            ex_coord = ex_xy[i]
+            p_ex = ex_pset_arr[i]
 
-            idxs = tree.query(ex_geom.buffer(max_radius_m))
-            if idxs is None or len(idxs) == 0:
+            cand_js = np.array(kd_tree.query_ball_point(ex_coord, r=max_radius_m), dtype=int)
+            if len(cand_js) == 0:
                 pass_unmatched.append(ex_id)
                 continue
 
             p_lo, p_hi = p_ex * (1 - pset_tol), p_ex * (1 + pset_tol)
+            pset_ok = (new_pset_arr[cand_js] >= p_lo) & (new_pset_arr[cand_js] <= p_hi)
+            not_used = np.array([new_ids[j] not in used_new for j in cand_js])
+            valid = cand_js[pset_ok & not_used]
 
-            best = None
-            for j in idxs:
-                new_id = new_ids[j]
-
-                if new_id in used_new:
-                    continue
-
-                p_new = float(new_pset.loc[new_id])
-                if not (p_lo <= p_new <= p_hi):
-                    continue
-
-                dist = float(ex_geom.distance(new_geoms[j]))
-                rel_dev = abs(p_new / p_ex - 1.0) if p_ex != 0 else 0.0
-
-                # distance-dominated in phase 1
-                cand = (dist, rel_dev, new_id)
-
-                if best is None or cand < best:
-                    best = cand
-
-            if best is None:
+            if len(valid) == 0:
                 pass_unmatched.append(ex_id)
-            else:
-                dist_best, rel_dev_best, new_best = best
-                used_new.add(new_best)
-                pass_matches.append((ex_id, new_best, dist_best))
+                continue
+
+            dists = np.linalg.norm(new_xy[valid] - ex_coord, axis=1)
+            best_local = int(np.argmin(dists))
+            best_j = int(valid[best_local])
+            best_new_id = new_ids[best_j]
+
+            used_new.add(best_new_id)
+            pass_matches.append((ex_id, best_new_id, float(dists[best_local])))
 
         return pass_matches, pass_unmatched
 
@@ -277,9 +258,7 @@ def _match_two_step_nearest(
             ex_id = ex_list[i]
             new_id = new_list[j]
 
-            ex_geom = existing_m.loc[ex_id].geometry
-            new_geom = new_m.loc[new_id].geometry
-            dist = float(ex_geom.distance(new_geom))
+            dist = float(np.linalg.norm(ex_xy[_ex_gdf_pos[ex_id]] - new_xy[_new_gdf_pos[new_id]]))
 
             used_new.add(new_id)
             matched_existing.add(ex_id)
@@ -371,15 +350,17 @@ def _transfer_ts_and_replace_new_with_existing(
         # keep existing bus+p_set: do NOT touch those columns
         if keep_existing_bus_and_pset and existing_id in edisgo.topology.loads_df.index:
             edisgo.topology.loads_df.at[existing_id, "type"] = "charging_point"
-
+            
         # --- remove NEW load + TS to keep CP count constant ---
         if drop_new and (new_id in edisgo.topology.loads_df.index):
             if new_id in edisgo.timeseries.loads_active_power.columns:
                 edisgo.timeseries.drop_component_time_series("loads_active_power", [new_id])
+        
             if new_id in edisgo.timeseries.loads_reactive_power.columns:
                 edisgo.timeseries.drop_component_time_series("loads_reactive_power", [new_id])
-
-            edisgo.remove_component("load", new_id)
+        
+            # Remove only the load row, keep the connected bus in buses_df
+            edisgo.topology.loads_df = edisgo.topology.loads_df.drop(index=new_id)
 
     edisgo.electromobility.integrated_charging_parks_df = icp
 
@@ -775,7 +756,10 @@ def _remove_load_ids(
     export_prefix=None,
 ):
     """
-    Remove specified loads from topology and time series.
+    Remove specified loads from topology and time series, but keep buses.
+
+    This intentionally does not call edisgo.remove_component("load", ...)
+    because remove_component may also remove now-empty buses.
     """
     if not remove_ids:
         return []
@@ -791,20 +775,40 @@ def _remove_load_ids(
             file_prefix=export_prefix or "removed_loads",
         )
 
-    p_cols = [i for i in remove_ids if i in edisgo.timeseries.loads_active_power.columns]
-    q_cols = [i for i in remove_ids if i in edisgo.timeseries.loads_reactive_power.columns]
+    p_cols = [
+        i for i in remove_ids
+        if i in edisgo.timeseries.loads_active_power.columns
+    ]
+    q_cols = [
+        i for i in remove_ids
+        if i in edisgo.timeseries.loads_reactive_power.columns
+    ]
 
     if p_cols:
-        edisgo.timeseries.drop_component_time_series("loads_active_power", p_cols)
+        edisgo.timeseries.drop_component_time_series(
+            "loads_active_power",
+            p_cols,
+        )
 
     if q_cols:
-        edisgo.timeseries.drop_component_time_series("loads_reactive_power", q_cols)
+        edisgo.timeseries.drop_component_time_series(
+            "loads_reactive_power",
+            q_cols,
+        )
 
-    for i in remove_ids:
-        if i in edisgo.topology.loads_df.index:
-            edisgo.remove_component("load", i)
+    # Important: remove only the load rows, keep buses untouched
+    existing_remove_ids = [
+        i for i in remove_ids
+        if i in edisgo.topology.loads_df.index
+    ]
+
+    if existing_remove_ids:
+        edisgo.topology.loads_df = edisgo.topology.loads_df.drop(
+            index=existing_remove_ids
+        )
 
     return remove_ids
+
 
 # ============================================================
 # Main generic function
