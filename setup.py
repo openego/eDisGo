@@ -25,7 +25,7 @@ def read(fname):
 
 requirements = [
     "contextily < 1.8.0",
-    "dash < 4.1.0",
+    "dash < 4.2.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
     "egoio >= 0.4.7, < 0.5.0",
@@ -52,7 +52,7 @@ requirements = [
     "shapely >= 1.7.0, < 2.2.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel < 0.5.0",
-    "urllib3 < 2.7.0",
+    "urllib3 < 2.8.0",
     "workalendar < 17.1.0",
     "astroid == 4.0.3",
 ]
@@ -68,13 +68,13 @@ dev_requirements = [
     "pytest-html < 5.0.0",
     "pytest-metadata < 4.0.0",
     "anyio < 5.0.0",
-    "dash < 4.1.0",
+    "dash < 4.2.0",
     "pluggy < 2.0.0",
     "pyupgrade < 3.22.0",
     "sphinx < 9.2.0",
     "sphinx_rtd_theme >= 0.5.2, < 3.2.0",
-    "sphinx-autodoc-typehints < 3.10.0",
-    "sphinx-autoapi < 3.8.0",
+    "sphinx-autodoc-typehints < 3.11.0",
+    "sphinx-autoapi < 3.9.0",
     "astroid == 4.0.3",
 ]
 
