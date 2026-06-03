@@ -48,9 +48,7 @@ def mv_line_max_relative_overload(edisgo_obj, n_minus_one=False):
 
     if not crit_lines.empty:
         logger.debug(
-            "==> {} line(s) in MV network has/have load issues.".format(
-                crit_lines.shape[0]
-            )
+            f"==> {crit_lines.shape[0]} line(s) in MV network has/have load issues."
         )
     else:
         logger.debug("==> No line load issues in MV network.")
@@ -101,9 +99,7 @@ def lv_line_max_relative_overload(edisgo_obj, n_minus_one=False, lv_grid_id=None
 
     if not crit_lines.empty:
         logger.debug(
-            "==> {} line(s) in LV networks has/have load issues.".format(
-                crit_lines.shape[0]
-            )
+            f"==> {crit_lines.shape[0]} line(s) in LV networks has/have load issues."
         )
     else:
         logger.debug("==> No line load issues in LV networks.")
@@ -164,8 +160,8 @@ def _line_max_relative_overload(
         lines = mv_grid.lines_df.index
     else:
         raise ValueError(
-            "{} is not a valid option for input variable 'voltage_level'. "
-            "Try 'mv' or 'lv'.".format(voltage_level)
+            f"{voltage_level} is not a valid option for input variable 'voltage_level'. "
+            "Try 'mv' or 'lv'."
         )
 
     # calculate relative line load and keep maximum over-load of each line
@@ -273,9 +269,9 @@ def _lines_allowed_load_voltage_level(edisgo_obj, voltage_level, n_minus_one=Fal
         lines_df = mv_grid.lines_df
     else:
         raise ValueError(
-            "{} is not a valid option for input variable 'voltage_level' in "
+            f"{voltage_level} is not a valid option for input variable 'voltage_level' in "
             "function lines_allowed_load_voltage_level. Try 'mv' or "
-            "'lv'.".format(voltage_level)
+            "'lv'."
         )
 
     allowed_load_per_case = {}
@@ -457,9 +453,7 @@ def mv_lv_station_max_overload(edisgo_obj, lv_grid_id=None):
         )
     if not crit_stations.empty:
         logger.debug(
-            "==> {} MV/LV station(s) has/have load issues.".format(
-                crit_stations.shape[0]
-            )
+            f"==> {crit_stations.shape[0]} MV/LV station(s) has/have load issues."
         )
     else:
         logger.debug("==> No MV/LV station load issues.")
@@ -819,9 +813,9 @@ def voltage_issues(edisgo_obj, voltage_level, split_voltage_band=True, lv_grid_i
             buses = edisgo_obj.topology.mv_grid.buses_df.index
         else:
             raise ValueError(
-                "{} is not a valid option for input variable 'voltage_level' in "
+                f"{voltage_level} is not a valid option for input variable 'voltage_level' in "
                 "function voltage_issue. Possible options are 'mv', 'mv_lv', 'lv', "
-                "or None.".format(voltage_level)
+                "or None."
             )
     else:
         mv_issues = voltage_issues(
@@ -1091,13 +1085,13 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         upper_limits_df = (
             voltage_base
             + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_max_v_rise".format(config_string)
+                f"{config_string}_max_v_rise"
             ]
         )
         lower_limits_df = (
             voltage_base
             - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_max_v_drop".format(config_string)
+                f"{config_string}_max_v_drop"
             ]
         )
     else:
@@ -1120,13 +1114,13 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         upper_limits_df_tmp = (
             voltage_base
             + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_max_v_rise".format(config_string)
+                f"{config_string}_max_v_rise"
             ]
         )
         lower_limits_df_tmp = (
             voltage_base
             - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                "{}_max_v_drop".format(config_string)
+                f"{config_string}_max_v_drop"
             ]
         )
 

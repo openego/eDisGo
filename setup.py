@@ -1,16 +1,8 @@
 """Setup"""
 
 import os
-import sys
 
 from setuptools import find_packages, setup
-
-if sys.version_info[:2] < (3, 9):
-    error = (
-        "eDisGo requires Python 3.9 or later (%d.%d detected)." % sys.version_info[:2]
-    )
-    sys.stderr.write(error + "\n")
-    sys.exit(1)
 
 
 def read(fname):
@@ -33,7 +25,7 @@ def read(fname):
 
 requirements = [
     "contextily < 1.8.0",
-    "dash < 3.4.0",
+    "dash < 4.2.0",
     "demandlib < 0.3.0",
     "descartes < 1.2.0",
     "egoio >= 0.4.7, < 0.5.0",
@@ -60,24 +52,29 @@ requirements = [
     "shapely >= 1.7.0, < 2.2.0",
     "sqlalchemy < 1.4.0",
     "sshtunnel < 0.5.0",
-    "urllib3 < 2.7.0",
+    "urllib3 < 2.8.0",
     "workalendar < 17.1.0",
     "astroid == 4.0.3",
 ]
 
 dev_requirements = [
-    "black < 25.13.0",
-    "flake8 < 7.4.0",
-    "isort < 7.1.0",
+    "ruff < 0.16.0",
     "pre-commit < 4.6.0",
     "pylint < 4.1.0",
     "pytest < 9.1.0",
     "pytest-notebook < 0.11.0",
+    "pytest-xdist < 4.0.0",
+    "pytest-rerunfailures < 17.0.0",
+    "pytest-html < 5.0.0",
+    "pytest-metadata < 4.0.0",
+    "anyio < 5.0.0",
+    "dash < 4.2.0",
+    "pluggy < 2.0.0",
     "pyupgrade < 3.22.0",
     "sphinx < 9.2.0",
     "sphinx_rtd_theme >= 0.5.2, < 3.2.0",
-    "sphinx-autodoc-typehints < 3.7.0",
-    "sphinx-autoapi < 3.7.0",
+    "sphinx-autodoc-typehints < 3.11.0",
+    "sphinx-autoapi < 3.9.0",
     "astroid == 4.0.3",
 ]
 

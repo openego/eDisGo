@@ -189,7 +189,7 @@ def _home_batteries_grid_integration(edisgo_obj, batteries_df):
         random.seed(a=duplicate)
         new_name = duplicate
         while new_name in tmp:
-            new_name = f"{duplicate}_{random.randint(10 ** 1, 10 ** 2)}"
+            new_name = f"{duplicate}_{random.randint(10**1, 10**2)}"
         # change name in batteries_df
         batteries_df.rename(index={duplicate: new_name}, inplace=True)
 

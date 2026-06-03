@@ -725,10 +725,8 @@ class Switch(BasicComponent):
                 self.topology.lines_df.at[self.branch, col] = self.bus_open
             else:
                 raise AttributeError(
-                    "Could not open switch {}. Specified branch {} of switch "
-                    "has no bus {}. Please check the switch.".format(
-                        self.id, self.branch, self.bus_closed
-                    )
+                    f"Could not open switch {self.id}. Specified branch {self.branch} of switch "
+                    f"has no bus {self.bus_closed}. Please check the switch."
                 )
 
     def close(self):
@@ -743,10 +741,8 @@ class Switch(BasicComponent):
                 self.topology.lines_df.at[self.branch, col] = self.bus_closed
             else:
                 raise AttributeError(
-                    "Could not close switch {}. Specified branch {} of switch "
-                    "has no bus {}. Please check the switch.".format(
-                        self.id, self.branch, self.bus_closed
-                    )
+                    f"Could not close switch {self.id}. Specified branch {self.branch} of switch "
+                    f"has no bus {self.bus_closed}. Please check the switch."
                 )
 
     def _get_bus_column(self, bus):

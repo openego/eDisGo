@@ -432,8 +432,8 @@ def assure_minimum_potential_charging_parks(
         while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
             logger.info(
                 f"Duplicating potential charging parks to meet the desired grid "
-                f"connections to cars rate of {gc_to_car_rate*100:.2f} % for use case "
-                f"{use_case}. Iteration: {n+1}."
+                f"connections to cars rate of {gc_to_car_rate * 100:.2f} % for use case "
+                f"{use_case}. Iteration: {n + 1}."
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:

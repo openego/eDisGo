@@ -448,8 +448,8 @@ class Electromobility:
                 )
                 if charging_time - (end - start + 1) > 1e-6:
                     raise ValueError(
-                        "Charging demand cannot be fulfilled for charging process {}. "
-                        "Please check.".format(idx)
+                        f"Charging demand cannot be fulfilled for charging process {idx}. "
+                        "Please check."
                     )
                 full_charging_steps = int(charging_time)
                 part_time_step = charging_time - full_charging_steps
@@ -913,9 +913,7 @@ class Electromobility:
                 df = df.assign(geometry=gpd.GeoSeries.from_wkt(df["geometry"]))
 
                 try:
-                    df = gpd.GeoDataFrame(
-                        df, geometry="geometry", crs=f"epsg:{epsg}"
-                    )
+                    df = gpd.GeoDataFrame(df, geometry="geometry", crs=f"epsg:{epsg}")
 
                 except Exception:
                     logger.warning(
@@ -923,9 +921,7 @@ class Electromobility:
                         f"EPSG {epsg}. Trying with EPSG 4326 as fallback."
                     )
 
-                    df = gpd.GeoDataFrame(
-                        df, geometry="geometry", crs="epsg:4326"
-                    )
+                    df = gpd.GeoDataFrame(df, geometry="geometry", crs="epsg:4326")
 
             if attr == "simbev_config_df":
                 for col in ["start_date", "end_date"]:

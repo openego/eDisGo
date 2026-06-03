@@ -466,7 +466,7 @@ def _grid_integration(
             random.seed(a=duplicate)
             new_name = duplicate
             while new_name in tmp:
-                new_name = f"{duplicate}_{random.randint(10 ** 1, 10 ** 2)}"
+                new_name = f"{duplicate}_{random.randint(10**1, 10**2)}"
             # change name in hp_individual
             hp_individual.rename(index={duplicate: new_name}, inplace=True)
 

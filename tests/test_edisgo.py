@@ -381,11 +381,18 @@ class TestEDisGo:
         )
 
     @pytest.mark.slow
-    @pytest.mark.skip(reason="deprecated - should not be tested right now")
     def test_generator_import(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
-        edisgo.import_generators("nep2035")
-        assert len(edisgo.topology.generators_df) == 524
+        try:
+            edisgo.import_generators("nep2035")
+            assert len(edisgo.topology.generators_df) == 524
+        except Exception as e:
+            if "Table does not exist" in str(e) or "HTTP 404" in str(e):
+                pytest.skip(
+                    "Database table not accessible (requires external database connection)"
+                )
+            else:
+                raise
 
     def test_analyze(self, caplog):
         self.setup_worst_case_time_series()
@@ -1411,6 +1418,45 @@ class TestEDisGo:
         self.edisgo.plot_mv_grid_topology()
         plt.close("all")
 
+    def test_plot_voltage_over_dist(self):
+        self.setup_worst_case_time_series()
+        self.edisgo.analyze()
+        fig, df = self.edisgo.plot_voltage_over_dist(
+            mv_id=None, lv_id=0, return_data=True
+        )
+
+        assert fig is not None
+        assert df is not None
+        assert not df.empty
+        assert {"bus", "x", "v_pu", "label"}.issubset(df.columns)
+        assert set(df["label"].unique()) == {"base — load case", "base — feed-in case"}
+        assert df["x"].ge(0).all()
+        assert df["v_pu"].between(0.5, 1.5).all()
+
+    def test_plot_voltage_over_dist_mv(self):
+        self.setup_worst_case_time_series()
+        self.edisgo.analyze()
+        import copy
+
+        other = copy.deepcopy(self.edisgo)
+        other.analyze()
+        fig, df = self.edisgo.plot_voltage_over_dist_mv(
+            mv_id=None, other=other, return_data=True
+        )
+
+        assert fig is not None
+        assert df is not None
+        assert not df.empty
+        assert {"bus", "x", "v_pu", "label"}.issubset(df.columns)
+        assert set(df["label"].unique()) == {
+            "base — load case",
+            "base — feed-in case",
+            "other — load case",
+            "other — feed-in case",
+        }
+        assert df["x"].ge(0).all()
+        assert df["v_pu"].between(0.5, 1.5).all()
+
     def test_plot_mv_voltages(self):
         self.setup_worst_case_time_series()
         plt.ion()
@@ -1701,29 +1747,27 @@ class TestEDisGo:
         self.edisgo.check_integrity()
         assert (
             "The following generators are missing in generators_active_power: "
-            "{}".format(self.edisgo.topology.generators_df.index.values) in caplog.text
+            f"{self.edisgo.topology.generators_df.index.values}" in caplog.text
         )
         assert (
             "The following generators are missing in generators_reactive_power: "
-            "{}".format(self.edisgo.topology.generators_df.index.values) in caplog.text
+            f"{self.edisgo.topology.generators_df.index.values}" in caplog.text
         )
         assert (
             "The following loads are missing in loads_active_power: "
-            "{}".format(self.edisgo.topology.loads_df.index.values) in caplog.text
+            f"{self.edisgo.topology.loads_df.index.values}" in caplog.text
         )
         assert (
             "The following loads are missing in loads_reactive_power: "
-            "{}".format(self.edisgo.topology.loads_df.index.values) in caplog.text
+            f"{self.edisgo.topology.loads_df.index.values}" in caplog.text
         )
         assert (
             "The following storage_units are missing in storage_units_active_power"
-            ": {}".format(self.edisgo.topology.storage_units_df.index.values)
-            in caplog.text
+            f": {self.edisgo.topology.storage_units_df.index.values}" in caplog.text
         )
         assert (
             "The following storage_units are missing in storage_units_reactive_power"
-            ": {}".format(self.edisgo.topology.storage_units_df.index.values)
-            in caplog.text
+            f": {self.edisgo.topology.storage_units_df.index.values}" in caplog.text
         )
         caplog.clear()
 

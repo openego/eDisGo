@@ -96,3 +96,65 @@ class TestChargingStrategy:
         self.edisgo_obj.set_timeindex(timeindex)
         charging_strategy(self.edisgo_obj, strategy="dumb")
         assert ts._loads_active_power.index.freqstr == "15T"
+
+    def test_charging_strategy_with_subset_of_parks(self):
+        """
+        Charging strategies can be applied to different subsets of charging parks
+        without overwriting each other's results.
+        """
+        # edisgo = self.edisgo_obj
+        timeindex = pd.date_range("1/1/2011", periods=24 * 7, freq="H")
+        edisgo = self.edisgo_obj
+        edisgo.set_timeindex(timeindex)
+
+        ts = edisgo.timeseries
+        # Baseline: apply a strategy to all integrated charging parks
+        # so that we have non-zero time series for all of them.
+        edisgo.apply_charging_strategy(strategy="dumb")
+
+        integrated = edisgo.electromobility.integrated_charging_parks_df
+        all_park_ids = list(integrated.index)
+
+        # If the test network had less than two charging parks, this test would
+        # not make sense.
+        if len(all_park_ids) < 2:
+            pytest.skip("Not enough charging parks for subset test.")
+
+        park_a = all_park_ids[0]
+        park_b = all_park_ids[1]
+
+        edisgo_id_a = integrated.loc[park_a, "edisgo_id"]
+        edisgo_id_b = integrated.loc[park_b, "edisgo_id"]
+
+        # store baseline time series for both parks
+        loads_before = ts._loads_active_power.copy()
+        ts_a_before = loads_before[edisgo_id_a].copy()
+        ts_b_before = loads_before[edisgo_id_b].copy()
+
+        # 1) apply a strategy only to park A
+        edisgo.apply_charging_strategy(
+            strategy="reduced",
+            charging_park_ids=[park_a],
+        )
+
+        loads_after_first = ts._loads_active_power
+        ts_a_after_first = loads_after_first[edisgo_id_a].copy()
+        ts_b_after_first = loads_after_first[edisgo_id_b].copy()
+
+        # park B should be unchanged by a call that only targets park A
+        pd.testing.assert_series_equal(ts_b_before, ts_b_after_first, check_names=True)
+
+        # 2) apply a different strategy only to park B
+        edisgo.apply_charging_strategy(
+            strategy="residual",
+            charging_park_ids=[park_b],
+        )
+
+        loads_after_second = ts._loads_active_power
+        ts_a_after_second = loads_after_second[edisgo_id_a].copy()
+        ts_b_after_second = loads_after_second[edisgo_id_b].copy()
+
+        # park A must not be changed by the second call that targets only park B
+        pd.testing.assert_series_equal(
+            ts_a_after_first, ts_a_after_second, check_names=True
+        )

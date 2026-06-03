@@ -32,3 +32,14 @@ Changes
 * Loading predefined time series now automatically sets the timeindex to the default year of the database if it is empty. `#457 <https://github.com/openego/eDisGo/pull/457>`_
 * Made OEP database call optional in get_database_alias_dictionaries, allowing setup without OEP when using an alternative eGon-data database. `#451 <https://github.com/openego/eDisGo/pull/451>`_
 * Fixed database import issues by addressing table naming assumptions and added support for external SSH tunneling in eGon-data configurations. `#451 <https://github.com/openego/eDisGo/pull/451>`_
+* Added clipping of heat pump electrical power at its maximum value `#428 <https://github.com/openego/eDisGo/pull/428>`
+* Replaced flake8, isort, pyupgrade, and Black with Ruff for linting
+  and formatting in pre-commit configuration `#222 <https://github.com/openego/eDisGo/issues/222>`_
+* Made ``engine`` parameter optional in
+  :meth:`~.edisgo.EDisGo.set_time_series_active_power_predefined`,
+  :meth:`~.edisgo.EDisGo.import_generators`,
+  :meth:`~.edisgo.EDisGo.import_electromobility`,
+  :meth:`~.edisgo.EDisGo.import_heat_pumps`,
+  :meth:`~.edisgo.EDisGo.import_dsm`, and
+  :meth:`~.edisgo.EDisGo.import_home_batteries`;
+  defaults to a standard open energy platform engine when not provided
