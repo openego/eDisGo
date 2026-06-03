@@ -989,6 +989,20 @@ def plot_plotly(
 
     G = grid.graph
 
+    # Allow passing custom colors as Series/dict for lines and nodes
+    custom_line_colors = None
+    custom_node_colors = None
+
+    if isinstance(line_color, (pd.Series, dict)):
+        # normalize to Series indexed by branch_name
+        custom_line_colors = pd.Series(line_color)
+        line_color = None  # avoid the string-based checks below
+
+    if isinstance(node_color, (pd.Series, dict)):
+        # normalize to Series indexed by bus name
+        custom_node_colors = pd.Series(node_color)
+        node_color = None
+
     logger.debug(f"selected_timesteps={selected_timesteps}")
 
     if isinstance(selected_timesteps, pd.Timestamp) or isinstance(
@@ -1021,26 +1035,28 @@ def plot_plotly(
     else:
         reinforcement_results = True
 
-    # check line_color input
+    # check line_color input (only if it is a string; Series/dict are handled as custom colors)    
     line_color_options = ["loading", "relative_loading", "reinforce"]
-    if line_color not in line_color_options:
-        logger.warning(f"Line colors need to be one of {line_color_options}.")
-        line_color = None
-    elif (line_color in ["loading", "relative_loading"]) and (not power_flow_results):
-        logger.warning("No power flow results to show. -> Run power flow.")
-        line_color = None
-    elif (line_color in ["reinforce"]) and (not reinforcement_results):
-        logger.warning("No reinforcement results to show. -> Run reinforcement.")
-        line_color = None
+    if isinstance(line_color, str):
+        if line_color not in line_color_options:
+            logger.warning(f"Line colors need to be one of {line_color_options}.")
+            line_color = None
+        elif (line_color in ["loading", "relative_loading"]) and (not power_flow_results):
+            logger.warning("No power flow results to show. -> Run power flow.")
+            line_color = None
+        elif (line_color in ["reinforce"]) and (not reinforcement_results):
+            logger.warning("No reinforcement results to show. -> Run reinforcement.")
+            line_color = None
 
     # check node_color input
     node_color_options = ["voltage_deviation", "adjacencies"]
-    if node_color not in node_color_options:
-        logger.warning(f"Line colors need to be one of {node_color_options}.")
-        node_color = None
-    elif (node_color in ["voltage_deviation"]) and (not power_flow_results):
-        logger.warning("No power flow results to show. -> Run power flow.")
-        node_color = None
+    if isinstance(node_color, str):
+        if node_color not in node_color_options:
+            logger.warning(f"Line colors need to be one of {node_color_options}.")
+            node_color = None
+        elif (node_color in ["voltage_deviation"]) and (not power_flow_results):
+            logger.warning("No power flow results to show. -> Run power flow.")
+            node_color = None
 
     if hasattr(grid, "transformers_df"):
         node_root = grid.transformers_df.bus1.iat[0]
@@ -1151,7 +1167,11 @@ def plot_plotly(
     def plot_lines():
         showscale = True
 
-        if line_color == "loading":
+         # Custom line colors: user provided a Series/dict of colors
+        if custom_line_colors is not None:
+            showscale = False
+            colorscale = None
+        elif line_color == "loading":
             color_min = s_res.min()
             color_max = s_res.max()
             colorscale = "YlOrRd"
@@ -1171,6 +1191,7 @@ def plot_plotly(
             colorscale = [[0, "green"], [0.5, "green"], [0.5, "red"], [1, "red"]]
         else:
             showscale = False
+            colorscale = None
 
         data_line_plot = []
         for edge in G.edges(data=True):
@@ -1180,7 +1201,16 @@ def plot_plotly(
 
             branch_name = edge[2]["branch_name"]
 
-            if line_color == "reinforce":
+            
+            # 1) User-defined colors (Series or dict)
+            if custom_line_colors is not None:
+                if branch_name in custom_line_colors.index:
+                    color = custom_line_colors.loc[branch_name]
+                else:
+                    color = "grey"
+
+            # 2) Existing modes
+            elif line_color == "reinforce":    
                 # Possible distinction between added parallel
                 # lines and changed lines
                 if (
@@ -1341,7 +1371,19 @@ def plot_plotly(
             node_x.append(x - x_root)
             node_y.append(y - y_root)
 
-        if node_color == "voltage_deviation":
+        if custom_node_colors is not None:
+            node_colors = []
+            for node in G.nodes():
+                if node in custom_node_colors.index:
+                    node_colors.append(custom_node_colors.loc[node])
+                else:
+                    node_colors.append("grey")
+            colorscale = None
+            colorbar = None
+            cmid = None
+            showscale = False    
+
+        elif node_color == "voltage_deviation":
             node_colors = []
             for node in G.nodes():
                 color = v_res.loc[node] - 1
