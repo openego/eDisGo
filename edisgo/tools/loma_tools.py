@@ -1585,7 +1585,7 @@ def plot_network(
         margin=0.05, ax=ax, geomap=False,
         bus_colors=bus_colors, bus_alpha=1, bus_sizes=bus_sizes,
         bus_cmap=voltage_cmap, bus_norm=norm_buses,
-        line_colors=loading_relative, line_widths=1.6,
+        line_colors=loading_relative, line_widths=0.5,
         line_cmap="jet", line_norm=norm_lines,
         title=f"Grid Analysis: {snapshot}", geometry=False,
     )
