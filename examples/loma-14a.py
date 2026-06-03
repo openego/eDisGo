@@ -379,6 +379,11 @@ def main():
     pre_edisgo = edisgo.copy()
     pre_opt_line_loading = edisgo.results.s_res.copy()
 
+    # Save pre-optimization line loading for §14a activation diagnosis
+    edisgo.analyze()
+    pre_edisgo = edisgo.copy()
+    pre_opt_line_loading = edisgo.results.s_res.copy()
+
     edisgo = run_optimization_14a(edisgo)
     edisgo.analyze()
 
@@ -522,7 +527,9 @@ def main():
     return edisgo
 
 
-if __name__ == "__main__":
-    edisgo = main()
+
+=======
+#if __name__ == "__main__":
+    #edisgo = main()
 
     

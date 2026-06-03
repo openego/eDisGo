@@ -1478,6 +1478,7 @@ def analyze_14a_activations(edisgo, pre_opt_line_loading, *, threshold_kw=0.5):
             "n_active_generators": int((ts_curt > threshold_mw).sum()),
             "top_generators": top_gens,
         }
+        breakpoint()
 
         if pre_opt_line_loading is not None and ts in pre_opt_line_loading.index:
             ts_loading = pre_opt_line_loading.loc[ts]
