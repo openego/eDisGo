@@ -182,10 +182,8 @@ class Topology:
             config = {}
             for voltage_level, eq_list in equipment.items():
                 for i in eq_list:
-                    config["equipment_{}_parameters_{}".format(voltage_level, i)] = (
-                        "equipment-parameters_{}_{}.csv".format(
-                            voltage_level.upper(), i
-                        )
+                    config[f"equipment_{voltage_level}_parameters_{i}"] = (
+                        f"equipment-parameters_{voltage_level.upper()}_{i}.csv"
                     )
         else:
             equipment_dir = config["system_dirs"]["equipment_dir"]
@@ -197,9 +195,9 @@ class Topology:
         for voltage_level, eq_list in equipment.items():
             for i in eq_list:
                 equipment_parameters = config[
-                    "equipment_{}_parameters_{}".format(voltage_level, i)
+                    f"equipment_{voltage_level}_parameters_{i}"
                 ]
-                data["{}_{}".format(voltage_level, i)] = pd.read_csv(
+                data[f"{voltage_level}_{i}"] = pd.read_csv(
                     os.path.join(package_path, equipment_dir, equipment_parameters),
                     comment="#",
                     index_col="name",
@@ -1017,7 +1015,7 @@ class Topology:
         # check if bus is part of topology
         if bus_name not in self.buses_df.index:
             logger.warning(
-                "Bus of name {} not in Topology. Cannot be removed.".format(bus_name)
+                f"Bus of name {bus_name} not in Topology. Cannot be removed."
             )
             return False
 
@@ -1059,8 +1057,7 @@ class Topology:
         # check if line is part of topology
         if line_name not in self.lines_df.index:
             logger.warning(
-                "Line of name {} not in Topology. Cannot be "
-                "removed.".format(line_name)
+                f"Line of name {line_name} not in Topology. Cannot be removed."
             )
             return False
 
@@ -1115,8 +1112,7 @@ class Topology:
             bus_s = self.buses_df.loc[bus]
         except KeyError:
             raise ValueError(
-                "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus)
+                f"Specified bus {bus} is not valid as it is not defined in buses_df."
             )
 
         # generate load name and check uniqueness
@@ -1217,8 +1213,7 @@ class Topology:
             bus_s = self.buses_df.loc[bus]
         except KeyError:
             raise ValueError(
-                "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus)
+                f"Specified bus {bus} is not valid as it is not defined in buses_df."
             )
 
         # generate generator name and check uniqueness
@@ -1400,13 +1395,11 @@ class Topology:
         # check if buses exist
         if bus0 not in self.buses_df.index:
             raise ValueError(
-                "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus0)
+                f"Specified bus {bus0} is not valid as it is not defined in buses_df."
             )
         if bus1 not in self.buses_df.index:
             raise ValueError(
-                "Specified bus {} is not valid as it is not defined in "
-                "buses_df.".format(bus1)
+                f"Specified bus {bus1} is not valid as it is not defined in buses_df."
             )
 
         # check if line between given buses already exists
@@ -1455,10 +1448,10 @@ class Topology:
             )
 
         # generate line name and check uniqueness
-        line_name = "Line_{}_{}".format(bus0, bus1)
+        line_name = f"Line_{bus0}_{bus1}"
         while line_name in self.lines_df.index:
             random.seed(a=line_name)
-            line_name = "Line_{}_{}_{}".format(bus0, bus1, random.randint(10**8, 10**9))
+            line_name = f"Line_{bus0}_{bus1}_{random.randint(10**8, 10**9)}"
 
         # check if all necessary data is now available
         if b is None:
@@ -1894,7 +1887,7 @@ class Topology:
 
         if comp_type == "generator":
             if comp_data["generator_id"] is not None:
-                bus = f'Bus_Generator_{comp_data["generator_id"]}'
+                bus = f"Bus_Generator_{comp_data['generator_id']}"
             else:
                 bus = f"Bus_Generator_{len(self.generators_df)}"
         elif comp_type == "charging_point":
@@ -2268,12 +2261,7 @@ class Topology:
                     generator_id = int(comp_data["generator_id"].split("_")[-1])
                     random.seed(a=generator_id)
             elif comp_type == "storage_unit":
-                random.seed(
-                    a="{}_{}".format(
-                        power,
-                        len(lv_grid.storage_units_df),
-                    )
-                )
+                random.seed(a=f"{power}_{len(lv_grid.storage_units_df)}")
             else:
                 random.seed(
                     a="{}_{}_{}".format(

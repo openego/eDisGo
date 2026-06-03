@@ -459,8 +459,8 @@ class Electromobility:
                 )
                 if charging_time - (end - start + 1) > 1e-6:
                     raise ValueError(
-                        "Charging demand cannot be fulfilled for charging process {}. "
-                        "Please check.".format(idx)
+                        f"Charging demand cannot be fulfilled for charging process {idx}. "
+                        "Please check."
                     )
                 full_charging_steps = int(charging_time)
                 part_time_step = charging_time - full_charging_steps

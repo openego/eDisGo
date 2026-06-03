@@ -1141,16 +1141,14 @@ class EDisGo:
             if raise_not_converged and len(timesteps_not_converged) > 0:
                 raise ValueError(
                     "Power flow analysis did not converge for the "
-                    "following {} time steps: {}.".format(
-                        len(timesteps_not_converged), timesteps_not_converged
-                    )
+                    f"following {len(timesteps_not_converged)} time steps: "
+                    f"{timesteps_not_converged}."
                 )
             elif len(timesteps_not_converged) > 0:
                 logger.warning(
                     "Power flow analysis did not converge for the "
-                    "following {} time steps: {}.".format(
-                        len(timesteps_not_converged), timesteps_not_converged
-                    )
+                    f"following {len(timesteps_not_converged)} time steps: "
+                    f"{timesteps_not_converged}."
                 )
             return timesteps_converged, timesteps_not_converged
 
@@ -1192,9 +1190,7 @@ class EDisGo:
                 pypsa_network = _scale_timeseries(pypsa_network_copy, fraction)
                 # run power flow analysis
                 pf_results = pypsa_network.pf(timesteps, use_seed=True)
-                logger.info(
-                    "Current fraction in iterative process: {}.".format(fraction)
-                )
+                logger.info(f"Current fraction in iterative process: {fraction}.")
                 # get converged and not converged time steps
                 timesteps_converged, timesteps_not_converged = _check_convergence()
         else:
@@ -1709,8 +1705,7 @@ class EDisGo:
         if voltage_level not in supported_voltage_levels:
             if p is None:
                 raise ValueError(
-                    "Neither appropriate voltage level nor nominal power "
-                    "were supplied."
+                    "Neither appropriate voltage level nor nominal power were supplied."
                 )
             # determine voltage level manually from nominal power
             voltage_level = determine_grid_integration_voltage_level(self, p)
@@ -1866,9 +1861,7 @@ class EDisGo:
                                 naming.format("_".join(k))
                                 if isinstance(k, tuple)
                                 else naming.format(k)
-                            ): getattr(self.timeseries, attribute)
-                            .loc[:, v]
-                            .sum(axis=1)
+                            ): getattr(self.timeseries, attribute).loc[:, v].sum(axis=1)
                         }
                     )
                     for k, v in groups.items()
@@ -2156,7 +2149,9 @@ class EDisGo:
             self, strategy=strategy, charging_park_ids=charging_park_ids, **kwargs
         )
 
-    def import_heat_pumps(self, scenario, engine, timeindex=None, import_types=None):
+    def import_heat_pumps(
+        self, scenario, engine=None, timeindex=None, import_types=None
+    ):
         """
         Gets heat pump data for specified scenario from oedb and integrates the heat
         pumps into the grid.
@@ -2214,8 +2209,9 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve heat pump data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to set COP and heat demand data. Leap years
             can currently not be handled. In case the given
@@ -2232,6 +2228,7 @@ class EDisGo:
             "central_resistive_heaters". If None, all are imported.
 
         """
+        engine = engine if engine is not None else egon_engine()
         # set up year to index data by
         # first try to get index from time index
         if timeindex is None:
@@ -2328,7 +2325,7 @@ class EDisGo:
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
-    def import_dsm(self, scenario: str, engine: Engine, timeindex=None):
+    def import_dsm(self, scenario: str, engine: Engine = None, timeindex=None):
         """
         Gets industrial and CTS DSM profiles from the
         `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
@@ -2347,8 +2344,9 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve DSM data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to get data. Leap years can currently not be
             handled. In case the given timeindex contains a leap year, the data will be
@@ -2360,6 +2358,7 @@ class EDisGo:
             is indexed using the default year and returned for the whole year.
 
         """
+        engine = engine if engine is not None else egon_engine()
         dsm_profiles = dsm_import.oedb(
             edisgo_obj=self, scenario=scenario, engine=engine, timeindex=timeindex
         )
@@ -2371,7 +2370,7 @@ class EDisGo:
     def import_home_batteries(
         self,
         scenario: str,
-        engine: Engine,
+        engine: Engine = None,
     ):
         """
         Gets home battery data for specified scenario and integrates the batteries into
@@ -2399,10 +2398,12 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve home battery data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
 
         """
+        engine = engine if engine is not None else egon_engine()
         home_batteries_oedb(
             edisgo_obj=self,
             scenario=scenario,
@@ -2445,14 +2446,12 @@ class EDisGo:
         try:
             if self.results.v_res is None:
                 logger.warning(
-                    "Voltages from power flow "
-                    "analysis must be available to plot them."
+                    "Voltages from power flow analysis must be available to plot them."
                 )
                 return
         except AttributeError:
             logger.warning(
-                "Results must be available to plot voltages. "
-                "Please analyze grid first."
+                "Results must be available to plot voltages. Please analyze grid first."
             )
             return
         except ValueError:
@@ -3663,10 +3662,9 @@ class EDisGo:
             if comparison.any():
                 logger.warning(
                     "Heat demand is higher than rated heatpump power"
-                    " of heatpumps: {}. Demand can not be covered if no sufficient"
-                    " heat storage capacities are available.".format(
-                        comparison.index[comparison.values].values
-                    )
+                    f" of heatpumps: {comparison.index[comparison.values].values}."
+                    " Demand can not be covered if no sufficient"
+                    " heat storage capacities are available."
                 )
 
         logging.info("Integrity check finished. Please pay attention to warnings.")

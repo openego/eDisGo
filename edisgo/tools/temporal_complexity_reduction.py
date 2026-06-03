@@ -629,8 +629,7 @@ def _troubleshooting_mode(
                     scale_timeseries=fraction,
                 )
                 logger.info(
-                    f"Power flow fully converged for a reduction factor "
-                    f"of {fraction}."
+                    f"Power flow fully converged for a reduction factor of {fraction}."
                 )
                 break
             except Exception:

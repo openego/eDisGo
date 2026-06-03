@@ -13,8 +13,9 @@ from __future__ import annotations
 
 import logging
 
+from collections.abc import Iterable
 from numbers import Number
-from typing import TYPE_CHECKING, Iterable
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd

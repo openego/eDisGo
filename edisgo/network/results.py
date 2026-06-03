@@ -836,7 +836,7 @@ class Results:
                     getattr(self, attr).to_csv(
                         os.path.join(
                             target_dir,
-                            "{}.csv".format(power_flow_results_dict[attr]),
+                            f"{power_flow_results_dict[attr]}.csv",
                         )
                     )
 
@@ -852,7 +852,7 @@ class Results:
                     getattr(self, attr).to_csv(
                         os.path.join(
                             target_dir,
-                            "{}.csv".format(grid_expansion_results_dict[attr]),
+                            f"{grid_expansion_results_dict[attr]}.csv",
                         )
                     )
 

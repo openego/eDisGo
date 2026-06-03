@@ -11,6 +11,8 @@
 
 from typing import Literal, Optional
 
+from typing import Literal
+
 import pandas as pd
 
 from sqlalchemy import text

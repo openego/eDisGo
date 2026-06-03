@@ -248,7 +248,9 @@ class TestPowerModelsOPF:
         )
         assert np.isclose(
             np.round(
-                self.edisgo.timeseries.loads_active_power.Charging_Point_LVGrid_6_1.iloc[-1],
+                self.edisgo.timeseries.loads_active_power.Charging_Point_LVGrid_6_1.iloc[
+                    -1
+                ],
                 3,
             ),
             0.761,

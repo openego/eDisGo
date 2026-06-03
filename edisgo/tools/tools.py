@@ -457,7 +457,7 @@ def select_cable(
     if suitable_cables.empty:
         raise exceptions.MaximumIterationError(
             "Could not find a suitable cable for apparent power of "
-            "{} MVA.".format(apparent_power)
+            f"{apparent_power} MVA."
         )
 
     cable_type = suitable_cables.loc[suitable_cables["I_max_th"].idxmin()]
@@ -1372,7 +1372,7 @@ def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.Da
     if show_reduction is True:
         print(
             "Reduced memory usage of DataFrame by "
-            f"{(1 - end_mem/start_mem) * 100:.2f} %."
+            f"{(1 - end_mem / start_mem) * 100:.2f} %."
         )
 
     return df

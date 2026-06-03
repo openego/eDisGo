@@ -46,9 +46,7 @@ def proj2equidistant(srid):
 
     """
 
-    return Transformer.from_crs(
-        "EPSG:{}".format(srid), "EPSG:3035", always_xy=True
-    ).transform
+    return Transformer.from_crs(f"EPSG:{srid}", "EPSG:3035", always_xy=True).transform
 
 
 def proj2equidistant_reverse(srid):
@@ -66,9 +64,7 @@ def proj2equidistant_reverse(srid):
 
     """
 
-    return Transformer.from_crs(
-        "EPSG:3035", "EPSG:{}".format(srid), always_xy=True
-    ).transform
+    return Transformer.from_crs("EPSG:3035", f"EPSG:{srid}", always_xy=True).transform
 
 
 def proj_by_srids(srid1, srid2):
@@ -94,7 +90,7 @@ def proj_by_srids(srid1, srid2):
     """
 
     return Transformer.from_crs(
-        "EPSG:{}".format(srid1), "EPSG:{}".format(srid2), always_xy=True
+        f"EPSG:{srid1}", f"EPSG:{srid2}", always_xy=True
     ).transform
 
 
@@ -318,7 +314,7 @@ def find_nearest_conn_objects(grid_topology, bus, lines, conn_diff_tolerance=0.0
         # find nearest connection point in conn_objects
         conn_objects_min = min(conn_objects.values(), key=lambda v: v["dist"])
         # discard duplicates
-        if not conn_objects_min["repr"] in repr:
+        if conn_objects_min["repr"] not in repr:
             conn_objects_min_stack.append(conn_objects_min)
             repr.append(conn_objects_min["repr"])
 

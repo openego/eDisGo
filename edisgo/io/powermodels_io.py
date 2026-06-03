@@ -91,7 +91,7 @@ def to_powermodels(
         ("storage", flexible_storage_units, "Storage units"),
     ]:
         if (flex not in opf_flex) & (len(loads) != 0):
-            logger.info("{} will be optimized.".format(text))
+            logger.info(f"{text} will be optimized.")
             opf_flex.append(flex)
     hv_flex_dict = dict()
     # Sorts buses such that bus0 is always the upstream bus
@@ -115,7 +115,7 @@ def to_powermodels(
     # build PowerModels structure
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # number of considered timesteps
-    pm["name"] = "ding0_{}_t_{}".format(edisgo_object.topology.id, timesteps)
+    pm["name"] = f"ding0_{edisgo_object.topology.id}_t_{timesteps}"
     pm["time_elapsed"] = int(
         (psa_net.snapshots[1] - psa_net.snapshots[0]).seconds / 3600
     )  # length of timesteps in hours
@@ -392,9 +392,7 @@ def from_powermodels(
                 edisgo_object.opf_results.overlying_grid["Highest relative error"][flex]
                 > 0.05
             ).any():
-                logger.warning(
-                    "Highest relative error of {} variable exceeds 5%.".format(flex)
-                )
+                logger.warning(f"Highest relative error of {flex} variable exceeds 5%.")
 
     # save slack generator variable to edisgo object
     df = pd.DataFrame(index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"])
@@ -794,8 +792,8 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             # only modify r, x and l values if min value is too small
             branches[par] = val.clip(lower=min_value)
             logger.warning(
-                "Min value of {} is too small. Lowest {}% of {} values will be set "
-                "to {} {}".format(text, 100 * quant, text, min_value, unit)
+                f"Min value of {text} is too small. Lowest {100 * quant}% of {text} values will be set "
+                f"to {min_value} {unit}"
             )
 
     for branch_i in np.arange(len(branches.index)):
@@ -940,8 +938,8 @@ def _build_load(
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "charging_point")
         else:
             logger.warning(
-                "No type specified for load {}. Power factor and sign will"
-                "be set for conventional load.".format(loads_df.index[load_i])
+                f"No type specified for load {loads_df.index[load_i]}. Power factor and sign will"
+                "be set for conventional load."
             )
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "conventional_load")
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
@@ -1227,10 +1225,8 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     if comparison.any():
         logger.warning(
             "Heat demand is higher than rated heatpump power"
-            " of heatpumps: {}. Demand can not be covered if no sufficient"
-            " heat storage capacities are available.".format(
-                comparison.index[comparison.values].values
-            )
+            f" of heatpumps: {comparison.index[comparison.values].values}. Demand can not be covered if no sufficient"
+            " heat storage capacities are available."
         )
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus.iloc[hp_i])
@@ -2025,7 +2021,7 @@ def _mapping(
         df = psa_net.loads.loc[flexible_loads]
     else:
         df = pd.DataFrame()
-        logging.warning("Mapping for '{}' not implemented.".format(kind))
+        logging.warning(f"Mapping for '{kind}' not implemented.")
     idx = df.reset_index()[df.index == name].index[0] + 1
     return idx
 
@@ -2079,8 +2075,8 @@ def _get_pf(edisgo_obj, pm, idx_bus, kind):
 
     """
     grid_level = pm["bus"][str(idx_bus)]["grid_level"]
-    pf = edisgo_obj.config["reactive_power_factor"]["{}_{}".format(grid_level, kind)]
-    sign = edisgo_obj.config["reactive_power_mode"]["{}_{}".format(grid_level, kind)]
+    pf = edisgo_obj.config["reactive_power_factor"][f"{grid_level}_{kind}"]
+    sign = edisgo_obj.config["reactive_power_mode"][f"{grid_level}_{kind}"]
     if kind in ["generator", "storage_unit"]:
         if sign == "inductive":
             sign = -1

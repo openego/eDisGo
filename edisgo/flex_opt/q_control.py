@@ -39,7 +39,7 @@ def get_q_sign_generator(reactive_power_mode):
     else:
         raise ValueError(
             "reactive_power_mode must either be 'capacitive' "
-            "or 'inductive' but is {}.".format(reactive_power_mode)
+            f"or 'inductive' but is {reactive_power_mode}."
         )
 
 
@@ -69,7 +69,7 @@ def get_q_sign_load(reactive_power_mode):
     else:
         raise ValueError(
             "reactive_power_mode must either be 'capacitive' "
-            "or 'inductive' but is {}.".format(reactive_power_mode)
+            f"or 'inductive' but is {reactive_power_mode}."
         )
 
 

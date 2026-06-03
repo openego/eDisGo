@@ -106,7 +106,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
     # Add Transformer to network
     psa_network.add(
         "Transformer",
-        "Transformer_hvmv_{}".format(psa_network.name),
+        f"Transformer_hvmv_{psa_network.name}",
         type=trafo_type,
         bus0=hvmv_trafos.iloc[0].bus0,
         bus1=hvmv_trafos.iloc[0].bus1,
@@ -136,7 +136,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
             try:
                 val.insert(0, slack_bus_hv_name, [1.0] * len(psa_network.snapshots))
             except ValueError as e:
-                print("ValueError: {}".format(e))
+                print(f"ValueError: {e}")
 
 
 def aggregate_fluct_generators(psa_network):
@@ -162,7 +162,7 @@ def aggregate_fluct_generators(psa_network):
             # no generators to aggregate at this bus
             continue
         else:
-            print("{} has {} generators attached".format(gen_bus, n_gens))
+            print(f"{gen_bus} has {n_gens} generators attached")
 
             for fluct in ["wind", "solar"]:
                 if "mvgd" in gen_bus:
@@ -170,10 +170,10 @@ def aggregate_fluct_generators(psa_network):
                         gen_bus[gen_bus.index("mvgd") :], fluct
                     )
                 else:
-                    gen_name = "Generator_aggr_{}_{}".format(gen_bus, fluct)
+                    gen_name = f"Generator_aggr_{gen_bus}_{fluct}"
                 # ToDo check for type rather than generator name
                 gens_to_aggr = gens.loc[gens.index.str.contains(fluct)]
-                print("{} gens of type {}".format(len(gens_to_aggr), fluct))
+                print(f"{len(gens_to_aggr)} gens of type {fluct}")
                 if len(gens_to_aggr) == 0:
                     continue
                 gen_aggr_df = pd.DataFrame(

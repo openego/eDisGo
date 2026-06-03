@@ -656,7 +656,9 @@ def _append_lv_components(
                         (
                             True
                             if (comps.type.isin(flucts)).all()
-                            else False if ~comps.type.isin(flucts).any() else "Mixed"
+                            else False
+                            if ~comps.type.isin(flucts).any()
+                            else "Mixed"
                         )
                     ],
                 },

@@ -28,4 +28,14 @@ Changes
 * Move function to assign feeder to Topology class and add methods to the Grid class to get information on the feeders `#360 <https://github.com/openego/eDisGo/pull/360>`_
 * Added a storage operation strategy where the storage is charged when PV feed-in is higher than electricity demand of the household and discharged when electricity demand exceeds PV generation `#386 <https://github.com/openego/eDisGo/pull/386>`_
 * Added an estimation of the voltage deviation over a cable when selecting a suitable cable to connect a new component `#411 <https://github.com/openego/eDisGo/pull/411>`_
-* Added clipping of heat pump electrical power at its maximum value #428 <https://github.com/openego/eDisGo/pull/428>
+* Added clipping of heat pump electrical power at its maximum value `#428 <https://github.com/openego/eDisGo/pull/428>`
+* Replaced flake8, isort, pyupgrade, and Black with Ruff for linting
+  and formatting in pre-commit configuration `#222 <https://github.com/openego/eDisGo/issues/222>`_
+* Made ``engine`` parameter optional in
+  :meth:`~.edisgo.EDisGo.set_time_series_active_power_predefined`,
+  :meth:`~.edisgo.EDisGo.import_generators`,
+  :meth:`~.edisgo.EDisGo.import_electromobility`,
+  :meth:`~.edisgo.EDisGo.import_heat_pumps`,
+  :meth:`~.edisgo.EDisGo.import_dsm`, and
+  :meth:`~.edisgo.EDisGo.import_home_batteries`;
+  defaults to a standard open energy platform engine when not provided
