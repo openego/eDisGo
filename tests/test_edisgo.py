@@ -388,7 +388,9 @@ class TestEDisGo:
             assert len(edisgo.topology.generators_df) == 524
         except Exception as e:
             if "Table does not exist" in str(e) or "HTTP 404" in str(e):
-                pytest.skip("Database table not accessible (requires external database connection)")
+                pytest.skip(
+                    "Database table not accessible (requires external database connection)"
+                )
             else:
                 raise
 
@@ -940,9 +942,9 @@ class TestEDisGo:
 
         # ##### test without any aggregation
 
-        self.edisgo.topology._loads_df.at[
-            "Load_residential_LVGrid_1_4", "bus"
-        ] = "Bus_BranchTee_LVGrid_1_10"
+        self.edisgo.topology._loads_df.at["Load_residential_LVGrid_1_4", "bus"] = (
+            "Bus_BranchTee_LVGrid_1_10"
+        )
 
         # save original values
         number_gens_before = len(self.edisgo.topology.generators_df)
@@ -1060,9 +1062,9 @@ class TestEDisGo:
         )
         # manipulate grid so that more than one load of the same sector is
         # connected at the same bus
-        self.edisgo.topology._loads_df.at[
-            "Load_residential_LVGrid_1_4", "bus"
-        ] = "Bus_BranchTee_LVGrid_1_10"
+        self.edisgo.topology._loads_df.at["Load_residential_LVGrid_1_4", "bus"] = (
+            "Bus_BranchTee_LVGrid_1_10"
+        )
 
         # save original values (only loads, as generators did not change)
         loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
@@ -1142,9 +1144,9 @@ class TestEDisGo:
 
         # manipulate grid so that two generators of different types are
         # connected at the same bus
-        self.edisgo.topology._generators_df.at[
-            "GeneratorFluctuating_13", "type"
-        ] = "misc"
+        self.edisgo.topology._generators_df.at["GeneratorFluctuating_13", "type"] = (
+            "misc"
+        )
 
         # save original values (values of loads were changed in previous aggregation)
         loads_p_set_before = self.edisgo.topology.loads_df.p_set.sum()
@@ -1419,7 +1421,9 @@ class TestEDisGo:
     def test_plot_voltage_over_dist(self):
         self.setup_worst_case_time_series()
         self.edisgo.analyze()
-        fig, df = self.edisgo.plot_voltage_over_dist(mv_id=None, lv_id=0, return_data=True)
+        fig, df = self.edisgo.plot_voltage_over_dist(
+            mv_id=None, lv_id=0, return_data=True
+        )
 
         assert fig is not None
         assert df is not None
@@ -1433,9 +1437,12 @@ class TestEDisGo:
         self.setup_worst_case_time_series()
         self.edisgo.analyze()
         import copy
+
         other = copy.deepcopy(self.edisgo)
         other.analyze()
-        fig, df = self.edisgo.plot_voltage_over_dist_mv(mv_id=None, other=other, return_data=True)
+        fig, df = self.edisgo.plot_voltage_over_dist_mv(
+            mv_id=None, other=other, return_data=True
+        )
 
         assert fig is not None
         assert df is not None
@@ -1740,29 +1747,27 @@ class TestEDisGo:
         self.edisgo.check_integrity()
         assert (
             "The following generators are missing in generators_active_power: "
-            "{}".format(self.edisgo.topology.generators_df.index.values) in caplog.text
+            f"{self.edisgo.topology.generators_df.index.values}" in caplog.text
         )
         assert (
             "The following generators are missing in generators_reactive_power: "
-            "{}".format(self.edisgo.topology.generators_df.index.values) in caplog.text
+            f"{self.edisgo.topology.generators_df.index.values}" in caplog.text
         )
         assert (
             "The following loads are missing in loads_active_power: "
-            "{}".format(self.edisgo.topology.loads_df.index.values) in caplog.text
+            f"{self.edisgo.topology.loads_df.index.values}" in caplog.text
         )
         assert (
             "The following loads are missing in loads_reactive_power: "
-            "{}".format(self.edisgo.topology.loads_df.index.values) in caplog.text
+            f"{self.edisgo.topology.loads_df.index.values}" in caplog.text
         )
         assert (
             "The following storage_units are missing in storage_units_active_power"
-            ": {}".format(self.edisgo.topology.storage_units_df.index.values)
-            in caplog.text
+            f": {self.edisgo.topology.storage_units_df.index.values}" in caplog.text
         )
         assert (
             "The following storage_units are missing in storage_units_reactive_power"
-            ": {}".format(self.edisgo.topology.storage_units_df.index.values)
-            in caplog.text
+            f": {self.edisgo.topology.storage_units_df.index.values}" in caplog.text
         )
         caplog.clear()
 

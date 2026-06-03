@@ -181,6 +181,14 @@ OEP Database (Standard)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The OEP database provides the egon-data interface and is the default data source.
+No ``engine`` argument is required — when omitted, a default OEP engine is created
+automatically. The following methods support this behaviour:
+:meth:`~.edisgo.EDisGo.set_time_series_active_power_predefined`,
+:meth:`~.edisgo.EDisGo.import_generators`,
+:meth:`~.edisgo.EDisGo.import_electromobility`,
+:meth:`~.edisgo.EDisGo.import_heat_pumps`,
+:meth:`~.edisgo.EDisGo.import_dsm`, and
+:meth:`~.edisgo.EDisGo.import_home_batteries`.
 
 Example
 ^^^^^^^
@@ -361,10 +369,10 @@ This mode can be invoked as follows:
 For the following components you can use existing time series:
 
 * Fluctuating generators: Feed-in time series for solar and wind power plants can be
-  retrieved from the `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+  retrieved from the `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 * Conventional loads: Standard load profiles for the different sectors residential,
   commercial, agricultural and industrial are generated using the oemof
-  `demandlib <https://github.com/oemof/demandlib/>`_.
+  `demandlib <https://github.com/oemof/oemof-demand>`_.
 
 For all other components you need to provide your own time series. Time series for
 heat pumps cannot be set using this mode.

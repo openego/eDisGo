@@ -58,7 +58,7 @@ internal_config_file = os.path.join(package_path, "config", "config_system.cfg")
 try:
     cfg.read(internal_config_file)
 except Exception:
-    logger.exception("Internal config {} file not found.".format(internal_config_file))
+    logger.exception(f"Internal config {internal_config_file} file not found.")
 
 
 class Config:
@@ -66,39 +66,22 @@ class Config:
     Container for all configurations.
 
     Other Parameters
-    -----------------
-    config_path : None or str or :dict
+    ----------------
+    config_path : None or str or dict
         Path to the config directory. Options are:
 
-        * 'default' (default)
-            If `config_path` is set to 'default', the provided default config files
-            are used directly.
-        * str
-            If `config_path` is a string, configs will be loaded from the
-            directory specified by `config_path`. If the directory
-            does not exist, it is created. If config files don't exist, the
-            default config files are copied into the directory.
-        * dict
-            A dictionary can be used to specify different paths to the
-            different config files. The dictionary must have the following
-            keys:
-
-            * 'config_db_tables'
-
-            * 'config_grid'
-
-            * 'config_grid_expansion'
-
-            * 'config_timeseries'
-
-            Values of the dictionary are paths to the corresponding
-            config file. In contrast to the other options, the directories
-            and config files must exist and are not automatically created.
-        * None
-            If `config_path` is None, configs are loaded from the edisgo
-            default config directory ($HOME$/.edisgo). If the directory
-            does not exist, it is created. If config files don't exist, the
-            default config files are copied into the directory.
+        * 'default' (default): The provided default config files are used directly.
+        * str: Configs will be loaded from the directory specified by `config_path`.
+          If the directory does not exist, it is created. If config files don't exist,
+          the default config files are copied into the directory.
+        * dict: A dictionary can be used to specify different paths to the different
+          config files. Keys are 'config_db_tables', 'config_grid',
+          'config_grid_expansion', and 'config_timeseries'. Values are paths to the
+          corresponding config file. The directories and config files must exist and
+          are not automatically created.
+        * None: Configs are loaded from the edisgo default config directory
+          (~/.edisgo). If the directory does not exist, it is created. If config
+          files don't exist, the default config files are copied into the directory.
 
         Default: "default".
 
@@ -343,19 +326,19 @@ class Config:
             for conf in config_files:
                 conf = conf + "_default"
                 load_config(
-                    filename="{}.cfg".format(conf),
+                    filename=f"{conf}.cfg",
                     config_dir=os.path.join(package_path, "config"),
                 )
         elif isinstance(config_path, dict):
             for conf in config_files:
                 load_config(
-                    filename="{}.cfg".format(conf),
+                    filename=f"{conf}.cfg",
                     config_dir=config_path[conf],
                     copy_default_config=False,
                 )
         else:
             for conf in config_files:
-                load_config(filename="{}.cfg".format(conf), config_dir=config_path)
+                load_config(filename=f"{conf}.cfg", config_dir=config_path)
 
         config_dict = cfg._sections
 
@@ -438,14 +421,13 @@ class Config:
             try:
                 return self._data[key1]
             except Exception:
-                raise KeyError("Config does not contain section {}.".format(key1))
+                raise KeyError(f"Config does not contain section {key1}.")
         else:
             try:
                 return self._data[key1][key2]
             except Exception:
                 raise KeyError(
-                    "Config does not contain value for {} or "
-                    "section {}.".format(key2, key1)
+                    f"Config does not contain value for {key2} or section {key1}."
                 )
 
     def __setitem__(self, key, value):
@@ -487,8 +469,8 @@ def load_config(filename, config_dir=None, copy_default_config=True):
         if not os.path.isfile(config_file):
             if copy_default_config:
                 logger.info(
-                    "Config file {} not found, I will create a "
-                    "default version".format(config_file)
+                    f"Config file {config_file} not found, I will create a "
+                    "default version"
                 )
                 make_directory(config_dir)
                 shutil.copy(
@@ -500,12 +482,12 @@ def load_config(filename, config_dir=None, copy_default_config=True):
                     config_file,
                 )
             else:
-                message = "Config file {} not found.".format(config_file)
+                message = f"Config file {config_file} not found."
                 logger.error(message)
                 raise FileNotFoundError(message)
 
     if len(cfg.read(config_file)) == 0:
-        message = "Config file {} not found or empty.".format(config_file)
+        message = f"Config file {config_file} not found or empty."
         logger.error(message)
         raise FileNotFoundError(message)
     global _loaded
@@ -560,9 +542,7 @@ def get_default_config_path():
     # root directory does not exist
     if not os.path.isdir(root_path):
         # create it
-        logger.info(
-            "eDisGo root path {} not found, I will create it.".format(root_path)
-        )
+        logger.info(f"eDisGo root path {root_path} not found, I will create it.")
         make_directory(root_path)
 
     # config directory does not exist
@@ -572,9 +552,7 @@ def get_default_config_path():
         make_directory(config_path)
 
         # copy default config files
-        logger.info(
-            "eDisGo config path {} not found, I will create it.".format(config_path)
-        )
+        logger.info(f"eDisGo config path {config_path} not found, I will create it.")
 
     # copy default config files if they don't exist
     internal_config_dir = os.path.join(package_path, "config")
@@ -583,9 +561,7 @@ def get_default_config_path():
             config_path, os.path.basename(file).replace("_default", "")
         )
         if not os.path.isfile(filename):
-            logger.info(
-                "I will create a default config file {} in {}".format(file, config_path)
-            )
+            logger.info(f"I will create a default config file {file} in {config_path}")
             shutil.copy(file, filename)
     return config_path
 
@@ -602,4 +578,4 @@ def make_directory(directory):
     """
     if not os.path.isdir(directory):
         os.makedirs(directory)
-        logger.info("Path {} not found, I will create it.".format(directory))
+        logger.info(f"Path {directory} not found, I will create it.")
