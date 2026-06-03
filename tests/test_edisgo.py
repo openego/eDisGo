@@ -164,9 +164,7 @@ class TestEDisGo:
             storage_units_ts, self.edisgo.timeseries.storage_units_reactive_power
         )
 
-    def test_set_time_series_active_power_predefined_oedb_auto_sets_timeindex(self):
-        # Test that timeindex is automatically set when importing predefined time series
-        # and no timeindex is provided
+    def test_set_time_series_active_power_predefined_demandlib_auto_sets_timeindex(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         # Ensure timeindex is empty initially
         assert edisgo.timeseries.timeindex.empty
@@ -221,10 +219,7 @@ class TestEDisGo:
 
         # check warning
         self.edisgo.set_time_series_active_power_predefined()
-        assert (
-            "When setting time series using predefined profiles it is better"
-            in caplog.text
-        )
+        assert "No timeindex was set. TimeSeries.timeindex is automatically" in caplog.text
 
         # check if right functions are called
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
