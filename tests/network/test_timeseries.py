@@ -2044,6 +2044,9 @@ class TestTimeSeries:
 
     def test_residual_load(self):
         self.edisgo.set_time_series_worst_case_analysis()
+
+        # test residual load of whole grid
+        residual_load = self.edisgo.timeseries.residual_load()
         time_steps_load_case = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
         ].values
@@ -2051,15 +2054,33 @@ class TestTimeSeries:
             self.edisgo.topology.loads_df.p_set.sum()
             + self.edisgo.topology.storage_units_df.p_nom.sum()
         )
-        assert np.allclose(
-            self.edisgo.timeseries.residual_load.loc[time_steps_load_case], peak_load
-        )
+        assert np.allclose(residual_load.loc[time_steps_load_case], peak_load)
         time_steps_feedin_case = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
         ].values
-        assert (
-            self.edisgo.timeseries.residual_load.loc[time_steps_feedin_case] < 0
-        ).all()
+        assert (residual_load.loc[time_steps_feedin_case] < 0).all()
+        # test residual load per MV grid feeder
+        residual_load_feeder = self.edisgo.timeseries.residual_load(
+            feeder="mv_feeder", edisgo_obj=self.edisgo
+        )
+        assert np.allclose(residual_load, residual_load_feeder.sum(axis=1))
+        assert residual_load_feeder.shape == (4, 6)
+        assert np.allclose(
+            residual_load_feeder["BusBar_lac_1"], [0.31, 0.31, -3.00350, -3.01900]
+        )
+        assert np.allclose(residual_load_feeder["station_node"], [0.4, 0.4, -0.4, -0.4])
+        # test residual load per MV and LV feeder
+        residual_load_feeder = self.edisgo.timeseries.residual_load(
+            feeder="grid_feeder", edisgo_obj=self.edisgo
+        )
+        assert np.allclose(
+            self.edisgo.timeseries.residual_load(), residual_load_feeder.sum(axis=1)
+        )
+        assert residual_load_feeder.shape == (4, 28)
+        assert np.allclose(
+            residual_load_feeder["Bus_BranchTee_LVGrid_1_11"],
+            [0.002794, 0.002794, -0.0378309, -0.0379706],
+        )
 
     def test_timesteps_load_feedin_case(self):
         self.edisgo.set_time_series_worst_case_analysis()
@@ -2473,6 +2494,8 @@ class TestTimeSeries:
 
     def test_scale_timeseries(self):
         self.edisgo.set_time_series_worst_case_analysis()
+
+        # test scaling all time series
         edisgo_scaled = copy.deepcopy(self.edisgo)
         edisgo_scaled.timeseries.scale_timeseries(
             p_scaling_factor=0.5, q_scaling_factor=0.4
@@ -2501,6 +2524,37 @@ class TestTimeSeries:
         assert_frame_equal(
             edisgo_scaled.timeseries.storage_units_reactive_power,
             self.edisgo.timeseries.storage_units_reactive_power * 0.4,
+        )
+
+        # test only scaling load time series
+        edisgo_scaled = copy.deepcopy(self.edisgo)
+        edisgo_scaled.timeseries.scale_timeseries(
+            p_scaling_factor=0.5, components=["loads"]
+        )
+
+        assert_frame_equal(
+            edisgo_scaled.timeseries.generators_active_power,
+            self.edisgo.timeseries.generators_active_power,
+        )
+        assert_frame_equal(
+            edisgo_scaled.timeseries.generators_reactive_power,
+            self.edisgo.timeseries.generators_reactive_power,
+        )
+        assert_frame_equal(
+            edisgo_scaled.timeseries.loads_active_power,
+            self.edisgo.timeseries.loads_active_power * 0.5,
+        )
+        assert_frame_equal(
+            edisgo_scaled.timeseries.loads_reactive_power,
+            self.edisgo.timeseries.loads_reactive_power,
+        )
+        assert_frame_equal(
+            edisgo_scaled.timeseries.storage_units_active_power,
+            self.edisgo.timeseries.storage_units_active_power,
+        )
+        assert_frame_equal(
+            edisgo_scaled.timeseries.storage_units_reactive_power,
+            self.edisgo.timeseries.storage_units_reactive_power,
         )
 
 

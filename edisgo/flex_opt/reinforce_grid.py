@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import datetime
 import logging
 
@@ -12,6 +13,7 @@ from edisgo.flex_opt import check_tech_constraints as checks
 from edisgo.flex_opt import exceptions, reinforce_measures
 from edisgo.flex_opt.costs import grid_expansion_costs
 from edisgo.flex_opt.reinforce_measures import separate_lv_grid
+from edisgo.network.timeseries import TimeSeriesRaw
 from edisgo.tools import tools
 from edisgo.tools.temporal_complexity_reduction import get_most_critical_time_steps
 
@@ -68,6 +70,7 @@ def reinforce_grid(
         If True, excludes lines that were added in the generator import to connect
         new generators from calculation of network expansion costs. Default: False.
     n_minus_one : bool
+        ToDo adapt
         Determines whether n-1 security should be checked. Currently, n-1 security
         cannot be handled correctly, wherefore the case where this parameter is set to
         True will lead to an error being raised. Default: False.
@@ -130,9 +133,6 @@ def reinforce_grid(
     reinforcement is conducted.
 
     """
-    if n_minus_one is True:
-        raise NotImplementedError("n-1 security can currently not be checked.")
-
     # check if provided mode is valid
     if mode and mode not in ["mv", "mvlv", "lv"]:
         raise ValueError(f"Provided mode {mode} is not a valid mode.")
@@ -208,24 +208,28 @@ def reinforce_grid(
     overloaded_mv_station = (
         pd.DataFrame(dtype=float)
         if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
-        else checks.hv_mv_station_max_overload(edisgo)
+        else checks.hv_mv_station_max_overload(edisgo, n_minus_one=n_minus_one)
     )
     if lv_grid_id or (mode == "mv"):
         overloaded_lv_stations = pd.DataFrame(dtype=float)
     else:
-        overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
+        overloaded_lv_stations = checks.mv_lv_station_max_overload(
+            edisgo, n_minus_one=n_minus_one
+        )
 
     logger.debug("==> Check line load.")
     crit_lines = (
         pd.DataFrame(dtype=float)
         if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
-        else checks.mv_line_max_relative_overload(edisgo)
+        else checks.mv_line_max_relative_overload(edisgo, n_minus_one=n_minus_one)
     )
     if not mode or mode == "lv":
         crit_lines = pd.concat(
             [
                 crit_lines,
-                checks.lv_line_max_relative_overload(edisgo, lv_grid_id=lv_grid_id),
+                checks.lv_line_max_relative_overload(
+                    edisgo, lv_grid_id=lv_grid_id, n_minus_one=n_minus_one
+                ),
             ]
         )
 
@@ -289,22 +293,26 @@ def reinforce_grid(
         overloaded_mv_station = (
             pd.DataFrame(dtype=float)
             if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
-            else checks.hv_mv_station_max_overload(edisgo)
+            else checks.hv_mv_station_max_overload(edisgo, n_minus_one=n_minus_one)
         )
         if mode != "mv" and (not lv_grid_id):
-            overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
+            overloaded_lv_stations = checks.mv_lv_station_max_overload(
+                edisgo, n_minus_one=n_minus_one
+            )
 
         logger.debug("==> Recheck line load.")
         crit_lines = (
             pd.DataFrame(dtype=float)
             if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
-            else checks.mv_line_max_relative_overload(edisgo)
+            else checks.mv_line_max_relative_overload(edisgo, n_minus_one=n_minus_one)
         )
         if not mode or mode == "lv":
             crit_lines = pd.concat(
                 [
                     crit_lines,
-                    checks.lv_line_max_relative_overload(edisgo, lv_grid_id=lv_grid_id),
+                    checks.lv_line_max_relative_overload(
+                        edisgo, lv_grid_id=lv_grid_id, n_minus_one=n_minus_one
+                    ),
                 ]
             )
 
@@ -532,24 +540,28 @@ def reinforce_grid(
     overloaded_mv_station = (
         pd.DataFrame(dtype=float)
         if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
-        else checks.hv_mv_station_max_overload(edisgo)
+        else checks.hv_mv_station_max_overload(edisgo, n_minus_one=n_minus_one)
     )
     if (lv_grid_id) or (mode == "mv"):
         overloaded_lv_stations = pd.DataFrame(dtype=float)
     else:
-        overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
+        overloaded_lv_stations = checks.mv_lv_station_max_overload(
+            edisgo, n_minus_one=n_minus_one
+        )
 
     logger.debug("==> Recheck line load.")
     crit_lines = (
         pd.DataFrame(dtype=float)
         if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
-        else checks.mv_line_max_relative_overload(edisgo)
+        else checks.mv_line_max_relative_overload(edisgo, n_minus_one=n_minus_one)
     )
     if not mode or mode == "lv":
         crit_lines = pd.concat(
             [
                 crit_lines,
-                checks.lv_line_max_relative_overload(edisgo, lv_grid_id=lv_grid_id),
+                checks.lv_line_max_relative_overload(
+                    edisgo, lv_grid_id=lv_grid_id, n_minus_one=n_minus_one
+                ),
             ]
         )
 
@@ -613,22 +625,26 @@ def reinforce_grid(
         overloaded_mv_station = (
             pd.DataFrame(dtype=float)
             if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
-            else checks.hv_mv_station_max_overload(edisgo)
+            else checks.hv_mv_station_max_overload(edisgo, n_minus_one=n_minus_one)
         )
         if mode != "mv" and (not lv_grid_id):
-            overloaded_lv_stations = checks.mv_lv_station_max_overload(edisgo)
+            overloaded_lv_stations = checks.mv_lv_station_max_overload(
+                edisgo, n_minus_one=n_minus_one
+            )
 
         logger.debug("==> Recheck line load.")
         crit_lines = (
             pd.DataFrame(dtype=float)
             if mode == "lv" or kwargs.get("skip_mv_reinforcement", False)
-            else checks.mv_line_max_relative_overload(edisgo)
+            else checks.mv_line_max_relative_overload(edisgo, n_minus_one=n_minus_one)
         )
         if not mode or mode == "lv":
             crit_lines = pd.concat(
                 [
                     crit_lines,
-                    checks.lv_line_max_relative_overload(edisgo, lv_grid_id=lv_grid_id),
+                    checks.lv_line_max_relative_overload(
+                        edisgo, lv_grid_id=lv_grid_id, n_minus_one=n_minus_one
+                    ),
                 ]
             )
 
@@ -675,6 +691,71 @@ def reinforce_grid(
     )
 
     return edisgo.results
+
+
+def reinforce_for_n_minus_one(
+    edisgo_obj: EDisGo,
+    **kwargs,
+):
+    """
+    Grid reinforcment to comply with n-1 security
+
+    Only means reduced allowed line loading. Voltage limits are not changed.
+    Fault conditions are not used. But load case is checked per MV feeder.
+
+    Per default LV is included. To change that set mode to "mv".
+
+    Parameters
+    ----------
+    edisgo : :class:`~.EDisGo`
+    kwargs : dict
+        See parameters of function
+        :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid`.
+
+    Returns
+    --------
+
+    """
+    # ToDo HV/MV transformer needs to be checked separately
+
+    comp_types = ["loads", "generators", "storage_units"]
+    # get residual load in each MV feeder
+    edisgo_obj.topology.assign_feeders("mv_feeder")
+    residual_load_feeders = edisgo_obj.timeseries.residual_load(
+        feeder="mv_feeder", edisgo_obj=edisgo_obj
+    )
+    # save original time series
+    orig_ts = copy.deepcopy(edisgo_obj.timeseries)
+    orig_ts.time_series_raw = TimeSeriesRaw()
+    # per feeder, set all time series to zero, in case residual load in feeder is
+    # negative (feed-in case)
+    for feeder in residual_load_feeders.columns:
+        if feeder != "station_node":
+            # get time steps where residual load is negative
+            residual_load_feeder = residual_load_feeders[feeder]
+            ts_neg = residual_load_feeder[residual_load_feeder < 0].dropna()
+            # ToDo check if it works correctly if dataframe or ts_net is empty
+            for comp_type in comp_types:
+                # get all components of that type in feeder
+                groupby_bus = pd.merge(
+                    getattr(edisgo_obj.topology, f"{comp_type}_df"),
+                    edisgo_obj.topology.buses_df,
+                    how="left",
+                    left_on="bus",
+                    right_index=True,
+                ).groupby(feeder)
+                comps_feeder = groupby_bus.groups[feeder]
+                for ts_type in ["active_power", "reactive_power"]:
+                    # set time series data to zero
+                    getattr(edisgo_obj.topology, f"{comp_type}_{ts_type}").loc[
+                        ts_neg, comps_feeder
+                    ] = 0.0
+
+    # reinforce with n-1 values
+    # n_minus_one = kwargs.pop("")
+    edisgo_obj.reinforce(**kwargs)
+
+    # reset time series
 
 
 def catch_convergence_reinforce_grid(

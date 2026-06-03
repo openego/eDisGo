@@ -25,6 +25,9 @@ class TestCheckTechConstraints:
 
     def test_mv_line_max_relative_overload(self):
         # implicitly checks function _line_overload
+        # Note: n-1 cannot be checked easily, because load case is never more severe
+        # than feed-in case, even when load time series are scaled up. It just leads
+        # to a non-convergence at some point.
 
         df = check_tech_constraints.mv_line_max_relative_overload(self.edisgo)
         # check shape of dataframe
@@ -91,12 +94,17 @@ class TestCheckTechConstraints:
             0.08521689973238901,
         )
 
-        # check with specifying lines
+        # check with specifying lines and n-1
         df = check_tech_constraints.lines_allowed_load(
-            self.edisgo, lines=["Line_10005", "Line_50000002"]
+            self.edisgo, lines=["Line_10005", "Line_50000002"], n_minus_one=True
         )
         # check shape of dataframe
         assert (4, 2) == df.shape
+        # check value of line in ring
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"],
+            7.274613391789284 / 2,
+        )
 
     def test__lines_allowed_load_voltage_level(self):
         # check for MV
@@ -112,6 +120,26 @@ class TestCheckTechConstraints:
         assert np.isclose(
             df.at[self.timesteps[0], "Line_10005"],
             7.274613391789284,
+        )
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10024"],
+            7.27461339178928,
+        )
+        # check n-1
+        df = check_tech_constraints._lines_allowed_load_voltage_level(
+            self.edisgo, "mv", n_minus_one=True
+        )
+        # check shape of dataframe
+        assert (4, 30) == df.shape
+        # check in feed-in case
+        assert np.isclose(
+            df.at[self.timesteps[2], "Line_10005"],
+            7.27461339178928,
+        )
+        # check in load case
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"],
+            7.274613391789284 / 2,
         )
         assert np.isclose(
             df.at[self.timesteps[0], "Line_10024"],
@@ -150,12 +178,23 @@ class TestCheckTechConstraints:
             df.at[self.timesteps[0], "Line_10005"], 0.00142 / 7.27461, atol=1e-5
         )
 
-        # check with specifying lines
+        # check with specifying lines and n-1 is True
         df = check_tech_constraints.lines_relative_load(
-            self.edisgo, lines=["Line_10005", "Line_50000002"]
+            self.edisgo,
+            lines=["Line_10005", "Line_10024", "Line_50000002"],
+            n_minus_one=True,
         )
         # check shape of dataframe
-        assert (4, 2) == df.shape
+        assert (4, 3) == df.shape
+        # check in load case
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"], 0.00142 / (7.27461 / 2), atol=1e-5
+        )
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10024"],
+            0.06931 / 7.27461339178928,
+            atol=1e-5,
+        )
 
     def test_hv_mv_station_max_overload(self):
         # implicitly checks function _station_overload
@@ -173,6 +212,19 @@ class TestCheckTechConstraints:
         assert np.isclose(
             df.at["MVGrid_1_station", "s_missing"],
             (np.hypot(30, 30) - 40),
+        )
+        assert df.at["MVGrid_1_station", "time_index"] == self.timesteps[0]
+
+        # check n-1
+        df = check_tech_constraints.hv_mv_station_max_overload(
+            self.edisgo, n_minus_one=True
+        )
+        # check shape of dataframe
+        assert (1, 3) == df.shape
+        # check missing transformer capacity
+        assert np.isclose(
+            df.at["MVGrid_1_station", "s_missing"],
+            (np.hypot(30, 30) - 20),
         )
         assert df.at["MVGrid_1_station", "time_index"] == self.timesteps[0]
 
@@ -256,6 +308,16 @@ class TestCheckTechConstraints:
         feed_in_cases = self.edisgo.timeseries.timeindex_worst_cases[
             self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("feed")
         ]
+        assert np.isclose(40.0, df.loc[feed_in_cases.values].values).all()
+
+        # check MV grid n-1
+        df = check_tech_constraints._station_allowed_load(
+            self.edisgo, grid, n_minus_one=True
+        )
+        # check shape of dataframe
+        assert (4, 1) == df.shape
+        # check values
+        assert np.isclose(20.0, df.loc[load_cases.values].values).all()
         assert np.isclose(40.0, df.loc[feed_in_cases.values].values).all()
 
     def test_stations_allowed_load(self):
@@ -348,6 +410,26 @@ class TestCheckTechConstraints:
         assert np.isclose(
             df.at[self.timesteps[0], "Line_10005"], 0.00142 / 7.27461, atol=1e-5
         )
+
+        # check with power flow results available for all components and n-1
+        df = check_tech_constraints.components_relative_load(
+            self.edisgo, n_minus_one=True
+        )
+        # check shape of dataframe
+        assert (4, 142) == df.shape
+        # check values
+        load_cases = self.edisgo.timeseries.timeindex_worst_cases[
+            self.edisgo.timeseries.timeindex_worst_cases.index.str.contains("load")
+        ]
+        assert np.isclose(
+            0.02853, df.loc[load_cases.values, "LVGrid_4_station"].values, atol=1e-5
+        ).all()
+        assert np.isclose(
+            df.at[self.timesteps[0], "Line_10005"], 0.00142 / 7.27461 * 2, atol=1e-5
+        )
+        assert np.isclose(
+            0.03427 * 2, df.loc[load_cases.values, "MVGrid_1_station"].values, atol=1e-5
+        ).all()
 
         # check with power flow results not available for all components
         self.edisgo.analyze(mode="mvlv")
