@@ -365,13 +365,22 @@ def from_powermodels(
         # calculate relative error
         df2 = deepcopy(df)
         for flex in df2.columns:
-            abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
-            rel_error = [
-                abs_error[i] / hv_flex_dict[flex].iloc[i]
-                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
-                else 0
-                for i in range(len(abs_error))
-            ]
+            if type(hv_flex_dict[flex]) == pd.Series:
+                abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
+                rel_error = [
+                    abs_error[i] / hv_flex_dict[flex].iloc[i]
+                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
+                    else 0
+                    for i in range(len(abs_error))
+                ]
+            else:
+                abs_error = abs(df2[flex].values - hv_flex_dict[flex].sum(axis=1).values)
+                rel_error = [
+                    abs_error[i] / hv_flex_dict[flex].sum(axis=1).iloc[i]
+                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].sum(axis=1).iloc[i] != 0))
+                    else 0
+                    for i in range(len(abs_error))
+                ]
             df2[flex] = rel_error
         # write results to edisgo object
         edisgo_object.opf_results.overlying_grid = pd.DataFrame(
@@ -1022,8 +1031,13 @@ def _build_battery_storage(
                 + edisgo_obj.timeseries.timeindex.freq
             ]
         )
-        if edisgo_obj.overlying_grid.storage_units_soc.index[0].year==2011:
-            timesteps = timesteps.map(lambda t: t.replace(year=2011))
+
+        # If the overlying grid data uses another year in the timeindex then
+        # edisgo.timindex, unify them
+        og_year = edisgo_obj.overlying_grid.storage_units_soc.index[0].year
+        if og_year != edisgo_obj.timeseries.timeindex[0].year:
+            timesteps = timesteps.map(lambda t: t.replace(year=og_year))
+
         data = pd.concat(
             [edisgo_obj.overlying_grid.storage_units_soc.loc[timesteps]]
             * len(edisgo_obj.topology.storage_units_df),
