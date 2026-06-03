@@ -558,8 +558,8 @@ class EDisGo:
 
         """
         engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
-        set_timeindex = False
-        if timeindex is not None and not self.timeseries.timeindex.empty:
+        timeindex = kwargs.get("timeindex", None)
+        if timeindex is None and self.timeseries.timeindex.empty:
             logger.warning(
                 "When setting time series using predefined profiles it is better to "
                 "set a time index as all data in TimeSeries class is indexed by the"
