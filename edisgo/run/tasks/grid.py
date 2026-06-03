@@ -10,14 +10,25 @@ Two ways to start a pipeline:
   a slow "base" phase and one or more fast "scenario" phases that
   reuse the base-reinforced grid.
 """
+
 from __future__ import annotations
+
+import pandas as pd
 
 from edisgo.run.registry import register_task
 
 
 @register_task("setup_grid")
-def task_setup_grid(edisgo, ctx, *, timeindex = None, ding0_path=None, legacy_ding0_grids=None,
-                    import_generators=False, generator_scenario=None):
+def task_setup_grid(
+    edisgo,
+    ctx,
+    *,
+    timeindex=None,
+    ding0_path=None,
+    legacy_ding0_grids=None,
+    import_generators=False,
+    generator_scenario=None,
+):
     """
     Load a ding0 grid into an EDisGo instance.
 
@@ -99,10 +110,19 @@ def task_setup_grid(edisgo, ctx, *, timeindex = None, ding0_path=None, legacy_di
 
 
 @register_task("load_from_base")
-def task_load_from_base(edisgo, ctx, *, path, reset_equipment_changes=True,
-                        import_timeseries=False, import_results=False,
-                        import_electromobility=False, import_heat_pump=False,
-                        import_dsm=False, import_overlying_grid=False):
+def task_load_from_base(
+    edisgo,
+    ctx,
+    *,
+    path=None,
+    reset_equipment_changes=True,
+    import_timeseries=False,
+    import_results=False,
+    import_electromobility=False,
+    import_heat_pump=False,
+    import_dsm=False,
+    import_overlying_grid=False,
+):
     """
     Reload an EDisGo instance from a previously saved directory/zip.
 
@@ -152,6 +172,14 @@ def task_load_from_base(edisgo, ctx, *, path, reset_equipment_changes=True,
 
     from edisgo.edisgo import import_edisgo_from_files
 
+    if path is None:
+        grid_cfg = ctx.raw_config.get("grid", {}) or {}
+        path = grid_cfg.get("ding0_path")
+    if path is None:
+        raise ValueError(
+            "Task 'load_from_base' requires 'path' either as task "
+            "parameter or under config.grid.ding0_path."
+        )
     path = str(path)
     from_zip = path.endswith(".zip") or not os.path.isdir(path)
     edisgo = import_edisgo_from_files(
