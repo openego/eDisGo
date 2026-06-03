@@ -9,6 +9,7 @@ try
     using JuMP
     using JSON
     using Gurobi
+    using Printf
 catch e
     Pkg.instantiate()
     using eDisGo_OPF
@@ -17,6 +18,7 @@ catch e
     using JuMP
     using JSON
     using Gurobi
+    using Printf
 end
 
 
@@ -28,6 +30,97 @@ results_path = ARGS[2]
 method = ARGS[3]
 silence_moi = ARGS[4].=="True"
 warm_start = ARGS[5].=="True"
+
+
+"""
+    print_14a_debug_summary(data_mn; threshold_mw=0.001)
+
+Print a per-timestep §14a activation summary to stderr after solving.
+
+Output goes to stderr so it never mixes with the JSON result on stdout.
+Each line shows HP and CP §14a activation in kW plus the approximate maximum
+active-power line loading at that timestep.  Only timesteps where the total
+§14a activation exceeds `threshold_mw` are printed.
+
+Activation values are in per-unit (relative to s_base).  Multiply by the
+transformer s_nom to convert to MW.
+"""
+function print_14a_debug_summary(data_mn; threshold_mw=0.001)
+    println(stderr, "\n===== §14a Debug Summary (Julia) =====")
+
+    nw_keys = sort(collect(keys(data_mn["nw"])), lt=(a, b) -> parse(Int, a) < parse(Int, b))
+    n_active = 0
+
+    for t in nw_keys
+        nw_t = data_mn["nw"][t]
+
+        # --- §14a HP activation ---
+        hp14a_pu = 0.0
+        if haskey(nw_t, "gen_hp_14a")
+            for (_, gen) in nw_t["gen_hp_14a"]
+                p_val = get(gen, "p", 0.0)
+                if p_val > 0
+                    hp14a_pu += p_val
+                end
+            end
+        end
+
+        # --- §14a CP activation ---
+        cp14a_pu = 0.0
+        if haskey(nw_t, "gen_cp_14a")
+            for (_, gen) in nw_t["gen_cp_14a"]
+                p_val = get(gen, "p", 0.0)
+                if p_val > 0
+                    cp14a_pu += p_val
+                end
+            end
+        end
+
+        total_pu = hp14a_pu + cp14a_pu
+        if total_pu < threshold_mw
+            continue
+        end
+
+        n_active += 1
+
+        # --- Approximate max line loading: |pf| / rate_a ---
+        max_loading = 0.0
+        max_branch_id = ""
+        if haskey(nw_t, "branch")
+            for (b_id, branch_res) in nw_t["branch"]
+                is_storage = get(get(nw_t["branch"], b_id, Dict()), "storage", 0) == 1
+                if is_storage
+                    continue
+                end
+                rate_a = get(branch_res, "rate_a", 0.0)
+                pf_val = abs(get(branch_res, "pf", 0.0))
+                if rate_a > 1e-9
+                    loading = pf_val / rate_a
+                    if loading > max_loading
+                        max_loading = loading
+                        max_branch_id = b_id
+                    end
+                end
+            end
+        end
+
+        @printf(stderr,
+            "  t=%4s | HP_14a=%7.2f kVA | CP_14a=%7.2f kVA | Total=%7.2f kVA | max_line=%.1f%% (%s)\n",
+            t,
+            hp14a_pu * 1000,
+            cp14a_pu * 1000,
+            total_pu * 1000,
+            max_loading * 100,
+            max_branch_id,
+        )
+    end
+
+    println(stderr, "  §14a active timesteps (>$(threshold_mw*1000) kVA): $n_active / $(length(nw_keys))")
+    println(stderr, "  Note: values are in per-unit × 1000 (≈ kVA at s_base=1 MVA).")
+    println(stderr, "        Multiply by transformer s_nom [MVA] to get absolute MW.")
+    println(stderr, "===== End §14a Debug Summary =====\n")
+end
+
 
 # Set solver attributes
 const ipopt = optimizer_with_attributes(Ipopt.Optimizer, MOI.Silent() => silence_moi, "sb" => "yes", "tol"=>1e-6)
@@ -63,6 +156,7 @@ function optimize_edisgo()
         println("SOC solution is not tight!")
       end
       PowerModels.update_data!(data_edisgo_mn, result_soc["solution"])
+      print_14a_debug_summary(data_edisgo_mn)
       data_edisgo_mn["solve_time"] = result_soc["solve_time"]
       data_edisgo_mn["status"] = result_soc["termination_status"]
       data_edisgo_mn["solver"] = "Gurobi"
@@ -81,6 +175,7 @@ function optimize_edisgo()
     println("Starting cold-start non-convex AC-OPF with IPOPT.")
     result, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, NCBFPowerModelEdisgo, ipopt)
     PowerModels.update_data!(data_edisgo_mn, result["solution"])
+    print_14a_debug_summary(data_edisgo_mn)
     data_edisgo_mn["solve_time"] = result["solve_time"]
     data_edisgo_mn["status"] = result["termination_status"]
     data_edisgo_mn["solver"] = "Ipopt"

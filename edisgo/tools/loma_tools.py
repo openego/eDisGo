@@ -1478,6 +1478,7 @@ def analyze_14a_activations(edisgo, pre_opt_line_loading, *, threshold_kw=0.5):
             "n_active_generators": int((ts_curt > threshold_mw).sum()),
             "top_generators": top_gens,
         }
+        breakpoint()
 
         if pre_opt_line_loading is not None and ts in pre_opt_line_loading.index:
             ts_loading = pre_opt_line_loading.loc[ts]
@@ -1576,7 +1577,7 @@ def plot_network(
     grouped_14a = curt_14a.groupby("bus").sum()
     grouped_14a.columns = grouped_14a.columns.map(str)
 
-    bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.000001)
+    bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.0001)
     bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
 
     fig, ax = plt.subplots(figsize=(12, 8))
@@ -1965,3 +1966,157 @@ def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = Tru
     if show:
         plt.show()
     plt.close()
+
+
+def plot_14a_overview_full_period(edisgo, output_path, show=False, save=True):
+    """
+    Single plot for the full simulation period: stacked loads on primary y-axis,
+    §14a curtailment (CP + HP) on a secondary y-axis.
+    """
+    ti = edisgo.timeseries.timeindex
+    loads_df = edisgo.topology.loads_df
+    lap = edisgo.timeseries.loads_active_power
+
+    cp_loads = loads_df[loads_df["type"] == "charging_point"].index
+    hp_loads = loads_df[loads_df["type"] == "heat_pump"].index
+    conv_loads = loads_df[loads_df["type"] == "conventional_load"].index
+
+    cp_ts   = lap[[c for c in cp_loads   if c in lap.columns]].sum(axis=1)
+    hp_ts   = lap[[c for c in hp_loads   if c in lap.columns]].sum(axis=1)
+    conv_ts = lap[[c for c in conv_loads if c in lap.columns]].sum(axis=1)
+
+    curt = get_curtailment_data(edisgo)
+    cp_curt = curt[[c for c in curt.columns if "cp_14a_support" in c or "charging_point_14a_support" in c]].sum(axis=1)
+    hp_curt = curt[[c for c in curt.columns if "hp_14a_support" in c]].sum(axis=1)
+
+    cp_opt = cp_ts - cp_curt
+    hp_opt = hp_ts - hp_curt
+
+    stack_conv       = conv_ts.values
+    stack_conv_hp    = (conv_ts + hp_opt).values
+    stack_conv_hp_cp = (conv_ts + hp_opt + cp_opt).values
+
+    fig, ax1 = plt.subplots(figsize=(16, 6))
+
+    ax1.fill_between(ti, 0,            stack_conv,       alpha=0.6, color="gray",          label="Conventional load")
+    ax1.fill_between(ti, stack_conv,   stack_conv_hp,    alpha=0.6, color="mediumseagreen", label="Heat pumps (optimized)")
+    ax1.fill_between(ti, stack_conv_hp, stack_conv_hp_cp, alpha=0.6, color="steelblue",     label="Charging points (optimized)")
+    ax1.set_ylabel("Active Power [MW]")
+    ax1.grid(True, alpha=0.3)
+
+    ax2 = ax1.twinx()
+    ax2.fill_between(ti, 0,              hp_curt.values,               alpha=0.75, color="darkgreen", label="§14a HP curtailment")
+    ax2.fill_between(ti, hp_curt.values, (hp_curt + cp_curt).values,   alpha=0.75, color="darkblue",  label="§14a CP curtailment")
+    ax2.set_ylabel("§14a Curtailment [MW]", color="navy")
+    ax2.tick_params(axis="y", labelcolor="navy")
+
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left", fontsize=8, framealpha=0.85)
+
+    start, end = ti[0].strftime("%Y-%m-%d %H:%M"), ti[-1].strftime("%Y-%m-%d %H:%M")
+    ax1.set_title(f"§14a Impact on Load — {start} to {end}", fontsize=12, fontweight="bold")
+    fig.tight_layout()
+
+    if save:
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.close(fig)
+
+
+def plot_14a_focus_bus(edisgo, bus, output_path, show=False, save=True):
+    """
+    3-panel plot for a single bus over the full simulation period:
+      1. Load at bus (left axis) vs. §14a curtailment at bus (right axis)
+      2. Relative loading of all lines/transformers connected to the bus
+      3. Bus voltage [p.u.]
+    """
+    ti = edisgo.timeseries.timeindex
+    loads_df = edisgo.topology.loads_df
+    lap = edisgo.timeseries.loads_active_power
+
+    # Load at the focus bus
+    bus_load_cols = [c for c in loads_df[loads_df["bus"] == bus].index if c in lap.columns]
+    bus_load_ts = lap[bus_load_cols].sum(axis=1)
+
+    # §14a curtailment at the focus bus
+    curt = get_curtailment_data(edisgo)
+    curt_T = curt.T.copy()
+    curt_T["load"] = (
+        curt_T.index
+        .str.replace("cp_14a_support_", "", regex=False)
+        .str.replace("hp_14a_support_", "", regex=False)
+        .str.replace("charging_point_14a_support_", "", regex=False)
+    )
+    curt_T["bus"] = curt_T["load"].map(loads_df["bus"])
+    bus_curt_rows = curt_T[curt_T["bus"] == bus].drop(columns=["load", "bus"])
+    bus_curt_ts = bus_curt_rows.T.sum(axis=1) if not bus_curt_rows.empty else pd.Series(0.0, index=ti)
+
+    # Lines + transformers connected to the focus bus
+    lines_df = edisgo.topology.lines_df
+    trafos_df = edisgo.topology.transformers_df
+    connected_lines = lines_df[(lines_df["bus0"] == bus) | (lines_df["bus1"] == bus)].index
+    connected_trafos = trafos_df[(trafos_df["bus0"] == bus) | (trafos_df["bus1"] == bus)].index
+
+    s_res = edisgo.results.s_res
+    s_nom_lines  = lines_df["s_nom"]
+    s_nom_trafos = trafos_df["s_nom"]
+
+    loading_parts = []
+    for comp, s_nom in [(connected_lines, s_nom_lines), (connected_trafos, s_nom_trafos)]:
+        cols = [c for c in comp if c in s_res.columns]
+        if cols:
+            loading_parts.append(s_res[cols] / s_nom[cols])
+    bus_loading_rel = pd.concat(loading_parts, axis=1) if loading_parts else pd.DataFrame(index=ti)
+
+    # Bus voltage
+    v_res = edisgo.results.v_res
+    bus_voltage = v_res[bus] if bus in v_res.columns else pd.Series(float("nan"), index=ti)
+
+    # ── Plot ────────────────────────────────────────────────────────────────
+    fig, axes = plt.subplots(3, 1, figsize=(16, 12), sharex=True)
+    fig.suptitle(f"§14a Focus Analysis — Bus {bus}", fontsize=13, fontweight="bold")
+
+    # Panel 1: load vs curtailment
+    ax1 = axes[0]
+    ax1.fill_between(ti, 0, bus_load_ts.values, alpha=0.5, color="steelblue", label="Total load at bus")
+    ax1.set_ylabel("Load [MW]")
+    ax1.grid(True, alpha=0.3)
+    ax1_r = ax1.twinx()
+    ax1_r.fill_between(ti, 0, bus_curt_ts.values, alpha=0.75, color="crimson", label="§14a curtailment")
+    ax1_r.set_ylabel("§14a Curtailment [MW]", color="crimson")
+    ax1_r.tick_params(axis="y", labelcolor="crimson")
+    h1, l1 = ax1.get_legend_handles_labels()
+    h2, l2 = ax1_r.get_legend_handles_labels()
+    ax1.legend(h1 + h2, l1 + l2, fontsize=8, loc="upper left")
+
+    # Panel 2: relative line loading
+    ax2 = axes[1]
+    for col in bus_loading_rel.columns:
+        ax2.plot(ti, bus_loading_rel[col], linewidth=1.2, alpha=0.85, label=col)
+    ax2.axhline(1.0, color="red", linestyle="--", linewidth=0.8, label="100% limit")
+    ax2.set_ylabel("Relative Line Loading")
+    ax2.legend(fontsize=7, loc="upper right", framealpha=0.85)
+    ax2.grid(True, alpha=0.3)
+
+    # Panel 3: bus voltage
+    ax3 = axes[2]
+    ax3.plot(ti, bus_voltage.values, color="purple", linewidth=1.2, label="Bus voltage")
+    ax3.axhline(1.0,  color="gray", linestyle="--", linewidth=0.8, alpha=0.6)
+    ax3.axhline(1.1,  color="red",  linestyle=":",  linewidth=0.8, label="±10% limits")
+    ax3.axhline(0.9,  color="red",  linestyle=":",  linewidth=0.8)
+    ax3.set_ylabel("Voltage [p.u.]")
+    ax3.set_xlabel("Time")
+    ax3.legend(fontsize=8)
+    ax3.grid(True, alpha=0.3)
+
+    fig.tight_layout()
+
+    if save:
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+        fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    if show:
+        plt.show()
+    plt.close(fig)

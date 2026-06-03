@@ -6,6 +6,7 @@ import pandas as pd
 
 from edisgo import EDisGo
 from edisgo.tools.loma_tools import (
+    analyze_14a_activations,
     buses_with_existing_loads,
     create_network_gif,
     get_curtailment_data,
@@ -18,6 +19,16 @@ from edisgo.tools.loma_tools import (
     set_storage_timeseries_bus_level,
     transfer_ts_from_new_to_existing_cp,
 )
+
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+logger = logging.getLogger(__name__)
 
 
 def run_optimization_14a(edisgo):
@@ -243,7 +254,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     
     set_charging_points_to_target(
         edisgo,
-        target_total=1500, # sets total amount of CP #412 SQ, 1000 2035
+        target_total=1000, # sets total amount of CP    #1000 for Husum2035 default, 412 for statusQuo default
         # percentage=0.10, # increases total amount of CP by 10%
         # percentage=-0.10, # decreases total amount of CP by 10%
         eligible_buses=cp_eligible_buses,
@@ -255,7 +266,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
 
     set_heat_pumps_to_target(
         edisgo,
-        target_total=2000,  # sets total amount of HP #575 SQ, 2600 2035
+        target_total=2600,  # sets total amount of HP      #2600 for Husum2035 default, 575 for statusQuo default
         # percentage=0.10, # increases total amount of HP by 10%
         # percentage=-0.10, # decreases total amount of HP by 10%
         eligible_buses=hp_eligible_buses,
@@ -326,24 +337,24 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
 
 def main():
     # General Paths
-    output_dir = "/home/paul/LoMa/test/edisgo_output"
-    emob_cache_dir = "/home/paul/LoMa/loma-repo/emob_cache/husum_eGon2035"
-
+    output_dir = "/home/student/Execution/eDisGo_exe/eDisGo_exe_results_Whole_Husum_final_2035"
+    emob_cache_dir = "/home/student/Execution/eDisGo_exe/emob_cache_Whole_Husum_final_2035"
+    #"/home/student/Execution/eDisGo_exe/emob_cache_MGB_final_statusQuo"
+    #"/home/student/Execution/eDisGo_exe/emob_cache_Whole_Husum_final_statusQuo"
+    
     # Whole Husum paths
-    grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_final_statusQuo_LV_ids" # Status-Quo
-    # grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_model_pypsa_2035" # 2035
+    grid_path = "/home/student/Execution/LoMa_exe/results/Whole_Husum_final_2035_LV_ids" # Husum
+    #/home/student/Execution/LoMa_exe/results/Whole_Husum_final_statusQuo_LV_ids
+    #/home/student/Execution/LoMa_exe/results/MGB_final_statusQuo_LV_ids
+    
     path_husum_district_shp = (
-        "/home/paul/LoMa/loma-repo/data/Input_files/MV_grid_district/husum_district.shp"
+        "/home/student/Execution/LoMa_exe/data/Input_files/MV_grid_district/husum_district.shp"
     )
+   #/home/student/Execution/LoMa_exe/data/Input_files/MV_grid_district/husum_district.shp
+    #/home/student/Execution/eDisGo_exe/MGB_district/MGB_district.shp
+    
 
-    # MGB paths
-    # grid_path = ""
-    # path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MGB_district"
-
-    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 12)) 
-    #edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 167)) #first week january 2025
-    #edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(2159, 2327)) #first week april 2025
-    #edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(5088, 5256)) #first week august 2025
+    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 6))
 
     mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
     edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
@@ -363,12 +374,68 @@ def main():
     
     plot_cp_hp_locations(edisgo, show=False, save=True)
 
+    # Save pre-optimization line loading for §14a activation diagnosis
+    edisgo.analyze()
+    pre_edisgo = edisgo.copy()
+    pre_opt_line_loading = edisgo.results.s_res.copy()
+
     edisgo = run_optimization_14a(edisgo)
     edisgo.analyze()
 
     # ────────────────────────── Slack diagnosis ──────────────────────────────
+    load_shed = edisgo.opf_results.grid_slacks_t.load_shedding
+
+    # Positiv = echter Last-Abwurf, Negativ = Solver-Artefakt trennen
+    pos = load_shed.clip(lower=0)   # nur echtes Shedding
+    neg = load_shed.clip(upper=0)   # nur Artefakte
+      
+    print("=== OPF Slack Diagnosis ===")
+    print(f"Echtes Load Shedding (p > 0):      {pos.sum().sum():.6f} MW")
+    print(f"Negative Artefakte (p < 0):        {neg.sum().sum():.6f} MW")
+    print(f"Rohe Summe (irreführend):           {load_shed.sum().sum():.6f} MW")
+      
+      # Nur Knoten mit echtem Shedding
+    threshold = 1e-4  # MW, unter diesem Wert = Rauschen
+    col_sums_pos = pos.sum()
+    active_cols = col_sums_pos[col_sums_pos > threshold]
+    
+    if active_cols.empty:
+        print("\n✓ Kein relevantes Load Shedding – nur Solver-Rauschen")
+    else:
+        print(f"\nKnoten mit echtem Shedding (>{threshold} MW gesamt):")
+        for col, val in active_cols.items():
+              peak = pos[col].max()
+              n_ts  = (pos[col] > 1e-6).sum()
+              print(f"  {col}: {val:.4f} MW gesamt | Peak: {peak:.4f} MW | {n_ts} Zeitschritte aktiv")
+      
+    # Alle drei Slack-Typen korrekt
+    for name, df in [
+          ("Load Shedding",    edisgo.opf_results.grid_slacks_t.load_shedding),
+          ("HP Load Shedding", edisgo.opf_results.grid_slacks_t.hp_load_shedding),
+          ("CP Load Shedding", edisgo.opf_results.grid_slacks_t.cp_load_shedding),
+      ]:
+        p = df.clip(lower=0).sum().sum()
+        n = df.clip(upper=0).sum().sum()
+        print(f"  {name:<20}: {p:.6f} MW  (Artefakte: {n:.2e} MW)")
+        
+        
+        
     slacks = edisgo.opf_results.grid_slacks_t
     print("\n=== OPF Slack Diagnosis (v5) ===")
+    load_shed = edisgo.opf_results.grid_slacks_t.load_shedding
+    print("Load Shedding aktiv:")
+    print(load_shed[(load_shed > 1e-6).any(axis=1)]) # Nur wenn > 0.00001
+    
+    for col in load_shed.columns:
+          if (load_shed[col] > 1e-6).any():
+                print(f" Knoten {col}: {load_shed[col].sum():.4f} MW abgeworfen")
+                
+    print("\nGesamtes Slack-Volume pro Komponente:")
+    print(f" Load Shedding: {load_shed.sum().sum():.4f} MW")
+    print(f" HP Load Shedding: {edisgo.opf_results.grid_slacks_t.hp_load_shedding.sum().sum():.4f} MW")
+    print(f" CP Load Shedding: {edisgo.opf_results.grid_slacks_t.cp_load_shedding.sum().sum():.4f} MW")
+
+
     for name, df in [
         ("gen_nd_crt  (renewable curtailment)", slacks.gen_nd_crt),
         ("gen_d_crt   (disp. gen curtailment)", slacks.gen_d_crt),
@@ -401,10 +468,38 @@ def main():
     print(f"Total use of 14a:{gen_t_14a.sum().sum()}")
     print("\n=== end 14a analysis ===")
 
-    # # Create gif
-    # for ts in edisgo.timeseries.timeindex:
-    #     plot_network(edisgo, show=False, snapshot=str(ts))
-    # create_network_gif(duration=500)
+    # ── §14a Activation Diagnosis ────────────────────────────────────────────
+    # Cross-correlates §14a activations with pre-optimization line loading.
+    # "has_pre_overload=False" rows are candidates for spurious activation.
+    activation_report = analyze_14a_activations(
+        edisgo,
+        pre_opt_line_loading,
+        threshold_kw=0.5,
+    )
+    if not activation_report.empty:
+        report_csv = os.path.join(output_dir, "14a_activation_report.csv")
+        activation_report.drop(columns=["top_generators"]).to_csv(report_csv)
+        print(f"\n§14a activation report saved to: {report_csv}")
+        spurious = activation_report[~activation_report["has_pre_overload"]]
+        if not spurious.empty:
+            print("\nTimesteps with §14a activation but no pre-opt overload:")
+            print(spurious[["14a_total_mw", "n_active_generators",
+                             "max_line_loading_pre"]].to_string())
+    # ── End §14a Diagnosis ───────────────────────────────────────────────────
+
+
+
+    # Create gif
+    output_folder = "plots/2035_before_analyze"   # <-- hier einmal definieren
+
+    for ts in edisgo.timeseries.timeindex:
+          plot_network(edisgo, show=False, snapshot=str(ts), output_folder=output_folder, focus_bus=None)
+      
+    create_network_gif(
+          folder_path=output_folder,
+          output_name=f"{output_folder}/network_evolution.gif",
+          duration=500,
+    )
 
     # ── Presentation plots ───────────────────────────────────────────────────────
     # Select days that have non-trivial §14a curtailment (threshold: 1 kW total)
@@ -429,3 +524,5 @@ def main():
 
 if __name__ == "__main__":
     edisgo = main()
+
+    
