@@ -1031,8 +1031,13 @@ def _build_battery_storage(
                 + edisgo_obj.timeseries.timeindex.freq
             ]
         )
-        if edisgo_obj.overlying_grid.storage_units_soc.index[0].year==2011:
-            timesteps = timesteps.map(lambda t: t.replace(year=2011))
+
+        # If the overlying grid data uses another year in the timeindex then
+        # edisgo.timindex, unify them
+        og_year = edisgo_obj.overlying_grid.storage_units_soc.index[0].year
+        if og_year != edisgo_obj.timeseries.timeindex[0].year:
+            timesteps = timesteps.map(lambda t: t.replace(year=og_year))
+
         data = pd.concat(
             [edisgo_obj.overlying_grid.storage_units_soc.loc[timesteps]]
             * len(edisgo_obj.topology.storage_units_df),
