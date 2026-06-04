@@ -1,22 +1,20 @@
-"""This file is part of eDisGo, a python package for distribution network
-analysis and optimization.
-
-It is developed in the project open_eGo: https://openegoproject.wordpress.com
-
-eDisGo lives on github: https://github.com/openego/edisgo/
-The documentation is available on RTD: https://edisgo.readthedocs.io/en/dev/
-
-Based on code by oemof developing group
-
-This module provides a highlevel layer for reading and writing config files.
-
-"""
-
-__copyright__ = "Reiner Lemoine Institut gGmbH"
-__license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
-__url__ = "https://github.com/openego/edisgo/blob/master/LICENSE"
-__author__ = "nesnoj, gplssm"
-
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# This file is part of eDisGo. Copyright belongs to
+# Reiner Lemoine Institut gGmbH, authors are recorded in the version control
+# history of the file, available from its original location on github:
+# https://github.com/openego/eDisGo/.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# eDisGo st available on RTD: https://edisgo.readthedocs.io.
 
 import copy
 import datetime

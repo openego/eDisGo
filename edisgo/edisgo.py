@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import copy
@@ -2674,8 +2685,8 @@ class EDisGo:
         if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
             raise RuntimeError(
                 "Voltage results (results.v_res) are empty. "
-                "Run analyze() with timesteps/snapshots so voltage results "
-                "are generated."
+                "Run analyze() with timesteps/snapshots so voltage "
+                "results are generated."
             )
         # Resolve LV grids (index-based resolution)
         lv_grids_a = list(self.topology.mv_grid.lv_grids)
@@ -2844,8 +2855,8 @@ class EDisGo:
 
     def plot_voltage_over_dist_mv(self, mv_id, other, save_as=False, return_data=False):
         """
-        Plot MV voltage over distance to the HV/MV transformer, comparing two
-        EDisGo objects.
+        Plot MV voltage over distance to the HV/MV transformer,
+        comparing two EDisGo objects.
 
         Parameters
         ----------
@@ -2867,8 +2878,8 @@ class EDisGo:
         if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
             raise RuntimeError(
                 "Voltage results (results.v_res) are empty. "
-                "Run analyze() with timesteps/snapshots so voltage results "
-                "are generated."
+                "Run analyze() with timesteps/snapshots so voltage "
+                "results are generated."
             )
         mv_a = self.topology.mv_grid
         mv_b = other.topology.mv_grid

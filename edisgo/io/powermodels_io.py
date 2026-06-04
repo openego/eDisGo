@@ -1,10 +1,13 @@
-"""
-This module provides tools to convert eDisGo representation of the network
-topology and timeseries to PowerModels network data format and to retrieve results from
-PowerModels OPF in PowerModels network data format to eDisGo representation.
-Call :func:`to_powermodels` to retrieve the PowerModels network container and
-:func:`from_powermodels` to write OPF results to edisgo object.
-"""
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 import json
 import logging
@@ -250,10 +253,10 @@ def from_powermodels(
         Base value of apparent power for per unit system.
         Default: 1 MVA.
     """
-    if type(pm_results) == str:
+    if isinstance(pm_results, str):
         with open(pm_results) as f:
             pm = json.loads(json.load(f))
-    elif type(pm_results) == dict:
+    elif isinstance(pm_results, dict):
         pm = pm_results
     else:
         raise ValueError(
@@ -363,9 +366,11 @@ def from_powermodels(
         for flex in df2.columns:
             abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
             rel_error = [
-                abs_error[i] / hv_flex_dict[flex].iloc[i]
-                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
-                else 0
+                (
+                    abs_error[i] / hv_flex_dict[flex].iloc[i]
+                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
+                    else 0
+                )
                 for i in range(len(abs_error))
             ]
             df2[flex] = rel_error
