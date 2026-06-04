@@ -1,17 +1,13 @@
-"""This file is part of DINGO, the DIstribution Network GeneratOr.
-DINGO is a tool to generate synthetic medium and low voltage power
-distribution grids based on open data.
-
-It is developed in the project open_eGo: https://openegoproject.wordpress.com
-
-DINGO lives at github: https://github.com/openego/dingo/
-The documentation is available on RTD: https://edisgo.readthedocs.io/en/dev/"""
-
-__copyright__ = "Reiner Lemoine Institut gGmbH"
-__license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
-__url__ = "https://github.com/openego/eDisGo/blob/dev/LICENSE"
-__author__ = "nesnoj, gplssm"
-
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 #
