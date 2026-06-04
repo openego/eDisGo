@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -312,7 +323,8 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     scenario_name = scenario_mapping.get(generator_scenario.lower(), generator_scenario)
 
     if oedb_data_source == "model_draft":
-        # Use base tables from model_draft schema (CamelCase ORM names, without _mview suffix)
+        # Use base tables from model_draft schema
+        # (CamelCase ORM names, without _mview suffix)
         orm_conv_generators = model_draft.__getattribute__("EgoDpSupplyConvPowerplant")
         orm_re_generators = model_draft.__getattribute__("EgoDpSupplyResPowerplant")
 
@@ -327,7 +339,8 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     elif oedb_data_source == "versioned":
         data_version = edisgo_object.config["versioned"]["version"]
 
-        # Use base tables from supply schema (CamelCase ORM names, without _mview suffix)
+        # Use base tables from supply schema
+        # (CamelCase ORM names, without _mview suffix)
         orm_conv_generators = supply.__getattribute__("EgoDpConvPowerplant")
         orm_re_generators = supply.__getattribute__("EgoDpResPowerplant")
 
