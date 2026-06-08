@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -240,7 +251,7 @@ def make_pseudo_coordinates(edisgo_obj: EDisGo, mv_coordinates: bool = False):
         grids = [edisgo_obj.topology.mv_grid] + grids
 
     for grid in grids:
-        logger.debug("Make pseudo coordinates for: {}".format(grid))
+        logger.debug(f"Make pseudo coordinates for: {grid}")
         G = grid.graph
         G = make_pseudo_coordinates_graph(
             G, edisgo_obj.config["grid_connection"]["branch_detour_factor"]

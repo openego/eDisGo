@@ -131,9 +131,9 @@ class TestHeatPumpImport:
         bus_hp_voltage_level_5_building = loads_df[loads_df.building_id == 446933].bus[
             0
         ]
-        self.edisgo.topology.buses_df.at[
-            bus_hp_voltage_level_5_building, "v_nom"
-        ] = 20.0
+        self.edisgo.topology.buses_df.at[bus_hp_voltage_level_5_building, "v_nom"] = (
+            20.0
+        )
         heat_pump_import._grid_integration(
             self.edisgo,
             hp_individual=self.setup_heat_pump_data_individual_heating(),

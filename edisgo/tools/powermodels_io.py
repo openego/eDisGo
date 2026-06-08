@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import math
 
 import numpy as np
@@ -129,20 +140,14 @@ def pypsa2ppc(psa_net):
     time_horizon = len(psa_net.loads_t["p_set"])
     try:
         load_dict = _build_load_dict(psa_net, ppc)
-        print(
-            "Dictionary for load timeseries of timehorizon {} created".format(
-                time_horizon
-            )
-        )
+        print(f"Dictionary for load timeseries of timehorizon {time_horizon} created")
     except IndexError:
         print("No load timeseries. Create empty dicts for timeseries of load")
         load_dict = dict()
     try:
         gen_dict = _build_generator_dict(psa_net, ppc)
         print(
-            "Dictionary for generator timeseries of timehorizon {} created".format(
-                time_horizon
-            )
+            f"Dictionary for generator timeseries of timehorizon {time_horizon} created"
         )
     except IndexError:
         print(
@@ -328,7 +333,7 @@ def _init_ppc():
 
 def _build_bus(psa_net, ppc):
     n_bus = len(psa_net.buses.index)
-    print("build {} buses".format(n_bus))
+    print(f"build {n_bus} buses")
     col_names = (
         "index",
         "type",
@@ -381,9 +386,7 @@ def _build_gen(psa_net, ppc):
         ]
     )
     print(
-        "build {} generators, distributed on {} buses".format(
-            n_gen, len(np.unique(bus_indices))
-        )
+        f"build {n_gen} generators, distributed on {len(np.unique(bus_indices))} buses"
     )
     ppc["gen"][:, GEN_BUS] = bus_indices  # noqa: F405
     # adjust bus types
@@ -434,7 +437,7 @@ def _build_gen(psa_net, ppc):
 
 def _build_branch(psa_net, ppc):
     n_branch = len(psa_net.lines.index)
-    print("build {} lines".format(n_branch))
+    print(f"build {n_branch} lines")
     col_names = [
         "fbus",
         "tbus",
@@ -502,7 +505,7 @@ def _build_branch(psa_net, ppc):
 
 def _build_transformers(psa_net, ppc):
     n_transformers = len(psa_net.transformers.index)
-    print("appending {} transformers".format(n_transformers))
+    print(f"appending {n_transformers} transformers")
     col_names = [
         "fbus",
         "tbus",
@@ -568,11 +571,7 @@ def _build_load(psa_net, ppc):
     load_buses = np.array(
         [psa_net.buses.index.get_loc(bus_name) for bus_name in psa_net.loads["bus"]]
     )
-    print(
-        "build {} loads, distributed on {} buses".format(
-            n_load, len(np.unique(load_buses))
-        )
-    )
+    print(f"build {n_load} loads, distributed on {len(np.unique(load_buses))} buses")
 
     # USE LOAD DATA FROM psa_net.loads as static network data
     # set bool if loads contains a timeseries

@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -174,9 +185,9 @@ def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level)
             raise KeyError("Standard HV/MV transformer is not in equipment list.")
     else:
         raise ValueError(
-            "{} is not a valid option for input variable 'voltage_level' in "
+            f"{voltage_level} is not a valid option for input variable 'voltage_level' in "
             "function _station_overloading. Try 'mv' or "
-            "'lv'.".format(voltage_level)
+            "'lv'."
         )
 
     transformers_changes = {"added": {}, "removed": {}}
@@ -408,8 +419,8 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
         # distribution substations due to overvoltage issues.
         if len(path) == 1:
             logger.error(
-                "Voltage issues at busbar in LV network {} should have "
-                "been solved in previous steps.".format(grid)
+                f"Voltage issues at busbar in LV network {grid} should have "
+                "been solved in previous steps."
             )
         nodes_feeder.setdefault(path[1], []).append(node)
 
@@ -506,17 +517,17 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
             else:
                 raise ValueError("Bus not in line buses. Please check.")
             # change line length and type
-            edisgo_obj.topology._lines_df.at[
-                crit_line_name, "length"
-            ] = path_length_dict[node_2_3]
+            edisgo_obj.topology._lines_df.at[crit_line_name, "length"] = (
+                path_length_dict[node_2_3]
+            )
             edisgo_obj.topology.change_line_type([crit_line_name], standard_line)
             lines_changes[crit_line_name] = 1
             # TODO: Include switch disconnector
 
     if not lines_changes:
         logger.debug(
-            "==> {} line(s) was/were reinforced due to voltage "
-            "issues.".format(len(lines_changes))
+            f"==> {len(lines_changes)} line(s) was/were reinforced due to voltage "
+            "issues."
         )
 
     return lines_changes
@@ -570,8 +581,8 @@ def reinforce_lines_overloading(edisgo_obj, crit_lines):
 
     if not crit_lines.empty:
         logger.debug(
-            "==> {} line(s) was/were reinforced due to over-loading "
-            "issues.".format(crit_lines.shape[0])
+            f"==> {crit_lines.shape[0]} line(s) was/were reinforced due to over-loading "
+            "issues."
         )
 
     return lines_changes
@@ -846,13 +857,11 @@ def separate_lv_grid(
         """
         if bus_lv not in edisgo_obj.topology.buses_df.index:
             raise ValueError(
-                f"Specified bus {bus_lv} is not valid as it is not defined in "
-                "buses_df."
+                f"Specified bus {bus_lv} is not valid as it is not defined in buses_df."
             )
         if bus_mv not in edisgo_obj.topology.buses_df.index:
             raise ValueError(
-                f"Specified bus {bus_mv} is not valid as it is not defined in "
-                "buses_df."
+                f"Specified bus {bus_mv} is not valid as it is not defined in buses_df."
             )
 
         try:
@@ -911,9 +920,9 @@ def separate_lv_grid(
         edisgo_obj.topology.transformers_df = pd.concat(
             [edisgo_obj.topology.transformers_df, new_transformer_df]
         )
-        transformer_changes["added"][
-            f"LVGrid_{lv_grid_id_new}"
-        ] = new_transformer_df.index.tolist()
+        transformer_changes["added"][f"LVGrid_{lv_grid_id_new}"] = (
+            new_transformer_df.index.tolist()
+        )
 
         return transformer_changes
 

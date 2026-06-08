@@ -1,10 +1,13 @@
-"""
-This module provides tools to convert eDisGo representation of the network
-topology and timeseries to PowerModels network data format and to retrieve results from
-PowerModels OPF in PowerModels network data format to eDisGo representation.
-Call :func:`to_powermodels` to retrieve the PowerModels network container and
-:func:`from_powermodels` to write OPF results to edisgo object.
-"""
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 import json
 import logging
@@ -88,7 +91,7 @@ def to_powermodels(
         ("storage", flexible_storage_units, "Storage units"),
     ]:
         if (flex not in opf_flex) & (len(loads) != 0):
-            logger.info("{} will be optimized.".format(text))
+            logger.info(f"{text} will be optimized.")
             opf_flex.append(flex)
     hv_flex_dict = dict()
     # Sorts buses such that bus0 is always the upstream bus
@@ -112,7 +115,7 @@ def to_powermodels(
     # build PowerModels structure
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # number of considered timesteps
-    pm["name"] = "ding0_{}_t_{}".format(edisgo_object.topology.id, timesteps)
+    pm["name"] = f"ding0_{edisgo_object.topology.id}_t_{timesteps}"
     pm["time_elapsed"] = int(
         (psa_net.snapshots[1] - psa_net.snapshots[0]).seconds / 3600
     )  # length of timesteps in hours
@@ -250,10 +253,10 @@ def from_powermodels(
         Base value of apparent power for per unit system.
         Default: 1 MVA.
     """
-    if type(pm_results) == str:
+    if isinstance(pm_results, str):
         with open(pm_results) as f:
             pm = json.loads(json.load(f))
-    elif type(pm_results) == dict:
+    elif isinstance(pm_results, dict):
         pm = pm_results
     else:
         raise ValueError(
@@ -363,9 +366,11 @@ def from_powermodels(
         for flex in df2.columns:
             abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
             rel_error = [
-                abs_error[i] / hv_flex_dict[flex].iloc[i]
-                if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
-                else 0
+                (
+                    abs_error[i] / hv_flex_dict[flex].iloc[i]
+                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
+                    else 0
+                )
                 for i in range(len(abs_error))
             ]
             df2[flex] = rel_error
@@ -387,9 +392,7 @@ def from_powermodels(
                 edisgo_object.opf_results.overlying_grid["Highest relative error"][flex]
                 > 0.05
             ).any():
-                logger.warning(
-                    "Highest relative error of {} variable exceeds 5%.".format(flex)
-                )
+                logger.warning(f"Highest relative error of {flex} variable exceeds 5%.")
 
     # save slack generator variable to edisgo object
     df = pd.DataFrame(index=edisgo_object.timeseries.timeindex, columns=["pg", "qg"])
@@ -707,13 +710,17 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_g = max(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.p_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     0.0,
                 ]
             )
             q_g = min(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.q_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     0.0,
                 ]
             )
@@ -785,8 +792,8 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             # only modify r, x and l values if min value is too small
             branches[par] = val.clip(lower=min_value)
             logger.warning(
-                "Min value of {} is too small. Lowest {}% of {} values will be set "
-                "to {} {}".format(text, 100 * quant, text, min_value, unit)
+                f"Min value of {text} is too small. Lowest {100 * quant}% of {text} values will be set "
+                f"to {min_value} {unit}"
             )
 
     for branch_i in np.arange(len(branches.index)):
@@ -841,9 +848,9 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
 
         pm["branch"][str(stor_i + len(branches.index) + 1)] = {
             "name": "bss_branch_" + str(stor_i + 1),
-            "br_r": (0.017 * s_base / (psa_net.buses.v_nom.iloc[idx_bus - 1] ** 2)).round(
-                10
-            ),
+            "br_r": (
+                0.017 * s_base / (psa_net.buses.v_nom.iloc[idx_bus - 1] ** 2)
+            ).round(10),
             "r": 0.017,
             "br_x": 0,
             "f_bus": idx_bus,
@@ -931,8 +938,8 @@ def _build_load(
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "charging_point")
         else:
             logger.warning(
-                "No type specified for load {}. Power factor and sign will"
-                "be set for conventional load.".format(loads_df.index[load_i])
+                f"No type specified for load {loads_df.index[load_i]}. Power factor and sign will"
+                "be set for conventional load."
             )
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "conventional_load")
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
@@ -958,13 +965,17 @@ def _build_load(
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "storage_unit")
             p_d = -min(
                 [
-                    psa_net.storage_units_t.p_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.p_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     np.float64(0.0),
                 ]
             )
             q_d = -max(
                 [
-                    psa_net.storage_units_t.q_set[inflexible_storage_units[stor_i]].iloc[0],
+                    psa_net.storage_units_t.q_set[
+                        inflexible_storage_units[stor_i]
+                    ].iloc[0],
                     np.float64(0.0),
                 ]
             )
@@ -1049,9 +1060,13 @@ def _build_battery_storage(
             "pf": pf,
             "sign": sign,
             "virtual_branch": str(stor_i + len(branches.index) + 1),
-            "ps": psa_net.storage_units.p_set.loc[flexible_storage_units[stor_i]].round(20)
+            "ps": psa_net.storage_units.p_set.loc[flexible_storage_units[stor_i]].round(
+                20
+            )
             / s_base,
-            "qs": psa_net.storage_units.q_set.loc[flexible_storage_units[stor_i]].round(20)
+            "qs": psa_net.storage_units.q_set.loc[flexible_storage_units[stor_i]].round(
+                20
+            )
             / s_base,
             "pmax": psa_net.storage_units.p_nom.loc[
                 flexible_storage_units[stor_i]
@@ -1210,10 +1225,8 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     if comparison.any():
         logger.warning(
             "Heat demand is higher than rated heatpump power"
-            " of heatpumps: {}. Demand can not be covered if no sufficient"
-            " heat storage capacities are available.".format(
-                comparison.index[comparison.values].values
-            )
+            f" of heatpumps: {comparison.index[comparison.values].values}. Demand can not be covered if no sufficient"
+            " heat storage capacities are available."
         )
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus.iloc[hp_i])
@@ -2008,7 +2021,7 @@ def _mapping(
         df = psa_net.loads.loc[flexible_loads]
     else:
         df = pd.DataFrame()
-        logging.warning("Mapping for '{}' not implemented.".format(kind))
+        logging.warning(f"Mapping for '{kind}' not implemented.")
     idx = df.reset_index()[df.index == name].index[0] + 1
     return idx
 
@@ -2062,8 +2075,8 @@ def _get_pf(edisgo_obj, pm, idx_bus, kind):
 
     """
     grid_level = pm["bus"][str(idx_bus)]["grid_level"]
-    pf = edisgo_obj.config["reactive_power_factor"]["{}_{}".format(grid_level, kind)]
-    sign = edisgo_obj.config["reactive_power_mode"]["{}_{}".format(grid_level, kind)]
+    pf = edisgo_obj.config["reactive_power_factor"][f"{grid_level}_{kind}"]
+    sign = edisgo_obj.config["reactive_power_mode"][f"{grid_level}_{kind}"]
     if kind in ["generator", "storage_unit"]:
         if sign == "inductive":
             sign = -1

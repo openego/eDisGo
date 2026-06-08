@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import datetime
@@ -233,7 +244,7 @@ def feedin_oedb(
 def load_time_series_demandlib(edisgo_obj, timeindex=None):
     """
     Get normalized sectoral electricity load time series using the
-    `demandlib <https://github.com/oemof/demandlib/>`_.
+    `demandlib <https://github.com/oemof/oemof-demand>`_.
 
     Resulting electricity load profiles hold time series of hourly conventional
     electricity demand for the sectors residential, cts, agricultural

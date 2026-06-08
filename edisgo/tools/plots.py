@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -669,7 +680,7 @@ def mv_grid_topology(
         except Exception as e:
             logger.warning(
                 "Grid district geometry could not be plotted due "
-                "to the following error: {}".format(e)
+                f"to the following error: {e}"
             )
 
     # if scaling factor is given s_nom is plotted as line width
@@ -846,8 +857,7 @@ def mv_grid_topology(
             add_basemap(ax, zoom=12)
         except Exception as e:
             logger.warning(
-                "Background map could not be plotted due to the "
-                "following error: {}".format(e)
+                f"Background map could not be plotted due to the following error: {e}"
             )
 
     if filename is None:

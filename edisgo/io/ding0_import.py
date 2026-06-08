@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import os
 
 import pandas as pd
@@ -45,9 +56,9 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
         voltage_bus1 = edisgo_obj.topology.buses_df.loc[
             transformers_df.bus1
         ].v_nom.values
-        transformers_df.loc[
-            voltage_bus1 > voltage_bus0, ["bus0", "bus1"]
-        ] = transformers_df.loc[voltage_bus1 > voltage_bus0, ["bus1", "bus0"]].values
+        transformers_df.loc[voltage_bus1 > voltage_bus0, ["bus0", "bus1"]] = (
+            transformers_df.loc[voltage_bus1 > voltage_bus0, ["bus1", "bus0"]].values
+        )
         return transformers_df
 
     def sort_hvmv_transformer_buses(transformers_df):

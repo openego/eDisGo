@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import logging
 import os
 
@@ -825,7 +836,7 @@ class Results:
                     getattr(self, attr).to_csv(
                         os.path.join(
                             target_dir,
-                            "{}.csv".format(power_flow_results_dict[attr]),
+                            f"{power_flow_results_dict[attr]}.csv",
                         )
                     )
 
@@ -841,7 +852,7 @@ class Results:
                     getattr(self, attr).to_csv(
                         os.path.join(
                             target_dir,
-                            "{}.csv".format(grid_expansion_results_dict[attr]),
+                            f"{grid_expansion_results_dict[attr]}.csv",
                         )
                     )
 

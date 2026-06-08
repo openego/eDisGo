@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import numpy as np
 import pandas as pd
 
@@ -28,7 +39,7 @@ def get_q_sign_generator(reactive_power_mode):
     else:
         raise ValueError(
             "reactive_power_mode must either be 'capacitive' "
-            "or 'inductive' but is {}.".format(reactive_power_mode)
+            f"or 'inductive' but is {reactive_power_mode}."
         )
 
 
@@ -58,7 +69,7 @@ def get_q_sign_load(reactive_power_mode):
     else:
         raise ValueError(
             "reactive_power_mode must either be 'capacitive' "
-            "or 'inductive' but is {}.".format(reactive_power_mode)
+            f"or 'inductive' but is {reactive_power_mode}."
         )
 
 

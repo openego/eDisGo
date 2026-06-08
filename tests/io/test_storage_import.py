@@ -69,9 +69,9 @@ class TestStorageImport:
         bus_bat_voltage_level_5_building = loads_df[loads_df.building_id == 446933].bus[
             0
         ]
-        self.edisgo.topology.buses_df.at[
-            bus_bat_voltage_level_5_building, "v_nom"
-        ] = 20.0
+        self.edisgo.topology.buses_df.at[bus_bat_voltage_level_5_building, "v_nom"] = (
+            20.0
+        )
 
         with caplog.at_level(logging.DEBUG):
             integrated_bat_1 = storage_import._home_batteries_grid_integration(

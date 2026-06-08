@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -183,7 +194,7 @@ def _home_batteries_grid_integration(edisgo_obj, batteries_df):
         random.seed(a=duplicate)
         new_name = duplicate
         while new_name in tmp:
-            new_name = f"{duplicate}_{random.randint(10 ** 1, 10 ** 2)}"
+            new_name = f"{duplicate}_{random.randint(10**1, 10**2)}"
         # change name in batteries_df
         batteries_df.rename(index={duplicate: new_name}, inplace=True)
 

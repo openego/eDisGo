@@ -1,8 +1,18 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 # edisgo/tools/voltage_over_distance.py
 
 from __future__ import annotations
-from edisgo.tools.tools import get_path_length_to_station
-from typing import Optional, Tuple
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -18,12 +28,16 @@ def _get_v_res_df(edisgo_obj) -> pd.DataFrame:
 
     v_res = getattr(edisgo_obj.results, "v_res", None)
     if v_res is None:
-        raise RuntimeError("No voltage results (results.v_res) found. Run edisgo.analyze() first.")
+        raise RuntimeError(
+            "No voltage results (results.v_res) found. Run edisgo.analyze() first."
+        )
 
     return v_res() if callable(v_res) else v_res
 
 
-def _infer_load_and_feedin_timesteps(edisgo_obj, v_df: Optional[pd.DataFrame] = None) -> Tuple[pd.Timestamp, pd.Timestamp]:
+def _infer_load_and_feedin_timesteps(
+    edisgo_obj, v_df: pd.DataFrame | None = None
+) -> tuple[pd.Timestamp, pd.Timestamp]:
     """
     Robust worst-case timestep inference.
 
@@ -48,22 +62,30 @@ def _infer_load_and_feedin_timesteps(edisgo_obj, v_df: Optional[pd.DataFrame] = 
 
         # If all-NaN, fall back
         if not row_min.dropna().empty and not row_max.dropna().empty:
-            t_load = pd.Timestamp(row_min.idxmin())   # worst undervoltage
-            t_feed = pd.Timestamp(row_max.idxmax())   # worst overvoltage
+            t_load = pd.Timestamp(row_min.idxmin())  # worst undervoltage
+            t_feed = pd.Timestamp(row_max.idxmax())  # worst overvoltage
             return t_load, t_feed
 
     # 2) Fallback: residual load from timeseries
     ts = getattr(edisgo_obj, "timeseries", None)
     if ts is None:
-        raise RuntimeError("Cannot infer worst-case timesteps: no voltage results and no timeseries.")
+        raise RuntimeError(
+            "Cannot infer worst-case timesteps: no voltage results and no timeseries."
+        )
 
     loads_p = getattr(ts, "loads_active_power", None)
     gens_p = getattr(ts, "generators_active_power", None)
 
-    if loads_p is None or gens_p is None or len(loads_p.index) == 0 or len(gens_p.index) == 0:
+    if (
+        loads_p is None
+        or gens_p is None
+        or len(loads_p.index) == 0
+        or len(gens_p.index) == 0
+    ):
         raise RuntimeError(
             "Cannot infer worst-case timesteps: voltage results are empty and "
-            "timeseries.loads_active_power / generators_active_power are missing or empty."
+            "timeseries.loads_active_power / generators_active_power "
+            "are missing or empty."
         )
 
     loads_sum = loads_p.sum(axis=1)
@@ -71,12 +93,13 @@ def _infer_load_and_feedin_timesteps(edisgo_obj, v_df: Optional[pd.DataFrame] = 
     residual = (loads_sum - gens_sum).dropna()
 
     if residual.empty:
-        raise RuntimeError("Cannot infer worst-case timesteps: residual load series is empty.")
+        raise RuntimeError(
+            "Cannot infer worst-case timesteps: residual load series is empty."
+        )
 
     t_load = pd.Timestamp(residual.idxmax())
     t_feed = pd.Timestamp(residual.idxmin())
     return t_load, t_feed
-
 
 
 def _series_at_t(v_df: pd.DataFrame, t: pd.Timestamp) -> pd.Series:
@@ -100,15 +123,16 @@ def _series_at_t(v_df: pd.DataFrame, t: pd.Timestamp) -> pd.Series:
     s.index = s.index.map(str)
     return s
 
+
 def build_voltage_over_distance_df(
     *,
     buses: pd.Index,
     dist_a: pd.Series,
     v_a_load: pd.Series,
     v_a_feed: pd.Series,
-    dist_b: Optional[pd.Series] = None,
-    v_b_load: Optional[pd.Series] = None,
-    v_b_feed: Optional[pd.Series] = None,
+    dist_b: pd.Series | None = None,
+    v_b_load: pd.Series | None = None,
+    v_b_feed: pd.Series | None = None,
 ) -> pd.DataFrame:
     """
     Build the DataFrame used for voltage-over-distance plots.
@@ -143,6 +167,7 @@ def build_voltage_over_distance_df(
 
     return pd.concat(parts, ignore_index=True)
 
+
 def make_voltage_over_distance_figure(
     *,
     title: str,
@@ -150,13 +175,13 @@ def make_voltage_over_distance_figure(
     dist_a: pd.Series,
     v_a_load: pd.Series,
     v_a_feed: pd.Series,
-    dist_b: Optional[pd.Series] = None,
-    v_b_load: Optional[pd.Series] = None,
-    v_b_feed: Optional[pd.Series] = None,
+    dist_b: pd.Series | None = None,
+    v_b_load: pd.Series | None = None,
+    v_b_feed: pd.Series | None = None,
     band_low: float,
     band_high: float,
     x_label: str = "Path length to station [-]",
-    df: Optional[pd.DataFrame] = None,
+    df: pd.DataFrame | None = None,
 ) -> go.Figure:
     """
     Builds a plotly scatter figure with 4 traces:
@@ -175,7 +200,6 @@ def make_voltage_over_distance_figure(
             v_b_load=v_b_load,
             v_b_feed=v_b_feed,
         )
-
 
     fig = go.Figure()
 
@@ -196,9 +220,12 @@ def make_voltage_over_distance_figure(
                 mode="markers",
                 name=label,
                 customdata=np.stack([sub["bus"]], axis=-1),
-                hovertemplate="bus=%{customdata[0]}<br>path=%{x}<br>v=%{y:.4f} p.u.<extra></extra>",
+                hovertemplate=(
+                    "bus=%{customdata[0]}<br>path=%{x}"
+                    "<br>v=%{y:.4f} p.u.<extra></extra>"
+                ),
             )
-        )    
+        )
     fig.update_layout(
         title=title,
         xaxis_title=x_label,

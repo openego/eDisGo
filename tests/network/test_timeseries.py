@@ -37,8 +37,8 @@ class TestTimeSeries:
                     pd.DataFrame(index=index_3),
                 )
             assert (
-                "Timeindex and {} have deviating indices. "
-                "Empty dataframe will be returned.".format(attribute) in caplog.text
+                f"Timeindex and {attribute} have deviating indices. "
+                "Empty dataframe will be returned." in caplog.text
             )
 
     def test_set_active_power_manual(self):
@@ -739,9 +739,9 @@ class TestTimeSeries:
 
     def test_worst_case_conventional_load(self):
         # connect one load to MV
-        self.edisgo.topology._loads_df.at[
-            "Load_agricultural_LVGrid_1_1", "bus"
-        ] = "Bus_BranchTee_MVGrid_1_2"
+        self.edisgo.topology._loads_df.at["Load_agricultural_LVGrid_1_1", "bus"] = (
+            "Bus_BranchTee_MVGrid_1_2"
+        )
 
         # ######### check both feed-in and load case
         df = assign_voltage_level_to_component(
@@ -1491,9 +1491,9 @@ class TestTimeSeries:
 
         # ############# all generators (default), with "gas" and "other"
         # overwrite type of generator GeneratorFluctuating_2
-        self.edisgo.topology._generators_df.at[
-            "GeneratorFluctuating_2", "type"
-        ] = "coal"
+        self.edisgo.topology._generators_df.at["GeneratorFluctuating_2", "type"] = (
+            "coal"
+        )
         gens_p = pd.DataFrame(
             data={
                 "other": [5, 6],
@@ -1808,9 +1808,9 @@ class TestTimeSeries:
             == "The annual consumption of some loads is missing. Please provide"
         )
         # Restore the original 'annual_consumption' values
-        self.edisgo.topology.loads_df[
-            "annual_consumption"
-        ] = original_annual_consumption
+        self.edisgo.topology.loads_df["annual_consumption"] = (
+            original_annual_consumption
+        )
 
     def test_predefined_charging_points_by_use_case(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")
@@ -2165,6 +2165,17 @@ class TestTimeSeries:
 
         shutil.rmtree(save_dir)
 
+        # test that worst-case mappings are saved as well
+        self.edisgo.timeseries.timeindex_worst_cases = pd.Series(
+            data=timeindex,
+            index=["load_case_mv", "load_case_lv"],
+        )
+        self.edisgo.timeseries.to_csv(save_dir)
+        files_in_timeseries_dir = os.listdir(save_dir)
+        assert "timeindex_worst_cases.csv" in files_in_timeseries_dir
+
+        shutil.rmtree(save_dir)
+
         # test with reduce memory True, to_type = float16 and saving TimeSeriesRaw
         self.edisgo.timeseries.to_csv(
             save_dir, reduce_memory=True, to_type="float16", time_series_raw=True
@@ -2174,7 +2185,8 @@ class TestTimeSeries:
             self.edisgo.timeseries.generators_reactive_power.dtypes == "float16"
         ).all()
         files_in_timeseries_dir = os.listdir(save_dir)
-        assert len(files_in_timeseries_dir) == 3
+        assert len(files_in_timeseries_dir) == 4
+        assert "timeindex_worst_cases.csv" in files_in_timeseries_dir
         files_in_timeseries_raw_dir = os.listdir(
             os.path.join(save_dir, "time_series_raw")
         )
@@ -2212,6 +2224,10 @@ class TestTimeSeries:
         # fmt: on
 
         # write to csv
+        self.edisgo.timeseries.timeindex_worst_cases = pd.Series(
+            data=timeindex,
+            index=["load_case_mv", "load_case_lv"],
+        )
         save_dir = os.path.join(os.getcwd(), "timeseries_csv")
         self.edisgo.timeseries.to_csv(save_dir, time_series_raw=True)
 
@@ -2236,6 +2252,16 @@ class TestTimeSeries:
             fluctuating_generators_active_power_by_technology.empty
         )
         # fmt: on
+
+        assert_series_equal(
+            self.edisgo.timeseries.timeindex_worst_cases,
+            pd.Series(
+                data=timeindex,
+                index=["load_case_mv", "load_case_lv"],
+                name="timeindex_worst_cases",
+            ),
+            check_dtype=False,
+        )
 
         self.edisgo.timeseries.from_csv(save_dir, time_series_raw=True)
 
@@ -2290,7 +2316,7 @@ class TestTimeSeries:
                 ts_tmp.iloc[0, 0] = np.NaN
                 setattr(self.edisgo.timeseries, attr, ts_tmp)
                 self.edisgo.timeseries.check_integrity()
-                assert "There are null values in {}".format(attr) in caplog.text
+                assert f"There are null values in {attr}" in caplog.text
                 caplog.clear()
                 ts_tmp.iloc[0, 0] = 0
                 setattr(self.edisgo.timeseries, attr, ts_tmp)
@@ -2303,9 +2329,7 @@ class TestTimeSeries:
                 setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
                 self.edisgo.timeseries.check_integrity()
                 assert (
-                    "{} has duplicated indices: {}".format(
-                        attr, ts_tmp.iloc[0:2].index.values
-                    )
+                    f"{attr} has duplicated indices: {ts_tmp.iloc[0:2].index.values}"
                     in caplog.text
                 )
                 caplog.clear()
@@ -2315,9 +2339,7 @@ class TestTimeSeries:
                 setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
                 self.edisgo.timeseries.check_integrity()
                 assert (
-                    "{} has duplicated columns: {}".format(
-                        attr, ts_tmp.iloc[:, 0:2].columns.values
-                    )
+                    f"{attr} has duplicated columns: {ts_tmp.iloc[:, 0:2].columns.values}"
                     in caplog.text
                 )
                 caplog.clear()

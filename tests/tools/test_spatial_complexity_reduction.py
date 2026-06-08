@@ -245,9 +245,9 @@ class TestSpatialComplexityReduction:
         busmap_df = self.setup_busmap_df(test_edisgo_obj)
 
         # Add second line to test line reduction
-        test_edisgo_obj.topology.lines_df.loc[
-            "Line_10003_2"
-        ] = test_edisgo_obj.topology.lines_df.loc["Line_10003"]
+        test_edisgo_obj.topology.lines_df.loc["Line_10003_2"] = (
+            test_edisgo_obj.topology.lines_df.loc["Line_10003"]
+        )
 
         assert test_edisgo_obj.topology.buses_df.shape[0] == 142
         assert test_edisgo_obj.topology.lines_df.shape[0] == 132

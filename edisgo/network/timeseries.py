@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import itertools
@@ -985,9 +996,9 @@ class TimeSeries:
         for s in sectors:
             for case in cases:
                 for voltage_level in ["mv", "lv"]:
-                    power_scaling.at[
-                        f"{case}_{voltage_level}", s
-                    ] = worst_case_scale_factors[f"{voltage_level}_{case}_cp_{s}"]
+                    power_scaling.at[f"{case}_{voltage_level}", s] = (
+                        worst_case_scale_factors[f"{voltage_level}_{case}_cp_{s}"]
+                    )
 
         # calculate active power of charging points
         active_power = pd.concat(
@@ -1208,7 +1219,7 @@ class TimeSeries:
                 Technology and weather cell specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_. See
+                <https://openenergyplatform.org/database/>`_. See
                 :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
 
                 This option requires that the parameter `engine` is provided in case
@@ -1379,9 +1390,11 @@ class TimeSeries:
 
         # scale time series by nominal power
         ts_scaled = generators_df.apply(
-            lambda x: ts_generators[x.type] * x.p_nom
-            if x.type in ts_generators.columns
-            else ts_generators["other"] * x.p_nom,
+            lambda x: (
+                ts_generators[x.type] * x.p_nom
+                if x.type in ts_generators.columns
+                else ts_generators["other"] * x.p_nom
+            ),
             axis=1,
         ).T
         if not ts_scaled.empty:
@@ -1439,9 +1452,9 @@ class TimeSeries:
 
         # write to TimeSeriesRaw
         for col in ts_loads:
-            self.time_series_raw.conventional_loads_active_power_by_sector[
-                col
-            ] = ts_loads[col]
+            self.time_series_raw.conventional_loads_active_power_by_sector[col] = (
+                ts_loads[col]
+            )
 
         # set load_names if None
         if load_names is None:
@@ -1498,9 +1511,9 @@ class TimeSeries:
 
         # write to TimeSeriesRaw
         for col in ts_loads:
-            self.time_series_raw.charging_points_active_power_by_use_case[
-                col
-            ] = ts_loads[col]
+            self.time_series_raw.charging_points_active_power_by_use_case[col] = (
+                ts_loads[col]
+            )
 
         # set load_names if None
         if load_names is None:
@@ -1958,6 +1971,11 @@ class TimeSeries:
             if not getattr(self, attr).empty:
                 getattr(self, attr).to_csv(os.path.join(directory, f"{attr}.csv"))
 
+        if hasattr(self, "timeindex_worst_cases") and len(self.timeindex_worst_cases) > 0:
+            self.timeindex_worst_cases.to_frame("timeindex_worst_cases").to_csv(
+                os.path.join(directory, "timeindex_worst_cases.csv")
+            )
+
         if time_series_raw:
             self.time_series_raw.to_csv(
                 directory=os.path.join(directory, "time_series_raw"),
@@ -2040,6 +2058,25 @@ class TimeSeries:
 
             if timeindex is None:
                 timeindex = getattr(self, f"_{attr}").index
+
+        # restore mapping for worst-case timesteps if saved
+        worst_cases_file = (
+            "timeseries/timeindex_worst_cases.csv"
+            if from_zip_archive
+            else "timeindex_worst_cases.csv"
+        )
+        if worst_cases_file in files:
+            if from_zip_archive:
+                with zip.open(worst_cases_file) as f:
+                    df = pd.read_csv(f, index_col=0, parse_dates=True)
+            else:
+                path = os.path.join(data_path, worst_cases_file)
+                df = pd.read_csv(path, index_col=0, parse_dates=True)
+
+            self.timeindex_worst_cases = pd.to_datetime(df.iloc[:, 0])
+            self.timeindex_worst_cases.name = df.columns[0]
+            if (timeindex is None or len(timeindex) == 0) and not self.timeindex_worst_cases.empty:
+                timeindex = pd.DatetimeIndex(self.timeindex_worst_cases.values)
 
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections

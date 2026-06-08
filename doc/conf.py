@@ -1,17 +1,13 @@
-"""This file is part of DINGO, the DIstribution Network GeneratOr.
-DINGO is a tool to generate synthetic medium and low voltage power
-distribution grids based on open data.
-
-It is developed in the project open_eGo: https://openegoproject.wordpress.com
-
-DINGO lives at github: https://github.com/openego/dingo/
-The documentation is available on RTD: https://edisgo.readthedocs.io/en/dev/"""
-
-__copyright__ = "Reiner Lemoine Institut gGmbH"
-__license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
-__url__ = "https://github.com/openego/eDisGo/blob/dev/LICENSE"
-__author__ = "nesnoj, gplssm"
-
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 #
@@ -27,6 +23,8 @@ __author__ = "nesnoj, gplssm"
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+import importlib.metadata
+import logging
 import os
 import sys
 
@@ -65,8 +63,8 @@ autoapi_options = [
     "show-inheritance",
     "show-inheritance-diagram",
     "show-module-summary",
-    "special-members",
 ]
+autoapi_own_page_level = "class"
 # Files to ignore when building api documentation
 autoapi_ignore = [
     "*/opf/timeseries_reduction.py",
@@ -82,8 +80,23 @@ def skip_autoapi_parts(app, what, name, obj, skip, options):
     return skip
 
 
+class _SuppressDuplicateObjectFilter(logging.Filter):
+    """Suppress autoapi duplicate object description warnings.
+
+    These warnings arise because autoapi registers attributes both from
+    instance assignments in __init__ and from the Attributes section in the
+    class docstring.
+    """
+
+    def filter(self, record):
+        return "duplicate object description" not in record.getMessage()
+
+
 def setup(sphinx):
     sphinx.connect("autoapi-skip-member", skip_autoapi_parts)
+    logging.getLogger("sphinx.domains.python").addFilter(
+        _SuppressDuplicateObjectFilter()
+    )
 
 
 # Autodoc mock imports - Mock all heavy dependencies that cause import issues
@@ -174,7 +187,7 @@ extlinks = {
         "geopandas.%s",
     ),
     "networkx": (
-        "https://networkx.org/documentation/stable/reference/classes/" "graph.html#%s",
+        "https://networkx.org/documentation/stable/reference/classes/graph.html#%s",
         "networkx.%s",
     ),
     "sqlalchemy": (
@@ -208,6 +221,9 @@ linkcheck_ignore = [
     r"https://support.gurobi.com/*",
     r"https://www.gnu.org/licenses/",
     r"https://www.mdpi.com/*",
+    # zenodo and numpy.org return errors in CI even though the links are correct
+    r"https://zenodo.org/*",
+    r"https://numpy.org/*",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -234,7 +250,10 @@ author = "open_eGo-Team"
 # built documents.
 #
 # The short X.Y version.
-version = "0.2.1"
+try:
+    version = importlib.metadata.version("eDisGo")
+except importlib.metadata.PackageNotFoundError:
+    version = "unknown"
 # The full version, including alpha/beta/rc tags.
 release = version
 

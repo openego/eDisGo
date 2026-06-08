@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import copy
@@ -14,7 +25,6 @@ import numpy as np
 import pandas as pd
 
 from sqlalchemy.engine.base import Engine
-from edisgo.tools.tools import get_path_length_to_station
 
 from edisgo.flex_opt.charging_strategies import charging_strategy
 from edisgo.flex_opt.check_tech_constraints import lines_relative_load
@@ -55,7 +65,10 @@ from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
 from edisgo.tools.spatial_complexity_reduction import spatial_complexity_reduction
-from edisgo.tools.tools import determine_grid_integration_voltage_level
+from edisgo.tools.tools import (
+    determine_grid_integration_voltage_level,
+    get_path_length_to_station,
+)
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
@@ -390,7 +403,7 @@ class EDisGo:
 
         Predefined profiles comprise i.e. standard electric conventional load profiles
         for different sectors generated using the oemof
-        `demandlib <https://github.com/oemof/demandlib/>`_ or feed-in time series of
+        `demandlib <https://github.com/oemof/oemof-demand>`_ or feed-in time series of
         fluctuating solar and wind generators provided on the OpenEnergy DataBase.
         This function can also be used to provide your own profiles per technology or
         load sector.
@@ -419,7 +432,7 @@ class EDisGo:
                 Technology- and weather cell-specific hourly feed-in time series are
                 obtained from the
                 `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_. See
+                <https://openenergyplatform.org/database/>`_. See
                 :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
 
                 This option requires that the parameter `engine` is provided in case
@@ -480,7 +493,7 @@ class EDisGo:
 
                 Sets active power demand time series using individual hourly electricity
                 load time series for one year obtained from the `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_.
+                <https://openenergyplatform.org/database/>`_.
 
                 This option requires that the parameters `engine` and `scenario` are
                 provided. For further settings, the parameter `timeindex` can also be
@@ -490,7 +503,7 @@ class EDisGo:
 
                 Sets active power demand time series using hourly electricity load time
                 series obtained using standard electric load profiles from
-                the oemof `demandlib <https://github.com/oemof/demandlib/>`_.
+                the oemof `demandlib <https://github.com/oemof/oemof-demand>`_.
                 The demandlib provides sector-specific time series for the sectors
                 'residential', 'cts', 'industrial', and 'agricultural'.
 
@@ -555,10 +568,28 @@ class EDisGo:
             :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
             If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
             is indexed using a default year and set for the whole year.
+            In this case, the EDisGo TimeSeries timeindex is automatically set to
+            the selected default year so that imported data is linked to a valid
+            time index.
 
         """
         engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
-        if self.timeseries.timeindex.empty:
+        if self.timeseries.timeindex.empty and kwargs.get("timeindex", None) is None:
+            if conventional_loads_ts == "oedb":
+                default_year = tools.get_year_based_on_scenario(kwargs.get("scenario"))
+                if default_year is None:
+                    default_year = 2011
+            else:
+                default_year = 2011
+            self.timeseries.timeindex = pd.date_range(
+                f"1/1/{default_year}", periods=8760, freq="H"
+            )
+            logger.warning(
+                "No timeindex was set. TimeSeries.timeindex is automatically "
+                f"set to the default year {default_year} to match imported "
+                "time series."
+            )
+        elif self.timeseries.timeindex.empty:
             logger.warning(
                 "When setting time series using predefined profiles it is better to "
                 "set a time index as all data in TimeSeries class is indexed by the"
@@ -1128,16 +1159,14 @@ class EDisGo:
             if raise_not_converged and len(timesteps_not_converged) > 0:
                 raise ValueError(
                     "Power flow analysis did not converge for the "
-                    "following {} time steps: {}.".format(
-                        len(timesteps_not_converged), timesteps_not_converged
-                    )
+                    f"following {len(timesteps_not_converged)} time steps: "
+                    f"{timesteps_not_converged}."
                 )
             elif len(timesteps_not_converged) > 0:
                 logger.warning(
                     "Power flow analysis did not converge for the "
-                    "following {} time steps: {}.".format(
-                        len(timesteps_not_converged), timesteps_not_converged
-                    )
+                    f"following {len(timesteps_not_converged)} time steps: "
+                    f"{timesteps_not_converged}."
                 )
             return timesteps_converged, timesteps_not_converged
 
@@ -1179,9 +1208,7 @@ class EDisGo:
                 pypsa_network = _scale_timeseries(pypsa_network_copy, fraction)
                 # run power flow analysis
                 pf_results = pypsa_network.pf(timesteps, use_seed=True)
-                logger.info(
-                    "Current fraction in iterative process: {}.".format(fraction)
-                )
+                logger.info(f"Current fraction in iterative process: {fraction}.")
                 # get converged and not converged time steps
                 timesteps_converged, timesteps_not_converged = _check_convergence()
         else:
@@ -1696,8 +1723,7 @@ class EDisGo:
         if voltage_level not in supported_voltage_levels:
             if p is None:
                 raise ValueError(
-                    "Neither appropriate voltage level nor nominal power "
-                    "were supplied."
+                    "Neither appropriate voltage level nor nominal power were supplied."
                 )
             # determine voltage level manually from nominal power
             voltage_level = determine_grid_integration_voltage_level(self, p)
@@ -1853,9 +1879,7 @@ class EDisGo:
                                 naming.format("_".join(k))
                                 if isinstance(k, tuple)
                                 else naming.format(k)
-                            ): getattr(self.timeseries, attribute)
-                            .loc[:, v]
-                            .sum(axis=1)
+                            ): getattr(self.timeseries, attribute).loc[:, v].sum(axis=1)
                         }
                     )
                     for k, v in groups.items()
@@ -1934,7 +1958,7 @@ class EDisGo:
         Imports electromobility data and integrates charging points into grid.
 
         Electromobility data can be obtained from the `OpenEnergy DataBase
-        <https://openenergyplatform.org/dataedit/schemas>`_ or from self-provided
+        <https://openenergyplatform.org/database/>`_ or from self-provided
         data. In case you want to use self-provided data, it needs to be generated
         using the tools
         `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
@@ -1966,7 +1990,7 @@ class EDisGo:
             * "oedb"
 
                 Electromobility data is obtained from the `OpenEnergy DataBase
-                <https://openenergyplatform.org/dataedit/schemas>`_.
+                <https://openenergyplatform.org/database/>`_.
 
                 This option requires that the parameters `scenario` and `engine` are
                 provided.
@@ -2066,7 +2090,12 @@ class EDisGo:
 
         integrate_charging_parks(self)
 
-    def apply_charging_strategy(self, strategy: str = "dumb", charging_park_ids: list[int] | None = None, **kwargs):
+    def apply_charging_strategy(
+        self,
+        strategy: str = "dumb",
+        charging_park_ids: list[int] | None = None,
+        **kwargs,
+    ):
         """
         Applies charging strategy to set EV charging time series at charging parks.
 
@@ -2134,9 +2163,13 @@ class EDisGo:
         series resampled back to the original frequency.
 
         """
-        charging_strategy(self, strategy=strategy, charging_park_ids=charging_park_ids, **kwargs)
+        charging_strategy(
+            self, strategy=strategy, charging_park_ids=charging_park_ids, **kwargs
+        )
 
-    def import_heat_pumps(self, scenario, engine, timeindex=None, import_types=None):
+    def import_heat_pumps(
+        self, scenario, engine=None, timeindex=None, import_types=None
+    ):
         """
         Gets heat pump data for specified scenario from oedb and integrates the heat
         pumps into the grid.
@@ -2145,7 +2178,7 @@ class EDisGo:
         are as well retrieved.
 
         Currently, the only supported data source is scenario data generated
-        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        in the research project `eGo^n <https://rego-n.org/>`_. You can choose
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
@@ -2194,8 +2227,9 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve heat pump data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to set COP and heat demand data. Leap years
             can currently not be handled. In case the given
@@ -2212,6 +2246,7 @@ class EDisGo:
             "central_resistive_heaters". If None, all are imported.
 
         """
+        engine = engine if engine is not None else egon_engine()
         # set up year to index data by
         # first try to get index from time index
         if timeindex is None:
@@ -2308,10 +2343,10 @@ class EDisGo:
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
-    def import_dsm(self, scenario: str, engine: Engine, timeindex=None):
+    def import_dsm(self, scenario: str, engine: Engine = None, timeindex=None):
         """
         Gets industrial and CTS DSM profiles from the
-        `OpenEnergy DataBase <https://openenergyplatform.org/dataedit/schemas>`_.
+        `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
         Profiles comprise minimum and maximum load increase in MW as well as maximum
         energy pre- and postponing in MWh. The data is written to the
@@ -2327,8 +2362,9 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve DSM data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
         timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
             Specifies time steps for which to get data. Leap years can currently not be
             handled. In case the given timeindex contains a leap year, the data will be
@@ -2340,6 +2376,7 @@ class EDisGo:
             is indexed using the default year and returned for the whole year.
 
         """
+        engine = engine if engine is not None else egon_engine()
         dsm_profiles = dsm_import.oedb(
             edisgo_obj=self, scenario=scenario, engine=engine, timeindex=timeindex
         )
@@ -2351,7 +2388,7 @@ class EDisGo:
     def import_home_batteries(
         self,
         scenario: str,
-        engine: Engine,
+        engine: Engine = None,
     ):
         """
         Gets home battery data for specified scenario and integrates the batteries into
@@ -2379,10 +2416,12 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve home battery data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-            Database engine.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
 
         """
+        engine = engine if engine is not None else egon_engine()
         home_batteries_oedb(
             edisgo_obj=self,
             scenario=scenario,
@@ -2425,14 +2464,12 @@ class EDisGo:
         try:
             if self.results.v_res is None:
                 logger.warning(
-                    "Voltages from power flow "
-                    "analysis must be available to plot them."
+                    "Voltages from power flow analysis must be available to plot them."
                 )
                 return
         except AttributeError:
             logger.warning(
-                "Results must be available to plot voltages. "
-                "Please analyze grid first."
+                "Results must be available to plot voltages. Please analyze grid first."
             )
             return
         except ValueError:
@@ -2596,8 +2633,15 @@ class EDisGo:
             title = None
         plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
 
-    def plot_voltage_over_dist(self, mv_id, lv_id, save_as=False, split_branches=False, return_data=False, other=None):
-
+    def plot_voltage_over_dist(
+        self,
+        mv_id,
+        lv_id,
+        save_as=False,
+        split_branches=False,
+        return_data=False,
+        other=None,
+    ):
         """
         Plot LV voltage over distance to the MV/LV transformer for one LV grid,
 
@@ -2630,7 +2674,8 @@ class EDisGo:
         if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
             raise RuntimeError(
                 "Voltage results (results.v_res) are empty. "
-                "Run analyze() with timesteps/snapshots so voltage results are generated."
+                "Run analyze() with timesteps/snapshots so voltage "
+                "results are generated."
             )
         # Resolve LV grids (index-based resolution)
         lv_grids_a = list(self.topology.mv_grid.lv_grids)
@@ -2641,20 +2686,30 @@ class EDisGo:
                 lv_grid_a = lv_grids_a[lv_id]
                 lv_grid_b = lv_grids_b[lv_id]
             except IndexError as e:
-                raise ValueError(f"lv_id={lv_id} out of range. base has {len(lv_grids_a)} LV grids.") from e
+                raise ValueError(
+                    f"lv_id={lv_id} out of range. base has {len(lv_grids_a)} LV grids."
+                ) from e
         else:
             # String matching fallback
             target = str(lv_id)
+
             def _match(lvs):
                 for g in lvs:
-                    for cand in (getattr(g, "id", None), getattr(g, "name", None), str(g)):
+                    for cand in (
+                        getattr(g, "id", None),
+                        getattr(g, "name", None),
+                        str(g),
+                    ):
                         if cand is not None and str(cand) == target:
                             return g
                 return None
+
             lv_grid_a = _match(lv_grids_a)
             lv_grid_b = _match(lv_grids_b)
             if lv_grid_a is None or lv_grid_b is None:
-                raise ValueError(f"Could not resolve lv_id='{lv_id}' in one of the EDisGo objects.")
+                raise ValueError(
+                    f"Could not resolve lv_id='{lv_id}' in one of the EDisGo objects."
+                )
 
         # Determine LV transformer (source) bus
         # Prefer station-like attributes; fallback to first bus if not found.
@@ -2671,9 +2726,9 @@ class EDisGo:
         source_a = _lv_source_bus(lv_grid_a)
         source_b = _lv_source_bus(lv_grid_b)
 
-
         # Distances (Dijkstra)
-        # Edge weight attribute commonly is 'length' in eDisGo graphs; adjust if your graph uses 'length_km'
+        # Edge weight attribute commonly is 'length' in eDisGo graphs;
+        # adjust if your graph uses 'length_km'
         pl_a = get_path_length_to_station(self)
         pl_b = get_path_length_to_station(other)
 
@@ -2686,17 +2741,24 @@ class EDisGo:
 
         # Import networkx once
         import networkx as nx
-        
-        # If LV station bus is not in pl_a (external bus), set its distance to 0 and compute other buses relative to it
+
+        # If LV station bus is not in pl_a (external bus), set its distance to 0
+        # and compute other buses relative to it
         if str(source_a) in dist_a.index and pd.isna(dist_a.loc[str(source_a)]):
             # Use LV grid graph to compute path lengths
             try:
                 lv_graph = lv_grid_a.graph
-                lv_station = str(lv_grid_a.station.index[0])  if hasattr(lv_grid_a, 'station') else str(source_a)
-                
+                lv_station = (
+                    str(lv_grid_a.station.index[0])
+                    if hasattr(lv_grid_a, "station")
+                    else str(source_a)
+                )
+
                 # Compute all path lengths from station at once using BFS
                 try:
-                    path_lengths = nx.single_source_shortest_path_length(lv_graph, source=lv_station)
+                    path_lengths = nx.single_source_shortest_path_length(
+                        lv_graph, source=lv_station
+                    )
                     for bus in lv_buses_a:
                         dist_a.loc[bus] = path_lengths.get(bus, 0)
                 except (nx.NetworkXError, nx.NodeNotFound):
@@ -2705,16 +2767,22 @@ class EDisGo:
             except Exception:
                 # Fallback: set all LV buses to 0
                 dist_a.loc[:] = 0
-        
+
         if str(source_b) in dist_b.index and pd.isna(dist_b.loc[str(source_b)]):
             # Use LV grid graph to compute path lengths
             try:
                 lv_graph = lv_grid_b.graph
-                lv_station = str(lv_grid_b.station.index[0]) if hasattr(lv_grid_b, 'station') else str(source_b)
-                
+                lv_station = (
+                    str(lv_grid_b.station.index[0])
+                    if hasattr(lv_grid_b, "station")
+                    else str(source_b)
+                )
+
                 # Compute all path lengths from station at once using BFS
                 try:
-                    path_lengths = nx.single_source_shortest_path_length(lv_graph, source=lv_station)
+                    path_lengths = nx.single_source_shortest_path_length(
+                        lv_graph, source=lv_station
+                    )
                     for bus in lv_buses_b:
                         dist_b.loc[bus] = path_lengths.get(bus, 0)
                 except (nx.NetworkXError, nx.NodeNotFound):
@@ -2723,14 +2791,12 @@ class EDisGo:
             except Exception:
                 # Fallback: set all LV buses to 0
                 dist_b.loc[:] = 0
- 
+
         # Shift to LV station reference (station bus distance -> 0)
         if str(source_a) in pl_a.index and not pd.isna(pl_a.loc[str(source_a)]):
             dist_a = dist_a - float(pl_a.loc[str(source_a)])
         if str(source_b) in pl_b.index and not pd.isna(pl_b.loc[str(source_b)]):
             dist_b = dist_b - float(pl_b.loc[str(source_b)])
-
-
 
         # Worst-case timesteps
         t_load_a, t_feed_a = _infer_load_and_feedin_timesteps(self, v_a)
@@ -2739,9 +2805,6 @@ class EDisGo:
         # Voltages at those timesteps
         v_a_load = _series_at_t(v_a, t_load_a)
         v_a_feed = _series_at_t(v_a, t_feed_a)
-        v_b_load = _series_at_t(v_b, t_load_b)
-        v_b_feed = _series_at_t(v_b, t_feed_b)
-
         # Use all buses (grids are identical), no intersection needed
         buses = pd.Index([str(b) for b in lv_grid_a.buses_df.index])
         if buses.empty:
@@ -2753,7 +2816,7 @@ class EDisGo:
             v_a_load=v_a_load,
             v_a_feed=v_a_feed,
         )
- 
+
         fig = make_voltage_over_distance_figure(
             title=f"LV voltage over distance (lv_id={lv_id})",
             buses=buses,
@@ -2765,7 +2828,6 @@ class EDisGo:
             x_label="Path length to LV station [-]",
             df=df,
         )
-
 
         if save_as:
             if isinstance(save_as, str):
@@ -2782,7 +2844,8 @@ class EDisGo:
 
     def plot_voltage_over_dist_mv(self, mv_id, other, save_as=False, return_data=False):
         """
-        Plot MV voltage over distance to the HV/MV transformer, comparing two EDisGo objects.
+        Plot MV voltage over distance to the HV/MV transformer,
+        comparing two EDisGo objects.
 
         Parameters
         ----------
@@ -2804,7 +2867,8 @@ class EDisGo:
         if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
             raise RuntimeError(
                 "Voltage results (results.v_res) are empty. "
-                "Run analyze() with timesteps/snapshots so voltage results are generated."
+                "Run analyze() with timesteps/snapshots so voltage "
+                "results are generated."
             )
         mv_a = self.topology.mv_grid
         mv_b = other.topology.mv_grid
@@ -2817,7 +2881,11 @@ class EDisGo:
 
             # 1) Try transformer buses, but only accept if they exist in graph nodes
             trafos = getattr(edisgo_obj.topology, "transformers_hvmv_df", None)
-            if trafos is not None and hasattr(trafos, "columns") and {"bus0", "bus1"}.issubset(trafos.columns):
+            if (
+                trafos is not None
+                and hasattr(trafos, "columns")
+                and {"bus0", "bus1"}.issubset(trafos.columns)
+            ):
                 for col in ("bus0", "bus1"):
                     b = str(trafos.iloc[0][col])
                     if b in G:
@@ -2830,9 +2898,8 @@ class EDisGo:
                     bus = getattr(st, "bus", None)
                     if bus is not None and str(bus) in G:
                         return str(bus)
-                 # Fallback: first graph node (guaranteed)
+                # Fallback: first graph node (guaranteed)
             return str(next(iter(G.nodes)))
-
 
         source_a = _mv_source_bus(self)
         source_b = _mv_source_bus(other)
@@ -2850,27 +2917,32 @@ class EDisGo:
         # Handle cases where MV buses are not in pl_a (e.g., external buses)
         # Use MV grid graph to compute path lengths if needed
         import networkx as nx
+
         if dist_a.isna().any():
             try:
                 mv_graph = mv_a.graph
                 for bus in mv_buses_a:
                     if pd.isna(dist_a.loc[bus]):
                         try:
-                            path = nx.shortest_path(mv_graph, source=source_a, target=bus)
+                            path = nx.shortest_path(
+                                mv_graph, source=source_a, target=bus
+                            )
                             dist_a.loc[bus] = len(path) - 1  # number of edges
                         except (nx.NetworkXNoPath, nx.NodeNotFound):
                             dist_a.loc[bus] = 0
             except Exception:
                 # Fallback: set all NaN values to 0
                 dist_a = dist_a.fillna(0)
-        
+
         if dist_b.isna().any():
             try:
                 mv_graph = mv_b.graph
                 for bus in mv_buses_b:
                     if pd.isna(dist_b.loc[bus]):
                         try:
-                            path = nx.shortest_path(mv_graph, source=source_b, target=bus)
+                            path = nx.shortest_path(
+                                mv_graph, source=source_b, target=bus
+                            )
                             dist_b.loc[bus] = len(path) - 1  # number of edges
                         except (nx.NetworkXNoPath, nx.NodeNotFound):
                             dist_b.loc[bus] = 0
@@ -2889,7 +2961,6 @@ class EDisGo:
         buses = pd.Index([str(b) for b in mv_a.buses_df.index])
         if buses.empty:
             raise RuntimeError("No MV buses found in MV grid.")
-
 
         df = build_voltage_over_distance_df(
             buses=buses,
@@ -2913,8 +2984,7 @@ class EDisGo:
             band_high=1.06,
             x_label="Path length to HV/MV station [-]",
             df=df,
-    )
-
+        )
 
         if save_as:
             if isinstance(save_as, str):
@@ -3610,10 +3680,9 @@ class EDisGo:
             if comparison.any():
                 logger.warning(
                     "Heat demand is higher than rated heatpump power"
-                    " of heatpumps: {}. Demand can not be covered if no sufficient"
-                    " heat storage capacities are available.".format(
-                        comparison.index[comparison.values].values
-                    )
+                    f" of heatpumps: {comparison.index[comparison.values].values}."
+                    " Demand can not be covered if no sufficient"
+                    " heat storage capacities are available."
                 )
 
         logging.info("Integrity check finished. Please pay attention to warnings.")

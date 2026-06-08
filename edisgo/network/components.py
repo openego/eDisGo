@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import logging
 import math
 import os
@@ -725,10 +736,8 @@ class Switch(BasicComponent):
                 self.topology.lines_df.at[self.branch, col] = self.bus_open
             else:
                 raise AttributeError(
-                    "Could not open switch {}. Specified branch {} of switch "
-                    "has no bus {}. Please check the switch.".format(
-                        self.id, self.branch, self.bus_closed
-                    )
+                    f"Could not open switch {self.id}. Specified branch {self.branch} of switch "
+                    f"has no bus {self.bus_closed}. Please check the switch."
                 )
 
     def close(self):
@@ -743,10 +752,8 @@ class Switch(BasicComponent):
                 self.topology.lines_df.at[self.branch, col] = self.bus_closed
             else:
                 raise AttributeError(
-                    "Could not close switch {}. Specified branch {} of switch "
-                    "has no bus {}. Please check the switch.".format(
-                        self.id, self.branch, self.bus_closed
-                    )
+                    f"Could not close switch {self.id}. Specified branch {self.branch} of switch "
+                    f"has no bus {self.bus_closed}. Please check the switch."
                 )
 
     def _get_bus_column(self, bus):
