@@ -568,10 +568,28 @@ class EDisGo:
             :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
             If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
             is indexed using a default year and set for the whole year.
+            In this case, the EDisGo TimeSeries timeindex is automatically set to
+            the selected default year so that imported data is linked to a valid
+            time index.
 
         """
         engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
-        if self.timeseries.timeindex.empty:
+        if self.timeseries.timeindex.empty and kwargs.get("timeindex", None) is None:
+            if conventional_loads_ts == "oedb":
+                default_year = tools.get_year_based_on_scenario(kwargs.get("scenario"))
+                if default_year is None:
+                    default_year = 2011
+            else:
+                default_year = 2011
+            self.timeseries.timeindex = pd.date_range(
+                f"1/1/{default_year}", periods=8760, freq="H"
+            )
+            logger.warning(
+                "No timeindex was set. TimeSeries.timeindex is automatically "
+                f"set to the default year {default_year} to match imported "
+                "time series."
+            )
+        elif self.timeseries.timeindex.empty:
             logger.warning(
                 "When setting time series using predefined profiles it is better to "
                 "set a time index as all data in TimeSeries class is indexed by the"
