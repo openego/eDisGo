@@ -1971,6 +1971,11 @@ class TimeSeries:
             if not getattr(self, attr).empty:
                 getattr(self, attr).to_csv(os.path.join(directory, f"{attr}.csv"))
 
+        if hasattr(self, "timeindex_worst_cases") and len(self.timeindex_worst_cases) > 0:
+            self.timeindex_worst_cases.to_frame("timeindex_worst_cases").to_csv(
+                os.path.join(directory, "timeindex_worst_cases.csv")
+            )
+
         if time_series_raw:
             self.time_series_raw.to_csv(
                 directory=os.path.join(directory, "time_series_raw"),
@@ -2053,6 +2058,25 @@ class TimeSeries:
 
             if timeindex is None:
                 timeindex = getattr(self, f"_{attr}").index
+
+        # restore mapping for worst-case timesteps if saved
+        worst_cases_file = (
+            "timeseries/timeindex_worst_cases.csv"
+            if from_zip_archive
+            else "timeindex_worst_cases.csv"
+        )
+        if worst_cases_file in files:
+            if from_zip_archive:
+                with zip.open(worst_cases_file) as f:
+                    df = pd.read_csv(f, index_col=0, parse_dates=True)
+            else:
+                path = os.path.join(data_path, worst_cases_file)
+                df = pd.read_csv(path, index_col=0, parse_dates=True)
+
+            self.timeindex_worst_cases = pd.to_datetime(df.iloc[:, 0])
+            self.timeindex_worst_cases.name = df.columns[0]
+            if (timeindex is None or len(timeindex) == 0) and not self.timeindex_worst_cases.empty:
+                timeindex = pd.DatetimeIndex(self.timeindex_worst_cases.values)
 
         if from_zip_archive:
             # make sure to destroy ZipFile Class to close any open connections
