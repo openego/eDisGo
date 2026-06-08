@@ -1602,6 +1602,9 @@ class TestEDisGo:
         dirs_in_save_dir = os.listdir(save_dir)
         assert len(dirs_in_save_dir) == 4
         assert "configs.json" in dirs_in_save_dir
+        timeseries_dir = os.path.join(save_dir, "timeseries")
+        assert os.path.exists(timeseries_dir)
+        assert "timeindex_worst_cases.csv" in os.listdir(timeseries_dir)
 
         shutil.rmtree(save_dir)
 
@@ -1633,7 +1636,7 @@ class TestEDisGo:
         zip = ZipFile(zip_file)
         files = zip.namelist()
         zip.close()
-        assert len(files) == 28
+        assert len(files) == 29
 
         os.remove(zip_file)
 

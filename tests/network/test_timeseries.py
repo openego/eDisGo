@@ -2165,6 +2165,17 @@ class TestTimeSeries:
 
         shutil.rmtree(save_dir)
 
+        # test that worst-case mappings are saved as well
+        self.edisgo.timeseries.timeindex_worst_cases = pd.Series(
+            data=timeindex,
+            index=["load_case_mv", "load_case_lv"],
+        )
+        self.edisgo.timeseries.to_csv(save_dir)
+        files_in_timeseries_dir = os.listdir(save_dir)
+        assert "timeindex_worst_cases.csv" in files_in_timeseries_dir
+
+        shutil.rmtree(save_dir)
+
         # test with reduce memory True, to_type = float16 and saving TimeSeriesRaw
         self.edisgo.timeseries.to_csv(
             save_dir, reduce_memory=True, to_type="float16", time_series_raw=True
@@ -2174,7 +2185,8 @@ class TestTimeSeries:
             self.edisgo.timeseries.generators_reactive_power.dtypes == "float16"
         ).all()
         files_in_timeseries_dir = os.listdir(save_dir)
-        assert len(files_in_timeseries_dir) == 3
+        assert len(files_in_timeseries_dir) == 4
+        assert "timeindex_worst_cases.csv" in files_in_timeseries_dir
         files_in_timeseries_raw_dir = os.listdir(
             os.path.join(save_dir, "time_series_raw")
         )
@@ -2212,6 +2224,10 @@ class TestTimeSeries:
         # fmt: on
 
         # write to csv
+        self.edisgo.timeseries.timeindex_worst_cases = pd.Series(
+            data=timeindex,
+            index=["load_case_mv", "load_case_lv"],
+        )
         save_dir = os.path.join(os.getcwd(), "timeseries_csv")
         self.edisgo.timeseries.to_csv(save_dir, time_series_raw=True)
 
@@ -2236,6 +2252,16 @@ class TestTimeSeries:
             fluctuating_generators_active_power_by_technology.empty
         )
         # fmt: on
+
+        assert_series_equal(
+            self.edisgo.timeseries.timeindex_worst_cases,
+            pd.Series(
+                data=timeindex,
+                index=["load_case_mv", "load_case_lv"],
+                name="timeindex_worst_cases",
+            ),
+            check_dtype=False,
+        )
 
         self.edisgo.timeseries.from_csv(save_dir, time_series_raw=True)
 
