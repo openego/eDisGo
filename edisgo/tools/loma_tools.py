@@ -1311,7 +1311,8 @@ def plot_network(
 
     norm_buses = mcolors.TwoSlopeNorm(vmin=0.9, vcenter=1.0, vmax=1.1)
     voltage_cmap = mcolors.LinearSegmentedColormap.from_list(
-        "voltage", ["purple", "blue", "red"]
+        "voltage",
+        [(0.0, "navy"), (0.35, "dodgerblue"), (0.5, "limegreen"), (0.65, "orangered"), (1.0, "darkred")],
     )
 
     curt_14a = get_curtailment_data(edisgo).T
@@ -1358,7 +1359,7 @@ def plot_network(
         sm_buses, ax=ax, orientation="vertical", location="right", pad=0.02, aspect=20
     )
     cb_buses.set_label(
-        "Bus Voltage [p.u.]  — blue: under, yellow: nominal, red: over", fontsize=8
+        "Bus Voltage [p.u.]  — navy: under, green: nominal, red: over", fontsize=8
     )
 
     if save:
