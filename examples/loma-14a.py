@@ -50,7 +50,7 @@ def run_optimization_14a(edisgo):
     start_time = datetime.now()
 
     # Run optimization
-    edisgo.pm_optimize(opf_version=5, curtailment_14a=True)
+    edisgo.pm_optimize(opf_version=5, curtailment_14a=True, hours_limit_14a=24)
 
     duration = (datetime.now() - start_time).total_seconds()
 
@@ -280,10 +280,29 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
     edisgo.topology.buses_df = edisgo.topology.buses_df[
         edisgo.topology.buses_df.v_nom <= 20
     ]
-    edisgo.topology.buses_df = edisgo.topology.buses_df[
-        (edisgo.topology.buses_df.index != "HV_dummy_bus") &
-        (edisgo.topology.buses_df.index != "bus_20111_HV")
+
+    dummy_buses = ["HV_dummy_bus", "bus_20111_HV"]
+    loads_dummy_buses = edisgo.topology.loads_df[
+        edisgo.topology.loads_df.bus.isin(dummy_buses)
     ]
+
+    edisgo.topology.loads_df = edisgo.topology.loads_df.drop(
+        loads_dummy_buses.index
+    )
+
+    edisgo.timeseries.loads_active_power = (
+        edisgo.timeseries.loads_active_power.drop(
+            columns=loads_dummy_buses, errors="ignore"
+        )
+    )
+    edisgo.timeseries.loads_reactive_power = (
+        edisgo.timeseries.loads_reactive_power.drop(
+            columns=loads_dummy_buses, errors="ignore"
+        )
+    )
+    edisgo.topology.buses_df = edisgo.topology.buses_df.drop(
+        dummy_buses, errors="ignore"
+    )
 
     integrate_ev_and_hp_for_14a(
         edisgo,
