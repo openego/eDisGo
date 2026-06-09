@@ -79,6 +79,13 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
 
         return transformers_df
 
+    # Some ding0 grid folders do not contain the CSV files directly but in a
+    # 'topology' subfolder. If a buses.csv is found there, that folder is used.
+    topology_subfolder = os.path.join(path, "topology")
+    if os.path.isfile(os.path.join(topology_subfolder, "buses.csv")):
+        logger.debug(f"Using topology subfolder for grid import: {topology_subfolder}")
+        path = topology_subfolder
+
     grid = PyPSANetwork()
     grid.import_from_csv_folder(path)
 
