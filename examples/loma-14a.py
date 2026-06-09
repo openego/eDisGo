@@ -9,6 +9,7 @@ from edisgo.tools.loma_tools import (
     buses_with_existing_loads,
     create_network_gif,
     get_curtailment_data,
+    plot_cp_hp_locations,
     plot_load_before_after,
     plot_network,
     plot_storage_dispatch,
@@ -365,7 +366,11 @@ def main():
         setup_days=None,
     )
 
+    plot_cp_hp_locations(edisgo, show=False, save=True)
+
     edisgo = run_optimization_14a(edisgo)
+
+
     edisgo.analyze()
 
     # ────────────────────────── Slack diagnosis ──────────────────────────────

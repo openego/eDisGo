@@ -1370,6 +1370,145 @@ def plot_network(
         plt.show()
 
 
+def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True):
+    """Plot load composition per bus (CP, HP, conventional) as pie charts on the grid."""
+    import matplotlib.patches as mpatches
+
+    TYPES = {
+        "charging_point":    "#1f77b4",  # blue
+        "heat_pump":         "#d62728",  # red
+        "conventional_load": "#2ca02c",  # green
+    }
+    TYPE_ORDER = ["charging_point", "heat_pump", "conventional_load"]
+
+    n = edisgo.to_pypsa()
+    buses_df = edisgo.topology.buses_df
+    coords = buses_df[["x", "y"]].reindex(n.buses.index)
+    n.buses["x"] = coords["x"].values
+    n.buses["y"] = coords["y"].values
+
+    # Use p_set from loads_df as nominal load capacity
+    loads = edisgo.topology.loads_df[["bus", "type", "p_set"]].copy()
+    loads = loads[loads["type"].isin(TYPES)]
+
+    # Dedicated Bus_ChargingPoint_X / Bus_HeatPump_X buses may lack coordinates;
+    # walk one hop through lines_df to reach a parent bus that has valid x/y.
+    lines_df = edisgo.topology.lines_df
+    has_coords = set(buses_df[["x", "y"]].dropna().index)
+
+    def _resolve(bus):
+        if bus in has_coords:
+            return bus
+        nb = pd.concat([
+            lines_df.loc[lines_df["bus0"] == bus, "bus1"],
+            lines_df.loc[lines_df["bus1"] == bus, "bus0"],
+        ])
+        hits = nb[nb.isin(has_coords)]
+        return hits.iloc[0] if not hits.empty else None
+
+    loads["resolved_bus"] = loads["bus"].map(_resolve)
+    loads = loads.dropna(subset=["resolved_bus"])
+
+    # Sum p_set per (resolved_bus, type); ensure all type columns are present
+    by_bus_type = (
+        loads.groupby(["resolved_bus", "type"])["p_set"]
+        .sum()
+        .unstack(fill_value=0.0)
+    )
+    for t in TYPE_ORDER:
+        if t not in by_bus_type.columns:
+            by_bus_type[t] = 0.0
+
+    total_by_bus = by_bus_type.sum(axis=1)
+    max_total = total_by_bus.max() or 1.0
+
+    fig, ax = plt.subplots(figsize=(13, 10))
+
+    n.plot(
+        ax=ax, margin=0.05, geomap=False, bus_sizes=0,
+        line_colors="dimgrey", line_widths=0.6,
+        title="Load composition per bus — CP · HP · conventional  (p_set)",
+        geometry=False,
+    )
+
+    # Pie radius in data (degree) units, scaled by sqrt of total p_set
+    x_vals = buses_df["x"].dropna()
+    y_vals = buses_df["y"].dropna()
+    grid_extent = max(x_vals.max() - x_vals.min(), y_vals.max() - y_vals.min())
+    MIN_R = grid_extent * 0.003
+    MAX_R = grid_extent * 0.018
+
+    for bus, row in by_bus_type.iterrows():
+        total = total_by_bus[bus]
+        if total <= 0 or bus not in buses_df.index:
+            continue
+        bx, by_ = buses_df.at[bus, "x"], buses_df.at[bus, "y"]
+        if pd.isna(bx) or pd.isna(by_):
+            continue
+        r = MIN_R + (MAX_R - MIN_R) * np.sqrt(total / max_total)
+        start = 90.0
+        for t in TYPE_ORDER:
+            val = row.get(t, 0.0)
+            if val <= 0:
+                continue
+            angle = 360.0 * val / total
+            ax.add_patch(mpatches.Wedge(
+                (bx, by_), r, start, start + angle,
+                facecolor=TYPES[t], edgecolor="white", linewidth=0.3,
+                alpha=0.85, zorder=5,
+            ))
+            start += angle
+
+    ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
+
+    # ── color legend (upper left) ───────────────────────────────────────────
+    counts = {t: int((loads["type"] == t).sum()) for t in TYPE_ORDER}
+    labels = {"charging_point": "Charging Point (CP)",
+              "heat_pump": "Heat Pump (HP)",
+              "conventional_load": "Conventional Load"}
+    color_handles = [
+        mpatches.Patch(facecolor=TYPES[t], alpha=0.85,
+                       label=f"{labels[t]}  [{counts[t]} units]")
+        for t in TYPE_ORDER
+    ]
+    leg1 = ax.legend(handles=color_handles, loc="upper left", fontsize=9)
+    ax.add_artist(leg1)
+
+    # ── size reference: hollow circles drawn on the map (lower-right area) ──
+    ref_mws = [0.05, 0.2, 1.0]
+    x0 = x_vals.max() - MAX_R
+    y0 = y_vals.min() + MAX_R * 1.5
+    spacing = MAX_R * 2.8
+    ax.text(x0 - spacing * (len(ref_mws) - 1) / 2,
+            y0 + MAX_R * 1.2, "total p_set per bus",
+            ha="center", va="bottom", fontsize=7, zorder=6)
+    for i, mw in enumerate(ref_mws):
+        r = MIN_R + (MAX_R - MIN_R) * np.sqrt(mw / max_total)
+        cx = x0 - i * spacing
+        ax.add_patch(plt.Circle((cx, y0), r, fill=False,
+                                edgecolor="black", linewidth=1, zorder=6))
+        ax.text(cx, y0 - r - grid_extent * 0.002,
+                f"{mw * 1000:.0f} kW", ha="center", va="top", fontsize=7, zorder=6)
+
+    # ── stats annotation (lower left) ──────────────────────────────────────
+    totals = {t: by_bus_type[t].sum() for t in TYPE_ORDER}
+    ax.text(
+        0.01, 0.01,
+        "\n".join(f"{labels[t]}: {totals[t]:.2f} MW" for t in TYPE_ORDER),
+        transform=ax.transAxes, fontsize=8, verticalalignment="bottom",
+        bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.7),
+    )
+
+    if save:
+        os.makedirs("plots", exist_ok=True)
+        plt.savefig("plots/cp_hp_locations.png", dpi=300, bbox_inches="tight")
+
+    if show:
+        plt.show()
+
+    plt.close(fig)
+
+
 def plot_storage_dispatch(
     edisgo, day: str = None, show: bool = True, save: bool = True
 ):
