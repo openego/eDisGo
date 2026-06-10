@@ -1837,7 +1837,16 @@ class EDisGo:
                 raise ValueError(
                     "Neither appropriate voltage level nor nominal power were supplied."
                 )
-            voltage_level = determine_grid_integration_voltage_level(self, p)
+        
+            if comp_type == "charging_point":
+                if float(p) < 0.1:
+                    # < 100 kW: LV grid
+                    voltage_level = 7
+                else:
+                    # >= 100 kW: MV grid
+                    voltage_level = 5
+            else:
+                voltage_level = determine_grid_integration_voltage_level(self, p)
 
         # convert geolocation to shapely Point if needed
         if type(geolocation) is not Point:
@@ -1857,26 +1866,28 @@ class EDisGo:
         # -------------------------
         else:
             lv_buses = self.topology.buses_df.drop(self.topology.mv_grid.buses_df.index)
-            lv_buses_dropna = lv_buses.dropna(axis=0, subset=["x", "y"])
-
-            # fallback path for non-georeferenced LV grids
-            if len(lv_buses_dropna) < len(lv_buses):
-                if kwargs.get("mvlv_subst_id", None) is None:
-                    substations = self.topology.buses_df.loc[
-                        self.topology.transformers_df.bus1.unique()
-                    ]
-                    nearest_substation, _ = find_nearest_bus_14a(geolocation, substations)
-                    kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
-
-                comp_name = self.topology.connect_to_lv_14a(self, kwargs, comp_type)
-
-            else:
-                max_distance_from_target_bus = kwargs.pop(
-                    "max_distance_from_target_bus", 0.3 #CHANGED #14a
+            lv_buses_without_xy = lv_buses[
+                lv_buses[["x", "y"]].isna().any(axis=1)
+            ]
+        
+            if not lv_buses_without_xy.empty:
+                logger.warning(
+                    "Not all LV buses are georeferenced. "
+                    "%d of %d LV buses have missing x/y coordinates and will be ignored "
+                    "by connect_to_lv_based_on_geolocation_14a. "
+                    "This can lead to non-local LV connections if affected grid areas are missing. "
+                    "Example buses without coordinates: %s",
+                    len(lv_buses_without_xy),
+                    len(lv_buses),
+                    list(lv_buses_without_xy.index[:10]),
                 )
-                comp_name = self.topology.connect_to_lv_based_on_geolocation_14a(
-                    self, kwargs, comp_type, max_distance_from_target_bus
-                )
+        
+            max_distance_from_target_bus = kwargs.pop(
+                "max_distance_from_target_bus", 0.3
+            )
+            comp_name = self.topology.connect_to_lv_based_on_geolocation_14a(
+                self, kwargs, comp_type, max_distance_from_target_bus
+            )
 
         if add_ts:
             if comp_type == "generator":
