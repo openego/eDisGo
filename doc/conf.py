@@ -47,13 +47,23 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
     "sphinx.ext.coverage",
-    "sphinx.ext.imgmath",
+    "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",  # enable Napoleon Sphinx v>1.3
     "sphinx.ext.extlinks",  # enables external links with a key
     "sphinx_autodoc_typehints",
     "sphinx.ext.inheritance_diagram",
+    "nbsphinx",  # render Jupyter notebooks as documentation pages
 ]
+
+# -- nbsphinx settings ----------------------------------------------------
+# Notebooks are rendered with their stored outputs and are NOT executed during
+# the documentation build, because they require a database connection (OEP/
+# egon-data) and, for the optimisation, Julia and Gurobi, none of which are
+# available in the build environment (e.g. ReadTheDocs CI). Make sure the
+# notebooks are committed with up-to-date outputs.
+nbsphinx_execute = "never"
+nbsphinx_allow_errors = True
 # Autoapi settings
 autoapi_type = "python"
 autoapi_dirs = ["../edisgo"]
@@ -262,7 +272,7 @@ release = version
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = "English"
+language = "en"
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
@@ -272,7 +282,7 @@ language = "English"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ["_build", "whatsnew", "examples"]
+exclude_patterns = ["_build", "whatsnew", "examples", "**.ipynb_checkpoints"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.

@@ -39,3 +39,8 @@ Changes
   :meth:`~.edisgo.EDisGo.import_dsm`, and
   :meth:`~.edisgo.EDisGo.import_home_batteries`;
   defaults to a standard open energy platform engine when not provided
+* Restructured the documentation into clearly separated tiers (Getting Started,
+  User Guide, Methodology & Physics, Tutorials, Reference, and Experimental & Legacy)
+  and added in-depth methodology pages for power flow, grid reinforcement, complexity
+  reduction and the flexibility optimisation. Tutorial notebooks are now rendered via
+  nbsphinx and unmaintained methods are collected in a dedicated legacy section.

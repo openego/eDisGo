@@ -137,7 +137,7 @@ def reinforce_grid(
 
     Notes
     -----
-    See :ref:`features-in-detail` for more information on how network
+    See :ref:`grid-reinforcement` for more information on how network
     reinforcement is conducted.
 
     """

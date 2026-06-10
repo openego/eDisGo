@@ -1243,7 +1243,7 @@ class EDisGo:
         If the :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case` is
         True input for `timesteps_pfa` is overwritten and therefore ignored.
 
-        See :ref:`features-in-detail` for more information on how network
+        See :ref:`grid-reinforcement` for more information on how network
         reinforcement is conducted.
 
         Parameters
