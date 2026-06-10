@@ -1046,13 +1046,13 @@ def plot_plotly(
     else:
         reinforcement_results = True
 
-    # check line_color input (only if it is a string; Series/dict are handled as custom colors)    
+    # check line_color input (string only; Series/dict are handled as custom colors)
     line_color_options = ["loading", "relative_loading", "reinforce"]
     if isinstance(line_color, str):
         if line_color not in line_color_options:
             logger.warning(f"Line colors need to be one of {line_color_options}.")
             line_color = None
-        elif (line_color in ["loading", "relative_loading"]) and (not power_flow_results):
+        elif line_color in ["loading", "relative_loading"] and not power_flow_results:
             logger.warning("No power flow results to show. -> Run power flow.")
             line_color = None
         elif (line_color in ["reinforce"]) and (not reinforcement_results):
@@ -1178,7 +1178,7 @@ def plot_plotly(
     def plot_lines():
         showscale = True
 
-         # Custom line colors: user provided a Series/dict of colors
+        # Custom line colors: user provided a Series/dict of colors
         if custom_line_colors is not None:
             showscale = False
             colorscale = None
@@ -1212,7 +1212,6 @@ def plot_plotly(
 
             branch_name = edge[2]["branch_name"]
 
-            
             # 1) User-defined colors (Series or dict)
             if custom_line_colors is not None:
                 if branch_name in custom_line_colors.index:
@@ -1221,7 +1220,7 @@ def plot_plotly(
                     color = "grey"
 
             # 2) Existing modes
-            elif line_color == "reinforce":    
+            elif line_color == "reinforce":
                 # Possible distinction between added parallel
                 # lines and changed lines
                 if (
@@ -1392,7 +1391,7 @@ def plot_plotly(
             colorscale = None
             colorbar = None
             cmid = None
-            showscale = False    
+            showscale = False
 
         elif node_color == "voltage_deviation":
             node_colors = []
