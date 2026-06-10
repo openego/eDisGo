@@ -162,10 +162,11 @@ class Config:
         -------
         tuple
             A tuple containing two dictionaries:
-            - name_mapping: A dictionary mapping source table names to target table
-                names.
-            - schema_mapping: A dictionary mapping source schema names to target schema
-                names.
+
+            - ``name_mapping``: dictionary mapping source table names to target
+              table names.
+            - ``schema_mapping``: dictionary mapping source schema names to target
+              schema names.
         """
         engine = Engine()
         dictionary_schema_name = "data"
