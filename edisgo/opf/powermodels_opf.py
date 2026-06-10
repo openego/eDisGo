@@ -130,7 +130,7 @@ def pm_optimize(
     logger.info("starting julia process")
     julia_process = subprocess.Popen(
         [
-            "/opt/julia-1.8.3/bin/julia",
+            "julia",
             os.path.join(opf_dir, "eDisGo_OPF.jl/Main.jl"),
             pm["name"],
             solution_dir,
