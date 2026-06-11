@@ -31,6 +31,15 @@ The optimisation is free to choose any operation inside these bands. The bands a
 what turn "an EV", "a heat pump" or "a DSM load" into a mathematically optimisable
 flexibility.
 
+.. figure:: ../../images/flexibility_bands.png
+   :width: 90%
+   :align: center
+
+   Every flexibility is expressed as a **power band** (the allowed power at each time
+   step) and an **energy band** (the cumulative-energy corridor). Any trajectory that
+   stays inside both bands fully serves the user; the optimisation picks the
+   grid-friendliest one.
+
 The optimise-then-reinforce loop
 --------------------------------
 
@@ -44,8 +53,23 @@ A typical flexibility study is:
 #. write those schedules back into the time series and **reinforce** the (hopefully
    much smaller) residual problems.
 
+.. figure:: ../../images/optimise_reinforce_loop.png
+   :width: 95%
+   :align: center
+
+   The optimise-then-reinforce workflow: compute the flexibility bands, schedule the
+   flexibilities with the optimal power flow, write the schedules back, and reinforce
+   only the residual problems.
+
 Comparing the reinforcement cost with and without the optimisation quantifies how
 much grid expansion the flexibility saves.
+
+.. figure:: ../../images/reinforcement_cost_comparison.png
+   :width: 55%
+   :align: center
+
+   Reinforcement cost with and without the flexibility optimisation, by voltage level
+   (illustrative). The difference is the grid expansion that the flexibility avoids.
 
 What is flexible
 ----------------

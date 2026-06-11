@@ -17,6 +17,14 @@ Spatial reduction merges nearby buses into a smaller set of representative buses
 keeping the electrical behaviour as close as possible to the original grid. This
 shrinks the grid for faster power flow and optimisation.
 
+.. figure:: ../images/spatial_complexity_reduction.png
+   :width: 95%
+   :align: center
+
+   Spatial complexity reduction clusters buses *along the grid* into a smaller set of
+   representative buses. Because the clusters are connected parts of the grid, the
+   reduced grid stays radial — each reduced line aggregates real lines.
+
 How it works
 ~~~~~~~~~~~~
 

@@ -59,3 +59,12 @@ state of energy evolves as it is charged (heat produced by the pump) and dischar
 so the pump can pre-heat the buffer when it is grid-friendly and coast later. The
 COP couples the *electrical* power the grid sees to the *thermal* power the building
 needs.
+
+.. figure:: ../../images/heat_pump_thermal_storage.png
+   :width: 95%
+   :align: center
+
+   A heat pump with thermal storage. The pump turns grid electricity :math:`P_{el}`
+   into heat :math:`P_{heat}=\mathrm{COP}\cdot P_{el}`; the store buffers the
+   difference to the heat demand :math:`\dot Q_{heat}` (right axis = energy in the
+   store). So the pump can pre-heat when the grid has room and coast later.

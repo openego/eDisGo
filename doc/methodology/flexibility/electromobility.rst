@@ -63,6 +63,14 @@ computed with
 * ``lower_energy`` / ``upper_energy`` — the minimum and maximum *cumulative* energy
   that may have been charged by each time step.
 
+.. figure:: ../../images/ev_flexibility_bands.png
+   :width: 90%
+   :align: center
+
+   Electric-vehicle flexibility bands. The power band is non-zero only while the car
+   is plugged in; the energy band guarantees the car is full by departure. The OPF may
+   choose any charging profile that stays inside both bands.
+
 Physics
 ~~~~~~~
 

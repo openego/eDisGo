@@ -43,8 +43,17 @@ The grid model: radial branch flow
 -----------------------------------
 
 eDisGo's OPF uses a **radial branch flow model (BFM)** — the natural formulation for
-the tree-shaped distribution grids ding0 produces. For every branch and bus the model
-enforces:
+the tree-shaped distribution grids ding0 produces.
+
+.. figure:: ../../images/branch_flow_model.png
+   :width: 75%
+   :align: center
+
+   Radial branch-flow model: for each branch :math:`i \to j` the model couples the
+   sending-end power :math:`(P_{ij}, Q_{ij})`, the branch current :math:`I_{ij}` and
+   the bus voltages :math:`V_i, V_j`, with a power balance at every bus.
+
+For every branch and bus the model enforces:
 
 * **Power balance** at each bus — injected active and reactive power equals what
   flows out on the branches plus losses.
@@ -68,6 +77,15 @@ Solution method: SOC vs. non-convex
 -----------------------------------
 
 The ``method`` argument chooses how that quadratic constraint is handled:
+
+.. figure:: ../../images/soc_relaxation.png
+   :width: 60%
+   :align: center
+
+   The SOC relaxation replaces the non-convex equality :math:`P^2+Q^2=V^2 I^2` (the
+   cone surface) with the convex inequality :math:`P^2+Q^2 \le V^2 I^2` (the filled
+   cone). For radial grids the optimum lies on the surface, so the relaxation is
+   usually *exact*.
 
 * ``"soc"`` (default) — a **second-order cone relaxation** replaces the equality
   :math:`P^2+Q^2=V^2 I^2` with the convex inequality :math:`P^2+Q^2 \le V^2 I^2`. The

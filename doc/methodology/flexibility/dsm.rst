@@ -43,3 +43,11 @@ i.e. the instantaneous shift is bounded by the power band and the *accumulated* 
 by the energy band. The energy band ensures the process still does the same total
 work — energy is only moved in time, never created or destroyed. The OPF uses this
 freedom to flatten grid-critical peaks.
+
+.. figure:: ../../images/dsm_flexibility_bands.png
+   :width: 90%
+   :align: center
+
+   DSM flexibility bands. The power band bounds the instantaneous shift around the
+   baseline load :math:`P_0`; the cumulative shift must stay inside the energy
+   corridor and returns to zero, so the same total energy is only moved in time.
