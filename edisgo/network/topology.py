@@ -2003,132 +2003,10 @@ class Topology:
                 )
 
         return comp_name
-    
-    # def connect_to_mv_14a(self, edisgo_object, comp_data, comp_type="generator"): #CHANGED
-    #     """
-    #     14a variant of connect_to_mv.
-
-    #     """
-    #     if "p" not in comp_data.keys():
-    #         comp_data["p"] = (
-    #             comp_data["p_set"]
-    #             if "p_set" in comp_data.keys()
-    #             else comp_data["p_nom"]
-    #         )
-
-    #     voltage_level = comp_data.pop("voltage_level")
-    #     power = comp_data.pop("p")
-
-    #     # create new bus for new component
-    #     if not isinstance(comp_data["geom"], Point):
-    #         geom = wkt_loads(comp_data["geom"])
-    #     else:
-    #         geom = comp_data["geom"]
-          
-    #     if comp_type == "charging_point":
-
-    #         mv_buses = self.mv_grid.buses_df
-    #         target_bus, target_bus_distance = geo.find_nearest_bus_14a(geom, mv_buses)
-
-    #         MAX_DIST = 0.3  # km
-        
-    #         if target_bus_distance >= MAX_DIST:
-    #             print(
-    #                 f"SKIP CP (too far from MV bus): dist={target_bus_distance:.3f} km"
-    #             )
-    #             return None
-
-    #         # attach directly to existing MV bus
-    #         comp_data.pop("geom", None)
-    #         comp_data.pop("p", None)
-
-    #         return self.add_load(
-    #             bus=target_bus,
-    #             type="charging_point",
-    #             **comp_data
-    #         )
-
-    #     # ===== FIND NEAREST MV BUS =====
-    #     mv_buses = self.mv_grid.buses_df
-    #     target_bus, target_bus_distance = geo.find_nearest_bus_14a(geom, mv_buses)
-
-    #     MAX_DIST = 0.3
-
-    #     if comp_type == "charging_point" and target_bus_distance < MAX_DIST:
-    #         bus = target_bus
-    #     else:
-    #         print("comp_type has to be charging_point in _14a workflow")
-
-    #     # add component to newly created bus
-    #     comp_data.pop("geom")
-    #     if comp_type == "generator":
-    #         comp_name = self.add_generator(bus=bus, **comp_data)
-    #     elif comp_type == "charging_point":
-    #         comp_name = self.add_load(bus=bus, type="charging_point", **comp_data)
-    #     elif comp_type == "heat_pump":
-    #         comp_name = self.add_load(bus=bus, type="heat_pump", **comp_data)
-    #     else:
-    #         comp_name = self.add_storage_unit(bus=bus, **comp_data)
-
-    #     # ===== voltage level 4: component is connected to MV station =====
-    #     if voltage_level == 4:
-    #         print("Voltage_level 4 in connect_t_mv_14a has no 14a workflow yet.")
-
-    #     elif voltage_level == 5:
-    #         # get branches within the predefined `connection_buffer_radius`
-    #         lines = geo.calc_geo_lines_in_buffer(
-    #             grid_topology=self,
-    #             bus=self.buses_df.loc[bus, :],
-    #             grid=self.mv_grid,
-    #             buffer_radius=int(
-    #                 edisgo_object.config["grid_connection"]["conn_buffer_radius"]
-    #             ),
-    #             buffer_radius_inc=int(
-    #                 edisgo_object.config["grid_connection"]["conn_buffer_radius_inc"]
-    #             ),
-    #         )
-
-    #         # calc distance between component and grid's lines -> find nearest line
-    #         conn_objects_min_stack = geo.find_nearest_conn_objects(
-    #             grid_topology=self,
-    #             bus=self.buses_df.loc[bus, :],
-    #             lines=lines,
-    #             conn_diff_tolerance=edisgo_object.config["grid_connection"][
-    #                 "conn_diff_tolerance"
-    #             ],
-    #         )
-
-    #         # connect
-    #         # go through the stack (from nearest to farthest connection target
-    #         # object)
-    #         comp_connected = False
-    #         for dist_min_obj in conn_objects_min_stack:
-    #             # do not allow connection to virtual busses
-    #             if "virtual" not in dist_min_obj["repr"]:
-    #                 target_obj_result = self._connect_mv_bus_to_target_object(
-    #                     edisgo_object=edisgo_object,
-    #                     bus=self.buses_df.loc[bus, :],
-    #                     target_obj=dist_min_obj,
-    #                     comp_type=comp_type,
-    #                     power=power,
-    #                 )
-
-    #                 if target_obj_result is not None:
-    #                     comp_connected = True
-    #                     break
-
-    #         if not comp_connected:
-    #             logger.error(
-    #                 f"Component {comp_name} could not be connected. Try to increase the"
-    #                 f" parameter `conn_buffer_radius` in config file `config_grid.cfg` "
-    #                 f"to gain more possible connection points."
-    #             )
-
-    #     return comp_name
 
     def connect_to_mv_14a(self, edisgo_object, comp_data, comp_type="generator"):
         """
-        Connect a charging point directly to the nearest existing MV bus.
+        Connect a charging point directly to the nearest MV-side bus of an MV/LV transformer.
         
         This 14a variant is intended exclusively for charging points.
         It never creates a new bus. If no MV bus is found within the
@@ -2190,6 +2068,7 @@ class Topology:
         # Pop fields that are not needed by add_load(...)
         comp_data.pop("voltage_level")
         geom_raw = comp_data.pop("geom")
+        comp_data.pop("p", None)
 
         # Parse geometry
         if isinstance(geom_raw, Point):
@@ -2197,13 +2076,24 @@ class Topology:
         else:
             geom = wkt_loads(geom_raw)
 
-        # Find nearest existing MV bus
-        mv_buses = self.mv_grid.buses_df
+        # Use only MV side of MV/LV transformers as possible target buses
+        mv_trafo_bus_ids = self.transformers_df["bus0"].dropna().unique()
+        
+        mv_buses = self.buses_df.loc[
+            self.buses_df.index.intersection(mv_trafo_bus_ids)
+        ].dropna(subset=["x", "y"])
+        
+        if mv_buses.empty:
+            raise ValueError(
+                "No MV-side transformer buses with coordinates found "
+                "for charging point connection."
+            )
+        
         target_bus, target_bus_distance = geo.find_nearest_bus_14a(geom, mv_buses)
 
         if target_bus_distance >= MAX_DIST_KM:
             raise ValueError(
-                f"Charging point cannot be connected: nearest MV bus is "
+                f"Charging point cannot be connected: nearest MV-side transformer bus is "
                 f"{target_bus_distance:.3f} km away, exceeding the maximum "
                 f"allowed distance of {MAX_DIST_KM:.3f} km."
             )
@@ -2685,18 +2575,6 @@ class Topology:
         from scipy.spatial import cKDTree
 
         # -------------------------------------------------------------
-        # Charging-point bus eligibility by use case
-        # Extend this dictionary later as needed.
-        # None means: keep previous default behavior (= all LV buses)
-        # -------------------------------------------------------------
-        CHARGING_USE_CASE_BUS_COMP_TYPES = {
-            "home": ["house_connection"],
-            "work": None,
-            "public": None,
-            "hpc": None,
-        }
-
-        # -------------------------------------------------------------
         # Helper: build KDTree cache
         # -------------------------------------------------------------
         def _build_cache(bus_df):
@@ -2732,14 +2610,6 @@ class Topology:
             dist, idx = cache["tree"].query([px, py], k=1)
 
             return cache["index"][idx], float(dist)
-
-        # -------------------------------------------------------------
-        # Helper: cache key for filtered LV buses
-        # -------------------------------------------------------------
-        def _cache_attr_name_for_use_case(use_case):
-            if use_case is None:
-                return "_geo_cache_lv_14a_all"
-            return f"_geo_cache_lv_14a_{use_case}"
 
         # -------------------------------------------------------------
         # Setup
@@ -2788,35 +2658,30 @@ class Topology:
             lv_buses = self.buses_df.drop(self.mv_grid.buses_df.index)
 
             # ---------------------------------------------------------
-            # Optional use-case-specific filtering for charging points
+            # Charging points in LV: only connect to house connections
             # ---------------------------------------------------------
             if comp_type == "charging_point":
-                use_case = comp_data.get("sector")
-                allowed_comp_types = CHARGING_USE_CASE_BUS_COMP_TYPES.get(use_case, None)
-
-                if allowed_comp_types is not None:
-                    if "comp_type" not in lv_buses.columns:
-                        raise KeyError(
-                            "Column 'comp_type' not found in buses_df, but it is "
-                            f"required for charging-point use case '{use_case}'."
-                        )
-
-                    lv_buses = lv_buses.loc[
-                        lv_buses["comp_type"].isin(allowed_comp_types)
-                    ]
-
-                    if lv_buses.empty:
-                        raise ValueError(
-                            f"No eligible LV buses found for charging use case "
-                            f"'{use_case}' with allowed comp_type values "
-                            f"{allowed_comp_types}."
-                        )
-
-                cache_attr = _cache_attr_name_for_use_case(use_case)
-
+                if "comp_type" not in lv_buses.columns:
+                    raise KeyError(
+                        "Column 'comp_type' not found in buses_df. "
+                        "It is required to connect charging points only to house_connection buses."
+                    )
+            
+                lv_buses = lv_buses.loc[
+                    lv_buses["comp_type"] == "house_connection"
+                ]
+            
+                if lv_buses.empty:
+                    raise ValueError(
+                        "No eligible LV buses with comp_type='house_connection' found "
+                        "for charging point connection."
+                    )
+            
+                cache_attr = "_geo_cache_lv_14a_cp_house_connection"
+            
             else:
-                cache_attr = _cache_attr_name_for_use_case(None)
-
+                cache_attr = "_geo_cache_lv_14a_all"
+ 
             valid_coords_count = len(lv_buses[["x", "y"]].dropna())
 
             if (

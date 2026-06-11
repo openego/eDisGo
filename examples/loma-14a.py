@@ -148,7 +148,6 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
         if cache_dir is not None:
             _save_emob_cache(edisgo, cache_dir)
 
-
     """
     This step created the time series for the new eDisGo charging points.
     Without the preparation of Q before charging strategy I got an error while
@@ -217,11 +216,11 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
         tol_2=0.9,
     )
 
-    # ============================================================
+    # ------------------------------------------------------------
     # Optional Utilities for sensitivity analysis/changing the amount of cp/hp
     # - target by absolute value or relative percentage
     # - Only use one option at a time (target_total, percentage)
-    # ============================================================
+    # ------------------------------------------------------------
     """
     In this step the total amount of charging points or heat pumps can be adjusted.
     Either by percentage or by a total amount including the infrastructure from
@@ -242,7 +241,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     
     set_charging_points_to_target(
         edisgo,
-        target_total=1000,  # sets total amount of CP to 1000
+        target_total=4000, # sets total amount of CP #412 SQ, 1000 2035
         # percentage=0.10, # increases total amount of CP by 10%
         # percentage=-0.10, # decreases total amount of CP by 10%
         eligible_buses=cp_eligible_buses,
@@ -251,7 +250,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
         export_removed=False,
         export_dir=output_dir,
     )
-
+    
     # Recompute HP eligible buses after CP scaling
     valid_buses = set(edisgo.topology.buses_df.index)
     
@@ -262,7 +261,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
 
     set_heat_pumps_to_target(
         edisgo,
-        target_total=2600,  # sets total amount of HP
+        target_total=575,  # sets total amount of HP #575 SQ, 2600 2035
         # percentage=0.10, # increases total amount of HP by 10%
         # percentage=-0.10, # decreases total amount of HP by 10%
         eligible_buses=hp_eligible_buses,
@@ -331,15 +330,14 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
 
     edisgo.set_time_series_reactive_power_control()
 
-
 def main():
     # General Paths
     output_dir = "/home/paul/LoMa/test/edisgo_output"
     emob_cache_dir = "/home/paul/LoMa/loma-repo/emob_cache/husum_eGon2035"
-    
+
     # Whole Husum paths
-    # grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_model_pypsa_SQ" # Status-Quo
-    grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_model_pypsa_2035" # 2035
+    grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_final_statusQuo_LV_ids" # Status-Quo
+    # grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_model_pypsa_2035" # 2035
     path_husum_district_shp = (
         "/home/paul/LoMa/loma-repo/data/Input_files/MV_grid_district/husum_district.shp"
     )
@@ -348,16 +346,19 @@ def main():
     # grid_path = ""
     # path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MGB_district"
 
-    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 2))
+    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 12)) 
+    #edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 167)) #first week january 2025
+    #edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(2159, 2327)) #first week april 2025
+    #edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(5088, 5256)) #first week august 2025
 
     mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
     edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
     edisgo.topology.grid_district["srid"] = 4326
-
+    
     edisgo.topology.check_integrity()
     pypsa_n = edisgo.to_pypsa()
     edisgo.analyze()
-
+    
     prepare_edisgo_for_14a(
         edisgo,
         shapefile_path=path_husum_district_shp,
@@ -369,9 +370,8 @@ def main():
     plot_cp_hp_locations(edisgo, show=False, save=True)
 
     edisgo = run_optimization_14a(edisgo)
-
-
     edisgo.analyze()
+
 
     # ────────────────────────── Slack diagnosis ──────────────────────────────
     slacks = edisgo.opf_results.grid_slacks_t
@@ -437,31 +437,3 @@ def main():
 if __name__ == "__main__":
     edisgo = main()
     
-    # # ── Temporary export of final charging point locations ─────────────────────
-    # output_dir = "/home/paul/LoMa/test/edisgo_output"
-    
-    # cp_df = edisgo.topology.loads_df[
-    #     edisgo.topology.loads_df["type"] == "charging_point"
-    # ].copy()
-    
-    # cp_df = cp_df.join(
-    #     edisgo.topology.buses_df[["x", "y"]],
-    #     on="bus",
-    # )
-    
-    # cp_df = cp_df.dropna(subset=["x", "y"])
-    
-    # cp_gdf = gpd.GeoDataFrame(
-    #     cp_df.reset_index(names="cp_id"),
-    #     geometry=gpd.points_from_xy(cp_df["x"], cp_df["y"]),
-    #     crs="EPSG:4326",
-    # )
-    
-    # cp_export_path = os.path.join(
-    #     output_dir,
-    #     "charging_point_locations_after_opf.shp",
-    # )
-    
-    # cp_gdf.to_file(cp_export_path)
-    
-    # print(f"Exported {len(cp_gdf)} charging point locations to {cp_export_path}")

@@ -1441,7 +1441,6 @@ def integrate_charging_parks_14a(edisgo_obj):
 
     charging_parks = list(edisgo_obj.electromobility.potential_charging_parks)
     
-    #temp1
     total_parks = len(charging_parks)
     
     parks_demand_gt_0 = [
@@ -1452,7 +1451,6 @@ def integrate_charging_parks_14a(edisgo_obj):
         cp for cp in charging_parks
         if cp.within_grid
     ]
-    #temp2
     
     designated_charging_parks = [
         cp
@@ -1460,14 +1458,12 @@ def integrate_charging_parks_14a(edisgo_obj):
         if (cp.designated_charging_point_capacity > 0) and cp.within_grid
     ]
 
-    #temp1    
     print("\nCharging park filter check (14a)")
     print("-" * 44)
     print(f"{'Total parks in all mv_grid_ids':<30}{total_parks:>6}")
     print(f"{'CP with Demand > 0':<30}{len(parks_demand_gt_0):>6}")
     print(f"{'CP within grid':<30}{len(parks_within_grid):>6}")
     print(f"{'Designated CP (both true)':<30}{len(designated_charging_parks):>6}")
-    #temp2
     
     charging_park_ids = []
     edisgo_ids = []
