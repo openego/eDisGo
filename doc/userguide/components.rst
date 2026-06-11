@@ -4,7 +4,8 @@ Adding and modifying components
 ===============================
 
 Besides importing whole scenarios, you can add, remove and integrate individual
-components — generators, loads, storage units, charging points or heat pumps.
+components — generators, loads, storage units, charging points or heat pumps. For an
+overview of all component types, see :ref:`components`.
 
 Adding a component
 ------------------

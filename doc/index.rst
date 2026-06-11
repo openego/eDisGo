@@ -77,6 +77,7 @@ grid-planning tool spanning all voltage levels, used in two project publications
    userguide/data_sources
    userguide/workflow
    userguide/data_model
+   userguide/components_overview
    userguide/time_series
    userguide/components
    userguide/analysis_results

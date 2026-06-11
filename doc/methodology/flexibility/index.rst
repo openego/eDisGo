@@ -100,7 +100,9 @@ What is flexible
      - :class:`~edisgo.network.overlying_grid.OverlyingGrid`
      - :ref:`overlying-grid-flex`
 
-The optimisation that ties them together is described in :ref:`flexibility-opf`.
+The optimisation that ties them together is described in :ref:`flexibility-opf`. For
+*all* eDisGo component types — grid components as well as these flexibilities — see
+:ref:`components`.
 
 .. toctree::
    :maxdepth: 1
