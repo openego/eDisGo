@@ -87,6 +87,14 @@ Single components can also be retrieved as objects
     list(edisgo.topology.mv_grid.switch_disconnectors)
     list(lv_grid.generators)
 
+Each :class:`~edisgo.network.grids.Grid` can also assign **feeders** (the branches
+leaving the grid's station) to its buses and lines and report per-feeder statistics:
+
+.. code-block:: python
+
+    edisgo.topology.mv_grid.assign_grid_feeder()   # tag buses/lines with their feeder
+    edisgo.topology.mv_grid.get_feeder_stats()     # statistics per feeder
+
 Graph representation
 --------------------
 

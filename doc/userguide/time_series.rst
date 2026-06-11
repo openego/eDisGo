@@ -118,3 +118,14 @@ Derive reactive power from active power with a fixed power factor:
 
 Make sure the active-power series are set first. The sign conventions and the
 formula ``Q = P · tan(arccos(cos φ))`` are explained in :ref:`reactive-power-flex`.
+
+Scaling existing series
+-----------------------
+
+Already-set series can be scaled up or down (e.g. for a sensitivity study) with
+:meth:`~edisgo.network.timeseries.TimeSeries.scale_timeseries`, applied in place to all
+generators, loads and storage units:
+
+.. code-block:: python
+
+    edisgo.timeseries.scale_timeseries(p_scaling_factor=1.1, q_scaling_factor=1.0)

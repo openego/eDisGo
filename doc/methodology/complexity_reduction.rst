@@ -78,11 +78,19 @@ See [SCR]_ and [HoerschBrown]_ for the theory.
 Temporal complexity reduction
 -----------------------------
 
-The number of analysed time steps can be reduced by selecting only the
-grid-critical steps, or by clustering representative steps. This is used internally
-by :meth:`~edisgo.edisgo.EDisGo.reinforce` (``reduced_analysis=True``) and by the
-optimisation; the selection functions live in
-``edisgo.opf.timeseries_reduction``.
+The number of analysed time steps can be reduced by keeping only the grid-critical
+ones. :meth:`~edisgo.edisgo.EDisGo.reinforce` does this when called with
+``reduced_analysis=True``: it picks the most critical steps with
+:func:`~edisgo.tools.temporal_complexity_reduction.get_most_critical_time_steps`
+(ranked by the worst voltage and line-loading issues; whole worst-case *intervals* can
+be selected with
+:func:`~edisgo.tools.temporal_complexity_reduction.get_most_critical_time_intervals`).
+
+The flexibility optimisation uses a separate step selection in
+``edisgo.opf.timeseries_reduction`` — e.g.
+:func:`~edisgo.opf.timeseries_reduction.get_steps_curtailment` and
+:func:`~edisgo.opf.timeseries_reduction.get_steps_storage` — which clusters
+representative steps for the OPF.
 
 Memory
 ------
