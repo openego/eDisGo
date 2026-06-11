@@ -34,13 +34,16 @@ A ding0 grid is a directory of CSV files (``buses.csv``, ``lines.csv``,
 * ``legacy_ding0_grids=False`` selects the **current** (egon-data compatible) grid
   format. Use ``True`` only for older ding0 grids.
 
+Internally the constructor calls :meth:`~edisgo.edisgo.EDisGo.import_ding0_grid`, which
+you can also invoke directly on an existing :class:`~edisgo.edisgo.EDisGo` object.
+
 Where to get ding0 grids:
 
 * **Zenodo** — ready-made example grids are published on
   `Zenodo (record 10405129) <https://zenodo.org/records/10405129>`_; always pick
   the latest record.
 * **Generate your own** — follow the
-  `ding0 documentation <https://dingo.readthedocs.io/en/dev/usage_details.html#ding0-examples>`_.
+  `ding0 documentation <https://dingo.readthedocs.io/en/dev/usage_details.html#examples>`_.
 
 Scenario & time-series data — OpenEnergy Platform / egon-data
 -------------------------------------------------------------
@@ -55,7 +58,9 @@ methods are :meth:`~edisgo.edisgo.EDisGo.import_generators`,
 :meth:`~edisgo.edisgo.EDisGo.import_dsm`,
 :meth:`~edisgo.edisgo.EDisGo.import_home_batteries` and
 :meth:`~edisgo.edisgo.EDisGo.set_time_series_active_power_predefined`. A scenario is
-selected with the ``scenario`` argument (e.g. ``"eGon2035"``).
+selected with the ``scenario`` argument (e.g. ``"eGon2035"``). In eDisGo's API the
+OEP data source is referred to as ``"oedb"`` (OpenEnergy DataBase) for historical
+reasons.
 
 OEP database (standard)
 ~~~~~~~~~~~~~~~~~~~~~~~~~

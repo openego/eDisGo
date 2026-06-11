@@ -60,13 +60,21 @@ eDisGo ships a range of plots — static (matplotlib) and interactive
 .. code-block:: python
 
     edisgo.plot_mv_grid_topology()          # MV topology on a map
+    edisgo.plot_mv_grid()                   # general MV plot (all mv_grid_topology options)
     edisgo.plot_mv_grid_expansion_costs()   # expansion costs on a map
     edisgo.plot_mv_line_loading()           # line loading
     edisgo.plot_mv_voltages()               # node voltages
+    edisgo.plot_mv_storage_integration()    # positions of integrated storage units
     edisgo.histogram_voltage()              # voltage histogram
     edisgo.histogram_relative_line_load()   # line-loading histogram
     edisgo.plot_plotly()                    # interactive single-grid plot
     edisgo.plot_dash()                      # interactive comparison dashboard
+
+To inspect the **voltage profile along a feeder**,
+:meth:`~edisgo.edisgo.EDisGo.plot_voltage_over_dist` plots the LV voltage over the
+distance to the MV/LV transformer for one LV grid, and
+:meth:`~edisgo.edisgo.EDisGo.plot_voltage_over_dist_mv` does the same for the MV grid
+relative to the HV/MV station.
 
 See the :doc:`../tutorials/plot_example` notebook and the
 :class:`~edisgo.edisgo.EDisGo` API for all plotting options.

@@ -294,7 +294,7 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
     critical_stations : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with maximum deviations from allowed lower or upper voltage limits
         in p.u. for all MV-LV stations with voltage issues. For more information on
-        dataframe see :attr:`~.flex_opt.check_tech_constraints.voltage_issues`.
+        dataframe see :func:`~.flex_opt.check_tech_constraints.voltage_issues`.
 
     Returns
     -------
@@ -364,7 +364,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     crit_nodes : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with maximum deviations from allowed lower or upper voltage limits
         in p.u. for all buses in specified grid. For more information on dataframe see
-        :attr:`~.flex_opt.check_tech_constraints.voltage_issues`.
+        :func:`~.flex_opt.check_tech_constraints.voltage_issues`.
 
     Returns
     -------

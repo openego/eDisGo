@@ -70,6 +70,8 @@ heat-demand series:
     hp_name = edisgo.add_component(
         "load", bus=bus, p_set=0.015, type="heat_pump")
 
+    # cop and heat_demand are pandas Series you provide (indexed by the time index),
+    # e.g. from measured or modelled data
     edisgo.heat_pump.set_cop(edisgo, cop.to_frame(name=hp_name))
     edisgo.heat_pump.set_heat_demand(edisgo, heat_demand.to_frame(name=hp_name))
     edisgo.apply_heat_pump_operating_strategy()

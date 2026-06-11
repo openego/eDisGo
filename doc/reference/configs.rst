@@ -3,10 +3,12 @@
 Configuration data
 ==================
 
-eDisGo's default behaviour is controlled by four configuration files shipped with
+eDisGo's default behaviour is controlled by configuration files shipped with
 the package (``edisgo/config/``). You can inspect the current values below and
 override them by editing the configuration of an :class:`~edisgo.edisgo.EDisGo`
-object (``edisgo.config``). This page reproduces the default files verbatim.
+object (``edisgo.config``). This page reproduces the most relevant default files
+verbatim; the additional ``config_system.cfg`` only holds internal system paths and
+is not meant to be edited.
 
 .. _config_db:
 
@@ -59,4 +61,17 @@ voltage-level power thresholds used by
 disconnecting points are placed.
 
 .. include:: ../../edisgo/config/config_grid_default.cfg
+   :literal:
+
+.. _config_opf_julia:
+
+config_opf_julia
+----------------
+
+``config_opf_julia.cfg`` points to the Julia binary used by the multi-period optimal
+power flow (:ref:`flexibility-opf`). It is only relevant when running
+:meth:`~edisgo.edisgo.EDisGo.pm_optimize`; see :ref:`opf-requirements` for the full
+Julia/Gurobi setup.
+
+.. include:: ../../edisgo/config/config_opf_julia_default.cfg
    :literal:

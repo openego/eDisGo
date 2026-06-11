@@ -32,6 +32,31 @@ weighted by the TracBEV factor
 free and powerful enough, otherwise a new one is chosen the same weighted way
 (:py:func:`~edisgo.io.electromobility_import.distribute_public_charging_demand`).
 
+Grid integration
+----------------
+
+Once the charging points carry their demand, the parks are connected to the grid by
+:py:func:`~edisgo.io.electromobility_import.integrate_charging_parks`. The decisive
+quantity is each park's **grid connection capacity**, which is deliberately *not* the
+plain sum of its charging-point ratings:
+
+#. The **gross capacity** is the summed (loss-corrected) peak power of every charging
+   point in the park
+   (:attr:`~edisgo.network.components.PotentialChargingParks.designated_charging_point_capacity`).
+#. A size-dependent **simultaneity (diversity) factor** is applied
+   (:func:`~edisgo.io.electromobility_import.determine_grid_connection_capacity`):
+   small parks are connected in full (factor ``1.0``), parks of 1 MW gross and above
+   are reduced to 45 % (factor ``0.45``), and in between the factor ramps down
+   linearly. The rationale: the more charging points a site has, the less likely they
+   all draw peak power at the same instant. High-power-charging (``hpc``) sites are the
+   exception and are connected at full capacity.
+#. The result becomes the charging point's ``p_set``, which determines the **voltage
+   level** it is connected to and how the connection is sized — and hence how much grid
+   reinforcement the charging demand ultimately triggers.
+
+Using the gross sum directly would systematically oversize the connections (and the
+reinforcement); the diversity factor keeps the integration realistic.
+
 .. _charging-strategies:
 
 Charging strategies (heuristic)
@@ -72,7 +97,7 @@ computed with
    choose any charging profile that stays inside both bands.
 
 Physics
-~~~~~~~
+-------
 
 The bands encode two facts. The **power band** follows from the connected charger and
 the parking schedule: :math:`0 \le P(t) \le P_\text{max}` only while the car is

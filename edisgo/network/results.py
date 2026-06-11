@@ -109,7 +109,7 @@ class Results:
         The given active power for each line / transformer is the
         active power at the line ending / transformer side with the higher
         apparent power determined from active powers :math:`p_0` and
-        :math:`p_1` and reactive powers :math:`q_0` and :math:`q_0` at the
+        :math:`p_1` and reactive powers :math:`q_0` and :math:`q_1` at the
         line endings / transformer sides:
 
         .. math::
@@ -149,7 +149,7 @@ class Results:
     @property
     def pfa_q(self):
         r"""
-        Active power over components in Mvar from last power flow analysis.
+        Reactive power over components in Mvar from last power flow analysis.
 
         The given reactive power over each line / transformer is the
         reactive power at the line ending / transformer side with the higher

@@ -27,7 +27,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     Calculates topology expansion costs for each reinforced transformer and line
     in kEUR.
 
-    Attributes
+    Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
     without_generator_import : bool

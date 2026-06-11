@@ -22,10 +22,18 @@ Manual
 ~~~~~~
 
 Provide your own series with :meth:`~edisgo.edisgo.EDisGo.set_time_series_manual`.
+Pass a pandas ``DataFrame`` per component category, indexed by the time index and
+with one column per component:
 
 .. code-block:: python
 
-    edisgo.set_time_series_manual()
+    import pandas as pd
+
+    edisgo.set_time_series_manual(
+        loads_active_power=pd.DataFrame(
+            {"Load_1": [0.5, 0.6]}, index=edisgo.timeseries.timeindex
+        ),
+    )
 
 .. _worst-case-ts:
 
@@ -92,7 +100,7 @@ See :ref:`heat-pumps-flex` for details.
 Reactive power
 --------------
 
-Two options exist for reactive power; more controls (Q(U), cos φ(P)) are planned.
+Two options exist for reactive power.
 
 Manual
 ~~~~~~

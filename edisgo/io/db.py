@@ -264,6 +264,21 @@ def session_scope_egon_data(engine: Engine):
 
 
 def sql_grid_geom(edisgo_obj: EDisGo) -> Geometry:
+    """
+    Returns the grid district geometry as a PostGIS geometry.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+        EDisGo object whose grid district geometry is used.
+
+    Returns
+    -------
+    Geometry
+        Grid district geometry built from its WKT and SRID, for use in spatial SQL
+        queries.
+
+    """
     return func.ST_GeomFromText(
         edisgo_obj.topology.grid_district["geom"].wkt,
         edisgo_obj.topology.grid_district["srid"],
@@ -271,6 +286,22 @@ def sql_grid_geom(edisgo_obj: EDisGo) -> Geometry:
 
 
 def get_srid_of_db_table(session: Session, geom_col: InstrumentedAttribute) -> int:
+    """
+    Returns the SRID of a geometry column in a database table.
+
+    Parameters
+    ----------
+    session : Session
+        SQLAlchemy session used to query the database.
+    geom_col : InstrumentedAttribute
+        Geometry column whose spatial reference identifier is determined.
+
+    Returns
+    -------
+    int
+        Spatial reference identifier (SRID) of the geometry column.
+
+    """
     query = session.query(func.ST_SRID(geom_col)).limit(1)
 
     return pd.read_sql(sql=query.statement, con=query.session.bind).iat[0, 0]
@@ -304,6 +335,19 @@ def sql_within(geom_a: Geometry, geom_b: Geometry, srid: int):
 
 
 def sql_intersects(geom_col: InstrumentedAttribute, geom_shape: Geometry, srid: int):
+    """
+    Checks if a geometry column intersects a given geometry.
+
+    Parameters
+    ----------
+    geom_col : InstrumentedAttribute
+        Geometry column to test for intersection.
+    geom_shape : Geometry
+        Geometry to test the column against.
+    srid : int
+        SRID both geometries are transformed to before the intersection test.
+
+    """
     return func.ST_Intersects(
         func.ST_Transform(
             geom_col,

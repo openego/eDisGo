@@ -46,6 +46,11 @@ depending on the scenario):
 The :doc:`../tutorials/full_workflow_walkthrough` notebook implements exactly this
 sequence, stage by stage.
 
+At any point before analysing you can call
+:meth:`~edisgo.edisgo.EDisGo.check_integrity` to validate that the time series,
+components and flexibility data are mutually consistent — a quick way to catch the
+ordering mistakes described below.
+
 .. _ordering-rules:
 
 Critical ordering rules

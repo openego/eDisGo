@@ -736,8 +736,8 @@ class Switch(BasicComponent):
                 self.topology.lines_df.at[self.branch, col] = self.bus_open
             else:
                 raise AttributeError(
-                    f"Could not open switch {self.id}. Specified branch {self.branch} of switch "
-                    f"has no bus {self.bus_closed}. Please check the switch."
+                    f"Could not open switch {self.id}. Specified branch {self.branch} "
+                    f"of switch has no bus {self.bus_closed}. Please check the switch."
                 )
 
     def close(self):
@@ -752,8 +752,8 @@ class Switch(BasicComponent):
                 self.topology.lines_df.at[self.branch, col] = self.bus_closed
             else:
                 raise AttributeError(
-                    f"Could not close switch {self.id}. Specified branch {self.branch} of switch "
-                    f"has no bus {self.bus_closed}. Please check the switch."
+                    f"Could not close switch {self.id}. Specified branch {self.branch} "
+                    f"of switch has no bus {self.bus_closed}. Please check the switch."
                 )
 
     def _get_bus_column(self, bus):
@@ -771,6 +771,19 @@ class Switch(BasicComponent):
 
 
 class PotentialChargingParks(BasicComponent):
+    """
+    Charging park (potential charging-point location) for electric vehicles.
+
+    A potential charging park is a candidate site, derived from the SimBEV/TracBEV
+    data held in the :class:`~.network.electromobility.Electromobility` container, at
+    which one or more charging points may be connected. It is used by
+    :meth:`~.EDisGo.import_electromobility` to allocate charging demand and integrate
+    the resulting charging points into the grid.
+
+    See :class:`~.network.components.BasicComponent` for the constructor arguments.
+
+    """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -926,6 +939,17 @@ class PotentialChargingParks(BasicComponent):
 
     @property
     def edisgo_id(self):
+        """
+        Name of the charging point this charging park was integrated as.
+
+        Returns
+        --------
+        :obj:`str`
+            Identifier of the integrated charging point (as in the index of
+            :attr:`~.network.topology.Topology.charging_points_df`), or None if the
+            potential charging park has not been integrated into the grid yet.
+
+        """
         try:
             return self._edisgo_obj.electromobility.integrated_charging_parks_df.at[
                 self.id, "edisgo_id"
@@ -954,6 +978,19 @@ class PotentialChargingParks(BasicComponent):
 
     @property
     def grid_connection_capacity(self):
+        """
+        Required grid connection capacity of the potential charging park in MW.
+
+        Returns
+        --------
+        :obj:`float`
+            Grid connection capacity in MW. For high-power charging
+            (``use_case == "hpc"``) this equals the designated charging-point
+            capacity; for the other use cases it is reduced via
+            :func:`~.io.electromobility_import.determine_grid_connection_capacity` to
+            account for simultaneity.
+
+        """
         if self.use_case == "hpc":
             return self.designated_charging_point_capacity / 10**3
         else:

@@ -73,6 +73,10 @@ The coupling between branch power, current and voltage is the quadratic equality
 
 which is what makes an exact AC-OPF non-convex.
 
+All quantities are scaled to per-unit on a common base power ``s_base`` (an argument
+of :meth:`~edisgo.edisgo.EDisGo.pm_optimize`, default 1 MVA), which keeps the
+optimisation numerically well-conditioned.
+
 Solution method: SOC vs. non-convex
 -----------------------------------
 
@@ -91,7 +95,8 @@ The ``method`` argument chooses how that quadratic constraint is handled:
   :math:`P^2+Q^2=V^2 I^2` with the convex inequality :math:`P^2+Q^2 \le V^2 I^2`. The
   resulting convex problem is solved with **Gurobi** and is fast and reliable. For
   radial grids the relaxation is usually *exact* (the inequality is tight at the
-  optimum), so the solution is also feasible for the original AC problem.
+  optimum), so the solution is also feasible for the original AC problem; where it is
+  not, ``warm_start=True`` (below) recovers a feasible AC solution.
 * ``"nc"`` — the **non-convex** problem with the exact equality, solved with the
   **Ipopt** interior-point solver. More accurate in principle but slower and not
   guaranteed to find the global optimum.
@@ -141,6 +146,18 @@ DSM and storage active power) and can then feed a final
 and ``save_slacks`` flags control whether heat-storage states, the slack generator and
 the optimisation slack variables are stored as well; the exact slack set depends on
 ``opf_version`` (see :func:`edisgo.io.powermodels_io.from_powermodels`).
+
+Beyond the schedules, the full raw optimisation result is collected in
+``edisgo.opf_results``, an
+:class:`~edisgo.opf.results.opf_result_class.OPFResults` object. It holds the solver
+status and solve time, the per-line branch-flow variables
+(:class:`~edisgo.opf.results.opf_result_class.LineVariables`), the heat- and
+battery-storage trajectories
+(:class:`~edisgo.opf.results.opf_result_class.HeatStorage`,
+:class:`~edisgo.opf.results.opf_result_class.BatteryStorage`), the exchange with the
+overlying grid, and the grid slack variables — curtailment and load shedding —
+(:class:`~edisgo.opf.results.opf_result_class.GridSlacks`). See its API reference for
+the full field list.
 
 Performance
 -----------

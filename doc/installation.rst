@@ -89,7 +89,7 @@ synthetic grids generated with `ding0 <https://github.com/openego/ding0>`_. You 
 * download ready-made example grids from
   `Zenodo <https://zenodo.org/records/10405129>`_ (choose the latest record), or
 * generate grids yourself following the
-  `ding0 documentation <https://dingo.readthedocs.io/en/dev/usage_details.html#ding0-examples>`_.
+  `ding0 documentation <https://dingo.readthedocs.io/en/dev/usage_details.html#examples>`_.
 
 See :ref:`data-sources` for details on grid data and on the scenario data obtained
 from the OpenEnergy Platform.

@@ -125,6 +125,19 @@ class Config:
 
     @property
     def db_table_mapping(self):
+        """
+        Mapping of dataset names to database table names.
+
+        Read lazily from the ``config_db_tables`` configuration (see
+        :ref:`default_configs`) on first access and used when retrieving data from the
+        Open Energy Platform.
+
+        Returns
+        -------
+        dict
+            Mapping of dataset name to database table name.
+
+        """
         if not self._config_dict.get("db_table_mapping"):
             self._ensure_db_mappings_loaded()
         return self._config_dict.get("db_table_mapping", {})
@@ -135,6 +148,19 @@ class Config:
 
     @property
     def db_schema_mapping(self):
+        """
+        Mapping of dataset names to database schema names.
+
+        Read lazily from the ``config_db_tables`` configuration (see
+        :ref:`default_configs`) on first access and used when retrieving data from the
+        Open Energy Platform.
+
+        Returns
+        -------
+        dict
+            Mapping of dataset name to database schema name.
+
+        """
         if not self._config_dict.get("db_schema_mapping"):
             self._ensure_db_mappings_loaded()
         return self._config_dict.get("db_schema_mapping", {})

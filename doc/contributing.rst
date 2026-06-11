@@ -29,9 +29,10 @@ with conda first (see :ref:`installation`).
 Code standards
 --------------
 
-* **pre-commit hooks** — formatting and linting (ruff, isort, flake8) run on every
-  commit; with the hooks installed you cannot push until they pass. Run them on
-  demand with ``pre-commit`` (most issues are fixed automatically).
+* **pre-commit hooks** — formatting and linting (Ruff, which replaced flake8, isort,
+  pyupgrade and Black) run on every commit; with the hooks installed you cannot push
+  until they pass. Run them on demand with ``pre-commit`` (most issues are fixed
+  automatically).
 * **Tests** — all tests must pass and new code must come with tests.
 * **Type hints** — add type hints to new functions; they are rendered into the API
   reference.
