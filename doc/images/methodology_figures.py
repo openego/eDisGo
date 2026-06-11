@@ -270,7 +270,7 @@ def fig_cost_comparison():
     fig, ax = plt.subplots(figsize=(5.6, 4.4))
     levels = ["LV", "MV/LV", "MV"]
     without = [142, 88, 210]
-    withopt = [40, 22, 70]
+    withopt = [121, 75, 178]
     cols = [GREEN, ORANGE, BLUE]
     for vals, xpos in ((without, 0), (withopt, 1)):
         bottom = 0
