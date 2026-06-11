@@ -369,7 +369,7 @@ def main():
 
     plot_cp_hp_locations(edisgo, show=False, save=True)
 
-    #edisgo = run_optimization_14a(edisgo)
+    edisgo = run_optimization_14a(edisgo)
     edisgo.analyze()
 
 
