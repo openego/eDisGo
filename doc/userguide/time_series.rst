@@ -66,6 +66,13 @@ Set series by component type, either from your own data or from public sources:
   ``oedb`` (OpenEnergy DataBase).
 * **Conventional loads** — standard load profiles per sector via
   ``demandlib`` (see :ref:`data-sources`).
+* **Charging points** — pass normalised profiles *per use case* via the
+  ``charging_points_ts`` argument (there is no ``oedb`` source for charging points, and
+  only the use cases you supply are set). If you omit it, charging points — including
+  ``public`` ones — are left **without a series**. To set them automatically instead,
+  use :meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy` (see
+  :ref:`charging-strategies`), which covers all charging points (``public``/``hpc``
+  charged "dumb").
 
 For all other components you provide your own series. See
 :meth:`~edisgo.edisgo.EDisGo.set_time_series_active_power_predefined`.

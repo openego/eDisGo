@@ -65,8 +65,9 @@ Charging strategies (heuristic)
 Rule-based strategies are applied with
 :meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy`
 (:py:func:`~edisgo.flex_opt.charging_strategies.charging_strategy`). Every strategy
-must fully cover each charging requirement, and only *private* processes are
-flexibilised (public charging prioritises service):
+must fully cover each charging requirement. Only the **private** use cases — ``home``
+and ``work`` — are shifted; ``public`` and high-power (``hpc``) charging is always
+charged "dumb", as it prioritises immediate service:
 
 * ``"dumb"`` — charge at maximum power immediately on arrival. No flexibility; the
   worst case for the grid.
@@ -75,6 +76,13 @@ flexibilised (public charging prioritises service):
   ``minimum_charging_capacity_factor``), spreading the load out.
 * ``"residual"`` — *active*: charge when the residual load in the MV grid is lowest
   (high generation, low consumption); processes with little flexibility get priority.
+
+So the ``"dumb"`` strategy charges *every* use case immediately, while ``"reduced"`` and
+``"residual"`` shift only ``home`` and ``work`` and leave ``public``/``hpc`` dumb. Either
+way, after :meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy` *every* charging point
+has an active-power series — none are left unset — which is what a subsequent power flow
+or the :ref:`optimisation <flexibility-opf>` needs (the optimisation reschedules only the
+charging points passed as flexible and keeps the rest as fixed load).
 
 Flexibility bands (for optimisation)
 ------------------------------------
