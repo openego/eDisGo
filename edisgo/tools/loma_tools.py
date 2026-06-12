@@ -1785,18 +1785,6 @@ def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True):
 
     plt.close(fig)
 
-=======
-
-    if save:
-        os.makedirs(output_folder, exist_ok=True)
-        plt.savefig(
-            os.path.join(output_folder, f"grid_analysis_{snapshot}.png"),
-            dpi=300, bbox_inches="tight"
-        )
-    if show:
-        plt.show()
-    plt.close(fig) 
->>>>>>> a2535e6f (Adjust plot function for final Husum results)
 
 def plot_storage_dispatch(
     edisgo, day: str = None, show: bool = True, save: bool = True
