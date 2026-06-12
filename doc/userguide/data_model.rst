@@ -109,3 +109,104 @@ a station to a generator). Lines become edges; buses and transformers become nod
 
 For the sign and unit conventions used throughout these DataFrames, see
 :ref:`definitions and units <definitions-and-units>`.
+
+.. _pypsa-relationship:
+
+Relationship to the PyPSA format
+--------------------------------
+
+eDisGo's static data model is a set of :pandas:`pandas.DataFrames<DataFrame>` that is
+deliberately **close to, but not identical with, the** `PyPSA <https://pypsa.org>`_
+**component model**. eDisGo does not store a PyPSA network internally; instead it
+converts its topology on demand — :meth:`~edisgo.edisgo.EDisGo.to_pypsa` builds a
+PyPSA network for the power flow, and :meth:`~edisgo.edisgo.EDisGo.to_powermodels`
+builds the OPF input. A second, important difference: in eDisGo the **time series
+live in a separate container** (:class:`~edisgo.network.timeseries.TimeSeries`), not
+in the component frames — ``to_pypsa`` fills PyPSA's ``loads_t``/``generators_t`` etc.
+from it.
+
+Component mapping
+~~~~~~~~~~~~~~~~~
+
+.. list-table::
+   :header-rows: 1
+   :widths: 26 22 52
+
+   * - eDisGo (``topology``)
+     - PyPSA component
+     - Notes / differing columns
+   * - ``buses_df``
+     - ``Bus``
+     - ``v_nom``, ``x``, ``y`` as in PyPSA; eDisGo adds ``mv_grid_id`` /
+       ``lv_grid_id`` (grid hierarchy) and ``in_building``.
+   * - ``lines_df``
+     - ``Line``
+     - ``bus0``/``bus1``/``length``/``s_nom``/``num_parallel`` as in PyPSA; ``r`` and
+       ``x`` are stored in **ohms** and passed straight through to PyPSA, which does the
+       per-unit conversion internally from ``v_nom`` (``to_pypsa`` itself does *not*
+       convert them). eDisGo uses ``type_info`` (cable/line type name) and ``kind``
+       (``"cable"``/``"line"``) instead of PyPSA's standard-type ``type``. A ``b`` column
+       exists but is always 0 and there is no ``g``, so **line shunt admittance is
+       effectively neglected**.
+   * - ``transformers_df``, ``transformers_hvmv_df``
+     - ``Transformer``
+     - MV/LV and HV/MV transformers; the HV/MV transformer's secondary side carries
+       the **slack**.
+   * - ``loads_df``
+     - ``Load``
+     - ``bus``/``p_set`` as in PyPSA; eDisGo adds ``type`` (``conventional_load`` /
+       ``charging_point`` / ``heat_pump``), ``sector``, ``building_id``,
+       ``annual_consumption``, ``number_households``.
+   * - ``generators_df``
+     - ``Generator``
+     - ``bus``/``p_nom``/``control`` as in PyPSA; eDisGo adds ``type`` (technology),
+       ``subtype`` and ``weather_cell_id``.
+   * - ``storage_units_df``
+     - ``StorageUnit``
+     - ``p_nom``/``max_hours``/``efficiency_store``/``efficiency_dispatch``/``control``
+       — these names are taken directly from PyPSA.
+   * - ``switches_df``
+     - —
+     - **No PyPSA equivalent.** Switches are resolved into ``lines_df`` (open/closed
+       state) before conversion, so PyPSA sees the radial operating state
+       (:ref:`switches-explained`).
+
+What eDisGo needs beyond PyPSA
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Compared with a bare PyPSA network, eDisGo additionally requires:
+
+* the **grid hierarchy** — every bus tagged with its ``mv_grid_id`` and (for LV buses)
+  ``lv_grid_id``, plus a defined HV/MV transformer — because eDisGo reasons per MV/LV
+  grid (reinforcement, feeders, complexity reduction);
+* **geo-coordinates** (``x``/``y``) for line lengths, plotting and spatial reduction;
+* **component typing** — ``type``/``sector`` on loads, ``type``/``subtype``/
+  ``weather_cell_id`` on generators, ``type_info``/``kind`` on lines — used for
+  equipment limits, costs and time-series generation;
+* the **flexibility containers** (:class:`~edisgo.network.electromobility.Electromobility`,
+  :class:`~edisgo.network.heat.HeatPump`, :class:`~edisgo.network.dsm.DSM`,
+  :class:`~edisgo.network.overlying_grid.OverlyingGrid`), which have no PyPSA counterpart.
+
+Conversely, what PyPSA needs is assembled by ``to_pypsa``: the reactive-power series
+``q_set`` from :ref:`reactive-power-flex`, and the slack at the HV/MV station. The
+ohmic line ``r``/``x`` are handed to PyPSA unchanged — PyPSA converts them to per-unit
+internally — while transformer per-unit values (``r_pu``/``x_pu``) are already computed
+at ding0 import time, not by ``to_pypsa``.
+
+Coming from a PyPSA network
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There is **no automatic PyPSA-to-eDisGo importer**: eDisGo loads grids from
+ding0-format CSV files (:ref:`data-sources`). To represent an existing PyPSA grid in
+eDisGo you therefore need to provide the data in eDisGo's schema — in practice:
+
+#. assign every bus to an MV grid (and LV buses to an LV grid) via ``mv_grid_id`` /
+   ``lv_grid_id``, and make sure there is an HV/MV transformer;
+#. supply ``x``/``y`` coordinates for all buses;
+#. give lines an ``s_nom``, ``length``, ``num_parallel``, ``type_info`` and ``kind``
+   (``r``/``x`` in ohms);
+#. classify loads (``type``, ``sector``) and generators (``type``, ``subtype``,
+   ``weather_cell_id``);
+#. add switches only if you want ring topology (otherwise the grid is purely radial);
+#. set the time series through the :class:`~edisgo.network.timeseries.TimeSeries` API
+   rather than on the components.
