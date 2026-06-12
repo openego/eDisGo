@@ -125,7 +125,6 @@ def _load_emob_cache(edisgo, cache_dir):
 
     print(f"[emob cache] Loaded from {cache_dir} ({len(new_cp_rows)} eDisGo CPs restored)")
 
-
 def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_days=None, cache_dir=None):
     """Import EV charging points, apply charging strategy, and adjust CP/HP counts."""
 
@@ -234,14 +233,17 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     # Compute CP eligible buses for CP scaling
     valid_buses = set(edisgo.topology.buses_df.index)
 
-    cp_eligible_buses = [
+    base_eligible_buses = [
         bus for bus in buses_with_existing_loads(edisgo)
         if bus in valid_buses
     ]
     
+    cp_eligible_buses = base_eligible_buses.copy()
+    hp_eligible_buses = base_eligible_buses.copy()
+    
     set_charging_points_to_target(
         edisgo,
-        target_total=4000, # sets total amount of CP #412 SQ, 1000 2035
+        target_total=1500, # sets total amount of CP #412 SQ, 1000 2035
         # percentage=0.10, # increases total amount of CP by 10%
         # percentage=-0.10, # decreases total amount of CP by 10%
         eligible_buses=cp_eligible_buses,
@@ -250,18 +252,10 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
         export_removed=False,
         export_dir=output_dir,
     )
-    
-    # Recompute HP eligible buses after CP scaling
-    valid_buses = set(edisgo.topology.buses_df.index)
-    
-    hp_eligible_buses = [
-        bus for bus in buses_with_existing_loads(edisgo)
-        if bus in valid_buses
-    ]
 
     set_heat_pumps_to_target(
         edisgo,
-        target_total=575,  # sets total amount of HP #575 SQ, 2600 2035
+        target_total=2000,  # sets total amount of HP #575 SQ, 2600 2035
         # percentage=0.10, # increases total amount of HP by 10%
         # percentage=-0.10, # decreases total amount of HP by 10%
         eligible_buses=hp_eligible_buses,
@@ -366,12 +360,11 @@ def main():
         cache_dir=emob_cache_dir,
         setup_days=None,
     )
-
+    
     plot_cp_hp_locations(edisgo, show=False, save=True)
 
     edisgo = run_optimization_14a(edisgo)
     edisgo.analyze()
-
 
     # ────────────────────────── Slack diagnosis ──────────────────────────────
     slacks = edisgo.opf_results.grid_slacks_t
@@ -436,4 +429,3 @@ def main():
 
 if __name__ == "__main__":
     edisgo = main()
-    

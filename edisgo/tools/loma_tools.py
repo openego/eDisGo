@@ -17,6 +17,8 @@ from edisgo.flex_opt.battery_storage_operation import _reference_operation
 from edisgo.io.db import get_srid_of_db_table, session_scope_egon_data
 from edisgo.tools.config import Config
 
+import hashlib
+
 logger = logging.getLogger(__name__)
 
 # ==========================
@@ -407,6 +409,57 @@ def get_load_ids_by_type(edisgo, load_type):
     loads_df = edisgo.topology.loads_df
     return loads_df.index[loads_df["type"] == load_type].tolist()
 
+def _stable_hash_score(value, *, seed=42):
+    """
+    Deterministic pseudo-random score for one value.
+
+    Depends only on:
+    - value
+    - seed
+
+    This is stable across Python sessions and independent of list length.
+    """
+    key = f"{seed}|{value}".encode("utf-8")
+    digest = hashlib.sha256(key).hexdigest()
+    return int(digest[:16], 16)
+
+
+def _stable_order_ids(candidate_ids, *, seed=42):
+    """
+    Return IDs in deterministic pseudo-random order.
+
+    Taking the first N entries guarantees nested selections:
+    first 1500 are contained in first 2000, etc.
+    """
+    candidate_ids = list(candidate_ids)
+
+    return sorted(
+        candidate_ids,
+        key=lambda x: (_stable_hash_score(str(x), seed=seed), str(x)),
+    )
+
+
+def _stable_choice_from_pool(pool, *, key, seed=42):
+    """
+    Deterministically choose one item from a pool based on a key.
+
+    This is used for target-bus selection of duplicated loads.
+    The chosen bus depends on:
+    - duplicate ID / key
+    - seed
+    - available pool
+
+    It does not depend on how many duplicates are created in total.
+    """
+    pool = list(pd.Index(pool).dropna().unique())
+
+    if len(pool) == 0:
+        raise ValueError("Cannot choose from an empty pool.")
+
+    ordered_pool = sorted(pool, key=str)
+    score = _stable_hash_score(key, seed=seed)
+    return ordered_pool[score % len(ordered_pool)]
+
 def split_ids_by_marker(load_ids, marker="Existing"):
     """
     Split IDs into two groups based on a substring marker.
@@ -479,9 +532,11 @@ def _select_keep_ids(
     seed=42,
 ):
     """
-    Randomly select IDs to keep.
+    Select IDs to keep in a deterministic nested way.
+
+    For the same candidate set and seed:
+    target_total=1500 is always a subset of target_total=2000.
     """
-    rng = np.random.default_rng(seed)
     candidate_ids = list(candidate_ids)
 
     if target_total < 0:
@@ -493,7 +548,8 @@ def _select_keep_ids(
     if target_total == 0:
         return []
 
-    return rng.choice(np.array(candidate_ids), size=target_total, replace=False).tolist()
+    ordered_ids = _stable_order_ids(candidate_ids, seed=seed)
+    return ordered_ids[:target_total]
 
 def _select_keep_ids_by_removal_priority(
     candidate_ids,
@@ -503,37 +559,17 @@ def _select_keep_ids_by_removal_priority(
     removal_priority=None,
 ):
     """
-    Select IDs to keep such that removal happens in priority stages.
+    Select IDs to keep with staged removal priority and nested target sizes.
 
-    Removal order:
-    1. IDs without any marker
-    2. IDs matching earlier markers in `removal_priority`
-    3. IDs matching later markers in `removal_priority`
+    For the same candidate set and seed:
+    target_total=1500 is always a subset of target_total=2000,
+    while still respecting the removal priority.
 
-    Example
-    -------
-    removal_priority = ["Additional", "Existing"]
-
-    -> removal order:
-       - no marker
-       - "Additional"
-       - "Existing"
-
-    Parameters
-    ----------
-    candidate_ids : list[str]
-    target_total : int
-    seed : int
-    removal_priority : list[str] | None
-        Markers ordered from earlier removable to later removable.
-        Later entries are protected longer.
-
-    Returns
-    -------
-    list[str]
-        IDs to keep
+    Example with removal_priority=["Additional", "Existing"]:
+    - Existing is protected longest
+    - Additional is protected next
+    - unmarked IDs are removed first
     """
-    rng = np.random.default_rng(seed)
     candidate_ids = list(candidate_ids)
 
     if target_total < 0:
@@ -546,13 +582,13 @@ def _select_keep_ids_by_removal_priority(
         return []
 
     if not removal_priority:
-        return rng.choice(np.array(candidate_ids), size=target_total, replace=False).tolist()
+        ordered_ids = _stable_order_ids(candidate_ids, seed=seed)
+        return ordered_ids[:target_total]
 
     # Buckets:
-    # bucket 0 = IDs without any marker
+    # bucket 0 = IDs without marker
     # bucket 1 = first marker in removal_priority
     # bucket 2 = second marker in removal_priority
-    # ...
     buckets = {i: [] for i in range(len(removal_priority) + 1)}
 
     for load_id in candidate_ids:
@@ -562,9 +598,14 @@ def _select_keep_ids_by_removal_priority(
         for i, marker in enumerate(removal_priority, start=1):
             if marker in load_id_str:
                 matched_bucket = i
+
         buckets[matched_bucket].append(load_id)
 
-    # Keep from highest protection bucket first
+    # Keep from highest-protection bucket first.
+    # Example ["Additional", "Existing"]:
+    # 1. Existing
+    # 2. Additional
+    # 3. unmarked IDs
     keep_ids = []
     remaining = target_total
 
@@ -575,12 +616,12 @@ def _select_keep_ids_by_removal_priority(
             break
 
         if remaining >= len(bucket_ids):
-            keep_ids.extend(bucket_ids)
+            # Sort for deterministic output order.
+            keep_ids.extend(_stable_order_ids(bucket_ids, seed=seed))
             remaining -= len(bucket_ids)
         else:
-            keep_ids.extend(
-                rng.choice(np.array(bucket_ids), size=remaining, replace=False).tolist()
-            )
+            ordered_bucket_ids = _stable_order_ids(bucket_ids, seed=seed)
+            keep_ids.extend(ordered_bucket_ids[:remaining])
             remaining = 0
 
     return keep_ids
@@ -592,18 +633,29 @@ def _select_source_ids_for_duplication(
     seed=42,
 ):
     """
-    Select source IDs for duplication.
+    Select source IDs for duplication in a deterministic nested way.
 
-    Sampling is with replacement to allow arbitrary growth.
-    No special priority logic is applied.
+    For the same candidate set and seed:
+    n_add=500 is always the prefix of n_add=1000.
+
+    Sampling is still with replacement.
     """
-    rng = np.random.default_rng(seed)
     candidate_ids = list(candidate_ids)
 
     if len(candidate_ids) == 0:
         raise ValueError("No candidate source IDs available for duplication.")
 
-    return rng.choice(np.array(candidate_ids), size=n_add, replace=True)
+    if n_add <= 0:
+        return []
+
+    ordered_ids = _stable_order_ids(candidate_ids, seed=seed)
+
+    source_ids = []
+    for k in range(1, n_add + 1):
+        score = _stable_hash_score(f"dup_source|{k}", seed=seed)
+        source_ids.append(ordered_ids[score % len(ordered_ids)])
+
+    return source_ids
 
 # ============================================================
 # Topology / time-series write helpers
@@ -623,8 +675,6 @@ def _duplicate_loads_from_source_ids(
     """
     Duplicate given source loads to eligible buses.
     """
-    rng = np.random.default_rng(seed)
-
     loads_df = edisgo.topology.loads_df
     tindex = edisgo.timeseries.timeindex
 
@@ -647,10 +697,16 @@ def _duplicate_loads_from_source_ids(
     for k, src_id in enumerate(source_ids, start=1):
         if src_id not in loads_df.index:
             raise KeyError(f"Source load '{src_id}' not found in topology.loads_df.")
-
+    
         src_row = loads_df.loc[src_id].copy()
         src_bus = src_row["bus"]
-        
+    
+        new_id_base = f"{name_prefix}_{k}"
+        new_id = _make_unique_load_id(
+            loads_df.index.union(pd.Index(new_ids)),
+            new_id_base,
+        )
+    
         if avoid_source_bus:
             bus_pool = eligible_buses[eligible_buses != src_bus]
             if len(bus_pool) == 0:
@@ -659,7 +715,7 @@ def _duplicate_loads_from_source_ids(
                 )
         else:
             bus_pool = eligible_buses
-        
+    
         # ------------------------------------------------------------
         # 14a CP duplication logic
         # < 100 kW: house_connection
@@ -670,12 +726,12 @@ def _duplicate_loads_from_source_ids(
                 raise KeyError(
                     f"Source charging point '{src_id}' has no 'p_set' column."
                 )
-        
+    
             p_set = float(src_row["p_set"])
-        
+    
             buses_df = edisgo.topology.buses_df
             trafos_df = edisgo.topology.transformers_df
-        
+    
             # --------------------------------------------------------
             # CP < 100 kW: duplicate only to house_connection buses
             # --------------------------------------------------------
@@ -686,21 +742,25 @@ def _duplicate_loads_from_source_ids(
                         "It is required to connect duplicated charging points "
                         "below 100 kW only to house_connection buses."
                     )
-        
+    
                 house_connection_buses = buses_df.index[
                     buses_df["comp_type"] == "house_connection"
                 ]
-        
+    
                 bus_pool_filtered = pd.Index(bus_pool).intersection(house_connection_buses)
-        
+    
                 if len(bus_pool_filtered) == 0:
                     raise ValueError(
                         f"No eligible house_connection buses found for duplicated "
                         f"charging point '{src_id}' with p_set={p_set:.6f} MW."
                     )
-        
-                tgt_bus = rng.choice(np.array(bus_pool_filtered))
-        
+    
+                tgt_bus = _stable_choice_from_pool(
+                    bus_pool_filtered,
+                    key=f"{load_type}|{new_id}|target_bus",
+                    seed=seed,
+                )
+    
             # --------------------------------------------------------
             # CP >= 100 kW: connect to MV side of nearest MV/LV trafo
             # --------------------------------------------------------
@@ -710,45 +770,46 @@ def _duplicate_loads_from_source_ids(
                         "Column 'bus0' not found in transformers_df. "
                         "It is required to identify the MV side of MV/LV transformers."
                     )
-        
+    
                 mv_trafo_bus_ids = trafos_df["bus0"].dropna().unique()
-        
+    
                 mv_trafo_buses = buses_df.loc[
                     buses_df.index.intersection(mv_trafo_bus_ids)
                 ].dropna(subset=["x", "y"])
-        
+    
                 if mv_trafo_buses.empty:
                     raise ValueError(
                         f"No MV-side transformer buses with coordinates found for "
                         f"duplicated charging point '{src_id}' with p_set={p_set:.6f} MW."
                     )
-        
+    
                 if src_bus not in buses_df.index:
                     raise KeyError(
                         f"Source bus '{src_bus}' of duplicated charging point "
                         f"'{src_id}' not found in buses_df."
                     )
-        
+    
                 src_x = buses_df.at[src_bus, "x"]
                 src_y = buses_df.at[src_bus, "y"]
-        
+    
                 if pd.isna(src_x) or pd.isna(src_y):
                     raise ValueError(
                         f"Source bus '{src_bus}' of duplicated charging point "
                         f"'{src_id}' has no valid coordinates."
                     )
-        
+    
                 dx = mv_trafo_buses["x"] - src_x
                 dy = mv_trafo_buses["y"] - src_y
-        
+    
                 tgt_bus = (dx**2 + dy**2).idxmin()
-        
+    
         else:
-            tgt_bus = rng.choice(bus_pool)
-
-        new_id_base = f"{name_prefix}_{k}"
-        new_id = _make_unique_load_id(loads_df.index.union(pd.Index(new_ids)), new_id_base)
-
+            tgt_bus = _stable_choice_from_pool(
+                bus_pool,
+                key=f"{load_type}|{new_id}|target_bus",
+                seed=seed,
+            )
+        
         new_row = src_row.copy()
         new_row.name = new_id
         new_row["bus"] = tgt_bus
