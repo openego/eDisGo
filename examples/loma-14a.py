@@ -125,139 +125,6 @@ def _load_emob_cache(edisgo, cache_dir):
 
     print(f"[emob cache] Loaded from {cache_dir} ({len(new_cp_rows)} eDisGo CPs restored)")
 
-#temp1
-def export_cp_hp_locations_and_timeseries(
-    edisgo,
-    *,
-    output_dir,
-    prefix="cp_hp_export",
-):
-    """
-    Export final charging point and heat pump locations as shapefiles
-    and their time series as CSV files.
-
-    Exports:
-    - <prefix>_charging_points.shp
-    - <prefix>_heat_pumps.shp
-    - <prefix>_charging_points_active_power.csv
-    - <prefix>_heat_pumps_active_power.csv
-    - <prefix>_charging_points_reactive_power.csv, if available
-    - <prefix>_heat_pumps_reactive_power.csv, if available
-    - <prefix>_heat_pumps_heat_demand.csv, if available
-    """
-    os.makedirs(output_dir, exist_ok=True)
-
-    srid = int(edisgo.topology.grid_district.get("srid", 4326))
-    crs = f"EPSG:{srid}"
-
-    def _export_load_type(load_type, export_name):
-        loads_df = edisgo.topology.loads_df
-        buses_df = edisgo.topology.buses_df
-
-        load_ids = loads_df.index[loads_df["type"] == load_type].tolist()
-
-        if len(load_ids) == 0:
-            print(f"[EXPORT] No loads of type '{load_type}' found.")
-            return
-
-        # --- Export locations ---
-        export_df = loads_df.loc[load_ids].copy()
-
-        export_df = export_df.join(
-            buses_df[["x", "y"]],
-            on="bus",
-            how="left",
-        )
-
-        missing_xy = export_df["x"].isna() | export_df["y"].isna()
-        if missing_xy.any():
-            missing_examples = export_df.index[missing_xy].tolist()[:10]
-            raise ValueError(
-                f"{missing_xy.sum()} {load_type} loads have missing bus coordinates. "
-                f"Examples: {missing_examples}"
-            )
-
-        # Shapefile column names are limited to 10 characters.
-        # Therefore keep/rename only robust columns.
-        shp_df = export_df.reset_index().rename(
-            columns={
-                "index": "load_id",
-                "building_id": "bld_id",
-                "source_load_id": "src_id",
-                "is_duplicate": "is_dup",
-            }
-        )
-
-        gdf = gpd.GeoDataFrame(
-            shp_df,
-            geometry=gpd.points_from_xy(shp_df["x"], shp_df["y"]),
-            crs=crs,
-        )
-
-        shp_path = os.path.join(output_dir, f"{prefix}_{export_name}.shp")
-        gdf.to_file(shp_path, driver="ESRI Shapefile")
-
-        print(f"[EXPORT] Wrote {len(gdf)} {export_name} locations to:")
-        print(f"         {shp_path}")
-
-        # --- Export active power time series ---
-        p_cols = [
-            load_id for load_id in load_ids
-            if load_id in edisgo.timeseries.loads_active_power.columns
-        ]
-
-        if p_cols:
-            p_path = os.path.join(
-                output_dir,
-                f"{prefix}_{export_name}_active_power.csv",
-            )
-            edisgo.timeseries.loads_active_power.loc[:, p_cols].to_csv(p_path)
-            print(f"[EXPORT] Wrote {export_name} active power time series to:")
-            print(f"         {p_path}")
-        else:
-            print(f"[EXPORT] No active power time series found for {export_name}.")
-
-        # --- Export reactive power time series ---
-        if hasattr(edisgo.timeseries, "loads_reactive_power"):
-            q_df = edisgo.timeseries.loads_reactive_power
-
-            q_cols = [
-                load_id for load_id in load_ids
-                if load_id in q_df.columns
-            ]
-
-            if q_cols:
-                q_path = os.path.join(
-                    output_dir,
-                    f"{prefix}_{export_name}_reactive_power.csv",
-                )
-                q_df.loc[:, q_cols].to_csv(q_path)
-                print(f"[EXPORT] Wrote {export_name} reactive power time series to:")
-                print(f"         {q_path}")
-
-        # --- Optional: export heat demand for heat pumps ---
-        if load_type == "heat_pump" and hasattr(edisgo, "heat_pump"):
-            heat_demand_df = getattr(edisgo.heat_pump, "heat_demand_df", None)
-
-            if heat_demand_df is not None and not heat_demand_df.empty:
-                heat_cols = [
-                    load_id for load_id in load_ids
-                    if load_id in heat_demand_df.columns
-                ]
-
-                if heat_cols:
-                    heat_path = os.path.join(
-                        output_dir,
-                        f"{prefix}_{export_name}_heat_demand.csv",
-                    )
-                    heat_demand_df.loc[:, heat_cols].to_csv(heat_path)
-                    print(f"[EXPORT] Wrote {export_name} heat demand time series to:")
-                    print(f"         {heat_path}")
-
-    _export_load_type("charging_point", "charging_points")
-    _export_load_type("heat_pump", "heat_pumps")
-#temp2
-
 def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_days=None, cache_dir=None):
     """Import EV charging points, apply charging strategy, and adjust CP/HP counts."""
 
@@ -366,7 +233,6 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     # Compute CP eligible buses for CP scaling
     valid_buses = set(edisgo.topology.buses_df.index)
 
-    #temp1
     base_eligible_buses = [
         bus for bus in buses_with_existing_loads(edisgo)
         if bus in valid_buses
@@ -374,11 +240,10 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     
     cp_eligible_buses = base_eligible_buses.copy()
     hp_eligible_buses = base_eligible_buses.copy()
-    #temp2
     
     set_charging_points_to_target(
         edisgo,
-        target_total=3500, # sets total amount of CP #412 SQ, 1000 2035
+        target_total=1500, # sets total amount of CP #412 SQ, 1000 2035
         # percentage=0.10, # increases total amount of CP by 10%
         # percentage=-0.10, # decreases total amount of CP by 10%
         eligible_buses=cp_eligible_buses,
@@ -495,20 +360,11 @@ def main():
         cache_dir=emob_cache_dir,
         setup_days=None,
     )
-
-    #temp3
-    export_cp_hp_locations_and_timeseries(
-        edisgo,
-        output_dir=output_dir,
-        prefix="status_quo_before_opf",
-    )
-    #temp4
     
     plot_cp_hp_locations(edisgo, show=False, save=True)
 
-    #edisgo = run_optimization_14a(edisgo)
+    edisgo = run_optimization_14a(edisgo)
     edisgo.analyze()
-
 
     # ────────────────────────── Slack diagnosis ──────────────────────────────
     slacks = edisgo.opf_results.grid_slacks_t
@@ -573,4 +429,3 @@ def main():
 
 if __name__ == "__main__":
     edisgo = main()
-    
