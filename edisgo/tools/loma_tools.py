@@ -1478,8 +1478,6 @@ def analyze_14a_activations(edisgo, pre_opt_line_loading, *, threshold_kw=0.5):
             "n_active_generators": int((ts_curt > threshold_mw).sum()),
             "top_generators": top_gens,
         }
-        breakpoint()
-
         if pre_opt_line_loading is not None and ts in pre_opt_line_loading.index:
             ts_loading = pre_opt_line_loading.loc[ts]
             max_idx = ts_loading.idxmax()
@@ -1605,16 +1603,6 @@ def plot_network(
         title=f"Grid Analysis: {snapshot}", geometry=False,
     )
     ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
-
-    sm_lines = plt.cm.ScalarMappable(cmap="jet", norm=norm_lines)
-    cb_lines = fig.colorbar(sm_lines, ax=ax, orientation="vertical", location="left", pad=0.08, aspect=20)
-    cb_lines.set_label("Line Loading [relative]", fontsize=8)
-
-    sm_buses = plt.cm.ScalarMappable(cmap=voltage_cmap, norm=norm_buses)
-
-    cb_buses = fig.colorbar(sm_buses, ax=ax, orientation="vertical", location="right", pad=0.02, aspect=20)
-    cb_buses.set_label("Bus Voltage [p.u.] — blue: under, yellow: nominal, red: over", fontsize=8)
-
 
     # Zoom um focus_bus
     if focus_bus is not None:
