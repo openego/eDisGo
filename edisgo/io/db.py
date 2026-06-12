@@ -190,9 +190,9 @@ def engine(
     """
 
     if not ssh:
-        # Github Actions KHs token
-        if "OEP_TOKEN_KH" in os.environ:
-            token = os.environ["OEP_TOKEN_KH"]
+        # Github Actions token
+        if "OEP_TOKEN" in os.environ:
+            token = os.environ["OEP_TOKEN"]
 
             read = True
         else:

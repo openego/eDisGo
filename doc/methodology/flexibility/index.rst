@@ -71,6 +71,31 @@ much grid expansion the flexibility saves.
    Reinforcement cost with and without the flexibility optimisation, by voltage level
    (illustrative). The difference is the grid expansion that the flexibility avoids.
 
+The optimisation model
+----------------------
+
+Step 3 of that loop — the optimal power flow — is the mathematical heart of eDisGo's
+flexibility handling. It represents the grid with an **AC branch-flow model** and, in a
+single multi-period optimisation, chooses operation schedules for every flexibility
+that minimise grid stress (line losses and, depending on the settings, line loading,
+voltage and overlying-grid violations) while keeping each flexibility inside its power
+and energy bands. Because shifting energy in time only couples components *across* time
+steps, all time steps are optimised jointly.
+
+The full formulation — the decision variables, the objective, the branch-flow and
+flexibility constraints, and how the non-convex AC equations are handled via a
+second-order-cone relaxation — is described in :ref:`flexibility-opf`. The model was
+developed in, and is documented in full mathematical detail in, the master's thesis it
+is based on:
+
+   Maike Held, *Netzdienlich optimaler Einsatz von Flexibilitäten in radialen
+   Verteilnetzen basierend auf einem AC-Lastflussmodell* (in German), master's thesis,
+   Technische Universität Berlin (in cooperation with the Reiner Lemoine Institut),
+   2023.
+   `PDF <https://reiner-lemoine-institut.de/wp-content/uploads/2024/09/2023_MA_Maike_Held_Netzdienlich_optimaler_Einsatz_von_Flexibilitaeten.pdf>`__
+
+which is the recommended reference for readers who want the complete derivation.
+
 What is flexible
 ----------------
 

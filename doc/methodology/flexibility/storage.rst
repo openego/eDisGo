@@ -45,8 +45,11 @@ Optimised operation
 
 Storage units passed to :meth:`~edisgo.edisgo.EDisGo.pm_optimize` via
 ``flexible_storage_units`` are dispatched by the OPF to minimise grid expansion,
-subject to the same SOE dynamics and capacity limits. Storage units **not** marked
-flexible keep the self-consumption reference operation.
+subject to their state-of-energy dynamics and capacity limits. (The OPF models the
+battery losses with a resistance-based model rather than the
+``efficiency_store``/``efficiency_dispatch`` factors of the reference operation —
+see :ref:`flexibility-opf`.) Storage units **not** marked flexible keep the
+self-consumption reference operation.
 
 .. note::
 

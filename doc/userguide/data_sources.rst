@@ -57,10 +57,15 @@ methods are :meth:`~edisgo.edisgo.EDisGo.import_generators`,
 :meth:`~edisgo.edisgo.EDisGo.import_heat_pumps`,
 :meth:`~edisgo.edisgo.EDisGo.import_dsm`,
 :meth:`~edisgo.edisgo.EDisGo.import_home_batteries` and
-:meth:`~edisgo.edisgo.EDisGo.set_time_series_active_power_predefined`. A scenario is
-selected with the ``scenario`` argument (e.g. ``"eGon2035"``). In eDisGo's API the
-OEP data source is referred to as ``"oedb"`` (OpenEnergy DataBase) for historical
-reasons.
+:meth:`~edisgo.edisgo.EDisGo.set_time_series_active_power_predefined`. Most of these
+select a scenario with the ``scenario`` argument — ``"eGon2035"`` or ``"eGon100RE"``.
+Two differ: :meth:`~edisgo.edisgo.EDisGo.import_generators` takes
+``generator_scenario`` (``"eGon2035"``/``"eGon100RE"`` for current ding0 grids, or
+``"nep2035"``/``"ego100"`` for legacy grids), and
+:meth:`~edisgo.edisgo.EDisGo.set_time_series_active_power_predefined` selects its
+sources per component type (e.g. ``fluctuating_generators_ts="oedb"``). In eDisGo's
+API the OEP data source is referred to as ``"oedb"`` (OpenEnergy DataBase) for
+historical reasons.
 
 OEP database (standard)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -76,7 +81,7 @@ default OEP engine is created automatically:
 
 **OEP token.** To authenticate, place a file named ``OEP_TOKEN.txt`` containing your
 personal access token in the directory ``edisgo/config/`` (or set the environment
-variable ``OEP_TOKEN_KH``). A token can be requested at
+variable ``OEP_TOKEN``). A token can be requested at
 https://openenergyplatform.org/. Using a token is optional but recommended, as
 anonymous access is rate-limited.
 
