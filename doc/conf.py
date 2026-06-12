@@ -32,6 +32,8 @@ import sys
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath("../"))
+# Local Sphinx extensions (e.g. the Julia OPF docstring harvester).
+sys.path.insert(0, os.path.abspath("_ext"))
 
 # -- General configuration ------------------------------------------------
 
@@ -54,7 +56,14 @@ extensions = [
     "sphinx_autodoc_typehints",
     "sphinx.ext.inheritance_diagram",
     "nbsphinx",  # render Jupyter notebooks as documentation pages
+    "myst_parser",  # render the generated Julia API page (Markdown)
+    "julia_autodoc",  # harvest eDisGo_OPF Julia docstrings into a Sphinx page
 ]
+
+# -- MyST settings --------------------------------------------------------
+# Only the auto-generated Julia API page uses Markdown; enable dollar math and
+# colon fences so Julia docstrings render faithfully.
+myst_enable_extensions = ["dollarmath", "colon_fence"]
 
 # -- nbsphinx settings ----------------------------------------------------
 # Notebooks are rendered with their stored outputs and are NOT executed during

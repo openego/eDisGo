@@ -114,6 +114,7 @@ grid-planning tool spanning all voltage levels, used in two project publications
    reference/configs
    reference/equipment
    API Reference <autoapi/edisgo/index>
+   reference/julia_api
    genindex
 
 .. toctree::
