@@ -401,12 +401,11 @@ def main():
     print(f"Total use of 14a:{gen_t_14a.sum().sum()}")
     print("\n=== end 14a analysis ===")
 
-    # # Create gif
-    # for ts in edisgo.timeseries.timeindex:
-    #     plot_network(edisgo, show=False, snapshot=str(ts))
-    # create_network_gif(duration=500)
+    # Create plots for grid results per hour
+    plot_network(edisgo, show=False, snapshots=edisgo.timeseries.timeindex)
+    #create_network_gif(duration=500)
 
-    # ── Presentation plots ───────────────────────────────────────────────────────
+    # ── Presentation plots ───────────────────────────────────────────────────
     # Select days that have non-trivial §14a curtailment (threshold: 1 kW total)
     curt_daily = (
         get_curtailment_data(edisgo)

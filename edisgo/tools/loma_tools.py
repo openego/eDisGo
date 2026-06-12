@@ -1432,10 +1432,11 @@ def create_network_gif(
 
 def plot_network(
     edisgo,
-    snapshot: str = "2035-01-15 09:00:00",
+    snapshots: str = "2035-01-15 09:00:00",
     show: bool = True,
     save: bool = True,
     base_bus_size=0.000000002,
+    folder_path: str = "plots"
 ):
     results = edisgo.results
 
@@ -1447,72 +1448,77 @@ def plot_network(
     n.buses["y"] = coords["y"].values
 
     line_columns = n.lines.index
-    loading_relative = results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
-
-    v_min, v_max = 0.0, 1.0
-    norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
-
-    bus_colors = edisgo.results.v_res.T[snapshot]
-
-    norm_buses = mcolors.TwoSlopeNorm(vmin=0.9, vcenter=1.0, vmax=1.1)
-    voltage_cmap = mcolors.LinearSegmentedColormap.from_list(
-        "voltage",
-        [(0.0, "navy"), (0.35, "dodgerblue"), (0.5, "limegreen"), (0.65, "orangered"), (1.0, "darkred")],
-    )
-
-    curt_14a = get_curtailment_data(edisgo).T
-    curt_14a["load"] = curt_14a.index
-    curt_14a["load"] = curt_14a["load"].apply(
-        lambda x: x.replace("cp_14a_support_", "").replace("hp_14a_support_", "")
-    )
-    curt_14a["bus"] = curt_14a["load"].map(edisgo.topology.loads_df["bus"])
-    grouped_14a = curt_14a.groupby("bus").sum()
-    grouped_14a.columns = grouped_14a.columns.map(str)
-
-    bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.000001)
-    bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
-
-    fig, ax = plt.subplots(figsize=(12, 8))
-
-    n.plot(
-        margin=0.05,
-        ax=ax,
-        geomap=False,
-        bus_colors=bus_colors,
-        bus_alpha=1,
-        bus_sizes=bus_sizes,
-        bus_cmap=voltage_cmap,
-        bus_norm=norm_buses,
-        line_colors=loading_relative,
-        line_widths=1.6,
-        line_cmap="jet",
-        line_norm=norm_lines,
-        title=f"Grid Analysis: {snapshot}",
-        geometry=False,
-    )
-
-    ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
-
-    sm_lines = plt.cm.ScalarMappable(cmap="jet", norm=norm_lines)
-    cb_lines = fig.colorbar(
-        sm_lines, ax=ax, orientation="vertical", location="left", pad=0.08, aspect=20
-    )
-    cb_lines.set_label("Line Loading [relative]", fontsize=8)
-
-    sm_buses = plt.cm.ScalarMappable(cmap=voltage_cmap, norm=norm_buses)
-    cb_buses = fig.colorbar(
-        sm_buses, ax=ax, orientation="vertical", location="right", pad=0.02, aspect=20
-    )
-    cb_buses.set_label(
-        "Bus Voltage [p.u.]  — navy: under, green: nominal, red: over", fontsize=8
-    )
-
-    if save:
-        os.makedirs("plots", exist_ok=True)
-        plt.savefig(f"plots/grid_analysis_{snapshot}.png", dpi=300, bbox_inches="tight")
-
-    if show:
-        plt.show()
+    
+    for snapshot in snapshots:
+        snapshot = str(snapshot)
+        loading_relative = results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
+    
+        v_min, v_max = 0.0, 1.0
+        norm_lines = mcolors.Normalize(vmin=v_min, vmax=v_max)
+    
+        bus_colors = edisgo.results.v_res.T[snapshot]
+    
+        norm_buses = mcolors.TwoSlopeNorm(vmin=0.9, vcenter=1.0, vmax=1.1)
+        voltage_cmap = mcolors.LinearSegmentedColormap.from_list(
+            "voltage",
+            [(0.0, "navy"), (0.35, "dodgerblue"), (0.5, "limegreen"), (0.65, "orangered"), (1.0, "darkred")],
+        )
+    
+        curt_14a = get_curtailment_data(edisgo).T
+        curt_14a["load"] = curt_14a.index
+        curt_14a["load"] = curt_14a["load"].apply(
+            lambda x: x.replace("cp_14a_support_", "").replace("hp_14a_support_", "")
+        )
+        curt_14a["bus"] = curt_14a["load"].map(edisgo.topology.loads_df["bus"])
+        grouped_14a = curt_14a.groupby("bus").sum()
+        grouped_14a.columns = grouped_14a.columns.map(str)
+    
+        bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.000001)
+        bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
+    
+        fig, ax = plt.subplots(figsize=(12, 8))
+    
+        n.plot(
+            margin=0.05,
+            ax=ax,
+            geomap=False,
+            bus_colors=bus_colors,
+            bus_alpha=1,
+            bus_sizes=bus_sizes,
+            bus_cmap=voltage_cmap,
+            bus_norm=norm_buses,
+            line_colors=loading_relative,
+            line_widths=1.6,
+            line_cmap="jet",
+            line_norm=norm_lines,
+            title=f"Grid Analysis: {snapshot}",
+            geometry=False,
+        )
+    
+        ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
+    
+        sm_lines = plt.cm.ScalarMappable(cmap="jet", norm=norm_lines)
+        cb_lines = fig.colorbar(
+            sm_lines, ax=ax, orientation="vertical", location="left", pad=0.08, aspect=20
+        )
+        cb_lines.set_label("Line Loading [relative]", fontsize=8)
+    
+        sm_buses = plt.cm.ScalarMappable(cmap=voltage_cmap, norm=norm_buses)
+        cb_buses = fig.colorbar(
+            sm_buses, ax=ax, orientation="vertical", location="right", pad=0.02, aspect=20
+        )
+        cb_buses.set_label(
+            "Bus Voltage [p.u.]  — navy: under, green: nominal, red: over", fontsize=8
+        )
+    
+        if save:
+            os.makedirs(folder_path, exist_ok=True)
+            plt.savefig(f"{folder_path}/grid_analysis_{snapshot}.png", dpi=200, bbox_inches="tight")
+    
+        if show:
+            plt.show()
+    
+        plt.close(fig)
 
 
 def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True):
