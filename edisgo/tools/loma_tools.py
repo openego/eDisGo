@@ -1461,7 +1461,7 @@ def plot_network(
         norm_buses = mcolors.TwoSlopeNorm(vmin=0.9, vcenter=1.0, vmax=1.1)
         voltage_cmap = mcolors.LinearSegmentedColormap.from_list(
             "voltage",
-            [(0.0, "navy"), (0.35, "dodgerblue"), (0.5, "limegreen"), (0.65, "orangered"), (1.0, "darkred")],
+            [(0.0, "navy"), (0.20, "dodgerblue"), (0.5, "limegreen"), (0.80, "orangered"), (1.0, "darkred")],
         )
     
         curt_14a = get_curtailment_data(edisgo).T
