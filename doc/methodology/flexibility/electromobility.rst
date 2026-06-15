@@ -84,6 +84,28 @@ has an active-power series — none are left unset — which is what a subsequen
 or the :ref:`optimisation <flexibility-opf>` needs (the optimisation reschedules only the
 charging points passed as flexible and keeps the rest as fixed load).
 
+.. note::
+
+   These grid-friendly charging strategies and their effect on distribution grids were
+   investigated in the master's thesis underlying this functionality:
+
+      Kilian Helfenbein, *Analyse des Einflusses netzdienlicher Ladestrategien auf
+      Verteilnetze aufgrund der zunehmenden Netzintegration von Elektrofahrzeugen*
+      (in German; "Analysis of the effect of grid-friendly charging strategies on
+      distribution grids due to the increasing grid integration of electric vehicles"),
+      master's thesis, Hochschule für Technik und Wirtschaft Berlin (in cooperation
+      with the Reiner Lemoine Institut), 2021.
+      `PDF <https://reiner-lemoine-institut.de/wp-content/uploads/2024/09/2021-04-25_Helfenbein_Masterarbeit.pdf>`__
+
+   It evaluates the preventive ``"reduced"`` strategy (reduced charging power) and the
+   active ``"residual"`` strategy (charging steered by the medium-voltage residual
+   load) against uncoordinated ``"dumb"`` charging on five representative medium-voltage
+   grids, using SimBEV-derived charging demand. It finds that the ``"reduced"`` strategy
+   reliably lowers load-driven grid issues, whereas the ``"residual"`` strategy is the
+   only one able to reduce generation curtailment in PV-dominated grids — but performs
+   poorly where the global MV residual load is a weak proxy for local conditions, as in
+   wind-dominated grids.
+
 Flexibility bands (for optimisation)
 ------------------------------------
 

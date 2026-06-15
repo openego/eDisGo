@@ -54,10 +54,28 @@ The documentation is organised by how deep you want to go:
 
 eDisGo was initially developed in the
 `open_eGo <https://openegoproject.wordpress.com>`_ research project as part of a
-grid-planning tool spanning all voltage levels, used in two project publications:
+grid-planning tool spanning all voltage levels, documented in two project
+publications:
 
-* `Integrated Techno-Economic Power System Planning of Transmission and Distribution Grids <https://www.mdpi.com/1996-1073/12/11/2091>`_
+* `Integrated Techno-Economic Power System Planning of Transmission and Distribution Grids <https://www.mdpi.com/1996-1073/12/11/2091>`_ (Müller et al., *Energies*, 2019)
 * `Final report of the open_eGo project (in German) <https://www.uni-flensburg.de/fileadmin/content/abteilungen/industrial/dokumente/downloads/veroeffentlichungen/forschungsergebnisse/20190426endbericht-openego-fkz0325881-final.pdf>`_
+
+Publications using eDisGo
+-------------------------
+
+eDisGo has since been used for the grid analysis and reinforcement-cost calculations
+in the following peer-reviewed studies:
+
+* `Challenges of top-down flexibility deployment for grid expansion across all voltage levels <https://doi.org/10.1088/2753-3751/ae2686>`_ — Büttner et al., *Environmental Research: Energy*, 2025.
+* `On the Integration of Electric Vehicles Into German Distribution Grids Through Smart Charging <https://doi.org/10.1109/tia.2024.3494777>`_ — Heider et al., *IEEE Transactions on Industry Applications*, 2024 (conference version: `SEST 2022 <https://doi.org/10.1109/sest53650.2022.9898464>`_).
+* `Grid Reinforcement Costs with Increasing Penetrations of Distributed Energy Resources <https://doi.org/10.1109/powertech55446.2023.10202913>`_ — Heider et al., *IEEE PowerTech Belgrade*, 2023.
+* `On the impact of heat pump installations and peak blocking strategies on grid expansion costs <https://doi.org/10.1109/isgteurope56780.2023.10407931>`_ — Semmelmann et al., *IEEE ISGT Europe*, 2023.
+* `Assessing the impacts of market-oriented electric vehicle charging on German distribution grids <https://doi.org/10.1049/icp.2021.2515>`_ — Schachler et al., *CIRED 2021*.
+* `Distribution System Planning with Battery Storage using Multiperiod Optimal Power Flow <https://doi.org/10.2991/ahe.k.210202.007>`_ — Pedersen et al., 2021.
+
+The synthetic distribution grids analysed in these studies are generated with
+`ding0 <https://github.com/openego/ding0>`_; an example dataset is published on
+`Zenodo <https://doi.org/10.5281/zenodo.10405129>`_ (Amme et al., 2023).
 
 .. _getting-started:
 

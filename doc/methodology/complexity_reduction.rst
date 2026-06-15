@@ -104,9 +104,17 @@ References
 .. [PyPSA] `PyPSA — Spatial Clustering documentation
    <https://docs.pypsa.org/v0.35.1/examples/spatial-clustering.html>`_
 
-.. [SCR] Malte Jahn: *Analysis of the effects of spatial complexity reduction on
-   distribution network expansion planning with flexibilities* (master's thesis, in
-   German).
+.. [SCR] Malte Jahn, *Analyse der Auswirkungen räumlicher Komplexitätsreduktion auf
+   die Verteilnetzausbauplanung mit Flexibilitäten* (in German; "Analysis of the
+   effects of spatial complexity reduction on distribution grid expansion planning
+   with flexibilities"), master's thesis, Technische Universität Berlin (in
+   cooperation with the Reiner Lemoine Institut), 2022.
+   `PDF <https://reiner-lemoine-institut.de/wp-content/uploads/2024/09/2022_MA_Malte_Jahn_Raeumliche_Komplexitaetsreduktion.pdf>`__
+   The four clustering modes offered by
+   :meth:`~edisgo.edisgo.EDisGo.spatial_complexity_reduction` (``"kmeans"``,
+   ``"kmeansdijkstra"``, ``"aggregate_to_main_feeder"`` and ``"equidistant_nodes"``)
+   and the ``reduction_factor_not_focused`` option for reducing non-critical areas
+   more strongly are developed and evaluated there.
 
 .. [HoerschBrown] Jonas Hörsch, Tom Brown: *The role of spatial scale in joint
    optimisations of generation and transmission for European highly renewable
