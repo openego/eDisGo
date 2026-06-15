@@ -763,7 +763,7 @@ class Results:
         * 'grid_losses' : Attribute :py:attr:`~grid_losses` is saved to
           `grid_losses.csv`.
         * 'pfa_slack' : Attribute :py:attr:`~pfa_slack` is saved to
-          `pfa_slack.csv`.
+          `slack_results.csv`.
         * 'pfa_v_mag_pu_seed' : Attribute :py:attr:`~pfa_v_mag_pu_seed` is
           saved to `pfa_v_mag_pu_seed.csv`, if `save_seed` is set to True.
         * 'pfa_v_ang_seed' : Attribute :py:attr:`~pfa_v_ang_seed` is

@@ -966,9 +966,9 @@ class PotentialChargingParks(BasicComponent):
         --------
         :pandas:`pandas.DataFrame<DataFrame>`
             DataFrame with AGS, car ID, trip destination, charging use case
-            (private or public), netto charging capacity, charging demand,
-            charge start, charge end, potential charging park ID and charging point
-            ID.
+            ("hpc", "home", "public" or "work"), netto charging capacity, charging
+            demand, charge start, charge end, potential charging park ID and charging
+            point ID.
 
         """
         return self._edisgo_obj.electromobility.charging_processes_df.loc[

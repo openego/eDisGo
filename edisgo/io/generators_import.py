@@ -81,7 +81,8 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     edisgo_object : :class:`~.EDisGo`
     generator_scenario : str
         Scenario for which to retrieve generator data. Possible options
-        are 'nep2035' and 'ego100'.
+        are 'nep2035', 'ego100' and 'status_quo' (or its alias 'sq'). The input is
+        case-insensitive.
 
     Other Parameters
     ----------------

@@ -2778,8 +2778,9 @@ class Topology:
         -------
         :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
-            where lines are represented by edges in the graph, and buses and
-            transformers are represented by nodes.
+            where lines and transformers are represented by edges in the graph
+            and buses are represented by nodes. Transformer edges have a length
+            of zero.
 
         """
         return networkx_helper.translate_df_to_graph(

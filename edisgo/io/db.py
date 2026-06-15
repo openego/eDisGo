@@ -76,7 +76,7 @@ def config_settings(path: Path | str) -> dict[str, dict[str, str | int | Path]]:
 
 def credentials(path: Path | str) -> dict[str, str | int | Path]:
     """
-    Return local database connection parameters.
+    Return database connection parameters for the egon-data database.
 
     Parameters
     ----------
@@ -174,8 +174,10 @@ def engine(
     path : str or pathlib.Path, optional (default=None)
         Path to configuration YAML file of egon-data database.
     ssh : bool (default=False)
-        If True try to establish ssh tunnel from given information within the
-        configuration YAML. If False try to connect to local database.
+        If False, connects to the remote Open Energy Platform database (using the
+        token, see parameter `token`). If True, establishes an ssh tunnel to a local
+        egon-data database using the connection information in the configuration YAML
+        given through `path`.
     token : str or pathlib.Path, optional (default=None)
         Token for database connection or path to text file containing token.
         If empty the default token file in the config folder OEP_TOKEN.txt
