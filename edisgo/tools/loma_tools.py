@@ -1757,7 +1757,8 @@ def plot_storage_dispatch(
     plt.close()
 
 
-def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = True):
+def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = True,
+                           folder_path: str = "plots"):
     """
     Plot aggregate CP + HP load before and after §14a curtailment for a 24h day.
 
@@ -1859,8 +1860,8 @@ def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = Tru
     plt.tight_layout()
 
     if save:
-        os.makedirs("plots", exist_ok=True)
-        plt.savefig(f"plots/load_before_after_{day}.png", dpi=300, bbox_inches="tight")
+        os.makedirs(folder_path, exist_ok=True)
+        plt.savefig(f"{folder_path}/load_before_after_{day}.png", dpi=300, bbox_inches="tight")
     if show:
         plt.show()
     plt.close()

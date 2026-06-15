@@ -1,3 +1,4 @@
+import calendar
 import os
 from datetime import datetime
 
@@ -19,6 +20,10 @@ from edisgo.tools.loma_tools import (
     transfer_ts_from_new_to_existing_cp,
 )
 
+# Define global variables
+emob_cache_dir = "/home/carlos/LoMa/emob_cache/husum_eGon2035_MGB"
+grid_path = "/home/carlos/LoMa/exec_folder/results/MGB_010626"
+path_husum_district_shp = "/home/carlos/LoMa/exec_folder/MGB_district"
 
 def run_optimization_14a(edisgo):
     """
@@ -125,7 +130,7 @@ def _load_emob_cache(edisgo, cache_dir):
 
     print(f"[emob cache] Loaded from {cache_dir} ({len(new_cp_rows)} eDisGo CPs restored)")
 
-def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_days=None, cache_dir=None):
+def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_days=None, cache_dir=None, seed=42):
     """Import EV charging points, apply charging strategy, and adjust CP/HP counts."""
 
     """
@@ -243,7 +248,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     
     set_charging_points_to_target(
         edisgo,
-        target_total=1500, # sets total amount of CP #412 SQ, 1000 2035
+        target_total=50, # sets total amount of CP #412 SQ, 1000 2035
         # percentage=0.10, # increases total amount of CP by 10%
         # percentage=-0.10, # decreases total amount of CP by 10%
         eligible_buses=cp_eligible_buses,
@@ -251,21 +256,23 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
         add_tracking_columns=False,
         export_removed=False,
         export_dir=output_dir,
+        seed=seed,
     )
 
     set_heat_pumps_to_target(
         edisgo,
-        target_total=2000,  # sets total amount of HP #575 SQ, 2600 2035
+        target_total=130,  # sets total amount of HP #575 SQ, 2600 2035
         # percentage=0.10, # increases total amount of HP by 10%
         # percentage=-0.10, # decreases total amount of HP by 10%
         eligible_buses=hp_eligible_buses,
         add_tracking_columns=False,
         export_removed=False,  # only applies when there are deleted HP
         export_dir=output_dir,  # only applies when there are deleted HP
+        seed=seed,
     )
 
 
-def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None, setup_days=None):
+def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None, setup_days=None, seed=42):
     """Apply topology fixes, EV integration, and pre-optimization setup."""
 
     edisgo.topology.generators_df = edisgo.topology.generators_df[
@@ -304,6 +311,7 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
         output_dir=output_dir,
         cache_dir=cache_dir,
         setup_days=setup_days,
+        seed=seed,
     )
 
     set_storage_timeseries_bus_level(edisgo)
@@ -324,33 +332,62 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
 
     edisgo.set_time_series_reactive_power_control()
 
-def main():
-    # General Paths
-    output_dir = "/home/paul/LoMa/test/edisgo_output"
-    emob_cache_dir = "/home/paul/LoMa/loma-repo/emob_cache/husum_eGon2035"
+def cal_line_usage(edisgo):
+    """
+    Hours per month each line exceeded 90 % of its rated loading.
 
-    # Whole Husum paths
-    grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_final_statusQuo_LV_ids" # Status-Quo
-    # grid_path = "/home/paul/LoMa/loma-repo/results/Whole_Husum_model_pypsa_2035" # 2035
-    path_husum_district_shp = (
-        "/home/paul/LoMa/loma-repo/data/Input_files/MV_grid_district/husum_district.shp"
-    )
+    Parameters
+    ----------
+    edisgo : EDisGo
+        EDisGo object with power flow results (edisgo.results.s_res populated).
 
-    # MGB paths
-    # grid_path = ""
-    # path_husum_district_shp = "/home/paul/LoMa/loma-repo/data/Input_files/MGB_district"
+    Returns
+    -------
+    pd.DataFrame
+        Index: line names. Columns: month-start timestamps (one per month present
+        in the timeindex). Values: hours per month the line loading exceeded 90 %.
+    """
+    from edisgo.flex_opt.check_tech_constraints import lines_relative_load
 
-    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 12)) 
-    #edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 167)) #first week january 2025
-    #edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(2159, 2327)) #first week april 2025
-    #edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(5088, 5256)) #first week august 2025
+    rel_load = lines_relative_load(edisgo)  # shape: (timesteps, lines), p.u.
+
+    timeindex = rel_load.index
+    freq_hours = (timeindex[1] - timeindex[0]).total_seconds() / 3600
+
+    over_90 = (rel_load > 0.9).astype(float) * freq_hours
+    monthly = over_90.resample("MS").sum()  # shape: (n_months, lines)
+
+    return monthly.T  # shape: (lines, n_months)
+
+
+def get_monthly_snapshot_ranges(year=2025, test=False):
+    """Return list of (month_label, start_idx, end_idx) for each month of year."""
+    if test:
+        jan_start = 0
+        feb_start = calendar.monthrange(year, 1)[1] * 24
+        return [
+            (f"{year}-01", jan_start, jan_start + 3 * 24 - 1),
+            (f"{year}-02", feb_start, feb_start + 3 * 24 - 1),
+        ]
+    idx, months = 0, []
+    for m in range(1, 13):
+        hours = calendar.monthrange(year, m)[1] * 24
+        months.append((f"{year}-{m:02d}", idx, idx + hours - 1))
+        idx += hours
+    return months
+
+
+def main(output_dir, snapshot_range, seed=42):
+    t0 = datetime.now()
+
+    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=snapshot_range)
 
     mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
     edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
     edisgo.topology.grid_district["srid"] = 4326
     
     edisgo.topology.check_integrity()
-    pypsa_n = edisgo.to_pypsa()
+
     edisgo.analyze()
     
     prepare_edisgo_for_14a(
@@ -359,6 +396,7 @@ def main():
         output_dir=output_dir,
         cache_dir=emob_cache_dir,
         setup_days=None,
+        seed=seed,
     )
     
     plot_cp_hp_locations(edisgo, show=False, save=True)
@@ -402,7 +440,8 @@ def main():
     print("\n=== end 14a analysis ===")
 
     # Create plots for grid results per hour
-    plot_network(edisgo, show=False, snapshots=edisgo.timeseries.timeindex)
+    # plot_network(edisgo, show=False, snapshots=edisgo.timeseries.timeindex,
+    #              folder_path=f"{output_dir}/plot")
     #create_network_gif(duration=500)
 
     # ── Presentation plots ───────────────────────────────────────────────────
@@ -419,12 +458,24 @@ def main():
 
     for day in active_days:
         print(f"  Plotting {day}...")
-        plot_load_before_after(edisgo, day=day, show=False, save=True)
+        plot_load_before_after(edisgo, day=day, show=False, save=True,
+                               folder_path=f"{output_dir}/load_plots/")
 
-    print("Saved plots to ./plots/")
+    print(f"Saved plots to {output_dir}/plots/")
+    print(f"Time: {datetime.now() - t0}")
 
+    os.makedirs(output_dir, exist_ok=True)
+    edisgo.save(f"{output_dir}/edisgo")
     return edisgo
 
-
 if __name__ == "__main__":
-    edisgo = main()
+    line_usage_parts = []
+    for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test=True):
+        output_dir = f"/home/carlos/LoMa/output_edisgo/{month_name}"
+        edisgo = main(output_dir, snapshot_range=(snap_start, snap_end), seed=42)
+        line_usage_parts.append(cal_line_usage(edisgo))
+
+    line_usage = pd.concat(line_usage_parts, axis=1)
+    print("\n=== Line usage > 90 % (hours/month) ===")
+    print(line_usage.to_string())
+
