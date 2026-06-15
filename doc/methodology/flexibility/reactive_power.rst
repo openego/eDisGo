@@ -32,6 +32,13 @@ loads. The helpers
 given reactive-power mode (inductive/capacitive). See
 :ref:`definitions and units <definitions-and-units>` for the full sign convention.
 
+By default (``"default"``) the power factor and inductive/capacitive mode of every
+component group come from the configuration files. They can be overridden per group by
+passing a ``DataFrame`` (with columns ``components``, ``mode`` and ``power_factor``) to
+``generators_parametrisation`` / ``loads_parametrisation`` /
+``storage_units_parametrisation``, or a group can be set to ``None`` to leave it
+untouched.
+
 .. note::
 
    Reactive power must be set **after** all active-power series are in place (it is

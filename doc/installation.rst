@@ -3,8 +3,9 @@
 Installation
 ============
 
-eDisGo requires **Python 3.9 or higher** (Python 3.11 is used for the official
-builds and is recommended).
+eDisGo is tested with **Python 3.10–3.12** (the conda environment files pin
+``>=3.9, <=3.11``). The documentation is built with Python 3.11, which is a good
+default choice.
 
 User installation
 -----------------
@@ -67,16 +68,20 @@ Additional requirements for the optimal power flow
 
 The multi-period optimal power flow used for the flexibility optimisation
 (:ref:`flexibility-opf`) is solved in `Julia <https://julialang.org>`_ via
-`PowerModels.jl <https://lanl-ansi.github.io/PowerModels.jl/stable/>`_ and the
-`Gurobi <https://www.gurobi.com>`_ solver. These are **only** needed if you call
+`PowerModels.jl <https://lanl-ansi.github.io/PowerModels.jl/stable/>`_ with the
+`Gurobi <https://www.gurobi.com>`_ and `Ipopt <https://github.com/jump-dev/Ipopt.jl>`_
+solvers. These are **only** needed if you call
 :meth:`~edisgo.edisgo.EDisGo.pm_optimize`; the rest of eDisGo works without them.
 
-#. **Julia** — install a supported Julia version from the
-   `Julia downloads page <https://julialang.org/downloads/>`_ and make sure
-   ``julia`` is on your system ``PATH``.
-#. **Gurobi** — install the solver and a valid licence following the
+#. **Julia** — install Julia (the bundled ``eDisGo_OPF.jl`` package targets Julia
+   ``1.6``) from the `Julia downloads page <https://julialang.org/downloads/>`_ and
+   make sure ``julia`` is on your system ``PATH``.
+#. **Solvers** — install the **Gurobi** solver and a valid licence following the
    `Gurobi getting-started guide
    <https://support.gurobi.com/hc/en-us/articles/14799677517585-Getting-Started-with-Gurobi-Optimizer>`_.
+   Gurobi covers the default SOC method; **Ipopt** (a dependency of the Julia package)
+   is additionally required for the non-convex method (``method="nc"``) and for
+   ``warm_start=True``.
 
 .. _grid-data-prerequisite:
 

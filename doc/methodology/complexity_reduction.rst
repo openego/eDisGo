@@ -51,7 +51,8 @@ Parameters:
   * ``"equidistant_nodes"`` — place nodes equidistantly along the main feeder.
 
 * ``cluster_area`` — where clustering is applied: ``"grid"``, ``"feeder"`` or
-  ``"main_feeder"``.
+  ``"main_feeder"``. Note that ``"aggregate_to_main_feeder"`` and ``"equidistant_nodes"``
+  only work with ``cluster_area="main_feeder"``.
 * ``reduction_factor`` — :math:`n_\text{buses} = k_\text{reduction}\cdot
   n_\text{buses, cluster area}`; a smaller factor means a stronger reduction.
 * ``reduction_factor_not_focused`` — reduce *non-critical* areas (no voltage or
@@ -82,21 +83,24 @@ The number of analysed time steps can be reduced by keeping only the grid-critic
 ones. :meth:`~edisgo.edisgo.EDisGo.reinforce` does this when called with
 ``reduced_analysis=True``: it picks the most critical steps with
 :func:`~edisgo.tools.temporal_complexity_reduction.get_most_critical_time_steps`
-(ranked by the worst voltage and line-loading issues; whole worst-case *intervals* can
-be selected with
+(ranked by the worst voltage and line-loading issues, by default weighted by the
+estimated grid-expansion costs; whole worst-case *intervals* can be selected with
 :func:`~edisgo.tools.temporal_complexity_reduction.get_most_critical_time_intervals`).
 
 The flexibility optimisation uses a separate step selection in
-``edisgo.opf.timeseries_reduction`` — e.g.
+``edisgo.opf.timeseries_reduction`` —
 :func:`~edisgo.opf.timeseries_reduction.get_steps_curtailment` and
-:func:`~edisgo.opf.timeseries_reduction.get_steps_storage` — which clusters
+:func:`~edisgo.opf.timeseries_reduction.get_steps_storage` *select and expand* the
+critical time steps, while
+:func:`~edisgo.opf.timeseries_reduction.get_linked_steps` then groups them into
 representative steps for the OPF.
 
 Memory
 ------
 
-:meth:`~edisgo.edisgo.EDisGo.reduce_memory` downcasts the stored time-series and
-results DataFrames to smaller dtypes, lowering memory use without changing the grid.
+:meth:`~edisgo.edisgo.EDisGo.reduce_memory` downcasts the stored time-series, results,
+heat-pump and overlying-grid DataFrames to smaller dtypes (``float32`` by default),
+lowering memory use without changing the grid.
 
 References
 ----------

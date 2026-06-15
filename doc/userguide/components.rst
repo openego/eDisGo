@@ -15,10 +15,11 @@ is connected there; otherwise see geolocation-based integration below.
 
 .. code-block:: python
 
-    # add a storage unit to a known bus (worst-case study: no time series needed)
+    # add a storage unit to a known bus (no time series set — e.g. for a
+    # subsequent worst-case study, where the series come from
+    # set_time_series_worst_case_analysis)
     edisgo.add_component(
         comp_type="storage_unit",
-        add_ts=False,
         bus=edisgo.topology.buses_df.index[3],
         p_nom=4,
     )
@@ -54,9 +55,12 @@ station, smaller ones to the nearest suitable line or bus.
 Aggregating components
 ----------------------
 
-:meth:`~edisgo.edisgo.EDisGo.aggregate_components` combines components of the same
-type at a bus (e.g. all loads of a sector) into a single component, which can speed
-up power flow and optimisation.
+:meth:`~edisgo.edisgo.EDisGo.aggregate_components` combines the generators
+respectively loads at the same bus into a single component, which can speed up power
+flow and optimisation. By default all generators (resp. all loads) at a bus are
+aggregated; you can instead group them by further columns — e.g. by type or sector —
+via ``aggregate_generators_by_cols`` / ``aggregate_loads_by_cols``. Storage units are
+not aggregated.
 
 Manual heat-pump and storage integration
 -----------------------------------------

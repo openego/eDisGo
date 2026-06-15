@@ -6,8 +6,10 @@ Quickstart
 This page gets you from a fresh installation to your first grid analysis in a few
 minutes. It assumes eDisGo is installed (see :ref:`installation`) and that you have
 a ding0 grid (a directory of CSV files describing the grid topology — see
-:ref:`grid-data-prerequisite`). A small test grid ships with eDisGo under
-``tests/data/ding0_test_network_2``.
+:ref:`grid-data-prerequisite`). Small test grids ship with the eDisGo **repository**
+under ``tests/data/`` (the smallest self-constructed one is
+``ding0_test_network_1``); note that a ``pip``-installed eDisGo does not include the
+``tests/`` directory.
 
 .. _edisgo-mwe:
 
@@ -26,6 +28,9 @@ and reinforces the grid until all voltage and loading limits are met.
     edisgo = EDisGo(ding0_grid="path/to/ding0_grid")
 
     # 2. Add a future generator park (optional, from the OpenEnergy DataBase).
+    #    Scenario names depend on the grid format: "nep2035"/"ego100" for legacy
+    #    grids, "eGon2035"/"eGon100RE" (with an engine=... argument) for current
+    #    geo-referenced grids.
     edisgo.import_generators(generator_scenario="nep2035")
 
     # 3. Create worst-case load and feed-in time series.

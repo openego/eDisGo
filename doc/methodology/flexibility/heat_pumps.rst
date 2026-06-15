@@ -47,18 +47,19 @@ Flexible operation (for optimisation)
 When a heat pump has a thermal storage and is passed to
 :meth:`~edisgo.edisgo.EDisGo.pm_optimize` via ``flexible_hps``, the OPF may decouple
 electrical consumption from heat demand within the storage limits. The thermal
-state of energy evolves as it is charged (heat produced by the pump) and discharged
-(heat demand served),
+state of energy evolves as it is charged (heat produced by the pump, scaled by the
+store's efficiency :math:`\eta`) and discharged (heat demand served),
 
 .. math::
 
-   E_\text{th}(t+1) = E_\text{th}(t) + \big(\text{COP}(t)\,P_\text{el}(t)
+   E_\text{th}(t+1) = E_\text{th}(t) + \big(\eta\,\text{COP}(t)\,P_\text{el}(t)
    - \dot Q_\text{heat}(t)\big)\,\Delta t ,
    \qquad 0 \le E_\text{th}(t) \le E_\text{th,max},
 
 so the pump can pre-heat the buffer when it is grid-friendly and coast later. The
-COP couples the *electrical* power the grid sees to the *thermal* power the building
-needs.
+store also has standing losses (the OPF applies a per-hour self-discharge factor), and
+the COP couples the *electrical* power the grid sees to the *thermal* power the
+building needs.
 
 .. figure:: ../../images/heat_pump_thermal_storage.png
    :width: 95%

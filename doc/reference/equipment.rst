@@ -10,6 +10,12 @@ equipment defines the technical limits checked during analysis (e.g. ``I_max_th`
 when it expands the grid. The cost of each type is configured in
 :ref:`config_grid_expansion`.
 
+Besides the thermal/rating limits, the tables carry the per-km impedance parameters
+used to build the network model: nominal voltage ``U_n`` (kV), resistance ``R_per_km``
+(Ω/km), inductance ``L_per_km`` (mH/km) and capacitance ``C_per_km`` (µF/km) for
+cables and lines, and the short-circuit voltage ``u_kr`` (%) and copper losses ``P_k``
+(MW) for transformers. The units are given in the second header row of each table.
+
 .. _lv_cables_table:
 
 .. csv-table:: LV cables

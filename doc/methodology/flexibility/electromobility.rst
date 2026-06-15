@@ -45,11 +45,13 @@ plain sum of its charging-point ratings:
    (:attr:`~edisgo.network.components.PotentialChargingParks.designated_charging_point_capacity`).
 #. A size-dependent **simultaneity (diversity) factor** is applied
    (:func:`~edisgo.io.electromobility_import.determine_grid_connection_capacity`):
-   small parks are connected in full (factor ``1.0``), parks of 1 MW gross and above
-   are reduced to 45 % (factor ``0.45``), and in between the factor ramps down
-   linearly. The rationale: the more charging points a site has, the less likely they
-   all draw peak power at the same instant. High-power-charging (``hpc``) sites are the
-   exception and are connected at full capacity.
+   parks below 0.3 MW gross are connected in full (factor ``1.0``), parks of 1 MW gross
+   and above are reduced to 45 % (factor ``0.45``), and in between the factor is
+   interpolated linearly. The rationale: the more charging points a site has, the less
+   likely they all draw peak power at the same instant. High-power-charging (``hpc``)
+   sites are the exception and are connected at full capacity. (Because the linear
+   factor is applied multiplicatively, the resulting *capacity* is not monotonic in the
+   0.3–1.0 MW range — see the function's notes.)
 #. The result becomes the charging point's ``p_set``, which determines the **voltage
    level** it is connected to and how the connection is sized — and hence how much grid
    reinforcement the charging demand ultimately triggers.
@@ -74,8 +76,9 @@ charged "dumb", as it prioritises immediate service:
 * ``"reduced"`` — *preventive*: charge at the **minimum** power that still fully
   charges the car during its parking time (controlled by
   ``minimum_charging_capacity_factor``), spreading the load out.
-* ``"residual"`` — *active*: charge when the residual load in the MV grid is lowest
-  (high generation, low consumption); processes with little flexibility get priority.
+* ``"residual"`` — *active*: charge when the residual load of the grid as a whole (all
+  loads minus all generation and storage, the network-wide quantity) is lowest (high
+  generation, low consumption); processes with little flexibility get priority.
 
 So the ``"dumb"`` strategy charges *every* use case immediately, while ``"reduced"`` and
 ``"residual"`` shift only ``home`` and ``work`` and leave ``public``/``hpc`` dumb. Either

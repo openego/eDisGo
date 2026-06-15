@@ -18,8 +18,9 @@ depending on the scenario):
 #. **Load the grid** — :class:`~edisgo.edisgo.EDisGo` from a ding0 grid, or
    :func:`~edisgo.edisgo.import_edisgo_from_files` to reload a saved object.
 #. **Import the generator park** —
-   :meth:`~edisgo.edisgo.EDisGo.import_generators` (skip for new ding0 grids that
-   already contain generators).
+   :meth:`~edisgo.edisgo.EDisGo.import_generators` (to adopt a future-scenario
+   generator park; skip if you want to keep the status-quo park that every ding0 grid
+   already ships with).
 #. **Set the time index** — pass ``timeindex`` to the constructor or call
    :meth:`~edisgo.edisgo.EDisGo.set_timeindex`. Required before any time-series
    import.
@@ -68,10 +69,10 @@ Critical ordering rules
    * **Reactive power last.** Call
      :meth:`~edisgo.edisgo.EDisGo.set_time_series_reactive_power_control` only after
      *all* active-power series and components are in place.
-   * **Load series before charging strategy.**
-     :meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy` needs
-     ``loads_active_power`` to exist, i.e. call
-     :meth:`~edisgo.edisgo.EDisGo.set_time_series_active_power_predefined` first.
+   * **Import electromobility before the charging strategy.**
+     :meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy` operates on the charging
+     parks from :meth:`~edisgo.edisgo.EDisGo.import_electromobility` (it writes the
+     charging-point series itself); run the import first, or it has nothing to do.
 
 Common errors and how to fix them
 ---------------------------------
@@ -82,19 +83,21 @@ Common errors and how to fix them
 
    * - Symptom
      - Cause / fix
-   * - ``TypeError: 'NoneType' has no attribute 'columns'`` when setting reactive
-       power
-     - Reactive-power control was called before the active-power series existed.
-       Set active power first; call reactive power last.
+   * - Reactive power is empty / zero after
+       :meth:`~edisgo.edisgo.EDisGo.set_time_series_reactive_power_control`
+     - Reactive-power control was called before the active-power series existed (``Q``
+       is derived from ``P``). Set active power first; call reactive power last.
    * - ``KeyError`` in :meth:`~edisgo.edisgo.EDisGo.pm_optimize` (missing ``q_set``)
      - Reactive power was not set. Run
        :meth:`~edisgo.edisgo.EDisGo.set_time_series_reactive_power_control` after all
        active-power steps.
-   * - :meth:`~edisgo.edisgo.EDisGo.import_heat_pumps` does not import all heat pumps
-     - Specify the types explicitly, e.g.
-       ``import_types=["individual_heat_pumps", "central_heat_pumps"]``.
-   * - :meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy` fails
-     - ``loads_active_power`` is ``None``; set the active-power series first.
+   * - :meth:`~edisgo.edisgo.EDisGo.import_heat_pumps` imports the wrong technologies
+     - By default **all** of ``individual_heat_pumps``, ``central_heat_pumps`` and
+       ``central_resistive_heaters`` are imported; pass ``import_types`` to restrict to
+       a subset.
+   * - :meth:`~edisgo.edisgo.EDisGo.apply_charging_strategy` does nothing
+     - No charging parks present; run
+       :meth:`~edisgo.edisgo.EDisGo.import_electromobility` first.
    * - Storage unit has no time series
      - Storage series are not auto-generated; set them manually (e.g. assign a
        DataFrame to ``edisgo.timeseries.storage_units_active_power``) or use a

@@ -21,8 +21,9 @@ MV/LV grid for each German *MV grid district*; a grid is identified by that
 district number (e.g. ``32377``).
 
 A ding0 grid is a directory of CSV files (``buses.csv``, ``lines.csv``,
-``loads.csv``, ``generators.csv``, ``transformers.csv``, ``switches.csv``,
-``network.csv``). It is loaded by passing the directory to the
+``loads.csv``, ``generators.csv``, ``transformers.csv``, ``transformers_hvmv.csv``,
+``storage_units.csv``, ``switches.csv``, ``network.csv``; the CSVs may also sit in a
+``topology/`` subfolder). It is loaded by passing the directory to the
 :class:`~edisgo.edisgo.EDisGo` constructor:
 
 .. code-block:: python
@@ -31,8 +32,10 @@ A ding0 grid is a directory of CSV files (``buses.csv``, ``lines.csv``,
 
     edisgo = EDisGo(ding0_grid="path/to/ding0_grid", legacy_ding0_grids=False)
 
-* ``legacy_ding0_grids=False`` selects the **current** (egon-data compatible) grid
-  format. Use ``True`` only for older ding0 grids.
+* ``legacy_ding0_grids`` **defaults to** ``True``. Set it to ``False`` for the
+  **current** (egon-data compatible) grid format; ``True`` is only for older ding0
+  grids. Omitting it on a current grid triggers the legacy code path (different column
+  renames) and mis-imports the grid.
 
 Internally the constructor calls :meth:`~edisgo.edisgo.EDisGo.import_ding0_grid`, which
 you can also invoke directly on an existing :class:`~edisgo.edisgo.EDisGo` object.
@@ -70,14 +73,20 @@ historical reasons.
 OEP database (standard)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The OEP is the default data source. When the ``engine`` argument is omitted, a
-default OEP engine is created automatically:
+The OEP is the default data source. For most import methods, when the ``engine``
+argument is omitted a default OEP engine is created automatically:
 
 .. code-block:: python
 
     edisgo.set_time_series_active_power_predefined(
         fluctuating_generators_ts="oedb",  # load feed-in profiles from the OEP
     )
+
+.. note::
+
+   :meth:`~edisgo.edisgo.EDisGo.import_electromobility` is an exception: with
+   ``data_source="oedb"`` it does **not** create a default engine, so you must pass an
+   explicit ``engine``.
 
 **OEP token.** To authenticate, place a file named ``OEP_TOKEN.txt`` containing your
 personal access token in the directory ``edisgo/config/`` (or set the environment
@@ -88,19 +97,23 @@ anonymous access is rate-limited.
 Custom PostgreSQL database (egon-data)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-You can also connect to your own egon-data PostgreSQL database. Create a YAML
+You can also connect to your own egon-data PostgreSQL database via an SSH tunnel.
+Connecting through :func:`~edisgo.io.db.engine` always uses an SSH tunnel
+(``ssh=True`` with a complete ``ssh-tunnel`` section); for a tunnel-less local
+database you have to build a SQLAlchemy engine yourself. The database keys follow the
+egon-data CLI-flag style and must be prefixed with ``--``. Create a YAML
 configuration file:
 
 .. code-block:: yaml
 
     egon-data:
-      database-host: mydb.example.org
-      database-port: 5432
-      database-name: egon_data
-      database-user: my_user
-      database-password: my_password
+      --database-host: mydb.example.org
+      --database-port: 5432
+      --database-name: egon_data
+      --database-user: my_user
+      --database-password: my_password
 
-    ssh-tunnel:                 # leave empty / remove if no tunnel is needed
+    ssh-tunnel:                 # required when ssh=True
       ssh-host: my.ssh.server
       ssh-user: ubuntu
       ssh-pkey: ~/.ssh/id_rsa
@@ -113,7 +126,7 @@ method:
 
     from edisgo.io.db import engine
 
-    eng = engine(path="path/to/database_config.yaml", ssh=False)
+    eng = engine(path="path/to/database_config.yaml", ssh=True)
     edisgo.import_heat_pumps(scenario="eGon2035", engine=eng)
 
 .. list-table::
@@ -127,8 +140,8 @@ method:
      - Official egon-data source on the OpenEnergy Platform
      - OEP token (recommended)
    * - Custom PostgreSQL
-     - Your own egon-data database, optionally via SSH tunnel
-     - YAML config file with credentials
+     - Your own egon-data database via an SSH tunnel
+     - YAML config file with ``--`` credentials + ``ssh-tunnel`` section
 
 Load profiles — demandlib
 --------------------------
@@ -142,11 +155,16 @@ oemof `demandlib <https://github.com/oemof/oemof-demand>`_. This is selected wit
 Electric-vehicle data — SimBEV / TracBEV
 ----------------------------------------
 
-When not taken from the OEP, electric-vehicle data can be imported from
+When not taken from the OEP, electric-vehicle data can be imported from a directory
+with :meth:`~edisgo.edisgo.EDisGo.import_electromobility` using
+``data_source="directory"`` and the ``charging_processes_dir`` /
+``potential_charging_points_dir`` arguments. The data is produced by
 `SimBEV <https://github.com/rl-institut/simbev>`_ (charging processes: standing
 times, charging demand per vehicle) and
 `TracBEV <https://github.com/rl-institut/tracbev>`_ (potential charging-point
-locations). See :ref:`electromobility-methodology` and the
+locations). The import is tied to specific tool versions — SimBEV commit ``3083c5a``
+and TracBEV commit ``14d864c``; data from other versions is not guaranteed to parse.
+See :ref:`electromobility-methodology` and the
 :doc:`../tutorials/electromobility_example` notebook.
 
 Configuration data

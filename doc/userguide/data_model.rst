@@ -63,7 +63,10 @@ The grids can be accessed individually. The MV grid is an
 
 .. code-block:: python
 
-    # MV grid and its components (same DataFrame attributes as above)
+    # MV grid and its components
+    # (grids expose buses_df, lines_df, loads_df, generators_df, storage_units_df,
+    #  charging_points_df and switch_disconnectors_df; transformers_df on a grid
+    #  returns the transformers to the overlying level — HV/MV for the MV grid)
     edisgo.topology.mv_grid
     edisgo.topology.mv_grid.buses_df
     edisgo.topology.mv_grid.generators_df
@@ -99,7 +102,11 @@ Graph representation
 --------------------
 
 A :networkx:`networkx.Graph<>` representation is useful for path searches (e.g. from
-a station to a generator). Lines become edges; buses and transformers become nodes:
+a station to a generator). Buses become nodes and lines become edges. In the
+whole-topology graph from :meth:`~edisgo.edisgo.EDisGo.to_graph`, transformers are
+added as additional edges (with length 0) between their primary and secondary side;
+in the per-grid graphs ``mv_grid.graph`` / ``lv_grid.graph`` transformers are not
+included:
 
 .. code-block:: python
 
@@ -145,13 +152,16 @@ Component mapping
        ``x`` are stored in **ohms** and passed straight through to PyPSA, which does the
        per-unit conversion internally from ``v_nom`` (``to_pypsa`` itself does *not*
        convert them). eDisGo uses ``type_info`` (cable/line type name) and ``kind``
-       (``"cable"``/``"line"``) instead of PyPSA's standard-type ``type``. A ``b`` column
-       exists but is always 0 and there is no ``g``, so **line shunt admittance is
-       effectively neglected**.
-   * - ``transformers_df``, ``transformers_hvmv_df``
+       (``"cable"``/``"line"``) instead of PyPSA's standard-type ``type``. The ``b``
+       column (shunt susceptance in S) defaults to 0 but is computed from the cable's
+       ``C_per_km`` whenever a line is added or changed via a line type (e.g. during
+       reinforcement) and is passed to PyPSA; there is no ``g`` column, so **shunt
+       conductance is neglected**.
+   * - ``transformers_df``
      - ``Transformer``
-     - MV/LV and HV/MV transformers; the HV/MV transformer's secondary side carries
-       the **slack**.
+     - Only the MV/LV transformers are exported. ``transformers_hvmv_df`` is **not**
+       converted to a PyPSA component; it only defines the **slack** bus at its
+       secondary side.
    * - ``loads_df``
      - ``Load``
      - ``bus``/``p_set`` as in PyPSA; eDisGo adds ``type`` (``conventional_load`` /
@@ -160,15 +170,16 @@ Component mapping
    * - ``generators_df``
      - ``Generator``
      - ``bus``/``p_nom``/``control`` as in PyPSA; eDisGo adds ``type`` (technology),
-       ``subtype`` and ``weather_cell_id``.
+       ``subtype``, ``weather_cell_id`` and ``source_id``.
    * - ``storage_units_df``
      - ``StorageUnit``
      - ``p_nom``/``max_hours``/``efficiency_store``/``efficiency_dispatch``/``control``
        — these names are taken directly from PyPSA.
    * - ``switches_df``
      - —
-     - **No PyPSA equivalent.** Switches are resolved into ``lines_df`` (open/closed
-       state) before conversion, so PyPSA sees the radial operating state
+     - **No PyPSA equivalent.** The open/closed state is permanently encoded in
+       ``lines_df`` (the switch branch connects to ``bus_open`` or ``bus_closed``), so
+       ``to_pypsa`` needs no special handling and PyPSA sees the radial operating state
        (:ref:`switches-explained`).
 
 What eDisGo needs beyond PyPSA
@@ -190,8 +201,9 @@ Compared with a bare PyPSA network, eDisGo additionally requires:
 Conversely, what PyPSA needs is assembled by ``to_pypsa``: the reactive-power series
 ``q_set`` from :ref:`reactive-power-flex`, and the slack at the HV/MV station. The
 ohmic line ``r``/``x`` are handed to PyPSA unchanged — PyPSA converts them to per-unit
-internally — while transformer per-unit values (``r_pu``/``x_pu``) are already computed
-at ding0 import time, not by ``to_pypsa``.
+internally — while transformer per-unit values (``r_pu``/``x_pu``) are taken over from
+the ding0 data (or from eDisGo's equipment data for newly added transformers), not
+computed by ``to_pypsa``.
 
 Coming from a PyPSA network
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

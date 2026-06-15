@@ -111,12 +111,14 @@ The ``method`` argument chooses how that quadratic constraint is handled:
   resulting convex problem is solved with **Gurobi** and is fast and reliable. For
   radial grids the relaxation is usually *exact* (the inequality is tight at the
   optimum), so the solution is also feasible for the original AC problem; where it is
-  not, ``warm_start=True`` (below) recovers a feasible AC solution.
+  not, the violations are written to a JSON file in ``opf/opf_solutions/``.
 * ``"nc"`` — the **non-convex** problem with the exact equality, solved with the
   **Ipopt** interior-point solver. More accurate in principle but slower and not
   guaranteed to find the global optimum.
 * ``warm_start=True`` (with ``method="soc"``) — additionally runs the non-convex
-  Ipopt OPF, warm-started from the (exact) Gurobi SOC solution, to polish the result.
+  Ipopt OPF, warm-started from the Gurobi SOC solution, to polish the result. Note that
+  this only runs when the SOC solution is already tight; if it is not, the warm start
+  is skipped.
 
 Optimisation versions
 ----------------------
@@ -150,7 +152,8 @@ into a penalised objective term (maximum loading), which is useful for assessing
 much flexibility *could* help before deciding on reinforcement. Versions 2 and 4 keep
 the limits as constraints and penalise the remaining unavoidable violations via
 *slack* variables. Versions 3 and 4 additionally honour requirements handed down from
-the overlying grid (:ref:`overlying-grid-flex`).
+the overlying grid (:ref:`overlying-grid-flex`); if no overlying-grid data is present,
+they silently fall back to version 2.
 
 The optimisation model in detail
 --------------------------------
@@ -266,10 +269,16 @@ Results and slacks
 
 Operation schedules are written into ``edisgo.timeseries`` (charging-point, heat-pump,
 DSM and storage active power) and can then feed a final
-:meth:`~edisgo.edisgo.EDisGo.reinforce`. The ``save_heat_storage``, ``save_slack_gen``
-and ``save_slacks`` flags control whether heat-storage states, the slack generator and
-the optimisation slack variables are stored as well; the exact slack set depends on
-``opf_version`` (see :func:`edisgo.io.powermodels_io.from_powermodels`).
+:meth:`~edisgo.edisgo.EDisGo.reinforce`. Heat-storage states, the slack generator and
+the optimisation slack variables are written back as well; which slacks exist depends
+on ``opf_version`` (see :func:`edisgo.io.powermodels_io.from_powermodels`). Solver and
+Julia output can be silenced with ``silence_moi=True``.
+
+.. note::
+
+   ``pm_optimize`` also declares ``save_heat_storage``, ``save_slack_gen`` and
+   ``save_slacks`` parameters, but these are currently **not** forwarded to the
+   conversion and therefore have no effect.
 
 Beyond the schedules, the full raw optimisation result is collected in
 ``edisgo.opf_results``, an

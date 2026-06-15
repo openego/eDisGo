@@ -30,6 +30,23 @@ The power flow is solved for the time steps in
 the ``timesteps`` argument. Internally the eDisGo object is converted to a PyPSA
 network with :meth:`~edisgo.edisgo.EDisGo.to_pypsa`.
 
+The extent of the power flow is controlled by ``mode``:
+
+* ``None`` (default) — the whole grid (MV and all LV grids);
+* ``"mv"`` — only the MV grid, with the LV grids aggregated at the **primary** side of
+  their MV/LV stations;
+* ``"mvlv"`` — like ``"mv"`` but the LV grids are aggregated at the station's
+  **secondary** side;
+* ``"lv"`` — a single LV grid (selected via ``lv_grid_id``).
+
+When the power flow does not converge, ``troubleshooting_mode`` helps: ``"lpf"`` seeds
+the non-linear power flow with a preceding linear power flow, and ``"iteration"`` ramps
+the loads and generators up from ``range_start`` to their full value over ``range_num``
+steps, re-seeding each step. ``scale_timeseries`` applies a uniform scaling factor to
+the power-flow input, and ``raise_not_converged`` (default ``True``) decides whether
+non-convergence raises an error or is only reported; ``analyze`` returns the converging
+and non-converging time steps.
+
 Which time series?
 ------------------
 
@@ -92,9 +109,11 @@ while an LV grid may rise by 3.5 % but drop by 6.5 %. The load factors are likew
 per case. So "load case / feed-in case" really just answers: *which limit do I check
 this operating point against — the undervoltage one or the overvoltage one?*
 
-With **real time series** every analysed time step is classified per grid by the sign
-of (:math:`\sum \text{load} - \sum \text{generation}`): positive ⇒ load case, negative
-⇒ feed-in case (grid losses are neglected for this classification; see
+With **real time series** every analysed time step is classified for the network as a
+whole by the sign of the residual load at the HV/MV substation
+(:math:`\sum \text{load} - \sum \text{generation} - \sum \text{storage discharge}`): a
+non-negative residual (including exactly zero) ⇒ load case, a negative residual ⇒
+feed-in case (grid losses are neglected for this classification; see
 :meth:`~edisgo.network.timeseries.TimeSeries.timesteps_load_feedin_case`). The
 **worst-case analysis** (:ref:`worst-case-ts`) instead builds *only* these two extreme
 points directly, from simultaneity (scale) factors in :ref:`config_timeseries`.

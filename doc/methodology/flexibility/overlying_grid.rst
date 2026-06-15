@@ -22,16 +22,23 @@ The :class:`~edisgo.network.overlying_grid.OverlyingGrid` container
 grid, such as:
 
 * ``renewables_curtailment`` — required curtailment of renewable feed-in,
-* ``storage_units_active_power`` / ``storage_units_soc`` — required central-storage
-  dispatch and state of charge,
+* ``storage_units_active_power`` / ``storage_units_soc`` — required aggregate
+  storage-unit dispatch and state of charge,
 * ``dsm_active_power`` — required DSM utilisation,
 * ``electromobility_active_power`` — required aggregate EV charging,
 * ``heat_pump_decentral_active_power`` /
-  ``thermal_storage_units_decentral_soc`` — required flexible heat-pump operation.
+  ``thermal_storage_units_decentral_soc`` — required decentral heat-pump operation,
+* ``heat_pump_central_active_power`` / ``thermal_storage_units_central_soc`` /
+  ``feedin_district_heating`` — the corresponding central power-to-heat / district-heating
+  requirements.
 
 The helper
 :py:func:`~edisgo.network.overlying_grid.distribute_overlying_grid_requirements`
-distributes these aggregate requirements onto the individual components in the grid.
+returns a new EDisGo object in which these aggregate requirements are distributed onto
+the individual components, with a distribution key that differs per flexibility (EV by
+flexibility-band power, storage by installed capacity ``p_nom``, power-to-heat by
+``p_set``, DSM by its potential bands, and curtailment proportional to current
+feed-in).
 
 Use in the optimisation
 -----------------------
