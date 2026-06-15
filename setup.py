@@ -83,7 +83,7 @@ dev_requirements = [
     "pyupgrade < 3.22.0",
     "sphinx < 9.2.0",
     "sphinx_rtd_theme >= 0.5.2, < 3.2.0",
-    "sphinx-autodoc-typehints < 3.11.0",
+    "sphinx-autodoc-typehints < 3.12.0",
     "sphinx-autoapi < 3.9.0",
     "astroid == 4.0.3",
 ]
