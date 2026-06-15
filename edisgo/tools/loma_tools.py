@@ -1540,13 +1540,13 @@ def create_network_gif(
 
 def plot_network(
     edisgo,
-    snapshot: str = "2035-01-15 09:00:00",
+    snapshots: str = "2035-01-15 09:00:00",
     show: bool = True,
     save: bool = True,
     base_bus_size=0.00000002,
     output_folder: str = "plots",
-    focus_bus: str = None,       # <-- neu: Bus-Name als String
-    focus_radius: float = 0.02,  # <-- neu: Radius in Grad (lon/lat)
+    focus_bus: str = None,
+    focus_radius: float = 0.02,
 ):
     results = edisgo.results
     n = edisgo.to_pypsa()
@@ -1556,96 +1556,99 @@ def plot_network(
     n.buses["y"] = coords["y"].values
 
     line_columns = n.lines.index
-    loading_relative = results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
 
-    norm_lines = mcolors.Normalize(vmin=0.0, vmax=1.0)
-    bus_colors = edisgo.results.v_res.T[snapshot]
-    norm_buses = mcolors.TwoSlopeNorm(vmin=0.9, vcenter=1.0, vmax=1.1)
-    voltage_cmap = mcolors.LinearSegmentedColormap.from_list(
-        "voltage",
-        [(0.0, "navy"), (0.35, "dodgerblue"), (0.5, "limegreen"), (0.65, "orangered"), (1.0, "darkred")],
-    )
+    for snapshot in snapshots:
+        snapshot = str(snapshot)
+        loading_relative = results.s_res.loc[snapshot, line_columns] / n.lines.s_nom
 
-    curt_14a = get_curtailment_data(edisgo).T
-    curt_14a["load"] = curt_14a.index
-    curt_14a["load"] = curt_14a["load"].apply(
-        lambda x: x.replace("cp_14a_support_", "").replace("hp_14a_support_", "")
-    )
-    curt_14a["bus"] = curt_14a["load"].map(edisgo.topology.loads_df["bus"])
-    grouped_14a = curt_14a.groupby("bus").sum()
-    grouped_14a.columns = grouped_14a.columns.map(str)
-
-    bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.0001)
-    bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
-
-    # PyPSA draws buses as Circle patches in data-coordinate space (degrees).
-    # When zooming in, the same degree-radius circle occupies more screen space.
-    # Pre-scale sizes down proportionally to the zoom area so visual size stays
-    # consistent between the full-network view and the focus-bus view.
-    if focus_bus is not None:
-        x_vals = coords["x"].dropna()
-        y_vals = coords["y"].dropna()
-        x_range = max(x_vals.max() - x_vals.min(), 1e-6)
-        y_range = max(y_vals.max() - y_vals.min(), 1e-6)
-        full_area = x_range * y_range
-        zoom_area = (2 * focus_radius) ** 2
-        bus_sizes = bus_sizes * (zoom_area / full_area)
-
-    fig, ax = plt.subplots(figsize=(14, 10))
-    plt.subplots_adjust(left=0.1, right=0.9, top=0.95, bottom=0.05)
-
-    n.plot(
-        margin=0.05, ax=ax, geomap=False,
-        bus_colors=bus_colors, bus_alpha=1, bus_sizes=bus_sizes,
-        bus_cmap=voltage_cmap, bus_norm=norm_buses,
-        line_colors=loading_relative, line_widths=1.6,
-        line_cmap="jet", line_norm=norm_lines,
-        title=f"Grid Analysis: {snapshot}", geometry=False,
-    )
-    ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
-
-    # Zoom um focus_bus
-    if focus_bus is not None:
-        if focus_bus not in n.buses.index:
-            raise ValueError(f"Bus '{focus_bus}' nicht im Netz gefunden.")
-        bx = n.buses.loc[focus_bus, "x"]
-        by = n.buses.loc[focus_bus, "y"]
-        ax.set_xlim(bx - focus_radius, bx + focus_radius)
-        ax.set_ylim(by - focus_radius, by + focus_radius)
-        ax.set_title(f"Grid Analysis: {snapshot} — Zoom: {focus_bus}")
-
-    # Compute final axes bounding box, then place colorbars explicitly so they
-    # span exactly the same height as the map – no taller, no shorter.
-    fig.canvas.draw()
-    pos = ax.get_position()
-    cb_w   = 0.018   # colorbar width as fraction of figure width
-    cb_gap = 0.010   # gap between colorbar and map edge
-
-    cax_left  = fig.add_axes([pos.x0 - cb_w - cb_gap * 2, pos.y0, cb_w, pos.height])
-    cax_right = fig.add_axes([pos.x1 + cb_gap,             pos.y0, cb_w, pos.height])
-
-    sm_lines = plt.cm.ScalarMappable(cmap="jet", norm=norm_lines)
-    cb_lines = fig.colorbar(sm_lines, cax=cax_left, orientation="vertical")
-    cax_left.yaxis.set_ticks_position("left")
-    cax_left.yaxis.set_label_position("left")
-    cb_lines.set_label("Line Loading [relative]", fontsize=8)
-
-    sm_buses = plt.cm.ScalarMappable(cmap=voltage_cmap, norm=norm_buses)
-    cb_buses = fig.colorbar(sm_buses, cax=cax_right, orientation="vertical")
-    cb_buses.set_label(
-        "Bus Voltage [p.u.]  — navy: under, green: nominal, red: over", fontsize=8
-    )
-
-
-    if save:
-        os.makedirs(output_folder, exist_ok=True)
-        plt.savefig(
-            os.path.join(output_folder, f"grid_analysis_{snapshot}.png"),
-            dpi=150, bbox_inches="tight"
+        norm_lines = mcolors.Normalize(vmin=0.0, vmax=1.0)
+        bus_colors = edisgo.results.v_res.T[snapshot]
+        norm_buses = mcolors.TwoSlopeNorm(vmin=0.9, vcenter=1.0, vmax=1.1)
+        # updated color scale from merge branch
+        voltage_cmap = mcolors.LinearSegmentedColormap.from_list(
+            "voltage",
+            [(0.0, "navy"), (0.20, "dodgerblue"), (0.5, "limegreen"), (0.80, "orangered"), (1.0, "darkred")],
         )
-    if show:
-        plt.show()
-    plt.close(fig)
+
+        curt_14a = get_curtailment_data(edisgo).T
+        curt_14a["load"] = curt_14a.index
+        curt_14a["load"] = curt_14a["load"].apply(
+            lambda x: x.replace("cp_14a_support_", "").replace("hp_14a_support_", "")
+        )
+        curt_14a["bus"] = curt_14a["load"].map(edisgo.topology.loads_df["bus"])
+        grouped_14a = curt_14a.groupby("bus").sum()
+        grouped_14a.columns = grouped_14a.columns.map(str)
+
+        bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.000001)
+        bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
+
+        # PyPSA draws buses as Circle patches in data-coordinate space (degrees).
+        # When zooming in, the same degree-radius circle occupies more screen space.
+        # Pre-scale sizes down proportionally to the zoom area so visual size stays
+        # consistent between the full-network view and the focus-bus view.
+        if focus_bus is not None:
+            x_vals = coords["x"].dropna()
+            y_vals = coords["y"].dropna()
+            x_range = max(x_vals.max() - x_vals.min(), 1e-6)
+            y_range = max(y_vals.max() - y_vals.min(), 1e-6)
+            full_area = x_range * y_range
+            zoom_area = (2 * focus_radius) ** 2
+            bus_sizes = bus_sizes * (zoom_area / full_area)
+
+        fig, ax = plt.subplots(figsize=(14, 10))
+        plt.subplots_adjust(left=0.1, right=0.9, top=0.95, bottom=0.05)
+
+        n.plot(
+            margin=0.05, ax=ax, geomap=False,
+            bus_colors=bus_colors, bus_alpha=1, bus_sizes=bus_sizes,
+            bus_cmap=voltage_cmap, bus_norm=norm_buses,
+            line_colors=loading_relative, line_widths=1.6,
+            line_cmap="jet", line_norm=norm_lines,
+            title=f"Grid Analysis: {snapshot}", geometry=False,
+        )
+        ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
+
+        # Zoom um focus_bus
+        if focus_bus is not None:
+            if focus_bus not in n.buses.index:
+                raise ValueError(f"Bus '{focus_bus}' nicht im Netz gefunden.")
+            bx = n.buses.loc[focus_bus, "x"]
+            by = n.buses.loc[focus_bus, "y"]
+            ax.set_xlim(bx - focus_radius, bx + focus_radius)
+            ax.set_ylim(by - focus_radius, by + focus_radius)
+            ax.set_title(f"Grid Analysis: {snapshot} — Zoom: {focus_bus}")
+
+        # Compute final axes bounding box, then place colorbars explicitly so they
+        # span exactly the same height as the map – no taller, no shorter.
+        fig.canvas.draw()
+        pos = ax.get_position()
+        cb_w   = 0.018
+        cb_gap = 0.010
+
+        cax_left  = fig.add_axes([pos.x0 - cb_w - cb_gap * 2, pos.y0, cb_w, pos.height])
+        cax_right = fig.add_axes([pos.x1 + cb_gap,             pos.y0, cb_w, pos.height])
+
+        sm_lines = plt.cm.ScalarMappable(cmap="jet", norm=norm_lines)
+        cb_lines = fig.colorbar(sm_lines, cax=cax_left, orientation="vertical")
+        cax_left.yaxis.set_ticks_position("left")
+        cax_left.yaxis.set_label_position("left")
+        cb_lines.set_label("Line Loading [relative]", fontsize=8)
+
+        sm_buses = plt.cm.ScalarMappable(cmap=voltage_cmap, norm=norm_buses)
+        cb_buses = fig.colorbar(sm_buses, cax=cax_right, orientation="vertical")
+        cb_buses.set_label(
+            "Bus Voltage [p.u.]  — navy: under, green: nominal, red: over", fontsize=8
+        )
+
+        if save:
+            os.makedirs(output_folder, exist_ok=True)
+            plt.savefig(
+                os.path.join(output_folder, f"grid_analysis_{snapshot}.png"),
+                dpi=150, bbox_inches="tight"
+            )
+        if show:
+            plt.show()
+        plt.close(fig)
 
 def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True):
     """Plot load composition per bus (CP, HP, conventional) as pie charts on the grid."""

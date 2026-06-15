@@ -356,6 +356,10 @@ def main():
 
     edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=(0, 6))
 
+    # Set HV/MV transformer secondary voltage to 1.025 pu to reflect the common
+    # DSO practice of boosting LV bus voltage to compensate for feeder voltage drops.
+    edisgo.config["grid_expansion_allowed_voltage_deviations"]["hv_mv_trafo_offset"] = 0.025
+
     mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
     edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
     edisgo.topology.grid_district["srid"] = 4326
@@ -473,7 +477,7 @@ def main():
     print(f"Total use of 14a:{gen_t_14a.sum().sum()}")
     print("\n=== end 14a analysis ===")
 
-    # ── §14a Activation Diagnosis ────────────────────────────────────────────
+        # ── §14a Activation Diagnosis ────────────────────────────────────────────
     # Cross-correlates §14a activations with pre-optimization line loading.
     # "has_pre_overload=False" rows are candidates for spurious activation.
     activation_report = analyze_14a_activations(
@@ -492,21 +496,18 @@ def main():
                              "max_line_loading_pre"]].to_string())
     # ── End §14a Diagnosis ───────────────────────────────────────────────────
 
+    # Create plots for grid results per hour
+    output_folder = "plots/2035_before_analyze"
+    plot_network(edisgo, show=False, snapshots=edisgo.timeseries.timeindex,
+                 output_folder=output_folder, focus_bus=None)
 
-
-    # Create gif
-    output_folder = "plots/2035_before_analyze"   # <-- hier einmal definieren
-
-    for ts in edisgo.timeseries.timeindex:
-          plot_network(edisgo, show=False, snapshot=str(ts), output_folder=output_folder, focus_bus=None)
-      
     create_network_gif(
-          folder_path=output_folder,
-          output_name=f"{output_folder}/network_evolution.gif",
-          duration=500,
+        folder_path=output_folder,
+        output_name=f"{output_folder}/network_evolution.gif",
+        duration=500,
     )
 
-    # ── Presentation plots ───────────────────────────────────────────────────────
+    # ── Presentation plots ───────────────────────────────────────────────────
     # Select days that have non-trivial §14a curtailment (threshold: 1 kW total)
     curt_daily = (
         get_curtailment_data(edisgo)
