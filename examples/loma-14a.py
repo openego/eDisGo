@@ -477,5 +477,4 @@ if __name__ == "__main__":
 
     line_usage = pd.concat(line_usage_parts, axis=1)
     print("\n=== Line usage > 90 % (hours/month) ===")
-    print(line_usage.to_string())
 
