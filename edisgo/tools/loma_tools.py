@@ -1530,7 +1530,7 @@ def plot_network(
         plt.close(fig)
 
 
-def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True):
+def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True, path= "load"):
     """Plot load composition per bus (CP, HP, conventional) as pie charts on the grid."""
     import matplotlib.patches as mpatches
 
@@ -1660,8 +1660,8 @@ def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True):
     )
 
     if save:
-        os.makedirs("plots", exist_ok=True)
-        plt.savefig("plots/cp_hp_locations.png", dpi=300, bbox_inches="tight")
+        os.makedirs(path, exist_ok=True)
+        plt.savefig(f"{path}/cp_hp_locations.png", dpi=300, bbox_inches="tight")
 
     if show:
         plt.show()

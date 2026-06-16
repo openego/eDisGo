@@ -376,8 +376,6 @@ def main(output_dir, snapshot_range, seed=42):
         setup_days=None,
         seed=seed,
     )
-    
-    plot_cp_hp_locations(edisgo, show=False, save=True)
 
     edisgo = run_optimization_14a(edisgo)
     edisgo.analyze()
@@ -446,15 +444,47 @@ def main(output_dir, snapshot_range, seed=42):
     edisgo.save(f"{output_dir}/edisgo")
     return edisgo
 
+
+def get_curtailment_14a_summary(edisgo):
+    """
+    Return hourly §14a curtailment split by HP and CP.
+
+    Returns
+    -------
+    pd.DataFrame
+        Columns: hp_curtailment_mw, cp_curtailment_mw; index is timeindex.
+    """
+    curt = get_curtailment_data(edisgo)
+    hp_cols = [c for c in curt.columns if "hp_14a_support" in c]
+    cp_cols = [c for c in curt.columns if "cp_14a_support" in c or "charging_point_14a_support" in c]
+    return pd.DataFrame(
+        {
+            "hp_curtailment_mw": curt[hp_cols].sum(axis=1) if hp_cols else 0.0,
+            "cp_curtailment_mw": curt[cp_cols].sum(axis=1) if cp_cols else 0.0,
+        },
+        index=edisgo.timeseries.timeindex,
+    )
+
+
 if __name__ == "__main__":
     for rnd_seed in range(42,44):
         line_usage_parts = []
-        for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test=True):
+        curtailment_parts = []
+        for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test=False):
             output_dir = f"/home/carlos/LoMa/output_edisgo/{rnd_seed}"
             edisgo = main(f"{output_dir}/{month_name}", snapshot_range=(snap_start, snap_end), seed=rnd_seed)
             line_usage_parts.append(lines_relative_load(edisgo) * 100)
+            curtailment_parts.append(get_curtailment_14a_summary(edisgo))
 
         line_usage = pd.concat(line_usage_parts, axis=0)
         line_usage.to_csv(f"{output_dir}/line_usage")
+
+        curtailment_14a = pd.concat(curtailment_parts, axis=0)
+        curtailment_14a.to_csv(f"{output_dir}/curtailment_14a.csv")
+        print(f"\n=== §14a Curtailment (seed={rnd_seed}) ===")
+        print(f"  HP: {curtailment_14a['hp_curtailment_mw'].sum():.4f} MWh")
+        print(f"  CP: {curtailment_14a['cp_curtailment_mw'].sum():.4f} MWh")
+
+        plot_cp_hp_locations(edisgo, show=False, save=True, path=output_dir)
         print("\n=== Line loading (%) ===")
 
