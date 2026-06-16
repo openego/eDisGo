@@ -335,8 +335,13 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
 
 
 def get_monthly_snapshot_ranges(year=2025, test=False):
-    """Return list of (month_label, start_idx, end_idx) for each month of year."""
-    if test:
+    """Return list of (month_label, start_idx, end_idx) for each month of year.
+
+    test=False  : full month windows for all 12 months
+    test="test1": 3-day windows for January and February only
+    test="test2": first 7-day window for each of the 12 months
+    """
+    if test == "test1":
         jan_start = 0
         feb_start = calendar.monthrange(year, 1)[1] * 24
         return [
@@ -346,7 +351,10 @@ def get_monthly_snapshot_ranges(year=2025, test=False):
     idx, months = 0, []
     for m in range(1, 13):
         hours = calendar.monthrange(year, m)[1] * 24
-        months.append((f"{year}-{m:02d}", idx, idx + hours - 1))
+        if test == "test2":
+            months.append((f"{year}-{m:02d}", idx, idx + 7 * 24 - 1))
+        else:
+            months.append((f"{year}-{m:02d}", idx, idx + hours - 1))
         idx += hours
     return months
 
@@ -470,7 +478,7 @@ if __name__ == "__main__":
     for rnd_seed in range(42,44):
         line_usage_parts = []
         curtailment_parts = []
-        for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test=False):
+        for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test="test1"):
             output_dir = f"/home/carlos/LoMa/output_edisgo/{rnd_seed}"
             edisgo = main(f"{output_dir}/{month_name}", snapshot_range=(snap_start, snap_end), seed=rnd_seed)
             line_usage_parts.append(lines_relative_load(edisgo) * 100)
