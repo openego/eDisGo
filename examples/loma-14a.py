@@ -6,6 +6,7 @@ import geopandas as gpd
 import pandas as pd
 
 from edisgo import EDisGo
+from edisgo.flex_opt.check_tech_constraints import lines_relative_load
 from edisgo.tools.loma_tools import (
     buses_with_existing_loads,
     create_network_gif,
@@ -332,33 +333,6 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
 
     edisgo.set_time_series_reactive_power_control()
 
-def cal_line_usage(edisgo):
-    """
-    Hours per month each line exceeded 90 % of its rated loading.
-
-    Parameters
-    ----------
-    edisgo : EDisGo
-        EDisGo object with power flow results (edisgo.results.s_res populated).
-
-    Returns
-    -------
-    pd.DataFrame
-        Index: line names. Columns: month-start timestamps (one per month present
-        in the timeindex). Values: hours per month the line loading exceeded 90 %.
-    """
-    from edisgo.flex_opt.check_tech_constraints import lines_relative_load
-
-    rel_load = lines_relative_load(edisgo)  # shape: (timesteps, lines), p.u.
-
-    timeindex = rel_load.index
-    freq_hours = (timeindex[1] - timeindex[0]).total_seconds() / 3600
-
-    over_90 = (rel_load > 0.9).astype(float) * freq_hours
-    monthly = over_90.resample("MS").sum()  # shape: (n_months, lines)
-
-    return monthly.T  # shape: (lines, n_months)
-
 
 def get_monthly_snapshot_ranges(year=2025, test=False):
     """Return list of (month_label, start_idx, end_idx) for each month of year."""
@@ -473,12 +447,14 @@ def main(output_dir, snapshot_range, seed=42):
     return edisgo
 
 if __name__ == "__main__":
-    line_usage_parts = []
-    for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test=True):
-        output_dir = f"/home/carlos/LoMa/output_edisgo/{month_name}"
-        edisgo = main(output_dir, snapshot_range=(snap_start, snap_end), seed=42)
-        line_usage_parts.append(cal_line_usage(edisgo))
+    for rnd_seed in range(42,44):
+        line_usage_parts = []
+        for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test=True):
+            output_dir = f"/home/carlos/LoMa/output_edisgo/{rnd_seed}/{month_name}"
+            edisgo = main(output_dir, snapshot_range=(snap_start, snap_end), seed=rnd_seed)
+            line_usage_parts.append(lines_relative_load(edisgo) * 100)
 
-    line_usage = pd.concat(line_usage_parts, axis=1)
-    print("\n=== Line usage > 90 % (hours/month) ===")
+        line_usage = pd.concat(line_usage_parts, axis=0)
+        line_usage.to_csv(f"{output_dir}/line_usage")
+        print("\n=== Line loading (%) ===")
 
