@@ -1476,8 +1476,9 @@ def plot_network(
         bus_sizes = base_bus_size + (grouped_14a[snapshot] * 0.000001)
         bus_sizes = bus_sizes.reindex(bus_colors.index, fill_value=base_bus_size)
     
-        fig, ax = plt.subplots(figsize=(12, 8))
-    
+        fig, ax = plt.subplots(figsize=(14, 10))
+        plt.subplots_adjust(left=0.1, right=0.9, top=0.95, bottom=0.05)
+
         n.plot(
             margin=0.05,
             ax=ax,
@@ -1497,16 +1498,24 @@ def plot_network(
     
         ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
     
+        # Compute final axes bounding box, then place colorbars explicitly so they
+        # span exactly the same height as the map – no taller, no shorter.
+        fig.canvas.draw()
+        pos = ax.get_position()
+        cb_w   = 0.018
+        cb_gap = 0.010
+
+        cax_left  = fig.add_axes([pos.x0 - cb_w - cb_gap * 2, pos.y0, cb_w, pos.height])
+        cax_right = fig.add_axes([pos.x1 + cb_gap,             pos.y0, cb_w, pos.height])
+
         sm_lines = plt.cm.ScalarMappable(cmap="jet", norm=norm_lines)
-        cb_lines = fig.colorbar(
-            sm_lines, ax=ax, orientation="vertical", location="left", pad=0.08, aspect=20
-        )
+        cb_lines = fig.colorbar(sm_lines, cax=cax_left, orientation="vertical")
+        cax_left.yaxis.set_ticks_position("left")
+        cax_left.yaxis.set_label_position("left")
         cb_lines.set_label("Line Loading [relative]", fontsize=8)
-    
+
         sm_buses = plt.cm.ScalarMappable(cmap=voltage_cmap, norm=norm_buses)
-        cb_buses = fig.colorbar(
-            sm_buses, ax=ax, orientation="vertical", location="right", pad=0.02, aspect=20
-        )
+        cb_buses = fig.colorbar(sm_buses, cax=cax_right, orientation="vertical")
         cb_buses.set_label(
             "Bus Voltage [p.u.]  — navy: under, green: nominal, red: over", fontsize=8
         )
