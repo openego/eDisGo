@@ -450,8 +450,8 @@ if __name__ == "__main__":
     for rnd_seed in range(42,44):
         line_usage_parts = []
         for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test=True):
-            output_dir = f"/home/carlos/LoMa/output_edisgo/{rnd_seed}/{month_name}"
-            edisgo = main(output_dir, snapshot_range=(snap_start, snap_end), seed=rnd_seed)
+            output_dir = f"/home/carlos/LoMa/output_edisgo/{rnd_seed}"
+            edisgo = main(f"{output_dir}/{month_name}", snapshot_range=(snap_start, snap_end), seed=rnd_seed)
             line_usage_parts.append(lines_relative_load(edisgo) * 100)
 
         line_usage = pd.concat(line_usage_parts, axis=0)
