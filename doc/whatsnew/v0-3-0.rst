@@ -39,3 +39,6 @@ Changes
   :meth:`~.edisgo.EDisGo.import_dsm`, and
   :meth:`~.edisgo.EDisGo.import_home_batteries`;
   defaults to a standard open energy platform engine when not provided
+* Vectorised :func:`~.tools.geo.find_nearest_bus` to drop the per-bus geodesic
+  loop, greatly speeding up component geolocation on large grids; the returned
+  distance stays exact `#672 <https://github.com/openego/eDisGo/issues/672>`_
