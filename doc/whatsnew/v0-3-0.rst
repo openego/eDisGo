@@ -70,3 +70,7 @@ Changes
   greatly speeding up the charging strategy on grids with many charging parks; the
   resulting time series are unchanged
   `#677 <https://github.com/openego/eDisGo/issues/677>`_
+* Removed the per-grid ``pd.concat`` loop in
+  :func:`~.io.timeseries_import.get_cts_profiles_per_building` by collecting the
+  per-grid profiles and concatenating them once; the returned profiles are
+  unchanged `#678 <https://github.com/openego/eDisGo/issues/678>`_

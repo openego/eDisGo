@@ -1027,13 +1027,21 @@ def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
         )
         df = pd.read_sql(query.statement, engine, index_col="building_id")
 
-    # iterate over grid IDs
-    profiles_df = pd.DataFrame()
-    for bus_id in df.bus_id.unique():
-        profiles_grid_df = get_cts_profiles_per_grid(
+    # iterate over grid IDs and concatenate the per-grid profiles once instead of
+    # inside the loop (concatenating inside the loop is O(grids^2) as each concat
+    # copies the whole growing frame)
+    profiles_per_grid = [
+        get_cts_profiles_per_grid(
             bus_id=bus_id, scenario=scenario, sector=sector, engine=engine
         )
-        profiles_df = pd.concat([profiles_df, profiles_grid_df], axis=1)
+        for bus_id in df.bus_id.unique()
+    ]
+    # get_cts_profiles_per_grid returns None for grids without a substation
+    # profile; drop those (the previous per-iteration pd.concat dropped them, too)
+    profiles_per_grid = [p for p in profiles_per_grid if p is not None]
+    profiles_df = (
+        pd.concat(profiles_per_grid, axis=1) if profiles_per_grid else pd.DataFrame()
+    )
 
     # filter CTS loads in grid
     return profiles_df.loc[:, cts_building_ids]
