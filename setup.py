@@ -69,7 +69,7 @@ requirements = [
 
 dev_requirements = [
     "ruff < 0.16.0",
-    "pre-commit < 4.6.0",
+    "pre-commit < 4.7.0",
     "pylint < 4.1.0",
     "pytest < 9.2.0",
     "nbclient < 0.12.0",
