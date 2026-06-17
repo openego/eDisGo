@@ -57,3 +57,9 @@ Changes
   with many buildings; the returned profiles are unchanged apart from negligible
   floating-point reordering noise (~1e-18)
   `#674 <https://github.com/openego/eDisGo/issues/674>`_
+* Sped up :func:`~.io.electromobility_import.distribute_private_charging_demand`
+  by recording the drawn charging park and point per car and writing them back to
+  the charging processes once after the loop, instead of scanning the whole frame
+  for every car; the per-car capacity lookup is replaced by a single groupby. The
+  stochastic assignment is unchanged
+  `#675 <https://github.com/openego/eDisGo/issues/675>`_
