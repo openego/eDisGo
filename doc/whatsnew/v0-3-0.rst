@@ -63,3 +63,10 @@ Changes
   for every car; the per-car capacity lookup is replaced by a single groupby. The
   stochastic assignment is unchanged
   `#675 <https://github.com/openego/eDisGo/issues/675>`_
+* Removed the O(parks^2) per-charging-park time-series concatenation in the
+  ``dumb`` and ``reduced`` branches of
+  :func:`~.flex_opt.charging_strategies.charging_strategy` by collecting all
+  charging park columns and adding them to the load time series in a single call,
+  greatly speeding up the charging strategy on grids with many charging parks; the
+  resulting time series are unchanged
+  `#677 <https://github.com/openego/eDisGo/issues/677>`_
