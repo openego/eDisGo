@@ -43,9 +43,12 @@ Changes
   loop, greatly speeding up component geolocation on large grids; the returned
   distance stays exact `#672 <https://github.com/openego/eDisGo/issues/672>`_
 * Reworked :meth:`~.network.electromobility.Electromobility.get_flexibility_bands`
-  to accumulate the energy and power bands in numpy arrays instead of per-process
-  pandas label-slice assignments, fixing an intermittent segfault and greatly
-  speeding it up on large grids; band values are numerically unchanged
+  to build the energy and power bands without the per-charging-process Python loop:
+  each process is expressed as range updates on difference arrays that are summed
+  with a single ``cumsum``, computed with vectorised ``numpy`` operations. This
+  fixes an intermittent segfault in pandas' ``_setitem_with_indexer`` and greatly
+  speeds it up on large grids; band values are unchanged apart from negligible
+  floating-point reordering noise
   `#673 <https://github.com/openego/eDisGo/issues/673>`_
 * Replaced the O(n^2) per-building ``pd.concat`` loop in
   :func:`~.io.timeseries_import.get_residential_electricity_profiles_per_building`
