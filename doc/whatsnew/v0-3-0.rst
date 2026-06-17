@@ -42,3 +42,15 @@ Changes
 * Vectorised :func:`~.tools.geo.find_nearest_bus` to drop the per-bus geodesic
   loop, greatly speeding up component geolocation on large grids; the returned
   distance stays exact `#672 <https://github.com/openego/eDisGo/issues/672>`_
+* Reworked :meth:`~.network.electromobility.Electromobility.get_flexibility_bands`
+  to accumulate the energy and power bands in numpy arrays instead of per-process
+  pandas label-slice assignments, fixing an intermittent segfault and greatly
+  speeding it up on large grids; band values are numerically unchanged
+  `#673 <https://github.com/openego/eDisGo/issues/673>`_
+* Replaced the O(n^2) per-building ``pd.concat`` loop in
+  :func:`~.io.timeseries_import.get_residential_electricity_profiles_per_building`
+  with a single sparse matrix product (building-to-profile incidence matrix times
+  the profiles), greatly speeding up residential demand-profile assembly on grids
+  with many buildings; the returned profiles are unchanged apart from negligible
+  floating-point reordering noise (~1e-18)
+  `#674 <https://github.com/openego/eDisGo/issues/674>`_
