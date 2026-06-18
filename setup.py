@@ -74,6 +74,7 @@ dev_requirements = [
     "pytest < 9.2.0",
     "nbclient < 0.12.0",
     "pytest-xdist < 4.0.0",
+    "pytest-split < 0.12.0",
     "pytest-rerunfailures < 17.0.0",
     "pytest-html < 5.0.0",
     "pytest-metadata < 4.0.0",

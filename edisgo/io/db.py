@@ -136,7 +136,7 @@ def credentials(path: Path | str) -> dict[str, str | int | Path]:
     return egon_config
 
 
-def ssh_tunnel(cred: dict) -> str:
+def ssh_tunnel(cred: dict) -> SSHTunnelForwarder:
     """
     Initialize an SSH tunnel to a remote host according to the input arguments.
     See https://sshtunnel.readthedocs.io/en/latest/ for more information.
@@ -148,24 +148,32 @@ def ssh_tunnel(cred: dict) -> str:
 
     Returns
     -------
-    str
-        Name of local port.
+    sshtunnel.SSHTunnelForwarder
+        The started SSH tunnel forwarder. The local port is available as
+        ``server.local_bind_port``. The caller is responsible for stopping it
+        via ``server.stop()`` when the tunnel is no longer needed.
 
     """
     server = SSHTunnelForwarder(
         ssh_address_or_host=(cred["SSH_HOST"], 22),
         ssh_username=cred["SSH_USER"],
-        ssh_pkey=cred["SSH_PKEY"],
+        # sshtunnel only loads the given key when ssh_pkey is a string path;
+        # a pathlib.Path (as produced by credentials()) is silently ignored,
+        # so it would fall back to the default ~/.ssh keys and fail.
+        ssh_pkey=str(cred["SSH_PKEY"]),
         remote_bind_address=(cred["PGRES_HOST"], cred["PORT"]),
     )
     server.start()
 
-    return str(server.local_bind_port)
+    return server
 
 
 def engine(
-    path: Path | str = None, ssh: bool = False, token: Path | str = None
-) -> Engine:
+    path: Path | str = None,
+    ssh: bool = False,
+    token: Path | str = None,
+    return_tunnel: bool = False,
+) -> Engine | tuple[Engine, SSHTunnelForwarder]:
     """
     Engine for local or remote database.
 
@@ -183,11 +191,17 @@ def engine(
         If empty the default token file in the config folder OEP_TOKEN.txt
         will be used. If the default token file is not found, no token
         will be used and the connection will be established without token.
+    return_tunnel : bool (default=False)
+        Only relevant for ``ssh=True``. If True, additionally return the
+        :class:`sshtunnel.SSHTunnelForwarder` so the caller can stop the
+        tunnel (``server.stop()``) once the engine is no longer needed.
 
     Returns
     -------
-    :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
-        Database engine
+    :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or \
+    tuple of (Engine, sshtunnel.SSHTunnelForwarder)
+        Database engine. If ``ssh=True`` and ``return_tunnel=True``, a tuple of
+        the engine and the started SSH tunnel forwarder.
 
     """
 
@@ -240,14 +254,19 @@ def engine(
         )
 
     cred = credentials(path=path)
-    local_port = ssh_tunnel(cred)
+    server = ssh_tunnel(cred)
 
-    return create_engine(
+    db_engine = create_engine(
         f"postgresql+psycopg2://{cred['POSTGRES_USER']}:"
         f"{cred['POSTGRES_PASSWORD']}@{cred['PGRES_HOST']}:"
-        f"{local_port}/{cred['POSTGRES_DB']}",
+        f"{server.local_bind_port}/{cred['POSTGRES_DB']}",
         echo=False,
     )
+
+    if return_tunnel:
+        return db_engine, server
+
+    return db_engine
 
 
 @contextmanager
