@@ -313,10 +313,20 @@ class Config:
                 )
 
                 # dynamisch eine ORM-Klasse erzeugen
+                class_attrs = {"__tablename__": table_name, "__table__": table}
+                # Many egon_data fact tables have no primary key, but the
+                # SQLAlchemy ORM requires one to map a class. For these
+                # read-only reflections, synthesize a composite key from all
+                # columns so the mapping succeeds (queries read the SQL
+                # statement, not the ORM identity map).
+                if len(table.primary_key.columns) == 0:
+                    class_attrs["__mapper_args__"] = {
+                        "primary_key": list(table.columns)
+                    }
                 orm_class = type(
                     table_name,
                     (Base,),
-                    {"__tablename__": table_name, "__table__": table},
+                    class_attrs,
                 )
                 orm_classes.append(orm_class)
 
