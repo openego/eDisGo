@@ -859,6 +859,94 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
     _save(fig, plots_dir, "network_curtailment_reach.png")
 
 
+def plot_cable_capacity_map(buses, lines, root_bus, plots_dir):
+    """
+    Network map with lines coloured by their nominal capacity (s_nom, MVA).
+    Thicker / warmer colour = higher capacity cable.
+    """
+    import matplotlib.patches as mpatches
+
+    cap_col = next((c for c in ("s_nom", "s_nom_mva", "capacity") if c in lines.columns), None)
+    if cap_col is None:
+        print("  [cable capacity map] No capacity column (s_nom) found in lines — skipping.")
+        return
+
+    plot_lines = lines[lines.index != "line_522"]
+    capacities = plot_lines[cap_col].fillna(0)
+    c_min, c_max = capacities.min(), capacities.max()
+    if c_max == c_min:
+        c_max = c_min + 1.0
+    norm = mcolors.Normalize(vmin=c_min, vmax=c_max)
+    cmap = cm.get_cmap("plasma")
+
+    fig, ax = plt.subplots(figsize=(14, 10))
+    fig.subplots_adjust(right=0.84)
+
+    bus_xy = buses[["x", "y"]].dropna()
+    x_extent = bus_xy["x"].max() - bus_xy["x"].min()
+
+    for line_name, row in plot_lines.iterrows():
+        b0, b1 = row["bus0"], row["bus1"]
+        if b0 not in buses.index or b1 not in buses.index:
+            continue
+        if pd.isna(buses.at[b0, "x"]) or pd.isna(buses.at[b1, "x"]):
+            continue
+        x0, y0 = buses.at[b0, "x"], buses.at[b0, "y"]
+        x1, y1 = buses.at[b1, "x"], buses.at[b1, "y"]
+        cap = capacities.get(line_name, 0)
+        color = cmap(norm(cap))
+        lw = 0.8 + 2.2 * (cap - c_min) / (c_max - c_min)
+        ax.plot([x0, x1], [y0, y1], color=color, linewidth=lw,
+                zorder=2, solid_capstyle="round")
+
+    ax.scatter(bus_xy["x"], bus_xy["y"], s=14, color="#888888",
+               zorder=3, linewidths=0.3, edgecolors="white")
+
+    if root_bus in buses.index:
+        tx = buses.at[root_bus, "x"]
+        ty = buses.at[root_bus, "y"]
+        if pd.notna(tx) and pd.notna(ty):
+            r_t = x_extent * 0.006
+            for cx in (tx - r_t * 0.75, tx + r_t * 0.75):
+                ax.add_patch(mpatches.Circle(
+                    (cx, ty), r_t,
+                    fill=False, edgecolor="black", linewidth=2.0, zorder=5,
+                ))
+
+    if _HAS_CTX:
+        try:
+            ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
+        except Exception:
+            pass
+
+    ax.set_axis_off()
+
+    cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
+    sm  = cm.ScalarMappable(cmap=cmap, norm=norm)
+    cb  = fig.colorbar(sm, cax=cax)
+    cb.set_label("Cable nominal capacity s_nom [MVA]", fontsize=9)
+
+    type_handles = [
+        plt.Line2D([0], [0], color=cmap(0.05), linewidth=1.2,
+                   label=f"Low capacity  ({c_min:.3g} MVA)"),
+        plt.Line2D([0], [0], color=cmap(0.99), linewidth=3.5,
+                   label=f"High capacity  ({c_max:.3g} MVA)"),
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888",
+                   markersize=7, label="Bus"),
+        plt.Line2D([], [], label="MV/LV transformer (feeder root)"),
+    ]
+    trafo_handle = type_handles[-1]
+    ax.legend(handles=type_handles, loc="upper left", fontsize=9,
+              handler_map={trafo_handle: _TwoCircleHandler()})
+
+    ax.set_title(
+        f"Cable Nominal Capacity (s_nom)  —  {len(plot_lines)} lines\n"
+        f"range: {c_min:.3g} – {c_max:.3g} MVA  (line_522 excluded)",
+        fontsize=12,
+    )
+    _save(fig, plots_dir, "cable_capacity_map.png")
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Summary
 # ══════════════════════════════════════════════════════════════════════════════
@@ -932,6 +1020,7 @@ if __name__ == "__main__":
     print(f"  Feeder root: {root_bus}")
 
     plot_network_map(data, buses, lines, loads, bus_curt, root_bus, PLOTS_DIR)
+    plot_cable_capacity_map(buses, lines, root_bus, PLOTS_DIR)
 
     print("\nComputing §14a curtailment reach along feeders …")
     bus_upstream = compute_bus_upstream_lines(G, root_bus)
