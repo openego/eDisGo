@@ -1,24 +1,10 @@
-"""
-Analyse and plot §14a OPF results from loma-14a.py runs.
-
-Reads per-seed files:
-    <RESULTS_ROOT>/<seed>/curtailment_14a.csv
-    <RESULTS_ROOT>/<seed>/line_usage
-
-Reads per-month edisgo saves for the network map:
-    <RESULTS_ROOT>/<seed>/<month>/edisgo/topology/
-    <RESULTS_ROOT>/<seed>/<month>/edisgo/timeseries/generators_active_power.csv
-
-Works for both test2 (7 days per month) and full-year runs, and for any
-number of seeds (box plots summarise the distribution rather than one
-element per seed).
-"""
 import os
 import glob
 
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
+from matplotlib.legend_handler import HandlerBase
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -36,6 +22,7 @@ CURT_THRESHOLD_MW = 1e-3   # solver noise floor
 LINE_STRESS_PCT   = 90.0   # threshold for "stressed" line [%]
 # ─────────────────────────────────────────────────────────────────────────────
 
+os.makedirs(PLOTS_DIR, exist_ok=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Data loading
@@ -179,10 +166,10 @@ def _daily_by_month(data, col):
     return dict(month_vals)
 
 
-def _line_hours_over_threshold(data, pct=LINE_STRESS_PCT):
+def _line_hours_over_threshold(data, pct=LINE_STRESS_PCT, aggregate="mean"):
     """
-    Return a Series indexed by line name with the mean (across seeds) number
-    of hours where loading exceeded `pct` %.
+    Return a Series indexed by line name with the aggregated (mean or sum
+    across seeds) number of hours where loading exceeded `pct` %.
     """
     counts = {}
     for d in data.values():
@@ -190,7 +177,8 @@ def _line_hours_over_threshold(data, pct=LINE_STRESS_PCT):
         over = (lu > pct).sum(axis=0)
         for line, n in over.items():
             counts.setdefault(line, []).append(n)
-    return pd.Series({line: np.mean(v) for line, v in counts.items()})
+    func = np.sum if aggregate == "sum" else np.mean
+    return pd.Series({line: func(v) for line, v in counts.items()})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -390,66 +378,77 @@ def plot_curtailment_vs_line_loading(data, plots_dir):
     _save(fig, plots_dir, "curtailment_vs_line_loading.png")
 
 
-def plot_network_map(data, buses, lines, loads, bus_curt, plots_dir):
+def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
     """
     Network map showing:
-      - Lines coloured by mean hours with loading > LINE_STRESS_PCT %
-      - Bus markers sized by total curtailment (HP red, CP blue pie-style)
+      - Lines coloured by total hours (sum across seeds) with loading > LINE_STRESS_PCT %
+        Unaffected lines are drawn in black; jet colormap with adaptive range.
+      - All buses visible as gray dots; buses with §14a get pie markers (HP red, CP blue).
+      - IEC two-circle transformer symbol at the feeder root.
+    Style mirrors plot_curtailment_reach_map.
     """
-    hours_over = _line_hours_over_threshold(data, LINE_STRESS_PCT)
+    import matplotlib.patches as mpatches
 
-    # ── figure setup ────────────────────────────────────────────────────────
-    fig, ax = plt.subplots(figsize=(13, 10))
+    hours_over = _line_hours_over_threshold(data, LINE_STRESS_PCT, aggregate="sum")
 
-    # ── draw lines ──────────────────────────────────────────────────────────
-    max_hours = max(hours_over.max(), 1)
-    norm  = mcolors.Normalize(vmin=0, vmax=max_hours)
-    cmap_lines = cm.get_cmap("YlOrRd")
+    fig, ax = plt.subplots(figsize=(14, 10))
+    fig.subplots_adjust(right=0.84)
+
+    # ── lines ─────────────────────────────────────────────────────────────────
+    affected   = hours_over[hours_over > 0]
+    h_min      = affected.min() if not affected.empty else 0
+    h_max      = affected.max() if not affected.empty else 1
+    norm_lines = mcolors.Normalize(vmin=h_min, vmax=h_max)
+    cmap_lines = cm.get_cmap("jet")
 
     for line_name, row in lines.iterrows():
-        b0 = row.get("bus0") or row.get("bus_0")
-        b1 = row.get("bus1") or row.get("bus_1")
+        b0, b1 = row["bus0"], row["bus1"]
         if b0 not in buses.index or b1 not in buses.index:
+            continue
+        if pd.isna(buses.at[b0, "x"]) or pd.isna(buses.at[b1, "x"]):
             continue
         x0, y0 = buses.at[b0, "x"], buses.at[b0, "y"]
         x1, y1 = buses.at[b1, "x"], buses.at[b1, "y"]
         h = hours_over.get(line_name, 0)
         if h > 0:
-            color = cmap_lines(norm(h))
-            lw    = 1.0 + 2.5 * (h / max_hours)
+            color  = cmap_lines(norm_lines(h))
+            lw     = 0.9 + 2.6 * (h / h_max)
             zorder = 3
         else:
-            color  = "#cccccc"
-            lw     = 0.7
+            color  = "black"
+            lw     = 0.8
             zorder = 2
-        ax.plot([x0, x1], [y0, y1], color=color, linewidth=lw, zorder=zorder, solid_capstyle="round")
+        ax.plot([x0, x1], [y0, y1], color=color, linewidth=lw,
+                zorder=zorder, solid_capstyle="round")
 
-    # ── draw bus curtailment markers ─────────────────────────────────────────
+    # ── buses ─────────────────────────────────────────────────────────────────
+    bus_xy = buses[["x", "y"]].dropna()
+
+    x_extent = bus_xy["x"].max() - bus_xy["x"].min()
+    MIN_R = x_extent * 0.0012
+    MAX_R = x_extent * 0.009
+
+    ax.scatter(bus_xy["x"], bus_xy["y"], s=18, color="#888888",
+               zorder=4, linewidths=0.4, edgecolors="white")
+
     if not bus_curt.empty:
-        bus_xy = buses[["x", "y"]].reindex(bus_curt.index).dropna()
         curt_align = bus_curt.reindex(bus_xy.index).fillna(0)
         total_curt = curt_align["hp_mwh"] + curt_align["cp_mwh"]
         max_total  = total_curt.max() or 1.0
 
-        x_range = buses["x"].dropna()
-        grid_extent = x_range.max() - x_range.min()
-        MIN_R = grid_extent * 0.0015
-        MAX_R = grid_extent * 0.010
-
-        import matplotlib.patches as mpatches
         for bus in bus_xy.index:
-            if total_curt[bus] <= 0:
+            tot = total_curt.get(bus, 0.0)
+            if tot <= 0:
                 continue
             bx, by = bus_xy.at[bus, "x"], bus_xy.at[bus, "y"]
-            r = MIN_R + (MAX_R - MIN_R) * np.sqrt(total_curt[bus] / max_total)
-            hp = curt_align.at[bus, "hp_mwh"]
-            cp = curt_align.at[bus, "cp_mwh"]
-            total = hp + cp
-            start = 90.0
+            r      = MIN_R + (MAX_R - MIN_R) * np.sqrt(tot / max_total)
+            hp     = curt_align.at[bus, "hp_mwh"]
+            cp     = curt_align.at[bus, "cp_mwh"]
+            start  = 90.0
             for val, color in [(hp, "#d62728"), (cp, "#1f77b4")]:
                 if val <= 0:
                     continue
-                angle = 360.0 * val / total
+                angle = 360.0 * val / tot
                 ax.add_patch(mpatches.Wedge(
                     (bx, by), r, start, start + angle,
                     facecolor=color, edgecolor="white", linewidth=0.3,
@@ -457,36 +456,85 @@ def plot_network_map(data, buses, lines, loads, bus_curt, plots_dir):
                 ))
                 start += angle
 
-    # ── basemap ──────────────────────────────────────────────────────────────
+    # ── transformer marker (IEC two-circle symbol) ────────────────────────────
+    if root_bus in buses.index:
+        tx = buses.at[root_bus, "x"]
+        ty = buses.at[root_bus, "y"]
+        if pd.notna(tx) and pd.notna(ty):
+            r_t = x_extent * 0.006
+            for cx in (tx - r_t * 0.75, tx + r_t * 0.75):
+                ax.add_patch(mpatches.Circle(
+                    (cx, ty), r_t,
+                    fill=False, edgecolor="black", linewidth=2.0, zorder=7,
+                ))
+
+    # ── basemap ───────────────────────────────────────────────────────────────
     if _HAS_CTX:
         try:
             ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
         except Exception:
             pass
 
-    # ── colourbar for line stress ─────────────────────────────────────────────
-    fig.canvas.draw()
-    pos = ax.get_position()
-    cax = fig.add_axes([pos.x1 + 0.01, pos.y0, 0.018, pos.height])
-    sm  = cm.ScalarMappable(cmap=cmap_lines, norm=norm)
-    cb  = fig.colorbar(sm, cax=cax)
-    cb.set_label(f"Mean hours loading > {LINE_STRESS_PCT:.0f} %", fontsize=9)
+    ax.set_axis_off()
 
-    # ── legend ────────────────────────────────────────────────────────────────
-    import matplotlib.patches as mpatches
-    legend_handles = [
-        mpatches.Patch(facecolor="#d62728", alpha=0.9, label="HP curtailment"),
-        mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="CP curtailment"),
-        plt.Line2D([0], [0], color="#cccccc", linewidth=1.5, label="Line (no stress)"),
-        plt.Line2D([0], [0], color=cmap_lines(0.99), linewidth=3, label=f"Line (>{LINE_STRESS_PCT:.0f} %, max hours)"),
+    # ── colourbar for line stress ─────────────────────────────────────────────
+    cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
+    sm  = cm.ScalarMappable(cmap=cmap_lines, norm=norm_lines)
+    cb  = fig.colorbar(sm, cax=cax)
+    cb.set_label(f"Total hours loading > {LINE_STRESS_PCT:.0f} %\n(sum across seeds)", fontsize=9)
+
+    # ── type legend (upper left) ──────────────────────────────────────────────
+    n_stressed = int((hours_over > 0).sum())
+    n_seeds    = len(data)
+    type_handles = [
+        plt.Line2D([0], [0], color="black", linewidth=1.2,
+                   label=f"Line — never over {LINE_STRESS_PCT:.0f} %"),
+        plt.Line2D([0], [0], color=cmap_lines(0.99), linewidth=3.5,
+                   label="Line — most stressed hours"),
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888",
+                   markersize=7, label="Bus (no §14a)"),
+        mpatches.Patch(facecolor="#d62728", alpha=0.9, label="Bus — HP curtailment"),
+        mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="Bus — CP curtailment"),
+        plt.Line2D([], [], label="MV/LV transformer (feeder root)"),
     ]
-    ax.legend(handles=legend_handles, loc="upper left", fontsize=9)
+    trafo_handle = type_handles[-1]
+    leg1 = ax.legend(handles=type_handles, loc="upper left", fontsize=9,
+                     handler_map={trafo_handle: _TwoCircleHandler()})
+    ax.add_artist(leg1)
+
+    # ── size reference legend (lower left) ───────────────────────────────────
+    if not bus_curt.empty:
+        curt_align = bus_curt.reindex(bus_xy.index).fillna(0)
+        total_curt = curt_align["hp_mwh"] + curt_align["cp_mwh"]
+        max_total  = total_curt.max() or 1.0
+
+        ref_fracs = [0.25, 0.5, 1.0]
+        ref_mwhs  = [f * max_total for f in ref_fracs]
+
+        fig.canvas.draw()
+        xlim = ax.get_xlim()
+        deg_per_pt = (xlim[1] - xlim[0]) / (
+            ax.get_position().width * fig.get_size_inches()[0] * 72
+        )
+
+        size_handles = []
+        for ref_mwh in ref_mwhs:
+            r_deg = MIN_R + (MAX_R - MIN_R) * np.sqrt(ref_mwh / max_total)
+            ms    = max(4, 2 * r_deg / deg_per_pt)
+            size_handles.append(
+                plt.Line2D([0], [0], marker="o", color="w",
+                           markerfacecolor="#9467bd", markersize=ms,
+                           label=f"{ref_mwh:.3g} MWh")
+            )
+        ax.legend(handles=size_handles, loc="lower left", fontsize=9,
+                  title="Bus size = total §14a [MWh]", title_fontsize=8)
+
     ax.set_title(
-        f"Network Map — Line Stress (hours >{LINE_STRESS_PCT:.0f} %) and §14a Curtailment\n"
-        f"(mean across {len(data)} seeds)",
-        fontsize=12,
+        f"§14a Network Map — Line Stress (hours >{LINE_STRESS_PCT:.0f} %)\n"
+        f"{n_stressed} of {len(lines)} lines stressed  —  "
+        f"bus size ∝ total §14a use  —  sum across {n_seeds} seed{'s' if n_seeds != 1 else ''}",
+        fontsize=11,
     )
-    plt.tight_layout()
     _save(fig, plots_dir, "network_map.png")
 
 
@@ -630,7 +678,21 @@ def compute_line_curtailment_reach(results_root, loads_df, bus_upstream_lines):
     )
 
 
-def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, n_seeds, plots_dir):
+class _TwoCircleHandler(HandlerBase):
+    """Legend handler that draws two small overlapping circles (IEC transformer symbol)."""
+    def create_artists(self, legend, orig_handle,
+                       xdescent, ydescent, width, height, fontsize, trans):
+        from matplotlib.patches import Circle
+        r  = height * 0.45
+        cy = height * 0.5
+        c1 = Circle((width * 0.5 - r * 0.75, cy), r, transform=trans,
+                    fill=False, edgecolor="black", linewidth=1.2)
+        c2 = Circle((width * 0.5 + r * 0.75, cy), r, transform=trans,
+                    fill=False, edgecolor="black", linewidth=1.2)
+        return [c1, c2]
+
+
+def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bus, n_seeds, plots_dir):
     """
     Network map combining two layers:
 
@@ -644,7 +706,10 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, n_seeds
     """
     import matplotlib.patches as mpatches
 
-    fig, ax = plt.subplots(figsize=(13, 10))
+    fig, ax = plt.subplots(figsize=(14, 10))
+    # Reserve fixed right margin for colorbar before drawing anything else,
+    # so tight_layout/basemap cannot push the map into the colorbar space.
+    fig.subplots_adjust(right=0.84)
 
     # ── lines ─────────────────────────────────────────────────────────────────
     affected = line_reach_hours[line_reach_hours > 0]
@@ -710,6 +775,18 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, n_seeds
                 ))
                 start += angle
 
+    # ── transformer marker (IEC two-circle symbol) ────────────────────────────
+    if root_bus in buses.index:
+        tx = buses.at[root_bus, "x"]
+        ty = buses.at[root_bus, "y"]
+        if pd.notna(tx) and pd.notna(ty):
+            r_t = x_extent * 0.006
+            for cx in (tx - r_t * 0.75, tx + r_t * 0.75):
+                ax.add_patch(mpatches.Circle(
+                    (cx, ty), r_t,
+                    fill=False, edgecolor="black", linewidth=2.0, zorder=7,
+                ))
+
     # ── basemap ───────────────────────────────────────────────────────────────
     if _HAS_CTX:
         try:
@@ -720,9 +797,8 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, n_seeds
     ax.set_axis_off()
 
     # ── colourbar for line reach ───────────────────────────────────────────────
-    fig.canvas.draw()
-    pos = ax.get_position()
-    cax = fig.add_axes([pos.x1 + 0.01, pos.y0, 0.018, pos.height])
+    # Place at fixed figure coordinates inside the reserved right margin.
+    cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
     sm  = cm.ScalarMappable(cmap=cmap_lines, norm=norm_lines)
     cb  = fig.colorbar(sm, cax=cax)
     cb.set_label("Total hours affected by downstream §14a curtailment\n(sum across seeds)", fontsize=9)
@@ -738,8 +814,11 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, n_seeds
                    markersize=7, label="Bus (no §14a)"),
         mpatches.Patch(facecolor="#d62728", alpha=0.9, label="Bus — HP curtailment"),
         mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="Bus — CP curtailment"),
+        plt.Line2D([], [], label="MV/LV transformer (feeder root)"),
     ]
-    leg1 = ax.legend(handles=type_handles, loc="upper left", fontsize=9)
+    trafo_handle = type_handles[-1]
+    leg1 = ax.legend(handles=type_handles, loc="upper left", fontsize=9,
+                     handler_map={trafo_handle: _TwoCircleHandler()})
     ax.add_artist(leg1)
 
     # ── size reference legend (lower left) ───────────────────────────────────
@@ -748,26 +827,25 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, n_seeds
         total_curt = curt_align["hp_mwh"] + curt_align["cp_mwh"]
         max_total  = total_curt.max() or 1.0
 
-        # pick three round reference values spanning the data range
-        ref_vals = []
-        for frac in [0.1, 0.5, 1.0]:
-            ref_mwh = frac * max_total
-            # round to 1 significant figure for readability
-            magnitude = 10 ** np.floor(np.log10(max(ref_mwh, 1e-9)))
-            ref_vals.append(round(ref_mwh / magnitude) * magnitude)
-        ref_vals = sorted(set(ref_vals))
+        # Three exact fractions of max — always distinct, no rounding surprises.
+        ref_fracs = [0.25, 0.5, 1.0]
+        ref_mwhs  = [f * max_total for f in ref_fracs]
+
+        # Compute deg_per_pt once from the stable (subplots_adjust) axes position.
+        fig.canvas.draw()
+        xlim = ax.get_xlim()
+        deg_per_pt = (xlim[1] - xlim[0]) / (
+            ax.get_position().width * fig.get_size_inches()[0] * 72
+        )
 
         size_handles = []
-        for ref_mwh in ref_vals:
-            r_deg   = MIN_R + (MAX_R - MIN_R) * np.sqrt(ref_mwh / max_total)
-            # convert radius in degrees to approximate points for the legend marker
-            fig.canvas.draw()
-            deg_per_pt = (ax.get_xlim()[1] - ax.get_xlim()[0]) / (ax.get_position().width * fig.get_size_inches()[0] * 72)
-            ms = max(3, 2 * r_deg / deg_per_pt)
+        for ref_mwh in ref_mwhs:
+            r_deg = MIN_R + (MAX_R - MIN_R) * np.sqrt(ref_mwh / max_total)
+            ms    = max(4, 2 * r_deg / deg_per_pt)
             size_handles.append(
                 plt.Line2D([0], [0], marker="o", color="w",
                            markerfacecolor="#9467bd", markersize=ms,
-                           label=f"{ref_mwh:.1f} MWh")
+                           label=f"{ref_mwh:.3g} MWh")
             )
         ax.legend(handles=size_handles, loc="lower left", fontsize=9,
                   title="Bus size = total §14a [MWh]", title_fontsize=8)
@@ -778,7 +856,6 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, n_seeds
         f"bus size ∝ total §14a use  —  sum across {n_seeds} seeds",
         fontsize=12,
     )
-    plt.tight_layout()
     _save(fig, plots_dir, "network_curtailment_reach.png")
 
 
@@ -849,16 +926,18 @@ if __name__ == "__main__":
     buses, lines, loads, transformers = load_topology(RESULTS_ROOT)
     bus_curt = load_per_bus_curtailment(RESULTS_ROOT, loads)
     print(f"  Per-bus curtailment: {len(bus_curt)} buses with §14a activity")
-    plot_network_map(data, buses, lines, loads, bus_curt, PLOTS_DIR)
+
+    G        = build_feeder_graph(lines)
+    root_bus = find_root_bus(lines, transformers)
+    print(f"  Feeder root: {root_bus}")
+
+    plot_network_map(data, buses, lines, loads, bus_curt, root_bus, PLOTS_DIR)
 
     print("\nComputing §14a curtailment reach along feeders …")
-    G         = build_feeder_graph(lines)
-    root_bus  = find_root_bus(lines, transformers)
-    print(f"  Feeder root: {root_bus}")
     bus_upstream = compute_bus_upstream_lines(G, root_bus)
     print(f"  Buses in feeder tree: {len(bus_upstream)}")
     line_reach = compute_line_curtailment_reach(RESULTS_ROOT, loads, bus_upstream)
     print(f"  Lines reached by §14a: {(line_reach > 0).sum()} / {len(lines)}")
-    plot_curtailment_reach_map(buses, lines, line_reach, bus_curt, len(data), PLOTS_DIR)
+    plot_curtailment_reach_map(buses, lines, line_reach, bus_curt, root_bus, len(data), PLOTS_DIR)
 
     print(f"\nDone. All plots saved to {PLOTS_DIR}")
