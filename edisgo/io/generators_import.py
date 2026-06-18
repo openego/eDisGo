@@ -1233,12 +1233,18 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
     edisgo_object.topology.generators_df = pd.concat(
         [edisgo_object.topology.generators_df, pv_rooftop_small.loc[:, cols]]
     )
-    integrated_plants = pv_rooftop_small.index
+    # accumulate integrated plant names in a plain list (built into an Index once at
+    # the end) to avoid O(n^2) per-iteration Index.append below
+    integrated_plants_list = list(pv_rooftop_small.index)
 
     # integrate larger PV rooftop plants - if load is already connected to
     # higher voltage level it can be integrated at same bus, otherwise it is
     # integrated based on geolocation
-    integrated_plants_own_grid_conn = pd.Index([])
+    integrated_plants_own_grid_conn_list = []
+    # collect same-bus rows and concat them into generators_df once after the loop to
+    # avoid O(n^2) per-iteration pd.concat (rows are independent additions, so batching
+    # keeps the same resulting frame and row order)
+    same_bus_rows = []
     for pv_pp in pv_rooftop_large.index:
         # check if building is already connected to a voltage level equal to or
         # higher than the voltage level the PV plant should be connected to
@@ -1248,13 +1254,8 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
 
         if voltage_level_pv >= voltage_level_bus:
             # integrate at same bus as load
-            edisgo_object.topology.generators_df = pd.concat(
-                [
-                    edisgo_object.topology.generators_df,
-                    pv_rooftop_large.loc[[pv_pp], cols],
-                ]
-            )
-            integrated_plants = integrated_plants.append(pd.Index([pv_pp]))
+            same_bus_rows.append(pv_rooftop_large.loc[[pv_pp], cols])
+            integrated_plants_list.append(pv_pp)
         else:
             # integrate based on geolocation
             pv_pp_name = edisgo_object.integrate_component_based_on_geolocation(
@@ -1273,10 +1274,16 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
                 weather_cell_id=pv_rooftop_large.at[pv_pp, "weather_cell_id"],
                 source_id=pv_rooftop_large.at[pv_pp, "source_id"],
             )
-            integrated_plants = integrated_plants.append(pd.Index([pv_pp_name]))
-            integrated_plants_own_grid_conn = integrated_plants_own_grid_conn.append(
-                pd.Index([pv_pp_name])
-            )
+            integrated_plants_list.append(pv_pp_name)
+            integrated_plants_own_grid_conn_list.append(pv_pp_name)
+
+    # concat all collected same-bus rows in one operation (O(n) instead of O(n^2))
+    if same_bus_rows:
+        edisgo_object.topology.generators_df = pd.concat(
+            [edisgo_object.topology.generators_df, *same_bus_rows]
+        )
+    integrated_plants = pd.Index(integrated_plants_list)
+    integrated_plants_own_grid_conn = pd.Index(integrated_plants_own_grid_conn_list)
 
     # check if all PV plants were integrated
     if not len(pv_rooftop_df) == len(integrated_plants):

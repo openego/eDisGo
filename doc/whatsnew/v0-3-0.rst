@@ -74,3 +74,47 @@ Changes
   :func:`~.io.timeseries_import.get_cts_profiles_per_building` by collecting the
   per-grid profiles and concatenating them once; the returned profiles are
   unchanged `#678 <https://github.com/openego/eDisGo/issues/678>`_
+* Performed a codebase-wide performance audit and removed a range of super-linear
+  (O(n^2)) accumulation and per-row Python hotspots; all changes are
+  output-identical apart from negligible floating-point reordering noise where
+  noted `#682 <https://github.com/openego/eDisGo/issues/682>`_:
+
+  * Replaced the O(n^2) per-component lookup in the PowerModels OPF builder
+    ``_mapping`` (:mod:`~.io.powermodels_io`) — a full linear name scan plus a
+    per-call frame rebuild — with a cached ``pandas.Index.get_loc`` and hoisted
+    the loop-invariant generator-type masks out of ``_build_component_timeseries``
+  * Rewrote the per-node ``networkx.shortest_simple_paths`` searches in
+    :func:`~.tools.pseudo_coordinates.make_pseudo_coordinates` as single
+    single-source path-length traversals, turning the O(nodes^2) coordinate
+    assignment into a near-linear one
+  * Collected the per-LV-station voltage-limit frames in
+    :func:`~.flex_opt.check_tech_constraints._lv_allowed_voltage_limits` and the
+    per-grid station load/loading frames in
+    :func:`~.flex_opt.check_tech_constraints.stations_allowed_load` and
+    :func:`~.flex_opt.check_tech_constraints.stations_relative_load` into single
+    ``pd.concat`` calls instead of growing them inside the loop
+  * Replaced the per-time-step ``iterrows`` in
+    :func:`~.flex_opt.battery_storage_operation.apply_reference_operation` with a
+    ``numpy`` array loop (the sequential state-of-energy recursion is unchanged)
+    and deferred the per-storage state-of-energy concatenation to a single call
+  * Batched the per-station transformer additions/removals in the grid
+    reinforcement measures (:mod:`~.flex_opt.reinforce_measures`) into single
+    ``pd.concat``/drop operations after the loop
+  * Vectorised the ``DataFrame.apply(..., axis=1)`` calls in the
+    ``predefined_*`` time-series setters of :mod:`~.network.timeseries` into
+    broadcast multiplications
+  * Batched the per-component grid-integration loops in
+    :mod:`~.io.generators_import`, :mod:`~.io.heat_pump_import` and
+    :mod:`~.io.storage_import` (single ``pd.concat`` and ``Index`` build instead
+    of per-element ``pd.concat``/``Index.append``)
+  * Vectorised :func:`~.tools.tools.add_line_susceptance` and replaced the
+    per-bus shortest-path loops in
+    :func:`~.tools.tools.get_path_length_to_station` and the MV branch of
+    ``plot_voltage_over_dist_mv`` (:mod:`~.edisgo`) with single single-source
+    traversals
+  * Pulled the time-series frames to ``numpy`` arrays once in the
+    ``_build_load_dict``/``_build_generator_dict`` helpers of
+    :mod:`~.tools.powermodels_io`, vectorised
+    :func:`~.flex_opt.costs._get_line_costs`, and removed the growing-frame
+    ``pd.concat`` loops in :func:`~.tools.spatial_complexity_reduction` busmap
+    assembly and :mod:`~.tools.preprocess_pypsa_opf_structure`
