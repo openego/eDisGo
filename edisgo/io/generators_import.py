@@ -1035,6 +1035,11 @@ def _integrate_pv_rooftop(edisgo_object, pv_rooftop_df):
     gens_df_building_id = gens_df.loc[:, ["bus"]].join(
         busses_building_id, how="left", on="bus"
     )
+    # Multiple buildings can share the same bus, causing duplicate generator index
+    # entries after the join. Keep only the first match per generator.
+    gens_df_building_id = gens_df_building_id[
+        ~gens_df_building_id.index.duplicated(keep="first")
+    ]
     # using update to make sure to not overwrite existing building ID information
     if "building_id" not in gens_df.columns:
         gens_df["building_id"] = None
