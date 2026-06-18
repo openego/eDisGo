@@ -298,6 +298,20 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
         dummy_buses, errors="ignore"
     )
 
+    ref = edisgo.topology.lines_df[
+        edisgo.topology.lines_df["type_info"] == "NAYY 4x95"
+    ].iloc[0]
+    r_per_km = ref["r"] / ref["length"]
+    x_per_km = ref["x"] / ref["length"]
+    b_per_km = ref["b"] / ref["length"]
+    hc_mask = edisgo.topology.lines_df["comp_type"] == "hc_line"
+    hc_lengths = edisgo.topology.lines_df.loc[hc_mask, "length"]
+    edisgo.topology.lines_df.loc[hc_mask, "r"] = r_per_km * hc_lengths
+    edisgo.topology.lines_df.loc[hc_mask, "x"] = x_per_km * hc_lengths
+    edisgo.topology.lines_df.loc[hc_mask, "b"] = b_per_km * hc_lengths
+    edisgo.topology.lines_df.loc[hc_mask, "s_nom"] = ref["s_nom"]
+    edisgo.topology.lines_df.loc[hc_mask, "type_info"] = ref["type_info"]
+
     integrate_ev_and_hp_for_14a(
         edisgo,
         shapefile_path=shapefile_path,
