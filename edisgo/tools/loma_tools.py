@@ -1481,9 +1481,10 @@ def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True, path= "lo
     n.buses["x"] = coords["x"].values
     n.buses["y"] = coords["y"].values
 
-    # Use p_set from loads_df as nominal load capacity
+    # Use p_set from loads_df as nominal load capacity; exclude MV buses
+    lv_buses = set(buses_df[buses_df["v_nom"] <= 1.0].index)
     loads = edisgo.topology.loads_df[["bus", "type", "p_set"]].copy()
-    loads = loads[loads["type"].isin(TYPES)]
+    loads = loads[loads["type"].isin(TYPES) & loads["bus"].isin(lv_buses)]
 
     # Dedicated Bus_ChargingPoint_X / Bus_HeatPump_X buses may lack coordinates;
     # walk one hop through lines_df to reach a parent bus that has valid x/y.
