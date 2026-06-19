@@ -1,4 +1,3 @@
-import calendar
 import os
 from datetime import datetime
 
@@ -9,12 +8,9 @@ from edisgo import EDisGo
 from edisgo.flex_opt.check_tech_constraints import lines_relative_load
 from edisgo.tools.loma_tools import (
     buses_with_existing_loads,
-    create_network_gif,
     get_curtailment_data,
     plot_cp_hp_locations,
     plot_load_before_after,
-    plot_network,
-    plot_storage_dispatch,
     set_charging_points_to_target,
     set_heat_pumps_to_target,
     set_storage_timeseries_bus_level,
@@ -25,6 +21,7 @@ from edisgo.tools.loma_tools import (
 emob_cache_dir = "/home/student/Execution/eDisGo_exe/emob_cache_Whole_Husum_final_statusQuo"
 grid_path = "/home/student/Execution/LoMa_exe/results/Whole_Husum_final_statusQuo_LV_ids"
 path_husum_district_shp = "/home/student/Execution/LoMa_exe/data/Input_files/MV_grid_district/husum_district.shp"
+
 
 def run_optimization_14a(edisgo):
     """
@@ -45,24 +42,12 @@ def run_optimization_14a(edisgo):
     EDisGo
         EDisGo object with optimization results
     """
-    print(f"\n{'='*80}")
-    print("⚡ Running OPF with §14a Curtailment")
-    print(f"{'='*80}")
-    print("\nUsing OPF version 5:")
-    print("  - §14a curtailment as only flexibility tool")
-    print("  - Minimize line losses + §14a usage")
-    print("  - Grid restrictions enforced (voltage 0.9-1.1, current limits)")
-    print("  - Feasibility slacks penalized at 1e8")
-
     start_time = datetime.now()
 
-    # Run optimization
     edisgo.pm_optimize(opf_version=5, curtailment_14a=True, hours_limit_14a=24)
 
     duration = (datetime.now() - start_time).total_seconds()
-
-    print("\n✓ Optimization complete!")
-    print(f"  Duration: {duration:.1f} seconds ({duration/60:.1f} minutes)")
+    print(f"  ✓ Optimization complete ({duration:.1f}s)")
 
     return edisgo
 
@@ -131,18 +116,9 @@ def _load_emob_cache(edisgo, cache_dir):
 
     print(f"[emob cache] Loaded from {cache_dir} ({len(new_cp_rows)} eDisGo CPs restored)")
 
+
 def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_days=None, cache_dir=None, seed=42):
     """Import EV charging points, apply charging strategy, and adjust CP/HP counts."""
-
-    """
-    After this function there are no time series yet. Only charging points and
-    a overall demand which is then transferred into a time series in
-    apply_charging_strategy.
-
-    Note: Afterwards there should be the Existing CP (411) and Additional CP (589)
-    from the LoMa side for the 2035 scenario and all new eDisGo CP (for whole Husum
-    there should be 2337). So the total should be 3337.
-    """
     if cache_dir is not None and _emob_cache_exists(cache_dir):
         _load_emob_cache(edisgo, cache_dir)
     else:
@@ -153,17 +129,6 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
         if cache_dir is not None:
             _save_emob_cache(edisgo, cache_dir)
 
-    """
-    This step created the time series for the new eDisGo charging points.
-    Without the preparation of Q before charging strategy I got an error while
-    apply_charging_strategy which was caused by a deviating time index.
-
-    Note: After this step ONLY the charging points from eDisGo have a time series.
-    """
-    # Optionally limit simulated days so apply_charging_strategy is faster.
-    # charging_strategies.py filters events via park_start_timesteps <= len_ts,
-    # where len_ts = simulated_days * 24*60 / stepsize, so a shorter day count
-    # proportionally reduces both the event set and the dummy_ts array size.
     _orig_days = None
     if setup_days is not None:
         _orig_days = int(edisgo.electromobility.simbev_config_df.at[0, "days"])
@@ -185,33 +150,23 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
 
     edisgo.apply_charging_strategy(strategy="dumb")
 
-    # Apply EV charging efficiency correction    
+    # Apply EV charging efficiency correction
     ev_charging_efficiency = 0.9
-    
+
     lap = edisgo.timeseries.loads_active_power.copy()
-    
+
     cp_names_before_transfer = edisgo.topology.loads_df.query(
         "type == 'charging_point'"
     ).index.intersection(lap.columns)
-    
+
     lap.loc[:, cp_names_before_transfer] = (
         lap.loc[:, cp_names_before_transfer] * ev_charging_efficiency
     )
     edisgo.timeseries.loads_active_power = lap
 
-        
     if _orig_days is not None:
         edisgo.electromobility.simbev_config_df.at[0, "days"] = _orig_days
 
-    """
-    This step then finally transfers the time series from suitable eDisGo
-    charging_points to Existing_ und Additional_ charging points which are
-    created on the LoMa side.
-
-    Note: After this step there should be 411 Existing CP and 589 Additional for
-    the 2035 scenario and 1337 eDisGo CP as 1000 of those were used for matching
-    and transferring the time series and deleted afterwards.
-    """
     transfer_ts_from_new_to_existing_cp(
         edisgo,
         existing_markers=("Existing", "Additional"),
@@ -221,37 +176,19 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
         tol_2=0.9,
     )
 
-    # ------------------------------------------------------------
-    # Optional Utilities for sensitivity analysis/changing the amount of cp/hp
-    # - target by absolute value or relative percentage
-    # - Only use one option at a time (target_total, percentage)
-    # ------------------------------------------------------------
-    """
-    In this step the total amount of charging points or heat pumps can be adjusted.
-    Either by percentage or by a total amount including the infrastructure from
-    LoMa. When deleting CP/HP there is an option to export the deleted ones.
-    New CP/HP will have 'dup' in their name.
-
-    Note: for the 2035 scenario the target total would need to be set to 1000.
-    CPs with the marker Additional and Existing in their name will be removed last.
-    This way only the remaining 1337 eDisGo CP would be deleted.
-    """
-    # Compute CP eligible buses for CP scaling
     valid_buses = set(edisgo.topology.buses_df.index)
 
     base_eligible_buses = [
         bus for bus in buses_with_existing_loads(edisgo)
         if bus in valid_buses
     ]
-    
+
     cp_eligible_buses = base_eligible_buses.copy()
     hp_eligible_buses = base_eligible_buses.copy()
-    
+
     set_charging_points_to_target(
         edisgo,
-        target_total=50, # sets total amount of CP #412 SQ, 1000 2035
-        # percentage=0.10, # increases total amount of CP by 10%
-        # percentage=-0.10, # decreases total amount of CP by 10%
+        target_total=50,
         eligible_buses=cp_eligible_buses,
         removal_priority=["Additional", "Existing"],
         add_tracking_columns=False,
@@ -262,20 +199,22 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
 
     set_heat_pumps_to_target(
         edisgo,
-        target_total=130,  # sets total amount of HP #575 SQ, 2600 2035
-        # percentage=0.10, # increases total amount of HP by 10%
-        # percentage=-0.10, # decreases total amount of HP by 10%
+        target_total=130,
         eligible_buses=hp_eligible_buses,
         add_tracking_columns=False,
-        export_removed=False,  # only applies when there are deleted HP
-        export_dir=output_dir,  # only applies when there are deleted HP
+        export_removed=False,
+        export_dir=output_dir,
         seed=seed,
     )
 
 
 def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None, setup_days=None, seed=42):
-    """Apply topology fixes, EV integration, and pre-optimization setup."""
+    """Apply topology fixes, EV integration, and pre-optimization setup.
 
+    Run ONCE for the whole loaded period (e.g. a full week). The resulting
+    object is later split into daily chunks for optimization, see
+    `restrict_edisgo_to_window`.
+    """
     edisgo.topology.generators_df = edisgo.topology.generators_df[
         edisgo.topology.generators_df.index != "HV_dummy_gen_slack"
     ]
@@ -334,123 +273,81 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
     edisgo.set_time_series_reactive_power_control()
 
 
-def get_monthly_snapshot_ranges(year=2025, test=False):
-    """Return list of (month_label, start_idx, end_idx) for each month of year.
+def get_daily_windows(timeindex):
+    """Split a DatetimeIndex into daily (calendar day) chunks.
 
-    test=False  : full month windows for all 12 months
-    test="test1": 3-day windows for January and February only
-    test="test2": first 7-day window for each of the 12 months
+    Returns
+    -------
+    list of (str, pandas.DatetimeIndex)
+        One entry per day, labelled "YYYY-MM-DD", in chronological order.
     """
-    if test == "test1":
-        jan_start = 0
-        feb_start = calendar.monthrange(year, 1)[1] * 24
-        return [
-            (f"{year}-01", jan_start, jan_start + 3 * 24 - 1),
-            (f"{year}-02", feb_start, feb_start + 3 * 24 - 1),
-        ]
-    idx, months = 0, []
-    for m in range(1, 13):
-        hours = calendar.monthrange(year, m)[1] * 24
-        if test == "test2":
-            months.append((f"{year}-{m:02d}", idx, idx + 7 * 24 - 1))
-        else:
-            months.append((f"{year}-{m:02d}", idx, idx + hours - 1))
-        idx += hours
-    return months
+    days = timeindex.normalize().unique().sort_values()
+    return [
+        (day.strftime("%Y-%m-%d"), timeindex[timeindex.normalize() == day])
+        for day in days
+    ]
 
 
-def main(output_dir, snapshot_range, seed=42):
-    t0 = datetime.now()
+def restrict_edisgo_to_window(edisgo_obj, window_index):
+    """Restrict an already-loaded EDisGo object to a subset of timesteps.
 
-    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=snapshot_range)
+    Setting `timeseries.timeindex` alone is NOT enough: properties like
+    `generators_active_power` are filtered through it automatically when
+    READ (TimeSeries._internal_getter does `.loc[self.timeindex]`), but the
+    underlying private DataFrames (`_generators_active_power`,
+    `_loads_active_power`, `_storage_units_active_power`, ...) still hold all
+    of the original (e.g. weekly) rows. `from_powermodels` writes OPF results
+    back into exactly those private DataFrames with `.loc[:, names] = ...`
+    (no row filtering), so if they still have e.g. 168 rows while the OPF
+    result array has only 24, this raises
+    "ValueError: shape mismatch: value array of shape (24, n) could not be
+    broadcast to indexing result of shape (168, n)".
 
-    # Set HV/MV transformer secondary voltage to 1.025 pu to reflect the common
-    # DSO practice of boosting LV bus voltage to compensate for feeder voltage drops.
-    edisgo.config["grid_expansion_allowed_voltage_deviations"]["hv_mv_trafo_offset"] = 0.025
+    Reading each property through its getter (already window-filtered) and
+    writing it back through its setter (plain full replace, see
+    `edisgo/network/timeseries.py`) shrinks the private DataFrame itself to
+    just this window.
 
-    mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
-    edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
-    edisgo.topology.grid_district["srid"] = 4326
-    
-    edisgo.topology.check_integrity()
+    `heat_pump.cop_df`/`heat_pump.heat_demand_df` are read directly by their
+    own row index inside `to_powermodels` (no `.loc[timeindex]` filtering
+    there either), so they are trimmed explicitly as well.
+    """
+    ts = edisgo_obj.timeseries
+    ts.timeindex = window_index
 
-    edisgo.analyze()
-    
-    prepare_edisgo_for_14a(
-        edisgo,
-        shapefile_path=path_husum_district_shp,
-        output_dir=output_dir,
-        cache_dir=emob_cache_dir,
-        setup_days=None,
-        seed=seed,
-    )
-
-    edisgo = run_optimization_14a(edisgo)
-    edisgo.analyze()
-
-    # ────────────────────────── Slack diagnosis ──────────────────────────────
-    slacks = edisgo.opf_results.grid_slacks_t
-    print("\n=== OPF Slack Diagnosis (v5) ===")
-    for name, df in [
-        ("gen_nd_crt  (renewable curtailment)", slacks.gen_nd_crt),
-        ("gen_d_crt   (disp. gen curtailment)", slacks.gen_d_crt),
-        ("load_shed   (load shedding)", slacks.load_shedding),
-        ("hp_shed     (HP load shedding)", slacks.hp_load_shedding),
+    for attr in [
+        "generators_active_power",
+        "generators_reactive_power",
+        "loads_active_power",
+        "loads_reactive_power",
+        "storage_units_active_power",
+        "storage_units_reactive_power",
     ]:
-        total = df.abs().sum(axis=1)
-        if (total > 5e-3).any():
-            print(f"  {name}: {total.sum():.4f} MW  ← NON-ZERO")
-        else:
-            print(f"  {name}: 0 (not used)")
+        setattr(ts, attr, getattr(ts, attr))
 
-    print("\n=== Voltage after OPF (edisgo.results.v_res) ===")
-    v = edisgo.results.v_res
-    print(f"  Min:  {v.min().min():.4f} p.u.")
-    print(f"  Max:  {v.max().max():.4f} p.u.")
-    viol = (v < 0.9) | (v > 1.1)
-    if viol.any().any():
-        print(f"  Violations:{viol.sum().sum()}")
-        print()
-    else:
-        print("  No voltage violations.")
-    # ────────────────────────── End diagnosis ────────────────────────────────
+    edisgo_obj.heat_pump.cop_df = edisgo_obj.heat_pump.cop_df.loc[window_index]
+    edisgo_obj.heat_pump.heat_demand_df = edisgo_obj.heat_pump.heat_demand_df.loc[
+        window_index
+    ]
+    return edisgo_obj
 
-    print("\n=== 14a analysis ===")
-    gen = edisgo.topology.generators_df
-    gen_t = edisgo.timeseries.generators_active_power
-    gen_14a = gen[gen.index.str.contains("14a")]
-    gen_t_14a = gen_t.loc[:, gen_14a.index]
-    print(f"Total use of 14a:{gen_t_14a.sum().sum()}")
-    print("\n=== end 14a analysis ===")
 
-    # Create plots for grid results per hour
-    # plot_network(edisgo, show=False, snapshots=edisgo.timeseries.timeindex,
-    #              folder_path=f"{output_dir}/plot")
-    #create_network_gif(duration=500)
+def run_day_chunk(edisgo_full, day_label, window_index):
+    """Run analyze + §14a OPF + analyze for a single day on an isolated copy.
 
-    # ── Presentation plots ───────────────────────────────────────────────────
-    # Select days that have non-trivial §14a curtailment (threshold: 1 kW total)
-    curt_daily = (
-        get_curtailment_data(edisgo)
-        .groupby(edisgo.timeseries.timeindex.normalize())
-        .sum()
-        .sum(axis=1)
-    )
-    active_days = curt_daily[curt_daily > 1e-3].index.strftime("%Y-%m-%d").tolist()
+    `edisgo_full` (already loaded and prepared for the whole week) is left
+    untouched; a deep copy is restricted to `window_index` and optimized.
+    """
+    print(f"\n{'='*80}\nDay {day_label} ({len(window_index)} timesteps)\n{'='*80}")
 
-    print(f"\n=== Days with §14a curtailment: {active_days} ===")
+    edisgo_day = edisgo_full.copy(deep=True)
+    restrict_edisgo_to_window(edisgo_day, window_index)
 
-    for day in active_days:
-        print(f"  Plotting {day}...")
-        plot_load_before_after(edisgo, day=day, show=False, save=True,
-                               folder_path=f"{output_dir}/load_plots/")
+    edisgo_day.analyze()
+    edisgo_day = run_optimization_14a(edisgo_day)
+    edisgo_day.analyze()
 
-    print(f"Saved plots to {output_dir}/plots/")
-    print(f"Time: {datetime.now() - t0}")
-
-    os.makedirs(output_dir, exist_ok=True)
-    edisgo.save(f"{output_dir}/edisgo")
-    return edisgo
+    return edisgo_day
 
 
 def get_curtailment_14a_summary(edisgo):
@@ -474,25 +371,157 @@ def get_curtailment_14a_summary(edisgo):
     )
 
 
+def main(output_dir, snapshot_range, seed=42):
+    """Load an EDisGo object once for the given period, then optimize it day
+    by day in independent 24h chunks and merge the results back together.
+
+    Parameters
+    ----------
+    output_dir : str
+    snapshot_range : tuple(int, int)
+        Inclusive (start, end) row range to load, e.g. (0, 7*24-1) for the
+        first week of the year. Should span whole calendar days.
+    seed : int
+    """
+    t0 = datetime.now()
+    print(f"=== main() started at {t0:%Y-%m-%d %H:%M:%S} ===")
+
+    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=snapshot_range)
+
+    # Set HV/MV transformer secondary voltage to 1.025 pu to reflect the common
+    # DSO practice of boosting LV bus voltage to compensate for feeder voltage drops.
+    edisgo.config["grid_expansion_allowed_voltage_deviations"]["hv_mv_trafo_offset"] = 0.025
+
+    mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
+    edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
+    edisgo.topology.grid_district["srid"] = 4326
+
+    edisgo.topology.check_integrity()
+    edisgo.analyze()
+
+    # Prepare ONCE for the whole period (EV import/charging strategy, HP setup).
+    prepare_edisgo_for_14a(
+        edisgo,
+        shapefile_path=path_husum_district_shp,
+        output_dir=output_dir,
+        cache_dir=emob_cache_dir,
+        setup_days=None,
+        seed=seed,
+    )
+
+    # ──────────────────────── Optimize day by day ─────────────────────────
+    daily_windows = get_daily_windows(edisgo.timeseries.timeindex)
+    print(
+        f"\nSplitting {len(edisgo.timeseries.timeindex)} timesteps into "
+        f"{len(daily_windows)} daily chunks: {[d for d, _ in daily_windows]}"
+    )
+
+    edisgo_days = []
+    slack_parts = {"gen_nd_crt": [], "gen_d_crt": [], "load_shedding": [], "hp_load_shedding": []}
+    v_res_parts = []
+    line_usage_parts = []
+    curtailment_parts = []
+
+    for day_label, window_index in daily_windows:
+        edisgo_day = run_day_chunk(edisgo, day_label, window_index)
+        edisgo_days.append((day_label, edisgo_day))
+
+        slacks = edisgo_day.opf_results.grid_slacks_t
+        slack_parts["gen_nd_crt"].append(slacks.gen_nd_crt)
+        slack_parts["gen_d_crt"].append(slacks.gen_d_crt)
+        slack_parts["load_shedding"].append(slacks.load_shedding)
+        slack_parts["hp_load_shedding"].append(slacks.hp_load_shedding)
+
+        v_res_parts.append(edisgo_day.results.v_res)
+        line_usage_parts.append(lines_relative_load(edisgo_day) * 100)
+        curtailment_parts.append(get_curtailment_14a_summary(edisgo_day))
+
+    # ─────────────────────── Merge daily results into one week ────────────
+    slacks_week = {
+        name: pd.concat(parts, axis=0).sort_index() for name, parts in slack_parts.items()
+    }
+    v_res_week = pd.concat(v_res_parts, axis=0).sort_index()
+    line_usage_week = pd.concat(line_usage_parts, axis=0).sort_index()
+    curtailment_week = pd.concat(curtailment_parts, axis=0).sort_index()
+
+    # ────────────────────────── Slack diagnosis ──────────────────────────
+    print("\n=== OPF Slack Diagnosis (v5, merged over week) ===")
+    for name, df in slacks_week.items():
+        total = df.abs().sum(axis=1)
+        if (total > 5e-3).any():
+            print(f"  {name}: {total.sum():.4f} MW  ← NON-ZERO")
+        else:
+            print(f"  {name}: 0 (not used)")
+
+    print("\n=== Voltage after OPF (merged over week) ===")
+    print(f"  Min:  {v_res_week.min().min():.4f} p.u.")
+    print(f"  Max:  {v_res_week.max().max():.4f} p.u.")
+    viol = (v_res_week < 0.9) | (v_res_week > 1.1)
+    if viol.any().any():
+        print(f"  Violations:{viol.sum().sum()}")
+    else:
+        print("  No voltage violations.")
+    # ────────────────────────── End diagnosis ────────────────────────────
+
+    print("\n=== 14a analysis (merged over week) ===")
+    print(f"Total use of 14a: {curtailment_week.sum().sum():.4f}")
+    print("\n=== end 14a analysis ===")
+
+    # ── Presentation plots ──────────────────────────────────────────────
+    # Select days that have non-trivial §14a curtailment (threshold: 1 kW total)
+    curt_daily = curtailment_week.groupby(curtailment_week.index.normalize()).sum().sum(axis=1)
+    active_days = curt_daily[curt_daily > 1e-3].index.strftime("%Y-%m-%d").tolist()
+    print(f"\n=== Days with §14a curtailment: {active_days} ===")
+
+    for day_label, edisgo_day in edisgo_days:
+        if day_label in active_days:
+            print(f"  Plotting {day_label}...")
+            plot_load_before_after(
+                edisgo_day, day=day_label, show=False, save=True,
+                folder_path=f"{output_dir}/load_plots/",
+            )
+
+    os.makedirs(output_dir, exist_ok=True)
+    line_usage_week.to_csv(f"{output_dir}/line_usage.csv")
+    curtailment_week.to_csv(f"{output_dir}/curtailment_14a.csv")
+
+    # Save each day's optimized EDisGo object individually (full result
+    # fidelity per day; the original full-week object never ran the OPF
+    # itself, only its per-day copies did).
+    for day_label, edisgo_day in edisgo_days:
+        edisgo_day.save(f"{output_dir}/days/{day_label}/edisgo")
+
+    print(f"Saved plots to {output_dir}/load_plots/")
+    t_end = datetime.now()
+    print(f"=== main() finished at {t_end:%Y-%m-%d %H:%M:%S} (duration: {t_end - t0}) ===")
+
+    return edisgo, edisgo_days, line_usage_week, curtailment_week
+
+
 if __name__ == "__main__":
-    for rnd_seed in range(42):
-        line_usage_parts = []
-        curtailment_parts = []
-        for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test="test1"):
-            output_dir = f"/home/student/Execution/eDisGo_exe/results_14a/{rnd_seed}"
-            edisgo = main(f"{output_dir}/{month_name}", snapshot_range=(snap_start, snap_end), seed=rnd_seed)
-            line_usage_parts.append(lines_relative_load(edisgo) * 100)
-            curtailment_parts.append(get_curtailment_14a_summary(edisgo))
+    script_t0 = datetime.now()
+    print(f"=== Script started at {script_t0:%Y-%m-%d %H:%M:%S} ===")
 
-        line_usage = pd.concat(line_usage_parts, axis=0)
-        line_usage.to_csv(f"{output_dir}/line_usage")
+    seed = 42
+    output_dir = f"/home/carlos/LoMa/output_edisgo/{seed}/week"
 
-        curtailment_14a = pd.concat(curtailment_parts, axis=0)
-        curtailment_14a.to_csv(f"{output_dir}/curtailment_14a.csv")
-        print(f"\n=== §14a Curtailment (seed={rnd_seed}) ===")
-        print(f"  HP: {curtailment_14a['hp_curtailment_mw'].sum():.4f} MWh")
-        print(f"  CP: {curtailment_14a['cp_curtailment_mw'].sum():.4f} MWh")
+    # One example week, first 7 days of the loaded year (snapshot_range is an
+    # inclusive row range and must span whole calendar days).
+    edisgo, edisgo_days, line_usage_week, curtailment_week = main(
+        output_dir, snapshot_range=(0, 7 * 24 - 1), seed=seed
+    )
 
-        plot_cp_hp_locations(edisgo, show=False, save=True, path=output_dir)
-        print("\n=== Line loading (%) ===")
+    print(f"\n=== §14a Curtailment (seed={seed}) ===")
+    print(f"  HP: {curtailment_week['hp_curtailment_mw'].sum():.4f} MWh")
+    print(f"  CP: {curtailment_week['cp_curtailment_mw'].sum():.4f} MWh")
 
+    print("\n=== Line loading (%) ===")
+    print(line_usage_week.describe())
+
+    plot_cp_hp_locations(edisgo, show=False, save=True, path=output_dir)
+
+    script_t_end = datetime.now()
+    print(
+        f"=== Script finished at {script_t_end:%Y-%m-%d %H:%M:%S} "
+        f"(total duration: {script_t_end - script_t0}) ==="
+    )
