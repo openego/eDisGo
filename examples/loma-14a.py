@@ -3,6 +3,7 @@ import os
 from datetime import datetime
 
 import geopandas as gpd
+import numpy as np
 import pandas as pd
 
 from edisgo import EDisGo
@@ -350,6 +351,66 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
     edisgo.set_time_series_reactive_power_control()
 
 
+def fix_hp_peak_loads(edisgo, seed=None):
+    """
+    Enforce minimum HP p_set constraints and ensure adequate representation
+    in higher power bands. Timeseries are scaled proportionally when p_set changes.
+
+    Rules:
+      1. p_set >= 0.003 MW for every heat pump.
+      2. At least 5 % of HPs have p_set in [0.01, 0.02] MW.
+      3. At least 5 % of HPs have p_set in [0.02, 0.03] MW.
+      4. At least 5 % of HPs have p_set in [0.04, 0.05] MW.
+    """
+    rng = np.random.default_rng(seed)
+    loads_df = edisgo.topology.loads_df
+    hp_idx = loads_df[loads_df["type"] == "heat_pump"].index.tolist()
+    n_hp = len(hp_idx)
+    if n_hp == 0:
+        return
+
+    lap = edisgo.timeseries.loads_active_power
+
+    def _rescale(hp, new_p):
+        old_p = loads_df.at[hp, "p_set"]
+        if old_p > 0 and hp in lap.columns:
+            lap[hp] = lap[hp] * (new_p / old_p)
+        loads_df.at[hp, "p_set"] = new_p
+
+    # Rule 1: floor all HPs at 0.003 MW
+    for hp in hp_idx:
+        if loads_df.at[hp, "p_set"] < 0.003:
+            _rescale(hp, 0.003)
+
+    # Rules 2–4: ensure at least 5 % of HPs fall in each target band
+    target_bands = [(0.01, 0.02), (0.02, 0.03), (0.04, 0.05)]
+    min_count = max(1, int(np.ceil(n_hp * 0.05)))
+
+    assigned = set()
+    for lo, hi in target_bands:
+        already = [hp for hp in hp_idx if lo <= loads_df.at[hp, "p_set"] <= hi]
+        assigned |= set(already)
+        need = min_count - len(already)
+        if need <= 0:
+            continue
+        # prefer HPs not yet assigned to any target band; fall back to all others
+        candidates = [hp for hp in hp_idx if hp not in assigned]
+        if len(candidates) < need:
+            candidates = [hp for hp in hp_idx if hp not in set(already)]
+        chosen = rng.choice(candidates, size=min(need, len(candidates)), replace=False).tolist()
+        for hp in chosen:
+            _rescale(hp, float(rng.uniform(lo, hi)))
+            assigned.add(hp)
+
+    # Keep heat_demand_df consistent with updated timeseries
+    hp_in_lap = [h for h in hp_idx if h in lap.columns]
+    if not edisgo.heat_pump.cop_df.empty and hp_in_lap:
+        edisgo.heat_pump.heat_demand_df = (
+            lap[hp_in_lap] * edisgo.heat_pump.cop_df[hp_in_lap]
+        )
+    print(f"[fix_hp_peak_loads] Adjusted {n_hp} heat pumps.")
+
+
 def get_monthly_snapshot_ranges(year=2025, test=False):
     """Return list of (month_label, start_idx, end_idx) for each month of year.
 
@@ -400,8 +461,10 @@ def main(output_dir, snapshot_range, seed=42):
         seed=seed,
     )
 
+    fix_hp_peak_loads(edisgo, seed=seed)
+
     edisgo = run_optimization_14a(edisgo)
-    edisgo.analyze()
+    #edisgo.analyze()
 
     # ────────────────────────── Slack diagnosis ──────────────────────────────
     slacks = edisgo.opf_results.grid_slacks_t
