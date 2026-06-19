@@ -358,9 +358,8 @@ def fix_hp_peak_loads(edisgo, seed=None):
 
     Rules:
       1. p_set >= 0.003 MW for every heat pump.
-      2. At least 5 % of HPs have p_set in [0.01, 0.02] MW.
-      3. At least 5 % of HPs have p_set in [0.02, 0.03] MW.
-      4. At least 5 % of HPs have p_set in [0.04, 0.05] MW.
+      2. At least 10 % of HPs have p_set in [0.01, 0.02] MW.
+      3. At least 10 % of HPs have p_set in [0.02, 0.03] MW.
     """
     rng = np.random.default_rng(seed)
     loads_df = edisgo.topology.loads_df
@@ -382,9 +381,9 @@ def fix_hp_peak_loads(edisgo, seed=None):
         if loads_df.at[hp, "p_set"] < 0.003:
             _rescale(hp, 0.003)
 
-    # Rules 2–4: ensure at least 5 % of HPs fall in each target band
-    target_bands = [(0.01, 0.02), (0.02, 0.03), (0.04, 0.05)]
-    min_count = max(1, int(np.ceil(n_hp * 0.05)))
+    # Rules 2–3: ensure at least 10 % of HPs fall in each target band
+    target_bands = [(0.01, 0.02), (0.02, 0.03)]
+    min_count = max(1, int(np.ceil(n_hp * 0.10)))
 
     assigned = set()
     for lo, hi in target_bands:
