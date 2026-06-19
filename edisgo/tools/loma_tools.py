@@ -887,6 +887,7 @@ def set_loads_to_target(
     name_prefix=None,
     remove_marked_last=True,
     removal_priority=None,
+    max_p_set_mw=None,
 ):
     """
     Set final number of loads of one type to a target value.
@@ -936,6 +937,10 @@ def set_loads_to_target(
         ["Additional", "Existing"]
         means:
         no marker -> Additional -> Existing
+    max_p_set_mw : float | None
+        If set, only loads with p_set <= max_p_set_mw are eligible as
+        duplication sources. Prevents large loads (e.g. MV-scale CPs) from
+        being duplicated onto LV buses.
     """
     current_ids = get_load_ids_by_type(edisgo, load_type)
     current_count = len(current_ids)
@@ -1006,8 +1011,21 @@ def set_loads_to_target(
 
     # increase
     n_add = desired_total - current_count
+    candidate_ids = current_ids
+    if max_p_set_mw is not None:
+        candidate_ids = [
+            i for i in current_ids
+            if edisgo.topology.loads_df.loc[i, "p_set"] <= max_p_set_mw
+        ]
+        n_filtered = len(current_ids) - len(candidate_ids)
+        if n_filtered:
+            print(f"[{load_type}] Excluded {n_filtered} source(s) with p_set > {max_p_set_mw} MW from duplication candidates.")
+        if not candidate_ids:
+            raise ValueError(
+                f"No loads of type '{load_type}' with p_set <= {max_p_set_mw} MW available as duplication sources."
+            )
     source_ids = _select_source_ids_for_duplication(
-        current_ids,
+        candidate_ids,
         n_add=n_add,
         seed=seed,
     )
@@ -1052,6 +1070,7 @@ def set_charging_points_to_target(
     add_tracking_columns=False,
     export_removed=False,
     export_dir=None,
+    max_p_set_mw=None,
 ):
     """
     Set charging points to a final target count.
@@ -1083,6 +1102,7 @@ def set_charging_points_to_target(
         name_prefix="cp_dup",
         remove_marked_last=remove_existing_last,
         removal_priority=removal_priority,
+        max_p_set_mw=max_p_set_mw,
     )
 
 # ============================================================
@@ -1100,6 +1120,7 @@ def set_heat_pumps_to_target(
     add_tracking_columns=False,
     export_removed=False,
     export_dir=None,
+    max_p_set_mw=None,
 ):
     """
     Set heat pumps to a final target count.
@@ -1122,6 +1143,7 @@ def set_heat_pumps_to_target(
         name_prefix="hp_dup",
         remove_marked_last=False,
         removal_priority=None,
+        max_p_set_mw=max_p_set_mw,
     )
 
 

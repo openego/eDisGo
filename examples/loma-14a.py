@@ -258,6 +258,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
         export_removed=False,
         export_dir=output_dir,
         seed=seed,
+        max_p_set_mw=0.1,
     )
 
     set_heat_pumps_to_target(
@@ -270,6 +271,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
         export_removed=False,  # only applies when there are deleted HP
         export_dir=output_dir,  # only applies when there are deleted HP
         seed=seed,
+        max_p_set_mw=0.1,
     )
 
 
@@ -360,7 +362,6 @@ def get_monthly_snapshot_ranges(year=2025, test=False):
         feb_start = calendar.monthrange(year, 1)[1] * 24
         return [
             (f"{year}-01", jan_start, jan_start + 3 * 24 - 1),
-            (f"{year}-02", feb_start, feb_start + 3 * 24 - 1),
         ]
     idx, months = 0, []
     for m in range(1, 13):
