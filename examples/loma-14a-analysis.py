@@ -186,47 +186,6 @@ def _line_hours_over_threshold(data, pct=LINE_STRESS_PCT, aggregate="mean"):
 # Plots
 # ══════════════════════════════════════════════════════════════════════════════
 
-def plot_monthly_curtailment_boxplot(data, plots_dir):
-    """
-    Box plots of daily §14a curtailment [MWh/day] per month.
-    Distribution comes from all seeds combined — one box per month.
-    Two panels: HP (top) and CP (bottom).
-    """
-    months = sorted(
-        set(m for d in data.values() for m in d["curtailment"].index.month.unique())
-    )
-    mlabels = [pd.Timestamp(2035, m, 1).strftime("%b") for m in months]
-
-    hp_by_month    = _daily_by_month(data, "hp_curtailment_mw")
-    cp_by_month    = _daily_by_month(data, "cp_curtailment_mw")
-    total_by_month = _daily_by_month(data, "total_curtailment")
-
-    fig, axes = plt.subplots(3, 1, figsize=(10, 9), sharex=True)
-
-    for ax, by_month, ylabel, color in [
-        (axes[0], hp_by_month,    "HP curtailment\n[MWh/day]", "#d62728"),
-        (axes[1], cp_by_month,    "CP curtailment\n[MWh/day]", "#1f77b4"),
-        (axes[2], total_by_month, "Total curtailment\n[MWh/day]", "#7f7f7f"),
-    ]:
-        boxes = [by_month.get(m, [0]) for m in months]
-        bp = ax.boxplot(boxes, patch_artist=True, widths=0.55,
-                        medianprops=dict(color="black", linewidth=1.5))
-        for patch in bp["boxes"]:
-            patch.set_facecolor(color)
-            patch.set_alpha(0.65)
-        ax.set_ylabel(ylabel, fontsize=9)
-        ax.grid(True, axis="y", alpha=0.3)
-        n_seeds = len(data)
-        ax.text(0.98, 0.97, f"n={n_seeds} seeds", transform=ax.transAxes,
-                ha="right", va="top", fontsize=8, color="gray")
-
-    axes[2].set_xticks(range(1, len(months) + 1))
-    axes[2].set_xticklabels(mlabels)
-    axes[2].set_xlabel("Month (2035)")
-    fig.suptitle("Monthly §14a Curtailment — Distribution Across Seeds", fontsize=13)
-    plt.tight_layout()
-    _save(fig, plots_dir, "curtailment_monthly_boxplot.png")
-
 
 def plot_monthly_curtailment_mean_stacked(data, plots_dir):
     """
@@ -253,10 +212,12 @@ def plot_monthly_curtailment_mean_stacked(data, plots_dir):
 
     x = np.arange(len(months))
     fig, ax = plt.subplots(figsize=(10, 5))
+    combined_means = hp_means + cp_means
+    combined_stds  = np.sqrt(hp_stds**2 + np.array(cp_stds)**2)
     ax.bar(x, hp_means, color="#d62728", alpha=0.85, label="HP (mean)")
     ax.bar(x, cp_means, bottom=hp_means, color="#1f77b4", alpha=0.85, label="CP (mean)")
-    ax.errorbar(x, hp_means + cp_means,
-                yerr=np.sqrt(hp_stds**2 + np.array(cp_stds)**2),
+    ax.errorbar(x, combined_means,
+                yerr=[np.minimum(combined_stds, combined_means), combined_stds],
                 fmt="none", color="black", capsize=3, linewidth=1, label="±1 std")
 
     ax.set_xticks(x)
@@ -270,113 +231,8 @@ def plot_monthly_curtailment_mean_stacked(data, plots_dir):
     _save(fig, plots_dir, "curtailment_monthly_mean_stacked.png")
 
 
-def plot_monthly_peak_line_loading_boxplot(data, plots_dir):
-    """
-    Box plots of the daily maximum line loading [%] per month.
-    Distribution comes from all lines × all seeds.
-    """
-    months = sorted(
-        set(m for d in data.values() for m in d["line_usage"].index.month.unique())
-    )
-    mlabels = [pd.Timestamp(2035, m, 1).strftime("%b") for m in months]
-
-    from collections import defaultdict
-    month_vals = defaultdict(list)
-    for d in data.values():
-        lu = d["line_usage"]
-        daily_max = lu.max(axis=1).resample("D").max()
-        for m, grp in daily_max.groupby(daily_max.index.month):
-            month_vals[m].extend(grp.values.tolist())
-
-    fig, ax = plt.subplots(figsize=(10, 5))
-    boxes = [month_vals.get(m, [0]) for m in months]
-    bp = ax.boxplot(boxes, patch_artist=True, widths=0.55,
-                    medianprops=dict(color="black", linewidth=1.5))
-    for patch in bp["boxes"]:
-        patch.set_facecolor("#2ca02c")
-        patch.set_alpha(0.65)
-
-    ax.axhline(100, color="red", linestyle="--", linewidth=1, label="100 % thermal limit")
-    ax.axhline(LINE_STRESS_PCT, color="orange", linestyle=":", linewidth=1,
-               label=f"{LINE_STRESS_PCT:.0f} % stress threshold")
-    ax.set_xticks(range(1, len(months) + 1))
-    ax.set_xticklabels(mlabels)
-    ax.set_ylabel("Daily peak line loading [%]")
-    ax.set_xlabel("Month (2035)")
-    ax.legend(fontsize=9)
-    ax.grid(True, axis="y", alpha=0.3)
-    n_seeds = len(data)
-    ax.text(0.98, 0.97, f"n={n_seeds} seeds", transform=ax.transAxes,
-            ha="right", va="top", fontsize=8, color="gray")
-    ax.set_title("Monthly Peak Line Loading — Distribution Across Seeds and Lines", fontsize=13)
-    plt.tight_layout()
-    _save(fig, plots_dir, "line_loading_monthly_boxplot.png")
 
 
-def plot_line_loading_cdf(data, plots_dir):
-    """
-    CDF of line loading [%] across all lines and hours.
-    Shows envelope (min/max) and mean across seeds.
-    """
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-    cdfs = []
-    x_common = np.linspace(0, 120, 500)
-    for d in data.values():
-        vals = d["line_usage"].values.ravel()
-        vals = np.sort(vals[np.isfinite(vals)])
-        cdf  = np.arange(1, len(vals) + 1) / len(vals)
-        cdfs.append(np.interp(x_common, vals, cdf, left=0, right=1))
-
-    cdfs = np.array(cdfs)
-    ax.fill_between(x_common, cdfs.min(axis=0), cdfs.max(axis=0),
-                    alpha=0.25, color="#2ca02c", label="Min–max range across seeds")
-    ax.plot(x_common, cdfs.mean(axis=0),
-            color="#2ca02c", linewidth=2, label="Mean across seeds")
-
-    ax.axvline(100, color="red", linestyle="--", linewidth=1, label="100 % thermal limit")
-    ax.axvline(LINE_STRESS_PCT, color="orange", linestyle=":", linewidth=1,
-               label=f"{LINE_STRESS_PCT:.0f} % stress threshold")
-    ax.set_xlabel("Line Loading [%]")
-    ax.set_ylabel("CDF")
-    ax.set_xlim(0, 120)
-    ax.legend(fontsize=9)
-    ax.grid(True, alpha=0.3)
-    ax.set_title(f"CDF of Line Loading — all lines, all hours ({len(data)} seeds)", fontsize=13)
-    plt.tight_layout()
-    _save(fig, plots_dir, "line_loading_cdf.png")
-
-
-def plot_curtailment_vs_line_loading(data, plots_dir):
-    """
-    Scatter of hourly total §14a curtailment [MW] vs. peak line loading [%].
-    All seeds pooled; colour encodes month to show seasonal pattern.
-    """
-    fig, ax = plt.subplots(figsize=(7, 5))
-
-    cmap  = plt.get_cmap("tab10")
-    month_done = set()
-
-    for d in data.values():
-        curt  = d["curtailment"]
-        total = curt["hp_curtailment_mw"] + curt["cp_curtailment_mw"]
-        peak  = d["line_usage"].max(axis=1).reindex(total.index)
-        for m, grp in total.groupby(total.index.month):
-            color = cmap(m - 1)
-            label = pd.Timestamp(2035, m, 1).strftime("%b") if m not in month_done else "_"
-            month_done.add(m)
-            ax.scatter(grp.values, peak.loc[grp.index].values,
-                       s=6, alpha=0.4, color=color, label=label)
-
-    ax.axhline(100, color="red", linestyle="--", linewidth=1, label="100 % limit")
-    ax.set_xlabel("Total §14a Curtailment [MW]")
-    ax.set_ylabel("Peak Line Loading [%]")
-    ax.legend(fontsize=8, ncol=3, markerscale=2)
-    ax.grid(True, alpha=0.3)
-    ax.set_title("Hourly Curtailment vs. Peak Line Loading (all seeds, colour = month)",
-                 fontsize=12)
-    plt.tight_layout()
-    _save(fig, plots_dir, "curtailment_vs_line_loading.png")
 
 
 def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
@@ -1007,11 +863,7 @@ if __name__ == "__main__":
     save_curtailment_summary(data, PLOTS_DIR)
 
     print("\nGenerating statistical plots …")
-    plot_monthly_curtailment_boxplot(data, PLOTS_DIR)
     plot_monthly_curtailment_mean_stacked(data, PLOTS_DIR)
-    plot_monthly_peak_line_loading_boxplot(data, PLOTS_DIR)
-    plot_line_loading_cdf(data, PLOTS_DIR)
-    plot_curtailment_vs_line_loading(data, PLOTS_DIR)
 
     print("\nLoading topology for network maps …")
     buses, lines, loads, transformers = load_topology(RESULTS_ROOT)
