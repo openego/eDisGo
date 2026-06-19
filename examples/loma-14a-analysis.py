@@ -4,6 +4,7 @@ import glob
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import matplotlib.cm as cm
+import matplotlib.ticker as mpl_ticker
 from matplotlib.legend_handler import HandlerBase
 import networkx as nx
 import numpy as np
@@ -389,7 +390,7 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
     """
     import matplotlib.patches as mpatches
 
-    hours_over = _line_hours_over_threshold(data, LINE_STRESS_PCT, aggregate="sum")
+    hours_over = _line_hours_over_threshold(data, LINE_STRESS_PCT, aggregate="mean")
 
     fig, ax = plt.subplots(figsize=(14, 10))
     fig.subplots_adjust(right=0.84)
@@ -481,7 +482,9 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
     cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
     sm  = cm.ScalarMappable(cmap=cmap_lines, norm=norm_lines)
     cb  = fig.colorbar(sm, cax=cax)
-    cb.set_label(f"Total hours loading > {LINE_STRESS_PCT:.0f} %\n(sum across seeds)", fontsize=9)
+    cb.set_label(f"Mean hours loading > {LINE_STRESS_PCT:.0f} %\n(across seeds)", fontsize=9)
+    cb.locator = mpl_ticker.MaxNLocator(integer=True)
+    cb.update_ticks()
 
     # ── type legend (upper left) ──────────────────────────────────────────────
     n_stressed = int((hours_over > 0).sum())
@@ -532,7 +535,7 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
     ax.set_title(
         f"§14a Network Map — Line Stress (hours >{LINE_STRESS_PCT:.0f} %)\n"
         f"{n_stressed} of {len(lines)} lines stressed  —  "
-        f"bus size ∝ total §14a use  —  sum across {n_seeds} seed{'s' if n_seeds != 1 else ''}",
+        f"bus size ∝ total §14a use  —  mean across {n_seeds} seed{'s' if n_seeds != 1 else ''}",
         fontsize=11,
     )
     _save(fig, plots_dir, "network_map.png")
