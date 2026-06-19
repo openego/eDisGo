@@ -1529,9 +1529,10 @@ def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True, path= "lo
     # Pie radius in data (degree) units, scaled by sqrt of total p_set
     x_vals = buses_df["x"].dropna()
     y_vals = buses_df["y"].dropna()
-    grid_extent = max(x_vals.max() - x_vals.min(), y_vals.max() - y_vals.min())
-    MIN_R = grid_extent * 0.003
-    MAX_R = grid_extent * 0.018
+    x_extent = x_vals.max() - x_vals.min()
+    grid_extent = max(x_extent, y_vals.max() - y_vals.min())
+    MIN_R = grid_extent * 0.002
+    MAX_R = grid_extent * 0.010
 
     for bus, row in by_bus_type.iterrows():
         total = total_by_bus[bus]
@@ -1554,6 +1555,26 @@ def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True, path= "lo
             ))
             start += angle
 
+    # ── transformer symbol (IEC two-circle) at feeder root ───────────────────
+    trafos_df = edisgo.topology.transformers_df
+    line_buses = set(lines_df["bus0"]) | set(lines_df["bus1"])
+    root_bus = None
+    if not trafos_df.empty and "bus1" in trafos_df.columns:
+        for _bus in trafos_df["bus1"]:
+            if _bus in line_buses and _bus in buses_df.index:
+                root_bus = _bus
+                break
+    if root_bus is not None:
+        tx = buses_df.at[root_bus, "x"]
+        ty = buses_df.at[root_bus, "y"]
+        if pd.notna(tx) and pd.notna(ty):
+            r_t = x_extent * 0.006
+            for cx_t in (tx - r_t * 0.75, tx + r_t * 0.75):
+                ax.add_patch(mpatches.Circle(
+                    (cx_t, ty), r_t,
+                    fill=False, edgecolor="black", linewidth=2.0, zorder=7,
+                ))
+
     ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
 
     # ── color legend (upper left) ───────────────────────────────────────────
@@ -1569,11 +1590,15 @@ def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True, path= "lo
     leg1 = ax.legend(handles=color_handles, loc="upper left", fontsize=9)
     ax.add_artist(leg1)
 
-    # ── size reference: hollow circles drawn on the map (lower-right area) ──
-    ref_mws = [0.05, 0.2, 1.0]
+    # ── size reference: hollow circles, capped at max_total ──────────────────
+    CANDS_MW = [0.05, 0.2, 0.5, 1.0]
+    ref_mws = [v for v in CANDS_MW if v <= max_total]
+    if not ref_mws:
+        ref_mws = [max_total]
+    ref_mws = ref_mws[-3:]  # keep at most 3 (the largest ones)
     x0 = x_vals.max() - MAX_R
     y0 = y_vals.min() + MAX_R * 1.5
-    spacing = MAX_R * 2.8
+    spacing = MAX_R * 2.2
     ax.text(x0 - spacing * (len(ref_mws) - 1) / 2,
             y0 + MAX_R * 1.2, "total p_set per bus",
             ha="center", va="bottom", fontsize=7, zorder=6)
