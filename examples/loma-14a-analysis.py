@@ -875,7 +875,6 @@ if __name__ == "__main__":
     print(f"  Feeder root: {root_bus}")
 
     plot_network_map(data, buses, lines, loads, bus_curt, root_bus, PLOTS_DIR)
-    plot_cable_capacity_map(buses, lines, root_bus, PLOTS_DIR)
 
     print("\nComputing §14a curtailment reach along feeders …")
     bus_upstream = compute_bus_upstream_lines(G, root_bus)
