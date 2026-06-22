@@ -415,9 +415,9 @@ class Electromobility:
 
         # set up bands
         tmp_idx = range(len(flex_band_index))
-        upper_power = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
-        upper_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
-        lower_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+        upper_power = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0.0, dtype=float)
+        upper_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0.0, dtype=float)
+        lower_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0.0, dtype=float)
         hourly_steps = 60 / self.stepsize
         for cp in cps.index:
             # get index of charging park used in charging processes
