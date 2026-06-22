@@ -7,6 +7,8 @@ import pytest
 
 from edisgo.network.dsm import DSM
 
+pytestmark = pytest.mark.fast
+
 
 class TestDSM:
     @pytest.yield_fixture(autouse=True)

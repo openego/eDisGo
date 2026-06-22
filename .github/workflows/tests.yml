@@ -1,0 +1,65 @@
+name: Run Fast Tests on Push_only
+
+on:
+  push:
+
+  pull_request:
+
+jobs:
+  fast-tests:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r rtd_requirements.txt
+          pip install -e .
+          pip install pytest-html
+
+      - name: Run fast tests
+        run: |
+         python -m pytest -m "fast" -vv \
+            --runslow \
+            --runonlinux
+
+      - name: Run non-fast tests
+        run: |
+          python tests/run_tests_from_file.py ci/non_fast_tests.txt
+
+  full-tests:
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r rtd_requirements.txt
+          pip install -e .
+          pip install pytest-html
+
+      - name: Run full test suite
+        run: |
+          python -m pytest -vv \
+             --runslow \
+             --runonlinux

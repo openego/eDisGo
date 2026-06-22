@@ -5,6 +5,8 @@ import pytest
 from edisgo import EDisGo
 from edisgo.flex_opt import costs as costs_mod
 
+pytestmark = pytest.mark.fast
+
 
 class TestCosts:
     @classmethod

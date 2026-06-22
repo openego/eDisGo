@@ -2339,8 +2339,8 @@ class TestTimeSeries:
                 setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
                 self.edisgo.timeseries.check_integrity()
                 assert (
-                    f"{attr} has duplicated columns: {ts_tmp.iloc[:, 0:2].columns.values}"
-                    in caplog.text
+                    f"{attr} has duplicated columns: "
+                    f"{ts_tmp.iloc[:, 0:2].columns.values}" in caplog.text
                 )
                 caplog.clear()
                 setattr(self.edisgo.timeseries, attr, ts_tmp)

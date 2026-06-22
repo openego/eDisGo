@@ -18,6 +18,7 @@ from edisgo.network.grids import LVGrid, MVGrid
 from edisgo.network.topology import Topology
 from edisgo.tools.geopandas_helper import GeoPandasGridContainer
 
+pytestmark = pytest.mark.fast
 logger = logging.getLogger(__name__)
 
 
@@ -1837,8 +1838,8 @@ class TestTopologyWithEdisgoObject:
             )
             self.edisgo.topology.check_integrity()
             assert (
-                f"The following {nodal_component} have buses which are not defined: {new_comp.name}."
-                in caplog.text
+                f"The following {nodal_component} have buses which are not defined: "
+                f"{new_comp.name}." in caplog.text
             )
             caplog.clear()
             # reset dataframe
@@ -1863,8 +1864,8 @@ class TestTopologyWithEdisgoObject:
             )
             self.edisgo.topology.check_integrity()
             assert (
-                f"The following {branch_component} have bus{i} which are not defined: {new_comp.name}."
-                in caplog.text
+                f"The following {branch_component} have bus{i} which are not defined: "
+                f"{new_comp.name}." in caplog.text
             )
             caplog.clear()
             # reset dataframe
@@ -1882,8 +1883,8 @@ class TestTopologyWithEdisgoObject:
             self.edisgo.topology.switches_df = new_comps
             self.edisgo.topology.check_integrity()
             assert (
-                f"The following switches have {attr} which are not defined: {new_comp.name}."
-                in caplog.text
+                f"The following switches have {attr} which are not defined: "
+                f"{new_comp.name}." in caplog.text
             )
             caplog.clear()
             self.edisgo.topology.switches_df = comps

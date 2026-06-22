@@ -5,6 +5,8 @@ import pytest
 
 from edisgo.tools.logger import setup_logger
 
+pytestmark = pytest.mark.fast
+
 
 def check_file_output(filename, output):
     with open(filename) as file:

@@ -1,8 +1,11 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from edisgo.flex_opt import q_control
 from edisgo.tools.config import Config
+
+pytestmark = pytest.mark.fast
 
 
 class TestQControl:

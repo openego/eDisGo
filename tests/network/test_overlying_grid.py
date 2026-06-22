@@ -11,6 +11,8 @@ from edisgo.network.overlying_grid import (
     distribute_overlying_grid_requirements,
 )
 
+pytestmark = pytest.mark.fast
+
 
 class TestOverlyingGrid:
     """

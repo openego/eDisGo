@@ -5,6 +5,8 @@ import pytest
 from edisgo import EDisGo
 from edisgo.flex_opt.battery_storage_operation import apply_reference_operation
 
+pytestmark = pytest.mark.fast
+
 
 class TestStorageOperation:
     @classmethod

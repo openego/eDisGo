@@ -1,0 +1,441 @@
+tests/flex_opt/test_battery_storage_operation.py::TestStorageOperation::test_operating_strategy
+tests/flex_opt/test_charging_strategy.py::TestChargingStrategy::test_charging_strategy
+tests/flex_opt/test_charging_strategy.py::TestChargingStrategy::test_charging_strategy_with_subset_of_parks
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_mv_line_max_relative_overload
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_lv_line_max_relative_overload
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_lines_allowed_load
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test__lines_allowed_load_voltage_level
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_lines_relative_load
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_hv_mv_station_max_overload
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_mv_lv_station_max_overload
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test__station_load
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test__station_allowed_load
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_stations_allowed_load
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_stations_relative_load
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_components_relative_load
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_voltage_issues
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test__voltage_issues_helper
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_allowed_voltage_limits
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test__mv_allowed_voltage_limits
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test__lv_allowed_voltage_limits
+tests/flex_opt/test_check_tech_constraints.py::TestCheckTechConstraints::test_voltage_deviation_from_allowed_voltage_limits
+tests/flex_opt/test_costs.py::TestCosts::test_costs
+tests/flex_opt/test_costs.py::TestCosts::test_line_expansion_costs
+tests/flex_opt/test_costs.py::TestCosts::test_transformer_expansion_costs
+tests/flex_opt/test_heat_pump_operation.py::TestHeatPumpOperation::test_operating_strategy
+tests/flex_opt/test_q_control.py::TestQControl::test_get_q_sign_generator
+tests/flex_opt/test_q_control.py::TestQControl::test_get_q_sign_load
+tests/flex_opt/test_q_control.py::TestQControl::test_fixed_cosphi
+tests/flex_opt/test_q_control.py::TestQControl::test__fixed_cosphi_default_power_factor
+tests/flex_opt/test_q_control.py::TestQControl::test__fixed_cosphi_default_reactive_power_sign
+tests/flex_opt/test_reinforce_grid.py::TestReinforceGrid::test_reinforce_grid
+tests/flex_opt/test_reinforce_grid.py::TestReinforceGrid::test_run_separate_lv_grids
+tests/flex_opt/test_reinforce_measures.py::TestReinforceMeasures::test_reinforce_mv_lv_station_overloading
+tests/flex_opt/test_reinforce_measures.py::TestReinforceMeasures::test_reinforce_hv_mv_station_overloading
+tests/flex_opt/test_reinforce_measures.py::TestReinforceMeasures::test_reinforce_mv_lv_station_voltage_issues
+tests/flex_opt/test_reinforce_measures.py::TestReinforceMeasures::test_reinforce_lines_voltage_issues
+tests/flex_opt/test_reinforce_measures.py::TestReinforceMeasures::test_reinforce_lines_overloading
+tests/flex_opt/test_reinforce_measures.py::TestReinforceMeasures::test_separate_lv_grid
+tests/io/test_ding0_import.py::TestImportFromDing0::test_import_ding0_grid
+tests/io/test_ding0_import.py::TestImportFromDing0::test_path_error
+tests/io/test_ding0_import.py::TestImportFromDing0::test_transformer_buses
+tests/io/test_dsm_import.py::TestDSMImport::test_oedb
+tests/io/test_dsm_import.py::TestDSMImport::test_get_profiles_per_industrial_load
+tests/io/test_dsm_import.py::TestDSMImport::test_get_profile_cts
+tests/io/test_electromobility_import.py::TestElectromobilityImport::test_import_electromobility
+tests/io/test_electromobility_import.py::TestElectromobilityImport::test_assure_minimum_potential_charging_parks
+tests/io/test_electromobility_import.py::TestElectromobilityImport::test_distribute_charging_demand
+tests/io/test_electromobility_import.py::TestElectromobilityImport::test_integrate_charging_parks
+tests/io/test_electromobility_import.py::TestElectromobilityImport::test_simbev_config_from_oedb
+tests/io/test_electromobility_import.py::TestElectromobilityImport::test_potential_charging_parks_from_oedb
+tests/io/test_electromobility_import.py::TestElectromobilityImport::test_charging_processes_from_oedb
+tests/io/test_generators_import.py::TestGeneratorsImport::test_update_grids
+tests/io/test_generators_import.py::TestGeneratorsImport::test_update_grids_target_capacity
+tests/io/test_generators_import.py::TestGeneratorsImport::test__integrate_pv_rooftop
+tests/io/test_generators_import.py::TestGeneratorsImport::test__integrate_new_pv_rooftop_to_buildings
+tests/io/test_generators_import.py::TestGeneratorsImport::test__integrate_power_and_chp_plants
+tests/io/test_generators_import.py::TestGeneratorsImportOEDB::test_oedb_legacy_without_timeseries
+tests/io/test_generators_import.py::TestGeneratorsImportOEDB::test_oedb_legacy_with_worst_case_timeseries
+tests/io/test_generators_import.py::TestGeneratorsImportOEDB::test_oedb_legacy_with_timeseries_by_technology
+tests/io/test_generators_import.py::TestGeneratorsImportOEDB::test_target_capacity
+tests/io/test_generators_import.py::TestGeneratorsImportOEDB::test_oedb
+tests/io/test_heat_pump_import.py::TestHeatPumpImport::test_oedb
+tests/io/test_heat_pump_import.py::TestHeatPumpImport::test__grid_integration
+tests/io/test_heat_pump_import.py::TestHeatPumpImport::test_efficiency_resistive_heaters_oedb
+tests/io/test_powermodels_io.py::TestPowermodelsIO::test_to_powermodels
+tests/io/test_powermodels_io.py::TestPowermodelsIO::test__get_pf
+tests/io/test_pypsa_io.py::TestPypsaIO::test_to_pypsa
+tests/io/test_pypsa_io.py::TestPypsaIO::test_append_lv_components
+tests/io/test_pypsa_io.py::TestPypsaIO::test_get_generators_timeseries_with_aggregated_elements
+tests/io/test_pypsa_io.py::TestPypsaIO::test_set_seed
+tests/io/test_pypsa_io.py::TestPypsaIO::test_process_pfa_results
+tests/io/test_storage_import.py::TestStorageImport::test_oedb
+tests/io/test_storage_import.py::TestStorageImport::test__grid_integration
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test__timeindex_helper_func
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_feedin_oedb_legacy
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_feedin_oedb
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_load_time_series_demandlib
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_cop_oedb
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_heat_demand_oedb
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_electricity_demand_oedb
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_get_residential_heat_profiles_per_building
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_get_district_heating_heat_demand_profiles
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_get_cts_profiles_per_building
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_get_cts_profiles_per_grid
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_get_residential_electricity_profiles_per_building
+tests/io/test_timeseries_import.py::TestTimeseriesImport::test_get_industrial_electricity_profiles_per_site
+tests/network/test_components.py::TestComponents::test_load_class
+tests/network/test_components.py::TestComponents::test_generator_class
+tests/network/test_components.py::TestComponents::test_storage_class
+tests/network/test_components.py::TestComponents::test_switch_class
+tests/network/test_dsm.py::TestDSM::test_reduce_memory
+tests/network/test_dsm.py::TestDSM::test_to_csv
+tests/network/test_dsm.py::TestDSM::test_from_csv
+tests/network/test_dsm.py::TestDSM::test_check_integrity
+tests/network/test_electromobility.py::TestElectromobility::test_charging_processes_df
+tests/network/test_electromobility.py::TestElectromobility::test_potential_charging_parks_gdf
+tests/network/test_electromobility.py::TestElectromobility::test_simbev_config_df
+tests/network/test_electromobility.py::TestElectromobility::test_integrated_charging_parks_df
+tests/network/test_electromobility.py::TestElectromobility::test_stepsize
+tests/network/test_electromobility.py::TestElectromobility::test_simulated_days
+tests/network/test_electromobility.py::TestElectromobility::test_eta_charging_points
+tests/network/test_electromobility.py::TestElectromobility::test_get_flexibility_bands
+tests/network/test_electromobility.py::TestElectromobility::test_fix_flexibility_bands_rounding_errors
+tests/network/test_electromobility.py::TestElectromobility::test_resample
+tests/network/test_electromobility.py::TestElectromobility::test_resample_2
+tests/network/test_electromobility.py::TestElectromobility::test_integrity_check
+tests/network/test_electromobility.py::TestElectromobility::test_to_csv
+tests/network/test_electromobility.py::TestElectromobility::test_from_csv
+tests/network/test_grids.py::TestGrids::test_mv_grid
+tests/network/test_grids.py::TestGrids::test_lv_grid
+tests/network/test_grids.py::TestGrids::test_assign_length_to_grid_station
+tests/network/test_grids.py::TestGrids::test_assign_grid_feeder
+tests/network/test_grids.py::TestGrids::test_get_feeder_stats
+tests/network/test_heat.py::TestHeatPump::test_set_cop
+tests/network/test_heat.py::TestHeatPump::test_set_cop_oedb
+tests/network/test_heat.py::TestHeatPump::test_set_heat_demand
+tests/network/test_heat.py::TestHeatPump::test_set_heat_demand_oedb
+tests/network/test_heat.py::TestHeatPump::test_reduce_memory
+tests/network/test_heat.py::TestHeatPump::test_to_csv
+tests/network/test_heat.py::TestHeatPump::test_from_csv
+tests/network/test_heat.py::TestHeatPump::test_resample_timeseries
+tests/network/test_heat.py::TestHeatPump::test_check_integrity
+tests/network/test_overlying_grid.py::TestOverlyingGrid::test_reduce_memory
+tests/network/test_overlying_grid.py::TestOverlyingGrid::test_to_csv
+tests/network/test_overlying_grid.py::TestOverlyingGrid::test_from_csv
+tests/network/test_overlying_grid.py::TestOverlyingGrid::test_resample
+tests/network/test_overlying_grid.py::TestOverlyingGridFunc::test_distribute_overlying_grid_timeseries
+tests/network/test_results.py::TestResults::test_to_csv
+tests/network/test_results.py::TestResults::test_from_csv
+tests/network/test_timeseries.py::TestTimeSeries::test_timeseries_getters
+tests/network/test_timeseries.py::TestTimeSeries::test_set_active_power_manual
+tests/network/test_timeseries.py::TestTimeSeries::test_set_reactive_power_manual
+tests/network/test_timeseries.py::TestTimeSeries::test_set_worst_case
+tests/network/test_timeseries.py::TestTimeSeries::test_worst_case_generators
+tests/network/test_timeseries.py::TestTimeSeries::test_worst_case_conventional_load
+tests/network/test_timeseries.py::TestTimeSeries::test_worst_case_charging_points
+tests/network/test_timeseries.py::TestTimeSeries::test_worst_case_heat_pumps
+tests/network/test_timeseries.py::TestTimeSeries::test_worst_case_storage_units
+tests/network/test_timeseries.py::TestTimeSeries::test_predefined_fluctuating_generators_by_technology
+tests/network/test_timeseries.py::TestTimeSeries::test_predefined_fluctuating_generators_by_technology_oedb
+tests/network/test_timeseries.py::TestTimeSeries::test_predefined_dispatchable_generators_by_technology
+tests/network/test_timeseries.py::TestTimeSeries::test_predefined_conventional_loads_by_sector
+tests/network/test_timeseries.py::TestTimeSeries::test_predefined_charging_points_by_use_case
+tests/network/test_timeseries.py::TestTimeSeries::test_fixed_cosphi
+tests/network/test_timeseries.py::TestTimeSeries::test_residual_load
+tests/network/test_timeseries.py::TestTimeSeries::test_timesteps_load_feedin_case
+tests/network/test_timeseries.py::TestTimeSeries::test_reduce_memory
+tests/network/test_timeseries.py::TestTimeSeries::test_to_csv
+tests/network/test_timeseries.py::TestTimeSeries::test_from_csv
+tests/network/test_timeseries.py::TestTimeSeries::test_integrity_check
+tests/network/test_timeseries.py::TestTimeSeries::test_drop_component_time_series
+tests/network/test_timeseries.py::TestTimeSeries::test_add_component_time_series
+tests/network/test_timeseries.py::TestTimeSeries::test_check_if_components_exist
+tests/network/test_timeseries.py::TestTimeSeries::test_resample
+tests/network/test_timeseries.py::TestTimeSeries::test_scale_timeseries
+tests/network/test_timeseries.py::TestTimeSeriesRaw::test_reduce_memory
+tests/network/test_timeseries.py::TestTimeSeriesRaw::test_to_csv
+tests/network/test_timeseries.py::TestTimeSeriesRaw::test_from_csv
+tests/network/test_topology.py::TestTopology::test_grids
+tests/network/test_topology.py::TestTopology::test_lv_grids
+tests/network/test_topology.py::TestTopology::test__lv_grid_ids
+tests/network/test_topology.py::TestTopology::test__grids_repr
+tests/network/test_topology.py::TestTopology::test_get_lv_grid
+tests/network/test_topology.py::TestTopology::test_rings
+tests/network/test_topology.py::TestTopology::test_get_connected_lines_from_bus
+tests/network/test_topology.py::TestTopology::test_get_connected_components_from_bus
+tests/network/test_topology.py::TestTopology::test_get_neighbours
+tests/network/test_topology.py::TestTopology::test_add_load
+tests/network/test_topology.py::TestTopology::test_add_generator
+tests/network/test_topology.py::TestTopology::test_add_storage_unit
+tests/network/test_topology.py::TestTopology::test_add_line
+tests/network/test_topology.py::TestTopology::test_add_bus
+tests/network/test_topology.py::TestTopology::test_check_bus_for_removal
+tests/network/test_topology.py::TestTopology::test_check_line_for_removal
+tests/network/test_topology.py::TestTopology::test_remove_load
+tests/network/test_topology.py::TestTopology::test_remove_generator
+tests/network/test_topology.py::TestTopology::test_remove_storage_unit
+tests/network/test_topology.py::TestTopology::test_remove_line
+tests/network/test_topology.py::TestTopology::test_remove_bus
+tests/network/test_topology.py::TestTopology::test_update_number_of_parallel_lines
+tests/network/test_topology.py::TestTopology::test_change_line_type
+tests/network/test_topology.py::TestTopology::test_sort_buses
+tests/network/test_topology.py::TestTopology::test_to_csv
+tests/network/test_topology.py::TestTopology::test_assign_feeders
+tests/network/test_topology.py::TestTopology::test_aggregate_lv_grid_at_station
+tests/network/test_topology.py::TestTopologyWithEdisgoObject::test_to_geopandas
+tests/network/test_topology.py::TestTopologyWithEdisgoObject::test_from_csv
+tests/network/test_topology.py::TestTopologyWithEdisgoObject::test_connect_to_mv
+tests/network/test_topology.py::TestTopologyWithEdisgoObject::test_connect_to_lv
+tests/network/test_topology.py::TestTopologyWithEdisgoObject::test_check_integrity
+tests/network/test_topology.py::TestTopologyWithEdisgoObject::test_find_meshes
+tests/opf/test_powermodels_opf.py::TestPowerModelsOPF::test_pm_optimize
+tests/test_edisgo.py::TestEDisGo::test_config_setter
+tests/test_edisgo.py::TestEDisGo::test_set_time_series_manual
+tests/test_edisgo.py::TestEDisGo::test_set_time_series_worst_case_analysis
+tests/test_edisgo.py::TestEDisGo::test_set_time_series_active_power_predefined
+tests/test_edisgo.py::TestEDisGo::test_set_time_series_active_power_predefined_oedb
+tests/test_edisgo.py::TestEDisGo::test_set_time_series_reactive_power_control
+tests/test_edisgo.py::TestEDisGo::test_to_pypsa
+tests/test_edisgo.py::TestEDisGo::test_to_graph
+tests/test_edisgo.py::TestEDisGo::test_generator_import
+tests/test_edisgo.py::TestEDisGo::test_analyze
+tests/test_edisgo.py::TestEDisGo::test_reinforce
+tests/test_edisgo.py::TestEDisGo::test_reinforce_catch_convergence
+tests/test_edisgo.py::TestEDisGo::test_enhanced_reinforce_grid
+tests/test_edisgo.py::TestEDisGo::test_add_component
+tests/test_edisgo.py::TestEDisGo::test_integrate_component_based_on_geolocation
+tests/test_edisgo.py::TestEDisGo::test_remove_component
+tests/test_edisgo.py::TestEDisGo::test_aggregate_components
+tests/test_edisgo.py::TestEDisGo::test_import_electromobility
+tests/test_edisgo.py::TestEDisGo::test_import_electromobility_oedb
+tests/test_edisgo.py::TestEDisGo::test_import_heat_pumps
+tests/test_edisgo.py::TestEDisGo::test_apply_charging_strategy
+tests/test_edisgo.py::TestEDisGo::test_plot_mv_grid_topology
+tests/test_edisgo.py::TestEDisGo::test_plot_voltage_over_dist
+tests/test_edisgo.py::TestEDisGo::test_plot_voltage_over_dist_mv
+tests/test_edisgo.py::TestEDisGo::test_plot_mv_voltages
+tests/test_edisgo.py::TestEDisGo::test_plot_mv_line_loading
+tests/test_edisgo.py::TestEDisGo::test_plot_mv_grid_expansion_costs
+tests/test_edisgo.py::TestEDisGo::test_plot_mv_storage_integration
+tests/test_edisgo.py::TestEDisGo::test_histogramm_voltage
+tests/test_edisgo.py::TestEDisGo::test_histogramm_relative_line_load
+tests/test_edisgo.py::TestEDisGo::test_save
+tests/test_edisgo.py::TestEDisGo::test_reduce_memory
+tests/test_edisgo.py::TestEDisGo::test_spatial_complexity_reduction
+tests/test_edisgo.py::TestEDisGo::test_check_integrity
+tests/test_edisgo.py::TestEDisGo::test_resample_timeseries
+tests/test_edisgo.py::TestEDisGoFunc::test_import_edisgo_from_files
+tests/test_examples.py::TestExamples::test_plot_example_ipynb
+tests/test_examples.py::TestExamples::test_electromobility_example_ipynb
+tests/test_examples.py::TestExamples::test_edisgo_simple_example_ipynb
+tests/tools/test_geopandas_helper.py::TestGeopandasHelper::test_to_geopandas
+tests/tools/test_logger.py::TestClass::test_setup_logger
+tests/tools/test_logger.py::TestClass::test_setup_logger_2
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-False-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-False-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-False-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-False-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-False-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-False-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-False-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-False-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-False-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-node_selection1-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-node_selection1-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-node_selection1-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-node_selection1-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-node_selection1-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-node_selection1-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-node_selection1-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-node_selection1-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_root-node_selection1-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-False-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-False-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-False-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-False-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-False-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-False-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-False-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-False-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-False-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-node_selection1-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-node_selection1-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-node_selection1-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-node_selection1-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-node_selection1-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-node_selection1-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-node_selection1-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-node_selection1-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_analyzed-node_selection1-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-False-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-False-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-False-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-False-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-False-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-False-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-False-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-False-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-False-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-node_selection1-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-node_selection1-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-node_selection1-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-node_selection1-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-node_selection1-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-node_selection1-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-node_selection1-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-node_selection1-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[None-edisgo_reinforced-node_selection1-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-False-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-False-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-False-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-False-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-False-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-False-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-False-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-False-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-False-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-node_selection1-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-node_selection1-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-node_selection1-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-node_selection1-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-node_selection1-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-node_selection1-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-node_selection1-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-node_selection1-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_root-node_selection1-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-False-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-False-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-False-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-False-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-False-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-False-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-False-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-False-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-False-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-node_selection1-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-node_selection1-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-node_selection1-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-node_selection1-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-node_selection1-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-node_selection1-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-node_selection1-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-node_selection1-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_analyzed-node_selection1-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-False-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-False-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-False-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-False-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-False-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-False-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-False-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-False-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-False-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-node_selection1-None-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-node_selection1-None-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-node_selection1-None-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-node_selection1-1970-01-01 01:00:00-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-node_selection1-1970-01-01 01:00:00-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-node_selection1-1970-01-01 01:00:00-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-node_selection1-selected_timesteps2-loading-voltage_deviation-min-min-True-True]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-node_selection1-selected_timesteps2-relative_loading-adjacencies-max-max-False-False]
+tests/tools/test_plots.py::TestPlots::test_plot_plotly[LVGrid-edisgo_reinforced-node_selection1-selected_timesteps2-reinforce-adjacencies-max-min-True-False]
+tests/tools/test_plots.py::TestPlots::test_chosen_graph
+tests/tools/test_plots.py::TestPlots::test_plot_dash_app
+tests/tools/test_pseudo_coordinates.py::TestPseudoCoordinates::test_make_pseudo_coordinates
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-grid-0.1-False-test_exception0-19]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeansdijkstra-grid-0.1-False-test_exception1-19]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-grid-0.5-0-test_exception2-76]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-grid-0.5-0.1-test_exception3-76]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-feeder-0.1-False-test_exception4-40]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeansdijkstra-feeder-0.1-False-test_exception5-39]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-feeder-0.5-0-test_exception6-23]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-feeder-0.5-0.1-test_exception7-46]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-main_feeder-0.1-False-test_exception8-36]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeansdijkstra-main_feeder-0.1-False-test_exception9-36]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[aggregate_to_main_feeder-main_feeder-None-False-test_exception10-105]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[equidistant_nodes-main_feeder-0.1-False-test_exception11-36]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-main_feeder-0.5-0-test_exception12-20]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-main_feeder-0.5-0.1-test_exception13-41]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-grid-0-False-test_exception14-None]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-grid-1-False-test_exception15-None]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-grid-0.1-1-test_exception16-None]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[MODE-grid-0.1-False-test_exception17-None]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap[kmeans-CLUSTER_AREA-0.1-False-test_exception18-None]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap_for_only_one_grid[grid-MVGrid-7]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap_for_only_one_grid[grid-LVGrid-6]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap_for_only_one_grid[feeder-MVGrid-9]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap_for_only_one_grid[feeder-LVGrid-8]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap_for_only_one_grid[main_feeder-MVGrid-7]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_make_busmap_for_only_one_grid[main_feeder-LVGrid-6]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_apply_busmap[standard_lines-True-bus-bus-27-17]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_apply_busmap[standard_lines-True-sector-type-28-18]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_apply_busmap[combined_name-False-None-None-50-28]
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_spatial_complexity_reduction
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_compare_voltage
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_compare_apparent_power
+tests/tools/test_spatial_complexity_reduction.py::TestSpatialComplexityReduction::test_remove_short_end_lines
+tests/tools/test_temporal_complexity_reduction.py::TestTemporalComplexityReduction::test__scored_most_critical_loading
+tests/tools/test_temporal_complexity_reduction.py::TestTemporalComplexityReduction::test__scored_most_critical_voltage_issues
+tests/tools/test_temporal_complexity_reduction.py::TestTemporalComplexityReduction::test_get_most_critical_time_steps
+tests/tools/test_temporal_complexity_reduction.py::TestTemporalComplexityReduction::test__scored_most_critical_loading_time_interval
+tests/tools/test_temporal_complexity_reduction.py::TestTemporalComplexityReduction::test__scored_most_critical_voltage_issues_time_interval
+tests/tools/test_temporal_complexity_reduction.py::TestTemporalComplexityReduction::test__costs_per_line_and_transformer
+tests/tools/test_temporal_complexity_reduction.py::TestTemporalComplexityReduction::test__costs_per_feeder
+tests/tools/test_temporal_complexity_reduction.py::TestTemporalComplexityReduction::test_get_most_critical_time_intervals
+tests/tools/test_tools.py::TestTools::test_calculate_line_reactance
+tests/tools/test_tools.py::TestTools::test_calculate_voltage_diff_pu_per_line
+tests/tools/test_tools.py::TestTools::test_calculate_voltage_diff_pu_per_line_from_type
+tests/tools/test_tools.py::TestTools::test_calculate_line_resistance
+tests/tools/test_tools.py::TestTools::test_calculate_line_susceptance
+tests/tools/test_tools.py::TestTools::test_calculate_apparent_power
+tests/tools/test_tools.py::TestTools::test_drop_duplicated_indices
+tests/tools/test_tools.py::TestTools::test_drop_duplicated_columns
+tests/tools/test_tools.py::TestTools::test_select_cable
+tests/tools/test_tools.py::TestTools::test_get_downstream_buses
+tests/tools/test_tools.py::TestTools::test_get_path_length_to_station
+tests/tools/test_tools.py::TestTools::test_assign_voltage_level_to_component
+tests/tools/test_tools.py::TestTools::test_determine_grid_integration_voltage_level
+tests/tools/test_tools.py::TestTools::test_determine_bus_voltage_level
+tests/tools/test_tools.py::TestTools::test_get_weather_cells_intersecting_with_grid_district
+tests/tools/test_tools.py::TestTools::test_get_weather_cells_intersecting_with_grid_district_egon
+tests/tools/test_tools.py::TestTools::test_add_line_susceptance
+tests/tools/test_tools.py::TestTools::test_reduce_memory_usage
+
+=============================== warnings summary ===============================
+../.venv311/lib/python3.11/site-packages/saio.py:128
+  /storage/VHG/.venv311/lib/python3.11/site-packages/saio.py:128: DeprecationWarning:
+
+  The 'shapely.geos' module is deprecated, and will be removed in a future version. All attributes of 'shapely.geos' are available directly from the top-level 'shapely' namespace (since shapely 2.0.0).
+
+../.venv311/lib/python3.11/site-packages/sqlalchemy/ext/declarative/base.py:433
+  /storage/VHG/.venv311/lib/python3.11/site-packages/sqlalchemy/ext/declarative/base.py:433: SAWarning:
+
+  Ignoring declarative-like tuple value of attribute 'segment': possibly a copy-and-paste error with a comma accidentally placed at the end of the line?
+
+../.venv311/lib/python3.11/site-packages/sqlalchemy/ext/declarative/base.py:433
+  /storage/VHG/.venv311/lib/python3.11/site-packages/sqlalchemy/ext/declarative/base.py:433: SAWarning:
+
+  Ignoring declarative-like tuple value of attribute 'cable': possibly a copy-and-paste error with a comma accidentally placed at the end of the line?
+
+tests/io/test_generators_import.py:22
+  /storage/VHG/eDisGo/tests/io/test_generators_import.py:22: PytestDeprecationWarning:
+
+  @pytest.yield_fixture is deprecated.
+  Use @pytest.fixture instead; they are the same.
+
+tests/network/test_dsm.py:12
+  /storage/VHG/eDisGo/tests/network/test_dsm.py:12: PytestDeprecationWarning:
+
+  @pytest.yield_fixture is deprecated.
+  Use @pytest.fixture instead; they are the same.
+
+tests/network/test_topology.py:948
+  /storage/VHG/eDisGo/tests/network/test_topology.py:948: PytestDeprecationWarning:
+
+  @pytest.yield_fixture is deprecated.
+  Use @pytest.fixture instead; they are the same.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================================= pytest-timer =================================
+403 tests collected in 54.11s
