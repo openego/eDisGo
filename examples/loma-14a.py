@@ -453,9 +453,10 @@ def main(output_dir, snapshot_range, seed=42):
 
     # Plot original cable capacities before hc_line s_nom is overwritten
     from loma_14a_analysis import plot_cable_capacity_map, find_root_bus
+
     _root_bus = find_root_bus(edisgo.topology.lines_df, edisgo.topology.transformers_df)
     plot_cable_capacity_map(edisgo.topology.buses_df, edisgo.topology.lines_df,
-                            _root_bus, output_dir)
+                            _root_bus, os.path.dirname(output_dir))
 
     prepare_edisgo_for_14a(
         edisgo,
