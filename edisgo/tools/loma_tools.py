@@ -1650,7 +1650,7 @@ def plot_network(
             plt.show()
         plt.close(fig)
 
-def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True):
+def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True, path: str = "plots"):
     """Plot load composition per bus (CP, HP, conventional) as pie charts on the grid."""
     import matplotlib.patches as mpatches
 
@@ -1780,8 +1780,8 @@ def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True):
     )
 
     if save:
-        os.makedirs("plots", exist_ok=True)
-        plt.savefig("plots/cp_hp_locations.png", dpi=300, bbox_inches="tight")
+        os.makedirs(path, exist_ok=True)
+        plt.savefig(os.path.join(path, "cp_hp_locations.png"), dpi=300, bbox_inches="tight")
 
     if show:
         plt.show()
@@ -1886,7 +1886,9 @@ def plot_storage_dispatch(
     plt.close()
 
 
-def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = True):
+def plot_load_before_after(
+    edisgo, day: str, show: bool = True, save: bool = True, folder_path: str = "plots"
+):
     """
     Plot aggregate CP + HP load before and after §14a curtailment for a 24h day.
 
@@ -1894,6 +1896,8 @@ def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = Tru
     ----------
     day : str
         Date string, e.g. "2035-01-15".
+    folder_path : str
+        Directory the plot is saved to when ``save=True``.
     """
     ti = edisgo.timeseries.timeindex
     day_ti = ti[ti.normalize() == pd.Timestamp(day)]
@@ -1988,8 +1992,11 @@ def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = Tru
     plt.tight_layout()
 
     if save:
-        os.makedirs("plots", exist_ok=True)
-        plt.savefig(f"plots/load_before_after_{day}.png", dpi=300, bbox_inches="tight")
+        os.makedirs(folder_path, exist_ok=True)
+        plt.savefig(
+            os.path.join(folder_path, f"load_before_after_{day}.png"),
+            dpi=300, bbox_inches="tight",
+        )
     if show:
         plt.show()
     plt.close()
