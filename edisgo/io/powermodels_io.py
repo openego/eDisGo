@@ -1030,17 +1030,21 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
     gen_disp = psa_net.generators.loc[disp_gens]
     # determine slack buses through slack generators
     slack_gens_bus = gen_slack.bus.values
+    trafo_offset = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"].get(
+        "hv_mv_trafo_offset", 0.0
+    )
+    slack_vm = 1.0 + trafo_offset
     for bus in slack_gens_bus:
-        pm["bus"][
-            str(
-                _mapping(
-                    psa_net,
-                    edisgo_obj,
-                    bus,
-                    flexible_storage_units=flexible_storage_units,
-                )
+        bus_idx = str(
+            _mapping(
+                psa_net,
+                edisgo_obj,
+                bus,
+                flexible_storage_units=flexible_storage_units,
             )
-        ]["bus_type"] = 3
+        )
+        pm["bus"][bus_idx]["bus_type"] = 3
+        pm["bus"][bus_idx]["vm"] = slack_vm
 
     for gen, text in [
         (gen_disp, "gen"),

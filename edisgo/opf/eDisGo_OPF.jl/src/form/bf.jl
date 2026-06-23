@@ -58,7 +58,8 @@ function constraint_voltage_magnitude_difference(pm::AbstractBFModelEdisgo, n::I
     JuMP.@constraint(pm.model, ((w_fr/tm^2)  - w_to ==  2*(r*p_fr + x*q_fr) - (r^2 + x^2)*ccm))
 
     if PowerModels.ref(pm, n, :bus)[f_bus]["bus_type"]==3
-        JuMP.@constraint(pm.model, (w_fr ==  1))
+        vm_ref = get(PowerModels.ref(pm, n, :bus)[f_bus], "vm", 1.0)
+        JuMP.@constraint(pm.model, (w_fr == vm_ref^2))
     end
 
 end
