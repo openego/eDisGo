@@ -559,6 +559,45 @@ def main(output_dir, snapshot_range, seed=42):
     print(f"  Lines >100%  : {ol_slots} hour-line slots across {ol_lines} lines")
     print(f"{'─'*62}")
 
+    # ── Load-shedding diagnostics ────────────────────────────────────────────
+    # Non-zero pds means the linearized BF model couldn't meet voltage/current
+    # limits with §14a alone. Print which buses/timesteps are affected so we
+    # can tell whether this is a real grid issue or a Q-modelling artefact.
+    if load_shed > 5e-3:
+        ls = slacks.load_shedding
+        nonzero = ls[ls.abs() > 1e-4].stack().rename_axis(["time", "load"])
+        nonzero.name = "shed_MW"
+        nonzero = nonzero.reset_index().sort_values("shed_MW", ascending=False)
+
+        load_buses = edisgo.topology.loads_df["bus"]
+        nonzero["bus"] = nonzero["load"].map(load_buses)
+
+        print(f"\n{'─'*62}")
+        print("  Load-shedding diagnostic (pds > 0.1 kW)")
+        print(f"{'─'*62}")
+        print(f"  Affected timesteps : {nonzero['time'].nunique()}")
+        print(f"  Affected loads     : {nonzero['load'].nunique()}")
+        print(f"  Affected buses     : {nonzero['bus'].nunique()}")
+        print(f"\n  Top 10 events:")
+        print(nonzero[["time", "bus", "load", "shed_MW"]].head(10).to_string(index=False))
+
+        # Per-bus voltage at the affected timesteps (from full AC power flow)
+        shed_times  = nonzero["time"].unique()
+        shed_buses  = nonzero["bus"].dropna().unique()
+        v_affected  = v.loc[v.index.isin(shed_times), v.columns.isin(shed_buses)]
+        if not v_affected.empty:
+            print(f"\n  AC voltage at affected buses/times (p.u.):")
+            print(f"    min={v_affected.min().min():.4f}  max={v_affected.max().max():.4f}")
+            worst_bus = v_affected.min().idxmin()
+            worst_ts  = v_affected[worst_bus].idxmin()
+            print(f"    Worst: bus={worst_bus}  time={worst_ts}  v={v_affected.loc[worst_ts, worst_bus]:.4f}")
+
+            # Also show OPF voltage at same bus/time if available
+            opf_v = edisgo.opf_results.v_mag_pu if hasattr(edisgo.opf_results, "v_mag_pu") else None
+            if opf_v is not None and worst_bus in opf_v.columns:
+                print(f"    OPF voltage at worst bus/time: {opf_v.loc[worst_ts, worst_bus]:.4f}")
+        print(f"{'─'*62}")
+
     # Create plots for grid results per hour
     # plot_network(edisgo, show=False, snapshots=edisgo.timeseries.timeindex,
     #              folder_path=f"{output_dir}/plot")
