@@ -309,6 +309,22 @@ def prepare_edisgo_for_14a(edisgo, *, shapefile_path, output_dir, cache_dir=None
         dummy_buses, errors="ignore"
     )
 
+    sector_loads = edisgo.topology.loads_df[
+        edisgo.topology.loads_df["sector"].isin(["industrial", "cts"])
+    ]
+    edisgo.topology.loads_df = edisgo.topology.loads_df.drop(sector_loads.index)
+    edisgo.timeseries.loads_active_power = (
+        edisgo.timeseries.loads_active_power.drop(
+            columns=sector_loads.index, errors="ignore"
+        )
+    )
+    edisgo.timeseries.loads_reactive_power = (
+        edisgo.timeseries.loads_reactive_power.drop(
+            columns=sector_loads.index, errors="ignore"
+        )
+    )
+    print(f"[prepare] Removed {len(sector_loads)} industrial/cts loads.")
+
     ref = edisgo.topology.lines_df[
         edisgo.topology.lines_df["type_info"] == "NAYY 4x95"
     ].iloc[0]
@@ -468,6 +484,29 @@ def main(output_dir, snapshot_range, seed=42):
     )
 
     fix_hp_peak_loads(edisgo, seed=seed)
+
+    mv_buses = set(edisgo.topology.buses_df[edisgo.topology.buses_df.v_nom > 0.4].index)
+    mv_loads = edisgo.topology.loads_df[edisgo.topology.loads_df["bus"].isin(mv_buses)]
+    edisgo.topology.loads_df = edisgo.topology.loads_df.drop(mv_loads.index)
+    edisgo.timeseries.loads_active_power = edisgo.timeseries.loads_active_power.drop(
+        columns=mv_loads.index, errors="ignore"
+    )
+    edisgo.timeseries.loads_reactive_power = edisgo.timeseries.loads_reactive_power.drop(
+        columns=mv_loads.index, errors="ignore"
+    )
+    print(f"[main] Removed {len(mv_loads)} loads connected to MV buses (v_nom > 0.4 kV).")
+
+    known_loads = edisgo.topology.loads_df.index
+    orphan_ap = edisgo.timeseries.loads_active_power.columns.difference(known_loads)
+    orphan_rp = edisgo.timeseries.loads_reactive_power.columns.difference(known_loads)
+    orphans = orphan_ap.union(orphan_rp)
+    edisgo.timeseries.loads_active_power = edisgo.timeseries.loads_active_power.drop(
+        columns=orphan_ap, errors="ignore"
+    )
+    edisgo.timeseries.loads_reactive_power = edisgo.timeseries.loads_reactive_power.drop(
+        columns=orphan_rp, errors="ignore"
+    )
+    print(f"[main] Removed {len(orphans)} orphan timeseries loads not in topology.loads_df.")
 
     edisgo = run_optimization_14a(edisgo)
     #edisgo.analyze()
