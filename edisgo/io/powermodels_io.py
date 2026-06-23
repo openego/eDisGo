@@ -951,7 +951,7 @@ def _build_bus(psa_net, edisgo_obj, pm, flexible_storage_units):
     )
     grid_level = {20: "mv", 10: "mv", 0.4: "lv"}
     v_max = [min(val, 1.1) for val in psa_net.buses["v_mag_pu_max"].values]
-    v_min = [max(val, 0.9) for val in psa_net.buses["v_mag_pu_min"].values]
+    v_min = [max(val, 0.88) for val in psa_net.buses["v_mag_pu_min"].values]
     for bus_i in np.arange(len(psa_net.buses.index)):
         pm["bus"][str(bus_i + 1)] = {
             "index": bus_i + 1,

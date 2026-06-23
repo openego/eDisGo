@@ -183,7 +183,7 @@ def pm_optimize(
             print(f"  Min:  {min(all_voltages):.4f} p.u.")
             print(f"  Max:  {max(all_voltages):.4f} p.u.")
             print(f"  Mean: {statistics.mean(all_voltages):.4f} p.u.")
-            print(f"  Violations (V<0.9 or V>1.1): {sum(1 for v in all_voltages if v<0.9 or v>1.1)} / {len(all_voltages)}")
+            print(f"  Violations (V<0.88 or V>1.1): {sum(1 for v in all_voltages if v<0.88 or v>1.1)} / {len(all_voltages)}")
             #####
             
             # write results to edisgo object

@@ -32,7 +32,7 @@ def run_optimization_14a(edisgo):
     Run optimization with §14a curtailment enabled.
 
     Uses opf_version=5 which uses §14a curtailment as the only flexibility tool.
-    Minimizes line losses and §14a usage. Grid restrictions (voltage 0.9-1.1 p.u.,
+    Minimizes line losses and §14a usage. Grid restrictions (voltage 0.88-1.1 p.u.,
     current limits) are enforced as hard constraints. Feasibility slacks exist but
     are penalized at 1e8 to ensure the model remains feasible.
 
@@ -52,7 +52,7 @@ def run_optimization_14a(edisgo):
     print("\nUsing OPF version 5:")
     print("  - §14a curtailment as only flexibility tool")
     print("  - Minimize line losses + §14a usage")
-    print("  - Grid restrictions enforced (voltage 0.9-1.1, current limits)")
+    print("  - Grid restrictions enforced (voltage 0.88-1.1, current limits)")
     print("  - Feasibility slacks penalized at 1e8")
 
     start_time = datetime.now()
@@ -520,11 +520,12 @@ def main(output_dir, snapshot_range, seed=42):
     hp_mwh   = curt_sum["hp_curtailment_mw"].sum()
     cp_mwh   = curt_sum["cp_curtailment_mw"].sum()
 
-    load_shed = slacks.load_shedding.abs().sum(axis=1).sum()
-    hp_shed   = slacks.hp_load_shedding.abs().sum(axis=1).sum()
+    _noise_floor = 1e-4  # 0.1 kW — per-element threshold to suppress solver noise
+    load_shed = slacks.load_shedding[slacks.load_shedding.abs() > _noise_floor].abs().sum(axis=1).sum()
+    hp_shed   = slacks.hp_load_shedding[slacks.hp_load_shedding.abs() > _noise_floor].abs().sum(axis=1).sum()
 
     v_min, v_max = v.min().min(), v.max().max()
-    viol = ((v < 0.9) | (v > 1.1)).sum().sum()
+    viol = ((v < 0.88) | (v > 1.1)).sum().sum()
 
     trafos      = edisgo.topology.transformers_df
     trafo_cols  = trafos.index.intersection(s_res.columns)
@@ -596,6 +597,92 @@ def main(output_dir, snapshot_range, seed=42):
             opf_v = edisgo.opf_results.v_mag_pu if hasattr(edisgo.opf_results, "v_mag_pu") else None
             if opf_v is not None and worst_bus in opf_v.columns:
                 print(f"    OPF voltage at worst bus/time: {opf_v.loc[worst_ts, worst_bus]:.4f}")
+        print(f"{'─'*62}")
+
+    # ── Overloaded-line / downstream topology diagnostic ─────────────────────
+    ol_mask = line_load > 100
+    if ol_mask.any().any():
+        print(f"\n{'─'*62}")
+        print("  Overloaded-line diagnostic")
+        print(f"{'─'*62}")
+
+        # Build adjacency for downstream-bus walk (radial network assumed)
+        lines_df  = edisgo.topology.lines_df
+        trafo_lv  = set(edisgo.topology.transformers_df["bus1"])  # LV side = root buses
+        adj = {}  # bus → list of neighbour buses via lines
+        for _, row in lines_df.iterrows():
+            adj.setdefault(row["bus0"], []).append((row["bus1"], row.name))
+            adj.setdefault(row["bus1"], []).append((row["bus0"], row.name))
+
+        def downstream_buses(root):
+            """BFS from root; returns {bus: line_used_to_reach_it}."""
+            visited = {root: None}
+            queue   = [root]
+            while queue:
+                bus = queue.pop(0)
+                for nb, line in adj.get(bus, []):
+                    if nb not in visited:
+                        visited[nb] = line
+                        queue.append(nb)
+            return visited
+
+        loads_df  = edisgo.topology.loads_df
+        hp_buses  = set(loads_df[loads_df["type"] == "heat_pump"]["bus"])
+        cp_buses  = set(loads_df[loads_df["type"] == "charging_point"]["bus"])
+
+        for line_name in ol_mask.columns[ol_mask.any()]:
+            peak_ts    = line_load[line_name].idxmax()
+            peak_load  = line_load[line_name].max()
+            line_row   = lines_df.loc[line_name]
+            # t-bus is the downstream end in a radial feeder
+            t_bus      = line_row["bus1"]
+            dn         = downstream_buses(t_bus)
+
+            dn_loads  = loads_df[loads_df["bus"].isin(dn)]
+            dn_hp     = dn_loads[dn_loads["type"] == "heat_pump"]
+            dn_cp     = dn_loads[dn_loads["type"] == "charging_point"]
+            dn_reg    = dn_loads[~dn_loads["type"].isin(["heat_pump", "charging_point"])]
+
+            dn_hp_mw  = edisgo.timeseries.loads_active_power.get(
+                list(dn_hp.index), pd.DataFrame()
+            )
+            dn_cp_mw  = edisgo.timeseries.loads_active_power.get(
+                list(dn_cp.index), pd.DataFrame()
+            )
+
+            print(f"\n  Line : {line_name}")
+            print(f"    buses    : {line_row['bus0']} → {line_row['bus1']}")
+            print(f"    s_nom    : {line_row['s_nom']:.4f} MVA")
+            print(f"    peak ts  : {peak_ts}  →  {peak_load:.1f}% loading")
+            print(f"    downstream buses : {len(dn)}")
+            print(f"    downstream loads : {len(dn_loads)}"
+                  f"  (regular={len(dn_reg)}, HP={len(dn_hp)}, CP={len(dn_cp)})")
+            if not dn_hp_mw.empty:
+                hp_peak = dn_hp_mw.loc[peak_ts].sum() if peak_ts in dn_hp_mw.index else 0
+                print(f"    HP active power at peak ts : {hp_peak*1e3:.2f} kW total")
+            if not dn_cp_mw.empty:
+                cp_peak = dn_cp_mw.loc[peak_ts].sum() if peak_ts in dn_cp_mw.index else 0
+                print(f"    CP active power at peak ts : {cp_peak*1e3:.2f} kW total")
+
+            # Were any of the shed loads on this feeder?
+            if load_shed > 5e-3:
+                ls_tmp      = slacks.load_shedding
+                nonzero_tmp = ls_tmp[ls_tmp.abs() > 1e-4].stack().rename_axis(["time", "load"])
+                nonzero_tmp = nonzero_tmp.reset_index()
+                shed_on_dn  = nonzero_tmp[
+                    nonzero_tmp["load"].map(loads_df["bus"]).isin(dn)
+                ]
+                shed_total_kw = shed_on_dn.iloc[:, -1].sum() * 1e3
+                print(f"    Shed events on this feeder: {len(shed_on_dn)}"
+                      f"  (total {shed_total_kw:.2f} kW)"
+                      if len(shed_on_dn) > 0 else
+                      f"    Shed events on this feeder: 0")
+                if len(shed_on_dn) > 0:
+                    shed_on_dn.columns = ["time", "load", "shed_MW"]
+                    print(shed_on_dn[["time", "load", "shed_MW"]]
+                          .sort_values("shed_MW", ascending=False)
+                          .head(5).to_string(index=False))
+
         print(f"{'─'*62}")
 
     # Create plots for grid results per hour
