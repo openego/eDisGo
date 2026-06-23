@@ -699,10 +699,10 @@ class TimeSeries:
             'mv_feed-in_case_cp_public', and 'mv_feed-in_case_cp_hpc',
             'lv_feed-in_case_cp_home', 'lv_feed-in_case_cp_work',
             'lv_feed-in_case_cp_public', and 'lv_feed-in_case_cp_hpc',
-            'mv_load-in_case_cp_home', 'mv_load-in_case_cp_work',
-            'mv_load-in_case_cp_public', and 'mv_load-in_case_cp_hpc',
-            'lv_load-in_case_cp_home', 'lv_load-in_case_cp_work',
-            'lv_load-in_case_cp_public', and 'lv_load-in_case_cp_hpc'.
+            'mv_load_case_cp_home', 'mv_load_case_cp_work',
+            'mv_load_case_cp_public', and 'mv_load_case_cp_hpc',
+            'lv_load_case_cp_home', 'lv_load_case_cp_work',
+            'lv_load_case_cp_public', and 'lv_load_case_cp_hpc'.
 
             For reactive power a fixed cosphi is assumed. A different reactive power
             factor is used for charging points in the MV and charging points in the LV.
@@ -2037,16 +2037,15 @@ class TimeSeries:
         """
         Contains residual load and information on feed-in and load case.
 
-        Residual load is calculated from total (load - generation) in the
-        network. Grid losses are not considered.
+        Residual load is calculated from total load minus total generation minus
+        storage active power (discharge counted as positive) over the whole network.
+        Grid losses are not considered.
 
         Feed-in and load case are identified based on the
         generation, load and storage time series and defined as follows:
 
-        1. Load case: positive (load - generation - storage) at HV/MV
-           substation
-        2. Feed-in case: negative (load - generation - storage) at HV/MV
-           substation
+        1. Load case: non-negative residual load (load - generation - storage)
+        2. Feed-in case: negative residual load (load - generation - storage)
 
         Returns
         -------
@@ -2165,7 +2164,10 @@ class TimeSeries:
             if not getattr(self, attr).empty:
                 getattr(self, attr).to_csv(os.path.join(directory, f"{attr}.csv"))
 
-        if hasattr(self, "timeindex_worst_cases") and len(self.timeindex_worst_cases) > 0:
+        if (
+            hasattr(self, "timeindex_worst_cases")
+            and len(self.timeindex_worst_cases) > 0
+        ):
             self.timeindex_worst_cases.to_frame("timeindex_worst_cases").to_csv(
                 os.path.join(directory, "timeindex_worst_cases.csv")
             )
@@ -2269,7 +2271,9 @@ class TimeSeries:
 
             self.timeindex_worst_cases = pd.to_datetime(df.iloc[:, 0])
             self.timeindex_worst_cases.name = df.columns[0]
-            if (timeindex is None or len(timeindex) == 0) and not self.timeindex_worst_cases.empty:
+            if (
+                timeindex is None or len(timeindex) == 0
+            ) and not self.timeindex_worst_cases.empty:
                 timeindex = pd.DatetimeIndex(self.timeindex_worst_cases.values)
 
         if from_zip_archive:

@@ -27,7 +27,7 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     Calculates topology expansion costs for each reinforced transformer and line
     in kEUR.
 
-    Attributes
+    Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
     without_generator_import : bool
@@ -54,15 +54,11 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
             For transformers quantity is always one, for lines it specifies the
             number of parallel lines.
 
-        line_length : float
+        length : float
             Length of line or in case of parallel lines all lines in km.
 
         voltage_level : str {'lv' | 'mv' | 'mv/lv'}
             Specifies voltage level the equipment is in.
-
-        mv_feeder : :class:`~.network.components.Line`
-            First line segment of half-ring used to identify in which
-            feeder the network expansion was conducted in.
 
     Notes
     -------
