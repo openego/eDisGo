@@ -509,42 +509,55 @@ def main(output_dir, snapshot_range, seed=42):
     print(f"[main] Removed {len(orphans)} orphan timeseries loads not in topology.loads_df.")
 
     edisgo = run_optimization_14a(edisgo)
-    #edisgo.analyze()
+    edisgo.analyze()
 
-    # ────────────────────────── Slack diagnosis ──────────────────────────────
+    # ── OPF Results Summary ──────────────────────────────────────────────────
     slacks = edisgo.opf_results.grid_slacks_t
-    print("\n=== OPF Slack Diagnosis (v5) ===")
-    for name, df in [
-        ("gen_nd_crt  (renewable curtailment)", slacks.gen_nd_crt),
-        ("gen_d_crt   (disp. gen curtailment)", slacks.gen_d_crt),
-        ("load_shed   (load shedding)", slacks.load_shedding),
-        ("hp_shed     (HP load shedding)", slacks.hp_load_shedding),
-    ]:
-        total = df.abs().sum(axis=1)
-        if (total > 5e-3).any():
-            print(f"  {name}: {total.sum():.4f} MW  ← NON-ZERO")
-        else:
-            print(f"  {name}: 0 (not used)")
+    v      = edisgo.results.v_res
+    s_res  = edisgo.results.s_res
 
-    print("\n=== Voltage after OPF (edisgo.results.v_res) ===")
-    v = edisgo.results.v_res
-    print(f"  Min:  {v.min().min():.4f} p.u.")
-    print(f"  Max:  {v.max().max():.4f} p.u.")
-    viol = (v < 0.9) | (v > 1.1)
-    if viol.any().any():
-        print(f"  Violations:{viol.sum().sum()}")
-        print()
+    curt_sum = get_curtailment_14a_summary(edisgo)
+    hp_mwh   = curt_sum["hp_curtailment_mw"].sum()
+    cp_mwh   = curt_sum["cp_curtailment_mw"].sum()
+
+    load_shed = slacks.load_shedding.abs().sum(axis=1).sum()
+    hp_shed   = slacks.hp_load_shedding.abs().sum(axis=1).sum()
+
+    v_min, v_max = v.min().min(), v.max().max()
+    viol = ((v < 0.9) | (v > 1.1)).sum().sum()
+
+    trafos      = edisgo.topology.transformers_df
+    trafo_cols  = trafos.index.intersection(s_res.columns)
+    if len(trafo_cols):
+        trafo_load  = s_res[trafo_cols] / trafos.loc[trafo_cols, "s_nom"] * 100
+        peak_pct    = trafo_load.max().max()
+        peak_trafo  = trafo_load.max().idxmax()
+        peak_ts     = trafo_load[peak_trafo].idxmax()
+        trafo_line  = f"{peak_pct:.1f}% ({peak_trafo}, {peak_ts})"
     else:
-        print("  No voltage violations.")
-    # ────────────────────────── End diagnosis ────────────────────────────────
+        trafo_line  = "n/a"
 
-    print("\n=== 14a analysis ===")
-    gen = edisgo.topology.generators_df
-    gen_t = edisgo.timeseries.generators_active_power
-    gen_14a = gen[gen.index.str.contains("14a")]
-    gen_t_14a = gen_t.loc[:, gen_14a.index]
-    print(f"Total use of 14a:{gen_t_14a.sum().sum()}")
-    print("\n=== end 14a analysis ===")
+    lines      = edisgo.topology.lines_df
+    line_cols  = lines.index.intersection(s_res.columns)
+    line_load  = s_res[line_cols] / lines.loc[line_cols, "s_nom"] * 100
+    ol_slots   = int((line_load > 100).sum().sum())
+    ol_lines   = int((line_load > 100).any().sum())
+
+    slack_line = (
+        f"load_shed={load_shed:.4f} MW, hp_shed={hp_shed:.4f} MW  ⚠"
+        if (load_shed > 5e-3 or hp_shed > 5e-3)
+        else "none (feasible)"
+    )
+
+    print(f"\n{'─'*62}")
+    print("  OPF Results Summary")
+    print(f"{'─'*62}")
+    print(f"  Voltage      : {v_min:.4f} – {v_max:.4f} p.u.   violations: {viol}")
+    print(f"  §14a         : HP {hp_mwh:.4f} MWh | CP {cp_mwh:.4f} MWh | Total {hp_mwh+cp_mwh:.4f} MWh")
+    print(f"  Slacks       : {slack_line}")
+    print(f"  Trafo peak   : {trafo_line}")
+    print(f"  Lines >100%  : {ol_slots} hour-line slots across {ol_lines} lines")
+    print(f"{'─'*62}")
 
     # Create plots for grid results per hour
     # plot_network(edisgo, show=False, snapshots=edisgo.timeseries.timeindex,
