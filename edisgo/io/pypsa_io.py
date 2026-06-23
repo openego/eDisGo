@@ -785,7 +785,7 @@ def _buses_voltage_set_point(edisgo_obj, buses, slack_bus, timesteps):
     """
 
     # set all buses to nominal voltage
-    v_nom = pd.DataFrame(1, columns=buses, index=timesteps)
+    v_nom = pd.DataFrame(1.0, columns=buses, index=timesteps)
 
     # set slack bus to operational voltage (includes offset and control
     # deviation)
