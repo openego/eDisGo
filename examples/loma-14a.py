@@ -553,8 +553,9 @@ def main(output_dir, snapshot_range, seed=42):
 
     # ── Presentation plots ───────────────────────────────────────────────────
     # Select days that have non-trivial §14a curtailment (threshold: 1 kW total)
+    curt_data = get_curtailment_data(edisgo)
     curt_daily = (
-        get_curtailment_data(edisgo)
+        curt_data
         .groupby(edisgo.timeseries.timeindex.normalize())
         .sum()
         .sum(axis=1)
@@ -567,6 +568,15 @@ def main(output_dir, snapshot_range, seed=42):
         print(f"  Plotting {day}...")
         plot_load_before_after(edisgo, day=day, show=False, save=True,
                                folder_path=f"{output_dir}/load_plots/")
+
+    curt_hourly = curt_data.sum(axis=1)
+    active_hours = curt_hourly[curt_hourly > 1e-3].index
+
+    print(f"\n=== Hours with §14a curtailment: {len(active_hours)} hours ===")
+
+    if len(active_hours) > 0:
+        plot_network(edisgo, show=False, snapshots=active_hours,
+                     folder_path=f"{output_dir}/network_plots/")
 
     print(f"Saved plots to {output_dir}/plots/")
     print(f"Time: {datetime.now() - t0}")
