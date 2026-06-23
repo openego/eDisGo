@@ -105,11 +105,43 @@ class RunContext:
                 "Task needs a database engine but no 'database' section "
                 "is configured."
             )
+        ssh_cfg = db_cfg.get("ssh") or {}
+        ssh_enabled = bool(ssh_cfg.get("enabled", False))
+
+        # Direct local database: when SSH is disabled and explicit
+        # connection parameters are given (host/port/user/password as
+        # passed by eGo), connect straight to that postgres via
+        # psycopg2. This avoids edisgo.io.db.engine(ssh=False), which
+        # is hard-wired to the remote OpenEnergyPlatform (oedialect)
+        # and can stall for hours on large queries.
+        host = db_cfg.get("host")
+        if not ssh_enabled and host:
+            from sqlalchemy import create_engine
+
+            user = db_cfg.get("user")
+            password = db_cfg.get("password")
+            port = db_cfg.get("port")
+            name = db_cfg.get("database_name") or db_cfg.get("database")
+            self.logger.info(
+                f"ensure_engine: using local database "
+                f"{user}@{host}:{port}/{name} (no OEP, no SSH tunnel)."
+            )
+            self.engine = create_engine(
+                f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{name}",
+                connect_args={"connect_timeout": 10},
+                # The engine is cached and reused across long-running tasks
+                # (e.g. electromobility can idle the connection for many
+                # minutes). pool_pre_ping detects connections the server/SSH
+                # tunnel dropped while idle and transparently reconnects,
+                # avoiding "server closed the connection unexpectedly".
+                pool_pre_ping=True,
+            )
+            return self.engine
+
         from edisgo.io.db import engine as egon_engine
 
-        ssh_cfg = db_cfg.get("ssh") or {}
         self.engine = egon_engine(
             path=db_cfg.get("credentials_path"),
-            ssh=bool(ssh_cfg.get("enabled", False)),
+            ssh=ssh_enabled,
         )
         return self.engine

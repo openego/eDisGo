@@ -1040,8 +1040,11 @@ def _build_battery_storage(
         # If the overlying grid data uses another year in the timeindex then
         # edisgo.timindex, unify them
         og_year = edisgo_obj.overlying_grid.storage_units_soc.index[0].year
-        if og_year != edisgo_obj.timeseries.timeindex[0].year:
-            timesteps = timesteps.map(lambda t: t.replace(year=og_year))
+        year_diff = og_year - edisgo_obj.timeseries.timeindex[0].year
+        if year_diff != 0:
+            # Shift by whole years instead of Timestamp.replace(year=...),
+            # which raises on Feb 29 when the target year is not a leap year.
+            timesteps = timesteps + pd.DateOffset(years=year_diff)
 
         data = pd.concat(
             [edisgo_obj.overlying_grid.storage_units_soc.loc[timesteps]]

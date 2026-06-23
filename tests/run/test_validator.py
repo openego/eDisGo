@@ -92,6 +92,24 @@ def test_stage_load_from_with_save_ok():
     cfg = {"stages": [
         {"name": "a", "pipeline": ["setup_grid", "worst_case_ts",
                                     "reinforce", "save"]},
-        {"name": "b", "load_from": "a", "pipeline": ["reinforce", "save"]},
+        # load_from reloads the grid with import_timeseries=False, so the
+        # consuming stage must set time series itself before reinforce.
+        {"name": "b", "load_from": "a",
+         "pipeline": ["worst_case_ts", "reinforce", "save"]},
     ]}
     validate(cfg)
+
+
+def test_stage_load_from_without_ts_rejected():
+    """
+    load_from does NOT satisfy the time-series prerequisite: the artifact is
+    reloaded with import_timeseries=False, so reinforce after a bare load_from
+    (no time-series task in the stage) must be rejected.
+    """
+    cfg = {"stages": [
+        {"name": "a", "pipeline": ["setup_grid", "worst_case_ts",
+                                    "reinforce", "save"]},
+        {"name": "b", "load_from": "a", "pipeline": ["reinforce", "save"]},
+    ]}
+    with pytest.raises(ValueError, match="requires time series"):
+        validate(cfg)

@@ -266,12 +266,12 @@ def task_manual_ts(
         return pd.DataFrame(obj) if obj is not None else None
 
     edisgo.set_time_series_manual(
-        generators_active_power=_as_df(generators_active_power),
-        generators_reactive_power=_as_df(generators_reactive_power),
-        loads_active_power=_as_df(loads_active_power),
-        loads_reactive_power=_as_df(loads_reactive_power),
-        storage_units_active_power=_as_df(storage_units_active_power),
-        storage_units_reactive_power=_as_df(storage_units_reactive_power),
+        generators_p=_as_df(generators_active_power),
+        generators_q=_as_df(generators_reactive_power),
+        loads_p=_as_df(loads_active_power),
+        loads_q=_as_df(loads_reactive_power),
+        storage_units_p=_as_df(storage_units_active_power),
+        storage_units_q=_as_df(storage_units_reactive_power),
     )
     ctx.flags["timeseries_set"] = True
     return edisgo

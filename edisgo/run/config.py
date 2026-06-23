@@ -128,9 +128,10 @@ def _resolve_extends(cfg: dict, base_dir: Path) -> dict:
     Resolve an ``extends:`` reference and deep-merge parent into child.
 
     The parent is loaded recursively, so a chain of ``extends:`` works.
-    References are looked up as (1) a bundled preset name under
-    :mod:`edisgo.run.presets`, (2) a path relative to ``base_dir``.
-    The child's keys override the parent's on conflicts.
+    A relative reference is looked up as (1) a path relative to
+    ``base_dir``, (2) a bundled preset name under
+    :mod:`edisgo.run.presets`. The child's keys override the parent's on
+    conflicts.
 
     Parameters
     ----------
@@ -156,11 +157,15 @@ def _resolve_extends(cfg: dict, base_dir: Path) -> dict:
         return cfg
     ext_path = Path(ext).expanduser()
     if not ext_path.is_absolute():
-        preset_path = _preset_path(str(ext_path))
-        if preset_path is not None:
-            ext_path = preset_path
+        # Resolve relative to the including file first (least surprise: a
+        # local file next to the config wins), then fall back to a bundled
+        # preset of that name.
+        local_path = (base_dir / ext_path).resolve()
+        if local_path.is_file():
+            ext_path = local_path
         else:
-            ext_path = (base_dir / ext_path).resolve()
+            preset_path = _preset_path(str(ext_path))
+            ext_path = preset_path if preset_path is not None else local_path
     if not ext_path.is_file():
         raise FileNotFoundError(f"extends: file not found: {ext_path}")
     parent = _read_file(ext_path)
@@ -399,8 +404,10 @@ def _adapt_ego_legacy(cfg: dict) -> dict:
         "grid": {"ding0_path": edisgo_cfg.get("grid_path")},
         "results": {"directory": edisgo_cfg.get("results")},
         "pipeline": mapped,
-        "overlying_grid": {"path": edisgo_cfg.get("overlying_grid_source")},
-        "overlying_grid": {"selection": edisgo_cfg.get("overlying_grid")}
+        "overlying_grid": {
+            "path": edisgo_cfg.get("overlying_grid_source"),
+            "selection": edisgo_cfg.get("overlying_grid"),
+        },
     }
     if "database" in cfg:
         adapted["database"] = cfg["database"]

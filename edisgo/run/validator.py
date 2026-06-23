@@ -117,21 +117,23 @@ def validate(cfg: dict) -> None:
                         f"a loaded grid (setup_grid or "
                         f"load_from_base) before it."
                     )
-            if task_name in {"analyze", "reinforce"} and not (
-                ts_set or load_from
-            ):
+            # load_from does NOT satisfy these: _load_artifact reloads the
+            # grid with import_timeseries=False and drops flex data, so a
+            # time-series (and, for optimize, a flex-import) task must run
+            # in the stage itself even after a load_from.
+            if task_name in {"analyze", "reinforce"} and not ts_set:
                 raise ValueError(
                     f"Stage '{name}': task '{task_name}' requires time "
                     f"series to be set (e.g. worst_case_ts or "
                     f"oedb_ts) before it."
                 )
             if task_name == "optimize":
-                if not ts_set and not load_from:
+                if not ts_set:
                     raise ValueError(
                         f"Stage '{name}': 'optimize' requires time "
                         f"series."
                     )
-                if not flex_imported and not load_from:
+                if not flex_imported:
                     raise ValueError(
                         f"Stage '{name}': 'optimize' requires at least "
                         f"one flex asset to be imported."
