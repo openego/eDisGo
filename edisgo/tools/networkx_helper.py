@@ -32,16 +32,17 @@ def translate_df_to_graph(
         Dataframe with all lines to use as Graph branches. For more information about
         the Dataframe see :attr:`~.network.topology.Topology.lines_df`
     transformers_df : :pandas:`pandas.DataFrame<DataFrame>`, optional
-        Dataframe with all transformers to use as additional Graph nodes. For more
-        information about the Dataframe see
+        Dataframe with all transformers to use as additional Graph edges (with a
+        length of zero). For more information about the Dataframe see
         :attr:`~.network.topology.Topology.transformers_df`
 
     Returns
     -------
     :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
-            where lines are represented by edges in the graph, and buses and
-            transformers are represented by nodes.
+            where lines and transformers are represented by edges in the graph
+            and buses are represented by nodes. Transformer edges have a length
+            of zero.
 
     """
     graph = Graph()

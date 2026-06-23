@@ -817,7 +817,7 @@ class Electromobility:
           :py:attr:`~integrated_charging_parks_df` is saved to
           `integrated_charging_parks.csv`.
         * 'simbev_config_df' : Attribute :py:attr:`~simbev_config_df` is
-          saved to `simbev_config.csv`.
+          saved to `metadata_simbev_run.csv`.
         * 'flexibility_bands' : The three flexibility bands in attribute
           :py:attr:`~flexibility_bands` are saved to
           `flexibility_band_upper_power.csv`, `flexibility_band_lower_energy.csv`, and

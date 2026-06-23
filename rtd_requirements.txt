@@ -18,6 +18,9 @@ sphinx < 9.2.0
 sphinx_rtd_theme >= 3.1.0, < 3.2.0
 sphinx-autodoc-typehints < 3.12.0
 sphinx-autoapi < 3.9.0
+nbsphinx < 0.10.0
+myst-parser < 6.0.0
+ipython < 9.0.0
 sshtunnel < 0.5.0
 urllib3 < 2.8.0
 workalendar < 17.1.0

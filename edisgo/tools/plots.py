@@ -266,8 +266,8 @@ def mv_grid_topology(
         options are:
 
         * 'loading'
-          Line color is set according to loading of the line. Loading of MV
-          lines must be provided by parameter `line_load`.
+          Line color is set according to loading of the line. Line loading is
+          calculated internally from the power flow results in `edisgo_obj.results`.
         * 'expansion_costs'
           Line color is set according to investment costs of the line. This
           option also effects node colors and sizes by plotting investment in
@@ -306,11 +306,6 @@ def mv_grid_topology(
         * 'charging_park'
           Plots nodes with charging stations in red.
 
-    line_load : :pandas:`pandas.DataFrame<DataFrame>` or None
-        Dataframe with current results from power flow analysis in A. Index of
-        the dataframe is a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`,
-        columns are the line representatives. Only needs to be provided when
-        parameter `line_color` is set to 'loading'. Default: None.
     grid_expansion_costs : :pandas:`pandas.DataFrame<DataFrame>` or None
         Dataframe with network expansion costs in kEUR. See `grid_expansion_costs`
         in :class:`~.network.results.Results` for more information. Only needs to
@@ -949,7 +944,8 @@ def plot_plotly(
         * 'voltage_deviation' (default)
             Node color is set according to voltage deviation from 1 p.u..
         * None
-            Line color is black. This is also the fallback, in case other options fail.
+            Nodes are colored grey. This is also the fallback, in case other
+            options fail.
 
     line_result_selection : str
         Defines which values are shown for the load of the lines:
