@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -70,7 +81,8 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     edisgo_object : :class:`~.EDisGo`
     generator_scenario : str
         Scenario for which to retrieve generator data. Possible options
-        are 'nep2035' and 'ego100'.
+        are 'nep2035', 'ego100' and 'status_quo' (or its alias 'sq'). The input is
+        case-insensitive.
 
     Other Parameters
     ----------------
@@ -312,7 +324,8 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     scenario_name = scenario_mapping.get(generator_scenario.lower(), generator_scenario)
 
     if oedb_data_source == "model_draft":
-        # Use base tables from model_draft schema (CamelCase ORM names, without _mview suffix)
+        # Use base tables from model_draft schema
+        # (CamelCase ORM names, without _mview suffix)
         orm_conv_generators = model_draft.__getattribute__("EgoDpSupplyConvPowerplant")
         orm_re_generators = model_draft.__getattribute__("EgoDpSupplyResPowerplant")
 
@@ -327,7 +340,8 @@ def oedb_legacy(edisgo_object, generator_scenario, **kwargs):
     elif oedb_data_source == "versioned":
         data_version = edisgo_object.config["versioned"]["version"]
 
-        # Use base tables from supply schema (CamelCase ORM names, without _mview suffix)
+        # Use base tables from supply schema
+        # (CamelCase ORM names, without _mview suffix)
         orm_conv_generators = supply.__getattribute__("EgoDpConvPowerplant")
         orm_re_generators = supply.__getattribute__("EgoDpResPowerplant")
 
@@ -460,8 +474,8 @@ def _update_grids(
             # set geom to EnergyMap's geom, if available
             if generator_data.geom_em:
                 logger.debug(
-                    f"Generator {generator_data.name} has no geom entry, EnergyMap's geom "
-                    "entry will be used."
+                    f"Generator {generator_data.name} has no geom entry, "
+                    "EnergyMap's geom entry will be used."
                 )
                 return generator_data.geom_em
         return None
@@ -542,8 +556,8 @@ def _update_grids(
         log_geno_count = len(gens_to_update_cap)
         log_geno_cap = gens_to_update_cap["cap_diff"].sum()
         logger.debug(
-            f"Capacities of {log_geno_count} of {len(gens_to_update)} existing generators updated "
-            f"({round(log_geno_cap, 1)} MW)."
+            f"Capacities of {log_geno_count} of {len(gens_to_update)} existing "
+            f"generators updated ({round(log_geno_cap, 1)} MW)."
         )
 
     # ==================================================
@@ -562,7 +576,8 @@ def _update_grids(
         log_geno_cap = decommissioned_gens.p_nom.sum()
         log_geno_count = len(decommissioned_gens)
         logger.debug(
-            f"{log_geno_count} decommissioned generators removed ({round(log_geno_cap, 1)} MW)."
+            f"{log_geno_count} decommissioned generators removed "
+            f"({round(log_geno_cap, 1)} MW)."
         )
 
     # ===================================
@@ -683,7 +698,8 @@ def _update_grids(
     log_geno_count = len(new_gens_mv)
     log_geno_cap = new_gens_mv["p_nom"].sum()
     logger.debug(
-        f"{log_geno_count} of {number_new_gens} new MV generators added ({round(log_geno_cap, 1)} MW)."
+        f"{log_geno_count} of {number_new_gens} new MV generators added "
+        f"({round(log_geno_cap, 1)} MW)."
     )
 
     # ====================================
@@ -758,8 +774,8 @@ def _update_grids(
         # warn if there are more generators than loads in LV grid
         if lv_gens_voltage_level_7 > lv_loads * 2:
             logger.debug(
-                f"There are {lv_gens_voltage_level_7} generators (voltage level 7) but only {lv_loads} "
-                f"loads in LV grid {lv_grid.id}."
+                f"There are {lv_gens_voltage_level_7} generators (voltage level 7) "
+                f"but only {lv_loads} loads in LV grid {lv_grid.id}."
             )
 
 
@@ -1153,7 +1169,7 @@ def _integrate_new_pv_rooftop_to_buildings(edisgo_object, pv_rooftop_df):
     ----------
     edisgo_object : :class:`~.EDisGo`
     pv_rooftop_df : :pandas:`pandas.DataFrame<DataFrame>`
-        See :attr:`~.io.generators_import._integrate_pv_rooftop` for more information.
+        See :func:`~.io.generators_import._integrate_pv_rooftop` for more information.
 
     Returns
     -------

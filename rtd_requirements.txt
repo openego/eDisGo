@@ -1,23 +1,26 @@
-dash < 4.2.0
+dash < 4.3.0
 demandlib < 0.3.0
 egoio >= 0.4.7, < 0.5.0
-geopy >= 2.0.0, < 2.5.0
+geopy >= 2.4.1, < 2.5.0
 jupyter_dash < 0.5.0
 matplotlib < 3.11.0
 multiprocess < 0.71.0
-networkx >= 2.5.0, < 3.7.0
+networkx >= 3.6.1, < 3.7.0
 pandas >= 1.4.0, < 2.2.0
 plotly < 6.0
 pypower < 5.2.0
-pyproj >=3.0.0, < 3.8.0
+pyproj >= 3.7.2, < 3.8.0
 pypsa == 0.26.2
 pyyaml < 6.1.0
 saio < 0.3.0
 scikit-learn < 1.6
 sphinx < 9.2.0
-sphinx_rtd_theme >= 0.5.2, < 3.2.0
-sphinx-autodoc-typehints < 3.11.0
+sphinx_rtd_theme >= 3.1.0, < 3.2.0
+sphinx-autodoc-typehints < 3.12.0
 sphinx-autoapi < 3.9.0
+nbsphinx < 0.10.0
+myst-parser < 6.0.0
+ipython < 9.0.0
 sshtunnel < 0.5.0
 urllib3 < 2.8.0
 workalendar < 17.1.0

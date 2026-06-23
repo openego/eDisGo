@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import copy
@@ -397,7 +408,7 @@ def make_busmap_grid(
         Default: "kmeansdijkstra".
     reduction_factor : float
         Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
-    preserve_trafo_bus_coordinates : True
+    preserve_trafo_bus_coordinates : bool
         If True, transformers have the same coordinates after the clustering, else
         the transformer coordinates are changed by the clustering. Default: True.
 

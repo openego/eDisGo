@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import copy
@@ -578,10 +589,28 @@ class EDisGo:
             :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
             If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
             is indexed using a default year and set for the whole year.
+            In this case, the EDisGo TimeSeries timeindex is automatically set to
+            the selected default year so that imported data is linked to a valid
+            time index.
 
         """
         engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
-        if self.timeseries.timeindex.empty:
+        if self.timeseries.timeindex.empty and kwargs.get("timeindex", None) is None:
+            if conventional_loads_ts == "oedb":
+                default_year = tools.get_year_based_on_scenario(kwargs.get("scenario"))
+                if default_year is None:
+                    default_year = 2011
+            else:
+                default_year = 2011
+            self.timeseries.timeindex = pd.date_range(
+                f"1/1/{default_year}", periods=8760, freq="H"
+            )
+            logger.warning(
+                "No timeindex was set. TimeSeries.timeindex is automatically "
+                f"set to the default year {default_year} to match imported "
+                "time series."
+            )
+        elif self.timeseries.timeindex.empty:
             logger.warning(
                 "When setting time series using predefined profiles it is better to "
                 "set a time index as all data in TimeSeries class is indexed by the"
@@ -1235,7 +1264,7 @@ class EDisGo:
         If the :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case` is
         True input for `timesteps_pfa` is overwritten and therefore ignored.
 
-        See :ref:`features-in-detail` for more information on how network
+        See :ref:`grid-reinforcement` for more information on how network
         reinforcement is conducted.
 
         Parameters
@@ -2096,7 +2125,7 @@ class EDisGo:
         :attr:`~.edisgo.EDisGo.import_electromobility`.
 
         It is assumed that only 'private' charging processes at 'home' or at 'work' can
-        be flexibilized. 'public' charging processes will always be 'dumb'.
+        be flexibilized. 'public' and 'hpc' charging processes will always be 'dumb'.
 
         The charging time series at each charging parks are written to
         :attr:`~.network.timeseries.TimeSeries.loads_active_power`. Reactive power
@@ -2340,8 +2369,9 @@ class EDisGo:
         Gets industrial and CTS DSM profiles from the
         `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
-        Profiles comprise minimum and maximum load increase in MW as well as maximum
-        energy pre- and postponing in MWh. The data is written to the
+        Profiles comprise the maximum load decrease (``p_min``) and maximum load
+        increase (``p_max``) in MW as well as the maximum energy preponing (``e_min``)
+        and postponing (``e_max``) in MWh. The data is written to the
         :class:`~.network.dsm.DSM` object.
 
         Currently, the only supported data source is scenario data generated
@@ -2350,7 +2380,6 @@ class EDisGo:
 
         Parameters
         ----------
-        edisgo_object : :class:`~.EDisGo`
         scenario : str
             Scenario for which to retrieve DSM data. Possible options
             are 'eGon2035' and 'eGon100RE'.
@@ -2666,8 +2695,8 @@ class EDisGo:
         if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
             raise RuntimeError(
                 "Voltage results (results.v_res) are empty. "
-                "Run analyze() with timesteps/snapshots so voltage results "
-                "are generated."
+                "Run analyze() with timesteps/snapshots so voltage "
+                "results are generated."
             )
         # Resolve LV grids (index-based resolution)
         lv_grids_a = list(self.topology.mv_grid.lv_grids)
@@ -2836,8 +2865,8 @@ class EDisGo:
 
     def plot_voltage_over_dist_mv(self, mv_id, other, save_as=False, return_data=False):
         """
-        Plot MV voltage over distance to the HV/MV transformer, comparing two
-        EDisGo objects.
+        Plot MV voltage over distance to the HV/MV transformer,
+        comparing two EDisGo objects.
 
         Parameters
         ----------
@@ -2859,8 +2888,8 @@ class EDisGo:
         if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
             raise RuntimeError(
                 "Voltage results (results.v_res) are empty. "
-                "Run analyze() with timesteps/snapshots so voltage results "
-                "are generated."
+                "Run analyze() with timesteps/snapshots so voltage "
+                "results are generated."
             )
         mv_a = self.topology.mv_grid
         mv_b = other.topology.mv_grid

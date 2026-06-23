@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import math
 
 import numpy as np
@@ -38,6 +49,22 @@ def to_powermodels(pypsa_net):
 
 
 def convert_storage_series(timeseries):
+    """
+    Converts a storage power time series to the PowerModels storage format.
+
+    Parameters
+    ----------
+    timeseries : :pandas:`pandas.Series<Series>`
+        Time series of required storage power per time step.
+
+    Returns
+    -------
+    dict
+        Dictionary with the time horizon and the per-time-step required power
+        (``p_req``) in the structure expected by PowerModels, or an empty dict if the
+        time series is empty.
+
+    """
     if len(timeseries) == 0:
         return {}
     else:

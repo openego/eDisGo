@@ -1,13 +1,15 @@
-"""
-Replacement functions for deprecated materialized views (mviews) in eDisGo/oedb.
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
-This module provides functions to replace the deprecated mviews by directly querying
-the underlying base tables with appropriate filters. The filter logic is extracted
-from the original mview definitions in mviews_definitions.sql.
-
-Author: Generated for mviews replacement
-Date: 2025-12-17
-"""
+from typing import Literal, Optional
 
 from typing import Literal
 
@@ -39,7 +41,7 @@ class MviewsReplacement:
     def get_conv_powerplant(
         self,
         scenario: str,
-        version: str | None = None,
+        version: Optional[str] = None,
         preversion: str = "v0.3.0",
         schema: Literal["model_draft", "data"] = "data",
         table_name: str = "ego_dp_conv_powerplant",
@@ -134,7 +136,7 @@ class MviewsReplacement:
                 shutdown, status, fuel, technology, type, eeg, chp, capacity,
                 capacity_uba, chp_capacity_uba, efficiency_data, efficiency_estimate,
                 network_node, voltage, network_operator, name_uba, lat, lon, comment,
-                geom, voltage_level, subst_id, otg_id, un_id, la_id, scenario, flag, nuts
+                geom, voltage_level, subst_id, otg_id, un_id, la_id, scenario, flag, nuts  # noqa: E501
             FROM {schema}.{table_name}
             WHERE scenario = '{scenario}'
                 AND capacity > 0
@@ -148,7 +150,7 @@ class MviewsReplacement:
     def get_res_powerplant(
         self,
         scenario: str,
-        version: str | None = None,
+        version: Optional[str] = None,
         preversion: str = "v0.3.0",
         schema: Literal["model_draft", "data"] = "data",
         table_name: str = "ego_dp_res_powerplant",
@@ -340,8 +342,8 @@ class MviewsReplacement:
     def load_mview_replacement(
         self,
         mview_name: str,
-        scenario: str | None = None,
-        version: str | None = None,
+        scenario: Optional[str] = None,
+        version: Optional[str] = None,
         **kwargs,
     ) -> pd.DataFrame:
         """
@@ -374,19 +376,16 @@ class MviewsReplacement:
         Examples
         --------
         >>> replacer = MviewsReplacement(engine)
-        >>> data = replacer.load_mview_replacement('ego_dp_conv_powerplant_nep2035_mview')
-        >>> data = replacer.load_mview_replacement('ego_supply_res_powerplant_ego100_mview')
+        >>> data = replacer.load_mview_replacement(
+        ...     'ego_dp_conv_powerplant_nep2035_mview')
+        >>> data = replacer.load_mview_replacement(
+        ...     'ego_supply_res_powerplant_ego100_mview')
         """
         # Remove 'mviews.' prefix if present
         mview_name = mview_name.replace("mviews.", "")
 
         # Determine schema from mview name
-        if mview_name.startswith("ego_supply_"):
-            schema = kwargs.get("schema", "data")
-            base_prefix = "ego_dp_supply_"
-        else:
-            schema = kwargs.get("schema", "data")
-            base_prefix = "ego_dp_"
+        schema = kwargs.get("schema", "data")
 
         # Parse conventional power plants
         if "conv_powerplant" in mview_name:

@@ -1,22 +1,20 @@
-"""This file is part of eDisGo, a python package for distribution network
-analysis and optimization.
-
-It is developed in the project open_eGo: https://openegoproject.wordpress.com
-
-eDisGo lives on github: https://github.com/openego/edisgo/
-The documentation is available on RTD: https://edisgo.readthedocs.io/en/dev/
-
-Based on code by oemof developing group
-
-This module provides a highlevel layer for reading and writing config files.
-
-"""
-
-__copyright__ = "Reiner Lemoine Institut gGmbH"
-__license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
-__url__ = "https://github.com/openego/edisgo/blob/master/LICENSE"
-__author__ = "nesnoj, gplssm"
-
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# This file is part of eDisGo. Copyright belongs to
+# Reiner Lemoine Institut gGmbH, authors are recorded in the version control
+# history of the file, available from its original location on github:
+# https://github.com/openego/eDisGo/.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# eDisGo st available on RTD: https://edisgo.readthedocs.io.
 
 import copy
 import datetime
@@ -127,6 +125,19 @@ class Config:
 
     @property
     def db_table_mapping(self):
+        """
+        Mapping of dataset names to database table names.
+
+        Read lazily from the ``config_db_tables`` configuration (see
+        :ref:`default_configs`) on first access and used when retrieving data from the
+        Open Energy Platform.
+
+        Returns
+        -------
+        dict
+            Mapping of dataset name to database table name.
+
+        """
         if not self._config_dict.get("db_table_mapping"):
             self._ensure_db_mappings_loaded()
         return self._config_dict.get("db_table_mapping", {})
@@ -137,6 +148,19 @@ class Config:
 
     @property
     def db_schema_mapping(self):
+        """
+        Mapping of dataset names to database schema names.
+
+        Read lazily from the ``config_db_tables`` configuration (see
+        :ref:`default_configs`) on first access and used when retrieving data from the
+        Open Energy Platform.
+
+        Returns
+        -------
+        dict
+            Mapping of dataset name to database schema name.
+
+        """
         if not self._config_dict.get("db_schema_mapping"):
             self._ensure_db_mappings_loaded()
         return self._config_dict.get("db_schema_mapping", {})
@@ -164,10 +188,11 @@ class Config:
         -------
         tuple
             A tuple containing two dictionaries:
-            - name_mapping: A dictionary mapping source table names to target table
-                names.
-            - schema_mapping: A dictionary mapping source schema names to target schema
-                names.
+
+            - ``name_mapping``: dictionary mapping source table names to target
+              table names.
+            - ``schema_mapping``: dictionary mapping source schema names to target
+              schema names.
         """
         engine = Engine()
         dictionary_schema_name = "data"

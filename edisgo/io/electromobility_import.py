@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import json
@@ -372,6 +383,38 @@ def assure_minimum_potential_charging_parks(
     potential_charging_parks_gdf: gpd.GeoDataFrame,
     **kwargs,
 ):
+    """
+    Ensures a minimum number of potential charging parks per use case.
+
+    For each use case the number of potential charging parks (grid connection points)
+    must be at least ``gc_to_car_rate`` times the number of cars. If too few are
+    available, existing potential charging parks of the use case (or, if there are
+    none, randomly drawn public ones) are duplicated until the ratio is met.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    potential_charging_parks_gdf : :geopandas:`GeoDataFrame`
+        Potential charging parks to check and, if necessary, extend.
+
+    Other Parameters
+    ----------------
+    gc_to_car_rate_home : float
+        Minimum ratio of home charging parks to cars. Default: 0.5.
+    gc_to_car_rate_work : float
+        Minimum ratio of work charging parks to cars. Default: 0.25.
+    gc_to_car_rate_public : float
+        Minimum ratio of public charging parks to cars. Default: 0.1.
+    gc_to_car_rate_hpc : float
+        Minimum ratio of high-power charging parks to cars. Default: 0.005.
+
+    Returns
+    -------
+    :geopandas:`GeoDataFrame`
+        Potential charging parks with the minimum number per use case assured, sorted
+        and reprojected to the grid's coordinate reference system.
+
+    """
     # ensure minimum number of potential charging parks per car
     num_cars = len(edisgo_obj.electromobility.charging_processes_df.car_id.unique())
 
@@ -431,8 +474,8 @@ def assure_minimum_potential_charging_parks(
         while actual_gc_to_car_rate < gc_to_car_rate and n < max_it:
             logger.info(
                 f"Duplicating potential charging parks to meet the desired grid "
-                f"connections to cars rate of {gc_to_car_rate * 100:.2f} % for use case "
-                f"{use_case}. Iteration: {n + 1}."
+                f"connections to cars rate of {gc_to_car_rate * 100:.2f} % for "
+                f"use case {use_case}. Iteration: {n + 1}."
             )
 
             if actual_gc_to_car_rate * 2 < gc_to_car_rate:
@@ -1093,6 +1136,42 @@ def distribute_public_charging_demand(edisgo_obj, **kwargs):
 def determine_grid_connection_capacity(
     total_charging_point_capacity, lower_limit=0.3, upper_limit=1.0, minimum_factor=0.45
 ):
+    """
+    Scales the total charging-point capacity to a grid connection capacity.
+
+    Applies a simultaneity (diversity) factor: capacities up to ``lower_limit`` are
+    connected in full, capacities of ``upper_limit`` and above are scaled by
+    ``minimum_factor``, and in between the factor is interpolated linearly.
+
+    Parameters
+    ----------
+    total_charging_point_capacity : float
+        Summed nominal capacity of the charging points in MW.
+    lower_limit : float
+        Capacity in MW below which no reduction is applied. Default: 0.3.
+    upper_limit : float
+        Capacity in MW at and above which the full ``minimum_factor`` reduction
+        applies. Default: 1.0.
+    minimum_factor : float
+        Simultaneity factor applied at and above ``upper_limit``. Default: 0.45.
+
+    Returns
+    -------
+    float
+        Required grid connection capacity in MW.
+
+    Notes
+    -----
+    The factor is interpolated linearly but applied *multiplicatively*, so between
+    ``lower_limit`` and ``upper_limit`` the returned capacity is quadratic in
+    ``total_charging_point_capacity`` and therefore **not monotonic**: with the default
+    limits it peaks at an input of about ``0.79 MW`` (output ≈ ``0.486 MW``) before
+    decreasing again to ``minimum_factor * upper_limit`` (``0.45 MW``) at
+    ``upper_limit``. A larger park can thus receive a slightly smaller connection rating
+    in that narrow range, which is likely unintended (see
+    `issue #650 <https://github.com/openego/eDisGo/issues/650>`_).
+
+    """
     if total_charging_point_capacity <= lower_limit:
         return total_charging_point_capacity
     elif total_charging_point_capacity >= upper_limit:

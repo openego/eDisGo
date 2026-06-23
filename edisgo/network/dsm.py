@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -63,7 +74,7 @@ class DSM:
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            Maximum load decrease in MW. For more information on the dataframe see
+            Maximum load increase in MW. For more information on the dataframe see
             input parameter `df`.
 
         """

@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -250,7 +261,7 @@ class Topology:
                 a charging process can be flexibilised, as it is assumed that only
                 charging processes at private charging points ('home' and 'work') can
                 be flexibilised (see function
-                :attr:`~.flex_opt.charging_strategies.charging_strategy`).
+                :func:`~.flex_opt.charging_strategies.charging_strategy`).
                 It is further used when charging points are integrated into the grid,
                 as e.g. 'home' charging points are allocated to a household (see
                 function :attr:`~.network.topology.Topology.connect_to_lv`).
@@ -2767,8 +2778,9 @@ class Topology:
         -------
         :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
-            where lines are represented by edges in the graph, and buses and
-            transformers are represented by nodes.
+            where lines and transformers are represented by edges in the graph
+            and buses are represented by nodes. Transformer edges have a length
+            of zero.
 
         """
         return networkx_helper.translate_df_to_graph(

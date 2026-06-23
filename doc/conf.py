@@ -1,17 +1,13 @@
-"""This file is part of DINGO, the DIstribution Network GeneratOr.
-DINGO is a tool to generate synthetic medium and low voltage power
-distribution grids based on open data.
-
-It is developed in the project open_eGo: https://openegoproject.wordpress.com
-
-DINGO lives at github: https://github.com/openego/dingo/
-The documentation is available on RTD: https://edisgo.readthedocs.io/en/dev/"""
-
-__copyright__ = "Reiner Lemoine Institut gGmbH"
-__license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
-__url__ = "https://github.com/openego/eDisGo/blob/dev/LICENSE"
-__author__ = "nesnoj, gplssm"
-
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 #
@@ -36,6 +32,8 @@ import sys
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath("../"))
+# Local Sphinx extensions (e.g. the Julia OPF docstring harvester).
+sys.path.insert(0, os.path.abspath("_ext"))
 
 # -- General configuration ------------------------------------------------
 
@@ -51,13 +49,30 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
     "sphinx.ext.coverage",
-    "sphinx.ext.imgmath",
+    "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",  # enable Napoleon Sphinx v>1.3
     "sphinx.ext.extlinks",  # enables external links with a key
     "sphinx_autodoc_typehints",
     "sphinx.ext.inheritance_diagram",
+    "nbsphinx",  # render Jupyter notebooks as documentation pages
+    "myst_parser",  # render the generated Julia API page (Markdown)
+    "julia_autodoc",  # harvest eDisGo_OPF Julia docstrings into a Sphinx page
 ]
+
+# -- MyST settings --------------------------------------------------------
+# Only the auto-generated Julia API page uses Markdown; enable dollar math and
+# colon fences so Julia docstrings render faithfully.
+myst_enable_extensions = ["dollarmath", "colon_fence"]
+
+# -- nbsphinx settings ----------------------------------------------------
+# Notebooks are rendered with their stored outputs and are NOT executed during
+# the documentation build, because they require a database connection (OEP/
+# egon-data) and, for the optimisation, Julia and Gurobi, none of which are
+# available in the build environment (e.g. ReadTheDocs CI). Make sure the
+# notebooks are committed with up-to-date outputs.
+nbsphinx_execute = "never"
+nbsphinx_allow_errors = True
 # Autoapi settings
 autoapi_type = "python"
 autoapi_dirs = ["../edisgo"]
@@ -266,7 +281,7 @@ release = version
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = "English"
+language = "en"
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
@@ -276,7 +291,7 @@ language = "English"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ["_build", "whatsnew", "examples"]
+exclude_patterns = ["_build", "whatsnew", "examples", "**.ipynb_checkpoints"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.

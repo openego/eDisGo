@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import os
 
 import pandas as pd
@@ -67,6 +78,13 @@ def import_ding0_grid(path, edisgo_obj, legacy_ding0_grids=True):
             ].values
 
         return transformers_df
+
+    # Some ding0 grid folders do not contain the CSV files directly but in a
+    # 'topology' subfolder. If a buses.csv is found there, that folder is used.
+    topology_subfolder = os.path.join(path, "topology")
+    if os.path.isfile(os.path.join(topology_subfolder, "buses.csv")):
+        logger.debug(f"Using topology subfolder for grid import: {topology_subfolder}")
+        path = topology_subfolder
 
     grid = PyPSANetwork()
     grid.import_from_csv_folder(path)

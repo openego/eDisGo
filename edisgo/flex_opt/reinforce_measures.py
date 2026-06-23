@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -174,8 +185,8 @@ def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level)
             raise KeyError("Standard HV/MV transformer is not in equipment list.")
     else:
         raise ValueError(
-            f"{voltage_level} is not a valid option for input variable 'voltage_level' in "
-            "function _station_overloading. Try 'mv' or "
+            f"{voltage_level} is not a valid option for input variable "
+            "'voltage_level' in function _station_overloading. Try 'mv' or "
             "'lv'."
         )
 
@@ -283,7 +294,7 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
     critical_stations : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with maximum deviations from allowed lower or upper voltage limits
         in p.u. for all MV-LV stations with voltage issues. For more information on
-        dataframe see :attr:`~.flex_opt.check_tech_constraints.voltage_issues`.
+        dataframe see :func:`~.flex_opt.check_tech_constraints.voltage_issues`.
 
     Returns
     -------
@@ -353,7 +364,7 @@ def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):
     crit_nodes : :pandas:`pandas.DataFrame<DataFrame>`
         Dataframe with maximum deviations from allowed lower or upper voltage limits
         in p.u. for all buses in specified grid. For more information on dataframe see
-        :attr:`~.flex_opt.check_tech_constraints.voltage_issues`.
+        :func:`~.flex_opt.check_tech_constraints.voltage_issues`.
 
     Returns
     -------
@@ -570,8 +581,8 @@ def reinforce_lines_overloading(edisgo_obj, crit_lines):
 
     if not crit_lines.empty:
         logger.debug(
-            f"==> {crit_lines.shape[0]} line(s) was/were reinforced due to over-loading "
-            "issues."
+            f"==> {crit_lines.shape[0]} line(s) was/were reinforced due to "
+            "over-loading issues."
         )
 
     return lines_changes
@@ -764,13 +775,17 @@ def separate_lv_grid(
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+        The eDisGo object whose topology is modified in place by adding the new
+        substation, buses and lines.
     grid : :class:`~.network.grids.LVGrid`
+        The overloaded LV grid to be split. Its feeders are halved and the second
+        half is reconnected to a newly added MV/LV station.
 
     Returns
     -------
     dict
-        Dictionary with name of lines as keys and the corresponding number of
-        lines added as values.
+        Dictionary with the names of changed lines as keys and the corresponding
+        number of parallel lines added as values.
     dict
         Dictionary with added transformers in the form::
 

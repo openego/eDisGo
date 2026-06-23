@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -30,12 +41,13 @@ def oedb(
     Gets industrial and CTS DSM profiles from the
     `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
-    Profiles comprise minimum and maximum load increase in MW as well as maximum energy
-    pre- and postponing in MWh.
+    Profiles comprise the maximum load decrease (p_min) and maximum load increase
+    (p_max) in MW as well as the maximum energy preponing (e_min) and postponing
+    (e_max) in MWh.
 
     Parameters
     ----------
-    edisgo_object : :class:`~.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
     scenario : str
         Scenario for which to retrieve DSM data. Possible options
         are 'eGon2035' and 'eGon100RE'.
@@ -209,7 +221,7 @@ def get_profile_cts(
 
     Parameters
     ----------
-    edisgo_object : :class:`~.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
     scenario : str
         Scenario for which to retrieve DSM data. Possible options
         are 'eGon2035' and 'eGon100RE'.
@@ -222,7 +234,8 @@ def get_profile_cts(
         Dictionary with DSM data with keys `p_min`, `p_max`, `e_min` and `e_max`. Values
         contain dataframes with DSM profiles per CTS load for one year in an
         hourly resolution in MW. Index contains hour of the year (from 0 to 8759) and
-        column names are site ID as integer.
+        column names are the CTS load names as in the index of
+        :attr:`~.network.topology.Topology.loads_df`.
 
     Notes
     ------

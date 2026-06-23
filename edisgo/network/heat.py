@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
@@ -18,8 +29,20 @@ class HeatPump:
     """
     Data container for all heat pump data.
 
-    This class holds data on heat pump COP, heat demand time series, and thermal storage
-    data.
+    This class holds data on heat pump coefficient of performance (COP), heat demand
+    time series, and thermal storage data. The data is used by the flexibility
+    optimisation (see :attr:`~.edisgo.EDisGo.pm_optimize`) and the rule-based heat pump
+    operating strategy (see
+    :attr:`~.edisgo.EDisGo.apply_heat_pump_operating_strategy`) to dispatch heat pumps
+    and their thermal storage units. The data can be filled from the OpenEnergy DataBase
+    via :attr:`~.edisgo.EDisGo.import_heat_pumps` or provided manually.
+
+    The individual data is accessed and set through the following attributes:
+
+    * COP time series: :py:attr:`~cop_df` (set via :py:attr:`~set_cop`)
+    * Heat demand time series: :py:attr:`~heat_demand_df` (set via
+      :py:attr:`~set_heat_demand`)
+    * Thermal storage parameters: :py:attr:`~thermal_storage_units_df`
 
     """
 
@@ -100,13 +123,18 @@ class HeatPump:
             Columns of the dataframe are:
 
             capacity : float
-                Thermal storage capacity in MWh.
+                Usable thermal energy capacity of the storage in MWh. This is the
+                maximum amount of heat that can be stored and corresponds to a state
+                of charge of 1 p.u..
 
             efficiency : float
-                Charging and discharging efficiency in p.u..
+                Charging and discharging efficiency in p.u. (between 0 and 1). The same
+                value is applied to both charging and discharging, so the round-trip
+                efficiency is ``efficiency`` squared.
 
             state_of_charge_initial : float
-                Initial state of charge in p.u..
+                State of charge at the first time step, given in p.u. relative to
+                `capacity` (0 p.u. = empty, 1 p.u. = full).
 
         Returns
         -------
