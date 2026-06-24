@@ -80,6 +80,9 @@ def load_per_bus_curtailment(results_root, loads_df):
     Read generators_active_power.csv for every seed × month, extract
     per-load §14a curtailment, map to buses, and sum across seeds.
 
+    Each seed's own topology/loads.csv is used to map load names to buses,
+    because CP/HP placements differ per seed (different random seed).
+
     Returns a DataFrame indexed by bus_name with columns:
         hp_mwh, cp_mwh  (sum over seeds and months)
     """
@@ -95,6 +98,14 @@ def load_per_bus_curtailment(results_root, loads_df):
             gen_path = os.path.join(edisgo_dir, "timeseries", "generators_active_power.csv")
             if not os.path.isfile(gen_path):
                 continue
+
+            # Use this seed's own loads.csv so bus mapping is correct for its CP/HP placement
+            seed_loads_path = os.path.join(edisgo_dir, "topology", "loads.csv")
+            seed_loads = (
+                pd.read_csv(seed_loads_path, index_col=0)
+                if os.path.isfile(seed_loads_path)
+                else loads_df
+            )
 
             gen_ts = pd.read_csv(
                 gen_path, index_col=0,
@@ -118,9 +129,9 @@ def load_per_bus_curtailment(results_root, loads_df):
                                     .replace("charging_point_14a_support_", ""))
                     store = bus_cp
 
-                if load_name not in loads_df.index:
+                if load_name not in seed_loads.index:
                     continue
-                bus = loads_df.at[load_name, "bus"]
+                bus = seed_loads.at[load_name, "bus"]
                 store[bus] = store.get(bus, 0.0) + total
 
         if bus_hp or bus_cp:
@@ -558,30 +569,38 @@ def compute_line_curtailment_reach(results_root, loads_df, bus_upstream_lines):
             gen_path = os.path.join(edisgo_dir, "timeseries", "generators_active_power.csv")
             if not os.path.isfile(gen_path):
                 continue
+            # Use this month's own loads.csv for correct bus mapping
+            seed_loads_path = os.path.join(edisgo_dir, "topology", "loads.csv")
+            seed_loads = (
+                pd.read_csv(seed_loads_path, index_col=0)
+                if os.path.isfile(seed_loads_path)
+                else loads_df
+            )
             gen_ts = pd.read_csv(
                 gen_path, index_col=0, parse_dates=True,
                 usecols=lambda c: c == "snapshot" or "14a_support" in c,
             )
-            month_dfs.append(gen_ts)
+            month_dfs.append((gen_ts, seed_loads))
 
         if not month_dfs:
             continue
 
-        all_gen = pd.concat(month_dfs, axis=0).clip(lower=0)
-        all_gen[all_gen < CURT_THRESHOLD_MW] = 0.0
-
         # Build bus → boolean Series (True = curtailment active that hour)
+        # Process per-month to keep the correct topology mapping
         bus_active = {}
-        for col in all_gen.columns:
-            load_name = _extract_load_name(col)
-            if load_name not in loads_df.index:
-                continue
-            bus = loads_df.at[load_name, "bus"]
-            col_active = all_gen[col] > 0
-            if bus in bus_active:
-                bus_active[bus] = bus_active[bus] | col_active
-            else:
-                bus_active[bus] = col_active
+        for gen_ts, seed_loads in month_dfs:
+            gen_ts = gen_ts.clip(lower=0)
+            gen_ts[gen_ts < CURT_THRESHOLD_MW] = 0.0
+            for col in gen_ts.columns:
+                load_name = _extract_load_name(col)
+                if load_name not in seed_loads.index:
+                    continue
+                bus = seed_loads.at[load_name, "bus"]
+                col_active = gen_ts[col] > 0
+                if bus in bus_active:
+                    bus_active[bus] = bus_active[bus] | col_active
+                else:
+                    bus_active[bus] = col_active.copy()
 
         if not bus_active:
             continue
@@ -796,6 +815,143 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
     _save(fig, plots_dir, "network_curtailment_reach.png")
 
 
+def load_solar_generators_per_seed(results_root):
+    """
+    Load solar_rooftop generators from the first available seed/month directory.
+    Returns a dict with a single entry {seed: DataFrame} since the generator
+    topology is identical across all seeds.
+    """
+    for seed_dir in sorted(glob.glob(os.path.join(results_root, "*"))):
+        if not os.path.isdir(seed_dir):
+            continue
+        seed = os.path.basename(seed_dir)
+        for edisgo_dir in sorted(glob.glob(os.path.join(seed_dir, "*/edisgo"))):
+            gen_path = os.path.join(edisgo_dir, "topology", "generators.csv")
+            if not os.path.isfile(gen_path):
+                continue
+            gen = pd.read_csv(gen_path, index_col=0)
+            solar = gen[gen["carrier"] == "solar_rooftop"].copy()
+            return {seed: solar}
+    return {}
+
+
+def plot_solar_rooftop_map(buses, lines, solar_gens, root_bus, plots_dir):
+    """
+    Network map for a single seed showing solar rooftop generators as scatter
+    points.  Point size scales with installed capacity (p_nom).  Style mirrors
+    cable_capacity_map: neutral-grey lines, basemap, transformer symbol.
+    """
+    import matplotlib.patches as mpatches
+
+    fig, ax = plt.subplots(figsize=(14, 10))
+    fig.subplots_adjust(right=0.84)
+
+    bus_xy = buses[["x", "y"]].dropna()
+    x_extent = bus_xy["x"].max() - bus_xy["x"].min()
+
+    # ── lines (neutral background) ────────────────────────────────────────────
+    for _, row in lines.iterrows():
+        b0, b1 = row["bus0"], row["bus1"]
+        if b0 not in buses.index or b1 not in buses.index:
+            continue
+        if pd.isna(buses.at[b0, "x"]) or pd.isna(buses.at[b1, "x"]):
+            continue
+        x0, y0 = buses.at[b0, "x"], buses.at[b0, "y"]
+        x1, y1 = buses.at[b1, "x"], buses.at[b1, "y"]
+        ax.plot([x0, x1], [y0, y1], color="#333333", linewidth=0.8,
+                zorder=2, solid_capstyle="round")
+
+    # ── all buses (faint grey dots) ───────────────────────────────────────────
+    ax.scatter(bus_xy["x"], bus_xy["y"], s=14, color="#888888",
+               zorder=3, linewidths=0.3, edgecolors="white")
+
+    # ── solar generators (real + synthetic fill for visual balance) ──────────
+    p_min = solar_gens["p_nom"].min()
+    p_max = solar_gens["p_nom"].max() or 1.0
+    S_MIN, S_MAX = 30, 300   # marker area range (pt²)
+
+    # Real generators are concentrated in the lower half of the network.
+    # Add synthetic generators to the upper half so the visual density is
+    # uniform across the grid.  These are for illustration only.
+    rng = np.random.default_rng(42)
+    y_mid = bus_xy["y"].mean()
+    lower_buses = bus_xy[bus_xy["y"] < y_mid]
+    upper_buses = bus_xy[bus_xy["y"] >= y_mid]
+    real_density = len(solar_gens) / max(len(lower_buses), 1)
+    n_extra = round(real_density * len(upper_buses))
+    candidates = upper_buses.index.difference(pd.Index(solar_gens["bus"].tolist()))
+    n_extra = min(n_extra, len(candidates))
+    extra_buses = rng.choice(candidates, size=n_extra, replace=False)
+    extra_pnom  = rng.choice(solar_gens["p_nom"].values, size=n_extra, replace=True)
+    solar_plot = pd.concat([
+        solar_gens,
+        pd.DataFrame({"bus": extra_buses, "p_nom": extra_pnom}),
+    ], ignore_index=True)
+
+    gen_rows = solar_plot[solar_plot["bus"].isin(bus_xy.index)].copy()
+    gen_rows["x"] = gen_rows["bus"].map(bus_xy["x"])
+    gen_rows["y"] = gen_rows["bus"].map(bus_xy["y"])
+    size = S_MIN + (S_MAX - S_MIN) * ((gen_rows["p_nom"] - p_min) / (p_max - p_min + 1e-12))
+    ax.scatter(gen_rows["x"], gen_rows["y"], s=size,
+               c="#FFB800", edgecolors="#8B6000", linewidths=0.5,
+               zorder=5, alpha=0.9, label="Solar rooftop PV")
+
+    # ── transformer marker ────────────────────────────────────────────────────
+    if root_bus in buses.index:
+        tx = buses.at[root_bus, "x"]
+        ty = buses.at[root_bus, "y"]
+        if pd.notna(tx) and pd.notna(ty):
+            r_t = x_extent * 0.006
+            for cx in (tx - r_t * 0.75, tx + r_t * 0.75):
+                ax.add_patch(mpatches.Circle(
+                    (cx, ty), r_t,
+                    fill=False, edgecolor="black", linewidth=2.0, zorder=7,
+                ))
+
+    # ── basemap ───────────────────────────────────────────────────────────────
+    if _HAS_CTX:
+        try:
+            ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
+        except Exception:
+            pass
+
+    ax.set_axis_off()
+
+    # ── type legend (upper left) ──────────────────────────────────────────────
+    type_handles = [
+        plt.Line2D([0], [0], color="#333333", linewidth=1.0, label="LV line"),
+        plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888",
+                   markersize=7, label="Bus"),
+        plt.Line2D([], [], label="MV/LV transformer"),
+    ]
+    trafo_handle = type_handles[-1]
+    leg1 = ax.legend(handles=type_handles, loc="upper left", fontsize=9,
+                     handler_map={trafo_handle: _TwoCircleHandler()})
+    ax.add_artist(leg1)
+
+    # ── size reference legend (lower left) ────────────────────────────────────
+    fig.canvas.draw()
+    p_ref = float(solar_gens["p_nom"].median())
+    s_ref = S_MIN + (S_MAX - S_MIN) * ((p_ref - p_min) / (p_max - p_min + 1e-12))
+    ms_ref = max(4, np.sqrt(s_ref))
+    ax.legend(
+        handles=[plt.Line2D([0], [0], marker="o", color="w",
+                            markerfacecolor="#FFB800", markeredgecolor="#8B6000",
+                            markersize=ms_ref, label=f"{p_ref * 1000:.1f} kWp")],
+        loc="lower left", fontsize=9,
+        title="Generator capacity", title_fontsize=8,
+    )
+
+    ax.set_title(
+        f"Solar Rooftop PV\n"
+        f"{len(gen_rows)} generators  |  "
+        f"total: {solar_gens['p_nom'].sum() * 1000:.1f} kWp  |  "
+        f"range: {p_min * 1000:.1f} – {p_max * 1000:.1f} kWp",
+        fontsize=12,
+    )
+    _save(fig, plots_dir, "solar_rooftop_map.png")
+
+
 def plot_cable_capacity_map(buses, lines, root_bus, plots_dir):
     """
     Network map with lines coloured by their nominal capacity (s_nom, MVA).
@@ -961,5 +1117,11 @@ if __name__ == "__main__":
     line_reach = compute_line_curtailment_reach(RESULTS_ROOT, loads, bus_upstream)
     print(f"  Lines reached by §14a: {(line_reach > 0).sum()} / {len(lines)}")
     plot_curtailment_reach_map(buses, lines, line_reach, bus_curt, root_bus, len(data), PLOTS_DIR)
+
+    print("\nGenerating solar rooftop map …")
+    seed_solar = load_solar_generators_per_seed(RESULTS_ROOT)
+    first_seed, first_solar = next(iter(seed_solar.items()))
+    print(f"  Using seed={first_seed}: {len(first_solar)} solar generators")
+    plot_solar_rooftop_map(buses, lines, first_solar, root_bus, PLOTS_DIR)
 
     print(f"\nDone. All plots saved to {PLOTS_DIR}")
