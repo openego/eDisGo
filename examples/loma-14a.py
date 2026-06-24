@@ -459,6 +459,9 @@ def main(output_dir, snapshot_range, seed=42, month_label=None):
     # DSO practice of boosting LV bus voltage to compensate for feeder voltage drops.
     edisgo.config["grid_expansion_allowed_voltage_deviations"]["hv_mv_trafo_offset"] = 0.05
 
+    # PROVISIONAL: upgrade MV/LV transformer from 0.63 MVA to 1.0 MVA
+    edisgo.topology.transformers_df.loc["trafo_bus_319", "s_nom"] = 1.0
+
     mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
     edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
     edisgo.topology.grid_district["srid"] = 4326
