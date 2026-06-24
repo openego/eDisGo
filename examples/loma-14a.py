@@ -250,7 +250,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     
     set_charging_points_to_target(
         edisgo,
-        target_total=50, # sets total amount of CP #412 SQ, 1000 2035
+        target_total=80, # sets total amount of CP #412 SQ, 1000 2035
         # percentage=0.10, # increases total amount of CP by 10%
         # percentage=-0.10, # decreases total amount of CP by 10%
         eligible_buses=cp_eligible_buses,
@@ -264,7 +264,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
 
     set_heat_pumps_to_target(
         edisgo,
-        target_total=130,  # sets total amount of HP #575 SQ, 2600 2035
+        target_total=170,  # sets total amount of HP #575 SQ, 2600 2035
         # percentage=0.10, # increases total amount of HP by 10%
         # percentage=-0.10, # decreases total amount of HP by 10%
         eligible_buses=hp_eligible_buses,
