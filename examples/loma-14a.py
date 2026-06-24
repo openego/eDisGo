@@ -450,7 +450,7 @@ def get_monthly_snapshot_ranges(year=2025, test=False):
     return months
 
 
-def main(output_dir, snapshot_range, seed=42):
+def main(output_dir, snapshot_range, seed=42, month_label=None):
     t0 = datetime.now()
 
     edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=snapshot_range)
@@ -718,11 +718,36 @@ def main(output_dir, snapshot_range, seed=42):
                      folder_path=f"{output_dir}/network_plots/")
 
     print(f"Saved plots to {output_dir}/plots/")
-    print(f"Time: {datetime.now() - t0}")
+    duration_s = (datetime.now() - t0).total_seconds()
+    print(f"Time: {duration_s:.1f} s ({duration_s/60:.1f} min)")
 
     os.makedirs(output_dir, exist_ok=True)
     edisgo.save(f"{output_dir}/edisgo")
-    return edisgo
+
+    # ── Build summary row for CSV export ────────────────────────────────────
+    summary = {
+        "seed":                   seed,
+        "month":                  month_label or os.path.basename(output_dir),
+        "snap_start":             snapshot_range[0],
+        "snap_end":               snapshot_range[1],
+        "v_min_pu":               round(v_min, 4),
+        "v_max_pu":               round(v_max, 4),
+        "v_violations":           int(viol),
+        "hp_curtailment_mwh":     round(float(hp_mwh), 4),
+        "cp_curtailment_mwh":     round(float(cp_mwh), 4),
+        "total_curtailment_mwh":  round(float(hp_mwh + cp_mwh), 4),
+        "load_shed_mw":           round(float(load_shed), 6),
+        "hp_shed_mw":             round(float(hp_shed), 6),
+        "feasible":               load_shed <= 5e-3 and hp_shed <= 5e-3,
+        "trafo_peak_pct":         round(float(peak_pct), 2) if len(trafo_cols) else None,
+        "peak_trafo":             str(peak_trafo) if len(trafo_cols) else None,
+        "peak_trafo_ts":          str(peak_ts) if len(trafo_cols) else None,
+        "lines_overloaded_slots": ol_slots,
+        "lines_overloaded_count": ol_lines,
+        "duration_s":             round(duration_s, 1),
+    }
+
+    return edisgo, summary
 
 
 def get_curtailment_14a_summary(edisgo):
@@ -747,14 +772,21 @@ def get_curtailment_14a_summary(edisgo):
 
 
 if __name__ == "__main__":
-    for rnd_seed in range(42,44):
+    for rnd_seed in range(42,53):
         line_usage_parts = []
         curtailment_parts = []
-        for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test="test1"):
+        summary_rows = []
+        for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test=False):
             output_dir = f"/home/carlos/LoMa/output_edisgo/{rnd_seed}"
-            edisgo = main(f"{output_dir}/{month_name}", snapshot_range=(snap_start, snap_end), seed=rnd_seed)
+            edisgo, summary = main(
+                f"{output_dir}/{month_name}",
+                snapshot_range=(snap_start, snap_end),
+                seed=rnd_seed,
+                month_label=month_name,
+            )
             line_usage_parts.append(lines_relative_load(edisgo) * 100)
             curtailment_parts.append(get_curtailment_14a_summary(edisgo))
+            summary_rows.append(summary)
 
         line_usage = pd.concat(line_usage_parts, axis=0)
         line_usage.to_csv(f"{output_dir}/line_usage")
@@ -764,6 +796,11 @@ if __name__ == "__main__":
         print(f"\n=== §14a Curtailment (seed={rnd_seed}) ===")
         print(f"  HP: {curtailment_14a['hp_curtailment_mw'].sum():.4f} MWh")
         print(f"  CP: {curtailment_14a['cp_curtailment_mw'].sum():.4f} MWh")
+
+        opf_log = pd.DataFrame(summary_rows)
+        opf_log.to_csv(f"{output_dir}/opf_log.csv", index=False)
+        print(f"\n=== OPF log saved to {output_dir}/opf_log.csv ===")
+        print(opf_log.to_string(index=False))
 
         plot_cp_hp_locations(edisgo, show=False, save=True, path=output_dir)
         print("\n=== Line loading (%) ===")
