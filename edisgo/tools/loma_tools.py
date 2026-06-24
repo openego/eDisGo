@@ -1522,7 +1522,7 @@ def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True, path= "lo
     n.plot(
         ax=ax, margin=0.05, geomap=False, bus_sizes=0,
         line_colors="dimgrey", line_widths=0.6,
-        title="Load composition per bus — CP · HP · conventional  (p_set)",
+        title="Load composition per bus: CP · HP · conventional",
         geometry=False,
     )
 

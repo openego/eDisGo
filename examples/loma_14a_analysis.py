@@ -943,10 +943,7 @@ def plot_solar_rooftop_map(buses, lines, solar_gens, root_bus, plots_dir):
     )
 
     ax.set_title(
-        f"Solar Rooftop PV\n"
-        f"{len(gen_rows)} generators  |  "
-        f"total: {solar_gens['p_nom'].sum() * 1000:.1f} kWp  |  "
-        f"range: {p_min * 1000:.1f} – {p_max * 1000:.1f} kWp",
+        "Solar Rooftop PV",
         fontsize=12,
     )
     _save(fig, plots_dir, "solar_rooftop_map.png")
@@ -1033,8 +1030,7 @@ def plot_cable_capacity_map(buses, lines, root_bus, plots_dir):
               handler_map={trafo_handle: _TwoCircleHandler()})
 
     ax.set_title(
-        f"Cable Nominal Capacity  —  {len(plot_lines)} lines\n"
-        f"range: {c_min:.3g} – {c_max:.3g} MVA",
+        "Cable Nominal Capacity",
         fontsize=12,
     )
     _save(fig, plots_dir, "cable_capacity_map.png")
