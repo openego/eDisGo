@@ -1082,6 +1082,154 @@ def _save(fig, plots_dir, name):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# Baseline powerflow (no §14a flexibilities)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def analyze_without_14a(edisgo):
+    """
+    Run a standard AC powerflow on an already-prepared EDisGo object and
+    return the max line loading per line across all snapshots.
+
+    The caller is responsible for setting up the load time series in the
+    unoptimized state (i.e. after prepare_edisgo_for_14a / fix_hp_peak_loads
+    but before any OPF run). See run_baseline_powerflow() in loma-14a.py for
+    the full orchestration.
+
+    Parameters
+    ----------
+    edisgo : EDisGo
+        EDisGo object with unoptimized time series already in place.
+
+    Returns
+    -------
+    line_max_loading : pd.Series
+        Max loading [%] across all snapshots, indexed by line name.
+    """
+    print("Running baseline powerflow …")
+    edisgo.analyze()
+
+    s_res    = edisgo.results.s_res
+    lines_df = edisgo.topology.lines_df
+    line_cols = lines_df.index.intersection(s_res.columns)
+    line_loading_pct = s_res[line_cols].div(lines_df.loc[line_cols, "s_nom"]) * 100
+    line_max_loading = line_loading_pct.max()
+
+    overloaded = line_max_loading[line_max_loading > 100]
+    print(f"  Lines overloaded in ≥1 snapshot: {len(overloaded)} / {len(line_cols)}")
+    if not overloaded.empty:
+        print(overloaded.sort_values(ascending=False).to_string())
+
+    return line_max_loading
+
+
+def plot_overloaded_lines(edisgo, line_max_loading,
+                          plots_dir: str = ".", show: bool = False):
+    """
+    Network map coloured by max line loading across all snapshots.
+    Lines overloaded in at least one snapshot (>100 %) are drawn in red.
+
+    Parameters
+    ----------
+    edisgo : EDisGo
+        EDisGo object (topology.buses_df must have x/y coordinates).
+    line_max_loading : pd.Series
+        Max loading [%] per line (output of analyze_without_14a).
+    plots_dir : str
+        Directory in which to save the PNG.
+    show : bool
+        If True, call plt.show() after saving.
+    """
+    import matplotlib.patches as mpatches
+
+    buses_df = edisgo.topology.buses_df
+    lines_df = edisgo.topology.lines_df
+    transformers_df = edisgo.topology.transformers_df
+
+    root_bus = find_root_bus(lines_df, transformers_df)
+
+    overload_threshold = 100.0
+    overloaded = line_max_loading[line_max_loading > overload_threshold]
+    normal     = line_max_loading[line_max_loading <= overload_threshold]
+
+    v_min = normal.min() if not normal.empty else 0.0
+    v_max = normal.max() if not normal.empty else overload_threshold
+    norm  = mcolors.Normalize(vmin=v_min, vmax=v_max)
+    cmap  = cm.get_cmap("YlOrRd")
+
+    fig, ax = plt.subplots(figsize=(14, 10))
+    fig.subplots_adjust(right=0.84)
+
+    for line_name, row in lines_df.iterrows():
+        b0, b1 = row["bus0"], row["bus1"]
+        if b0 not in buses_df.index or b1 not in buses_df.index:
+            continue
+        x0, y0 = buses_df.at[b0, "x"], buses_df.at[b0, "y"]
+        x1, y1 = buses_df.at[b1, "x"], buses_df.at[b1, "y"]
+        if pd.isna(x0) or pd.isna(x1):
+            continue
+
+        pct = line_max_loading.get(line_name, 0.0)
+        if pct > overload_threshold:
+            color, lw, zo = "#e63946", 2.8, 4
+        elif pct > 0:
+            color, lw, zo = cmap(norm(pct)), 1.4, 3
+        else:
+            color, lw, zo = "#aaaaaa", 0.7, 2
+
+        ax.plot([x0, x1], [y0, y1], color=color, linewidth=lw,
+                zorder=zo, solid_capstyle="round")
+
+    bus_xy = buses_df[["x", "y"]].dropna()
+    ax.scatter(bus_xy["x"], bus_xy["y"], s=10, color="#555555",
+               zorder=5, linewidths=0.3, edgecolors="white", alpha=0.4)
+
+    # transformer marker at feeder root
+    if root_bus in buses_df.index:
+        tx, ty = buses_df.at[root_bus, "x"], buses_df.at[root_bus, "y"]
+        if pd.notna(tx):
+            x_ext = bus_xy["x"].max() - bus_xy["x"].min()
+            r_t   = x_ext * 0.006
+            for cx in (tx - r_t * 0.75, tx + r_t * 0.75):
+                ax.add_patch(mpatches.Circle(
+                    (cx, ty), r_t,
+                    fill=False, edgecolor="black", linewidth=2.0, zorder=7,
+                ))
+
+    if _HAS_CTX:
+        try:
+            ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
+        except Exception:
+            pass
+
+    ax.set_axis_off()
+
+    cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
+    sm  = cm.ScalarMappable(cmap=cmap, norm=norm)
+    cb  = fig.colorbar(sm, cax=cax)
+    cb.set_label("Max line loading [%]", fontsize=9)
+
+    legend_handles = [
+        plt.Line2D([0], [0], color="#e63946", linewidth=2.5,
+                   label=f"Overloaded (>100 %)  [{len(overloaded)} lines]"),
+        plt.Line2D([0], [0], color=cmap(norm(v_max)), linewidth=1.6,
+                   label=f"Highest normal loading ({v_max:.0f} %)"),
+        plt.Line2D([0], [0], color="#aaaaaa", linewidth=0.9,
+                   label="No powerflow result"),
+    ]
+    ax.legend(handles=legend_handles, loc="upper left", fontsize=9)
+
+    ax.set_title(
+        f"Baseline powerflow — max line loading per snapshot\n"
+        f"{len(overloaded)} of {len(line_max_loading)} lines overloaded in ≥1 snapshot",
+        fontsize=11,
+    )
+
+    _save(fig, plots_dir, "baseline_overloaded_lines.png")
+    if show:
+        plt.show()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # Main
 # ══════════════════════════════════════════════════════════════════════════════
 

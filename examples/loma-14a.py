@@ -771,6 +771,88 @@ def get_curtailment_14a_summary(edisgo):
     )
 
 
+def run_baseline_powerflow(snapshot_range, output_dir, seed=42, month_label=None):
+    """
+    Load the raw grid, set up unoptimized load time series (same as main()
+    but without the OPF), run a standard AC powerflow, and plot the lines
+    that are overloaded in at least one snapshot.
+
+    This gives the grid state that §14a is meant to relieve, so the result
+    can be compared directly with the OPF output from main().
+
+    Parameters
+    ----------
+    snapshot_range : tuple[int, int]
+        (start_idx, end_idx) as used in get_monthly_snapshot_ranges().
+    output_dir : str
+        Directory for the output plot.
+    seed : int
+        RNG seed passed to prepare_edisgo_for_14a / fix_hp_peak_loads.
+    month_label : str, optional
+        Label used in printed output.
+
+    Returns
+    -------
+    edisgo : EDisGo
+    line_max_loading : pd.Series
+    """
+    from loma_14a_analysis import analyze_without_14a, plot_overloaded_lines
+
+    t0 = datetime.now()
+
+    edisgo = EDisGo(pypsa_csv_dir=grid_path, snapshot_range=snapshot_range)
+
+    edisgo.config["grid_expansion_allowed_voltage_deviations"]["hv_mv_trafo_offset"] = 0.05
+    edisgo.topology.transformers_df.loc["trafo_bus_319", "s_nom"] = 1.0
+
+    mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
+    edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
+    edisgo.topology.grid_district["srid"] = 4326
+
+    edisgo.topology.check_integrity()
+
+    prepare_edisgo_for_14a(
+        edisgo,
+        shapefile_path=path_husum_district_shp,
+        output_dir=output_dir,
+        cache_dir=emob_cache_dir,
+        setup_days=None,
+        seed=seed,
+    )
+
+    fix_hp_peak_loads(edisgo, seed=seed)
+
+    mv_buses = set(edisgo.topology.buses_df[edisgo.topology.buses_df.v_nom > 0.4].index)
+    mv_loads = edisgo.topology.loads_df[edisgo.topology.loads_df["bus"].isin(mv_buses)]
+    edisgo.topology.loads_df = edisgo.topology.loads_df.drop(mv_loads.index)
+    edisgo.timeseries.loads_active_power = edisgo.timeseries.loads_active_power.drop(
+        columns=mv_loads.index, errors="ignore"
+    )
+    edisgo.timeseries.loads_reactive_power = edisgo.timeseries.loads_reactive_power.drop(
+        columns=mv_loads.index, errors="ignore"
+    )
+    print(f"[baseline] Removed {len(mv_loads)} loads on MV buses.")
+
+    known_loads = edisgo.topology.loads_df.index
+    orphan_ap   = edisgo.timeseries.loads_active_power.columns.difference(known_loads)
+    orphan_rp   = edisgo.timeseries.loads_reactive_power.columns.difference(known_loads)
+    edisgo.timeseries.loads_active_power = edisgo.timeseries.loads_active_power.drop(
+        columns=orphan_ap, errors="ignore"
+    )
+    edisgo.timeseries.loads_reactive_power = edisgo.timeseries.loads_reactive_power.drop(
+        columns=orphan_rp, errors="ignore"
+    )
+    print(f"[baseline] Removed {len(orphan_ap.union(orphan_rp))} orphan timeseries columns.")
+
+    line_max_loading = analyze_without_14a(edisgo)
+    plot_overloaded_lines(edisgo, line_max_loading, plots_dir=output_dir)
+
+    duration_s = (datetime.now() - t0).total_seconds()
+    print(f"[baseline] Done in {duration_s:.1f} s  —  output: {output_dir}")
+
+    return edisgo, line_max_loading
+
+
 if __name__ == "__main__":
     for rnd_seed in range(42,53):
         line_usage_parts = []
