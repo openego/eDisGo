@@ -427,7 +427,7 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
     cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
     sm  = cm.ScalarMappable(cmap=cmap_lines, norm=norm_lines)
     cb  = fig.colorbar(sm, cax=cax)
-    cb.set_label(f"Mean hours loading > {LINE_STRESS_PCT:.0f} %\n(across seeds)", fontsize=9)
+    cb.set_label(f"Hours loading > {LINE_STRESS_PCT:.0f} in a year (8760h)", fontsize=9)
     cb.locator = mpl_ticker.MaxNLocator(integer=True)
     cb.update_ticks()
 
@@ -441,8 +441,8 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
                    label="Line — most stressed hours"),
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888",
                    markersize=7, label="Bus (no §14a)"),
-        mpatches.Patch(facecolor="#d62728", alpha=0.9, label="Bus — HP curtailment"),
-        mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="Bus — CP curtailment"),
+        mpatches.Patch(facecolor="#d62728", alpha=0.9, label="Bus — HP 14a"),
+        mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="Bus — CP 14a"),
         plt.Line2D([], [], label="MV/LV transformer (feeder root)"),
     ]
     trafo_handle = type_handles[-1]
@@ -456,7 +456,7 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
         total_curt = curt_align["hp_mwh"] + curt_align["cp_mwh"]
         max_total  = total_curt.max() or 1.0
 
-        ref_fracs = [0.25, 0.5, 1.0]
+        ref_fracs = [1.0]
         ref_mwhs  = [f * max_total for f in ref_fracs]
 
         fig.canvas.draw()
@@ -478,9 +478,7 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
                   title="Bus size = total §14a [MWh]", title_fontsize=8)
 
     ax.set_title(
-        f"§14a Network Map — Line Stress (hours >{LINE_STRESS_PCT:.0f} %)\n"
-        f"{n_stressed} of {len(lines)} lines stressed  —  "
-        f"bus size ∝ total §14a use  —  mean across {n_seeds} seed{'s' if n_seeds != 1 else ''}",
+        f"§14a Network Map — Line Stress (hours >{LINE_STRESS_PCT:.0f} %)",
         fontsize=11,
     )
     _save(fig, plots_dir, "network_map.png")
@@ -757,7 +755,7 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
     cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
     sm  = cm.ScalarMappable(cmap=cmap_lines, norm=norm_lines)
     cb  = fig.colorbar(sm, cax=cax)
-    cb.set_label("Mean hours affected by downstream §14a curtailment\n(across seeds)", fontsize=9)
+    cb.set_label("Total hours affected by downstream §14a curtailment", fontsize=9)
 
     # ── type legend (upper left) ──────────────────────────────────────────────
     n_affected = int((line_reach_hours > 0).sum())
@@ -768,9 +766,9 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
                    label="Line — most affected hours"),
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888",
                    markersize=7, label="Bus (no §14a)"),
-        mpatches.Patch(facecolor="#d62728", alpha=0.9, label="Bus — HP curtailment"),
-        mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="Bus — CP curtailment"),
-        plt.Line2D([], [], label="MV/LV transformer (feeder root)"),
+        mpatches.Patch(facecolor="#d62728", alpha=0.9, label="Bus — HP 14a"),
+        mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="Bus — CP 14a"),
+        plt.Line2D([], [], label="MV/LV transformer"),
     ]
     trafo_handle = type_handles[-1]
     leg1 = ax.legend(handles=type_handles, loc="upper left", fontsize=9,
@@ -783,8 +781,7 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
         total_curt = curt_align["hp_mwh"] + curt_align["cp_mwh"]
         max_total  = total_curt.max() or 1.0
 
-        # Three exact fractions of max — always distinct, no rounding surprises.
-        ref_fracs = [0.25, 0.5, 1.0]
+        ref_fracs = [1.0]
         ref_mwhs  = [f * max_total for f in ref_fracs]
 
         # Compute deg_per_pt once from the stable (subplots_adjust) axes position.
@@ -807,9 +804,7 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
                   title="Bus size = total §14a [MWh]", title_fontsize=8)
 
     ax.set_title(
-        f"§14a Curtailment Reach Along the Feeder\n"
-        f"{n_affected} of {len(lines)} lines reached  —  "
-        f"bus size ∝ total §14a use  —  mean across {n_seeds} seed{'s' if n_seeds != 1 else ''}",
+        "§14a Curtailment Reach Along the Feeder (bus size ∝ anual §14a use)",
         fontsize=12,
     )
     _save(fig, plots_dir, "network_curtailment_reach.png")
