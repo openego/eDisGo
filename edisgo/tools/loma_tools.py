@@ -1428,7 +1428,7 @@ def plot_network(
             line_widths=line_widths,
             line_cmap="jet",
             line_norm=norm_lines,
-            title=f"Grid Analysis: {snapshot}",
+            title=f"Netzanalyse: {snapshot}",
             geometry=False,
         )
     
@@ -1448,12 +1448,12 @@ def plot_network(
         cb_lines = fig.colorbar(sm_lines, cax=cax_left, orientation="vertical")
         cax_left.yaxis.set_ticks_position("left")
         cax_left.yaxis.set_label_position("left")
-        cb_lines.set_label("Line Loading [relative]", fontsize=8)
+        cb_lines.set_label("Leitungsbelastung [relativ]", fontsize=8)
 
         sm_buses = plt.cm.ScalarMappable(cmap=voltage_cmap, norm=norm_buses)
         cb_buses = fig.colorbar(sm_buses, cax=cax_right, orientation="vertical")
         cb_buses.set_label(
-            "Bus Voltage [p.u.]  — navy: under, green: nominal, red: over", fontsize=8
+            "Knotenspannung [p.u.] — dunkelblau: Unterspannung, grün: Nennwert, rot: Überspannung", fontsize=8
         )
     
         if save:

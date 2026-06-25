@@ -198,15 +198,15 @@ def plot_peak_demand_per_seed(results_root, plots_dir):
     fig, ax = plt.subplots(figsize=(max(6, len(seeds) * 0.7), 5))
     bars = ax.bar(x, values, color="#1f77b4", alpha=0.85, edgecolor="white", linewidth=0.5)
     ax.axhline(np.mean(values), color="black", linestyle="--", linewidth=1.0,
-               label=f"Mean: {np.mean(values):.2f} MW")
+               label=f"Mittelwert: {np.mean(values):.2f} MW")
 
     ax.set_xticks(x)
     ax.set_xticklabels(seeds, rotation=45, ha="right", fontsize=9)
-    ax.set_ylabel("Peak total demand [MW]")
-    ax.set_xlabel("Seed")
+    ax.set_ylabel("Jahresspitzenlast [MW]")
+    ax.set_xlabel("Szenario")
     ax.legend(fontsize=9)
     ax.grid(True, axis="y", alpha=0.3)
-    ax.set_title("Annual Peak Total Demand per Seed", fontsize=13)
+    ax.set_title("Jährliche Spitzenlast pro Szenario", fontsize=13)
     plt.tight_layout()
     _save(fig, plots_dir, "peak_demand_per_seed.png")
 
@@ -282,7 +282,9 @@ def plot_monthly_curtailment_mean_stacked(data, plots_dir):
     months = sorted(
         set(m for d in data.values() for m in d["curtailment"].index.month.unique())
     )
-    mlabels = [pd.Timestamp(2035, m, 1).strftime("%b") for m in months]
+    DE_MONTHS = {1: "Jan", 2: "Feb", 3: "Mär", 4: "Apr", 5: "Mai", 6: "Jun",
+                 7: "Jul", 8: "Aug", 9: "Sep", 10: "Okt", 11: "Nov", 12: "Dez"}
+    mlabels = [DE_MONTHS[m] for m in months]
 
     hp_monthly = _monthly_by_month(data, "hp_curtailment_mw")
     cp_monthly = _monthly_by_month(data, "cp_curtailment_mw")
@@ -303,19 +305,19 @@ def plot_monthly_curtailment_mean_stacked(data, plots_dir):
     fig, ax = plt.subplots(figsize=(10, 5))
     combined_means = hp_means + cp_means
     combined_stds  = np.sqrt(hp_stds**2 + np.array(cp_stds)**2)
-    ax.bar(x, hp_means, color="#d62728", alpha=0.85, label="HP (mean)")
-    ax.bar(x, cp_means, bottom=hp_means, color="#1f77b4", alpha=0.85, label="CP (mean)")
+    ax.bar(x, hp_means, color="#d62728", alpha=0.85, label="WP (Mittelwert)")
+    ax.bar(x, cp_means, bottom=hp_means, color="#1f77b4", alpha=0.85, label="LP (Mittelwert)")
     ax.errorbar(x, combined_means,
                 yerr=[np.minimum(combined_stds, combined_means), combined_stds],
-                fmt="none", color="black", capsize=3, linewidth=1, label="±1 std")
+                fmt="none", color="black", capsize=3, linewidth=1, label="±1 Std.-Abw.")
 
     ax.set_xticks(x)
     ax.set_xticklabels(mlabels)
-    ax.set_ylabel("Mean monthly §14a curtailment [MWh/month]")
-    ax.set_xlabel("Month (2035)")
+    ax.set_ylabel("Mittlere monatliche §14a-Abregelung [MWh/Monat]")
+    ax.set_xlabel("Monat (2035)")
     ax.legend(fontsize=9)
     ax.grid(True, axis="y", alpha=0.3)
-    ax.set_title("Mean Monthly §14a Curtailment — HP vs CP", fontsize=13)
+    ax.set_title("Mittlere monatliche §14a-Abregelung — WP vs. LP", fontsize=13)
     plt.tight_layout()
     _save(fig, plots_dir, "curtailment_monthly_mean_stacked.png")
 
@@ -427,7 +429,7 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
     cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
     sm  = cm.ScalarMappable(cmap=cmap_lines, norm=norm_lines)
     cb  = fig.colorbar(sm, cax=cax)
-    cb.set_label(f"Hours loading > {LINE_STRESS_PCT:.0f} in a year (8760h)", fontsize=9)
+    cb.set_label(f"Stunden Belastung > {LINE_STRESS_PCT:.0f} % im Jahr (8760 h)", fontsize=9)
     cb.locator = mpl_ticker.MaxNLocator(integer=True)
     cb.update_ticks()
 
@@ -436,14 +438,14 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
     n_seeds    = len(data)
     type_handles = [
         plt.Line2D([0], [0], color="black", linewidth=1.2,
-                   label=f"Line — never over {LINE_STRESS_PCT:.0f} %"),
+                   label=f"Leitung — nie über {LINE_STRESS_PCT:.0f} %"),
         plt.Line2D([0], [0], color=cmap_lines(0.99), linewidth=3.5,
-                   label="Line — most stressed hours"),
+                   label="Leitung — stärkste Belastungsstunden"),
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888",
-                   markersize=7, label="Bus (no §14a)"),
-        mpatches.Patch(facecolor="#d62728", alpha=0.9, label="Bus — HP 14a"),
-        mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="Bus — CP 14a"),
-        plt.Line2D([], [], label="MV/LV transformer (feeder root)"),
+                   markersize=7, label="Knoten (kein §14a)"),
+        mpatches.Patch(facecolor="#d62728", alpha=0.9, label="Knoten — WP §14a"),
+        mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="Knoten — LP §14a"),
+        plt.Line2D([], [], label="MS/NS-Transformator (Stationsabgang)"),
     ]
     trafo_handle = type_handles[-1]
     leg1 = ax.legend(handles=type_handles, loc="upper left", fontsize=9,
@@ -475,10 +477,10 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
                            label=f"{ref_mwh:.3g} MWh")
             )
         ax.legend(handles=size_handles, loc="lower left", fontsize=9,
-                  title="Bus size = total §14a [MWh]", title_fontsize=8)
+                  title="Knotengröße = §14a gesamt [MWh]", title_fontsize=8)
 
     ax.set_title(
-        f"§14a Network Map — Line Stress (hours >{LINE_STRESS_PCT:.0f} %)",
+        f"§14a-Netzübersicht — Leitungsbelastung (Stunden > {LINE_STRESS_PCT:.0f} %)",
         fontsize=11,
     )
     _save(fig, plots_dir, "network_map.png")
@@ -755,20 +757,20 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
     cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
     sm  = cm.ScalarMappable(cmap=cmap_lines, norm=norm_lines)
     cb  = fig.colorbar(sm, cax=cax)
-    cb.set_label("Total hours affected by downstream §14a curtailment", fontsize=9)
+    cb.set_label("Stunden mit §14a-Abregelung im nachgelagerten Netz", fontsize=9)
 
     # ── type legend (upper left) ──────────────────────────────────────────────
     n_affected = int((line_reach_hours > 0).sum())
     type_handles = [
         plt.Line2D([0], [0], color="black", linewidth=1.2,
-                   label="Line — not reached by §14a"),
+                   label="Leitung — kein §14a-Einfluss"),
         plt.Line2D([0], [0], color=cmap_lines(0.99), linewidth=3.5,
-                   label="Line — most affected hours"),
+                   label="Leitung — meiste betroffene Stunden"),
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888",
-                   markersize=7, label="Bus (no §14a)"),
-        mpatches.Patch(facecolor="#d62728", alpha=0.9, label="Bus — HP 14a"),
-        mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="Bus — CP 14a"),
-        plt.Line2D([], [], label="MV/LV transformer"),
+                   markersize=7, label="Knoten (kein §14a)"),
+        mpatches.Patch(facecolor="#d62728", alpha=0.9, label="Knoten — WP §14a"),
+        mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="Knoten — LP §14a"),
+        plt.Line2D([], [], label="MS/NS-Transformator"),
     ]
     trafo_handle = type_handles[-1]
     leg1 = ax.legend(handles=type_handles, loc="upper left", fontsize=9,
@@ -801,10 +803,10 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
                            label=f"{ref_mwh:.3g} MWh")
             )
         ax.legend(handles=size_handles, loc="lower left", fontsize=9,
-                  title="Bus size = total §14a [MWh]", title_fontsize=8)
+                  title="Knotengröße = §14a gesamt [MWh]", title_fontsize=8)
 
     ax.set_title(
-        "§14a Curtailment Reach Along the Feeder (bus size ∝ anual §14a use)",
+        "§14a-Abregelungsreichweite entlang des Feeders (Knotengröße ∝ jährl. §14a-Nutzung)",
         fontsize=12,
     )
     _save(fig, plots_dir, "network_curtailment_reach.png")
@@ -889,7 +891,7 @@ def plot_solar_rooftop_map(buses, lines, solar_gens, root_bus, plots_dir):
     size = S_MIN + (S_MAX - S_MIN) * ((gen_rows["p_nom"] - p_min) / (p_max - p_min + 1e-12))
     ax.scatter(gen_rows["x"], gen_rows["y"], s=size,
                c="#FFB800", edgecolors="#8B6000", linewidths=0.5,
-               zorder=5, alpha=0.9, label="Solar rooftop PV")
+               zorder=5, alpha=0.9, label="Dach-Photovoltaik")
 
     # ── transformer marker ────────────────────────────────────────────────────
     if root_bus in buses.index:
@@ -914,10 +916,10 @@ def plot_solar_rooftop_map(buses, lines, solar_gens, root_bus, plots_dir):
 
     # ── type legend (upper left) ──────────────────────────────────────────────
     type_handles = [
-        plt.Line2D([0], [0], color="#333333", linewidth=1.0, label="LV line"),
+        plt.Line2D([0], [0], color="#333333", linewidth=1.0, label="NS-Leitung"),
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888",
-                   markersize=7, label="Bus"),
-        plt.Line2D([], [], label="MV/LV transformer"),
+                   markersize=7, label="Knoten"),
+        plt.Line2D([], [], label="MS/NS-Transformator"),
     ]
     trafo_handle = type_handles[-1]
     leg1 = ax.legend(handles=type_handles, loc="upper left", fontsize=9,
@@ -934,11 +936,11 @@ def plot_solar_rooftop_map(buses, lines, solar_gens, root_bus, plots_dir):
                             markerfacecolor="#FFB800", markeredgecolor="#8B6000",
                             markersize=ms_ref, label=f"{p_ref * 1000:.1f} kWp")],
         loc="lower left", fontsize=9,
-        title="Generator capacity", title_fontsize=8,
+        title="Generatorleistung", title_fontsize=8,
     )
 
     ax.set_title(
-        "Solar Rooftop PV",
+        "Dach-Photovoltaik",
         fontsize=12,
     )
     _save(fig, plots_dir, "solar_rooftop_map.png")
@@ -1009,23 +1011,23 @@ def plot_cable_capacity_map(buses, lines, root_bus, plots_dir):
     cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
     sm  = cm.ScalarMappable(cmap=cmap, norm=norm)
     cb  = fig.colorbar(sm, cax=cax)
-    cb.set_label("Cable nominal capacity s_nom [MVA]", fontsize=9)
+    cb.set_label("Nennkapazität der Leitungen s_nom [MVA]", fontsize=9)
 
     type_handles = [
         plt.Line2D([0], [0], color=cmap(0.05), linewidth=1.2,
-                   label=f"Low capacity  ({c_min:.3g} MVA)"),
+                   label=f"Geringe Kapazität  ({c_min:.3g} MVA)"),
         plt.Line2D([0], [0], color=cmap(0.99), linewidth=3.5,
-                   label=f"High capacity  ({c_max:.3g} MVA)"),
+                   label=f"Hohe Kapazität  ({c_max:.3g} MVA)"),
         plt.Line2D([0], [0], marker="o", color="w", markerfacecolor="#888888",
-                   markersize=7, label="Bus"),
-        plt.Line2D([], [], label="MV/LV transformer (feeder root)"),
+                   markersize=7, label="Knoten"),
+        plt.Line2D([], [], label="MS/NS-Transformator (Stationsabgang)"),
     ]
     trafo_handle = type_handles[-1]
     ax.legend(handles=type_handles, loc="upper left", fontsize=9,
               handler_map={trafo_handle: _TwoCircleHandler()})
 
     ax.set_title(
-        "Cable Nominal Capacity",
+        "Nennkapazität der Leitungen",
         fontsize=12,
     )
     _save(fig, plots_dir, "cable_capacity_map.png")
@@ -1201,32 +1203,28 @@ def plot_overloaded_lines(edisgo, line_max_loading,
     sm  = cm.ScalarMappable(cmap=cmap, norm=norm)
     cb  = fig.colorbar(sm, cax=cax)
     cb.set_label(
-        "Peak line loading [%]\n(max across all snapshots,\nnon-overloaded lines only)",
+        "Spitzenbelastung der Leitungen [%]",
         fontsize=9,
     )
     cb.ax.axhline(v_max, color="black", linewidth=0.8, linestyle="--")
 
     n_total = len(line_max_loading)
     n_ol    = len(overloaded)
-    n_ok    = n_total - n_ol
 
     legend_handles = [
         plt.Line2D([0], [0], color="#ff1f1f", linewidth=5.0,
-                   label=f"OVERLOADED  >100 %\n({n_ol} of {n_total} lines;\nat least 1 hour above limit)"),
+                   label="ÜBERLASTET  > 100 %"),
         plt.Line2D([0], [0], color=cmap(0.99), linewidth=2.0,
-                   label=f"High loading  ~{v_max:.0f} %\n(near capacity but within limit)"),
+                   label="Hohe Belastung"),
         plt.Line2D([0], [0], color=cmap(0.01), linewidth=1.4,
-                   label=f"Low loading\n({n_ok} lines within limit)"),
-        plt.Line2D([0], [0], color="#aaaaaa", linewidth=0.9,
-                   label="No result available"),
+                   label="Geringe Belastung"),
     ]
     ax.legend(handles=legend_handles, loc="upper left", fontsize=9,
-              title="Line loading (peak snapshot)", title_fontsize=9,
+              title="Leitungsbelastung (Spitzenwert)", title_fontsize=9,
               framealpha=0.9, edgecolor="#cccccc")
 
     ax.set_title(
-        f"Baseline powerflow — worst-case line loading (no §14a flexibility)\n"
-        f"{n_ol} of {n_total} lines exceed 100 % in at least one snapshot",
+        "Baseline-Lastfluss — maximale Leitungsbelastung (ohne §14a-Flexibilität)",
         fontsize=11,
     )
 
