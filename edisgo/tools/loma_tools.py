@@ -716,11 +716,99 @@ def _duplicate_loads_from_source_ids(
         else:
             bus_pool = eligible_buses
     
-        tgt_bus = _stable_choice_from_pool(
-            bus_pool,
-            key=f"{load_type}|{new_id}|target_bus",
-            seed=seed,
-        )
+        # ------------------------------------------------------------
+        # 14a CP duplication logic
+        # < 100 kW: house_connection
+        # >= 100 kW: MV side of nearest MV/LV transformer
+        # ------------------------------------------------------------
+        if load_type == "charging_point":
+            if "p_set" not in src_row.index:
+                raise KeyError(
+                    f"Source charging point '{src_id}' has no 'p_set' column."
+                )
+    
+            p_set = float(src_row["p_set"])
+    
+            buses_df = edisgo.topology.buses_df
+            trafos_df = edisgo.topology.transformers_df
+    
+            # --------------------------------------------------------
+            # CP < 100 kW: duplicate only to house_connection buses
+            # --------------------------------------------------------
+            if p_set < 0.1:
+                if "comp_type" not in buses_df.columns:
+                    raise KeyError(
+                        "Column 'comp_type' not found in buses_df. "
+                        "It is required to connect duplicated charging points "
+                        "below 100 kW only to house_connection buses."
+                    )
+    
+                house_connection_buses = buses_df.index[
+                    buses_df["comp_type"] == "house_connection"
+                ]
+    
+                bus_pool_filtered = pd.Index(bus_pool).intersection(house_connection_buses)
+    
+                if len(bus_pool_filtered) == 0:
+                    raise ValueError(
+                        f"No eligible house_connection buses found for duplicated "
+                        f"charging point '{src_id}' with p_set={p_set:.6f} MW."
+                    )
+    
+                tgt_bus = _stable_choice_from_pool(
+                    bus_pool_filtered,
+                    key=f"{load_type}|{new_id}|target_bus",
+                    seed=seed,
+                )
+    
+            # --------------------------------------------------------
+            # CP >= 100 kW: connect to MV side of nearest MV/LV trafo
+            # --------------------------------------------------------
+            else:
+                if "bus0" not in trafos_df.columns:
+                    raise KeyError(
+                        "Column 'bus0' not found in transformers_df. "
+                        "It is required to identify the MV side of MV/LV transformers."
+                    )
+    
+                mv_trafo_bus_ids = trafos_df["bus0"].dropna().unique()
+    
+                mv_trafo_buses = buses_df.loc[
+                    buses_df.index.intersection(mv_trafo_bus_ids)
+                ].dropna(subset=["x", "y"])
+    
+                if mv_trafo_buses.empty:
+                    raise ValueError(
+                        f"No MV-side transformer buses with coordinates found for "
+                        f"duplicated charging point '{src_id}' with p_set={p_set:.6f} MW."
+                    )
+    
+                if src_bus not in buses_df.index:
+                    raise KeyError(
+                        f"Source bus '{src_bus}' of duplicated charging point "
+                        f"'{src_id}' not found in buses_df."
+                    )
+    
+                src_x = buses_df.at[src_bus, "x"]
+                src_y = buses_df.at[src_bus, "y"]
+    
+                if pd.isna(src_x) or pd.isna(src_y):
+                    raise ValueError(
+                        f"Source bus '{src_bus}' of duplicated charging point "
+                        f"'{src_id}' has no valid coordinates."
+                    )
+    
+                dx = mv_trafo_buses["x"] - src_x
+                dy = mv_trafo_buses["y"] - src_y
+    
+                tgt_bus = (dx**2 + dy**2).idxmin()
+    
+        else:
+            tgt_bus = _stable_choice_from_pool(
+                bus_pool,
+                key=f"{load_type}|{new_id}|target_bus",
+                seed=seed,
+            )
         
         new_row = src_row.copy()
         new_row.name = new_id
@@ -1442,7 +1530,7 @@ def plot_network(
         plt.close(fig)
 
 
-def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True, path= "load"):
+def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True):
     """Plot load composition per bus (CP, HP, conventional) as pie charts on the grid."""
     import matplotlib.patches as mpatches
 
@@ -1572,8 +1660,8 @@ def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True, path= "lo
     )
 
     if save:
-        os.makedirs(path, exist_ok=True)
-        plt.savefig(f"{path}/cp_hp_locations.png", dpi=300, bbox_inches="tight")
+        os.makedirs("plots", exist_ok=True)
+        plt.savefig("plots/cp_hp_locations.png", dpi=300, bbox_inches="tight")
 
     if show:
         plt.show()
@@ -1678,8 +1766,7 @@ def plot_storage_dispatch(
     plt.close()
 
 
-def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = True,
-                           folder_path: str = "plots"):
+def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = True):
     """
     Plot aggregate CP + HP load before and after §14a curtailment for a 24h day.
 
@@ -1781,8 +1868,8 @@ def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = Tru
     plt.tight_layout()
 
     if save:
-        os.makedirs(folder_path, exist_ok=True)
-        plt.savefig(f"{folder_path}/load_before_after_{day}.png", dpi=300, bbox_inches="tight")
+        os.makedirs("plots", exist_ok=True)
+        plt.savefig(f"plots/load_before_after_{day}.png", dpi=300, bbox_inches="tight")
     if show:
         plt.show()
     plt.close()
