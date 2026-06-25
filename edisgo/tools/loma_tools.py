@@ -1369,7 +1369,7 @@ def plot_network(
     snapshots: str = "2035-01-15 09:00:00",
     show: bool = True,
     save: bool = True,
-    base_bus_size=0.000000002,
+    base_bus_size=0.0000000005,
     folder_path: str = "plots"
 ):
     results = edisgo.results
@@ -1413,6 +1413,8 @@ def plot_network(
         fig, ax = plt.subplots(figsize=(14, 10))
         plt.subplots_adjust(left=0.1, right=0.9, top=0.95, bottom=0.05)
 
+        line_widths = 0.4 + loading_relative * 3.5
+
         n.plot(
             margin=0.05,
             ax=ax,
@@ -1423,7 +1425,7 @@ def plot_network(
             bus_cmap=voltage_cmap,
             bus_norm=norm_buses,
             line_colors=loading_relative,
-            line_widths=1.6,
+            line_widths=line_widths,
             line_cmap="jet",
             line_norm=norm_lines,
             title=f"Grid Analysis: {snapshot}",
