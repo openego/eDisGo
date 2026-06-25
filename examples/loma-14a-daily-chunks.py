@@ -448,7 +448,7 @@ def main(output_dir, snapshot_range, seed=42, cp_target=50, hp_target=130):
 
     # Set HV/MV transformer secondary voltage to 1.025 pu to reflect the common
     # DSO practice of boosting LV bus voltage to compensate for feeder voltage drops.
-    edisgo.config["grid_expansion_allowed_voltage_deviations"]["hv_mv_trafo_offset"] = 0.025
+    edisgo.config["grid_expansion_allowed_voltage_deviations"]["hv_mv_trafo_offset"] = 0.05
 
     mv_grid_geom = gpd.read_file(path_husum_district_shp).to_crs(4326)
     edisgo.topology.grid_district["geom"] = mv_grid_geom.loc[0, "geometry"]
