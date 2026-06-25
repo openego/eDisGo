@@ -1150,7 +1150,7 @@ def plot_overloaded_lines(edisgo, line_max_loading,
     v_min = normal.min() if not normal.empty else 0.0
     v_max = normal.max() if not normal.empty else overload_threshold
     norm  = mcolors.Normalize(vmin=v_min, vmax=v_max)
-    cmap  = cm.get_cmap("YlOrRd")
+    cmap  = cm.get_cmap("jet")
 
     fig, ax = plt.subplots(figsize=(14, 10))
     fig.subplots_adjust(right=0.84)
@@ -1166,14 +1166,17 @@ def plot_overloaded_lines(edisgo, line_max_loading,
 
         pct = line_max_loading.get(line_name, 0.0)
         if pct > overload_threshold:
-            color, lw, zo = "#e63946", 2.8, 4
+            # dark outline pass first, then bright alarm color on top
+            ax.plot([x0, x1], [y0, y1], color="black", linewidth=7.0,
+                    zorder=3, solid_capstyle="round")
+            ax.plot([x0, x1], [y0, y1], color="#ff1f1f", linewidth=5.0,
+                    zorder=4, solid_capstyle="round")
         elif pct > 0:
-            color, lw, zo = cmap(norm(pct)), 1.4, 3
+            ax.plot([x0, x1], [y0, y1], color=cmap(norm(pct)), linewidth=1.4,
+                    zorder=2, solid_capstyle="round")
         else:
-            color, lw, zo = "#aaaaaa", 0.7, 2
-
-        ax.plot([x0, x1], [y0, y1], color=color, linewidth=lw,
-                zorder=zo, solid_capstyle="round")
+            ax.plot([x0, x1], [y0, y1], color="#aaaaaa", linewidth=0.7,
+                    zorder=1, solid_capstyle="round")
 
     bus_xy = buses_df[["x", "y"]].dropna()
     ax.scatter(bus_xy["x"], bus_xy["y"], s=10, color="#555555",
@@ -1202,21 +1205,33 @@ def plot_overloaded_lines(edisgo, line_max_loading,
     cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
     sm  = cm.ScalarMappable(cmap=cmap, norm=norm)
     cb  = fig.colorbar(sm, cax=cax)
-    cb.set_label("Max line loading [%]", fontsize=9)
+    cb.set_label(
+        "Peak line loading [%]\n(max across all snapshots,\nnon-overloaded lines only)",
+        fontsize=9,
+    )
+    cb.ax.axhline(v_max, color="black", linewidth=0.8, linestyle="--")
+
+    n_total = len(line_max_loading)
+    n_ol    = len(overloaded)
+    n_ok    = n_total - n_ol
 
     legend_handles = [
-        plt.Line2D([0], [0], color="#e63946", linewidth=2.5,
-                   label=f"Overloaded (>100 %)  [{len(overloaded)} lines]"),
-        plt.Line2D([0], [0], color=cmap(norm(v_max)), linewidth=1.6,
-                   label=f"Highest normal loading ({v_max:.0f} %)"),
+        plt.Line2D([0], [0], color="#ff1f1f", linewidth=5.0,
+                   label=f"OVERLOADED  >100 %\n({n_ol} of {n_total} lines;\nat least 1 hour above limit)"),
+        plt.Line2D([0], [0], color=cmap(0.99), linewidth=2.0,
+                   label=f"High loading  ~{v_max:.0f} %\n(near capacity but within limit)"),
+        plt.Line2D([0], [0], color=cmap(0.01), linewidth=1.4,
+                   label=f"Low loading\n({n_ok} lines within limit)"),
         plt.Line2D([0], [0], color="#aaaaaa", linewidth=0.9,
-                   label="No powerflow result"),
+                   label="No result available"),
     ]
-    ax.legend(handles=legend_handles, loc="upper left", fontsize=9)
+    ax.legend(handles=legend_handles, loc="upper left", fontsize=9,
+              title="Line loading (peak snapshot)", title_fontsize=9,
+              framealpha=0.9, edgecolor="#cccccc")
 
     ax.set_title(
-        f"Baseline powerflow — max line loading per snapshot\n"
-        f"{len(overloaded)} of {len(line_max_loading)} lines overloaded in ≥1 snapshot",
+        f"Baseline powerflow — worst-case line loading (no §14a flexibility)\n"
+        f"{n_ol} of {n_total} lines exceed 100 % in at least one snapshot",
         fontsize=11,
     )
 
