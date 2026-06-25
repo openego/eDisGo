@@ -1,6 +1,6 @@
 dash < 4.4.0
 demandlib < 0.3.0
-egoio >= 0.4.7, < 0.5.0
+egoio >= 0.4.8, < 0.5.0
 geopy >= 2.4.1, < 2.5.0
 jupyter_dash < 0.5.0
 matplotlib < 3.11.0
