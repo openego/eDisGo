@@ -1623,7 +1623,7 @@ def plot_cp_hp_locations(edisgo, show: bool = True, save: bool = True, path= "lo
 
     if save:
         os.makedirs(path, exist_ok=True)
-        plt.savefig(f"{path}/cp_hp_locations.png", dpi=300, bbox_inches="tight")
+        plt.savefig(f"{path}/mgb_input_load_composition_map.png", dpi=300, bbox_inches="tight")
 
     if show:
         plt.show()
@@ -1832,7 +1832,7 @@ def plot_load_before_after(edisgo, day: str, show: bool = True, save: bool = Tru
 
     if save:
         os.makedirs(folder_path, exist_ok=True)
-        plt.savefig(f"{folder_path}/load_before_after_{day}.png", dpi=300, bbox_inches="tight")
+        plt.savefig(f"{folder_path}/mgb_14a_load_before_after_{day}.png", dpi=300, bbox_inches="tight")
     if show:
         plt.show()
     plt.close()

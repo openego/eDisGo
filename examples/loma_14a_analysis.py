@@ -319,7 +319,7 @@ def plot_monthly_curtailment_mean_stacked(data, plots_dir):
     ax.grid(True, axis="y", alpha=0.3)
     ax.set_title("Mittlere monatliche §14a-Abregelung — WP vs. LP", fontsize=13)
     plt.tight_layout()
-    _save(fig, plots_dir, "curtailment_monthly_mean_stacked.png")
+    _save(fig, plots_dir, "mgb_14a_curtailment_monthly.png")
 
 
 
@@ -483,7 +483,7 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
         f"§14a-Netzübersicht — Leitungsbelastung (Stunden > {LINE_STRESS_PCT:.0f} %)",
         fontsize=11,
     )
-    _save(fig, plots_dir, "network_map.png")
+    _save(fig, plots_dir, "mgb_14a_loading_hours_map.png")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -943,7 +943,7 @@ def plot_solar_rooftop_map(buses, lines, solar_gens, root_bus, plots_dir):
         "Dach-Photovoltaik",
         fontsize=12,
     )
-    _save(fig, plots_dir, "solar_rooftop_map.png")
+    _save(fig, plots_dir, "smgb_input_pv_rooftop_map.png")
 
 
 def plot_cable_capacity_map(buses, lines, root_bus, plots_dir):
@@ -1030,7 +1030,7 @@ def plot_cable_capacity_map(buses, lines, root_bus, plots_dir):
         "Nennkapazität der Leitungen",
         fontsize=12,
     )
-    _save(fig, plots_dir, "cable_capacity_map.png")
+    _save(fig, plots_dir, "mgb_input_line_capacities_map.png")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1228,7 +1228,7 @@ def plot_overloaded_lines(edisgo, line_max_loading,
         fontsize=11,
     )
 
-    _save(fig, plots_dir, "baseline_overloaded_lines.png")
+    _save(fig, plots_dir, "mgb_baseline_overload_map.png")
     if show:
         plt.show()
 
