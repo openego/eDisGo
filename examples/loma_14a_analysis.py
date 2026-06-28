@@ -206,7 +206,6 @@ def plot_peak_demand_per_seed(results_root, plots_dir):
     ax.set_xlabel("Szenario")
     ax.legend(fontsize=9)
     ax.grid(True, axis="y", alpha=0.3)
-    ax.set_title("Jährliche Spitzenlast pro Szenario", fontsize=13)
     plt.tight_layout()
     _save(fig, plots_dir, "peak_demand_per_seed.png")
 
@@ -317,7 +316,6 @@ def plot_monthly_curtailment_mean_stacked(data, plots_dir):
     ax.set_xlabel("Monat (2035)")
     ax.legend(fontsize=9)
     ax.grid(True, axis="y", alpha=0.3)
-    ax.set_title("Mittlere monatliche §14a-Abregelung — WP vs. LP", fontsize=13)
     plt.tight_layout()
     _save(fig, plots_dir, "mgb_14a_curtailment_monthly.png")
 
@@ -479,10 +477,6 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
         ax.legend(handles=size_handles, loc="lower left", fontsize=9,
                   title="Knotengröße = §14a gesamt [MWh]", title_fontsize=8)
 
-    ax.set_title(
-        f"§14a-Netzübersicht — Leitungsbelastung (Stunden > {LINE_STRESS_PCT:.0f} %)",
-        fontsize=11,
-    )
     _save(fig, plots_dir, "mgb_14a_loading_hours_map.png")
 
 
@@ -805,10 +799,6 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
         ax.legend(handles=size_handles, loc="lower left", fontsize=9,
                   title="Knotengröße = §14a gesamt [MWh]", title_fontsize=8)
 
-    ax.set_title(
-        "§14a-Abregelungsreichweite entlang des Feeders (Knotengröße ∝ jährl. §14a-Nutzung)",
-        fontsize=12,
-    )
     _save(fig, plots_dir, "network_curtailment_reach.png")
 
 
@@ -939,10 +929,6 @@ def plot_solar_rooftop_map(buses, lines, solar_gens, root_bus, plots_dir):
         title="Generatorleistung", title_fontsize=8,
     )
 
-    ax.set_title(
-        "Dach-Photovoltaik",
-        fontsize=12,
-    )
     _save(fig, plots_dir, "smgb_input_pv_rooftop_map.png")
 
 
@@ -1026,10 +1012,6 @@ def plot_cable_capacity_map(buses, lines, root_bus, plots_dir):
     ax.legend(handles=type_handles, loc="upper left", fontsize=9,
               handler_map={trafo_handle: _TwoCircleHandler()})
 
-    ax.set_title(
-        "Nennkapazität der Leitungen",
-        fontsize=12,
-    )
     _save(fig, plots_dir, "mgb_input_line_capacities_map.png")
 
 
@@ -1117,7 +1099,6 @@ def analyze_without_14a(edisgo):
 
 def plot_overloaded_lines(edisgo, line_max_loading,
                           plots_dir: str = ".", show: bool = False,
-                          title: str = "Baseline-Lastfluss — maximale Leitungsbelastung (ohne §14a-Flexibilität)",
                           filename: str = "mgb_baseline_overload_map.png"):
     """
     Network map coloured by max line loading across all snapshots.
@@ -1222,8 +1203,6 @@ def plot_overloaded_lines(edisgo, line_max_loading,
         va="bottom", ha="center", fontsize=8, color="#cc0000",
         fontweight="bold",
     )
-
-    ax.set_title(title, fontsize=11)
 
     _save(fig, plots_dir, filename)
     if show:
