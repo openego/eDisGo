@@ -17,13 +17,16 @@ function variable_buspair_current_magnitude_sqr(pm::AbstractBFModel; nw::Int=nw_
     )
 
     if bounded
-        bus = PowerModels.ref(pm, nw, :bus)
         for (i, b) in branch
             rate_a = Inf
             if haskey(b, "rate_a")
                 rate_a = b["rate_a"]
             end
-            ub = ((rate_a*b["tap"])/(bus[b["f_bus"]]["vmin"]))^2
+            # Current limit referenced to nominal voltage (1.0 p.u.), not vmin, so that
+            # rate_a (s_nom) acts as a hard cap on S = sqrt(p^2+q^2) at nominal voltage,
+            # instead of being inflated by 1/vmin^2 (previously allowed up to ~1/vmin
+            # times rate_a even at normal/high bus voltage).
+            ub = (rate_a*b["tap"])^2
 
             if !isinf(ub)
                 JuMP.set_upper_bound(ccm[i], ub)
