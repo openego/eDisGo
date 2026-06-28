@@ -1116,7 +1116,9 @@ def analyze_without_14a(edisgo):
 
 
 def plot_overloaded_lines(edisgo, line_max_loading,
-                          plots_dir: str = ".", show: bool = False):
+                          plots_dir: str = ".", show: bool = False,
+                          title: str = "Baseline-Lastfluss — maximale Leitungsbelastung (ohne §14a-Flexibilität)",
+                          filename: str = "mgb_baseline_overload_map.png"):
     """
     Network map coloured by max line loading across all snapshots.
     Lines overloaded in at least one snapshot (>100 %) are drawn in red.
@@ -1142,12 +1144,19 @@ def plot_overloaded_lines(edisgo, line_max_loading,
 
     overload_threshold = 100.0
     overloaded = line_max_loading[line_max_loading > overload_threshold]
-    normal     = line_max_loading[line_max_loading <= overload_threshold]
 
-    v_min = normal.min() if not normal.empty else 0.0
-    v_max = normal.max() if not normal.empty else overload_threshold
+    OVERLOAD_RED = np.array([0.8, 0.0, 0.0, 1.0])
+    v_min = 0.0
+    v_max = line_max_loading.max() if not line_max_loading.empty else overload_threshold
     norm  = mcolors.Normalize(vmin=v_min, vmax=v_max)
-    cmap  = cm.get_cmap("jet")
+
+    # jet for [0, 100 %], solid intense red for [100 %, v_max]
+    n = 512
+    n_normal = max(1, int(n * overload_threshold / v_max))
+    n_over   = n - n_normal
+    jet_colors  = cm.get_cmap("jet")(np.linspace(0, 1, n_normal))
+    over_colors = np.tile(OVERLOAD_RED, (n_over, 1))
+    cmap = mcolors.ListedColormap(np.vstack([jet_colors, over_colors]))
 
     fig, ax = plt.subplots(figsize=(14, 10))
     fig.subplots_adjust(right=0.84)
@@ -1163,10 +1172,9 @@ def plot_overloaded_lines(edisgo, line_max_loading,
 
         pct = line_max_loading.get(line_name, 0.0)
         if pct > overload_threshold:
-            # dark outline pass first, then bright alarm color on top
             ax.plot([x0, x1], [y0, y1], color="black", linewidth=7.0,
                     zorder=3, solid_capstyle="round")
-            ax.plot([x0, x1], [y0, y1], color="#ff1f1f", linewidth=5.0,
+            ax.plot([x0, x1], [y0, y1], color=cmap(norm(pct)), linewidth=5.0,
                     zorder=4, solid_capstyle="round")
         elif pct > 0:
             ax.plot([x0, x1], [y0, y1], color=cmap(norm(pct)), linewidth=1.4,
@@ -1202,33 +1210,22 @@ def plot_overloaded_lines(edisgo, line_max_loading,
     cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
     sm  = cm.ScalarMappable(cmap=cmap, norm=norm)
     cb  = fig.colorbar(sm, cax=cax)
-    cb.set_label(
-        "Spitzenbelastung der Leitungen [%]",
-        fontsize=9,
-    )
-    cb.ax.axhline(v_max, color="black", linewidth=0.8, linestyle="--")
+    cb.set_label("Spitzenbelastung der Leitungen [%]", fontsize=10)
 
-    n_total = len(line_max_loading)
-    n_ol    = len(overloaded)
-
-    legend_handles = [
-        plt.Line2D([0], [0], color="#ff1f1f", linewidth=5.0,
-                   label="ÜBERLASTET  > 100 %"),
-        plt.Line2D([0], [0], color=cmap(0.99), linewidth=2.0,
-                   label="Hohe Belastung"),
-        plt.Line2D([0], [0], color=cmap(0.01), linewidth=1.4,
-                   label="Geringe Belastung"),
-    ]
-    ax.legend(handles=legend_handles, loc="upper left", fontsize=9,
-              title="Leitungsbelastung (Spitzenwert)", title_fontsize=9,
-              framealpha=0.9, edgecolor="#cccccc")
-
-    ax.set_title(
-        "Baseline-Lastfluss — maximale Leitungsbelastung (ohne §14a-Flexibilität)",
-        fontsize=11,
+    # dashed line at the 100 % overload threshold
+    threshold_pos = norm(overload_threshold)
+    cb.ax.axhline(threshold_pos, color="black", linewidth=1.5, linestyle="--")
+    # show actual peak loading above the colorbar
+    cb.ax.text(
+        0.5, 1.02, f"max: {v_max:.0f} %",
+        transform=cb.ax.transAxes,
+        va="bottom", ha="center", fontsize=8, color="#cc0000",
+        fontweight="bold",
     )
 
-    _save(fig, plots_dir, "mgb_baseline_overload_map.png")
+    ax.set_title(title, fontsize=11)
+
+    _save(fig, plots_dir, filename)
     if show:
         plt.show()
 
