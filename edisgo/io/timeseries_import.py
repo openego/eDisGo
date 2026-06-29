@@ -470,7 +470,9 @@ def heat_demand_oedb(edisgo_obj, scenario, engine, timeindex=None):
         individual_heating_df = pd.concat(
             [residential_profiles_df, cts_profiles_df], axis=1
         )
-        individual_heating_df = individual_heating_df.groupby(axis=1, level=0).sum()
+        individual_heating_df = (
+            individual_heating_df.T.groupby(level=0).sum().T
+        )
         # set column names to be heat pump names instead of building IDs
         individual_heating_df = pd.DataFrame(
             {
@@ -812,7 +814,7 @@ def get_residential_heat_profiles_per_building(building_ids, scenario, engine):
         # unnest array of profile values per ID
         df_profiles = df_profiles.explode("idp")
         # add column for hour of day
-        df_profiles["hour"] = df_profiles.groupby(axis=0, level=0).cumcount() + 1
+        df_profiles["hour"] = df_profiles.groupby(level=0).cumcount() + 1
 
         return df_profiles
 

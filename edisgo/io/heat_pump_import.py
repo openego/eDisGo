@@ -220,19 +220,32 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
                 rsuffix="weather",
             )
 
-            # Calculate centroids for district heating areas
-            gdf_district_heating_areas["centroid"] = gdf_district_heating_areas.centroid
+            # Calculate centroids for district heating areas. Reproject to a projected
+            # CRS (EPSG:3035, ETRS89-LAEA for Europe) first, since centroid is
+            # numerically incorrect on a geographic CRS, then convert the resulting
+            # points back to the working CRS.
+            metric_crs = "EPSG:3035"
+            gdf_district_heating_areas["centroid"] = (
+                gdf_district_heating_areas.geometry.to_crs(metric_crs)
+                .centroid.to_crs(mv_grid_geom_srid)
+            )
             gdf_district_heating_areas = gdf_district_heating_areas.set_geometry(
                 "geom_polygon"
             )
 
-            # Perform spatial join with district heating areas
-            df_geom = gpd.sjoin_nearest(
-                gdf_combined,
-                gdf_district_heating_areas,
-                how="left",
-                rsuffix="district_heating",
-                max_distance=1000,
+            # Perform spatial join with district heating areas. sjoin_nearest uses
+            # max_distance in CRS units, so reproject both frames to a projected CRS
+            # (meters) to make the 1000 m threshold and the nearest computation
+            # correct, then reproject the result back.
+            df_geom = (
+                gpd.sjoin_nearest(
+                    gdf_combined.to_crs(metric_crs),
+                    gdf_district_heating_areas.to_crs(metric_crs),
+                    how="left",
+                    rsuffix="district_heating",
+                    max_distance=1000,
+                )
+                .to_crs(mv_grid_geom_srid)
             )
 
             df_merge = pd.merge(
@@ -285,7 +298,7 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
                 # if geom is still None, use geolocation of HV/MV station
                 if geom is None:
                     hvmv_station = edisgo_object.topology.mv_grid.station
-                    geom = Point(hvmv_station.x[0], hvmv_station.y[0])
+                    geom = Point(hvmv_station.x.iloc[0], hvmv_station.y.iloc[0])
                 df_merge.at[idx, "geom"] = geom
             return df_merge.loc[
                 :,
