@@ -57,8 +57,13 @@ def run_optimization_14a(edisgo):
 
     start_time = datetime.now()
 
-    # Run optimization
-    edisgo.pm_optimize(opf_version=5, curtailment_14a=True, hours_limit_14a=24)
+    # Run optimization.
+    # hours_limit_14a=24 (= full day) enables LP mode: binaries are replaced by
+    # tight continuous bounds, converting the 14 000-variable MILP to a pure LP.
+    # rate_a_factor=0.966 compensates for the BF-SOC relaxation gap (LV vmax=1.035
+    # allows up to 3.5 % implicit headroom above s_nom without triggering constraints).
+    edisgo.pm_optimize(opf_version=5, curtailment_14a=True, hours_limit_14a=24,
+                       rate_a_factor=1/1.035)
 
     duration = (datetime.now() - start_time).total_seconds()
 
@@ -250,7 +255,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
     
     set_charging_points_to_target(
         edisgo,
-        target_total=80, # sets total amount of CP #412 SQ, 1000 2035
+        target_total=50, # sets total amount of CP #412 SQ, 1000 2035
         # percentage=0.10, # increases total amount of CP by 10%
         # percentage=-0.10, # decreases total amount of CP by 10%
         eligible_buses=cp_eligible_buses,
@@ -264,7 +269,7 @@ def integrate_ev_and_hp_for_14a(edisgo, *, shapefile_path, output_dir, setup_day
 
     set_heat_pumps_to_target(
         edisgo,
-        target_total=170,  # sets total amount of HP #575 SQ, 2600 2035
+        target_total=130,  # sets total amount of HP #575 SQ, 2600 2035
         # percentage=0.10, # increases total amount of HP by 10%
         # percentage=-0.10, # decreases total amount of HP by 10%
         eligible_buses=hp_eligible_buses,
@@ -399,7 +404,7 @@ def fix_hp_peak_loads(edisgo, seed=None):
 
     # Rules 2–3: ensure at least 10 % of HPs fall in each target band
     target_bands = [(0.01, 0.02), (0.02, 0.03)]
-    min_count = max(1, int(np.ceil(n_hp * 0.10)))
+    min_count = max(1, int(np.ceil(n_hp * 0.15)))
 
     assigned = set()
     for lo, hi in target_bands:
@@ -430,14 +435,13 @@ def get_monthly_snapshot_ranges(year=2025, test=False):
     """Return list of (month_label, start_idx, end_idx) for each month of year.
 
     test=False  : full month windows for all 12 months
-    test="test1": 3-day windows for January and February only
+    test="test1": last week of January only (days 25-31)
     test="test2": first 7-day window for each of the 12 months
     """
     if test == "test1":
         jan_start = 0
-        feb_start = calendar.monthrange(year, 1)[1] * 24
         return [
-            (f"{year}-01", jan_start, jan_start + 3 * 24 - 1),
+            (f"{year}-01", jan_start + 24 * 24, jan_start + 31 * 24 - 1),
         ]
     idx, months = 0, []
     for m in range(1, 13):
@@ -472,6 +476,7 @@ def main(output_dir, snapshot_range, seed=42, month_label=None):
 
     # Plot original cable capacities before hc_line s_nom is overwritten
     from loma_14a_analysis import plot_cable_capacity_map, find_root_bus
+    from loma_tools import add_pv_rooftop_fill_generators
 
     _root_bus = find_root_bus(edisgo.topology.lines_df, edisgo.topology.transformers_df)
     plot_cable_capacity_map(edisgo.topology.buses_df, edisgo.topology.lines_df,
@@ -510,6 +515,8 @@ def main(output_dir, snapshot_range, seed=42, month_label=None):
         columns=orphan_rp, errors="ignore"
     )
     print(f"[main] Removed {len(orphans)} orphan timeseries loads not in topology.loads_df.")
+
+    add_pv_rooftop_fill_generators(edisgo, seed=seed)
 
     edisgo = run_optimization_14a(edisgo)
     edisgo.analyze()
@@ -727,6 +734,18 @@ def main(output_dir, snapshot_range, seed=42, month_label=None):
     os.makedirs(output_dir, exist_ok=True)
     edisgo.save(f"{output_dir}/edisgo")
 
+    # Persist load-shedding detail for loma_14a_analysis.py.
+    # Only non-noise rows/columns are kept to limit file size; the noise floor
+    # matches the one used in the OPF summary above.
+    _noise = 1e-4
+    for _fname, _df in [
+        ("load_shedding.csv",    slacks.load_shedding),
+        ("hp_load_shedding.csv", slacks.hp_load_shedding),
+    ]:
+        _row_mask = (_df.abs() > _noise).any(axis=1)
+        _col_mask = (_df.abs() > _noise).any(axis=0)
+        _df.loc[_row_mask, _col_mask].to_csv(f"{output_dir}/{_fname}")
+
     # ── Build summary row for CSV export ────────────────────────────────────
     summary = {
         "seed":                   seed,
@@ -850,6 +869,13 @@ def run_baseline_powerflow(snapshot_range, output_dir, seed=42, month_label=None
     line_max_loading = analyze_without_14a(edisgo)
     plot_overloaded_lines(edisgo, line_max_loading, plots_dir=output_dir)
 
+    # Save full per-timestep line loading for before/after §14a comparison in analysis.
+    # load_baseline_results() in loma_14a_analysis.py picks this up from either the
+    # seed directory (when called for a full year) or per-month subdirectory.
+    os.makedirs(output_dir, exist_ok=True)
+    lu_baseline = lines_relative_load(edisgo) * 100
+    lu_baseline.to_csv(os.path.join(output_dir, "line_usage_baseline"))
+
     duration_s = (datetime.now() - t0).total_seconds()
     print(f"[baseline] Done in {duration_s:.1f} s  —  output: {output_dir}")
 
@@ -857,11 +883,11 @@ def run_baseline_powerflow(snapshot_range, output_dir, seed=42, month_label=None
 
 
 if __name__ == "__main__":
-    for rnd_seed in range(42,53):
+    for rnd_seed in range(45,46):
         line_usage_parts = []
         curtailment_parts = []
         summary_rows = []
-        for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test=False):
+        for month_name, snap_start, snap_end in get_monthly_snapshot_ranges(2035, test="test1"):
             output_dir = f"/home/carlos/LoMa/output_edisgo/{rnd_seed}"
             edisgo, summary = main(
                 f"{output_dir}/{month_name}",
