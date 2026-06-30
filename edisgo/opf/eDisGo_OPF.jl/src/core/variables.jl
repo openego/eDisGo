@@ -449,12 +449,84 @@ end
 "§14a virtual generator binary variables for charging point time budget tracking"
 function variable_gen_cp_14a_binary(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
     z_cp14a = PowerModels.var(pm, nw)[:z_cp14a] = JuMP.@variable(pm.model,
-        [i in PowerModels.ids(pm, nw, :gen_cp_14a)], 
+        [i in PowerModels.ids(pm, nw, :gen_cp_14a)],
         base_name="$(nw)_z_cp14a",
         binary = true
     )
-    
+
     report && PowerModels.sol_component_value(pm, nw, :gen_cp_14a, :z, PowerModels.ids(pm, nw, :gen_cp_14a), z_cp14a)
+end
+
+
+"""
+    variable_gen_hp_14a_power_lp(pm, nw)
+
+LP variant of §14a HP virtual generator power variables.
+Used when daily time budget equals the full day (hours_limit = 24), making the
+binary z_hp14a completely unconstrained (z=1 is always feasible for every hour).
+Replacing the MILP big-M + binary with tight continuous bounds:
+  0 ≤ p_hp14a ≤ max(0, min(pmax, php_n - p_min_14a))
+converts the 14,112-binary MILP to a pure LP, giving the solver the exact optimum.
+"""
+function variable_gen_hp_14a_power_lp(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    p_hp14a = PowerModels.var(pm, nw)[:p_hp14a] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :gen_hp_14a)],
+        base_name="$(nw)_p_hp14a",
+        lower_bound = 0.0
+    )
+
+    for (i, gen) in PowerModels.ref(pm, nw, :gen_hp_14a)
+        hp_idx = gen["hp_index"]
+        hp_data = PowerModels.ref(pm, nw, :heatpumps, hp_idx)
+        # php is fixed to pd/cop in opf_version 5
+        php_n   = hp_data["pd"] / hp_data["cop"]
+        p_min   = gen["p_min_14a"]
+        pmax    = gen["pmax"]
+        # Upper bound encodes both the §14a capacity limit and the min-net-load constraint:
+        #   p_hp14a ≤ min(pmax, php_n - p_min)  →  net load ≥ p_min after curtailment
+        # When php_n < p_min the HP is below threshold and cannot be curtailed → ub=0
+        ub = max(0.0, min(pmax, php_n - p_min))
+        JuMP.set_upper_bound(p_hp14a[i], ub)
+    end
+
+    if report
+        PowerModels.sol_component_value(pm, nw, :gen_hp_14a, :p, PowerModels.ids(pm, nw, :gen_hp_14a), p_hp14a)
+    end
+end
+
+
+"""
+    variable_gen_cp_14a_power_lp(pm, nw)
+
+LP variant of §14a CP virtual generator power variables (same rationale as HP version).
+"""
+function variable_gen_cp_14a_power_lp(pm::AbstractPowerModel; nw::Int=nw_id_default, report::Bool=true)
+    p_cp14a = PowerModels.var(pm, nw)[:p_cp14a] = JuMP.@variable(pm.model,
+        [i in PowerModels.ids(pm, nw, :gen_cp_14a)],
+        base_name="$(nw)_p_cp14a",
+        lower_bound = 0.0
+    )
+
+    for (i, gen) in PowerModels.ref(pm, nw, :gen_cp_14a)
+        cp_idx  = gen["cp_index"]
+        p_min   = gen["p_min_14a"]
+        pmax    = gen["pmax"]
+        # Retrieve actual CP demand for this timestep
+        if haskey(PowerModels.ref(pm, nw), :electromobility) && haskey(PowerModels.ref(pm, nw, :electromobility), cp_idx)
+            pcp_n = PowerModels.ref(pm, nw, :electromobility, cp_idx)["pd"]
+        else
+            # Fixed-load CP: look up by name in loads dict
+            cp_name = gen["cp_name"]
+            load_match = filter(kv -> kv[2]["name"] == cp_name, PowerModels.ref(pm, nw, :load))
+            pcp_n = isempty(load_match) ? 0.0 : first(values(load_match))["pd"]
+        end
+        ub = max(0.0, min(pmax, pcp_n - p_min))
+        JuMP.set_upper_bound(p_cp14a[i], ub)
+    end
+
+    if report
+        PowerModels.sol_component_value(pm, nw, :gen_cp_14a, :p, PowerModels.ids(pm, nw, :gen_cp_14a), p_cp14a)
+    end
 end
 
 "slack variables for grid restrictions"

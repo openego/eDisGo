@@ -33,6 +33,7 @@ def to_powermodels(
     opf_version=1,
     curtailment_14a=None,
     hours_limit_14a: int = 24,
+    rate_a_factor: float = 1.0,
 ):
     """
     Convert eDisGo network to PowerModels dictionary format via 3-stage pipeline.
@@ -121,6 +122,16 @@ def to_powermodels(
         - If **False** or **None**: No §14a curtailment
 
         Default: None.
+    rate_a_factor : float, optional
+        Derating factor applied to all branch s_nom values when setting the BF
+        model current limit (rate_a).  Default 1.0 (no derating).
+
+        The SOC-BF relaxation allows the solver to set bus voltages up to vmax
+        (≈1.035 pu for LV) to relax line constraints, giving an effective
+        headroom of ~3.5 % above s_nom before the BF constraint binds.  Setting
+        ``rate_a_factor = 1/vmax ≈ 0.966`` (or a conservative 0.95) cancels this
+        relaxation so the OPF acts before the post-OPF AC power flow shows
+        overloading.  Recommended only for opf_version=5 with §14a.
 
     Returns
     -------
@@ -272,7 +283,8 @@ def to_powermodels(
     logger.info(
         "Transforming lines and transformers into PowerModels dictionary format."
     )
-    _build_branch(edisgo_object, psa_net, pm, flexible_storage_units, s_base)
+    _build_branch(edisgo_object, psa_net, pm, flexible_storage_units, s_base,
+                  rate_a_factor=rate_a_factor)
     if len(flexible_storage_units) > 0:
         logger.info("Transforming storage units into PowerModels dictionary format.")
         _build_battery_storage(
@@ -1145,7 +1157,8 @@ def _build_gen(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             }
 
 
-def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
+def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base,
+                   rate_a_factor: float = 1.0):
     """
     Build branch dictionary in PowerModels network data format and add it to
     PowerModels dictionary 'pm'.
@@ -1161,6 +1174,17 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
         Array containing all flexible storage units.
     s_base : int
         Base value of apparent power for per unit system.
+    rate_a_factor : float, optional
+        Multiplicative derating applied to s_nom when setting the branch current
+        limit (rate_a) in the BF model.  Default 1.0 (no derating).
+
+        The SOC-BF relaxation allows the solver to exploit voltages above 1.0 pu
+        to relax line constraints: the effective limit becomes
+        ``rate_a × v_from`` instead of ``rate_a``.  At the LV vmax of 1.035 pu
+        the BF model therefore misses overloading up to ~3.5 % above s_nom.
+        Setting ``rate_a_factor = 1 / v_max ≈ 0.966`` (or simply 0.95 for a
+        conservative margin) tightens the BF constraint so that the solver must
+        act before the AC power flow sees overloading.
 
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
@@ -1206,7 +1230,7 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             "b_fr": branches.b_pu.iloc[branch_i] / 2 * s_base,
             "shift": shift.iloc[branch_i],
             "br_status": 1.0,
-            "rate_a": branches.s_nom.iloc[branch_i].real / s_base,
+            "rate_a": branches.s_nom.iloc[branch_i].real * rate_a_factor / s_base,
             "rate_b": 250 / s_base,
             "rate_c": 250 / s_base,
             "angmin": -np.pi / 6,
