@@ -17,7 +17,7 @@ except ImportError:
     _HAS_CTX = False
 
 # ── configuration ─────────────────────────────────────────────────────────────
-RESULTS_ROOT = "/home/carlos/LoMa/output_edisgo"
+RESULTS_ROOT = "/home/carlos/LoMa/output_edisgo/45"
 PLOTS_DIR    = f"{RESULTS_ROOT}/presentation_plots"
 CURT_THRESHOLD_MW = 1e-3   # solver noise floor
 LINE_STRESS_PCT   = 90.0   # threshold for "stressed" line [%]
@@ -30,184 +30,103 @@ os.makedirs(PLOTS_DIR, exist_ok=True)
 # ══════════════════════════════════════════════════════════════════════════════
 
 def load_results(results_root):
-    """Return {seed: {"curtailment": df, "line_usage": df}}."""
-    data = {}
-    for seed_dir in sorted(glob.glob(os.path.join(results_root, "*"))):
-        if not os.path.isdir(seed_dir):
-            continue
-        curt_path = os.path.join(seed_dir, "curtailment_14a.csv")
-        lu_path   = os.path.join(seed_dir, "line_usage")
-        if not (os.path.isfile(curt_path) and os.path.isfile(lu_path)):
-            continue
-        seed = os.path.basename(seed_dir)
+    """Return {"curtailment": df, "line_usage": df}."""
+    curt_path = os.path.join(results_root, "curtailment_14a.csv")
+    lu_path   = os.path.join(results_root, "line_usage")
+    if not (os.path.isfile(curt_path) and os.path.isfile(lu_path)):
+        raise FileNotFoundError(
+            f"curtailment_14a.csv or line_usage not found in {results_root}"
+        )
 
-        curt = pd.read_csv(curt_path, index_col=0, parse_dates=True)
-        curt = curt.clip(lower=0)
-        curt[curt < CURT_THRESHOLD_MW] = 0.0
+    curt = pd.read_csv(curt_path, index_col=0, parse_dates=True)
+    curt = curt.clip(lower=0)
+    curt[curt < CURT_THRESHOLD_MW] = 0.0
 
-        lu = pd.read_csv(lu_path, index_col=0, parse_dates=True)
+    lu = pd.read_csv(lu_path, index_col=0, parse_dates=True)
 
-        data[seed] = {"curtailment": curt, "line_usage": lu}
-        print(f"  seed={seed}: {len(curt)} hours, {lu.shape[1]} lines")
-    return data
+    print(f"  {len(curt)} hours, {lu.shape[1]} lines")
+    return {"curtailment": curt, "line_usage": lu}
 
 
 def load_topology(results_root):
     """
-    Load network topology from the first available saved edisgo month directory.
-    All seeds share the same network topology.
+    Load network topology from the first available edisgo month directory.
 
     Returns buses, lines, loads, transformers DataFrames.
     """
-    for seed_dir in sorted(glob.glob(os.path.join(results_root, "*"))):
-        for edisgo_dir in sorted(glob.glob(os.path.join(seed_dir, "*/edisgo"))):
-            topo = os.path.join(edisgo_dir, "topology")
-            if not os.path.isdir(topo):
-                continue
-            buses = pd.read_csv(os.path.join(topo, "buses.csv"), index_col=0)
-            lines = pd.read_csv(os.path.join(topo, "lines.csv"), index_col=0)
-            loads = pd.read_csv(os.path.join(topo, "loads.csv"), index_col=0)
-            trafos_path = os.path.join(topo, "transformers.csv")
-            transformers = (pd.read_csv(trafos_path, index_col=0)
-                            if os.path.isfile(trafos_path) else pd.DataFrame())
-            print(f"  Topology from {edisgo_dir}")
-            return buses, lines, loads, transformers
+    for edisgo_dir in sorted(glob.glob(os.path.join(results_root, "*/edisgo"))):
+        topo = os.path.join(edisgo_dir, "topology")
+        if not os.path.isdir(topo):
+            continue
+        buses = pd.read_csv(os.path.join(topo, "buses.csv"), index_col=0)
+        lines = pd.read_csv(os.path.join(topo, "lines.csv"), index_col=0)
+        loads = pd.read_csv(os.path.join(topo, "loads.csv"), index_col=0)
+        trafos_path = os.path.join(topo, "transformers.csv")
+        transformers = (pd.read_csv(trafos_path, index_col=0)
+                        if os.path.isfile(trafos_path) else pd.DataFrame())
+        print(f"  Topology from {edisgo_dir}")
+        return buses, lines, loads, transformers
     raise FileNotFoundError("No saved edisgo topology found under " + results_root)
 
 
 def load_per_bus_curtailment(results_root, loads_df):
     """
-    Read generators_active_power.csv for every seed × month, extract
-    per-load §14a curtailment, map to buses, and sum across seeds.
-
-    Each seed's own topology/loads.csv is used to map load names to buses,
-    because CP/HP placements differ per seed (different random seed).
+    Read generators_active_power.csv for every month, extract per-load §14a
+    curtailment, map to buses, and sum across months.
 
     Returns a DataFrame indexed by bus_name with columns:
-        hp_mwh, cp_mwh  (sum over seeds and months)
+        hp_mwh, cp_mwh
     """
-    seed_bus_curt = {}
+    bus_hp, bus_cp = {}, {}
 
-    for seed_dir in sorted(glob.glob(os.path.join(results_root, "*"))):
-        if not os.path.isdir(seed_dir):
+    for edisgo_dir in sorted(glob.glob(os.path.join(results_root, "*/edisgo"))):
+        gen_path = os.path.join(edisgo_dir, "timeseries", "generators_active_power.csv")
+        if not os.path.isfile(gen_path):
             continue
-        seed = os.path.basename(seed_dir)
-        bus_hp, bus_cp = {}, {}
 
-        for edisgo_dir in sorted(glob.glob(os.path.join(seed_dir, "*/edisgo"))):
-            gen_path = os.path.join(edisgo_dir, "timeseries", "generators_active_power.csv")
-            if not os.path.isfile(gen_path):
+        loads_path = os.path.join(edisgo_dir, "topology", "loads.csv")
+        month_loads = (
+            pd.read_csv(loads_path, index_col=0)
+            if os.path.isfile(loads_path)
+            else loads_df
+        )
+
+        gen_ts = pd.read_csv(
+            gen_path, index_col=0,
+            usecols=lambda c: c == "snapshot" or "14a_support" in c,
+        )
+        if gen_ts.empty:
+            continue
+
+        gen_ts = gen_ts.clip(lower=0)
+        gen_ts[gen_ts < CURT_THRESHOLD_MW] = 0.0
+
+        for col in gen_ts.columns:
+            total = gen_ts[col].sum()
+            if total <= 0:
                 continue
+            if "hp_14a_support" in col:
+                load_name = col.replace("hp_14a_support_", "")
+                store = bus_hp
+            else:
+                load_name = (col.replace("cp_14a_support_", "")
+                                .replace("charging_point_14a_support_", ""))
+                store = bus_cp
 
-            # Use this seed's own loads.csv so bus mapping is correct for its CP/HP placement
-            seed_loads_path = os.path.join(edisgo_dir, "topology", "loads.csv")
-            seed_loads = (
-                pd.read_csv(seed_loads_path, index_col=0)
-                if os.path.isfile(seed_loads_path)
-                else loads_df
-            )
-
-            gen_ts = pd.read_csv(
-                gen_path, index_col=0,
-                usecols=lambda c: c == "snapshot" or "14a_support" in c,
-            )
-            if gen_ts.empty:
+            if load_name not in month_loads.index:
                 continue
+            bus = month_loads.at[load_name, "bus"]
+            store[bus] = store.get(bus, 0.0) + total
 
-            gen_ts = gen_ts.clip(lower=0)
-            gen_ts[gen_ts < CURT_THRESHOLD_MW] = 0.0
-
-            for col in gen_ts.columns:
-                total = gen_ts[col].sum()
-                if total <= 0:
-                    continue
-                if "hp_14a_support" in col:
-                    load_name = col.replace("hp_14a_support_", "")
-                    store = bus_hp
-                else:
-                    load_name = (col.replace("cp_14a_support_", "")
-                                    .replace("charging_point_14a_support_", ""))
-                    store = bus_cp
-
-                if load_name not in seed_loads.index:
-                    continue
-                bus = seed_loads.at[load_name, "bus"]
-                store[bus] = store.get(bus, 0.0) + total
-
-        if bus_hp or bus_cp:
-            seed_bus_curt[seed] = {"hp": bus_hp, "cp": bus_cp}
-
-    if not seed_bus_curt:
+    if not bus_hp and not bus_cp:
         return pd.DataFrame(columns=["hp_mwh", "cp_mwh"])
 
-    all_buses = set(
-        b for d in seed_bus_curt.values()
-        for store in d.values()
-        for b in store
-    )
-    rows = []
-    for bus in sorted(all_buses):
-        hp = np.sum([d["hp"].get(bus, 0.0) for d in seed_bus_curt.values()])
-        cp = np.sum([d["cp"].get(bus, 0.0) for d in seed_bus_curt.values()])
-        rows.append({"bus": bus, "hp_mwh": hp, "cp_mwh": cp})
-
+    all_buses = set(bus_hp) | set(bus_cp)
+    rows = [
+        {"bus": bus, "hp_mwh": bus_hp.get(bus, 0.0), "cp_mwh": bus_cp.get(bus, 0.0)}
+        for bus in sorted(all_buses)
+    ]
     return pd.DataFrame(rows).set_index("bus")
-
-
-def load_peak_demand_per_seed(results_root):
-    """
-    Read loads_active_power.csv for every seed × month, sum all load columns
-    per timestep, and return the annual peak total demand for each seed.
-
-    Returns a dict {seed: peak_mw}.
-    """
-    seed_peaks = {}
-    for seed_dir in sorted(glob.glob(os.path.join(results_root, "*"))):
-        if not os.path.isdir(seed_dir):
-            continue
-        seed = os.path.basename(seed_dir)
-        month_dfs = []
-        for edisgo_dir in sorted(glob.glob(os.path.join(seed_dir, "*/edisgo"))):
-            lap_path = os.path.join(edisgo_dir, "timeseries", "loads_active_power.csv")
-            if not os.path.isfile(lap_path):
-                continue
-            df = pd.read_csv(lap_path, index_col=0, parse_dates=True)
-            month_dfs.append(df.sum(axis=1))
-        if not month_dfs:
-            continue
-        total_demand = pd.concat(month_dfs)
-        seed_peaks[seed] = total_demand.max()
-        print(f"  seed={seed}: peak demand = {seed_peaks[seed]:.4f} MW")
-    return seed_peaks
-
-
-def plot_peak_demand_per_seed(results_root, plots_dir):
-    """
-    Bar chart of the annual peak total demand (MW) for each seed.
-    Seeds on x-axis, peak demand [MW] on y-axis.
-    """
-    seed_peaks = load_peak_demand_per_seed(results_root)
-    if not seed_peaks:
-        print("  [peak demand] No data found — skipping.")
-        return
-
-    seeds  = sorted(seed_peaks.keys())
-    values = [seed_peaks[s] for s in seeds]
-    x = np.arange(len(seeds))
-
-    fig, ax = plt.subplots(figsize=(max(6, len(seeds) * 0.7), 5))
-    bars = ax.bar(x, values, color="#1f77b4", alpha=0.85, edgecolor="white", linewidth=0.5)
-    ax.axhline(np.mean(values), color="black", linestyle="--", linewidth=1.0,
-               label=f"Mittelwert: {np.mean(values):.2f} MW")
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(seeds, rotation=45, ha="right", fontsize=9)
-    ax.set_ylabel("Jahresspitzenlast [MW]")
-    ax.set_xlabel("Szenario")
-    ax.legend(fontsize=9)
-    ax.grid(True, axis="y", alpha=0.3)
-    plt.tight_layout()
-    _save(fig, plots_dir, "peak_demand_per_seed.png")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -216,56 +135,47 @@ def plot_peak_demand_per_seed(results_root, plots_dir):
 
 def _daily_by_month(data, col):
     """
-    Return a dict {month_int: np.array of daily values across all seeds}.
+    Return a dict {month_int: np.array of daily values}.
 
     col: "hp_curtailment_mw" | "cp_curtailment_mw" | "total_curtailment"
     """
     from collections import defaultdict
     month_vals = defaultdict(list)
-    for d in data.values():
-        curt = d["curtailment"]
-        if col == "total_curtailment":
-            series = curt["hp_curtailment_mw"] + curt["cp_curtailment_mw"]
-        else:
-            series = curt[col]
-        daily = series.resample("D").sum()
-        for m, grp in daily.groupby(daily.index.month):
-            month_vals[m].extend(grp.values.tolist())
+    curt = data["curtailment"]
+    if col == "total_curtailment":
+        series = curt["hp_curtailment_mw"] + curt["cp_curtailment_mw"]
+    else:
+        series = curt[col]
+    daily = series.resample("D").sum()
+    for m, grp in daily.groupby(daily.index.month):
+        month_vals[m].extend(grp.values.tolist())
     return dict(month_vals)
 
 
 def _monthly_by_month(data, col):
     """
-    Return a dict {month_int: list of monthly totals, one per seed}.
+    Return a dict {month_int: monthly total}.
 
     col: "hp_curtailment_mw" | "cp_curtailment_mw" | "total_curtailment"
     """
-    from collections import defaultdict
-    month_vals = defaultdict(list)
-    for d in data.values():
-        curt = d["curtailment"]
-        if col == "total_curtailment":
-            series = curt["hp_curtailment_mw"] + curt["cp_curtailment_mw"]
-        else:
-            series = curt[col]
-        for m, grp in series.groupby(series.index.month):
-            month_vals[m].append(grp.sum())
-    return dict(month_vals)
+    month_vals = {}
+    curt = data["curtailment"]
+    if col == "total_curtailment":
+        series = curt["hp_curtailment_mw"] + curt["cp_curtailment_mw"]
+    else:
+        series = curt[col]
+    for m, grp in series.groupby(series.index.month):
+        month_vals[m] = grp.sum()
+    return month_vals
 
 
-def _line_hours_over_threshold(data, pct=LINE_STRESS_PCT, aggregate="mean"):
+def _line_hours_over_threshold(data, pct=LINE_STRESS_PCT):
     """
-    Return a Series indexed by line name with the aggregated (mean or sum
-    across seeds) number of hours where loading exceeded `pct` %.
+    Return a Series indexed by line name with the number of hours where
+    loading exceeded `pct` %.
     """
-    counts = {}
-    for d in data.values():
-        lu = d["line_usage"]
-        over = (lu > pct).sum(axis=0)
-        for line, n in over.items():
-            counts.setdefault(line, []).append(n)
-    func = np.sum if aggregate == "sum" else np.mean
-    return pd.Series({line: func(v) for line, v in counts.items()})
+    lu = data["line_usage"]
+    return (lu > pct).sum(axis=0)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -275,44 +185,27 @@ def _line_hours_over_threshold(data, pct=LINE_STRESS_PCT, aggregate="mean"):
 
 def plot_monthly_curtailment_mean_stacked(data, plots_dir):
     """
-    Stacked bar: mean HP + CP curtailment per month with std error bars.
+    Stacked bar: HP + CP curtailment per month.
     Shows the seasonal pattern and HP/CP split at a glance.
     """
-    months = sorted(
-        set(m for d in data.values() for m in d["curtailment"].index.month.unique())
-    )
+    months = sorted(data["curtailment"].index.month.unique())
     DE_MONTHS = {1: "Jan", 2: "Feb", 3: "Mär", 4: "Apr", 5: "Mai", 6: "Jun",
                  7: "Jul", 8: "Aug", 9: "Sep", 10: "Okt", 11: "Nov", 12: "Dez"}
     mlabels = [DE_MONTHS[m] for m in months]
 
     hp_monthly = _monthly_by_month(data, "hp_curtailment_mw")
     cp_monthly = _monthly_by_month(data, "cp_curtailment_mw")
-    hp_means, hp_stds, cp_means, cp_stds = [], [], [], []
-    for m in months:
-        hp_vals = hp_monthly.get(m, [0])
-        cp_vals = cp_monthly.get(m, [0])
-        hp_means.append(np.mean(hp_vals))
-        hp_stds.append(np.std(hp_vals))
-        cp_means.append(np.mean(cp_vals))
-        cp_stds.append(np.std(cp_vals))
-
-    hp_means = np.array(hp_means)
-    cp_means = np.array(cp_means)
-    hp_stds  = np.array(hp_stds)
+    hp_vals = np.array([hp_monthly.get(m, 0.0) for m in months])
+    cp_vals = np.array([cp_monthly.get(m, 0.0) for m in months])
 
     x = np.arange(len(months))
     fig, ax = plt.subplots(figsize=(10, 5))
-    combined_means = hp_means + cp_means
-    combined_stds  = np.sqrt(hp_stds**2 + np.array(cp_stds)**2)
-    ax.bar(x, hp_means, color="#d62728", alpha=0.85, label="WP (Mittelwert)")
-    ax.bar(x, cp_means, bottom=hp_means, color="#1f77b4", alpha=0.85, label="LP (Mittelwert)")
-    ax.errorbar(x, combined_means,
-                yerr=[np.minimum(combined_stds, combined_means), combined_stds],
-                fmt="none", color="black", capsize=3, linewidth=1, label="±1 Std.-Abw.")
+    ax.bar(x, hp_vals, color="#d62728", alpha=0.85, label="WP")
+    ax.bar(x, cp_vals, bottom=hp_vals, color="#1f77b4", alpha=0.85, label="LP")
 
     ax.set_xticks(x)
     ax.set_xticklabels(mlabels)
-    ax.set_ylabel("Mittlere monatliche §14a-Abregelung [MWh/Monat]")
+    ax.set_ylabel("Monatliche §14a-Abregelung [MWh/Monat]")
     ax.set_xlabel("Monat (2035)")
     ax.legend(fontsize=9)
     ax.grid(True, axis="y", alpha=0.3)
@@ -320,22 +213,17 @@ def plot_monthly_curtailment_mean_stacked(data, plots_dir):
     _save(fig, plots_dir, "mgb_14a_curtailment_monthly.png")
 
 
-
-
-
-
 def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
     """
     Network map showing:
-      - Lines coloured by total hours (sum across seeds) with loading > LINE_STRESS_PCT %
+      - Lines coloured by hours with loading > LINE_STRESS_PCT %.
         Unaffected lines are drawn in black; jet colormap with adaptive range.
       - All buses visible as gray dots; buses with §14a get pie markers (HP red, CP blue).
       - IEC two-circle transformer symbol at the feeder root.
-    Style mirrors plot_curtailment_reach_map.
     """
     import matplotlib.patches as mpatches
 
-    hours_over = _line_hours_over_threshold(data, LINE_STRESS_PCT, aggregate="mean")
+    hours_over = _line_hours_over_threshold(data, LINE_STRESS_PCT)
 
     fig, ax = plt.subplots(figsize=(14, 10))
     fig.subplots_adjust(right=0.84)
@@ -432,8 +320,6 @@ def plot_network_map(data, buses, lines, loads, bus_curt, root_bus, plots_dir):
     cb.update_ticks()
 
     # ── type legend (upper left) ──────────────────────────────────────────────
-    n_stressed = int((hours_over > 0).sum())
-    n_seeds    = len(data)
     type_handles = [
         plt.Line2D([0], [0], color="black", linewidth=1.2,
                    label=f"Leitung — nie über {LINE_STRESS_PCT:.0f} %"),
@@ -537,94 +423,73 @@ def compute_bus_upstream_lines(G, root_bus):
 
 def compute_line_curtailment_reach(results_root, loads_df, bus_upstream_lines):
     """
-    For each seed: load per-load §14a timeseries, map loads to buses, then
+    Load per-load §14a timeseries for every month, map loads to buses, then
     propagate curtailment events upstream through the feeder graph.
 
     For each line, a timestep is 'affected' when at least one bus in its
     downstream subtree had active §14a curtailment that hour.
 
-    Returns a pd.Series (index = line name, values = mean affected hours
-    across seeds).
+    Returns a pd.Series (index = line name, values = affected hours).
     """
     def _extract_load_name(col):
         return (col.replace("hp_14a_support_", "")
                    .replace("cp_14a_support_", "")
                    .replace("charging_point_14a_support_", ""))
 
-    seed_line_counts = {}
-
-    for seed_dir in sorted(glob.glob(os.path.join(results_root, "*"))):
-        if not os.path.isdir(seed_dir):
+    month_dfs = []
+    for edisgo_dir in sorted(glob.glob(os.path.join(results_root, "*/edisgo"))):
+        gen_path = os.path.join(edisgo_dir, "timeseries", "generators_active_power.csv")
+        if not os.path.isfile(gen_path):
             continue
-        seed = os.path.basename(seed_dir)
-        month_dfs = []
+        loads_path = os.path.join(edisgo_dir, "topology", "loads.csv")
+        month_loads = (
+            pd.read_csv(loads_path, index_col=0)
+            if os.path.isfile(loads_path)
+            else loads_df
+        )
+        gen_ts = pd.read_csv(
+            gen_path, index_col=0, parse_dates=True,
+            usecols=lambda c: c == "snapshot" or "14a_support" in c,
+        )
+        month_dfs.append((gen_ts, month_loads))
 
-        for edisgo_dir in sorted(glob.glob(os.path.join(seed_dir, "*/edisgo"))):
-            gen_path = os.path.join(edisgo_dir, "timeseries", "generators_active_power.csv")
-            if not os.path.isfile(gen_path):
-                continue
-            # Use this month's own loads.csv for correct bus mapping
-            seed_loads_path = os.path.join(edisgo_dir, "topology", "loads.csv")
-            seed_loads = (
-                pd.read_csv(seed_loads_path, index_col=0)
-                if os.path.isfile(seed_loads_path)
-                else loads_df
-            )
-            gen_ts = pd.read_csv(
-                gen_path, index_col=0, parse_dates=True,
-                usecols=lambda c: c == "snapshot" or "14a_support" in c,
-            )
-            month_dfs.append((gen_ts, seed_loads))
-
-        if not month_dfs:
-            continue
-
-        # Build bus → boolean Series (True = curtailment active that hour)
-        # Process per-month to keep the correct topology mapping
-        bus_active = {}
-        for gen_ts, seed_loads in month_dfs:
-            gen_ts = gen_ts.clip(lower=0)
-            gen_ts[gen_ts < CURT_THRESHOLD_MW] = 0.0
-            for col in gen_ts.columns:
-                load_name = _extract_load_name(col)
-                if load_name not in seed_loads.index:
-                    continue
-                bus = seed_loads.at[load_name, "bus"]
-                col_active = gen_ts[col] > 0
-                if bus in bus_active:
-                    bus_active[bus] = bus_active[bus] | col_active
-                else:
-                    bus_active[bus] = col_active.copy()
-
-        if not bus_active:
-            continue
-
-        bus_active_df = pd.DataFrame(bus_active)  # (timesteps × curtailed buses)
-
-        # Propagate upstream: for each bus, OR its activity into every upstream line
-        line_affected = {}
-        for bus, upstream in bus_upstream_lines.items():
-            if bus not in bus_active_df.columns or not upstream:
-                continue
-            for line in upstream:
-                if line not in line_affected:
-                    line_affected[line] = bus_active_df[bus].copy()
-                else:
-                    line_affected[line] = line_affected[line] | bus_active_df[bus]
-
-        seed_line_counts[seed] = {
-            line: int(series.sum()) for line, series in line_affected.items()
-        }
-        print(f"    seed={seed}: {len(seed_line_counts[seed])} lines reached")
-
-    if not seed_line_counts:
+    if not month_dfs:
         return pd.Series(dtype=float)
 
-    all_lines = set(l for d in seed_line_counts.values() for l in d)
+    bus_active = {}
+    for gen_ts, month_loads in month_dfs:
+        gen_ts = gen_ts.clip(lower=0)
+        gen_ts[gen_ts < CURT_THRESHOLD_MW] = 0.0
+        for col in gen_ts.columns:
+            load_name = _extract_load_name(col)
+            if load_name not in month_loads.index:
+                continue
+            bus = month_loads.at[load_name, "bus"]
+            col_active = gen_ts[col] > 0
+            if bus in bus_active:
+                bus_active[bus] = bus_active[bus] | col_active
+            else:
+                bus_active[bus] = col_active.copy()
+
+    if not bus_active:
+        return pd.Series(dtype=float)
+
+    bus_active_df = pd.DataFrame(bus_active)
+
+    line_affected = {}
+    for bus, upstream in bus_upstream_lines.items():
+        if bus not in bus_active_df.columns or not upstream:
+            continue
+        for line in upstream:
+            if line not in line_affected:
+                line_affected[line] = bus_active_df[bus].copy()
+            else:
+                line_affected[line] = line_affected[line] | bus_active_df[bus]
+
+    print(f"    {len(line_affected)} lines reached")
     return pd.Series(
-        {line: np.mean([d.get(line, 0) for d in seed_line_counts.values()])
-         for line in all_lines},
-        name="mean_affected_hours",
+        {line: int(series.sum()) for line, series in line_affected.items()},
+        name="affected_hours",
     )
 
 
@@ -642,23 +507,20 @@ class _TwoCircleHandler(HandlerBase):
         return [c1, c2]
 
 
-def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bus, n_seeds, plots_dir):
+def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bus, plots_dir):
     """
     Network map combining two layers:
 
-    Lines — coloured by mean hours per simulated period in which §14a
-    curtailment occurred somewhere downstream.  All lines are visible;
-    unaffected ones are drawn in a muted grey.
+    Lines — coloured by hours in which §14a curtailment occurred somewhere
+    downstream.  All lines are visible; unaffected ones are drawn in black.
 
     Buses — every bus is shown as a small dot.  Buses with §14a activity
     get a larger pie marker (red = HP, blue = CP) whose area scales with
-    the total curtailment energy (sum of HP + CP MWh, mean across seeds).
+    the total curtailment energy (HP + CP MWh).
     """
     import matplotlib.patches as mpatches
 
     fig, ax = plt.subplots(figsize=(14, 10))
-    # Reserve fixed right margin for colorbar before drawing anything else,
-    # so tight_layout/basemap cannot push the map into the colorbar space.
     fig.subplots_adjust(right=0.84)
 
     # ── lines ─────────────────────────────────────────────────────────────────
@@ -695,11 +557,9 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
     MIN_R = x_extent * 0.0012
     MAX_R = x_extent * 0.009
 
-    # visible dot for every bus (no §14a)
     ax.scatter(bus_xy["x"], bus_xy["y"], s=18, color="#888888",
                zorder=4, linewidths=0.4, edgecolors="white", alpha=0.35)
 
-    # pie marker for buses with curtailment
     if not bus_curt.empty:
         curt_align = bus_curt.reindex(bus_xy.index).fillna(0)
         total_curt = curt_align["hp_mwh"] + curt_align["cp_mwh"]
@@ -747,14 +607,12 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
     ax.set_axis_off()
 
     # ── colourbar for line reach ───────────────────────────────────────────────
-    # Place at fixed figure coordinates inside the reserved right margin.
     cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
     sm  = cm.ScalarMappable(cmap=cmap_lines, norm=norm_lines)
     cb  = fig.colorbar(sm, cax=cax)
     cb.set_label("Stunden mit §14a-Abregelung im nachgelagerten Netz", fontsize=9)
 
     # ── type legend (upper left) ──────────────────────────────────────────────
-    n_affected = int((line_reach_hours > 0).sum())
     type_handles = [
         plt.Line2D([0], [0], color="black", linewidth=1.2,
                    label="Leitung — kein §14a-Einfluss"),
@@ -780,7 +638,6 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
         ref_fracs = [1.0]
         ref_mwhs  = [f * max_total for f in ref_fracs]
 
-        # Compute deg_per_pt once from the stable (subplots_adjust) axes position.
         fig.canvas.draw()
         xlim = ax.get_xlim()
         deg_per_pt = (xlim[1] - xlim[0]) / (
@@ -802,31 +659,21 @@ def plot_curtailment_reach_map(buses, lines, line_reach_hours, bus_curt, root_bu
     _save(fig, plots_dir, "network_curtailment_reach.png")
 
 
-def load_solar_generators_per_seed(results_root):
-    """
-    Load solar_rooftop generators from the first available seed/month directory.
-    Returns a dict with a single entry {seed: DataFrame} since the generator
-    topology is identical across all seeds.
-    """
-    for seed_dir in sorted(glob.glob(os.path.join(results_root, "*"))):
-        if not os.path.isdir(seed_dir):
+def load_solar_generators(results_root):
+    """Load solar_rooftop generators from the first available month directory."""
+    for edisgo_dir in sorted(glob.glob(os.path.join(results_root, "*/edisgo"))):
+        gen_path = os.path.join(edisgo_dir, "topology", "generators.csv")
+        if not os.path.isfile(gen_path):
             continue
-        seed = os.path.basename(seed_dir)
-        for edisgo_dir in sorted(glob.glob(os.path.join(seed_dir, "*/edisgo"))):
-            gen_path = os.path.join(edisgo_dir, "topology", "generators.csv")
-            if not os.path.isfile(gen_path):
-                continue
-            gen = pd.read_csv(gen_path, index_col=0)
-            solar = gen[gen["carrier"] == "solar_rooftop"].copy()
-            return {seed: solar}
-    return {}
+        gen = pd.read_csv(gen_path, index_col=0)
+        return gen[gen["carrier"] == "solar_rooftop"].copy()
+    return pd.DataFrame()
 
 
 def plot_solar_rooftop_map(buses, lines, solar_gens, root_bus, plots_dir):
     """
-    Network map for a single seed showing solar rooftop generators as scatter
-    points.  Point size scales with installed capacity (p_nom).  Style mirrors
-    cable_capacity_map: neutral-grey lines, basemap, transformer symbol.
+    Network map showing solar rooftop generators as scatter points.
+    Point size scales with installed capacity (p_nom).
     """
     import matplotlib.patches as mpatches
 
@@ -852,10 +699,10 @@ def plot_solar_rooftop_map(buses, lines, solar_gens, root_bus, plots_dir):
     ax.scatter(bus_xy["x"], bus_xy["y"], s=14, color="#888888",
                zorder=3, linewidths=0.3, edgecolors="white")
 
-    # ── solar generators (real + synthetic fill for visual balance) ──────────
+    # ── solar generators ──────────────────────────────────────────────────────
     p_min = solar_gens["p_nom"].min()
     p_max = solar_gens["p_nom"].max() or 1.0
-    S_MIN, S_MAX = 30, 300   # marker area range (pt²)
+    S_MIN, S_MAX = 30, 300
 
     # Real generators are concentrated in the lower half of the network.
     # Add synthetic generators to the upper half so the visual density is
@@ -1020,28 +867,24 @@ def plot_cable_capacity_map(buses, lines, root_bus, plots_dir):
 # ══════════════════════════════════════════════════════════════════════════════
 
 def save_curtailment_summary(data, plots_dir):
-    rows = []
-    for seed, d in data.items():
-        curt = d["curtailment"]
-        hp   = curt["hp_curtailment_mw"]
-        cp   = curt["cp_curtailment_mw"]
-        rows.append({
-            "seed": seed,
-            "HP curtailment [MWh]":   round(hp.sum(), 4),
-            "CP curtailment [MWh]":   round(cp.sum(), 4),
-            "Total curtailment [MWh]": round((hp + cp).sum(), 4),
-            "Hours HP curtailed":     int((hp > 0).sum()),
-            "Hours CP curtailed":     int((cp > 0).sum()),
-            "Max hourly HP [MW]":     round(hp.max(), 4),
-            "Max hourly CP [MW]":     round(cp.max(), 4),
-        })
-    df = pd.DataFrame(rows).set_index("seed")
+    curt = data["curtailment"]
+    hp   = curt["hp_curtailment_mw"]
+    cp   = curt["cp_curtailment_mw"]
+    summary = pd.Series({
+        "HP curtailment [MWh]":    round(hp.sum(), 4),
+        "CP curtailment [MWh]":    round(cp.sum(), 4),
+        "Total curtailment [MWh]": round((hp + cp).sum(), 4),
+        "Hours HP curtailed":      int((hp > 0).sum()),
+        "Hours CP curtailed":      int((cp > 0).sum()),
+        "Max hourly HP [MW]":      round(hp.max(), 4),
+        "Max hourly CP [MW]":      round(cp.max(), 4),
+    })
     print("\n=== §14a Curtailment Summary ===")
-    print(df.to_string())
+    print(summary.to_string())
     path = os.path.join(plots_dir, "curtailment_summary.csv")
-    df.to_csv(path)
+    summary.to_csv(path)
     print(f"  Saved: {path}")
-    return df
+    return summary
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1089,7 +932,7 @@ def analyze_without_14a(edisgo):
     line_loading_pct = s_res[line_cols].div(lines_df.loc[line_cols, "s_nom"]) * 100
     line_max_loading = line_loading_pct.max()
 
-    overloaded = line_max_loading[line_max_loading > 100]
+    overloaded = line_max_loading[line_max_loading > 105]
     print(f"  Lines overloaded in ≥1 snapshot: {len(overloaded)} / {len(line_cols)}")
     if not overloaded.empty:
         print(overloaded.sort_values(ascending=False).to_string())
@@ -1161,14 +1004,13 @@ def plot_overloaded_lines(edisgo, line_max_loading,
             ax.plot([x0, x1], [y0, y1], color=cmap(norm(pct)), linewidth=1.4,
                     zorder=2, solid_capstyle="round")
         else:
-            ax.plot([x0, x1], [y0, y1], color="#aaaaaa", linewidth=0.7,
+            ax.plot([x0, x1], [y0, y1], color="black", linewidth=0.7,
                     zorder=1, solid_capstyle="round")
 
     bus_xy = buses_df[["x", "y"]].dropna()
     ax.scatter(bus_xy["x"], bus_xy["y"], s=10, color="#555555",
                zorder=5, linewidths=0.3, edgecolors="white", alpha=0.4)
 
-    # transformer marker at feeder root
     if root_bus in buses_df.index:
         tx, ty = buses_df.at[root_bus, "x"], buses_df.at[root_bus, "y"]
         if pd.notna(tx):
@@ -1193,16 +1035,222 @@ def plot_overloaded_lines(edisgo, line_max_loading,
     cb  = fig.colorbar(sm, cax=cax)
     cb.set_label("Spitzenbelastung der Leitungen [%]", fontsize=10)
 
-    # dashed line at the 100 % overload threshold
     threshold_pos = norm(overload_threshold)
     cb.ax.axhline(threshold_pos, color="black", linewidth=1.5, linestyle="--")
-    # show actual peak loading above the colorbar
     cb.ax.text(
         0.5, 1.02, f"max: {v_max:.0f} %",
         transform=cb.ax.transAxes,
         va="bottom", ha="center", fontsize=8, color="#cc0000",
         fontweight="bold",
     )
+
+    _save(fig, plots_dir, filename)
+    if show:
+        plt.show()
+
+
+def bus_curt_from_edisgo(edisgo, curt_threshold=1e-3):
+    """
+    Compute per-bus §14a curtailment totals directly from a loaded EDisGo object.
+
+    Returns a DataFrame indexed by bus with columns hp_mwh and cp_mwh.
+    """
+    gen_ts = edisgo.timeseries.generators_active_power
+    support_cols = [c for c in gen_ts.columns if "14a_support" in c]
+    if not support_cols:
+        return pd.DataFrame(columns=["hp_mwh", "cp_mwh"])
+
+    loads_df = edisgo.topology.loads_df
+    bus_hp, bus_cp = {}, {}
+
+    for col in support_cols:
+        series = gen_ts[col].clip(lower=0)
+        series = series[series >= curt_threshold]
+        total = series.sum()
+        if total <= 0:
+            continue
+        if "hp_14a_support" in col:
+            load_name = col.replace("hp_14a_support_", "")
+            store = bus_hp
+        else:
+            load_name = (col.replace("cp_14a_support_", "")
+                            .replace("charging_point_14a_support_", ""))
+            store = bus_cp
+        if load_name not in loads_df.index:
+            continue
+        bus = loads_df.at[load_name, "bus"]
+        store[bus] = store.get(bus, 0.0) + total
+
+    if not bus_hp and not bus_cp:
+        return pd.DataFrame(columns=["hp_mwh", "cp_mwh"])
+
+    all_buses = set(bus_hp) | set(bus_cp)
+    rows = [{"bus": b, "hp_mwh": bus_hp.get(b, 0.0), "cp_mwh": bus_cp.get(b, 0.0)}
+            for b in sorted(all_buses)]
+    return pd.DataFrame(rows).set_index("bus")
+
+
+def plot_overload_hours(edisgo, overload_hours,
+                        plots_dir: str = ".", show: bool = False,
+                        filename: str = "overload_hours_map.png",
+                        vmax: int | None = None,
+                        bus_curt=None):
+    """
+    Network map coloured by number of timesteps each line is overloaded
+    (loading > 105 %).  Lines with zero overloaded timesteps are drawn grey.
+
+    Parameters
+    ----------
+    edisgo : EDisGo
+        EDisGo object (topology.buses_df must have x/y coordinates).
+    overload_hours : pd.Series
+        Number of overloaded timesteps per line, indexed by line name.
+        Typically computed as ``(lines_relative_load(edisgo) * 100 > 105).sum()``.
+    plots_dir : str
+        Directory in which to save the PNG.
+    show : bool
+    vmax : int or None
+        Upper bound for the colorbar.  Pass the same value to both the
+        with-14a and baseline plots so their scales are directly comparable.
+        If None, the maximum of ``overload_hours`` is used.
+        If True, call plt.show() after saving.
+    bus_curt : pd.DataFrame or None
+        Per-bus §14a curtailment with columns hp_mwh and cp_mwh (e.g. from
+        bus_curt_from_edisgo).  When provided, buses with §14a activity are
+        drawn as pie markers (red = HP, blue = CP) sized by total MWh, and a
+        size-reference legend is added at the lower left.
+    """
+    import matplotlib.patches as mpatches
+
+    buses_df        = edisgo.topology.buses_df
+    lines_df        = edisgo.topology.lines_df
+    transformers_df = edisgo.topology.transformers_df
+
+    root_bus = find_root_bus(lines_df, transformers_df)
+
+    _data_max = int(overload_hours.max()) if not overload_hours.empty and overload_hours.max() > 0 else 1
+    v_max = vmax if vmax is not None else _data_max
+    norm  = mcolors.Normalize(vmin=0, vmax=v_max)
+    cmap  = cm.get_cmap("YlOrRd")
+
+    fig, ax = plt.subplots(figsize=(14, 10))
+    fig.subplots_adjust(right=0.84)
+
+    for line_name, row in lines_df.iterrows():
+        b0, b1 = row["bus0"], row["bus1"]
+        if b0 not in buses_df.index or b1 not in buses_df.index:
+            continue
+        x0, y0 = buses_df.at[b0, "x"], buses_df.at[b0, "y"]
+        x1, y1 = buses_df.at[b1, "x"], buses_df.at[b1, "y"]
+        if pd.isna(x0) or pd.isna(x1):
+            continue
+
+        hours = overload_hours.get(line_name, 0)
+        if hours > 0:
+            ax.plot([x0, x1], [y0, y1], color="black", linewidth=7.0,
+                    zorder=3, solid_capstyle="round")
+            ax.plot([x0, x1], [y0, y1], color=cmap(norm(hours)), linewidth=5.0,
+                    zorder=4, solid_capstyle="round")
+        else:
+            ax.plot([x0, x1], [y0, y1], color="black", linewidth=0.7,
+                    zorder=1, solid_capstyle="round")
+
+    bus_xy = buses_df[["x", "y"]].dropna()
+    ax.scatter(bus_xy["x"], bus_xy["y"], s=10, color="#555555",
+               zorder=5, linewidths=0.3, edgecolors="white", alpha=0.4)
+
+    # ── §14a bus pie markers ──────────────────────────────────────────────────
+    if bus_curt is not None and not bus_curt.empty:
+        x_extent = bus_xy["x"].max() - bus_xy["x"].min()
+        MIN_R = x_extent * 0.0012
+        MAX_R = x_extent * 0.009
+
+        curt_align = bus_curt.reindex(bus_xy.index).fillna(0)
+        total_curt = curt_align["hp_mwh"] + curt_align["cp_mwh"]
+        max_total  = total_curt.max() or 1.0
+
+        for bus in bus_xy.index:
+            tot = total_curt.get(bus, 0.0)
+            if tot <= 0:
+                continue
+            bx, by = bus_xy.at[bus, "x"], bus_xy.at[bus, "y"]
+            r      = MIN_R + (MAX_R - MIN_R) * np.sqrt(tot / max_total)
+            hp     = curt_align.at[bus, "hp_mwh"]
+            cp     = curt_align.at[bus, "cp_mwh"]
+            start  = 90.0
+            for val, color in [(hp, "#d62728"), (cp, "#1f77b4")]:
+                if val <= 0:
+                    continue
+                angle = 360.0 * val / tot
+                ax.add_patch(mpatches.Wedge(
+                    (bx, by), r, start, start + angle,
+                    facecolor=color, edgecolor="white", linewidth=0.3,
+                    alpha=0.9, zorder=6,
+                ))
+                start += angle
+
+    if root_bus in buses_df.index:
+        tx, ty = buses_df.at[root_bus, "x"], buses_df.at[root_bus, "y"]
+        if pd.notna(tx):
+            x_ext = bus_xy["x"].max() - bus_xy["x"].min()
+            r_t   = x_ext * 0.006
+            for cx in (tx - r_t * 0.75, tx + r_t * 0.75):
+                ax.add_patch(mpatches.Circle(
+                    (cx, ty), r_t,
+                    fill=False, edgecolor="black", linewidth=2.0, zorder=7,
+                ))
+
+    if _HAS_CTX:
+        try:
+            ctx.add_basemap(ax, crs=4326, source=ctx.providers.OpenStreetMap.Mapnik)
+        except Exception:
+            pass
+
+    ax.set_axis_off()
+
+    cax = fig.add_axes([0.86, 0.12, 0.018, 0.76])
+    sm  = cm.ScalarMappable(cmap=cmap, norm=norm)
+    cb  = fig.colorbar(sm, cax=cax)
+    cb.set_label("Überlastete Zeitschritte [Anzahl]", fontsize=10)
+    cb.ax.text(
+        0.5, 1.02, f"max: {_data_max}",
+        transform=cb.ax.transAxes,
+        va="bottom", ha="center", fontsize=8, color="#cc0000",
+        fontweight="bold",
+    )
+
+    # ── type legend (upper left) ──────────────────────────────────────────────
+    if bus_curt is not None and not bus_curt.empty:
+        type_handles = [
+            mpatches.Patch(facecolor="#d62728", alpha=0.9, label="Knoten — WP §14a"),
+            mpatches.Patch(facecolor="#1f77b4", alpha=0.9, label="Knoten — LP §14a"),
+        ]
+        leg1 = ax.legend(handles=type_handles, loc="upper left", fontsize=9)
+        ax.add_artist(leg1)
+
+        # ── size reference legend (lower left) ────────────────────────────────
+        curt_align = bus_curt.reindex(bus_xy.index).fillna(0)
+        total_curt = curt_align["hp_mwh"] + curt_align["cp_mwh"]
+        max_total  = total_curt.max() or 1.0
+
+        fig.canvas.draw()
+        xlim = ax.get_xlim()
+        deg_per_pt = (xlim[1] - xlim[0]) / (
+            ax.get_position().width * fig.get_size_inches()[0] * 72
+        )
+        x_extent = bus_xy["x"].max() - bus_xy["x"].min()
+        MIN_R = x_extent * 0.0012
+        MAX_R = x_extent * 0.009
+
+        r_deg = MIN_R + (MAX_R - MIN_R) * np.sqrt(1.0)
+        ms    = max(4, 2 * r_deg / deg_per_pt)
+        ax.legend(
+            handles=[plt.Line2D([0], [0], marker="o", color="w",
+                                markerfacecolor="#9467bd", markersize=ms,
+                                label=f"{max_total:.3g} MWh")],
+            loc="lower left", fontsize=9,
+            title="Knotengröße = §14a gesamt [MWh]", title_fontsize=8,
+        )
 
     _save(fig, plots_dir, filename)
     if show:
@@ -1216,16 +1264,10 @@ def plot_overloaded_lines(edisgo, line_max_loading,
 if __name__ == "__main__":
     print(f"Loading results from {RESULTS_ROOT} …")
     data = load_results(RESULTS_ROOT)
-    if not data:
-        raise FileNotFoundError(
-            f"No seed directories with curtailment_14a.csv + line_usage in {RESULTS_ROOT}"
-        )
-    print(f"\nSeeds found: {list(data.keys())}")
 
     save_curtailment_summary(data, PLOTS_DIR)
 
-    print("\nGenerating statistical plots …")
-    plot_peak_demand_per_seed(RESULTS_ROOT, PLOTS_DIR)
+    print("\nGenerating plots …")
     plot_monthly_curtailment_mean_stacked(data, PLOTS_DIR)
 
     print("\nLoading topology for network maps …")
@@ -1244,12 +1286,14 @@ if __name__ == "__main__":
     print(f"  Buses in feeder tree: {len(bus_upstream)}")
     line_reach = compute_line_curtailment_reach(RESULTS_ROOT, loads, bus_upstream)
     print(f"  Lines reached by §14a: {(line_reach > 0).sum()} / {len(lines)}")
-    plot_curtailment_reach_map(buses, lines, line_reach, bus_curt, root_bus, len(data), PLOTS_DIR)
+    plot_curtailment_reach_map(buses, lines, line_reach, bus_curt, root_bus, PLOTS_DIR)
 
     print("\nGenerating solar rooftop map …")
-    seed_solar = load_solar_generators_per_seed(RESULTS_ROOT)
-    first_seed, first_solar = next(iter(seed_solar.items()))
-    print(f"  Using seed={first_seed}: {len(first_solar)} solar generators")
-    plot_solar_rooftop_map(buses, lines, first_solar, root_bus, PLOTS_DIR)
+    solar = load_solar_generators(RESULTS_ROOT)
+    if not solar.empty:
+        print(f"  {len(solar)} solar generators")
+        plot_solar_rooftop_map(buses, lines, solar, root_bus, PLOTS_DIR)
+    else:
+        print("  No solar generators found — skipping.")
 
     print(f"\nDone. All plots saved to {PLOTS_DIR}")
