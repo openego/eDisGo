@@ -836,7 +836,8 @@ class EDisGo:
         flexible_storage_units=None,
         opf_version=1,
         curtailment_14a=False,
-        hours_limit_14a=24
+        hours_limit_14a=24,
+        rate_a_factor: float = 1.0,
     ):
         """
         Convert eDisGo representation of the network topology and timeseries to
@@ -886,6 +887,7 @@ class EDisGo:
             opf_version=opf_version,
             curtailment_14a=curtailment_14a,
             hours_limit_14a=hours_limit_14a,
+            rate_a_factor=rate_a_factor,
         )
 
     def pm_optimize(
@@ -904,6 +906,7 @@ class EDisGo:
         save_slacks=True,
         curtailment_14a=False,
         hours_limit_14a=24,
+        rate_a_factor: float = 1.0,
     ):
         """
         Run OPF in julia subprocess and write results of OPF back to edisgo object.
@@ -970,6 +973,7 @@ class EDisGo:
             silence_moi=silence_moi,
             curtailment_14a=curtailment_14a,
             hours_limit_14a=hours_limit_14a,
+            rate_a_factor=rate_a_factor,
         )
 
     def to_graph(self):
