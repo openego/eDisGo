@@ -1,3 +1,9 @@
+"""
+Solution processor: write a per-branch variable indexed by the directed arc
+`(l, i, j)` (e.g. the branch flows) back into the PowerModels solution dict under
+`field_name_to`, for the radial branch-flow model. The arc-indexed counterpart of
+PowerModels' `sol_component_value`.
+"""
 function sol_component_value_radial(aim::AbstractPowerModel, n::Int, comp_name::Symbol, field_name_to::Symbol, comp_ids_to, variables)
     for (l, i, j) in comp_ids_to
         @assert !haskey(InfrastructureModels.sol(aim, pm_it_sym, n, comp_name, l), field_name_to)
@@ -6,6 +12,15 @@ function sol_component_value_radial(aim::AbstractPowerModel, n::Int, comp_name::
 end
 
 
+"""
+Check whether the second-order-cone relaxation is *tight* in a solved SOC result.
+
+For every non-storage branch and time step it compares `pf² + qf²` against
+`ccm · w` (the SOC inequality); a gap below `-1e-1` means the cone is not tight
+there. Returns `(soc_tight, soc_eq_dict)`, where `soc_tight::Bool` and
+`soc_eq_dict` maps each time step to its offending branches. Used to decide whether
+a `warm_start` AC polishing step is needed (see `SOCBFPowerModelEdisgo`).
+"""
 function check_SOC_equality(result, data_edisgo)
     timesteps = keys(result["solution"]["nw"])
     branches = keys(data_edisgo["branch"])

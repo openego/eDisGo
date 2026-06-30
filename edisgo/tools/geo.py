@@ -327,6 +327,20 @@ def find_nearest_conn_objects(grid_topology, bus, lines, conn_diff_tolerance=0.0
 
 
 def mv_grid_gdf(edisgo_obj: EDisGo):
+    """
+    Returns the medium-voltage grid district as a GeoDataFrame.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+
+    Returns
+    -------
+    :geopandas:`GeoDataFrame`
+        GeoDataFrame with the grid district geometry, in the grid's coordinate
+        reference system.
+
+    """
     return gpd.GeoDataFrame(
         geometry=[edisgo_obj.topology.grid_district["geom"]],
         crs=f"EPSG:{edisgo_obj.topology.grid_district['srid']}",

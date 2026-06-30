@@ -1,5 +1,12 @@
-""" Creates constraints for storage operations (battery, heat, DSM)"""
+"""
+Initial-time-step state constraint for a storage `kind` (`"storage"` battery,
+`"heat_storage"`, or `"dsm"`).
 
+Sets the stored energy after the first time step from the unit's initial state of
+charge and its (dis)charging power, and pins the final state of charge to the
+required end value — Eq. (3.9)/(3.10) for batteries, (3.22)/(3.23) for heat
+storage and (3.32)/(3.33) for DSM in the eDisGo OPF formulation.
+"""
 function constraint_store_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int, energy, charge_eff, discharge_eff, time_elapsed, kind, p_loss)
     if kind == "storage"
         ps_1 = PowerModels.var(pm, n, :ps, i)
@@ -27,6 +34,13 @@ function constraint_store_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::In
 end
 
 
+"""
+Inter-time-step state-of-charge coupling for a storage `kind` between networks
+`n_1` and `n_2`: the stored energy in `n_2` equals that in `n_1` plus the energy
+(dis)charged over the elapsed time — Eq. (3.10), (3.23), (3.33) of the eDisGo OPF
+formulation. For heat storage the previous energy is reduced by the standing-loss
+factor.
+"""
 function constraint_store_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i::Int, charge_eff, discharge_eff, time_elapsed, kind, p_loss)
     if kind == "storage"
         ps_2 = PowerModels.var(pm, n_2, :ps, i)
@@ -49,8 +63,12 @@ function constraint_store_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i
     end
 end
 
-""" Creates constraints for EV charging per charging park"""
-
+"""
+Initial-time-step state constraint for charging park `i`: sets the charged energy
+after the first time step from the midpoint of the flexibility band
+`(e_min+e_max)/2` and the charging power, scaled by the charging efficiency `eta`
+— Eq. (3.25) of the eDisGo OPF formulation.
+"""
 function constraint_cp_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int, eta)
     if haskey(PowerModels.ref(pm, n), :time_elapsed)
         time_elapsed = PowerModels.ref(pm, n, :time_elapsed)
@@ -66,6 +84,13 @@ function constraint_cp_state_initial(pm::AbstractBFModelEdisgo, n::Int, i::Int, 
 
 end
 
+"""
+Inter-time-step energy coupling for charging park `i` between networks `n_1` and
+`n_2`: the charged energy in `n_2` equals that in `n_1` plus the energy charged
+over the elapsed time (scaled by the efficiency `eta`) — Eq. (3.26). In the last
+time step the energy is pinned back to the midpoint of the flexibility band
+(Eq. (3.25)).
+"""
 function constraint_cp_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i::Int, eta)
     if haskey(PowerModels.ref(pm, n_1), :time_elapsed)
         time_elapsed = PowerModels.ref(pm, n_1, :time_elapsed)
@@ -86,8 +111,12 @@ function constraint_cp_state(pm::AbstractBFModelEdisgo, n_1::Int, n_2::Int, i::I
     end
 end
 
-""" Creates constraints for heat pump operation"""
-
+"""
+Heat-pump energy balance for heat pump `i` in network `nw`: the electrical power
+drawn (`php`, plus the operation slack `phps2`) times the coefficient of
+performance `cop` must cover the heat demand `pd` plus the net heat-storage
+(dis)charge (`phss - phs`) — Eq. (3.19) of the eDisGo OPF formulation.
+"""
 function constraint_hp_operation(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
     hp = PowerModels.ref(pm, nw, :heatpumps, i)
     php = PowerModels.var(pm, nw, :php, i)
@@ -100,8 +129,12 @@ function constraint_hp_operation(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_i
 
 end
 
-""" Creates constraints for high voltage grid requirements"""
-
+"""
+Overlying-grid requirement constraint `i` in network `nw` (`opf_version` 3 and 4):
+forces the total dispatch of the addressed flexibility (DSM, curtailment, storage,
+heat pumps or charging points) to meet the active power `P` requested by the higher
+voltage level, up to the slack `phvs`.
+"""
 function constraint_HV_requirements(pm::AbstractBFModelEdisgo, i::Int, nw::Int=nw_id_default)
     hv_req = PowerModels.ref(pm, nw, :HV_requirements, i)
     phvs = PowerModels.var(pm, nw, :phvs, i)

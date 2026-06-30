@@ -32,6 +32,8 @@ import sys
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath("../"))
+# Local Sphinx extensions (e.g. the Julia OPF docstring harvester).
+sys.path.insert(0, os.path.abspath("_ext"))
 
 # -- General configuration ------------------------------------------------
 
@@ -47,13 +49,30 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
     "sphinx.ext.coverage",
-    "sphinx.ext.imgmath",
+    "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",  # enable Napoleon Sphinx v>1.3
     "sphinx.ext.extlinks",  # enables external links with a key
     "sphinx_autodoc_typehints",
     "sphinx.ext.inheritance_diagram",
+    "nbsphinx",  # render Jupyter notebooks as documentation pages
+    "myst_parser",  # render the generated Julia API page (Markdown)
+    "julia_autodoc",  # harvest eDisGo_OPF Julia docstrings into a Sphinx page
 ]
+
+# -- MyST settings --------------------------------------------------------
+# Only the auto-generated Julia API page uses Markdown; enable dollar math and
+# colon fences so Julia docstrings render faithfully.
+myst_enable_extensions = ["dollarmath", "colon_fence"]
+
+# -- nbsphinx settings ----------------------------------------------------
+# Notebooks are rendered with their stored outputs and are NOT executed during
+# the documentation build, because they require a database connection (OEP/
+# egon-data) and, for the optimisation, Julia and Gurobi, none of which are
+# available in the build environment (e.g. ReadTheDocs CI). Make sure the
+# notebooks are committed with up-to-date outputs.
+nbsphinx_execute = "never"
+nbsphinx_allow_errors = True
 # Autoapi settings
 autoapi_type = "python"
 autoapi_dirs = ["../edisgo"]
@@ -224,6 +243,10 @@ linkcheck_ignore = [
     # zenodo and numpy.org return errors in CI even though the links are correct
     r"https://zenodo.org/*",
     r"https://numpy.org/*",
+    # ACM Digital Library (via doi.org) returns 403 to the CI bot, link is correct
+    r"https://doi.org/10.1145/.*",
+    # pandoc.org intermittently fails decompression in CI, link is correct
+    r"https://pandoc.org",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -262,7 +285,7 @@ release = version
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = "English"
+language = "en"
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
@@ -272,7 +295,7 @@ language = "English"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ["_build", "whatsnew", "examples"]
+exclude_patterns = ["_build", "whatsnew", "examples", "**.ipynb_checkpoints"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
