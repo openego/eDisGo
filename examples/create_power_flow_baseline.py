@@ -20,7 +20,7 @@ import pandas as pd
 from edisgo.edisgo import import_edisgo_from_files
 from edisgo.flex_opt.check_tech_constraints import lines_relative_load
 
-from loma_14a_analysis import analyze_without_14a, plot_overload_hours
+from loma_14a_analysis import analyze_without_14a, bus_curt_from_edisgo, plot_overload_hours
 
 RESULTS_ROOT = "/home/carlos/LoMa/output_edisgo"
 PLOTS_DIR    = f"{RESULTS_ROOT}/presentation_plots"
@@ -74,11 +74,14 @@ for seed_dir in sorted(glob.glob(os.path.join(RESULTS_ROOT, "*"))):
         hours_baseline = (lu_baseline > 105).sum()
         shared_vmax    = int(max(hours_with_14a.max(), hours_baseline.max(), 1))
 
+        bus_curt = bus_curt_from_edisgo(edisgo)
+
         plot_overload_hours(
             edisgo, hours_with_14a,
             plots_dir=month_dir,
             filename=f"overload_hours_with_14a_{month}.png",
             vmax=shared_vmax,
+            bus_curt=bus_curt,
         )
         plot_overload_hours(
             edisgo, hours_baseline,
