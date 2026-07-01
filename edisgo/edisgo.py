@@ -243,7 +243,7 @@ class EDisGo:
     def config(self, kwargs):
         self._config = Config(**kwargs)
 
-    def run_pipeline(self, config):
+    def run_pipeline(self, config, overlying_grid_data=None):
         """
         Run a YAML/JSON task pipeline on this EDisGo instance.
 
@@ -253,6 +253,10 @@ class EDisGo:
         ----------
         config : str, :class:`pathlib.Path`, or dict
             Pipeline config as path to a YAML/JSON file or as a dict.
+        overlying_grid_data : dict, optional
+            Overlying-grid data (e.g. eTraGo results) consumed by the
+            ``import_overlying_grid_data`` task when
+            ``overlying_grid.source == "etrago"``.
 
         Returns
         -------
@@ -262,7 +266,9 @@ class EDisGo:
         """
         from edisgo.run import _run_pipeline_on
 
-        return _run_pipeline_on(self, config)
+        return _run_pipeline_on(
+            self, config, overlying_grid_data=overlying_grid_data
+        )
 
     def import_ding0_grid(self, path, legacy_ding0_grids=True):
         """

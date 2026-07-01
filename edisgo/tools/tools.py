@@ -38,6 +38,55 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def align_series_to_timeindex(ts, timeindex, extra_step=False):
+    """
+    Align a time series to a target time index, tolerating a year mismatch.
+
+    Data imported for the overlying grid (from CSV or eTraGo) may be indexed
+    in a different year than the EDisGo time index. This helper shifts the
+    series' index by whole years to match ``timeindex`` (using
+    :class:`pandas.DateOffset`, which — unlike ``Timestamp.replace(year=...)``
+    — does not raise on a Feb-29 timestamp when the target year is not a leap
+    year) and reindexes onto it. Missing steps become ``NaN`` rather than
+    raising a ``KeyError``.
+
+    Parameters
+    ----------
+    ts : :pandas:`pandas.Series<Series>` or \
+        :pandas:`pandas.DataFrame<DataFrame>` or None
+        The time series to align. Returned unchanged if ``None``, empty, or
+        when ``timeindex`` is empty.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Target time index to align to.
+    extra_step : bool, optional
+        If ``True``, append one trailing step to the target index (used for
+        state-of-charge series that carry an end-of-period value). The step
+        width is taken from ``timeindex.freq``, falling back to the spacing
+        of the first two entries; if neither is available (single-entry
+        index without freq) no extra step is added.
+
+    Returns
+    -------
+    Same type as ``ts``
+        ``ts`` reindexed onto the (optionally extended) target index.
+
+    """
+    if ts is None or ts.empty or timeindex.empty:
+        return ts
+    year_diff = timeindex[0].year - ts.index[0].year
+    if year_diff != 0:
+        ts = ts.copy()
+        ts.index = ts.index + pd.DateOffset(years=year_diff)
+    target = timeindex
+    if extra_step:
+        freq = timeindex.freq or (
+            timeindex[1] - timeindex[0] if len(timeindex) > 1 else None
+        )
+        if freq is not None:
+            target = timeindex.union([timeindex[-1] + freq])
+    return ts.reindex(target)
+
+
 def select_worstcase_snapshots(edisgo_obj):
     """
     Select two worst-case snapshots from time series

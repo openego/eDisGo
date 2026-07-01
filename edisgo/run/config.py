@@ -410,9 +410,11 @@ def _adapt_ego_legacy(cfg: dict) -> dict:
         },
     }
     if "database" in cfg:
-        adapted["database"] = cfg["database"]
+        # Deep-copy so injecting ssh below does not mutate the caller's
+        # cfg["database"] (which is merged again in _deep_merge afterwards).
+        adapted["database"] = copy.deepcopy(cfg["database"])
         if "ssh" in cfg:
-            adapted["database"]["ssh"] = cfg["ssh"]
+            adapted["database"]["ssh"] = copy.deepcopy(cfg["ssh"])
     for side_key in ("eGo", "eTraGo", "ssh", "_comment", "_workflow"):
         cfg.pop(side_key, None)
     cfg.pop("eDisGo", None)

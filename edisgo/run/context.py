@@ -62,6 +62,11 @@ class RunContext:
         The fully resolved pipeline config (after ``extends``,
         ``external_config``, and eGo-legacy adaptation). Tasks can
         read supplementary keys like ``database.*`` from here.
+    overlying_grid_data : dict or None
+        Overlying-grid data (e.g. eTraGo results) injected via the
+        ``overlying_grid_data=`` argument of :func:`edisgo.run.run_edisgo`.
+        Consumed by the ``import_overlying_grid_data`` task when
+        ``overlying_grid.source == "etrago"``.
 
     """
 
@@ -75,6 +80,7 @@ class RunContext:
     stage_artifacts: dict[str, Path] = field(default_factory=dict)
     current_stage: str | None = None
     raw_config: dict[str, Any] = field(default_factory=dict)
+    overlying_grid_data: Any = None
 
     def ensure_engine(self):
         """

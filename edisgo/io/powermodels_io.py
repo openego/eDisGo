@@ -1029,26 +1029,18 @@ def _build_battery_storage(
     """
     branches = pd.concat([psa_net.lines, psa_net.transformers])
     if not edisgo_obj.overlying_grid.storage_units_soc.empty:
-        # Select relevant timesteps
-        timesteps = edisgo_obj.timeseries.timeindex.union(
-            [
-                edisgo_obj.timeseries.timeindex[-1]
-                + edisgo_obj.timeseries.timeindex.freq
-            ]
+        # Align the SOC series (which may use another year) onto the edisgo
+        # time index plus one end-of-period step. Uses reindex, so a missing
+        # step yields NaN instead of a KeyError.
+        from edisgo.tools.tools import align_series_to_timeindex
+
+        soc_aligned = align_series_to_timeindex(
+            edisgo_obj.overlying_grid.storage_units_soc,
+            edisgo_obj.timeseries.timeindex,
+            extra_step=True,
         )
-
-        # If the overlying grid data uses another year in the timeindex then
-        # edisgo.timindex, unify them
-        og_year = edisgo_obj.overlying_grid.storage_units_soc.index[0].year
-        year_diff = og_year - edisgo_obj.timeseries.timeindex[0].year
-        if year_diff != 0:
-            # Shift by whole years instead of Timestamp.replace(year=...),
-            # which raises on Feb 29 when the target year is not a leap year.
-            timesteps = timesteps + pd.DateOffset(years=year_diff)
-
         data = pd.concat(
-            [edisgo_obj.overlying_grid.storage_units_soc.loc[timesteps]]
-            * len(edisgo_obj.topology.storage_units_df),
+            [soc_aligned] * len(edisgo_obj.topology.storage_units_df),
             axis=1,
         ).values
     else:

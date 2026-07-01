@@ -239,7 +239,7 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
         return edisgo
 
     source = og_cfg.get("source")
-    overlying_grid_data = getattr(ctx, "overlying_grid_data", None)
+    overlying_grid_data = ctx.overlying_grid_data
     edisgo_ti = edisgo.timeseries.timeindex
 
     soc_attrs = {
@@ -248,29 +248,11 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
         "thermal_storage_units_central_soc",
     }
 
+    from edisgo.tools.tools import align_series_to_timeindex
+
     def _to_edisgo_timeindex(ts, extra_step=False):
-        """
-        Shift ``ts``'s index year to match the edisgo timeindex and reindex
-        onto it. ``extra_step`` appends one trailing step (for SOC series,
-        which carry an end-of-period state). Returns ``ts`` unchanged for
-        empty inputs or an empty edisgo timeindex.
-        """
-        if ts is None or ts.empty or edisgo_ti.empty:
-            return ts
-        year_diff = edisgo_ti[0].year - ts.index[0].year
-        if year_diff != 0:
-            ts = ts.copy()
-            ts.index = ts.index + pd.DateOffset(years=year_diff)
-        target = edisgo_ti
-        if extra_step:
-            # Derive the step only when it can be inferred; a single-timestamp
-            # timeindex with no freq cannot, so fall back to no extra step.
-            freq = edisgo_ti.freq or (
-                edisgo_ti[1] - edisgo_ti[0] if len(edisgo_ti) > 1 else None
-            )
-            if freq is not None:
-                target = edisgo_ti.union([edisgo_ti[-1] + freq])
-        return ts.reindex(target)
+        # bind the stage's edisgo time index to the shared aligner
+        return align_series_to_timeindex(ts, edisgo_ti, extra_step=extra_step)
 
     if source not in ("etrago", "csv"):
         ctx.logger.warning(
