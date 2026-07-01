@@ -20,6 +20,7 @@ import pandas as pd
 
 from demandlib import bdew as bdew
 from demandlib import particular_profiles as profiles
+from scipy import sparse
 from sqlalchemy.engine.base import Engine
 from workalendar.europe import Germany
 
@@ -1026,13 +1027,21 @@ def get_cts_profiles_per_building(edisgo_obj, scenario, sector, engine):
         )
         df = pd.read_sql(query.statement, engine, index_col="building_id")
 
-    # iterate over grid IDs
-    profiles_df = pd.DataFrame()
-    for bus_id in df.bus_id.unique():
-        profiles_grid_df = get_cts_profiles_per_grid(
+    # iterate over grid IDs and concatenate the per-grid profiles once instead of
+    # inside the loop (concatenating inside the loop is O(grids^2) as each concat
+    # copies the whole growing frame)
+    profiles_per_grid = [
+        get_cts_profiles_per_grid(
             bus_id=bus_id, scenario=scenario, sector=sector, engine=engine
         )
-        profiles_df = pd.concat([profiles_df, profiles_grid_df], axis=1)
+        for bus_id in df.bus_id.unique()
+    ]
+    # get_cts_profiles_per_grid returns None for grids without a substation
+    # profile; drop those (the previous per-iteration pd.concat dropped them, too)
+    profiles_per_grid = [p for p in profiles_per_grid if p is not None]
+    profiles_df = (
+        pd.concat(profiles_per_grid, axis=1) if profiles_per_grid else pd.DataFrame()
+    )
 
     # filter CTS loads in grid
     return profiles_df.loc[:, cts_building_ids]
@@ -1231,7 +1240,9 @@ def get_cts_profiles_per_grid(
     return building_profiles
 
 
-def get_residential_electricity_profiles_per_building(building_ids, scenario, engine):
+def get_residential_electricity_profiles_per_building(
+    building_ids: list[int], scenario: str, engine: Engine
+) -> pd.DataFrame:
     """
     Gets residential electricity demand profiles per building.
 
@@ -1377,14 +1388,40 @@ def get_residential_electricity_profiles_per_building(building_ids, scenario, en
     profiles_df = _get_profiles(profile_ids)
 
     # calculate demand profile per building
-    ts_df = pd.DataFrame()
-    for building_id, df in profile_ids_buildings.groupby(by="building_id"):
-        load_ts_building = (
-            profiles_df.loc[:, df["profile_id"]].sum(axis=1)
-            * df["factor"].iloc[0]
-            / 1e6  # from Wh to MWh
-        ).to_frame(name=building_id)
-        ts_df = pd.concat([ts_df, load_ts_building], axis=1).dropna(axis=1)
+    #
+    # This used to loop over the thousands of building groups and grow the result
+    # frame with `pd.concat` inside the loop, which is O(n^2) (each concat copies
+    # the whole growing frame) and was the dominant cost on large grids. Instead
+    # the building -> profile mapping is encoded as a sparse incidence matrix and
+    # all per-building sums are computed in a single matrix product.
+    #
+    # `incidence` has shape (n_profiles, n_buildings); entry (p, b) counts how
+    # often profile p contributes to building b (a building may reference the same
+    # profile more than once, which the count reproduces). `profiles_df @ incidence`
+    # then sums the relevant profiles per building in one BLAS-backed operation,
+    # and scaling each column by the building's factor / 1e6 reproduces the loop.
+    # Building columns are sorted to match the previous groupby (sort=True) order.
+    buildings = np.sort(profile_ids_buildings["building_id"].unique())
+    profile_pos = profiles_df.columns.get_indexer(profile_ids_buildings["profile_id"])
+    building_pos = pd.Index(buildings).get_indexer(profile_ids_buildings["building_id"])
+    incidence = sparse.csr_matrix(
+        (np.ones(len(profile_ids_buildings)), (profile_pos, building_pos)),
+        shape=(profiles_df.shape[1], len(buildings)),
+    )
+    # one scaling factor per building (constant within a building group)
+    factors = (
+        profile_ids_buildings.groupby("building_id")["factor"]
+        .first()
+        .reindex(buildings)
+        .to_numpy()
+    )
+    ts_array = np.asarray(profiles_df.to_numpy() @ incidence) * (
+        factors / 1e6  # from Wh to MWh
+    )
+    ts_df = pd.DataFrame(ts_array, index=profiles_df.index, columns=buildings)
+    # dropna(axis=1) preserves the previous behaviour: drop buildings whose
+    # scaling factor was NaN (no match), which produced an all-NaN column.
+    ts_df = ts_df.dropna(axis=1)
 
     return ts_df
 
