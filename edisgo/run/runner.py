@@ -176,25 +176,11 @@ def _load_artifact(path: str):
         The restored EDisGo instance.
 
     """
-    import pandas as pd
+    from edisgo.run.tasks.grid import load_saved_edisgo
 
-    from edisgo.edisgo import import_edisgo_from_files
-
-    from_zip = path.endswith(".zip")
-    edisgo = import_edisgo_from_files(
-        edisgo_path=path,
-        import_topology=True,
-        import_timeseries=False,
-        import_results=True,
-        import_electromobility=False,
-        import_heat_pump=False,
-        import_dsm=False,
-        import_overlying_grid=False,
-        from_zip_archive=from_zip,
-    )
-    edisgo.legacy_grids = False
-    edisgo.results.equipment_changes = pd.DataFrame()
-    return edisgo
+    # Topology + results only; time series and flex data are dropped so the
+    # consuming stage sets them fresh, and equipment_changes is reset.
+    return load_saved_edisgo(path, import_results=True)
 
 
 def _resolve_templating(step_params: dict, stage_params: dict) -> dict:

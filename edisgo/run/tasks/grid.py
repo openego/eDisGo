@@ -18,7 +18,7 @@ import pandas as pd
 from edisgo.run.registry import register_task
 
 
-@register_task("setup_grid")
+@register_task("setup_grid", provides={"grid"})
 def task_setup_grid(
     edisgo,
     ctx,
@@ -109,7 +109,70 @@ def task_setup_grid(
     return edisgo
 
 
-@register_task("load_from_base")
+def load_saved_edisgo(
+    path,
+    *,
+    reset_equipment_changes=True,
+    import_timeseries=False,
+    import_results=False,
+    import_electromobility=False,
+    import_heat_pump=False,
+    import_dsm=False,
+    import_overlying_grid=False,
+):
+    """
+    Reload a previously saved EDisGo object from a directory or ``.zip``.
+
+    Shared by the ``load_from_base`` task and the runner's stage-level
+    ``load_from`` handling so both load artifacts with the same policy.
+    Topology is always imported; time series and flex data default to off
+    (the consuming stage sets them fresh). ``legacy_grids`` is cleared and,
+    by default, ``results.equipment_changes`` is reset so a subsequent
+    reinforce reflects only the current scenario.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Directory or ``.zip`` produced by the ``save`` task.
+    reset_equipment_changes : bool, optional
+        If ``True`` (default), clear ``results.equipment_changes``.
+    import_timeseries, import_results, import_electromobility, \
+    import_heat_pump, import_dsm, import_overlying_grid : bool, optional
+        Which saved sub-datasets to import (all off by default except as
+        overridden by the caller).
+
+    Returns
+    -------
+    edisgo.EDisGo
+        The restored EDisGo instance.
+
+    """
+    import os
+
+    import pandas as pd
+
+    from edisgo.edisgo import import_edisgo_from_files
+
+    path = str(path)
+    from_zip = path.endswith(".zip") or not os.path.isdir(path)
+    edisgo = import_edisgo_from_files(
+        edisgo_path=path,
+        import_topology=True,
+        import_timeseries=import_timeseries,
+        import_results=import_results,
+        import_electromobility=import_electromobility,
+        import_heat_pump=import_heat_pump,
+        import_dsm=import_dsm,
+        import_overlying_grid=import_overlying_grid,
+        from_zip_archive=from_zip,
+    )
+    edisgo.legacy_grids = False
+    if reset_equipment_changes:
+        edisgo.results.equipment_changes = pd.DataFrame()
+    return edisgo
+
+
+@register_task("load_from_base", provides={"grid"})
 def task_load_from_base(
     edisgo,
     ctx,
@@ -166,12 +229,6 @@ def task_load_from_base(
         The restored EDisGo instance.
 
     """
-    import os
-
-    import pandas as pd
-
-    from edisgo.edisgo import import_edisgo_from_files
-
     if path is None:
         grid_cfg = ctx.raw_config.get("grid", {}) or {}
         path = grid_cfg.get("ding0_path")
@@ -180,21 +237,15 @@ def task_load_from_base(
             "Task 'load_from_base' requires 'path' either as task "
             "parameter or under config.grid.ding0_path."
         )
-    path = str(path)
-    from_zip = path.endswith(".zip") or not os.path.isdir(path)
-    edisgo = import_edisgo_from_files(
-        edisgo_path=path,
-        import_topology=True,
+    edisgo = load_saved_edisgo(
+        path,
+        reset_equipment_changes=reset_equipment_changes,
         import_timeseries=import_timeseries,
         import_results=import_results,
         import_electromobility=import_electromobility,
         import_heat_pump=import_heat_pump,
         import_dsm=import_dsm,
         import_overlying_grid=import_overlying_grid,
-        from_zip_archive=from_zip,
     )
-    edisgo.legacy_grids = False
-    if reset_equipment_changes:
-        edisgo.results.equipment_changes = pd.DataFrame()
     ctx.flags["grid_loaded"] = True
     return edisgo

@@ -13,7 +13,7 @@ from __future__ import annotations
 from edisgo.run.registry import register_task
 
 
-@register_task("import_heat_pumps")
+@register_task("import_heat_pumps", requires={"grid"}, provides={"flex"})
 def task_import_heat_pumps(edisgo, ctx, *, import_types=None, timeindex=None):
     """
     Import heat pumps from egon_data into the topology.
@@ -52,7 +52,7 @@ def task_import_heat_pumps(edisgo, ctx, *, import_types=None, timeindex=None):
     return edisgo
 
 
-@register_task("import_home_batteries")
+@register_task("import_home_batteries", requires={"grid"}, provides={"flex"})
 def task_import_home_batteries(edisgo, ctx):
     """
     Import home batteries from egon_data into the topology.
@@ -81,7 +81,7 @@ def task_import_home_batteries(edisgo, ctx):
     return edisgo
 
 
-@register_task("import_dsm")
+@register_task("import_dsm", requires={"grid"}, provides={"flex"})
 def task_import_dsm(edisgo, ctx, *, timeindex=None):
     """
     Import demand-side-management potential from egon_data.
@@ -113,7 +113,7 @@ def task_import_dsm(edisgo, ctx, *, timeindex=None):
     return edisgo
 
 
-@register_task("import_electromobility")
+@register_task("import_electromobility", requires={"grid"}, provides={"flex"})
 def task_import_electromobility(edisgo, ctx, *, data_source="oedb",
                                 charging_strategy="dumb",
                                 flexibility_bands_ucs = None,

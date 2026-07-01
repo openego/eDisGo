@@ -27,16 +27,21 @@ from __future__ import annotations
 
 from typing import Any
 
-from edisgo.run.registry import known_tasks
+from edisgo.run.registry import get_task_meta, known_tasks
 
-_TS_TASKS = {"worst_case_ts", "oedb_ts", "manual_ts", "set_timeindex"}
-_GRID_CREATING_TASKS = {"setup_grid", "load_from_base"}
-_FLEX_IMPORTS = {
-    "import_heat_pumps",
-    "import_home_batteries",
-    "import_dsm",
-    "import_electromobility",
+# Human-readable message per required capability. The wording keeps the
+# substrings the validator tests assert on ("loaded grid", "time series",
+# "flex asset").
+_REQUIREMENT_MESSAGES = {
+    "grid": "requires a loaded grid (setup_grid or load_from_base) before it",
+    "timeseries": (
+        "requires time series to be set (e.g. worst_case_ts or oedb_ts) "
+        "before it"
+    ),
+    "flex": "requires at least one flex asset to be imported",
 }
+# Order in which a missing capability is reported when several are missing.
+_REQUIREMENT_PRIORITY = ("grid", "timeseries", "flex")
 
 
 def validate(cfg: dict) -> None:
@@ -68,6 +73,7 @@ def validate(cfg: dict) -> None:
     if not stages:
         raise ValueError("Config has no stages to run.")
 
+    known = set(known_tasks())
     available_artifacts: set[str] = set()
 
     for stage in stages:
@@ -82,67 +88,50 @@ def validate(cfg: dict) -> None:
                 f"{sorted(available_artifacts)}"
             )
 
-        grid_available = load_from is not None
-        ts_set = False
+        # Capabilities established so far in this stage. A stage-level
+        # load_from reloads the grid topology only — _load_artifact drops
+        # time series and flex data (import_timeseries=False) — so it
+        # provides "grid" but NOT "timeseries"/"flex". A task's requirements
+        # must therefore be satisfied by tasks run in this stage itself.
+        satisfied: set[str] = {"grid"} if load_from is not None else set()
         reactive_set = False
-        flex_imported = False
         has_save = False
 
         for step in pipeline:
             task_name, _params = _split_step(step)
-            if task_name not in known_tasks():
+            if task_name not in known:
                 raise ValueError(
                     f"Unknown task '{task_name}' in stage '{name}'. "
-                    f"Known: {known_tasks()}"
+                    f"Known: {sorted(known)}"
                 )
 
-            if task_name in _GRID_CREATING_TASKS:
-                grid_available = True
-            if task_name in _TS_TASKS:
-                if reactive_set:
-                    raise ValueError(
-                        f"Stage '{name}': time-series task "
-                        f"'{task_name}' comes after 'reactive_power' "
-                        f"— reactive_power must be the last "
-                        f"time-series-altering step."
-                    )
-                ts_set = True
+            meta = get_task_meta(task_name)
+
+            # reactive_power must be the last time-series-altering step.
+            if meta.ts_altering and reactive_set:
+                raise ValueError(
+                    f"Stage '{name}': time-series task '{task_name}' comes "
+                    f"after 'reactive_power' — reactive_power must be the "
+                    f"last time-series-altering step."
+                )
+
+            # Check declared requirements against what the stage provides.
+            missing = meta.requires - satisfied
+            if missing:
+                cap = next(
+                    (c for c in _REQUIREMENT_PRIORITY if c in missing),
+                    sorted(missing)[0],
+                )
+                detail = _REQUIREMENT_MESSAGES.get(
+                    cap, f"requires '{cap}' to be established before it"
+                )
+                raise ValueError(
+                    f"Stage '{name}': task '{task_name}' {detail}."
+                )
+
+            satisfied |= meta.provides
             if task_name == "reactive_power":
                 reactive_set = True
-            if task_name in _FLEX_IMPORTS:
-                flex_imported = True
-                if not grid_available:
-                    raise ValueError(
-                        f"Stage '{name}': task '{task_name}' requires "
-                        f"a loaded grid (setup_grid or "
-                        f"load_from_base) before it."
-                    )
-            # load_from does NOT satisfy these: _load_artifact reloads the
-            # grid with import_timeseries=False and drops flex data, so a
-            # time-series (and, for optimize, a flex-import) task must run
-            # in the stage itself even after a load_from.
-            if task_name in {"analyze", "reinforce"} and not ts_set:
-                raise ValueError(
-                    f"Stage '{name}': task '{task_name}' requires time "
-                    f"series to be set (e.g. worst_case_ts or "
-                    f"oedb_ts) before it."
-                )
-            if task_name == "optimize":
-                if not ts_set:
-                    raise ValueError(
-                        f"Stage '{name}': 'optimize' requires time "
-                        f"series."
-                    )
-                if not flex_imported:
-                    raise ValueError(
-                        f"Stage '{name}': 'optimize' requires at least "
-                        f"one flex asset to be imported."
-                    )
-            if task_name == "base_reinforce" and not grid_available:
-                raise ValueError(
-                    f"Stage '{name}': 'base_reinforce' requires a "
-                    f"loaded grid before it."
-                )
             if task_name == "save":
                 has_save = True
 

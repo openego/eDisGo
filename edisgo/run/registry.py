@@ -18,12 +18,44 @@ replaces it); otherwise the runner keeps using the same instance.
 """
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, NamedTuple
 
 _TASKS: dict[str, Callable] = {}
 
 
-def register_task(name: str) -> Callable[[Callable], Callable]:
+class TaskMeta(NamedTuple):
+    """
+    Declarative metadata describing a task's pipeline pre-/post-conditions.
+
+    Attributes
+    ----------
+    requires : frozenset of str
+        Capabilities that must already be satisfied in the stage before
+        this task runs (e.g. ``{"grid"}``, ``{"timeseries"}``, ``{"flex"}``).
+    provides : frozenset of str
+        Capabilities this task establishes for later tasks in the stage.
+    ts_altering : bool
+        Whether the task sets/alters the active-power time series. Such
+        tasks must not appear after ``reactive_power``. The validator uses
+        this metadata so it stays in sync with the actual tasks instead of
+        maintaining a parallel hard-coded list.
+    """
+
+    requires: frozenset = frozenset()
+    provides: frozenset = frozenset()
+    ts_altering: bool = False
+
+
+_META: dict[str, TaskMeta] = {}
+
+
+def register_task(
+    name: str,
+    *,
+    requires=frozenset(),
+    provides=frozenset(),
+    ts_altering: bool = False,
+) -> Callable[[Callable], Callable]:
     """
     Decorator to register a task function under the given name.
 
@@ -37,6 +69,14 @@ def register_task(name: str) -> Callable[[Callable], Callable]:
     ----------
     name : str
         Unique task name used in pipeline definitions.
+    requires : iterable of str, optional
+        Capabilities the task needs (see :class:`TaskMeta`). Used by the
+        validator for static ordering checks.
+    provides : iterable of str, optional
+        Capabilities the task establishes for later tasks.
+    ts_altering : bool, optional
+        Whether the task alters the active-power time series (must precede
+        ``reactive_power``).
 
     Returns
     -------
@@ -50,7 +90,8 @@ def register_task(name: str) -> Callable[[Callable], Callable]:
 
     Examples
     --------
-    >>> @register_task("set_timeindex_weekly")
+    >>> @register_task("set_timeindex_weekly", provides={"timeseries"},
+    ...                ts_altering=True)
     ... def task_weekly(edisgo, ctx, *, start):
     ...     import pandas as pd
     ...     edisgo.set_timeindex(pd.date_range(start, periods=168, freq="h"))
@@ -64,9 +105,33 @@ def register_task(name: str) -> Callable[[Callable], Callable]:
                 f"new={fn.__qualname__})."
             )
         _TASKS[name] = fn
+        _META[name] = TaskMeta(
+            requires=frozenset(requires),
+            provides=frozenset(provides),
+            ts_altering=ts_altering,
+        )
         return fn
 
     return deco
+
+
+def get_task_meta(name: str) -> TaskMeta:
+    """
+    Return the :class:`TaskMeta` for a registered task.
+
+    Parameters
+    ----------
+    name : str
+        Task name.
+
+    Returns
+    -------
+    TaskMeta
+        The task's declared metadata. Unregistered names yield an empty
+        :class:`TaskMeta` (no requirements, no provided capabilities).
+
+    """
+    return _META.get(name, TaskMeta())
 
 
 def get_task(name: str) -> Callable:

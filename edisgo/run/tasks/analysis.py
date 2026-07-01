@@ -55,7 +55,7 @@ def task_check_integrity(edisgo, ctx):
     return edisgo
 
 
-@register_task("analyze")
+@register_task("analyze", requires={"timeseries"})
 def task_analyze(
     edisgo,
     ctx,
@@ -110,7 +110,7 @@ def task_analyze(
     return edisgo
 
 
-@register_task("reinforce")
+@register_task("reinforce", requires={"timeseries"})
 def task_reinforce(
     edisgo,
     ctx,
@@ -182,7 +182,7 @@ def task_reinforce(
     return edisgo
 
 
-@register_task("base_reinforce")
+@register_task("base_reinforce", requires={"grid"})
 def task_base_reinforce(
     edisgo, ctx, *, cases=None, reset_equipment_changes=True, save_artifact=True
 ):
@@ -258,7 +258,7 @@ def task_base_reinforce(
     return edisgo
 
 
-@register_task("optimize")
+@register_task("optimize", requires={"timeseries", "flex"})
 def task_optimize(
     edisgo,
     ctx,

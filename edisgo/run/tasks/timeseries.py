@@ -20,7 +20,7 @@ import pandas as pd
 from edisgo.run.registry import register_task
 
 
-@register_task("worst_case_ts")
+@register_task("worst_case_ts", provides={"timeseries"}, ts_altering=True)
 def task_worst_case_ts(
     edisgo,
     ctx,
@@ -68,7 +68,7 @@ def task_worst_case_ts(
     return edisgo
 
 
-@register_task("set_timeindex")
+@register_task("set_timeindex", provides={"timeseries"}, ts_altering=True)
 def task_set_timeindex(edisgo, ctx, *, start, periods=None, end=None, freq="h"):
     """
     Set the time index on the EDisGo object.
@@ -119,7 +119,7 @@ def task_set_timeindex(edisgo, ctx, *, start, periods=None, end=None, freq="h"):
     return edisgo
 
 
-@register_task("oedb_ts")
+@register_task("oedb_ts", provides={"timeseries"}, ts_altering=True)
 def task_oedb_ts(
     edisgo,
     ctx,
@@ -216,7 +216,7 @@ def task_oedb_ts(
     return edisgo
 
 
-@register_task("manual_ts")
+@register_task("manual_ts", provides={"timeseries"}, ts_altering=True)
 def task_manual_ts(
     edisgo,
     ctx,
