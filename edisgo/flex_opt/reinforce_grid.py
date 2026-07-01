@@ -137,7 +137,7 @@ def reinforce_grid(
 
     Notes
     -----
-    See :ref:`features-in-detail` for more information on how network
+    See :ref:`grid-reinforcement` for more information on how network
     reinforcement is conducted.
 
     """
@@ -876,12 +876,14 @@ def enhanced_reinforce_grid(
     activate_cost_results_disturbing_mode : bool
         If True, LV grids where normal grid reinforcement does not solve all issues,
         two additional approaches are used to obtain a grid where power flow can be
-        conducted without non-convergence. These two approaches are currently not
-        included in the calculation of grid reinforcement costs, wherefore grid
-        reinforcement costs will be underestimated.
+        conducted without non-convergence.
         In the first approach, all lines in the LV grid are replaced by the
-        standard line type. Should this not be sufficient to solve non-convergence
-        issues, all components in the LV grid are aggregated to the MV/LV station.
+        standard line type. The costs of these replaced lines are included in the
+        grid reinforcement costs. Should this not be sufficient to solve
+        non-convergence issues, all components in the LV grid are aggregated to the
+        MV/LV station. This aggregation is not reflected in the grid reinforcement
+        costs, wherefore grid reinforcement costs will be underestimated for grids
+        where this measure is applied.
         Default: False.
     separate_lv_grids : bool
         If True, all highly overloaded LV grids are separated in a first step.
