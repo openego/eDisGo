@@ -243,6 +243,10 @@ linkcheck_ignore = [
     # zenodo and numpy.org return errors in CI even though the links are correct
     r"https://zenodo.org/*",
     r"https://numpy.org/*",
+    # ACM Digital Library (via doi.org) returns 403 to the CI bot, link is correct
+    r"https://doi.org/10.1145/.*",
+    # pandoc.org intermittently fails decompression in CI, link is correct
+    r"https://pandoc.org",
 ]
 
 # Add any paths that contain templates here, relative to this directory.
