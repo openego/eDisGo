@@ -1747,24 +1747,28 @@ def _build_component_timeseries(
         retrieved from overlying grid component of edisgo object.
     """
     pm_comp = dict()
-    solar_gens = edisgo_obj.topology.generators_df.index[
-        edisgo_obj.topology.generators_df.type == "solar"
-    ]
-    wind_gens = edisgo_obj.topology.generators_df.index[
-        edisgo_obj.topology.generators_df.type == "wind"
-    ]
-    disp_gens = edisgo_obj.topology.generators_df.index[
-        (edisgo_obj.topology.generators_df.type != "wind")
-        & (edisgo_obj.topology.generators_df.type != "solar")
-    ]
+    # The generator-type masks and the inflexible-component lists below are
+    # loop-invariant across the per-component ``_mapping`` calls in each branch,
+    # so they are computed once here instead of on every call.
+    gen_type = edisgo_obj.topology.generators_df.type
+    gen_index = edisgo_obj.topology.generators_df.index
+    solar_gens = gen_index[gen_type == "solar"]
+    wind_gens = gen_index[gen_type == "wind"]
+    disp_gens = gen_index[(gen_type != "wind") & (gen_type != "solar")]
     if flexible_storage_units is not None:
+        # Use a set for O(1) membership tests; list order (which determines the
+        # resulting column order) is preserved by iterating storage_units.index.
+        flex_storage_set = set(flexible_storage_units)
         inflexible_storage_units = [
             storage
             for storage in psa_net.storage_units.index
-            if storage not in list(flexible_storage_units)
+            if storage not in flex_storage_set
         ]
     flex_loads = np.concatenate((flexible_hps, flexible_cps))
-    inflexible_loads = [_ for _ in psa_net.loads.index if _ not in flex_loads]
+    # Membership set mirrors the values in ``flex_loads`` (string component
+    # names); iteration order over ``loads.index`` is preserved.
+    flex_loads_set = set(flex_loads)
+    inflexible_loads = [_ for _ in psa_net.loads.index if _ not in flex_loads_set]
     if kind == "gen":
         p_set2 = (psa_net.generators_t.p_set[disp_gens]).round(20)
         q_set2 = (psa_net.generators_t.q_set[disp_gens]).round(20)
@@ -2004,61 +2008,113 @@ def _mapping(
     flexible_storage_units : :numpy:`numpy.ndarray<ndarray>` or None
         Array containing all flexible storage units.
     """
-    solar_gens = edisgo_obj.topology.generators_df.index[
-        edisgo_obj.topology.generators_df.type == "solar"
-    ]
-    wind_gens = edisgo_obj.topology.generators_df.index[
-        edisgo_obj.topology.generators_df.type == "wind"
-    ]
-    disp_gens = edisgo_obj.topology.generators_df.index[
-        (edisgo_obj.topology.generators_df.type != "wind")
-        & (edisgo_obj.topology.generators_df.type != "solar")
-    ]
+    # ``_mapping`` is called from within per-component loops at ~22 sites. For a
+    # given ``kind`` the underlying index that ``name`` is looked up in depends
+    # only on ``psa_net``/``edisgo_obj`` and the (build-constant) flexible
+    # arrays, none of which change during a single ``to_powermodels`` build.
+    # We therefore build that index once per ``kind`` and cache it on
+    # ``psa_net``, then resolve the position with ``Index.get_loc`` (O(1)) rather
+    # than the original full linear scan (O(n) per call -> O(n^2) overall).
+    index = _mapping_index(
+        psa_net,
+        edisgo_obj,
+        kind,
+        flexible_cps=flexible_cps,
+        flexible_hps=flexible_hps,
+        flexible_loads=flexible_loads,
+        flexible_storage_units=flexible_storage_units,
+    )
+    # ``get_loc`` returns the 0-based position; the original code returned the
+    # 1-based position (``+ 1``). The index is unique for every supported kind,
+    # so ``get_loc`` returns a single integer (identical to the old scan).
+    return index.get_loc(name) + 1
+
+
+def _mapping_index(
+    psa_net,
+    edisgo_obj,
+    kind: str,
+    flexible_cps=None,
+    flexible_hps=None,
+    flexible_loads=None,
+    flexible_storage_units=None,
+) -> pd.Index:
+    """
+    Return (and cache) the component index that :func:`_mapping` looks names up
+    in for the given ``kind``.
+
+    The returned index is byte-identical (same labels in the same order) to
+    ``df.index`` of the original :func:`_mapping` implementation. Results are
+    memoized per ``kind`` on ``psa_net`` to avoid rebuilding the masks and
+    concatenated frames on every call.
+    """
+    cache = getattr(psa_net, "_edisgo_mapping_index_cache", None)
+    if cache is None:
+        cache = {}
+        psa_net._edisgo_mapping_index_cache = cache
+    cached = cache.get(kind)
+    if cached is not None:
+        return cached
+
     if flexible_storage_units is not None:
+        flex_storage_set = set(flexible_storage_units)
         inflexible_storage_units = [
             storage
             for storage in psa_net.storage_units.index
-            if storage not in list(flexible_storage_units)
+            if storage not in flex_storage_set
         ]
     else:
         inflexible_storage_units = None
+
     if kind == "bus":
-        df = psa_net.buses
+        index = psa_net.buses.index
     elif kind == "gen":
+        gen_type = edisgo_obj.topology.generators_df.type
+        gen_idx = edisgo_obj.topology.generators_df.index
+        disp_gens = gen_idx[(gen_type != "wind") & (gen_type != "solar")]
         df2 = psa_net.generators.loc[disp_gens]
-        df = pd.concat([df2, psa_net.storage_units.loc[inflexible_storage_units]])
+        index = pd.concat(
+            [df2, psa_net.storage_units.loc[inflexible_storage_units]]
+        ).index
     elif kind == "gen_nd":
-        df = psa_net.generators.loc[
+        gen_type = edisgo_obj.topology.generators_df.type
+        gen_idx = edisgo_obj.topology.generators_df.index
+        solar_gens = gen_idx[gen_type == "solar"]
+        wind_gens = gen_idx[gen_type == "wind"]
+        index = psa_net.generators.loc[
             np.concatenate((solar_gens.values, wind_gens.values))
-        ]
+        ].index
     elif kind == "gen_slack":
-        df = psa_net.generators.loc[(psa_net.generators.index.str.contains("slack"))]
+        index = psa_net.generators.loc[
+            (psa_net.generators.index.str.contains("slack"))
+        ].index
     elif kind == "storage":
-        df = psa_net.storage_units.loc[flexible_storage_units]
+        index = psa_net.storage_units.loc[flexible_storage_units].index
     elif kind == "load":
         flex_loads = np.concatenate((flexible_hps, flexible_cps))
         if len(flex_loads) == 0:
-            df = pd.concat(
+            index = pd.concat(
                 [psa_net.loads, psa_net.storage_units.loc[inflexible_storage_units]]
-            )
+            ).index
         else:
-            df = pd.concat(
+            index = pd.concat(
                 [
                     psa_net.loads.drop(flex_loads),
                     psa_net.storage_units.loc[inflexible_storage_units],
                 ]
-            )
+            ).index
     elif kind == "electromobility":
-        df = psa_net.loads.loc[flexible_cps]
+        index = psa_net.loads.loc[flexible_cps].index
     elif (kind == "heatpumps") | (kind == "heat_storage"):
-        df = psa_net.loads.loc[flexible_hps]
+        index = psa_net.loads.loc[flexible_hps].index
     elif kind == "dsm":
-        df = psa_net.loads.loc[flexible_loads]
+        index = psa_net.loads.loc[flexible_loads].index
     else:
-        df = pd.DataFrame()
+        index = pd.DataFrame().index
         logging.warning(f"Mapping for '{kind}' not implemented.")
-    idx = df.reset_index()[df.index == name].index[0] + 1
-    return idx
+
+    cache[kind] = index
+    return index
 
 
 def aggregate_parallel_transformers(psa_net):

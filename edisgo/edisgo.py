@@ -2948,15 +2948,14 @@ class EDisGo:
         if dist_a.isna().any():
             try:
                 mv_graph = mv_a.graph
+                # Compute all path lengths from source at once using BFS instead
+                # of one shortest_path call per bus.
+                path_lengths_a = nx.single_source_shortest_path_length(
+                    mv_graph, source=source_a
+                )
                 for bus in mv_buses_a:
                     if pd.isna(dist_a.loc[bus]):
-                        try:
-                            path = nx.shortest_path(
-                                mv_graph, source=source_a, target=bus
-                            )
-                            dist_a.loc[bus] = len(path) - 1  # number of edges
-                        except (nx.NetworkXNoPath, nx.NodeNotFound):
-                            dist_a.loc[bus] = 0
+                        dist_a.loc[bus] = path_lengths_a.get(bus, 0)
             except Exception:
                 # Fallback: set all NaN values to 0
                 dist_a = dist_a.fillna(0)
@@ -2964,15 +2963,14 @@ class EDisGo:
         if dist_b.isna().any():
             try:
                 mv_graph = mv_b.graph
+                # Compute all path lengths from source at once using BFS instead
+                # of one shortest_path call per bus.
+                path_lengths_b = nx.single_source_shortest_path_length(
+                    mv_graph, source=source_b
+                )
                 for bus in mv_buses_b:
                     if pd.isna(dist_b.loc[bus]):
-                        try:
-                            path = nx.shortest_path(
-                                mv_graph, source=source_b, target=bus
-                            )
-                            dist_b.loc[bus] = len(path) - 1  # number of edges
-                        except (nx.NetworkXNoPath, nx.NodeNotFound):
-                            dist_b.loc[bus] = 0
+                        dist_b.loc[bus] = path_lengths_b.get(bus, 0)
             except Exception:
                 # Fallback: set all NaN values to 0
                 dist_b = dist_b.fillna(0)
