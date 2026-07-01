@@ -99,11 +99,12 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
 
     def _get_line_costs(lines_added):
         costs_lines = line_expansion_costs(edisgo_obj, lines_added.index)
-        costs_lines["costs"] = costs_lines.apply(
-            lambda x: (
-                x.costs_earthworks + x.costs_cable * lines_added.loc[x.name, "quantity"]
-            ),
-            axis=1,
+        # Align quantity to costs_lines index and compute elementwise (vectorised
+        # equivalent of the former per-row apply).
+        quantity_aligned = lines_added["quantity"].reindex(costs_lines.index)
+        costs_lines["costs"] = (
+            costs_lines["costs_earthworks"]
+            + costs_lines["costs_cable"] * quantity_aligned
         )
 
         return costs_lines[["costs", "voltage_level"]]
