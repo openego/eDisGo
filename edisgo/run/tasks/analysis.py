@@ -354,3 +354,413 @@ def task_optimize(
         s_base=s_base,
     )
     return edisgo
+
+
+@register_task("optimize_selected_timesteps")
+def task_optimize_selected_timesteps(
+    edisgo,
+    ctx,
+    *,
+    flexible=None,
+    flexible_cps=None,
+    flexible_hps=None,
+    flexible_loads=None,
+    flexible_storage_units=None,
+    opf_version=2,
+    method="soc",
+    warm_start=False,
+    s_base=1,
+):
+    """
+    """
+
+    time_intervals = pd.read_csv("/home/clara/egon_edisgo_results/results_per_grid/33128/selected_time_intervals_new.csv",
+                    index_col=0,
+                )
+    time_intervals = time_intervals[~time_intervals.time_steps.isnull()]
+    for ti in time_intervals.index:
+        time_steps = time_intervals.at[ti, "time_steps"]
+        if time_steps is not None:
+            time_intervals.at[ti, "time_steps"] = pd.date_range(
+                start=time_steps.split("'")[1],
+                periods=168,#int(time_steps.split("\n")[-1].split(",")[0]),
+                freq="H",
+            )
+            if time_intervals.at[ti, "time_steps"][0].year != edisgo.timeseries.timeindex[0].year:
+                time_intervals.at[ti, "time_steps"] += pd.DateOffset(
+                    years=edisgo.timeseries.timeindex[0].year - time_intervals.at[ti, "time_steps"][0].year)
+            
+    timeindex = pd.Index([])
+    scenario = ctx.scenario
+    reduction_factor = 0.3 # eGon paper
+    from copy import deepcopy
+    from edisgo.tools.tools import (
+        aggregate_district_heating_components,
+        reduce_timeseries_data_to_given_timeindex,
+    )
+    for ti in time_intervals.index[:1]:
+        time_steps = time_intervals.at[ti, "time_steps"]
+        if time_steps is None:
+            continue
+        else:
+            timeindex = timeindex.append(pd.Index(time_steps))
+            # copy edisgo object
+            edisgo_copy = deepcopy(edisgo)
+            # temporal complexity reduction
+            reduce_timeseries_data_to_given_timeindex(edisgo_copy, time_steps)
+            edisgo_copy.timeseries.timeindex.freq = "H"
+            # spatial complexity reduction
+            edisgo_copy.spatial_complexity_reduction(
+                mode="kmeansdijkstra",
+                cluster_area="feeder",
+                reduction_factor=reduction_factor,
+                reduction_factor_not_focused=False,
+            )
+
+            # OPF
+            # flexibilities in full flex: DSM, decentral and central PtH units,
+            # curtailment, EVs, storage units
+            # flexibilities in low flex: curtailment, storage units
+            psa_net = edisgo_copy.to_pypsa()
+            if scenario in ["eGon2035", "eGon100RE"]:
+                flexible_loads = edisgo_copy.dsm.p_max.columns
+                # flexible_hps = (
+                #     edisgo_copy.heat_pump.thermal_storage_units_df.index.values
+                # )
+                flexible_cps = psa_net.loads.loc[
+                    psa_net.loads.index.str.contains("home")
+                    | (psa_net.loads.index.str.contains("work"))
+                ].index.values
+            else:
+                flexible_loads = []
+                # flexible_hps = []
+                flexible_cps = []
+            flexible_hps = edisgo_copy.heat_pump.heat_demand_df.columns.values
+            flexible_storage_units = (
+                edisgo_copy.topology.storage_units_df.index.values
+            )
+
+            edisgo_copy.pm_optimize(
+                flexible_cps=flexible_cps,
+                flexible_hps=flexible_hps,
+                flexible_loads=flexible_loads,
+                flexible_storage_units=flexible_storage_units,
+                s_base=1,
+                opf_version=4,
+                silence_moi=False,
+                method="soc",
+            )
+            
+            # save OPF results
+            # zip_name = f"opf_results_{ti}"
+            # if scenario in ["eGon2035_lowflex", "eGon100RE_lowflex"]:
+            #     zip_name += "_lowflex"
+            # edisgo_copy.save(
+            #     directory=os.path.join(results_dir, zip_name),
+            #     save_topology=True,
+            #     save_timeseries=False,
+            #     save_results=False,
+            #     save_opf_results=True,
+            #     reduce_memory=True,
+            #     archive=True,
+            #     archive_type="zip",
+            # )
+
+            # write flexibility dispatch results to spatially unreduced edisgo
+            # object
+            edisgo.timeseries._loads_active_power.loc[
+                time_steps, :
+            ] = edisgo_copy.timeseries.loads_active_power
+            edisgo.timeseries._loads_reactive_power.loc[
+                time_steps, :
+            ] = edisgo_copy.timeseries.loads_reactive_power
+            edisgo.timeseries._generators_active_power.loc[
+                time_steps, :
+            ] = edisgo_copy.timeseries.generators_active_power
+            edisgo.timeseries._generators_reactive_power.loc[
+                time_steps, :
+            ] = edisgo_copy.timeseries.generators_reactive_power
+
+            try:
+                edisgo.timeseries._storage_units_active_power
+            except AttributeError:
+                edisgo.timeseries.storage_units_active_power = pd.DataFrame(
+                    index=edisgo.timeseries.timeindex
+                )
+            edisgo.timeseries._storage_units_active_power.loc[
+                time_steps,
+                edisgo_copy.timeseries.storage_units_active_power.columns,
+            ] = edisgo_copy.timeseries.storage_units_active_power
+            try:
+                edisgo.timeseries._storage_units_reactive_power
+            except AttributeError:
+                edisgo.timeseries.storage_units_reactive_power = pd.DataFrame(
+                    index=edisgo.timeseries.timeindex
+                )
+            edisgo.timeseries._storage_units_reactive_power.loc[
+                time_steps,
+                edisgo_copy.timeseries.storage_units_reactive_power.columns,
+            ] = edisgo_copy.timeseries.storage_units_reactive_power
+
+            # write OPF results back
+            edisgo.opf_results.overlying_grid = pd.concat(
+                [
+                    edisgo.opf_results.overlying_grid,
+                    edisgo_copy.opf_results.overlying_grid,
+                ]
+            )
+            edisgo.opf_results.battery_storage_t.p = pd.concat(
+                [
+                    edisgo.opf_results.battery_storage_t.p,
+                    edisgo_copy.opf_results.battery_storage_t.p,
+                ]
+            )
+            edisgo.opf_results.battery_storage_t.e = pd.concat(
+                [
+                    edisgo.opf_results.battery_storage_t.e,
+                    edisgo_copy.opf_results.battery_storage_t.e,
+                ]
+            )
+
+    return edisgo
+
+
+@register_task("optimize_temporal_complexity_reduction")
+def optimize_temporal_complexity_reduction(
+    edisgo,
+    ctx,
+    *,
+    flexible=None,
+    flexible_cps=None,
+    flexible_hps=None,
+    flexible_loads=None,
+    flexible_storage_units=None,
+    opf_version=2,
+    method="soc",
+    warm_start=False,
+    s_base=1,
+):
+    """
+    """
+    from edisgo.tools.temporal_complexity_reduction import (
+        get_most_critical_time_intervals,
+    )
+    timeindex = pd.Index([])
+    time_intervals = get_most_critical_time_intervals(
+        edisgo,
+        percentage=1.0,
+        time_steps_per_time_interval=168,
+        time_step_day_start=4,
+        save_steps=True,
+        #path=results_dir,
+        use_troubleshooting_mode=True,
+        overloading_factor=0.95,
+        voltage_deviation_factor=0.95,
+    )
+    
+    # select time intervals
+    if not time_intervals.loc[:, "time_steps_overloading"].dropna().empty:
+        tmp = time_intervals.loc[:, "time_steps_overloading"].dropna()
+        time_interval_1 = tmp.iloc[0]
+        time_interval_1_ind = tmp.index[0]
+    else:
+        time_interval_1 = pd.Index([])
+        time_interval_1_ind = None
+    if not time_intervals.loc[:, "time_steps_voltage_issues"].dropna().empty:
+        tmp = time_intervals.loc[:, "time_steps_voltage_issues"].dropna()
+        time_interval_2 = tmp.iloc[0]
+        time_interval_2_ind = tmp.index[0]
+    else:
+        time_interval_2 = pd.Index([])
+        time_interval_2_ind = None
+
+    # check if time intervals overlap
+    overlap = [_ for _ in time_interval_1 if _ in time_interval_2]
+    if len(overlap) > 0:
+        print(
+            "Selected time intervals overlap. Trying to find another "
+            "time interval in voltage_issues intervals."
+        )
+        # check if time interval without overlap can be found
+        for ti in time_intervals.loc[:, "time_steps_voltage_issues"].dropna().index:
+            overlap = [
+                _
+                for _ in time_interval_1
+                if _ in time_intervals.at[ti, "time_steps_voltage_issues"]
+            ]
+            if len(overlap) == 0:
+                time_interval_2 = time_intervals.at[ti, "time_steps_voltage_issues"]
+                time_interval_2_ind = ti
+                break
+    overlap = [_ for _ in time_interval_1 if _ in time_interval_2]
+    if len(overlap) > 0:
+        print(
+            "Selected time intervals overlap. Trying to find another "
+            "time interval in overloading intervals."
+        )
+        # check if time interval without overlap can be found
+        for ti in time_intervals.loc[:, "time_steps_overloading"].dropna().index:
+            overlap = [
+                _
+                for _ in time_interval_2
+                if _ in time_intervals.at[ti, "time_steps_overloading"]
+            ]
+            if len(overlap) == 0:
+                time_interval_1 = time_intervals.at[ti, "time_steps_overloading"]
+                time_interval_1_ind = ti
+                break
+
+    overlap = [_ for _ in time_interval_1 if _ in time_interval_2]
+    if len(overlap) > 0:
+        print(
+            "Overlap of selected time intervals cannot be avoided. "
+            "Time intervals are therefore concatenated."
+        )
+        time_interval_1 = (
+            time_interval_1.append(time_interval_2).unique().sort_values()
+        )
+        time_interval_2 = None
+
+    # save to csv
+    percentage = pd.Series()
+    percentage["time_interval_1"] = (
+        None
+        if time_interval_1_ind is None
+        else time_intervals.at[
+            time_interval_1_ind, "percentage_max_overloaded_components"
+        ]
+    )
+    percentage["time_interval_2"] = (
+        None
+        if time_interval_2_ind is None
+        else time_intervals.at[
+            time_interval_2_ind, "percentage_buses_max_voltage_deviation"
+        ]
+    )
+
+    scenario = ctx.scenario
+    reduction_factor = 0.3 # aus eGon paper
+    timeindex = pd.Index([])
+    from copy import deepcopy
+    from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
+    for time_steps in [time_interval_1, time_interval_2]:
+        timeindex = timeindex.append(pd.Index(time_steps))
+        # copy edisgo object
+        edisgo_copy = deepcopy(edisgo)
+        # temporal complexity reduction
+        reduce_timeseries_data_to_given_timeindex(edisgo_copy, time_steps)
+        edisgo_copy.timeseries.timeindex.freq = "H"
+        # spatial complexity reduction
+        edisgo_copy.spatial_complexity_reduction(
+            mode="kmeansdijkstra",
+            cluster_area="feeder",
+            reduction_factor=reduction_factor,
+            reduction_factor_not_focused=False,
+        )
+
+        # OPF
+        # flexibilities in full flex: DSM, decentral and central PtH units,
+        # curtailment, EVs, storage units
+        # flexibilities in low flex: curtailment, storage units
+        psa_net = edisgo_copy.to_pypsa()
+        if scenario in ["eGon2035", "eGon100RE"]:
+            flexible_loads = edisgo_copy.dsm.p_max.columns
+            # flexible_hps = (
+            #     edisgo_copy.heat_pump.thermal_storage_units_df.index.values
+            # )
+            flexible_cps = psa_net.loads.loc[
+                psa_net.loads.index.str.contains("home")
+                | (psa_net.loads.index.str.contains("work"))
+            ].index.values
+        else:
+            flexible_loads = []
+            # flexible_hps = []
+            flexible_cps = []
+        flexible_hps = edisgo_copy.heat_pump.heat_demand_df.columns.values
+        flexible_storage_units = (
+            edisgo_copy.topology.storage_units_df.index.values
+        )
+
+        edisgo_copy.pm_optimize(
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            flexible_storage_units=flexible_storage_units,
+            s_base=1,
+            opf_version=4,
+            silence_moi=False,
+            method="soc",
+        )
+        
+        # save OPF results
+        # zip_name = f"opf_results_{ti}"
+        # if scenario in ["eGon2035_lowflex", "eGon100RE_lowflex"]:
+        #     zip_name += "_lowflex"
+        # edisgo_copy.save(
+        #     directory=os.path.join(results_dir, zip_name),
+        #     save_topology=True,
+        #     save_timeseries=False,
+        #     save_results=False,
+        #     save_opf_results=True,
+        #     reduce_memory=True,
+        #     archive=True,
+        #     archive_type="zip",
+        # )
+
+        # write flexibility dispatch results to spatially unreduced edisgo
+        # object
+        edisgo.timeseries._loads_active_power.loc[
+            time_steps, :
+        ] = edisgo_copy.timeseries.loads_active_power
+        edisgo.timeseries._loads_reactive_power.loc[
+            time_steps, :
+        ] = edisgo_copy.timeseries.loads_reactive_power
+        edisgo.timeseries._generators_active_power.loc[
+            time_steps, :
+        ] = edisgo_copy.timeseries.generators_active_power
+        edisgo.timeseries._generators_reactive_power.loc[
+            time_steps, :
+        ] = edisgo_copy.timeseries.generators_reactive_power
+
+        try:
+            edisgo.timeseries._storage_units_active_power
+        except AttributeError:
+            edisgo.timeseries.storage_units_active_power = pd.DataFrame(
+                index=edisgo.timeseries.timeindex
+            )
+        edisgo.timeseries._storage_units_active_power.loc[
+            time_steps,
+            edisgo_copy.timeseries.storage_units_active_power.columns,
+        ] = edisgo_copy.timeseries.storage_units_active_power
+        try:
+            edisgo.timeseries._storage_units_reactive_power
+        except AttributeError:
+            edisgo.timeseries.storage_units_reactive_power = pd.DataFrame(
+                index=edisgo.timeseries.timeindex
+            )
+        edisgo.timeseries._storage_units_reactive_power.loc[
+            time_steps,
+            edisgo_copy.timeseries.storage_units_reactive_power.columns,
+        ] = edisgo_copy.timeseries.storage_units_reactive_power
+
+        # write OPF results back
+        edisgo.opf_results.overlying_grid = pd.concat(
+            [
+                edisgo.opf_results.overlying_grid,
+                edisgo_copy.opf_results.overlying_grid,
+            ]
+        )
+        edisgo.opf_results.battery_storage_t.p = pd.concat(
+            [
+                edisgo.opf_results.battery_storage_t.p,
+                edisgo_copy.opf_results.battery_storage_t.p,
+            ]
+        )
+        edisgo.opf_results.battery_storage_t.e = pd.concat(
+            [
+                edisgo.opf_results.battery_storage_t.e,
+                edisgo_copy.opf_results.battery_storage_t.e,
+            ]
+        )
+
+    return edisgo

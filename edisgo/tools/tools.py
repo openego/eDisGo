@@ -1140,7 +1140,8 @@ def reduce_timeseries_data_to_given_timeindex(
     if electromobility:
         if save_ev_soc_initial:
             # timestep EV SOC from timestep before if possible
-            ts_before = timeindex[0] - frequency
+            ts_before = timeindex[0] - frequency + pd.DateOffset(years=2011-2035)
+            print(ts_before)
             if not edisgo_obj.electromobility.flexibility_bands["upper_energy"].empty:
                 try:
                     initial_soc_cp = (
@@ -1170,6 +1171,7 @@ def reduce_timeseries_data_to_given_timeindex(
                     )
                 edisgo_obj.electromobility.initial_soc_df = initial_soc_cp
         for key, df in edisgo_obj.electromobility.flexibility_bands.items():
+            df.index = df.index + pd.DateOffset(years=2035-2011)
             if not df.empty:
                 df = df.loc[timeindex]
                 edisgo_obj.electromobility.flexibility_bands.update({key: df})
