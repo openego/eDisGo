@@ -20,6 +20,23 @@ logger = logging.getLogger(__name__)
 
 
 class LineVariables:
+    """
+    Container for the per-line results of the optimal power flow.
+
+    Each attribute is a :pandas:`pandas.DataFrame<DataFrame>` with one column per
+    line and the optimisation time steps as index.
+
+    Attributes
+    ----------
+    p : :pandas:`pandas.DataFrame<DataFrame>`
+        Active power flow on each line in MW.
+    q : :pandas:`pandas.DataFrame<DataFrame>`
+        Reactive power flow on each line in Mvar.
+    ccm : :pandas:`pandas.DataFrame<DataFrame>`
+        Squared current magnitude on each line (branch-flow variable).
+
+    """
+
     def __init__(self):
         self.p = pd.DataFrame()
         self.q = pd.DataFrame()
@@ -30,6 +47,24 @@ class LineVariables:
 
 
 class HeatStorage:
+    """
+    Container for the thermal-storage results of the optimal power flow.
+
+    Each attribute is a :pandas:`pandas.DataFrame<DataFrame>` with one column per
+    heat pump / thermal storage and the optimisation time steps as index.
+
+    Attributes
+    ----------
+    p : :pandas:`pandas.DataFrame<DataFrame>`
+        Thermal charging (positive) / discharging (negative) power of the storage
+        in MW.
+    e : :pandas:`pandas.DataFrame<DataFrame>`
+        State of energy of the thermal storage in MWh.
+    p_slack : :pandas:`pandas.DataFrame<DataFrame>`
+        Slack power used when the heat demand cannot be met, in MW.
+
+    """
+
     def __init__(self):
         self.p = pd.DataFrame()
         self.e = pd.DataFrame()
@@ -40,6 +75,21 @@ class HeatStorage:
 
 
 class BatteryStorage:
+    """
+    Container for the battery-storage results of the optimal power flow.
+
+    Each attribute is a :pandas:`pandas.DataFrame<DataFrame>` with one column per
+    storage unit and the optimisation time steps as index.
+
+    Attributes
+    ----------
+    p : :pandas:`pandas.DataFrame<DataFrame>`
+        Charging (positive) / discharging (negative) power of the storage in MW.
+    e : :pandas:`pandas.DataFrame<DataFrame>`
+        State of energy of the storage in MWh.
+
+    """
+
     def __init__(self):
         self.p = pd.DataFrame()
         self.e = pd.DataFrame()
@@ -49,6 +99,31 @@ class BatteryStorage:
 
 
 class GridSlacks:
+    """
+    Container for the grid slack variables of the optimal power flow.
+
+    Slack variables absorb otherwise infeasible situations so that the optimisation
+    stays solvable; non-zero values flag where and by how much a hard requirement had
+    to be relaxed. Each attribute is a :pandas:`pandas.DataFrame<DataFrame>` with the
+    optimisation time steps as index.
+
+    Attributes
+    ----------
+    gen_d_crt : :pandas:`pandas.DataFrame<DataFrame>`
+        Curtailment of dispatchable generators in MW.
+    gen_nd_crt : :pandas:`pandas.DataFrame<DataFrame>`
+        Curtailment of non-dispatchable (fluctuating) generators in MW.
+    load_shedding : :pandas:`pandas.DataFrame<DataFrame>`
+        Shed conventional load in MW.
+    cp_load_shedding : :pandas:`pandas.DataFrame<DataFrame>`
+        Shed charging-point (electric-vehicle) demand in MW.
+    hp_load_shedding : :pandas:`pandas.DataFrame<DataFrame>`
+        Shed heat-pump demand in MW.
+    hp_operation_slack : :pandas:`pandas.DataFrame<DataFrame>`
+        Slack on the heat-pump operation constraints in MW.
+
+    """
+
     def __init__(self):
         self.gen_d_crt = pd.DataFrame()
         self.gen_nd_crt = pd.DataFrame()
@@ -69,6 +144,41 @@ class GridSlacks:
 
 
 class OPFResults:
+    """
+    Container for the results of the multi-period optimal power flow.
+
+    An instance is populated when reading back the PowerModels.jl solution (see
+    :func:`~.io.powermodels_io.from_powermodels`) and is accessible on the
+    :class:`~.EDisGo` object via ``edisgo.opf_results``. The operation schedules are
+    additionally written into ``edisgo.timeseries``; the objects below hold the raw
+    optimisation variables and slacks.
+
+    Attributes
+    ----------
+    status : str or None
+        Solver termination status (e.g. ``"OPTIMAL"``).
+    solution_time : float or None
+        Wall-clock solve time in seconds.
+    solver : str or None
+        Name of the solver used (e.g. ``"Gurobi"`` or ``"Ipopt"``).
+    lines_t : :class:`~.opf.results.opf_result_class.LineVariables`
+        Per-line branch-flow results.
+    slack_generator_t : :pandas:`pandas.DataFrame<DataFrame>`
+        Active power of the slack generator at the grid's feed-in point in MW.
+    heat_storage_t : :class:`~.opf.results.opf_result_class.HeatStorage`
+        Thermal-storage results.
+    hv_requirement_slacks_t : :pandas:`pandas.DataFrame<DataFrame>`
+        Slacks on the requirements handed down from the overlying (HV) grid
+        (``opf_version`` 3 and 4).
+    grid_slacks_t : :class:`~.opf.results.opf_result_class.GridSlacks`
+        Grid slack variables (curtailment and load shedding).
+    overlying_grid : :pandas:`pandas.DataFrame<DataFrame>`
+        Aggregated exchange with the overlying grid.
+    battery_storage_t : :class:`~.opf.results.opf_result_class.BatteryStorage`
+        Battery-storage results.
+
+    """
+
     def __init__(self):
         self.status = None
         self.solution_time = None

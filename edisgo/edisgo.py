@@ -1243,7 +1243,7 @@ class EDisGo:
         If the :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case` is
         True input for `timesteps_pfa` is overwritten and therefore ignored.
 
-        See :ref:`features-in-detail` for more information on how network
+        See :ref:`grid-reinforcement` for more information on how network
         reinforcement is conducted.
 
         Parameters
@@ -2104,7 +2104,7 @@ class EDisGo:
         :attr:`~.edisgo.EDisGo.import_electromobility`.
 
         It is assumed that only 'private' charging processes at 'home' or at 'work' can
-        be flexibilized. 'public' charging processes will always be 'dumb'.
+        be flexibilized. 'public' and 'hpc' charging processes will always be 'dumb'.
 
         The charging time series at each charging parks are written to
         :attr:`~.network.timeseries.TimeSeries.loads_active_power`. Reactive power
@@ -2348,8 +2348,9 @@ class EDisGo:
         Gets industrial and CTS DSM profiles from the
         `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
 
-        Profiles comprise minimum and maximum load increase in MW as well as maximum
-        energy pre- and postponing in MWh. The data is written to the
+        Profiles comprise the maximum load decrease (``p_min``) and maximum load
+        increase (``p_max``) in MW as well as the maximum energy preponing (``e_min``)
+        and postponing (``e_max``) in MWh. The data is written to the
         :class:`~.network.dsm.DSM` object.
 
         Currently, the only supported data source is scenario data generated
@@ -2358,7 +2359,6 @@ class EDisGo:
 
         Parameters
         ----------
-        edisgo_object : :class:`~.EDisGo`
         scenario : str
             Scenario for which to retrieve DSM data. Possible options
             are 'eGon2035' and 'eGon100RE'.

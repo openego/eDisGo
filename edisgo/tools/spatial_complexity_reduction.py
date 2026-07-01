@@ -408,7 +408,7 @@ def make_busmap_grid(
         Default: "kmeansdijkstra".
     reduction_factor : float
         Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
-    preserve_trafo_bus_coordinates : True
+    preserve_trafo_bus_coordinates : bool
         If True, transformers have the same coordinates after the clustering, else
         the transformer coordinates are changed by the clustering. Default: True.
 

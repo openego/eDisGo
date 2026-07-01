@@ -1,7 +1,7 @@
 Release v0.3.0
 ================
 
-Release date: <month> <day>, <year>
+Release date: unreleased (development version)
 
 Changes
 -------
@@ -16,7 +16,7 @@ Changes
   conventional generator dispatch `#335 <https://github.com/openego/eDisGo/pull/335>`_
 * Added integrity check for very short lines `#335 <https://github.com/openego/eDisGo/pull/335>`_
 * Refactoring of check_tech_constraints functions `#290 <https://github.com/openego/eDisGo/pull/290>`_
-* Add background map to plots `#346 <https://github.com/openego/eDisGo/pull/364>`_
+* Add background map to plots `#364 <https://github.com/openego/eDisGo/pull/364>`_
 * Added method to scale timeseries `#353 <https://github.com/openego/eDisGo/pull/353>`_
 * Added method to iteratively reinforce a grid in case the power flow analysis does not always converge `#353 <https://github.com/openego/eDisGo/pull/353>`_
 * Added method to aggregate LV grid buses to station bus secondary side `#353 <https://github.com/openego/eDisGo/pull/353>`_
@@ -28,7 +28,7 @@ Changes
 * Move function to assign feeder to Topology class and add methods to the Grid class to get information on the feeders `#360 <https://github.com/openego/eDisGo/pull/360>`_
 * Added a storage operation strategy where the storage is charged when PV feed-in is higher than electricity demand of the household and discharged when electricity demand exceeds PV generation `#386 <https://github.com/openego/eDisGo/pull/386>`_
 * Added an estimation of the voltage deviation over a cable when selecting a suitable cable to connect a new component `#411 <https://github.com/openego/eDisGo/pull/411>`_
-* Added clipping of heat pump electrical power at its maximum value `#428 <https://github.com/openego/eDisGo/pull/428>`
+* Added clipping of heat pump electrical power at its maximum value `#428 <https://github.com/openego/eDisGo/pull/428>`_
 * Replaced flake8, isort, pyupgrade, and Black with Ruff for linting
   and formatting in pre-commit configuration `#222 <https://github.com/openego/eDisGo/issues/222>`_
 * Made ``engine`` parameter optional in
@@ -118,3 +118,8 @@ Changes
     :func:`~.flex_opt.costs._get_line_costs`, and removed the growing-frame
     ``pd.concat`` loops in :func:`~.tools.spatial_complexity_reduction` busmap
     assembly and :mod:`~.tools.preprocess_pypsa_opf_structure`
+* Restructured the documentation into clearly separated tiers (Getting Started,
+  User Guide, Methodology & Physics, Tutorials, Reference, and Experimental & Legacy)
+  and added in-depth methodology pages for power flow, grid reinforcement, complexity
+  reduction and the flexibility optimisation. Tutorial notebooks are now rendered via
+  nbsphinx and unmaintained methods are collected in a dedicated legacy section.

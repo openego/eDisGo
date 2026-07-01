@@ -272,7 +272,8 @@ def calculate_voltage_diff_pu_per_line_from_type(
     ----------
     edisgo_obj : :class:`~.EDisGo`
     cable_names : str or array-like
-        Resistance per kilometer of the cable in ohm/km.
+        Name(s) of the cable type(s) (as in the index of the equipment data) to
+        calculate the voltage difference for.
     length : float
         Length of the cable in km.
     num_parallel : int
@@ -281,10 +282,9 @@ def calculate_voltage_diff_pu_per_line_from_type(
         Nominal voltage of the cable(s) in kV.
     s_max : float
         Apparent power the cable must carry in MVA.
-    component_type : str, optional
+    component_type : str
         Type of the component to be connected, used to obtain the default reactive power
-        mode and power factor from the configuration file. If this is given,
-        `reactive_power_mode` and `power_factor` are not considered.
+        mode and power factor from the configuration file.
         Possible options are "generator", "conventional_load", "charging_point",
         "heat_pump" and "storage_unit".
 

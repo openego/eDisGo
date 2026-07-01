@@ -244,8 +244,10 @@ def from_powermodels(
     ----------
     edisgo_object : :class:`~.EDisGo`
     pm_results : dict or str
-        Dictionary or path to json file that contains all optimization results in
-        PowerModels network data format.
+        Dictionary or path to a json file that contains all optimization results in
+        PowerModels network data format. If a path is given, the file is expected to
+        contain a JSON-encoded string (i.e. the JSON object serialized as a string),
+        as it is read via ``json.loads(json.load(f))``.
     hv_flex_dict : dict
         Dictionary containing time series of HV requirement for each flexibility
         retrieved from overlying grid component of edisgo object.
