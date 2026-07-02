@@ -86,42 +86,37 @@ class RunContext:
         """
         Return a database engine, creating it on first call.
 
-        Reads the ``database`` section of :attr:`raw_config` and calls
-        :func:`edisgo.io.db.engine`. Caches the engine on the context
-        so subsequent calls reuse the same connection.
+        The data source is chosen from the ``database`` section of
+        :attr:`raw_config`:
+
+        * ``source: "local"`` — egon-data database via SSH tunnel, using
+          ``config_path`` if given, otherwise the default location
+          (``~/.ssh/egon-data.configuration.yaml``).
+        * ``source: "oep"`` or no ``database`` section — remote Open Energy
+          Platform (previous default behaviour).
+
+        A legacy explicit direct-local database (``host`` given with SSH
+        disabled) is still honoured for backward compatibility. The engine is
+        cached on the context so subsequent calls reuse the same connection.
 
         Returns
         -------
         sqlalchemy.engine.Engine
             The active database engine.
 
-        Raises
-        ------
-        RuntimeError
-            If the config has no ``database`` section — indicates the
-            pipeline wants to reach the database without configuring
-            it.
-
         """
         if self.engine is not None:
             return self.engine
-        db_cfg = self.raw_config.get("database")
-        if not db_cfg:
-            raise RuntimeError(
-                "Task needs a database engine but no 'database' section "
-                "is configured."
-            )
+        db_cfg = self.raw_config.get("database") or {}
+        source = str(db_cfg.get("source") or "").lower()
+
+        # Legacy explicit direct local database: SSH disabled and explicit
+        # connection parameters given (host/port/user/password as passed by
+        # eGo). Connect straight to that postgres via psycopg2.
         ssh_cfg = db_cfg.get("ssh") or {}
         ssh_enabled = bool(ssh_cfg.get("enabled", False))
-
-        # Direct local database: when SSH is disabled and explicit
-        # connection parameters are given (host/port/user/password as
-        # passed by eGo), connect straight to that postgres via
-        # psycopg2. This avoids edisgo.io.db.engine(ssh=False), which
-        # is hard-wired to the remote OpenEnergyPlatform (oedialect)
-        # and can stall for hours on large queries.
         host = db_cfg.get("host")
-        if not ssh_enabled and host:
+        if source not in ("local", "oep") and host and not ssh_enabled:
             from sqlalchemy import create_engine
 
             user = db_cfg.get("user")
@@ -144,10 +139,12 @@ class RunContext:
             )
             return self.engine
 
-        from edisgo.io.db import engine as egon_engine
+        # Source-driven engine: source="local" -> egon-data via SSH tunnel
+        # (config_path or ~/.ssh default), source="oep"/absent -> OEP.
+        from edisgo.io.db import engine_from_settings
 
-        self.engine = egon_engine(
-            path=db_cfg.get("credentials_path"),
-            ssh=ssh_enabled,
-        )
+        # A legacy ssh.enabled flag maps to source "local".
+        if not source and ssh_enabled:
+            db_cfg = {**db_cfg, "source": "local"}
+        self.engine = engine_from_settings(db_cfg)
         return self.engine
