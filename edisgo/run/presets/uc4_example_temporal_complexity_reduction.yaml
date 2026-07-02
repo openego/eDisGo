@@ -1,0 +1,61 @@
+_comment: |
+  UC4 — OPF with full flexibility:
+  Loads real egon_data time series (oedb) and runs a powermodels OPF
+  over flexibilities (heat pumps, EV, DSM, storage) with HV requirements
+  from overlying grid. opf_version 3 activates HV-constraints from
+  overlying_grid CSV directory.
+
+_workflow:
+  - setup_grid: load ding0 topology
+  - import_generators: from egon_data
+  - import_home_batteries: from egon_data
+  - import_heat_pumps: from egon_data
+  - import_dsm: from egon_data
+  - oedb_ts: real wind/solar + load time series (24 h, 2035)
+  - apply_heat_pump_strategy: uncontrolled (overwritten by OPF)
+  - import_overlying_grid_data: HV constraints from CSV dir
+  - optimize: pm_optimize with flex assets (SOC, opf v3 = HV constraints)
+
+scenario: eGon2035
+
+grid:
+  ding0_path: "/path/to/ding0_grid"
+  legacy_ding0_grids: false
+
+database:
+  ssh:
+    enabled: false
+
+timeindex: {start: "2035-01-01", periods: 8760, freq: h}
+
+overlying_grid:
+  path: "path/to/overlying_grid"
+
+results:
+  directory: results/uc4_example
+
+
+pipeline:
+  - setup_grid
+  - import_generators
+  - import_home_batteries
+  - import_heat_pumps
+  - import_dsm
+  - import_electromobility:
+      charging_strategy: null
+      flexibility_bands_ucs: ["home", "work", "public", "hpc"]
+  - oedb_ts:
+      dispatchable: {other: 0.7}
+      timeindex: {start: "2035-01-01", periods: 8760, freq: h}
+  - apply_charging_strategy: {strategy: dumb}
+  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - import_overlying_grid_data
+  - reactive_power
+  - optimize_temporal_complexity_reduction:
+      flexible: [heat_pumps, storage, dsm]
+      method: soc
+      opf_version: 3
+  - reinforce
+  - save:
+      archive: true
+      save_opf_results: true
