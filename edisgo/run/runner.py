@@ -44,7 +44,7 @@ from edisgo.run.validator import _split_step, validate
 logger = logging.getLogger("edisgo.run.runner")
 
 
-def run_edisgo(config, overlying_grid_data=None) -> Any:
+def run_edisgo(config, overlying_grid_data=None, engine=None) -> Any:
     """
     Run an eDisGo pipeline from a YAML/JSON config or dict.
 
@@ -58,6 +58,16 @@ def run_edisgo(config, overlying_grid_data=None) -> Any:
     config : str, pathlib.Path, or dict
         Path to a YAML/JSON pipeline config, or an in-memory dict of
         the same shape.
+    overlying_grid_data : dict, optional
+        Overlying-grid data (e.g. eTraGo results) consumed by the
+        ``import_overlying_grid_data`` task.
+    engine : sqlalchemy.engine.Engine, optional
+        Pre-built database engine to use for all DB-backed tasks. When
+        given, it is cached on the :class:`~edisgo.run.context.RunContext`
+        so every task reuses it (via :meth:`RunContext.ensure_engine`)
+        instead of building its own from the config. This lets a caller
+        (e.g. eGo) supply a single connection that overrides the
+        ``database`` section of the config/preset.
 
     Returns
     -------
@@ -67,10 +77,12 @@ def run_edisgo(config, overlying_grid_data=None) -> Any:
         stage.
 
     """
-    return _run_pipeline_on(None, config, overlying_grid_data=overlying_grid_data)
+    return _run_pipeline_on(
+        None, config, overlying_grid_data=overlying_grid_data, engine=engine
+    )
 
 
-def _run_pipeline_on(edisgo, config, overlying_grid_data=None):
+def _run_pipeline_on(edisgo, config, overlying_grid_data=None, engine=None):
     """
     Internal runner shared by :func:`run_edisgo` and the EDisGo method.
 
@@ -99,6 +111,15 @@ def _run_pipeline_on(edisgo, config, overlying_grid_data=None):
     validate(cfg)
     ctx = _build_context(cfg)
     ctx.overlying_grid_data = overlying_grid_data
+    # A caller-supplied engine (e.g. from eGo) overrides the config/preset
+    # database section: caching it on the context makes ensure_engine() return
+    # it for every DB-backed task.
+    if engine is not None:
+        ctx.engine = engine
+        ctx.logger.info(
+            f"run_edisgo: using caller-supplied database engine "
+            f"'{getattr(engine.url, 'database', engine)}' for all tasks."
+        )
 
     for stage in cfg["stages"]:
         ctx.current_stage = stage["name"]

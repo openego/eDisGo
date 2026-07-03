@@ -277,6 +277,7 @@ def task_import_generators(edisgo, ctx, *, generator_scenario=None):
 
     """
     edisgo.import_generators(
-        generator_scenario=generator_scenario or ctx.scenario
+        generator_scenario=generator_scenario or ctx.scenario,
+        engine=ctx.ensure_engine(),
     )
     return edisgo
