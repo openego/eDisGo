@@ -188,6 +188,10 @@ def ssh_tunnel(cred: dict) -> str:
         # in ~/.ssh, which fails authentication against the gateway.
         ssh_pkey=str(cred["SSH_PKEY"]),
         remote_bind_address=(cred["PGRES_HOST"], cred["PORT"]),
+        # Keep the SSH transport alive during long idle periods (e.g. a
+        # multi-minute OPF between database queries in multi-grid eGo runs) so
+        # the tunnel is not torn down and connections stay usable.
+        set_keepalive=30.0,
     )
     server.start()
 
@@ -292,6 +296,16 @@ def engine(
         f"{cred['POSTGRES_PASSWORD']}@{cred['PGRES_HOST']}:"
         f"{local_port}/{cred['POSTGRES_DB']}",
         echo=False,
+        # This engine is typically cached and reused across many long-running
+        # tasks/grids (e.g. one eGo run computes grid after grid, each with a
+        # multi-minute OPF during which the pooled connection sits idle). The
+        # server or SSH tunnel closes such idle connections, so a later grid
+        # would otherwise get a dead connection ("server closed the connection
+        # unexpectedly"). pool_pre_ping validates (and transparently replaces)
+        # a connection before use; pool_recycle proactively drops connections
+        # older than an hour.
+        pool_pre_ping=True,
+        pool_recycle=3600,
     )
 
 
