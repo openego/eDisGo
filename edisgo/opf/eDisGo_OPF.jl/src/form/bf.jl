@@ -1,12 +1,25 @@
-""
+"""
+Create the squared branch-current-magnitude variables for the branch-flow model
+(wrapper around `variable_buspair_current_magnitude_sqr`, which defines `ccm[i]`).
+"""
 function variable_branch_current(pm::AbstractBFModel; kwargs...)
     eDisGo_OPF.variable_buspair_current_magnitude_sqr(pm; kwargs...)
 end
 
+"""
+Create the bus-voltage variable for the branch-flow model (wrapper around
+`variable_bus_voltage_magnitude_sqr`, which defines `w[i] = V²`).
+"""
 function variable_bus_voltage(pm::AbstractBFModel; kwargs...)
     eDisGo_OPF.variable_bus_voltage_magnitude_sqr(pm; kwargs...)
 end
 
+"""
+Variable `ccm[i]` for each branch `i`: the squared branch current magnitude
+(`= I²`). Lower-bounded by 0 and upper-bounded from the branch rating and the
+sending-bus voltage (`(rate_a·tap / vmin)²`); in the unbounded model only storage
+(virtual) branches receive the upper bound.
+"""
 function variable_buspair_current_magnitude_sqr(pm::AbstractBFModel; nw::Int=nw_id_default, bounded::Bool=true, report::Bool=true)
     branch = PowerModels.ref(pm, nw, :branch)
 
@@ -48,6 +61,13 @@ function variable_buspair_current_magnitude_sqr(pm::AbstractBFModel; nw::Int=nw_
 end
 
 
+"""
+Low-level branch-flow voltage-drop equation for branch `i` (network `n`): relates
+the squared voltages at the two ends to the active/reactive flows, the squared
+current `ccm` and the branch impedance `r, x` (with tap `tm`) — Eq. (3.5) of the
+eDisGo OPF formulation. At the slack bus the squared voltage is fixed to 1 p.u.
+Called by `constraint_voltage_magnitude_difference_radial`.
+"""
 function constraint_voltage_magnitude_difference(pm::AbstractBFModelEdisgo, n::Int, i, f_bus, t_bus, f_idx, t_idx, r, x, tm)
     p_fr = PowerModels.var(pm, n, :p, f_idx)
     q_fr = PowerModels.var(pm, n, :q, f_idx)
@@ -64,6 +84,12 @@ function constraint_voltage_magnitude_difference(pm::AbstractBFModelEdisgo, n::I
 end
 
 
+"""
+Current/power/voltage coupling for the **SOC** (convex) branch-flow model in
+network `n`: the second-order-cone inequality `p² + q² ≤ (w/tm²)·ccm` on every
+branch — the convex relaxation (Eq. (3.6i) of the eDisGo OPF formulation) of the
+exact equality.
+"""
 function constraint_model_current(pm::AbstractSOCBFModelEdisgo, n::Int) # Eq. (3.9)
     PowerModels._check_missing_keys(PowerModels.var(pm, n), [:p,:q,:w,:ccm], typeof(pm))
 
@@ -81,6 +107,11 @@ function constraint_model_current(pm::AbstractSOCBFModelEdisgo, n::Int) # Eq. (3
     end
 end
 
+"""
+Current/power/voltage coupling for the **non-convex** branch-flow model in network
+`n`: the exact nonlinear equality `p² + q² = (w/tm²)·ccm` (a JuMP `@NLconstraint`)
+on every non-storage branch — Eq. (3.6) of the eDisGo OPF formulation.
+"""
 function constraint_model_current(pm::AbstractNCBFModelEdisgo, n::Int) # Eq. (3.5)
     PowerModels._check_missing_keys(PowerModels.var(pm, n), [:p,:q,:w,:ccm], typeof(pm))
 
@@ -101,6 +132,12 @@ function constraint_model_current(pm::AbstractNCBFModelEdisgo, n::Int) # Eq. (3.
 end
 
 
+"""
+Maximum-line-loading constraint for network `n`: bounds the squared apparent power
+on every non-storage branch by the loading variable `ll`, `(p² + q²)/s_nom² ≤ ll`
+— Eq. (3.40) of the eDisGo OPF formulation. Together with the line-loading
+objective this minimises the worst-case loading (`opf_version` 1 and 3).
+"""
 function constraint_max_line_loading(pm::AbstractSOCBFModelEdisgo, n::Int)
     p  = PowerModels.var(pm, n, :p)
     q  = PowerModels.var(pm, n, :q)
@@ -118,6 +155,10 @@ function constraint_max_line_loading(pm::AbstractSOCBFModelEdisgo, n::Int)
 end
 
 
+"""
+Non-convex-model version of the maximum-line-loading constraint
+`(p² + q²)/s_nom² ≤ ll` (identical formulation to the SOC method) — Eq. (3.40).
+"""
 function constraint_max_line_loading(pm::AbstractNCBFModelEdisgo, n::Int)
     p  = PowerModels.var(pm, n, :p)
     q  = PowerModels.var(pm, n, :q)
@@ -135,6 +176,25 @@ function constraint_max_line_loading(pm::AbstractNCBFModelEdisgo, n::Int)
 end
 
 
+"""
+Nodal active- and reactive-power balance (Kirchhoff's current law) at bus `i` in
+network `n` for the radial branch-flow model — Eq. (3.3)/(3.4) of the eDisGo OPF
+formulation.
+
+Equates the power flowing into the bus on incoming branches to the power leaving
+on outgoing branches plus the net injection of every component connected to the
+bus: conventional and non-dispatchable generators, slack generator, loads, battery
+storage, DSM, heat pumps and charging points, plus the ohmic branch losses
+(`ccm·r` for active, `ccm·x` for reactive power). For `opf_version` 2 and 4 the
+balance additionally includes the load-shedding / curtailment slack variables
+(generation curtailment `pgc`, dispatchable-generation slack `pgens`, load slack
+`pds`, charging-point slack `pcps`, heat-pump slack `phps`). Reactive injections
+of the flexibilities are derived from their active power via the power factor
+(`tan(acos(pf))`).
+
+This low-level method receives the pre-collected per-bus component maps from
+`constraint_power_balance_bf`.
+"""
 function constraint_power_balance(pm::AbstractBFModelEdisgo, n::Int, i, bus_gens, bus_gens_nd, bus_gens_slack, bus_loads, bus_arcs_to, bus_arcs_from, bus_lines_to, bus_storage, bus_pg, bus_qg, bus_pg_nd, bus_qg_nd, bus_pd, bus_qd, branch_r, branch_x, bus_dsm, bus_hps, bus_cps, bus_storage_pf, bus_dsm_pf, bus_hps_pf, bus_cps_pf, bus_gen_nd_pf, bus_gen_d_pf, bus_loads_pf, branch_strg_pf)
     pt   = get(PowerModels.var(pm, n),  :p, Dict()); PowerModels._check_var_keys(pt, bus_arcs_to, "active power", "branch")
     qt   = get(PowerModels.var(pm, n),  :q, Dict()); PowerModels._check_var_keys(qt, bus_arcs_to, "reactive power", "branch")

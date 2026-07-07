@@ -408,7 +408,7 @@ def make_busmap_grid(
         Default: "kmeansdijkstra".
     reduction_factor : float
         Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
-    preserve_trafo_bus_coordinates : True
+    preserve_trafo_bus_coordinates : bool
         If True, transformers have the same coordinates after the clustering, else
         the transformer coordinates are changed by the clustering. Default: True.
 
@@ -483,7 +483,9 @@ def make_busmap_grid(
 
     grid_list = _make_grid_list(edisgo_obj, grid=grid)
 
-    busmap_df = pd.DataFrame()
+    # Collect per-grid busmaps in a list and concat once after the loop instead
+    # of growing the DataFrame on every iteration.
+    busmap_df_list: list[pd.DataFrame] = []
     # Cluster every grid
     for grid in grid_list:
         v_grid = grid.nominal_voltage
@@ -585,7 +587,9 @@ def make_busmap_grid(
             transform_coordinates_back, axis="columns"
         )
 
-        busmap_df = pd.concat([busmap_df, partial_busmap_df])
+        busmap_df_list.append(partial_busmap_df)
+
+    busmap_df = pd.concat(busmap_df_list) if busmap_df_list else pd.DataFrame()
 
     return busmap_df
 
@@ -702,7 +706,9 @@ def make_busmap_feeders(
     )
 
     grid_list = _make_grid_list(edisgo_obj, grid=grid)
-    busmap_df = pd.DataFrame()
+    # Collect per-grid busmaps in a list and concat once after the loop instead
+    # of growing the DataFrame on every iteration.
+    busmap_df_list: list[pd.DataFrame] = []
     mvgd_id = edisgo_obj.topology.mv_grid.id
 
     if reduction_factor_not_focused is False:
@@ -734,10 +740,12 @@ def make_busmap_feeders(
 
         partial_busmap_df = pd.DataFrame(index=grid.buses_df.index)
         partial_busmap_df.index.name = "old_bus"
-        for index in partial_busmap_df.index.tolist():
-            partial_busmap_df.loc[index, "new_bus"] = index
-            coordinates = grid.buses_df.loc[index, ["x", "y"]].values
-            partial_busmap_df.loc[index, ["new_x", "new_y"]] = coordinates
+        # Vectorised initialisation: new_bus is the bus itself, new_x/new_y are
+        # its coordinates (equivalent to the former per-bus loop).
+        partial_busmap_df["new_bus"] = partial_busmap_df.index
+        partial_busmap_df[["new_x", "new_y"]] = grid.buses_df.loc[
+            partial_busmap_df.index, ["x", "y"]
+        ].values
 
         number_of_feeder = 0
         feeder_graphs = list(nx.connected_components(graph_without_transformer))
@@ -836,8 +844,9 @@ def make_busmap_feeders(
                 partial_busmap_df, transformer_node
             )
 
-        busmap_df = pd.concat([busmap_df, partial_busmap_df])
+        busmap_df_list.append(partial_busmap_df)
 
+    busmap_df = pd.concat(busmap_df_list) if busmap_df_list else pd.DataFrame()
     busmap_df = busmap_df.apply(transform_coordinates_back, axis="columns")
     busmap_df.sort_index(inplace=True)
     return busmap_df
@@ -964,7 +973,9 @@ def make_busmap_main_feeders(
         )
 
     grid_list = _make_grid_list(edisgo_obj, grid=grid)
-    busmap_df = pd.DataFrame()
+    # Collect per-grid busmaps in a list and concat once after the loop instead
+    # of growing the DataFrame on every iteration.
+    busmap_df_list: list[pd.DataFrame] = []
     mvgd_id = edisgo_obj.topology.mv_grid.id
 
     if reduction_factor_not_focused is False:
@@ -1034,10 +1045,12 @@ def make_busmap_main_feeders(
                 not_main_nodes.append(node)
         partial_busmap_df = pd.DataFrame(index=grid.buses_df.index)
         partial_busmap_df.index.name = "old_bus"
-        for index in partial_busmap_df.index.tolist():
-            partial_busmap_df.loc[index, "new_bus"] = index
-            coordinates = grid.buses_df.loc[index, ["x", "y"]].values
-            partial_busmap_df.loc[index, ["new_x", "new_y"]] = coordinates
+        # Vectorised initialisation: new_bus is the bus itself, new_x/new_y are
+        # its coordinates (equivalent to the former per-bus loop).
+        partial_busmap_df["new_bus"] = partial_busmap_df.index
+        partial_busmap_df[["new_x", "new_y"]] = grid.buses_df.loc[
+            partial_busmap_df.index, ["x", "y"]
+        ].values
 
         graph_cleaned = copy.deepcopy(graph_root)
         graph_cleaned.remove_nodes_from(not_main_nodes)
@@ -1248,8 +1261,9 @@ def make_busmap_main_feeders(
                 partial_busmap_df, transformer_node
             )
 
-        busmap_df = pd.concat([busmap_df, partial_busmap_df])
+        busmap_df_list.append(partial_busmap_df)
 
+    busmap_df = pd.concat(busmap_df_list) if busmap_df_list else pd.DataFrame()
     if mode != "aggregate_to_main_feeder":
         busmap_df = busmap_df.apply(transform_coordinates_back, axis="columns")
 

@@ -74,7 +74,7 @@ class DSM:
         Returns
         -------
         :pandas:`pandas.DataFrame<DataFrame>`
-            Maximum load decrease in MW. For more information on the dataframe see
+            Maximum load increase in MW. For more information on the dataframe see
             input parameter `df`.
 
         """

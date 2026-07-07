@@ -26,3 +26,6 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.11"
+  # pandoc is required by nbsphinx to render the Jupyter notebook tutorials
+  apt_packages:
+    - pandoc

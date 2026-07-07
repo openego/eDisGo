@@ -169,7 +169,10 @@ class GeoPandasGridContainer:
 
         def plot(self):
             """
-            TODO: Implement plotting functions as needed
+            Plot the grid container.
+
+            .. note:: Not yet implemented; currently raises
+                :class:`NotImplementedError`.
             """
             raise NotImplementedError
 

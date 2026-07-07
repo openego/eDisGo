@@ -9,23 +9,31 @@
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
+from __future__ import annotations
+
 import logging
 import math
 
+from typing import TYPE_CHECKING
+
+import numpy as np
 import pandas as pd
+
+if TYPE_CHECKING:
+    from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
 
 def _reference_operation(
-    df,
-    soe_init,
-    soe_max,
-    storage_p_nom,
-    freq,
-    efficiency_store,
-    efficiency_dispatch,
-):
+    df: pd.DataFrame,
+    soe_init: float,
+    soe_max: float,
+    storage_p_nom: float,
+    freq: float,
+    efficiency_store: float,
+    efficiency_dispatch: float,
+) -> pd.DataFrame:
     """
     Reference operation of storage system where it is directly charged when PV feed-in
     is higher than electricity demand of the building.
@@ -60,17 +68,26 @@ def _reference_operation(
         energy in MWh.
 
     """
-    lst_storage_power = []
-    lst_storage_soe = []
+    # Pull the single column needed for the recursion into a raw numpy array once,
+    # so the per-timestep loop does not box each row into a pandas Series (iterrows).
+    feedin_minus_demand = df["feedin_minus_demand"].to_numpy()
+    n = feedin_minus_demand.shape[0]
+    # Preallocate result arrays; results are written back to df once at the end.
+    storage_power_arr = np.empty(n, dtype=float)
+    storage_soe_arr = np.empty(n, dtype=float)
     storage_soe = soe_init
 
-    for i, d in df.iterrows():
+    # Sequential state-of-energy recursion with clamping. The math and the order of
+    # operations within each iteration are kept exactly as in the original
+    # iterrows-based implementation - only the iteration mechanism changed.
+    for idx in range(n):
+        fmd = feedin_minus_demand[idx]
         # If the house were to feed electricity into the grid, charge the storage first.
         # No electricity exchange with grid as long as charger power is not exceeded.
-        if (d.feedin_minus_demand > 0.0) & (storage_soe < soe_max):
+        if (fmd > 0.0) & (storage_soe < soe_max):
             # Check if energy produced exceeds charger power
-            if d.feedin_minus_demand < storage_p_nom:
-                storage_power = -d.feedin_minus_demand
+            if fmd < storage_p_nom:
+                storage_power = -fmd
             # If it does, feed the rest to the grid
             else:
                 storage_power = -storage_p_nom
@@ -83,19 +100,17 @@ def _reference_operation(
                 storage_soe = soe_max
 
         # If the house needs electricity from the grid, discharge the storage first.
-        # In this case d.feedin_minus_demand is negative!
+        # In this case feedin_minus_demand is negative!
         # No electricity exchange with grid as long as demand does not exceed charging
         # power
-        elif (d.feedin_minus_demand < 0.0) & (storage_soe > 0.0):
+        elif (fmd < 0.0) & (storage_soe > 0.0):
             # Check if energy demand exceeds charger power
-            if d.feedin_minus_demand / efficiency_dispatch < (storage_p_nom * -1):
+            if fmd / efficiency_dispatch < (storage_p_nom * -1):
                 storage_soe = storage_soe - (storage_p_nom * freq)
                 storage_power = storage_p_nom * efficiency_dispatch
             else:
-                storage_soe = storage_soe + (
-                    d.feedin_minus_demand / efficiency_dispatch * freq
-                )
-                storage_power = -d.feedin_minus_demand
+                storage_soe = storage_soe + (fmd / efficiency_dispatch * freq)
+                storage_power = -fmd
             # If the storage is undercharged, take the 'rest' from the grid
             if storage_soe < 0.0:
                 # since storage_soe is negative in this case it can be taken as
@@ -106,18 +121,21 @@ def _reference_operation(
         # If the storage is full or empty, the demand is not affected
         else:
             storage_power = 0.0
-        lst_storage_power.append(storage_power)
-        lst_storage_soe.append(storage_soe)
+        storage_power_arr[idx] = storage_power
+        storage_soe_arr[idx] = storage_soe
 
-    df["storage_power"] = lst_storage_power
-    df["storage_soe"] = lst_storage_soe
+    df["storage_power"] = storage_power_arr
+    df["storage_soe"] = storage_soe_arr
 
     return df.round(6)
 
 
 def apply_reference_operation(
-    edisgo_obj, storage_units_names=None, soe_init=0.0, freq=1
-):
+    edisgo_obj: EDisGo,
+    storage_units_names: list[str] | None = None,
+    soe_init: float = 0.0,
+    freq: float = 1,
+) -> pd.DataFrame:
     """
     Applies reference storage operation to specified home storage units.
 
@@ -176,7 +194,10 @@ def apply_reference_operation(
         storage_units_names = edisgo_obj.topology.storage_units_df.index
 
     storage_units = edisgo_obj.topology.storage_units_df.loc[storage_units_names]
-    soe_df = pd.DataFrame(index=edisgo_obj.timeseries.timeindex)
+    soe_index = edisgo_obj.timeseries.timeindex
+    # Collect per-storage state-of-energy series and concatenate once after the loop
+    # to avoid the quadratic cost of repeated pd.concat inside the loop.
+    soe_series = []
 
     for stor_name, stor_data in storage_units.iterrows():
         # get corresponding PV systems and electric loads
@@ -201,7 +222,7 @@ def apply_reference_operation(
             edisgo_obj.set_time_series_manual(
                 storage_units_p=pd.DataFrame(
                     columns=[stor_name],
-                    index=soe_df.index,
+                    index=soe_index,
                     data=0.0,
                 )
             )
@@ -246,9 +267,13 @@ def apply_reference_operation(
                     data=storage_ts.storage_power.values,
                 )
             )
-            soe_df = pd.concat(
-                [soe_df, storage_ts.storage_soe.to_frame(stor_name)], axis=1
-            )
+            soe_series.append(storage_ts.storage_soe.rename(stor_name))
+
+    # Single concat preserves storage_units order (= collection order) and index.
+    if soe_series:
+        soe_df = pd.concat(soe_series, axis=1)
+    else:
+        soe_df = pd.DataFrame(index=soe_index)
 
     edisgo_obj.set_time_series_reactive_power_control(
         generators_parametrisation=None,
