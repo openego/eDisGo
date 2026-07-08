@@ -370,7 +370,7 @@ def from_powermodels(
         # calculate relative error
         df2 = deepcopy(df)
         for flex in df2.columns:
-            if type(hv_flex_dict[flex]) == pd.Series:
+            if isinstance(hv_flex_dict[flex], pd.Series):
                 abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
                 rel_error = [
                     abs_error[i] / hv_flex_dict[flex].iloc[i]
@@ -379,10 +379,15 @@ def from_powermodels(
                     for i in range(len(abs_error))
                 ]
             else:
-                abs_error = abs(df2[flex].values - hv_flex_dict[flex].sum(axis=1).values)
+                abs_error = abs(
+                    df2[flex].values - hv_flex_dict[flex].sum(axis=1).values
+                )
                 rel_error = [
                     abs_error[i] / hv_flex_dict[flex].sum(axis=1).iloc[i]
-                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].sum(axis=1).iloc[i] != 0))
+                    if (
+                        (abs_error > 0.01)[i]
+                        & (hv_flex_dict[flex].sum(axis=1).iloc[i] != 0)
+                    )
                     else 0
                     for i in range(len(abs_error))
                 ]
@@ -1061,6 +1066,18 @@ def _build_battery_storage(
         * edisgo_obj.topology.storage_units_df.max_hours
     )
 
+    # The end-of-period SoC step (timeindex[-1] + freq) is only used as the OPF
+    # boundary (soc_end) and is not an optimized time step. When the time index
+    # is a reduced, non-contiguous selection, that step can fall in a gap and be
+    # missing from the source SoC series (which only carried a trailing step for
+    # the very last interval), leaving it NaN. A NaN boundary makes the Julia OPF
+    # fail with "Inf - Inf". Forward-fill (then back-fill) so the boundary takes
+    # the interval's last valid SoC — a harmless approximation for a throwaway
+    # scaffolding step.
+    edisgo_obj.overlying_grid.storage_units_soc = (
+        edisgo_obj.overlying_grid.storage_units_soc.ffill().bfill()
+    )
+
     for stor_i in np.arange(len(flexible_storage_units)):
         idx_bus = _mapping(
             psa_net,
@@ -1357,6 +1374,12 @@ def _build_heat_storage(psa_net, pm, edisgo_obj, s_base, flexible_hps, opf_versi
     edisgo_obj.overlying_grid.heat_storage_units_soc = pd.concat(
         [df_decentral, df_central], axis=1
     )
+    # Fill the end-of-period boundary SoC step (see storage note above) so a
+    # reduced, non-contiguous time index does not leave a NaN boundary that
+    # breaks the Julia OPF.
+    edisgo_obj.overlying_grid.heat_storage_units_soc = (
+        edisgo_obj.overlying_grid.heat_storage_units_soc.ffill().bfill()
+    )
 
     heat_storage_df = heat_storage_df.loc[flexible_hps]
     for stor_i in np.arange(len(flexible_hps)):
@@ -1616,7 +1639,7 @@ def _build_hv_requirements(
     )
 
     for i in np.arange(len(opf_flex)):
-        if type(hv_flex_dict[opf_flex[i]]) == pd.DataFrame:
+        if isinstance(hv_flex_dict[opf_flex[i]], pd.DataFrame):
             pm["HV_requirements"][str(i + 1)] = {
                 "P": hv_flex_dict[opf_flex[i]].sum(axis=1).iloc[0],
                 "name": opf_flex[i],
@@ -1957,7 +1980,7 @@ def _build_component_timeseries(
 
     if (kind == "HV_requirements") & (pm["opf_version"] in [3, 4]):
         for i in np.arange(len(opf_flex)):
-            if type(hv_flex_dict[opf_flex[i]])==pd.DataFrame:
+            if isinstance(hv_flex_dict[opf_flex[i]], pd.DataFrame):
                 pm_comp[(str(i + 1))] = {
                     "P": hv_flex_dict[opf_flex[i]].sum(axis=1).round(20).tolist(),
                 }

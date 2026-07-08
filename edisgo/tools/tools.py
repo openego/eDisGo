@@ -1228,6 +1228,25 @@ def reduce_timeseries_data_to_given_timeindex(
                 )
     # Battery electric vehicle timeseries
     if electromobility:
+        # The EV flexibility bands are built in import_electromobility from the
+        # raw SimBEV grid (typically 15-min and in the reference year 2011),
+        # independently of the analysis time index. Before slicing by datetime,
+        # align them to the target index: first resample to its frequency
+        # (Electromobility.resample uses the correct per-band aggregation —
+        # mean for power, max for energy), then shift the year and reindex via
+        # align_series_to_timeindex so datetime .loc lookups below succeed.
+        _bands = edisgo_obj.electromobility.flexibility_bands
+        _band0 = next((b for b in _bands.values() if not b.empty), None)
+        if _band0 is not None and len(_band0.index) > 1:
+            band_freq = _band0.index[1] - _band0.index[0]
+            if band_freq != frequency:
+                edisgo_obj.electromobility.resample(freq=frequency)
+            # year-align every (now correctly-sampled) band onto the timeindex
+            for key, df in edisgo_obj.electromobility.flexibility_bands.items():
+                if not df.empty:
+                    edisgo_obj.electromobility.flexibility_bands[key] = (
+                        align_series_to_timeindex(df, timeindex)
+                    )
         if save_ev_soc_initial:
             # timestep EV SOC from timestep before if possible
             ts_before = timeindex[0] - frequency
@@ -1423,7 +1442,7 @@ def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.Da
     for col in df.columns:
         col_type = df[col].dtype
 
-        if col_type != object and str(col_type) != "category":
+        if not pd.api.types.is_object_dtype(col_type) and str(col_type) != "category":
             c_min = df[col].min()
             c_max = df[col].max()
 

@@ -1,3 +1,13 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Time-series tasks — set active/reactive power profiles on EDisGo.
 
@@ -8,7 +18,10 @@ attached to the EDisGo object. The order inside a stage matters:
 1. Set the time index and active-power profiles with one of
    :func:`task_worst_case_ts`, :func:`task_oedb_ts`,
    :func:`task_manual_ts`, possibly :func:`task_set_timeindex`.
-2. Finally call :func:`task_reactive_power` to fix reactive power
+2. Optionally reduce the time index to a selected subset with
+   :func:`task_select_timesteps` (manual before the imports, auto after
+   ``import_overlying_grid_data``).
+3. Finally call :func:`task_reactive_power` to fix reactive power
    control — this MUST come last because it overwrites whatever
    reactive power was set by the earlier steps.
 """
@@ -181,6 +194,20 @@ def task_oedb_ts(
             freq=timeindex.get("freq", "h"),
         )
         edisgo.set_timeindex(ti_df)
+    elif edisgo.timeseries.timeindex.empty:
+        # No explicit timeindex and none set yet (e.g. no manual time series
+        # earlier): fall back to a full year derived from the scenario, the
+        # same default the flex imports use.
+        from edisgo.tools.tools import get_year_based_on_scenario
+
+        year = get_year_based_on_scenario(ctx.scenario)
+        if year is None:
+            raise ValueError(
+                f"Cannot derive a default time index: invalid scenario "
+                f"{ctx.scenario!r}. Provide a 'timeindex' or a valid scenario "
+                f"('eGon2035', 'eGon100RE')."
+            )
+        edisgo.set_timeindex(pd.date_range(f"1/1/{year}", periods=8760, freq="h"))
 
     dispatchable_df = None
     if dispatchable is not None:
@@ -274,6 +301,283 @@ def task_manual_ts(
         storage_units_q=_as_df(storage_units_reactive_power),
     )
     ctx.flags["timeseries_set"] = True
+    return edisgo
+
+
+def _set_default_full_year_timeindex(edisgo, ctx):
+    """
+    Set a full-year hourly time index derived from the scenario.
+
+    Used as a fallback so time-index-dependent imports (notably the EV
+    flexibility bands built in ``import_electromobility``) run on an hourly,
+    full-year index rather than their raw source resolution. The year is only a
+    label — the DB imports fetch scenario-correct data regardless — and the index
+    can be overridden later (e.g. by ``oedb_ts`` or the auto ``select_timesteps``
+    step).
+    """
+    from edisgo.tools.tools import get_year_based_on_scenario
+
+    year = get_year_based_on_scenario(ctx.scenario) or 2011
+    edisgo.set_timeindex(pd.date_range(f"1/1/{year}", periods=8760, freq="h"))
+    ctx.logger.info(
+        f"select_timesteps: no time index set; using default full year "
+        f"{year} (8760 h) so imports build hourly full-year data."
+    )
+
+
+@register_task("select_timesteps", provides={"timeseries"}, ts_altering=True)
+def task_select_timesteps(edisgo, ctx, **overrides):
+    """
+    Select the time steps the grid is analyzed/optimized for.
+
+    Reduces the time index to a configurable subset. Configuration is
+    read from the top-level ``timeseries_selection:`` config block (so
+    eGo can inject it the same way it injects ``overlying_grid``);
+    inline step params override individual keys of that block. Two
+    modes:
+
+    ``manual``
+        Reduce to an explicit set of time steps. Positioned *before*
+        the data-import tasks so ``import_heat_pumps`` / ``import_dsm``
+        download only the requested steps. The selected index is
+        stashed in ``ctx.flags['selected_timeindex']`` for those
+        imports to pick up.
+
+    ``auto``
+        Determine the two most critical time intervals and reduce to
+        them. Must be positioned *after* ``import_overlying_grid_data``
+        (needs all active-power time series) and *before*
+        ``reactive_power``. Two ``method`` options:
+
+        * ``power_flow`` (default) — score intervals via a power flow
+          (:func:`~.tools.temporal_complexity_reduction.get_most_critical_time_intervals`).
+          A reactive-power series is set internally to run the scoring
+          power flow, but ``ctx.flags['reactive_power_set']`` is left
+          unset so the pipeline's own ``reactive_power`` step still runs
+          on the reduced index.
+        * ``residual_load`` — no power flow. The overlying-grid dispatch
+          is distributed onto the components and the residual load is
+          ranked over the whole year; intervals are centered on the
+          highest (load case) and lowest (feed-in case) residual-load
+          steps. Requires overlying-grid data to be present.
+
+        Both methods delegate to
+        :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_intervals`
+        (via its ``by`` parameter) and reduce to a non-overlapping pair
+        chosen by
+        :func:`~.tools.temporal_complexity_reduction.select_two_intervals`.
+
+    The auto mode normally yields two disconnected intervals (one for
+    overloading, one for voltage issues). These are kept separate in the
+    resulting time index (there is a gap between them). If they overlap,
+    a non-overlapping pair is chosen if possible, otherwise they are
+    concatenated into one interval. The intervals themselves are not
+    stored — a later ``optimize`` step can detect the gap in the time
+    index and run separate optimizations per interval.
+
+    Parameters
+    ----------
+    edisgo : edisgo.EDisGo
+        EDisGo instance to modify in place.
+    ctx : RunContext
+        Run context. Reads ``ctx.raw_config['timeseries_selection']``.
+        Sets ``ctx.flags['selected_timeindex']`` (manual) and
+        ``ctx.flags['timesteps_selected'] = True``.
+    **overrides
+        Inline step params overriding keys of the
+        ``timeseries_selection`` block. Recognized keys:
+        ``position`` (``"pre_import"`` | ``"post_grid"``, optional) — the
+        step only acts when the configured ``mode`` matches this
+        position (``pre_import`` ↔ ``manual``, ``post_grid`` ↔ ``auto``),
+        otherwise it is a no-op; this lets one pipeline carry both a
+        pre-import and a post-grid ``select_timesteps`` step and support
+        either mode via config. When omitted, the step always acts.
+        ``mode`` (``"manual"`` | ``"auto"``);
+        for manual: ``timestamps`` (list) or ``start`` /
+        ``periods`` / ``end`` / ``freq``;
+        for auto: ``method`` (``"power_flow"`` (default) |
+        ``"residual_load"``), ``time_steps_per_time_interval``;
+        for ``method="power_flow"`` additionally ``percentage``,
+        ``time_step_day_start`` (default 4), ``save_steps`` (default
+        True; CSV written to ``ctx.results_dir``),
+        ``use_troubleshooting_mode``, ``overloading_factor``,
+        ``voltage_deviation_factor``.
+
+    Returns
+    -------
+    edisgo.EDisGo
+        The modified EDisGo instance.
+
+    Raises
+    ------
+    ValueError
+        If ``mode`` is missing/unknown, if manual mode has neither
+        ``timestamps`` nor a range, or if auto mode runs before active
+        power time series are set.
+    """
+    from edisgo.tools.temporal_complexity_reduction import (
+        get_most_critical_time_intervals,
+        select_two_intervals,
+    )
+    from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
+
+    cfg = {**ctx.raw_config.get("timeseries_selection", {}), **overrides}
+    mode = cfg.get("mode")
+    if mode not in ("manual", "auto"):
+        raise ValueError(
+            f"select_timesteps needs mode 'manual' or 'auto', got {mode!r}."
+        )
+
+    # A pipeline may include two select_timesteps steps — one before the
+    # imports (``position: pre_import``, where manual selection belongs) and
+    # one after import_overlying_grid_data (``position: post_grid``, where auto
+    # selection belongs) — so the same preset supports both modes. Each step
+    # only acts when the configured mode matches its position; otherwise it is
+    # a no-op. When ``position`` is omitted (single-step usage) the step always
+    # acts.
+    position = overrides.get("position")
+    expected_mode = {"pre_import": "manual", "post_grid": "auto"}
+    if position is not None:
+        if position not in expected_mode:
+            raise ValueError(
+                f"select_timesteps 'position' must be 'pre_import' or "
+                f"'post_grid', got {position!r}."
+            )
+        if mode != expected_mode[position]:
+            # This positioned step is not the active selector. If it is the
+            # pre-import step and no time index has been set yet (i.e. manual
+            # selection is not driving the index), establish a full-year default
+            # so the following imports build their time-index-dependent data
+            # (e.g. EV flexibility bands) on an hourly full-year index. Only a
+            # label — DB imports fetch scenario-correct data regardless — and it
+            # is overridden later by oedb_ts / the auto select_timesteps step.
+            if position == "pre_import" and edisgo.timeseries.timeindex.empty:
+                _set_default_full_year_timeindex(edisgo, ctx)
+            ctx.logger.debug(
+                f"select_timesteps at position {position!r} is a no-op for "
+                f"mode {mode!r}."
+            )
+            return edisgo
+
+    if mode == "manual":
+        timestamps = cfg.get("timestamps")
+        if timestamps is not None:
+            timeindex = pd.DatetimeIndex(pd.to_datetime(list(timestamps)))
+        elif cfg.get("end") is not None:
+            timeindex = pd.date_range(
+                start=cfg["start"], end=cfg["end"], freq=cfg.get("freq", "h")
+            )
+        elif cfg.get("periods") is not None:
+            timeindex = pd.date_range(
+                start=cfg["start"],
+                periods=cfg["periods"],
+                freq=cfg.get("freq", "h"),
+            )
+        else:
+            raise ValueError(
+                "select_timesteps manual mode needs 'timestamps' or a "
+                "'start' plus 'periods'/'end' range."
+            )
+        timeindex = timeindex.sort_values().unique()
+        if not edisgo.timeseries.timeindex.empty:
+            # A time index is already set (manual selection reducing an existing
+            # full time series): align the user-supplied timestamps to that
+            # index's year so date-based slicing matches even if the user wrote
+            # them in a different (e.g. scenario) year than the internally used
+            # reference year.
+            year_diff = edisgo.timeseries.timeindex[0].year - timeindex[0].year
+            if year_diff != 0:
+                timeindex = timeindex + pd.DateOffset(years=year_diff)
+        ctx.flags["selected_timeindex"] = timeindex
+        if edisgo.timeseries.timeindex.empty:
+            # positioned before imports: just set the index so HP/DSM
+            # imports restrict their downloads to it
+            edisgo.set_timeindex(timeindex)
+        else:
+            reduce_timeseries_data_to_given_timeindex(edisgo, timeindex)
+        ctx.logger.info(
+            f"select_timesteps (manual): selected {len(timeindex)} time steps."
+        )
+        ctx.flags["timesteps_selected"] = True
+        return edisgo
+
+    # auto mode
+    if not ctx.flags.get("timeseries_set"):
+        raise ValueError(
+            "select_timesteps mode 'auto' needs active-power time series to "
+            "be set first (e.g. run oedb_ts before it)."
+        )
+
+    method = cfg.get("method", "power_flow")
+    if method not in ("power_flow", "residual_load"):
+        raise ValueError(
+            f"select_timesteps auto 'method' must be 'power_flow' or "
+            f"'residual_load', got {method!r}."
+        )
+    tsp = cfg.get("time_steps_per_time_interval", 168)
+
+    if method == "residual_load":
+        # residual-load selection requires overlying-grid data (the dispatch
+        # distributed onto the components); guard here (mode selection) before
+        # delegating the computation to the tools function.
+        og = edisgo.overlying_grid
+        if all(
+            s.empty
+            for s in (
+                og.electromobility_active_power,
+                og.storage_units_active_power,
+                og.heat_pump_central_active_power,
+                og.heat_pump_decentral_active_power,
+                og.dsm_active_power,
+                og.renewables_curtailment,
+            )
+        ):
+            raise ValueError(
+                "select_timesteps method 'residual_load' needs overlying-grid "
+                "data to be present (run import_overlying_grid_data before it)."
+            )
+        col_a, col_b = "time_steps_load_case", "time_steps_feedin_case"
+    else:  # power_flow
+        # throwaway reactive power so the scoring power flow yields meaningful
+        # voltages; do NOT mark reactive_power_set — the pipeline's own
+        # reactive_power step runs afterwards on the reduced index.
+        edisgo.set_time_series_reactive_power_control(control="fixed_cosphi")
+        col_a, col_b = "time_steps_overloading", "time_steps_voltage_issues"
+
+    intervals_df = get_most_critical_time_intervals(
+        edisgo,
+        by=method,
+        percentage=cfg.get("percentage", 1.0),
+        time_steps_per_time_interval=tsp,
+        time_step_day_start=cfg.get("time_step_day_start", 4),
+        save_steps=cfg.get("save_steps", True),
+        path=str(ctx.results_dir) if ctx.results_dir is not None else "",
+        use_troubleshooting_mode=cfg.get("use_troubleshooting_mode", True),
+        overloading_factor=cfg.get("overloading_factor", 0.95),
+        voltage_deviation_factor=cfg.get("voltage_deviation_factor", 0.95),
+    )
+    intervals = select_two_intervals(
+        list(intervals_df.get(col_a, [])),
+        list(intervals_df.get(col_b, [])),
+    )
+
+    if not intervals:
+        raise ValueError(
+            "select_timesteps mode 'auto' found no critical time intervals; "
+            "cannot reduce the time index."
+        )
+
+    timeindex = intervals[0]
+    for interval in intervals[1:]:
+        timeindex = timeindex.union(interval)
+    timeindex = timeindex.sort_values()
+
+    reduce_timeseries_data_to_given_timeindex(edisgo, timeindex)
+    ctx.logger.info(
+        f"select_timesteps (auto): selected {len(intervals)} interval(s), "
+        f"{len(timeindex)} time steps total."
+    )
+    ctx.flags["timesteps_selected"] = True
     return edisgo
 
 

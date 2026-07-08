@@ -1,3 +1,13 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Power-flow, reinforcement, and optimization tasks.
 
@@ -286,12 +296,18 @@ def task_optimize(
 
     Explicit ``flexible_*`` kwargs override the shortcut.
 
+    This task only performs the ``flexible`` shortcut expansion (mode selection)
+    and calls :meth:`EDisGo.pm_optimize`. Handling of a non-contiguous (reduced)
+    time index — running a separate OPF per contiguous interval and merging the
+    results — lives in :func:`~.opf.powermodels_opf.pm_optimize`.
+
     Parameters
     ----------
     edisgo : edisgo.EDisGo
         EDisGo instance to optimize.
     ctx : RunContext
-        Run context (unused).
+        Run context. Used for logging and, for multi-interval runs, nothing
+        else is required from it.
     flexible : list of str, optional
         High-level selector, subset of ``{"heat_pumps",
         "charging_points", "storage"}``. If ``None``, nothing is
@@ -343,6 +359,8 @@ def task_optimize(
     if flexible_storage_units is None:
         flexible_storage_units = []
 
+    # pm_optimize handles a non-contiguous (reduced) time index internally:
+    # it runs one OPF per contiguous interval and merges the results.
     edisgo.pm_optimize(
         flexible_cps=flexible_cps,
         flexible_hps=flexible_hps,

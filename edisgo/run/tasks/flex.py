@@ -1,3 +1,13 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Flex-asset import and operation-strategy tasks.
 
@@ -8,6 +18,7 @@ run AFTER the grid is loaded (``setup_grid`` or ``load_from_base``)
 and typically BEFORE the time-series step, so the time series can
 cover the new assets.
 """
+
 from __future__ import annotations
 
 from edisgo.run.registry import register_task
@@ -30,7 +41,10 @@ def task_import_heat_pumps(edisgo, ctx, *, import_types=None, timeindex=None):
         Subset of ``["individual_heat_pumps", "central_heat_pumps"]``;
         default imports both.
     timeindex : pandas.DatetimeIndex, optional
-        Restrict COP / heat-demand time series to this index.
+        Restrict COP / heat-demand time series to this index. If None,
+        falls back to ``ctx.flags['selected_timeindex']`` (set by a
+        preceding ``select_timesteps`` manual step) so the download is
+        restricted to the selected steps.
 
     Returns
     -------
@@ -38,17 +52,18 @@ def task_import_heat_pumps(edisgo, ctx, *, import_types=None, timeindex=None):
         The modified EDisGo instance.
 
     """
+    if timeindex is None:
+        timeindex = ctx.flags.get("selected_timeindex")
     edisgo.import_heat_pumps(
         scenario=ctx.scenario,
         engine=ctx.ensure_engine(),
         timeindex=timeindex,
         import_types=import_types,
     )
-    ctx.flags["has_heat_pumps"] = len(
-        edisgo.topology.loads_df.loc[
-            edisgo.topology.loads_df.type == "heat_pump"
-        ]
-    ) > 0
+    ctx.flags["has_heat_pumps"] = (
+        len(edisgo.topology.loads_df.loc[edisgo.topology.loads_df.type == "heat_pump"])
+        > 0
+    )
     return edisgo
 
 
@@ -72,12 +87,8 @@ def task_import_home_batteries(edisgo, ctx):
         The modified EDisGo instance.
 
     """
-    edisgo.import_home_batteries(
-        scenario=ctx.scenario, engine=ctx.ensure_engine()
-    )
-    ctx.flags["has_home_batteries"] = (
-        not edisgo.topology.storage_units_df.empty
-    )
+    edisgo.import_home_batteries(scenario=ctx.scenario, engine=ctx.ensure_engine())
+    ctx.flags["has_home_batteries"] = not edisgo.topology.storage_units_df.empty
     return edisgo
 
 
@@ -94,7 +105,10 @@ def task_import_dsm(edisgo, ctx, *, timeindex=None):
         Run context. Uses ``ctx.scenario`` and
         ``ctx.ensure_engine()``. Sets ``ctx.flags['has_dsm']``.
     timeindex : pandas.DatetimeIndex, optional
-        Restrict DSM availability time series to this index.
+        Restrict DSM availability time series to this index. If None,
+        falls back to ``ctx.flags['selected_timeindex']`` (set by a
+        preceding ``select_timesteps`` manual step) so the download is
+        restricted to the selected steps.
 
     Returns
     -------
@@ -102,23 +116,28 @@ def task_import_dsm(edisgo, ctx, *, timeindex=None):
         The modified EDisGo instance.
 
     """
+    if timeindex is None:
+        timeindex = ctx.flags.get("selected_timeindex")
     edisgo.import_dsm(
         scenario=ctx.scenario,
         engine=ctx.ensure_engine(),
         timeindex=timeindex,
     )
-    ctx.flags["has_dsm"] = (
-        edisgo.dsm.p_max is not None and not edisgo.dsm.p_max.empty
-    )
+    ctx.flags["has_dsm"] = edisgo.dsm.p_max is not None and not edisgo.dsm.p_max.empty
     return edisgo
 
 
 @register_task("import_electromobility", requires={"grid"}, provides={"flex"})
-def task_import_electromobility(edisgo, ctx, *, data_source="oedb",
-                                charging_strategy="dumb",
-                                flexibility_bands_ucs = None,
-                                import_electromobility_data_kwds=None,
-                                allocate_charging_demand_kwds=None):
+def task_import_electromobility(
+    edisgo,
+    ctx,
+    *,
+    data_source="oedb",
+    charging_strategy="dumb",
+    flexibility_bands_ucs=None,
+    import_electromobility_data_kwds=None,
+    allocate_charging_demand_kwds=None,
+):
     """
     Import electromobility data (charging processes + parks).
 
@@ -148,7 +167,11 @@ def task_import_electromobility(edisgo, ctx, *, data_source="oedb",
         and charging-strategy application. Valid entries:
         ``"home"``, ``"work"``, ``"public"``, ``"hpc"``. Pass a single
         string for one use case or a list for multiple. ``None``
-        (default) skips flexibility-band computation.
+        (default) skips flexibility-band computation — build them later
+        with the standalone :func:`task_build_flexibility_bands` once the
+        analysis time index is fixed, so the bands are resampled to it
+        (mirrors heat-pump handling, where the HP time series are not set
+        inside ``import_heat_pumps``).
     import_electromobility_data_kwds : dict, optional
         Extra kwargs passed through to the underlying importer.
     allocate_charging_demand_kwds : dict, optional
@@ -178,9 +201,47 @@ def task_import_electromobility(edisgo, ctx, *, data_source="oedb",
     return edisgo
 
 
+@register_task("build_flexibility_bands", requires={"flex"})
+def task_build_flexibility_bands(edisgo, ctx, *, use_case=None):
+    """
+    Build EV charging flexibility bands from imported electromobility data.
+
+    Standalone variant of the band computation that
+    :func:`task_import_electromobility` can do inline. Running it as a
+    separate step lets it execute *after* the analysis time index is fixed
+    (e.g. after ``oedb_ts`` / timestep selection), so
+    :meth:`Electromobility.get_flexibility_bands` resamples the bands to the
+    edisgo time-series frequency instead of leaving them at the raw SimBEV
+    resolution. This mirrors how the heat-pump time series are set outside
+    ``import_heat_pumps``, and is more efficient than building bands over a
+    non-final index.
+
+    Parameters
+    ----------
+    edisgo : edisgo.EDisGo
+        EDisGo instance to modify in place.
+    ctx : RunContext
+        Run context.
+    use_case : str or list of str, optional
+        Charging-point use case(s) to compute bands for. Valid entries:
+        ``"home"``, ``"work"``, ``"public"``, ``"hpc"``. Defaults to all
+        four.
+
+    Returns
+    -------
+    edisgo.EDisGo
+        The modified EDisGo instance.
+    """
+    if use_case is None:
+        use_case = ["home", "work", "public", "hpc"]
+    edisgo.electromobility.get_flexibility_bands(edisgo, use_case=use_case)
+    return edisgo
+
+
 @register_task("apply_charging_strategy")
-def task_apply_charging_strategy(edisgo, ctx, *, strategy="dumb",
-                                 charging_park_ids=None):
+def task_apply_charging_strategy(
+    edisgo, ctx, *, strategy="dumb", charging_park_ids=None
+):
     """
     Apply a charging strategy to the already-imported EV fleet.
 
@@ -212,8 +273,9 @@ def task_apply_charging_strategy(edisgo, ctx, *, strategy="dumb",
 
 
 @register_task("apply_heat_pump_strategy")
-def task_apply_heat_pump_strategy(edisgo, ctx, *, strategy="uncontrolled",
-                                  heat_pump_names=None):
+def task_apply_heat_pump_strategy(
+    edisgo, ctx, *, strategy="uncontrolled", heat_pump_names=None
+):
     """
     Apply a heat-pump operating strategy.
 
@@ -239,10 +301,7 @@ def task_apply_heat_pump_strategy(edisgo, ctx, *, strategy="uncontrolled",
 
     """
     if not ctx.flags.get("has_heat_pumps"):
-        ctx.logger.info(
-            "Skipping 'apply_heat_pump_strategy': no heat pumps "
-            "present."
-        )
+        ctx.logger.info("Skipping 'apply_heat_pump_strategy': no heat pumps present.")
         return edisgo
     edisgo.apply_heat_pump_operating_strategy(
         strategy=strategy, heat_pump_names=heat_pump_names
@@ -276,7 +335,5 @@ def task_import_generators(edisgo, ctx, *, generator_scenario=None):
         The modified EDisGo instance.
 
     """
-    edisgo.import_generators(
-        generator_scenario=generator_scenario or ctx.scenario
-    )
+    edisgo.import_generators(generator_scenario=generator_scenario or ctx.scenario)
     return edisgo
