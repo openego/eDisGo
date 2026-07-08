@@ -95,7 +95,10 @@ def task_setup_grid(
         )
 
     if import_generators:
-        edisgo.import_generators(generator_scenario=generator_scenario)
+        edisgo.import_generators(
+            generator_scenario=generator_scenario,
+            engine=ctx.ensure_engine(),
+        )
 
     if timeindex is not None:
         ti_df = pd.date_range(

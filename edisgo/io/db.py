@@ -36,6 +36,33 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+#: Default location of the egon-data SSH tunnel configuration file. Used when
+#: no explicit config path is passed and the connection mode is not forced.
+#: Can be overridden through the ``EGON_DATA_CONFIG`` environment variable.
+DEFAULT_EGON_DATA_CONFIG = "~/.ssh/egon-data.configuration.yaml"
+
+
+def default_config_path() -> Path | None:
+    """
+    Return the path to the egon-data SSH configuration file, or ``None``.
+
+    The location is read from the ``EGON_DATA_CONFIG`` environment variable and
+    falls back to :data:`DEFAULT_EGON_DATA_CONFIG`
+    (``~/.ssh/egon-data.configuration.yaml``). ``None`` is returned when the
+    resolved path does not point to an existing file, which callers use as the
+    signal to fall back to the Open Energy Platform (OEP).
+
+    Returns
+    -------
+    pathlib.Path or None
+        Path to an existing egon-data configuration file, or ``None`` if none
+        was found.
+
+    """
+    raw = os.environ.get("EGON_DATA_CONFIG", DEFAULT_EGON_DATA_CONFIG)
+    path = Path(raw).expanduser()
+    return path if path.is_file() else None
+
 
 def config_settings(path: Path | str) -> dict[str, dict[str, str | int | Path]]:
     """
@@ -155,8 +182,16 @@ def ssh_tunnel(cred: dict) -> str:
     server = SSHTunnelForwarder(
         ssh_address_or_host=(cred["SSH_HOST"], 22),
         ssh_username=cred["SSH_USER"],
-        ssh_pkey=cred["SSH_PKEY"],
+        # SSHTunnelForwarder only accepts a string path (or a loaded paramiko
+        # PKey) here. Passing the pathlib.Path produced by credentials() makes
+        # sshtunnel silently ignore the key and fall back to the default keys
+        # in ~/.ssh, which fails authentication against the gateway.
+        ssh_pkey=str(cred["SSH_PKEY"]),
         remote_bind_address=(cred["PGRES_HOST"], cred["PORT"]),
+        # Keep the SSH transport alive during long idle periods (e.g. a
+        # multi-minute OPF between database queries in multi-grid eGo runs) so
+        # the tunnel is not torn down and connections stay usable.
+        set_keepalive=30.0,
     )
     server.start()
 
@@ -172,12 +207,17 @@ def engine(
     Parameters
     ----------
     path : str or pathlib.Path, optional (default=None)
-        Path to configuration YAML file of egon-data database.
+        Path to configuration YAML file of egon-data database. Only used when
+        ``ssh=True``. If None, the default location is used
+        (``EGON_DATA_CONFIG`` environment variable or
+        ``~/.ssh/egon-data.configuration.yaml``, see
+        :func:`default_config_path`).
     ssh : bool (default=False)
-        If False, connects to the remote Open Energy Platform database (using the
-        token, see parameter `token`). If True, establishes an ssh tunnel to a local
-        egon-data database using the connection information in the configuration YAML
-        given through `path`.
+        If False, connects to the remote Open Energy Platform database (using
+        the token, see parameter `token`). If True, establishes an ssh tunnel
+        to a local egon-data database using the connection information in the
+        configuration YAML given through `path` (or the default location if
+        `path` is None).
     token : str or pathlib.Path, optional (default=None)
         Token for database connection or path to text file containing token.
         If empty the default token file in the config folder OEP_TOKEN.txt
@@ -239,6 +279,15 @@ def engine(
             echo=False,
         )
 
+    if path is None:
+        path = default_config_path()
+        if path is None:
+            raise ValueError(
+                "SSH connection requested but no egon-data configuration file "
+                "was found (checked the EGON_DATA_CONFIG environment variable "
+                f"and the default location {DEFAULT_EGON_DATA_CONFIG})."
+            )
+
     cred = credentials(path=path)
     local_port = ssh_tunnel(cred)
 
@@ -247,7 +296,61 @@ def engine(
         f"{cred['POSTGRES_PASSWORD']}@{cred['PGRES_HOST']}:"
         f"{local_port}/{cred['POSTGRES_DB']}",
         echo=False,
+        # This engine is typically cached and reused across many long-running
+        # tasks/grids (e.g. one eGo run computes grid after grid, each with a
+        # multi-minute OPF during which the pooled connection sits idle). The
+        # server or SSH tunnel closes such idle connections, so a later grid
+        # would otherwise get a dead connection ("server closed the connection
+        # unexpectedly"). pool_pre_ping validates (and transparently replaces)
+        # a connection before use; pool_recycle proactively drops connections
+        # older than an hour.
+        pool_pre_ping=True,
+        pool_recycle=3600,
     )
+
+
+def engine_from_settings(database: dict | None = None) -> Engine:
+    """
+    Build a database engine from a scenario ``database`` settings section.
+
+    This maps the data source configured in the scenario JSON onto
+    :func:`engine`. Recognised keys of `database`:
+
+    * ``source`` — ``"local"`` connects to a local egon-data database through
+      an SSH tunnel; ``"oep"`` (or a missing/empty value) connects to the
+      remote Open Energy Platform (OEP), i.e. the previous default behaviour.
+    * ``config_path`` — optional path to the egon-data configuration YAML.
+      Only relevant for ``source="local"``. If omitted, the default location
+      is used (``EGON_DATA_CONFIG`` environment variable or
+      ``~/.ssh/egon-data.configuration.yaml``, see :func:`default_config_path`).
+
+    Parameters
+    ----------
+    database : dict or None
+        The ``database`` section of the scenario configuration. If None or
+        empty, an OEP engine is returned.
+
+    Returns
+    -------
+    :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+        Database engine.
+
+    """
+    database = database or {}
+    source = str(database.get("source") or "oep").lower()
+
+    if source in ("local", "ssh", "egon-data", "egon_data"):
+        # config_path may be given explicitly; otherwise engine() falls back to
+        # the default location (~/.ssh/egon-data.configuration.yaml).
+        config_path = database.get("config_path") or database.get("credentials_path")
+        logger.info(
+            f"engine_from_settings: source='local', using egon-data database "
+            f"via SSH tunnel (config {config_path or 'default (~/.ssh/...)'})."
+        )
+        return engine(path=config_path, ssh=True)
+
+    logger.info("engine_from_settings: source='oep', connecting to the OEP.")
+    return engine(ssh=False)
 
 
 @contextmanager

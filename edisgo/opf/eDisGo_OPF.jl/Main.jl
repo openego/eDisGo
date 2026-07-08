@@ -66,25 +66,34 @@ function optimize_edisgo()
     println("Starting convex SOC AC-OPF with Gurobi.")
     result_soc, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, SOCBFPowerModelEdisgo, gurobi)
     #println("Termination status: "*result_soc["termination_status"])
-    if result_soc["termination_status"] != MOI.OPTIMAL
-      # if result_soc["termination_status"] == MOI.SUBOPTIMAL_TERMINATION
-      #   PowerModels.update_data!(data_edisgo_mn, result_soc["solution"])
-      # else
+    # A feasible solution exists if the solver proved optimality OR reports a
+    # feasible primal point (e.g. SUBOPTIMAL / ALMOST_OPTIMAL under the barrier
+    # tolerances set above). Only when there is genuinely no primal solution do
+    # we diagnose the infeasibility via an IIS conflict — calling
+    # compute_conflict! on a feasible model raises Gurobi error 10015.
+    has_solution = result_soc["termination_status"] == MOI.OPTIMAL ||
+                   MOI.get(pm.model, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
+    if !has_solution
       JuMP.compute_conflict!(pm.model)
       if MOI.get(pm.model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
         iis_model, _ = copy_conflict(pm.model)
         print(iis_model)
       end
-      #end
-    elseif result_soc["termination_status"] == MOI.OPTIMAL
-      # Check if SOC constraint is tight
-      soc_tight, soc_dict = eDisGo_OPF.check_SOC_equality(result_soc, data_edisgo)
-      # Save SOC violations if SOC is not tight
-      if !soc_tight
-        open(joinpath(results_path, ding0_grid*"_"*join(data_edisgo["flexibilities"])*".json"), "w") do f
-            write(f, JSON.json(soc_dict))
+    else
+      # Check if SOC constraint is tight (only meaningful for a proven optimum).
+      soc_tight = true
+      if result_soc["termination_status"] == MOI.OPTIMAL
+        soc_tight, soc_dict = eDisGo_OPF.check_SOC_equality(result_soc, data_edisgo)
+        # Save SOC violations if SOC is not tight
+        if !soc_tight
+          open(joinpath(results_path, ding0_grid*"_"*join(data_edisgo["flexibilities"])*".json"), "w") do f
+              write(f, JSON.json(soc_dict))
+          end
+          println("SOC solution is not tight!")
         end
-        println("SOC solution is not tight!")
+      else
+        println("SOC model terminated feasible but not optimal ("*
+                string(result_soc["termination_status"])*"); using the solution.")
       end
       PowerModels.update_data!(data_edisgo_mn, result_soc["solution"])
       data_edisgo_mn["solve_time"] = result_soc["solve_time"]

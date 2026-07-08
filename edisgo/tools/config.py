@@ -312,12 +312,19 @@ class Config:
                     table_name, metadata, autoload_with=engine, schema=schema_name
                 )
 
+                # The declarative mapper requires a primary key. Some egon-data
+                # tables/views have none reflected; declare all columns as a
+                # composite primary key so the ORM class can be built. This
+                # mirrors what saio does on the OEP path ("assuming primary
+                # key") and only affects mapping, not the data read back.
+                class_dict = {"__tablename__": table_name, "__table__": table}
+                if not list(table.primary_key.columns):
+                    class_dict["__mapper_args__"] = {
+                        "primary_key": list(table.columns)
+                    }
+
                 # dynamisch eine ORM-Klasse erzeugen
-                orm_class = type(
-                    table_name,
-                    (Base,),
-                    {"__tablename__": table_name, "__table__": table},
-                )
+                orm_class = type(table_name, (Base,), class_dict)
                 orm_classes.append(orm_class)
 
             return orm_classes

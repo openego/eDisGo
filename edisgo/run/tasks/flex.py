@@ -335,5 +335,8 @@ def task_import_generators(edisgo, ctx, *, generator_scenario=None):
         The modified EDisGo instance.
 
     """
-    edisgo.import_generators(generator_scenario=generator_scenario or ctx.scenario)
+    edisgo.import_generators(
+        generator_scenario=generator_scenario or ctx.scenario,
+        engine=ctx.ensure_engine(),
+    )
     return edisgo
