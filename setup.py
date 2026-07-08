@@ -112,6 +112,7 @@ setup(
         "edisgo": [
             os.path.join("config", "*.cfg"),
             os.path.join("equipment", "*.csv"),
+            os.path.join("run", "presets", "*.yaml"),
         ]
     },
 )

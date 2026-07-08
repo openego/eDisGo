@@ -95,6 +95,17 @@ class OverlyingGrid:
             "feedin_district_heating", pd.DataFrame(dtype="float64")
         )
 
+        self.dispatchable_generators_active_power = kwargs.get(
+            "dispatchable_generators_active_power", pd.DataFrame(dtype="float64")
+        )
+
+        self.dispatchable_generators_reactive_power = kwargs.get(
+            "dispatchable_generators_reactive_power", pd.DataFrame(dtype="float64")
+        )
+
+        self.renewables_potential = kwargs.get(
+            "renewables_potential", pd.Series(dtype="float64")
+        )
     @property
     def _attributes(self):
         return [
@@ -108,6 +119,9 @@ class OverlyingGrid:
             "heat_pump_central_active_power",
             "thermal_storage_units_central_soc",
             "feedin_district_heating",
+            "dispatchable_generators_active_power",
+            "dispatchable_generators_reactive_power",
+            "renewables_potential",
         ]
 
     def reduce_memory(self, attr_to_reduce=None, to_type="float32"):
