@@ -337,8 +337,13 @@ def oedb(edisgo_object, scenario, engine, import_types=None):
         ["egon_map_zensus_mvgd_buildings", "egon_map_zensus_weather_cell"],
         "boundaries",
     )
+    # egon_etrago_bus/egon_etrago_link live in schema "grid" in a local
+    # egon-data database, whereas the OEP path resolves them via the table/schema
+    # alias mapping keyed on "supply". Only switch the schema for the local
+    # (SSH/psycopg2) backend; keep "supply" for the remote OEP.
+    etrago_schema = "supply" if "openenergyplatform" in str(engine.url) else "grid"
     egon_etrago_bus, egon_etrago_link = config.import_tables_from_oep(
-        engine, ["egon_etrago_bus", "egon_etrago_link"], "supply"
+        engine, ["egon_etrago_bus", "egon_etrago_link"], etrago_schema
     )
 
     building_ids = edisgo_object.topology.loads_df.building_id.unique()
