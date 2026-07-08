@@ -5,6 +5,7 @@
 # exclude certain types of files
 *.doctree
 *.txt
+!.license-header.txt
 *.html
 *.js
 *.inv

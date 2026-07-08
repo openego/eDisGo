@@ -465,7 +465,7 @@ def select_cable(
     return cable_type, cable_count
 
 
-def get_path_length_to_station(edisgo_obj):
+def get_path_length_to_station(edisgo_obj: EDisGo) -> pd.Series:
     """
     Determines path length from each bus to HV-MV station.
 
@@ -485,9 +485,16 @@ def get_path_length_to_station(edisgo_obj):
     graph = edisgo_obj.topology.mv_grid.graph
     mv_station = edisgo_obj.topology.mv_grid.station.index[0]
 
+    # Compute the path length (number of edges) from the MV station to every MV
+    # bus in a single single-source traversal instead of one shortest_path call
+    # per bus. ``nx.shortest_path_length(graph, source)`` returns a dict mapping
+    # each reachable bus to its edge count, which equals ``len(path) - 1`` of the
+    # previous per-bus ``nx.shortest_path`` result.
+    mv_dist = nx.shortest_path_length(graph, source=mv_station)
+    buses_at = edisgo_obj.topology.buses_df.at
     for bus in edisgo_obj.topology.mv_grid.buses_df.index:
-        path = nx.shortest_path(graph, source=mv_station, target=bus)
-        edisgo_obj.topology.buses_df.at[bus, "path_length_to_station"] = len(path) - 1
+        # ``len(path) - 1`` == number of edges from station to bus == mv_dist[bus]
+        buses_at[bus, "path_length_to_station"] = mv_dist[bus]
         if bus.split("_")[0] == "BusBar" and bus.split("_")[-1] == "MV":
             # check if there is an underlying LV grid
             lv_grid_id = int(bus.split("_")[-2])
@@ -495,10 +502,19 @@ def get_path_length_to_station(edisgo_obj):
                 lvgrid = edisgo_obj.topology.get_lv_grid(lv_grid_id)
                 lv_graph = lvgrid.graph
                 lv_station = lvgrid.station.index[0]
-                for bus in lvgrid.buses_df.index:
-                    lv_path = nx.shortest_path(lv_graph, source=lv_station, target=bus)
-                    edisgo_obj.topology.buses_df.at[bus, "path_length_to_station"] = (
-                        len(path) + len(lv_path)
+                lv_dist = nx.shortest_path_length(lv_graph, source=lv_station)
+                # NOTE: The LV metric is intentionally computed as node counts
+                # (``len(path) + len(lv_path)``) while MV buses use the edge count
+                # (``len(path) - 1``). This inconsistency is a known bug tracked
+                # separately in #681 and is deliberately preserved here to keep
+                # the output byte-identical. ``len(path)`` is the node count of
+                # the MV path to this BusBar (== mv_dist[bus] + 1) and
+                # ``len(lv_path)`` is the node count of the LV path
+                # (== lv_dist[lv_bus] + 1), hence the constant +2 offset below.
+                mv_path_nodes = mv_dist[bus] + 1
+                for lv_bus in lvgrid.buses_df.index:
+                    buses_at[lv_bus, "path_length_to_station"] = (
+                        mv_path_nodes + lv_dist[lv_bus] + 1
                     )
     return edisgo_obj.topology.buses_df.path_length_to_station
 
@@ -880,9 +896,9 @@ def calculate_impedance_for_parallel_components(parallel_components, pu=False):
 
 
 def add_line_susceptance(
-    edisgo_obj,
-    mode="mv_b",
-):
+    edisgo_obj: EDisGo,
+    mode: str = "mv_b",
+) -> EDisGo:
     """
     Adds line susceptance information in Siemens to lines in existing grids.
 
@@ -932,22 +948,36 @@ def add_line_susceptance(
     lines_df = edisgo_obj.topology.lines_df
     buses_df = edisgo_obj.topology.buses_df
 
-    for index, bus0, type_info, length, num_parallel in lines_df[
-        ["bus0", "type_info", "length", "num_parallel"]
-    ].itertuples():
-        v_nom = buses_df.loc[bus0].v_nom
+    # Map each line's bus0 to its nominal voltage in one vectorised lookup.
+    v_nom = lines_df["bus0"].map(buses_df["v_nom"])
 
-        try:
-            line_capacitance_per_km = (
-                line_data_df.loc[line_data_df.U_n == v_nom].loc[type_info].C_per_km
-            )
-        except KeyError:
-            line_capacitance_per_km = line_data_df.loc[type_info].C_per_km
+    # Build an O(1) capacitance lookup keyed on (U_n, type_info). This replaces
+    # the per-line full-frame boolean filter ``line_data_df[line_data_df.U_n ==
+    # v_nom]`` followed by ``.loc[type_info]`` with a single vectorised reindex.
+    cap_by_key = line_data_df.set_index("U_n", append=True)["C_per_km"].swaplevel()
+    capacitance = pd.Series(
+        cap_by_key.reindex(
+            pd.MultiIndex.from_arrays([v_nom.to_numpy(), lines_df["type_info"]])
+        ).to_numpy(),
+        index=lines_df.index,
+    )
+
+    # Lines whose (U_n, type_info) combination was not found fall back to the
+    # type_info-only lookup, replicating the original ``except KeyError`` branch
+    # (incl. one warning log per affected line).
+    missing = capacitance.isna()
+    if missing.any():
+        fallback = line_data_df["C_per_km"]
+        for index in lines_df.index[missing]:
+            type_info = lines_df.at[index, "type_info"]
+            capacitance.at[index] = fallback.loc[type_info]
             logger.warning(f"False voltage level for line {index}.")
 
-        lines_df.loc[index, "b"] = calculate_line_susceptance(
-            line_capacitance_per_km, length, num_parallel
-        )
+    # Compute the susceptance for all lines as a single vector operation,
+    # equivalent to calling ``calculate_line_susceptance`` per line.
+    lines_df["b"] = (
+        capacitance / 1e6 * lines_df["length"] * 2 * pi * 50 * lines_df["num_parallel"]
+    )
 
     return edisgo_obj
 
