@@ -1,3 +1,13 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Task implementations for the eDisGo pipeline runner.
 
@@ -10,9 +20,9 @@ that the runner sees them at execution time. The submodules are:
   ``set_timeindex``, ``reactive_power``
 * :mod:`.flex` — flex imports
   (``import_heat_pumps``, ``import_home_batteries``, ``import_dsm``,
-  ``import_electromobility``, ``import_generators``) and operating
-  strategies (``apply_charging_strategy``,
-  ``apply_heat_pump_strategy``)
+  ``import_electromobility``, ``import_generators``),
+  ``build_flexibility_bands``, and operating strategies
+  (``apply_charging_strategy``, ``apply_heat_pump_strategy``)
 * :mod:`.analysis` — ``check_integrity``, ``analyze``, ``reinforce``,
   ``base_reinforce``, ``optimize``
 * :mod:`.io` — ``save``, ``load_charging_from_files``
@@ -22,4 +32,5 @@ mutate ``edisgo`` in place and/or return a new EDisGo instance (the
 returned value, if non-None, replaces the current one in the runner's
 loop).
 """
+
 from edisgo.run.tasks import analysis, flex, grid, io, timeseries  # noqa: F401
