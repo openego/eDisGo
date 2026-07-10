@@ -17,6 +17,7 @@ import pandas as pd
 
 from edisgo.run.registry import register_task
 
+import pandas as pd
 
 @register_task("setup_grid", provides={"grid"})
 def task_setup_grid(
@@ -73,6 +74,7 @@ def task_setup_grid(
 
     """
     from edisgo import EDisGo
+    import os
 
     grid_cfg = ctx.raw_config.get("grid", {})
     ding0_path = ding0_path or grid_cfg.get("ding0_path")
@@ -85,8 +87,15 @@ def task_setup_grid(
         legacy_ding0_grids = grid_cfg.get("legacy_ding0_grids", False)
 
     if edisgo is None:
+        # Check if topology-subfolder is part of ding0 grids
+        ding0_path_str = str(ding0_path)
+        if not os.path.exists(os.path.join(ding0_path_str, "buses.csv")):
+            topology_path = os.path.join(ding0_path_str, "topology")
+            if os.path.exists(os.path.join(topology_path, "buses.csv")):
+                ding0_path_str = topology_path
+
         edisgo = EDisGo(
-            ding0_grid=str(ding0_path),
+            ding0_grid=ding0_path_str,
             legacy_ding0_grids=legacy_ding0_grids,
         )
     else:
