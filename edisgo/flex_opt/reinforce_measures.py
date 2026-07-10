@@ -191,6 +191,13 @@ def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level)
         )
 
     transformers_changes = {"added": {}, "removed": {}}
+    # Collect the per-station frames of newly added transformers and the indices
+    # of transformers to be removed, so the topology dataframe is rebuilt only
+    # once after the loop instead of once per station (avoids O(stations x
+    # total_transformers) behaviour). Output is identical: surviving original
+    # rows keep their order and the new rows are concatenated in station order.
+    new_transformers_collected: list[pd.DataFrame] = []
+    removed_transformers_collected: list[np.ndarray] = []
     for station in critical_stations.index:
         grid = critical_stations.at[station, "grid"]
         # list of maximum power of each transformer in the station
@@ -254,29 +261,36 @@ def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level)
             transformers_changes["added"][station] = new_transformers.index.values
             # add previous transformers to list of removed transformers
             transformers_changes["removed"][station] = grid.transformers_df.index.values
-            # remove previous transformers from topology
-            if voltage_level == "lv":
-                edisgo_obj.topology.transformers_df.drop(
-                    grid.transformers_df.index.values, inplace=True
-                )
-            else:
-                edisgo_obj.topology.transformers_hvmv_df.drop(
-                    grid.transformers_df.index.values, inplace=True
-                )
+            # collect previous transformers to be removed from topology (batched
+            # after the loop)
+            removed_transformers_collected.append(grid.transformers_df.index.values)
 
-        # add new transformers to topology
+        # collect new transformers to be added to topology (batched after the loop)
+        new_transformers_collected.append(new_transformers)
+
+    # remove previous transformers from topology in a single drop. Each station
+    # corresponds to a distinct grid, so dropping one station's transformers does
+    # not affect the per-grid views read for other stations during the loop.
+    if removed_transformers_collected:
+        removed_index = np.concatenate(removed_transformers_collected)
+        if voltage_level == "lv":
+            edisgo_obj.topology.transformers_df.drop(removed_index, inplace=True)
+        else:
+            edisgo_obj.topology.transformers_hvmv_df.drop(removed_index, inplace=True)
+
+    # add all new transformers to topology in a single concat. Surviving original
+    # rows keep their order and new rows are appended in station order, matching
+    # the per-iteration concat behaviour.
+    if new_transformers_collected:
         if voltage_level == "lv":
             edisgo_obj.topology.transformers_df = pd.concat(
-                [
-                    edisgo_obj.topology.transformers_df,
-                    new_transformers,
-                ]
+                [edisgo_obj.topology.transformers_df, *new_transformers_collected]
             )
         else:
             edisgo_obj.topology.transformers_hvmv_df = pd.concat(
                 [
                     edisgo_obj.topology.transformers_hvmv_df,
-                    new_transformers,
+                    *new_transformers_collected,
                 ]
             )
     return transformers_changes
@@ -321,6 +335,11 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         raise KeyError("Standard MV/LV transformer is not in equipment list.")
 
     transformers_changes = {"added": {}}
+    # Collect the per-station new transformer frames so the topology dataframe is
+    # rebuilt only once after the loop instead of once per station (avoids
+    # O(stations x total_transformers) behaviour). Output is identical: the new
+    # rows are concatenated in station order.
+    new_transformers_collected: list[pd.DataFrame] = []
     for station in critical_stations.index:
         grid_id = critical_stations.at[station, "lv_grid_id"]
         grid = edisgo_obj.topology.get_lv_grid(int(grid_id))
@@ -335,14 +354,16 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         duplicated_transformer.r_pu = standard_transformer.r_pu
         duplicated_transformer.x_pu = standard_transformer.x_pu
         duplicated_transformer.type_info = standard_transformer.name
-        # add new transformer to topology
-        edisgo_obj.topology.transformers_df = pd.concat(
-            [
-                edisgo_obj.topology.transformers_df,
-                duplicated_transformer,
-            ]
-        )
+        # collect new transformer to be added to topology (batched after the loop)
+        new_transformers_collected.append(duplicated_transformer)
         transformers_changes["added"][str(grid)] = duplicated_transformer.index.tolist()
+
+    # add all new transformers to topology in a single concat, in station order,
+    # matching the per-iteration concat behaviour.
+    if new_transformers_collected:
+        edisgo_obj.topology.transformers_df = pd.concat(
+            [edisgo_obj.topology.transformers_df, *new_transformers_collected]
+        )
 
     if transformers_changes["added"]:
         logger.debug(

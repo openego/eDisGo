@@ -1583,14 +1583,22 @@ class TimeSeries:
         generators_df = edisgo_object.topology.generators_df.loc[generator_names, :]
 
         # scale time series by nominal power
-        ts_scaled = generators_df.apply(
-            lambda x: (
-                ts_generators[x.type] * x.p_nom
-                if x.type in ts_generators.columns
-                else ts_generators["other"] * x.p_nom
-            ),
-            axis=1,
-        ).T
+        # vectorised equivalent of the per-generator
+        # ``ts_generators[type] * p_nom`` (with fallback to the 'other' column
+        # for types not contained in ``ts_generators``): select the matching
+        # ts column per generator (in generators_df row order) and broadcast
+        # multiply along the time axis by the nominal power
+        types: pd.Series = generators_df["type"].where(
+            generators_df["type"].isin(ts_generators.columns), "other"
+        )
+        scaled: np.ndarray = (
+            ts_generators[types].to_numpy() * generators_df["p_nom"].to_numpy()
+        )
+        ts_scaled: pd.DataFrame = pd.DataFrame(
+            scaled,
+            index=ts_generators.index,
+            columns=generators_df.index,
+        )
         if not ts_scaled.empty:
             self.add_component_time_series("generators_active_power", ts_scaled)
 
@@ -1666,10 +1674,20 @@ class TimeSeries:
             )
 
         # scale time series by annual consumption
-        ts_scaled = loads_df.apply(
-            lambda x: ts_loads[x.sector] * x.annual_consumption,
-            axis=1,
-        ).T
+        # vectorised equivalent of the per-load
+        # ``ts_loads[sector] * annual_consumption``: select the sector ts column
+        # per load (in loads_df row order) and broadcast multiply along the
+        # time axis by the annual consumption (KeyError on a missing sector is
+        # preserved by the fancy column selection)
+        scaled: np.ndarray = (
+            ts_loads[loads_df["sector"]].to_numpy()
+            * loads_df["annual_consumption"].to_numpy()
+        )
+        ts_scaled: pd.DataFrame = pd.DataFrame(
+            scaled,
+            index=ts_loads.index,
+            columns=loads_df.index,
+        )
         self.add_component_time_series("loads_active_power", ts_scaled)
 
     def predefined_charging_points_by_use_case(
@@ -1725,10 +1743,19 @@ class TimeSeries:
                 " adapt if necessary."
             )
         # scale time series by nominal power
-        ts_scaled = loads_df.apply(
-            lambda x: ts_loads[x.sector] * x.p_set,
-            axis=1,
-        ).T
+        # vectorised equivalent of the per-load ``ts_loads[sector] * p_set``:
+        # select the use-case ts column per charging point (in loads_df row
+        # order) and broadcast multiply along the time axis by the nominal
+        # power (KeyError on a missing use case is preserved by the fancy
+        # column selection)
+        scaled: np.ndarray = (
+            ts_loads[loads_df["sector"]].to_numpy() * loads_df["p_set"].to_numpy()
+        )
+        ts_scaled: pd.DataFrame = pd.DataFrame(
+            scaled,
+            index=ts_loads.index,
+            columns=loads_df.index,
+        )
         self.add_component_time_series("loads_active_power", ts_scaled)
 
     def fixed_cosphi(

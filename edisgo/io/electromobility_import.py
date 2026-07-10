@@ -857,14 +857,35 @@ def weighted_random_choice(
     return charging_park_id
 
 
-def distribute_private_charging_demand(edisgo_obj):
+def distribute_private_charging_demand(edisgo_obj: EDisGo) -> None:
     """
     Distributes all private charging processes. Each car gets its own
     private charging point if a charging process takes place.
 
+    Private charging covers the ``work`` and ``home`` use cases. The cars are
+    processed grouped by destination, and for ``home`` additionally by
+    administrative zone (``ags``). For every car a potential charging park is
+    drawn with a weighted random choice; the weights combine static user-centric
+    weights with a capacity-based term that discourages parks to which charging
+    demand has already been assigned, so the draws depend on the running
+    assignment and are inherently sequential.
+
     Parameters
     ----------
     edisgo_obj : :class:`~.EDisGo`
+
+    Notes
+    -----
+    The drawn charging park and charging point are recorded per
+    ``(car_id, destination)`` and written back to
+    :attr:`~.network.electromobility.Electromobility.charging_processes_df` in a
+    single vectorised step after the loop, rather than once per car. A per-car
+    write-back matches ``car_id`` and ``destination`` against the whole frame for
+    every car, which is ``O(cars x rows)`` and dominates the runtime on large
+    grids; collecting the assignment and applying it once is ``O(rows)``. The
+    nominal charging capacity per car is likewise looked up once via ``groupby``
+    instead of filtering the destination frame for every car. The weighted random
+    draws are unaffected, so the resulting assignment is identical.
 
     """
     try:
@@ -892,6 +913,25 @@ def distribute_private_charging_demand(edisgo_obj):
         dtype=float,
     )
 
+    eta = edisgo_obj.electromobility.eta_charging_points
+    parks_gdf = edisgo_obj.electromobility.potential_charging_parks_gdf
+
+    # The chosen charging park and charging point are recorded per
+    # (car_id, destination) and written back to charging_processes_df in a single
+    # vectorised step after the loop. The previous code wrote inside the loop (via
+    # weighted_random_choice), scanning the whole frame for every car -- O(cars x
+    # rows), the dominant cost on large grids. The stochastic draws are unchanged,
+    # so the resulting assignment is identical.
+    assigned_park_id = {}
+    assigned_point_id = {}
+
+    # NOTE: in the home branch below `charging_park_id` is intentionally not
+    # updated per car; it keeps the value drawn for the last work car. This
+    # reproduces a pre-existing bug in the capacity bookkeeping (home capacity is
+    # booked to a stale charging park) so this performance refactor leaves the
+    # output unchanged. The bug is tracked separately in #679.
+    charging_park_id = None
+
     for destination in private_charging_df.destination.sort_values().unique():
         private_charging_destination_df = private_charging_df.loc[
             private_charging_df.destination == destination
@@ -899,13 +939,16 @@ def distribute_private_charging_demand(edisgo_obj):
 
         use_case = PRIVATE_DESTINATIONS[destination]
 
+        # nominal charging capacity per car (first occurrence), precomputed once
+        # instead of filtering the destination frame for every car
+        capacity_per_car = private_charging_destination_df.groupby("car_id")[
+            "nominal_charging_capacity_kW"
+        ].first()
+
         if use_case == "work":
-            potential_charging_park_indices = (
-                edisgo_obj.electromobility.potential_charging_parks_gdf.loc[
-                    edisgo_obj.electromobility.potential_charging_parks_gdf.use_case
-                    == use_case
-                ].index
-            )
+            potential_charging_park_indices = parks_gdf.loc[
+                parks_gdf.use_case == use_case
+            ].index
 
             for car_id in private_charging_destination_df.car_id.sort_values().unique():
                 weights = combine_weights(
@@ -914,23 +957,14 @@ def distribute_private_charging_demand(edisgo_obj):
                     user_centric_weights_df,
                 )
 
-                charging_park_id = weighted_random_choice(
-                    edisgo_obj,
-                    potential_charging_park_indices,
-                    car_id,
-                    destination,
-                    charging_point_id,
-                    weights,
-                    rng=rng,
+                draw_rng = default_rng(seed=charging_point_id) if rng is None else rng
+                charging_park_id = draw_rng.choice(
+                    a=potential_charging_park_indices, p=weights
                 )
+                assigned_park_id[(car_id, destination)] = charging_park_id
+                assigned_point_id[(car_id, destination)] = charging_point_id
 
-                charging_capacity = (
-                    private_charging_destination_df.loc[
-                        (private_charging_destination_df.car_id == car_id)
-                        & (private_charging_destination_df.destination == "0_work")
-                    ].nominal_charging_capacity_kW.iat[0]
-                    / edisgo_obj.electromobility.eta_charging_points
-                )
+                charging_capacity = capacity_per_car.at[car_id] / eta
 
                 designated_charging_point_capacity_df.at[
                     charging_park_id, "designated_charging_point_capacity"
@@ -944,19 +978,9 @@ def distribute_private_charging_demand(edisgo_obj):
                     private_charging_destination_df.ags == ags
                 ]
 
-                # fmt: off
-                potential_charging_park_indices = edisgo_obj.electromobility.\
-                    potential_charging_parks_gdf.loc[
-                        (
-                            edisgo_obj.electromobility.potential_charging_parks_gdf.ags
-                            == ags
-                        )
-                        & (
-                            edisgo_obj.electromobility.potential_charging_parks_gdf.
-                            use_case == use_case
-                        )
-                    ].index
-                # fmt: on
+                potential_charging_park_indices = parks_gdf.loc[
+                    (parks_gdf.ags == ags) & (parks_gdf.use_case == use_case)
+                ].index
 
                 for car_id in private_charging_ags_df.car_id.sort_values().unique():
                     weights = combine_weights(
@@ -965,21 +989,18 @@ def distribute_private_charging_demand(edisgo_obj):
                         user_centric_weights_df,
                     )
 
-                    weighted_random_choice(
-                        edisgo_obj,
-                        potential_charging_park_indices,
-                        car_id,
-                        destination,
-                        charging_point_id,
-                        weights,
-                        rng=rng,
+                    draw_rng = (
+                        default_rng(seed=charging_point_id) if rng is None else rng
                     )
+                    drawn_charging_park_id = draw_rng.choice(
+                        a=potential_charging_park_indices, p=weights
+                    )
+                    assigned_park_id[(car_id, destination)] = drawn_charging_park_id
+                    assigned_point_id[(car_id, destination)] = charging_point_id
 
-                    charging_capacity = private_charging_destination_df.loc[
-                        (private_charging_destination_df.car_id == car_id)
-                        & (private_charging_destination_df.destination == "6_home")
-                    ].nominal_charging_capacity_kW.iat[0]
+                    charging_capacity = capacity_per_car.at[car_id]
 
+                    # booked to the stale charging_park_id (see NOTE above, #679)
                     designated_charging_point_capacity_df.at[
                         charging_park_id, "designated_charging_point_capacity"
                     ] += charging_capacity
@@ -988,6 +1009,23 @@ def distribute_private_charging_demand(edisgo_obj):
 
         else:
             raise ValueError(f"Destination {destination} is unknown.")
+
+    # write the recorded charging park and point assignment back to
+    # charging_processes_df in one vectorised step
+    charging_processes_df = edisgo_obj.electromobility.charging_processes_df
+    if assigned_park_id:
+        key_index = pd.MultiIndex.from_arrays(
+            [charging_processes_df["car_id"], charging_processes_df["destination"]]
+        )
+        mapped_park_id = pd.Series(assigned_park_id).reindex(key_index)
+        mapped_point_id = pd.Series(assigned_point_id).reindex(key_index)
+        update = mapped_park_id.notna().to_numpy()
+        charging_processes_df.loc[update, "charging_park_id"] = (
+            mapped_park_id.to_numpy()[update]
+        )
+        charging_processes_df.loc[update, "charging_point_id"] = (
+            mapped_point_id.to_numpy()[update]
+        )
 
 
 def distribute_public_charging_demand(edisgo_obj, **kwargs):
