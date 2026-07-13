@@ -296,8 +296,8 @@ def task_import_overlying_grid_data(edisgo, ctx, *, overlying_grid_path=None):
 
     # --- 3) set dispatchable/fluctuating generator time series ---
     if source == "etrago":
-        disp_ts = overlying_grid_data.get("dispatchable_generators_active_power")
-        pot_ts = overlying_grid_data.get("renewables_potential")
+        disp_ts = edisgo.overlying_grid.dispatchable_generators_active_power
+        pot_ts = edisgo.overlying_grid.renewables_potential
         if disp_ts is not None and not disp_ts.empty:
             edisgo.set_time_series_active_power_predefined(
                 dispatchable_generators_ts=disp_ts,
