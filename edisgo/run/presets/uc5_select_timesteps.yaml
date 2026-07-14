@@ -46,8 +46,8 @@ grid:
   legacy_ding0_grids: false
 
 database:
-  ssh:
-    enabled: false
+  source: local
+
 
 # No explicit base time index is set. oedb_ts falls back to a full year derived
 # from the scenario when none is given, which is what auto interval selection
