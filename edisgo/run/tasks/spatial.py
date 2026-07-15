@@ -96,9 +96,7 @@ def task_spatial_reduce(edisgo, ctx, **overrides):
     return edisgo
 
 
-@register_task(
-    "spatial_restore", requires={"reduced_grid", "optimized_dispatch"}
-)
+@register_task("spatial_restore", requires={"reduced_grid", "optimized_dispatch"})
 def task_spatial_restore(edisgo, ctx, **overrides):
     """
     Write optimized flexible-component dispatch back onto the stashed full

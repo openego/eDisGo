@@ -28,9 +28,7 @@ edisgo = run_edisgo(
             "ding0_path": "/home/gurobi/.ding0/2024-07-25T17:38:34_new_planning_new_edisgo/ding0_grids/32377"  # noqa: E501
         },
         # OG path must be the leaf dir for THIS grid (like ding0_path), not the parent.
-        "overlying_grid": {
-            "path": "/home/gurobi/.edisgo_input/overlying_grid/32377"
-        },
+        "overlying_grid": {"path": "/home/gurobi/.edisgo_input/overlying_grid/32377"},
     }
 )
 
