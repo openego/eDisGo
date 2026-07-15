@@ -1,0 +1,149 @@
+_comment: |
+  UC5 — OPF with configurable timestep selection (manual OR auto), PLUS spatial
+  complexity reduction bracketing the OPF step. Standalone copy of
+  uc5_select_timesteps.yaml (not an `extends` overlay) with the spatial_reduce /
+  spatial_restore bracket added around `optimize`.
+
+  The pipeline carries TWO select_timesteps steps, each with a `position`:
+  - position: pre_import  (before import_heat_pumps) — acts only in MANUAL
+    mode. It sets the explicit time index, which the heat-pump/DSM imports
+    and oedb_ts then use to fetch only the selected steps (cheap).
+  - position: post_grid   (after import_overlying_grid_data, before
+    reactive_power) — acts only in AUTO mode. It needs all active-power
+    time series (incl. overlying-grid generation) set to run the scoring
+    power flow via get_most_critical_time_intervals.
+  Whichever mode is configured, the other positioned step is a no-op.
+
+  Auto mode normally yields two disconnected intervals (one overloading,
+  one voltage). They are kept separate (a gap in the time index); if they
+  overlap, a non-overlapping pair is chosen if possible, otherwise they are
+  concatenated into one interval. A later optimize step can detect the gap
+  and run separate optimizations per interval.
+
+  Spatial complexity reduction (spatial_reduce / spatial_restore) brackets
+  `optimize` only:
+  - spatial_reduce (before optimize): deepcopies and stashes the full grid on
+    ctx, then spatially reduces the working object so `optimize` runs on a
+    smaller grid.
+  - spatial_restore (after optimize): writes the optimized flexible-component
+    dispatch back onto the stashed full grid (by name, or disaggregated onto
+    `old_name` members if aggregation_mode is true), recomputes reactive power
+    for those components, and makes the full grid active again for `reinforce`.
+  Both are no-ops when `spatial_reduction.enabled` is false (default), so
+  `reinforce` then runs on the same grid `optimize` used, same as
+  uc5_select_timesteps.yaml. `reactive_power` (pre-OPF, full time series) stays
+  where it already was, unaffected by the spatial bracket.
+  Reinforcement always runs on the full topology, regardless of the flag.
+
+_workflow:
+  - setup_grid: load ding0 topology
+  - import_generators / import_home_batteries
+  - select_timesteps (pre_import): manual only — set explicit time index
+  - import_heat_pumps / import_dsm: fetch only selected steps (manual)
+  - import_electromobility: dumb charging, flex bands
+  - oedb_ts: real wind/solar + load time series
+  - apply_charging_strategy / apply_heat_pump_strategy
+  - build_flexibility_bands: EV bands on the fixed hourly index
+  - import_overlying_grid_data: HV constraints from CSV dir
+  - select_timesteps (post_grid): auto only — reduce to critical intervals
+  - reactive_power: fixed cosphi on the reduced index
+  - spatial_reduce: no-op unless spatial_reduction.enabled — stash full grid,
+      reduce working object
+  - optimize: pm_optimize with flex assets, on the (possibly) reduced grid
+  - spatial_restore: no-op unless spatial_reduction.enabled — write dispatch
+      back onto the stashed full grid, recompute reactive power
+  - reinforce / save: always on the full topology
+
+# Self-contained (no `extends`): everything uc4_example provided is inlined
+# below, so this preset can be run on its own via
+#   run_edisgo({"extends": "uc5_spatial_reduction", "grid": {"ding0_path": ...}})
+scenario: eGon2035
+
+grid:
+  ding0_path: "/path/to/ding0_grid"
+  legacy_ding0_grids: false
+
+database:
+  source: local
+
+
+# No explicit base time index is set. oedb_ts falls back to a full year derived
+# from the scenario when none is given, which is what auto interval selection
+# needs (week-long critical intervals to pick from). For manual selection the
+# pre-import select_timesteps step sets the index instead.
+
+overlying_grid:
+  enabled: true          # set true to activate import_overlying_grid_data
+  source: csv            # "csv" (load from path) or "etrago" (kwarg)
+  path: "/storage/JoDa/edisgo_playground/overlying_grid_data"
+
+results:
+  directory: results/uc5_spatial_reduction
+
+# Top-level block read by the select_timesteps task via ctx.raw_config.
+# eGo can inject this block the same way it injects overlying_grid.
+# Set `mode` (and its parameters) here or override it in the run script.
+timeseries_selection:
+  mode: manual
+  # auto method: "power_flow" (default, scores intervals via a power flow) or
+  # "residual_load" (no power flow — the weeks ending at the max/min residual-load
+  # time steps; requires overlying-grid data).
+  method: residual_load
+  # --- shared auto parameters (both methods) ---
+  time_steps_per_time_interval: 168  # one week (must be a multiple of 24)
+  time_step_day_start: 4             # hour of day the intervals start/end on
+  # --- power_flow method parameters ---
+  percentage: 1.0
+  save_steps: true                   # write selected intervals CSV to results_dir
+  use_troubleshooting_mode: true     # handle power-flow non-convergence
+  overloading_factor: 0.95
+  voltage_deviation_factor: 0.95
+  # --- manual parameters (used when mode: manual) ---
+  # timestamps: ["2035-01-15 08:00", "2035-01-15 9:00", "2035-01-15 10:00"]
+  # or a range instead of `timestamps`:
+  start: "2035-01-15 00:00"
+  periods: 24
+  freq: h
+
+# Top-level block read by the spatial_reduce/spatial_restore tasks via
+# ctx.raw_config. eGo can inject this block the same way it injects
+# overlying_grid/timeseries_selection (global `spatial_reduction` default +
+# per-grid `spatial_reduction_per_grid` override keyed by mv_grid_id).
+spatial_reduction:
+  enabled: true          # set true to activate spatial_reduce/spatial_restore
+  mode: kmeansdijkstra               # clustering mode for spatial_complexity_reduction
+  cluster_area: feeder
+  reduction_factor: 0.3
+  reduction_factor_not_focused: False
+  aggregation_mode: flase  # start with false; true enables load/generator merging
+
+pipeline:
+  - setup_grid
+  - import_generators
+  - import_home_batteries
+  - select_timesteps: {position: pre_import}   # acts in manual mode only
+  - import_heat_pumps
+  - import_dsm
+  - import_electromobility:
+      charging_strategy: null
+      # flexibility bands are built later (build_flexibility_bands), once the
+      # analysis time index is fixed, so they are resampled to it
+  - oedb_ts:
+      dispatchable: {other: 0.7}
+  - apply_charging_strategy: {strategy: dumb}
+  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - build_flexibility_bands                    # hourly bands on the 2035 index
+  - import_overlying_grid_data
+  - select_timesteps: {position: post_grid}    # acts in auto mode only
+  - reactive_power
+  - spatial_reduce                             # no-op unless spatial_reduction.enabled
+  - optimize:
+      flexible: [heat_pumps, storage, charging_points, dsm]
+      method: soc
+      opf_version: 2
+  - spatial_restore                            # no-op unless spatial_reduction.enabled
+  - reinforce:
+      catch_convergence_problems: true
+  - save:
+      archive: true
+      save_opf_results: true
