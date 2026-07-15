@@ -1,5 +1,5 @@
 _comment: |
-  UC5 — OPF with configurable timestep selection (manual OR auto), PLUS spatial
+  UC6 — OPF with configurable timestep selection (manual OR auto), PLUS spatial
   complexity reduction bracketing the OPF step. Standalone copy of
   uc5_select_timesteps.yaml (not an `extends` overlay) with the spatial_reduce /
   spatial_restore bracket added around `optimize`.
@@ -56,7 +56,7 @@ _workflow:
 
 # Self-contained (no `extends`): everything uc4_example provided is inlined
 # below, so this preset can be run on its own via
-#   run_edisgo({"extends": "uc5_spatial_reduction", "grid": {"ding0_path": ...}})
+#   run_edisgo({"extends": "uc6_spatial_reduction", "grid": {"ding0_path": ...}})
 scenario: eGon2035
 
 grid:
