@@ -1,3 +1,13 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Runtime context passed to every task during pipeline execution.
 
@@ -19,6 +29,7 @@ Typical uses:
 Tasks should treat ``flags`` as advisory — they MAY short-circuit based
 on a flag but MUST NOT assume a flag is present.
 """
+
 from __future__ import annotations
 
 import logging
@@ -67,6 +78,11 @@ class RunContext:
         ``overlying_grid_data=`` argument of :func:`edisgo.run.run_edisgo`.
         Consumed by the ``import_overlying_grid_data`` task when
         ``overlying_grid.source == "etrago"``.
+    full_grid_stash : edisgo.EDisGo or None
+        The pre-reduction :class:`~edisgo.EDisGo` instance, deepcopied and
+        stashed by the ``spatial_reduce`` task before it spatially reduces
+        the working object. Consumed (and cleared back to ``None``) by
+        ``spatial_restore``. ``None`` when spatial reduction is not in use.
 
     """
 
@@ -81,6 +97,7 @@ class RunContext:
     current_stage: str | None = None
     raw_config: dict[str, Any] = field(default_factory=dict)
     overlying_grid_data: Any = None
+    full_grid_stash: Any = None
 
     def ensure_engine(self):
         """

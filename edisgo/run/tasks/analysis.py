@@ -268,7 +268,9 @@ def task_base_reinforce(
     return edisgo
 
 
-@register_task("optimize", requires={"timeseries", "flex"})
+@register_task(
+    "optimize", requires={"timeseries", "flex"}, provides={"optimized_dispatch"}
+)
 def task_optimize(
     edisgo,
     ctx,
@@ -307,7 +309,11 @@ def task_optimize(
         EDisGo instance to optimize.
     ctx : RunContext
         Run context. Used for logging and, for multi-interval runs, nothing
-        else is required from it.
+        else is required from it. The resolved ``flexible_*`` name lists are
+        written to ``ctx.flags['flexible_cps']`` / ``ctx.flags['flexible_hps']``
+        / ``ctx.flags['flexible_loads']`` / ``ctx.flags['flexible_storage_units']``
+        so a later ``spatial_restore`` step knows which components' dispatch
+        needs mapping back onto the full grid.
     flexible : list of str, optional
         High-level selector, subset of ``{"heat_pumps",
         "charging_points", "storage"}``. If ``None``, nothing is
@@ -358,6 +364,11 @@ def task_optimize(
         flexible_loads = []
     if flexible_storage_units is None:
         flexible_storage_units = []
+
+    ctx.flags["flexible_cps"] = flexible_cps
+    ctx.flags["flexible_hps"] = flexible_hps
+    ctx.flags["flexible_loads"] = flexible_loads
+    ctx.flags["flexible_storage_units"] = flexible_storage_units
 
     # pm_optimize handles a non-contiguous (reduced) time index internally:
     # it runs one OPF per contiguous interval and merges the results.
