@@ -75,10 +75,10 @@ database:
 overlying_grid:
   enabled: true          # set true to activate import_overlying_grid_data
   source: csv            # "csv" (load from path) or "etrago" (kwarg)
-  path: "/storage/JoDa/edisgo_playground/overlying_grid_data"
+  path: "/home/gurobi/.edisgo_input/overlying_grid"
 
 results:
-  directory: results/uc5_spatial_reduction
+  directory: results/uc6_spatial_reduction
 
 # Top-level block read by the select_timesteps task via ctx.raw_config.
 # eGo can inject this block the same way it injects overlying_grid.
@@ -115,7 +115,7 @@ spatial_reduction:
   cluster_area: feeder
   reduction_factor: 0.3
   reduction_factor_not_focused: False
-  aggregation_mode: flase  # start with false; true enables load/generator merging
+  aggregation_mode: false  # start with false; true enables load/generator merging
 
 pipeline:
   - setup_grid
