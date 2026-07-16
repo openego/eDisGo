@@ -26,7 +26,7 @@ from edisgo.io import timeseries_import
 from edisgo.tools.tools import assign_voltage_level_to_component, resample
 
 if TYPE_CHECKING:
-    from edisgo import EDisGo
+    from edisgo.edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -1530,11 +1530,15 @@ class TimeSeries:
                 "Not all affected loads are charging points. Please check and"
                 " adapt if necessary."
             )
-        # scale time series by nominal power
-        ts_scaled = loads_df.apply(
-            lambda x: ts_loads[x.sector] * x.p_set,
-            axis=1,
-        ).T
+        # scale time series: HGV CPs with annual_consumption use energy-based scaling
+        # (profile sums to 1, profile[t]*annual_consumption_mwh = power in MW for hour t);
+        # all other CPs use p_set-based scaling (MIV / SimBEV path).
+        def _scale_cp(x):
+            if "annual_consumption" in x.index and pd.notna(x["annual_consumption"]):
+                return ts_loads[x.sector] * x["annual_consumption"]  # MW
+            return ts_loads[x.sector] * x.p_set
+
+        ts_scaled = loads_df.apply(_scale_cp, axis=1).T
         self.add_component_time_series("loads_active_power", ts_scaled)
 
     def fixed_cosphi(

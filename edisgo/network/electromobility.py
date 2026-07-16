@@ -71,6 +71,7 @@ COLUMNS = {
         "use_case",
     ],
     "integrated_charging_parks_df": ["edisgo_id"],
+    "hgv_integrated_charging_parks_df": ["edisgo_id", "annual_consumption_mwh"],
 }
 
 
@@ -251,6 +252,54 @@ class Electromobility:
         self._simbev_config_df = df
 
     @property
+    def hgv_config_df(self):
+        """
+        Configuration data for HGV charging, analogous to
+        :attr:`simbev_config_df` but for HGV (stepsize=60 min, eta_cp=1.0).
+        Kept separate because HGV and MIV use different timestep resolutions.
+        """
+        try:
+            return self._hgv_config_df
+        except Exception:
+            return pd.DataFrame(columns=COLUMNS["simbev_config_df"])
+
+    @hgv_config_df.setter
+    def hgv_config_df(self, df):
+        self._hgv_config_df = df
+
+    @property
+    def hgv_charging_processes_df(self):
+        """
+        Charging processes for HGV, analogous to :attr:`charging_processes_df`
+        but for HGV events (hourly timesteps). Kept separate from MIV processes
+        because timestep indices are incompatible (MIV: 15 min, HGV: 60 min).
+        """
+        try:
+            return self._hgv_charging_processes_df
+        except Exception:
+            return pd.DataFrame(columns=COLUMNS["charging_processes_df"])
+
+    @hgv_charging_processes_df.setter
+    def hgv_charging_processes_df(self, df):
+        self._hgv_charging_processes_df = df
+
+    @property
+    def hgv_integrated_charging_parks_df(self):
+        """
+        Mapping of HGV cp_id to eDisGo load name and annual consumption,
+        analogous to :attr:`integrated_charging_parks_df` but for HGV.
+        Kept separate to avoid cp_id collision with MIV charging park IDs.
+        """
+        try:
+            return self._hgv_integrated_charging_parks_df
+        except Exception:
+            return pd.DataFrame(columns=COLUMNS["hgv_integrated_charging_parks_df"])
+
+    @hgv_integrated_charging_parks_df.setter
+    def hgv_integrated_charging_parks_df(self, df):
+        self._hgv_integrated_charging_parks_df = df
+
+    @property
     def integrated_charging_parks_df(self):
         """
         Mapping DataFrame to map the charging park ID to the internal eDisGo ID.
@@ -397,89 +446,138 @@ class Electromobility:
         if isinstance(use_case, str):
             use_case = [use_case]
 
-        # get all relevant charging points
+        # Partition use cases into HGV (sectors starting with "hgv_") and MIV.
+        # Each domain has its own config and charging processes because HGV uses
+        # 60-min timesteps while MIV uses 15-min timesteps.
+        hgv_use_cases = [uc for uc in use_case if uc.startswith("hgv_")]
+        miv_use_cases = [uc for uc in use_case if not uc.startswith("hgv_")]
+
         cp_df = edisgo_obj.topology.loads_df[
             edisgo_obj.topology.loads_df.type == "charging_point"
         ]
-        cps = cp_df[cp_df.sector.isin(use_case)]
 
-        # set up time index
-        start_date = self.simbev_config_df.start_date.values[0]
-        # end date from SimBEV includes to the specified day, wherefore 1 day needs
-        # to be added to have the day included in the time index
-        end_date = self.simbev_config_df.end_date.values[0] + pd.Timedelta(1, "day")
-        stepsize = self.stepsize
-        flex_band_index = pd.date_range(
-            start=start_date, end=end_date, freq=f"{stepsize}min", inclusive="left"
-        )
-        # check if maximum end time step in charging data is larger than length of
-        # time index and if so, expand time index and raise warning
-        t_max = self.charging_processes_df.park_end_timesteps.max()
-        if len(flex_band_index) < t_max:
-            logger.warning(
-                "Time steps in charging processes exceed time steps specified in "
-                "SimBEV config data."
+        # --- Build bands per domain, then merge column-wise ---
+        band_parts = {"upper_power": [], "upper_energy": [], "lower_energy": []}
+        flex_band_index = None
+        effective_stepsize = None  # minimum stepsize across all domains for resample check
+        domain_etas = []  # collect eta per domain for integrity check
+
+        domains = []
+        if hgv_use_cases:
+            domains.append((
+                hgv_use_cases,
+                self.hgv_config_df,
+                self.hgv_charging_processes_df,
+                self.hgv_integrated_charging_parks_df,
+                float(self.hgv_config_df.at[0, "eta_cp"])
+                if not self.hgv_config_df.empty else 1.0,
+            ))
+        if miv_use_cases:
+            domains.append((
+                miv_use_cases,
+                self.simbev_config_df,
+                self.charging_processes_df,
+                self.integrated_charging_parks_df,
+                edisgo_obj.electromobility.eta_charging_points,
+            ))
+
+        for domain_use_cases, config_df, processes_df, parks_df, eta in domains:
+            cps = cp_df[cp_df.sector.isin(domain_use_cases)]
+
+            # set up time index
+            start_date = config_df.start_date.values[0]
+            # end date includes to the specified day; add 1 day to include it
+            end_date = config_df.end_date.values[0] + pd.Timedelta(1, "day")
+            stepsize = int(config_df.at[0, "stepsize"])
+            domain_index = pd.date_range(
+                start=start_date, end=end_date, freq=f"{stepsize}min", inclusive="left"
             )
-            flex_band_index = pd.date_range(
-                start=start_date, periods=t_max + 1, freq=f"{stepsize}min"
-            )
-
-        # set up bands
-        tmp_idx = range(len(flex_band_index))
-        upper_power = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
-        upper_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
-        lower_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
-        hourly_steps = 60 / self.stepsize
-        for cp in cps.index:
-            # get index of charging park used in charging processes
-            charging_park_id = self.integrated_charging_parks_df.loc[
-                self.integrated_charging_parks_df.edisgo_id == cp
-            ].index
-            # get relevant charging processes
-            charging_processes = self.charging_processes_df.loc[
-                self.charging_processes_df.charging_park_id.isin(charging_park_id)
-            ]
-            # iterate through charging processes and fill matrices
-            for idx, charging_process in charging_processes.iterrows():
-                # Last time steps can lead to problems --> skip
-                if charging_process.park_end_timesteps == max(tmp_idx):
-                    continue
-
-                start = charging_process.park_start_timesteps
-                end = charging_process.park_end_timesteps
-                power = charging_process.nominal_charging_capacity_kW
-
-                # charging power
-                upper_power.loc[start:end, cp] += (
-                    power / edisgo_obj.electromobility.eta_charging_points
-                )
-                # energy bands
-                charging_time = (
-                    charging_process.chargingdemand_kWh / power * hourly_steps
-                )
-                if charging_time - (end - start + 1) > 1e-6:
-                    raise ValueError(
-                        f"Charging demand cannot be fulfilled for charging process {idx}. "
-                        "Please check."
+            # check if maximum end time step in charging data exceeds time index
+            if not processes_df.empty:
+                t_max = processes_df.park_end_timesteps.max()
+                if len(domain_index) < t_max:
+                    logger.warning(
+                        "Time steps in charging processes exceed time steps specified in "
+                        "config data."
                     )
-                full_charging_steps = int(charging_time)
-                part_time_step = charging_time - full_charging_steps
-                # lower band
-                lower_energy.loc[end - full_charging_steps + 1 : end, cp] += power
-                if part_time_step != 0.0:
-                    lower_energy.loc[end - full_charging_steps, cp] += (
+                    domain_index = pd.date_range(
+                        start=start_date, periods=t_max + 1, freq=f"{stepsize}min"
+                    )
+
+            # all domains must share the same time index length for merging
+            if flex_band_index is None:
+                flex_band_index = domain_index
+            elif len(flex_band_index) != len(domain_index):
+                logger.warning(
+                    "HGV and MIV time indices have different lengths; using the longer one."
+                )
+                if len(domain_index) > len(flex_band_index):
+                    flex_band_index = domain_index
+
+            tmp_idx = range(len(domain_index))
+            upper_power = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+            upper_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+            lower_energy = pd.DataFrame(index=tmp_idx, columns=cps.index, data=0)
+            hourly_steps = 60 / stepsize
+
+            for cp in cps.index:
+                # get index of charging park used in charging processes
+                charging_park_id = parks_df.loc[
+                    parks_df.edisgo_id == cp
+                ].index
+                # get relevant charging processes
+                charging_processes = processes_df.loc[
+                    processes_df.charging_park_id.isin(charging_park_id)
+                ]
+                # iterate through charging processes and fill matrices
+                for idx, charging_process in charging_processes.iterrows():
+                    # Last time steps can lead to problems --> skip
+                    if charging_process.park_end_timesteps == max(tmp_idx):
+                        continue
+
+                    start = charging_process.park_start_timesteps
+                    end = charging_process.park_end_timesteps
+                    power = charging_process.nominal_charging_capacity_kW
+
+                    # charging power
+                    upper_power.loc[start:end, cp] += power / eta
+                    # energy bands
+                    charging_time = (
+                        charging_process.chargingdemand_kWh / power * hourly_steps
+                    )
+                    if charging_time - (end - start + 1) > 1e-6:
+                        raise ValueError(
+                            f"Charging demand cannot be fulfilled for charging process "
+                            f"{idx}. Please check."
+                        )
+                    full_charging_steps = int(charging_time)
+                    part_time_step = charging_time - full_charging_steps
+                    # lower band
+                    lower_energy.loc[end - full_charging_steps + 1 : end, cp] += power
+                    if part_time_step != 0.0:
+                        lower_energy.loc[end - full_charging_steps, cp] += (
+                            part_time_step * power
+                        )
+                    # upper band
+                    upper_energy.loc[start : start + full_charging_steps - 1, cp] += power
+                    upper_energy.loc[start + full_charging_steps, cp] += (
                         part_time_step * power
                     )
-                # upper band
-                upper_energy.loc[start : start + full_charging_steps - 1, cp] += power
-                upper_energy.loc[start + full_charging_steps, cp] += (
-                    part_time_step * power
-                )
 
-        # convert to MW and cumulate energy
-        upper_power = upper_power / 1e3
-        lower_energy = lower_energy.cumsum() / hourly_steps / 1e3
-        upper_energy = upper_energy.cumsum() / hourly_steps / 1e3
+            # convert to MW and cumulate energy
+            upper_power = upper_power / 1e3
+            lower_energy = lower_energy.cumsum() / hourly_steps / 1e3
+            upper_energy = upper_energy.cumsum() / hourly_steps / 1e3
+
+            band_parts["upper_power"].append(upper_power)
+            band_parts["upper_energy"].append(upper_energy)
+            band_parts["lower_energy"].append(lower_energy)
+            domain_etas.append(eta)
+
+        # merge domain results column-wise
+        upper_power = pd.concat(band_parts["upper_power"], axis=1)
+        upper_energy = pd.concat(band_parts["upper_energy"], axis=1)
+        lower_energy = pd.concat(band_parts["lower_energy"], axis=1)
 
         # set time index
         upper_power.index = flex_band_index
@@ -494,8 +592,8 @@ class Electromobility:
         }
         self.flexibility_bands = flex_band_dict
 
-        # fix rounding errors
-        self.fix_flexibility_bands_rounding_errors(tol=tol)
+        # fix rounding errors — use minimum eta across domains (most conservative)
+        self.fix_flexibility_bands_rounding_errors(tol=tol, efficiency=min(domain_etas))
 
         edisgo_timeindex = edisgo_obj.timeseries.timeindex
         if resample:
@@ -504,12 +602,12 @@ class Electromobility:
             if len(edisgo_timeindex) > 1:
                 # check if frequencies match
                 freq_edisgo = edisgo_timeindex[1] - edisgo_timeindex[0]
-                if freq_edisgo != pd.Timedelta(f"{stepsize}min"):
+                if freq_edisgo != (flex_band_index[1] - flex_band_index[0]):
                     # resample
                     self.resample(freq=freq_edisgo)
 
-        # sanity check
-        self.check_integrity()
+        # sanity check — use minimum eta across domains (most conservative)
+        self.check_integrity(efficiency=min(domain_etas))
         # check time index
         if len(edisgo_timeindex) > 0:
             missing_indices = [_ for _ in edisgo_timeindex if _ not in flex_band_index]
@@ -521,7 +619,7 @@ class Electromobility:
                 )
         return self.flexibility_bands
 
-    def fix_flexibility_bands_rounding_errors(self, tol=1e-6):
+    def fix_flexibility_bands_rounding_errors(self, tol=1e-6, efficiency=None):
         """
         Fixes possible rounding errors that may lead to failing integrity checks.
 
@@ -555,7 +653,8 @@ class Electromobility:
         if flex_band.empty:
             return
 
-        efficiency = self.eta_charging_points
+        if efficiency is None:
+            efficiency = self.eta_charging_points
         freq_orig = flex_band.index[1] - flex_band.index[0]
         hourly_steps = int(60 / (freq_orig.total_seconds() / 60))
 
@@ -743,13 +842,21 @@ class Electromobility:
                     df_dict[band] = df_dict[band].resample(freq).max()
         self.flexibility_bands = df_dict
 
-    def check_integrity(self):
+    def check_integrity(self, efficiency=None):
         """
         Method to check the integrity of the Electromobility object.
 
         Raises an error in case any of the checks fails.
 
         Currently only checks integrity of flexibility bands.
+
+        Parameters
+        ----------
+        efficiency : float or None
+            Charging point efficiency to use in the check. If None, falls back
+            to ``eta_charging_points`` (MIV value from ``simbev_config_df``).
+            Pass the correct eta when flex bands contain only HGV CPs (eta=1.0)
+            or a mix of domains.
 
         """
         # pick random flex band for some pre-checks
@@ -759,7 +866,8 @@ class Electromobility:
         if flex_band.empty:
             return
 
-        efficiency = self.eta_charging_points
+        if efficiency is None:
+            efficiency = self.eta_charging_points
         freq_orig = flex_band.index[1] - flex_band.index[0]
         hourly_steps = int(60 / (freq_orig.total_seconds() / 60))
 

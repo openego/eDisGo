@@ -33,7 +33,7 @@ if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
 
 if TYPE_CHECKING:
-    from edisgo import EDisGo
+    from edisgo.edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
 
@@ -1385,3 +1385,237 @@ def charging_processes_from_oedb(
         charging_park_id=np.nan,
         charging_point_id=np.nan,
     ).astype(DTYPES["charging_processes_df"])
+
+
+SCENARIO_MAP_HGV = {"reGon2037": "C 2037", "reGon2045": "C 2045"}
+
+
+def import_hgv_charging(
+    edisgo_obj,
+    scenario: str,
+    engine=None,
+    files_dir=None,
+):
+    """
+    Import HGV charging sites into an eDisGo object.
+
+    Integrates HGV charging points into the grid topology for the MV district
+    given by ``edisgo_obj.topology.id``. Populates:
+
+    * ``topology.loads_df`` — one load per CP with ``type="charging_point"``,
+      ``annual_consumption`` [MWh] per CP
+    * ``electromobility.hgv_integrated_charging_parks_df``
+    * ``electromobility.hgv_charging_processes_df``
+    * ``electromobility.hgv_config_df``
+
+    No timeseries are set here. Call
+    ``set_time_series_active_power_predefined`` or
+    ``electromobility.get_flexibility_bands`` afterward.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    scenario : str
+        Scenario name — ``"reGon2037"`` or ``"reGon2045"``.
+    engine : sqlalchemy.Engine, optional
+        DB engine (egon-data read replica). Required if ``files_dir`` is None.
+    files_dir : str or pathlib.Path, optional
+        Path to standalone-script output directory (for testing without DB).
+        Required if ``engine`` is None.
+    """
+    if engine is None and files_dir is None:
+        raise ValueError("Provide either 'engine' or 'files_dir'.")
+
+    mv_grid_id = edisgo_obj.topology.id
+
+    # ------------------------------------------------------------------ #
+    # 1. Load data                                                         #
+    # ------------------------------------------------------------------ #
+    if engine is not None:
+        sites = gpd.read_postgis(
+            f"SELECT * FROM demand.egon_hgv_charging_site "
+            f"WHERE mv_grid_id = {mv_grid_id} AND scenario = '{scenario}'",
+            engine,
+            geom_col="geom",
+            crs=3035,
+        )
+        if sites.empty:
+            logger.info(
+                f"No HGV charging sites found for mv_grid_id={mv_grid_id}, "
+                f"scenario={scenario}."
+            )
+            return
+
+        site_ids_sql = (
+            f"({sites['site_id'].iloc[0]})"
+            if len(sites) == 1
+            else str(tuple(sites["site_id"].tolist()))
+        )
+        cps = pd.read_sql(
+            f"SELECT * FROM demand.egon_hgv_charging_point "
+            f"WHERE scenario = '{scenario}' AND site_id IN {site_ids_sql}",
+            engine,
+        )
+        events = pd.read_sql(
+            f"SELECT * FROM demand.egon_hgv_charging_event "
+            f"WHERE scenario = '{scenario}' AND site_id IN {site_ids_sql}",
+            engine,
+        )
+        prof_df = pd.read_sql(
+            f"SELECT sector, profile FROM demand.egon_hgv_profile "
+            f"WHERE scenario = '{scenario}'",
+            engine,
+        )
+        prof_dict = {
+            r["sector"]: np.array(json.loads(r["profile"]))
+            for _, r in prof_df.iterrows()
+        }
+    else:
+        files_dir = Path(files_dir)
+        sites_all = gpd.read_file(files_dir / "egon_hgv_charging_site.gpkg")
+        sites = sites_all[sites_all["scenario"] == scenario].copy()
+        mv_geom = edisgo_obj.topology.grid_district["geom"]
+        srid = edisgo_obj.topology.grid_district.get("srid", 4326)
+        sites = sites.loc[sites.to_crs(srid).geometry.within(mv_geom)].copy()
+        if sites.empty:
+            logger.info(
+                f"No HGV charging sites found in files_dir for mv_grid_id={mv_grid_id}, "
+                f"scenario={scenario}."
+            )
+            return
+
+        site_ids = set(sites["site_id"].tolist())
+        cps_all = pd.read_csv(files_dir / "egon_hgv_charging_point.csv")
+        cps = cps_all[
+            (cps_all["scenario"] == scenario) & (cps_all["site_id"].isin(site_ids))
+        ].copy()
+        events_all = pd.read_csv(files_dir / "egon_hgv_charging_event.csv")
+        events = events_all[
+            (events_all["scenario"] == scenario) & (events_all["site_id"].isin(site_ids))
+        ].copy()
+        prof_all = pd.read_csv(files_dir / "egon_hgv_profile.csv")
+        prof_all = prof_all[prof_all["scenario"] == scenario]
+        prof_dict = {
+            r["sector"]: np.array(json.loads(r["profile"]))
+            for _, r in prof_all.iterrows()
+        }
+
+    # Reproject sites to the CRS used by eDisGo (grid_district srid, typically 4326)
+    target_srid = edisgo_obj.topology.grid_district.get("srid", 4326)
+    sites = sites.to_crs(target_srid)
+
+    # ------------------------------------------------------------------ #
+    # 2. Compute per-CP annual consumption                                 #
+    # ------------------------------------------------------------------ #
+    # Highway profiles are independently normalized (each sums to 1).
+    # The day/night energy split is encoded in the profile shapes via the
+    # raw Fraunhofer fractions — stored on the site as el_demand_day/night_*.
+    # annual_consumption for each highway CP = el_demand_{day|night}_mwh.
+    # Timeseries scaling: ts[t] = profile[t] * annual_consumption_mwh [MW]
+    # (profile sums to 1; product gives average power in MW for each 1h timestep).
+
+    def _cp_annual_consumption(site, cp):
+        if site["location_type"] == "depot":
+            return float(site[f"el_demand_{cp['vehicle_class']}_mwh"])
+        else:
+            # highway: day CP uses el_demand_day_mwh, night CP uses el_demand_night_mwh
+            return float(site[f"el_demand_{cp['time_of_day']}_mwh"])
+
+    # ------------------------------------------------------------------ #
+    # 3. Integrate sites into grid topology                               #
+    # ------------------------------------------------------------------ #
+    edisgo_id_map = {}         # cp_id (int) → load name in loads_df
+    annual_consumption_map = {}  # cp_id (int) → annual_consumption [MWh]
+    cps_by_site = cps.groupby("site_id")
+
+    for _, site in sites.iterrows():
+        # anchor: use p_set_aggregated_mw to place the site on the correct bus
+        anchor_name = edisgo_obj.integrate_component_based_on_geolocation(
+            comp_type="charging_point",
+            geolocation=site.geometry,
+            add_ts=False,
+            p_set=site["p_set_aggregated_mw"],
+            sector="hgv_anchor",
+        )
+        bus = edisgo_obj.topology.loads_df.loc[anchor_name, "bus"]
+        edisgo_obj.topology.loads_df.drop(anchor_name, inplace=True)
+
+        if site["site_id"] not in cps_by_site.groups:
+            continue
+        for _, cp in cps_by_site.get_group(site["site_id"]).iterrows():
+            annual_consumption = _cp_annual_consumption(site, cp)
+            load_name = edisgo_obj.topology.add_load(
+                bus=bus,
+                p_set=cp["p_set_mw"],
+                type="charging_point",
+                sector=cp["sector"],
+                annual_consumption=annual_consumption,
+                load_id=f"hgv_{int(cp['cp_id'])}",
+            )
+            edisgo_id_map[int(cp["cp_id"])] = load_name
+            annual_consumption_map[int(cp["cp_id"])] = annual_consumption
+
+    # ------------------------------------------------------------------ #
+    # 4. Populate hgv_integrated_charging_parks_df                        #
+    # ------------------------------------------------------------------ #
+    edisgo_obj.electromobility.hgv_integrated_charging_parks_df = pd.DataFrame(
+        {
+            "edisgo_id": list(edisgo_id_map.values()),
+            "annual_consumption_mwh": list(annual_consumption_map.values()),
+        },
+        index=pd.Index(list(edisgo_id_map.keys()), name="charging_park_id"),
+    )
+
+    # ------------------------------------------------------------------ #
+    # 5. Populate hgv_charging_processes_df                               #
+    # ------------------------------------------------------------------ #
+    if not events.empty:
+        sector_map = cps.set_index("cp_id")["sector"].to_dict()
+        procs = events.rename(columns={
+            "cp_id": "charging_park_id",
+            # DB names → eDisGo charging_processes_df names
+            "charging_demand": "chargingdemand_kWh",
+            "charging_capacity_nominal": "nominal_charging_capacity_kW",
+            "park_start": "park_start_timesteps",
+            "park_end": "park_end_timesteps",
+        }).copy()
+        procs["car_id"] = range(len(procs))
+        procs["ags"] = 0
+        procs["destination"] = procs["charging_park_id"].map(sector_map)
+        procs["use_case"] = procs["destination"]
+        procs["grid_charging_capacity_kW"] = procs["nominal_charging_capacity_kW"]
+        procs["park_time_timesteps"] = (
+            procs["park_end_timesteps"] - procs["park_start_timesteps"] + 1
+        )
+        procs["charging_point_id"] = np.nan
+        keep_cols = COLUMNS["charging_processes_df"] + ["charging_park_id", "charging_point_id"]
+        edisgo_obj.electromobility.hgv_charging_processes_df = procs[
+            keep_cols
+        ].astype(DTYPES["charging_processes_df"])
+    else:
+        edisgo_obj.electromobility.hgv_charging_processes_df = pd.DataFrame(
+            columns=COLUMNS["charging_processes_df"] + ["charging_park_id", "charging_point_id"]
+        )
+
+    # ------------------------------------------------------------------ #
+    # 6. Populate hgv_config_df                                           #
+    # ------------------------------------------------------------------ #
+    edisgo_obj.electromobility.hgv_config_df = pd.DataFrame(
+        [
+            {
+                "eta_cp": 1.0,
+                "stepsize": 60,
+                "start_date": pd.Timestamp("2011-01-01"),
+                "end_date": pd.Timestamp("2011-12-31"),
+                "soc_min": 0.0,
+                "grid_timeseries": False,
+                "grid_timeseries_by_usecase": False,
+                "days": 365,
+            }
+        ]
+    ).astype(DTYPES["simbev_config_df"])
+
+    logger.info(
+        f"Imported {len(sites)} HGV sites, {len(edisgo_id_map)} CPs for "
+        f"mv_grid_id={mv_grid_id}, scenario={scenario}."
+    )
