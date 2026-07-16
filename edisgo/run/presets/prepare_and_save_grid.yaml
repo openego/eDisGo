@@ -1,0 +1,110 @@
+_comment: |
+  UC5 — OPF with configurable timestep selection (manual OR auto):
+  Like UC4 (full flexibility OPF with HV requirements), but the time index
+  is reduced to a selected subset instead of a fixed window. The mode is
+  chosen in the timeseries_selection block below (typically overridden in
+  the run script).
+
+  The pipeline carries TWO select_timesteps steps, each with a `position`:
+  - position: pre_import  (before import_heat_pumps) — acts only in MANUAL
+    mode. It sets the explicit time index, which the heat-pump/DSM imports
+    and oedb_ts then use to fetch only the selected steps (cheap).
+  - position: post_grid   (after import_overlying_grid_data, before
+    reactive_power) — acts only in AUTO mode. It needs all active-power
+    time series (incl. overlying-grid generation) set to run the scoring
+    power flow via get_most_critical_time_intervals.
+  Whichever mode is configured, the other positioned step is a no-op.
+
+  Auto mode normally yields two disconnected intervals (one overloading,
+  one voltage). They are kept separate (a gap in the time index); if they
+  overlap, a non-overlapping pair is chosen if possible, otherwise they are
+  concatenated into one interval. A later optimize step can detect the gap
+  and run separate optimizations per interval.
+
+_workflow:
+  - setup_grid: load ding0 topology
+  - import_generators / import_home_batteries
+  - select_timesteps (pre_import): manual only — set explicit time index
+  - import_heat_pumps / import_dsm: fetch only selected steps (manual)
+  - import_electromobility: dumb charging, flex bands
+  - oedb_ts: real wind/solar + load time series
+  - apply_charging_strategy / apply_heat_pump_strategy
+  - build_flexibility_bands: EV bands on the fixed hourly index
+  - import_overlying_grid_data: HV constraints from CSV dir
+  - select_timesteps (post_grid): auto only — reduce to critical intervals
+  - reactive_power: fixed cosphi on the reduced index
+  - optimize: pm_optimize with flex assets
+  - reinforce / save
+
+# Self-contained (no `extends`): everything uc4_example provided is inlined
+# below, so this preset can be run on its own via
+#   run_edisgo({"extends": "uc5_select_timesteps", "grid": {"ding0_path": ...}})
+scenario: eGon2035
+
+grid:
+  ding0_path: "/path/to/ding0_grid"
+  legacy_ding0_grids: false
+
+database:
+  local
+
+# No explicit base time index is set. oedb_ts falls back to a full year derived
+# from the scenario when none is given, which is what auto interval selection
+# needs (week-long critical intervals to pick from). For manual selection the
+# pre-import select_timesteps step sets the index instead.
+
+overlying_grid:
+  enabled: true          # set true to activate import_overlying_grid_data
+  source: csv            # "csv" (load from path) or "etrago" (kwarg)
+  path: "/storage/JoDa/edisgo_playground/overlying_grid_data"
+
+results:
+  directory: results/uc5_select_timesteps
+
+# Top-level block read by the select_timesteps task via ctx.raw_config.
+# eGo can inject this block the same way it injects overlying_grid.
+# Set `mode` (and its parameters) here or override it in the run script.
+timeseries_selection:
+  mode: auto
+  # auto method: "power_flow" (default, scores intervals via a power flow) or
+  # "residual_load" (no power flow — the weeks ending at the max/min residual-load
+  # time steps; requires overlying-grid data).
+  method: residual_load
+  # --- shared auto parameters (both methods) ---
+  time_steps_per_time_interval: 168  # one week (must be a multiple of 24)
+  time_step_day_start: 4             # hour of day the intervals start/end on
+  # --- power_flow method parameters ---
+  percentage: 1.0
+  save_steps: true                   # write selected intervals CSV to results_dir
+  use_troubleshooting_mode: true     # handle power-flow non-convergence
+  overloading_factor: 0.95
+  voltage_deviation_factor: 0.95
+  # --- manual parameters (used when mode: manual) ---
+  # timestamps: ["2035-01-15 08:00", "2035-01-15 9:00", "2035-01-15 10:00"]
+  # or a range instead of `timestamps`:
+  start: "2035-01-15 00:00"
+  periods: 24
+  freq: h
+
+pipeline:
+  - setup_grid
+  - import_generators
+  - import_home_batteries
+  - select_timesteps: {position: pre_import}   # acts in manual mode only
+  - import_heat_pumps
+  - import_dsm
+  - import_electromobility:
+      charging_strategy: null
+      # flexibility bands are built later (build_flexibility_bands), once the
+      # analysis time index is fixed, so they are resampled to it
+  - oedb_ts:
+      dispatchable: {other: 0.7}
+  - apply_charging_strategy: {strategy: dumb}
+  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - build_flexibility_bands                    # hourly bands on the 2035 index
+  - save:
+      archive: true
+      save_heatpump: true
+      save_electromobility: true
+      save_timeseries: true
+      save_dsm: true
