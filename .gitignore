@@ -29,3 +29,10 @@ eDisGo.egg-info/
 .vscode/settings.json
 
 *OEP_TOKEN.*
+
+# local-only notes, not for sharing on this branch
+/CONTEXT.md
+/docs_notes/spatial_reduction_grilling_session.md
+/docs_notes/issue_spatial_complexity_reduction_pipeline_integration.md
+/docs_notes/issue_aggregation_mode_flexibility_bands_not_aggregated.md
+/docs_notes/issue_temporal_reduction_flexibility_bands.md
