@@ -90,7 +90,6 @@ pipeline:
   - setup_grid
   - import_generators
   - import_home_batteries
-  - select_timesteps: {position: pre_import}   # acts in manual mode only
   - import_heat_pumps
   - import_dsm
   - import_electromobility:
