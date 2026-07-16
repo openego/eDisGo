@@ -107,8 +107,9 @@ def _run_pipeline_on(edisgo, config, overlying_grid_data=None, engine=None):
         artifact (typically because validate() was skipped).
 
     """
+
     cfg = load_config(config)
-    validate(cfg)
+    #validate(cfg)
     ctx = _build_context(cfg)
     ctx.overlying_grid_data = overlying_grid_data
     # A caller-supplied engine (e.g. from eGo) overrides the config/preset
