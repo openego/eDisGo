@@ -401,7 +401,8 @@ class TestSpatialComplexityReduction:
 
 class TestApplyReducedResultsToFullGrid:
     """
-    Tests for :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`.
+    Tests for
+    :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`.
 
     Uses stub OPF results (directly writing to
     ``reduced_grid.timeseries._loads_active_power`` /
@@ -528,9 +529,7 @@ class TestApplyReducedResultsToFullGrid:
             4.0,
         ]
 
-    def test_disaggregation_multi_member_sums_to_representative(
-        self, full_and_reduced
-    ):
+    def test_disaggregation_multi_member_sums_to_representative(self, full_and_reduced):
         full_grid, reduced_grid = full_and_reduced
         ti = full_grid.timeseries.timeindex
         rep = self._first_representative_with(reduced_grid, n_members=2)
@@ -552,9 +551,9 @@ class TestApplyReducedResultsToFullGrid:
         assert np.allclose(total.values, rep_power.values)
         # Member with zero envelope at t0/t2/t3 gets none of the dispatch;
         # both members zero at t1 falls back to an equal split.
-        assert result.timeseries.loads_active_power.at[ti[1], members[0]] == pytest.approx(
-            rep_power.iloc[1] / 2
-        )
+        assert result.timeseries.loads_active_power.at[
+            ti[1], members[0]
+        ] == pytest.approx(rep_power.iloc[1] / 2)
 
     def test_disaggregation_singleton_renamed_representative(self, full_and_reduced):
         # Regression test: under aggregation_mode=True, spatial_complexity_

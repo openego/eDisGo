@@ -269,9 +269,7 @@ class EDisGo:
         """
         from edisgo.run import _run_pipeline_on
 
-        return _run_pipeline_on(
-            self, config, overlying_grid_data=overlying_grid_data
-        )
+        return _run_pipeline_on(self, config, overlying_grid_data=overlying_grid_data)
 
     def import_ding0_grid(self, path, legacy_ding0_grids=True):
         """
@@ -3602,7 +3600,8 @@ class EDisGo:
         untouched, since the OPF never changed their series and ``self``
         already holds the correct values for them.
 
-        See :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`
+        See
+        :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`
         for the full matching/disaggregation rules and the reactive-power
         recompute this method triggers as a side effect.
 

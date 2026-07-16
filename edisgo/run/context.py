@@ -1,3 +1,13 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """
 Runtime context passed to every task during pipeline execution.
 
@@ -19,6 +29,7 @@ Typical uses:
 Tasks should treat ``flags`` as advisory — they MAY short-circuit based
 on a flag but MUST NOT assume a flag is present.
 """
+
 from __future__ import annotations
 
 import logging
