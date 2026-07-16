@@ -502,11 +502,11 @@ def task_select_timesteps(edisgo, ctx, **overrides):
         return edisgo
 
     # auto mode
-    if not ctx.flags.get("timeseries_set"):
-        raise ValueError(
-            "select_timesteps mode 'auto' needs active-power time series to "
-            "be set first (e.g. run oedb_ts before it)."
-        )
+    # if not ctx.flags.get("timeseries_set"):
+    #     raise ValueError(
+    #         "select_timesteps mode 'auto' needs active-power time series to "
+    #         "be set first (e.g. run oedb_ts before it)."
+    #     )
 
     method = cfg.get("method", "power_flow")
     if method not in ("power_flow", "residual_load"):
