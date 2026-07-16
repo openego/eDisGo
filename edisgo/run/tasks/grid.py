@@ -261,3 +261,84 @@ def task_load_from_base(
     )
     ctx.flags["grid_loaded"] = True
     return edisgo
+
+
+@register_task("load_prebuild_grid", provides={"grid"})
+def task_load_prebuild_grid(
+    edisgo,
+    ctx,
+    *,
+    path=None,
+    reset_equipment_changes=True,
+    import_timeseries=True,
+    import_results=True,
+    import_electromobility=True,
+    import_heat_pump=True,
+    import_dsm=True,
+    import_overlying_grid=False,
+):
+    """
+    Reload an EDisGo instance from a previously saved directory/zip.
+
+    This is the two-phase R4MU workflow's entry point: stage 1
+    produces a base-reinforced grid and saves it, stage 2 (or N)
+    starts from ``load_from_base`` to pick up that grid and apply
+    scenario-specific modifications. The cost of the scenario then
+    shows up cleanly in ``equipment_changes`` because we reset it on
+    load.
+
+    Parameters
+    ----------
+    edisgo : edisgo.EDisGo or None
+        Unused — the task always replaces whatever was there.
+    ctx : RunContext
+        Run context (logger only).
+    path : str
+        Directory or ``.zip`` produced by :func:`task_save`.
+    reset_equipment_changes : bool, optional
+        If ``True`` (default), clear
+        :attr:`Results.equipment_changes` so only the scenario's
+        reinforce is tracked.
+    import_timeseries : bool, optional
+        Whether to import the saved time series. Default: ``False``
+        so the next stage sets its own.
+    import_results : bool, optional
+        Whether to import saved results. Default: ``False``.
+    import_electromobility : bool, optional
+        Whether to import saved electromobility data.
+    import_heat_pump : bool, optional
+        Whether to import saved heat-pump data.
+    import_dsm : bool, optional
+        Whether to import saved DSM data.
+    import_overlying_grid : bool, optional
+        Whether to import saved overlying-grid data (eTraGo
+        specifications).
+
+    Returns
+    -------
+    edisgo.EDisGo
+        The restored EDisGo instance.
+
+    """
+
+    if path is None:
+        grid_cfg = ctx.raw_config.get("grid", {}) or {}
+        path = grid_cfg.get("ding0_path")
+    if path is None:
+        raise ValueError(
+            "Task 'load_from_base' requires 'path' either as task "
+            "parameter or under config.grid.ding0_path."
+        )
+
+    edisgo = load_saved_edisgo(
+        path + "/" + str(ctx.results_dir).split("/")[-1] + "/main.zip",
+        reset_equipment_changes=reset_equipment_changes,
+        import_timeseries=import_timeseries,
+        import_results=import_results,
+        import_electromobility=import_electromobility,
+        import_heat_pump=import_heat_pump,
+        import_dsm=import_dsm,
+        import_overlying_grid=import_overlying_grid,
+    )
+    ctx.flags["grid_loaded"] = True
+    return edisgo
