@@ -36,3 +36,17 @@ eDisGo.egg-info/
 /docs_notes/issue_spatial_complexity_reduction_pipeline_integration.md
 /docs_notes/issue_aggregation_mode_flexibility_bands_not_aggregated.md
 /docs_notes/issue_temporal_reduction_flexibility_bands.md
+analyse_spatial_reduction_executed_example.ipynb
+analyse_spatial_reduction.ipynb
+analyse_uc5_results copy.ipynb
+analyse_uc5_results.ipynb
+handson_edisgo_starter.ipynb
+run_example_04.py
+docs_notes/ego_timeseries_selection_plan.md
+docs_notes/pr_description_spatial_complexity_reduction.md
+docs_notes/timeseries_selection_remaining_tasks.md
+results/uc4_example/main.zip
+results/uc5_select_timesteps/32377_t_168_residual_load.csv
+results/uc5_select_timesteps/main.zip
+results/uc5_spatial_reduction/main.zip
+results/uc6_spatial_reduction/main.zip
