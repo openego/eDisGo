@@ -116,8 +116,8 @@ def to_powermodels(
     pm = _init_pm()
     timesteps = len(psa_net.snapshots)  # number of considered timesteps
     pm["name"] = f"ding0_{edisgo_object.topology.id}_t_{timesteps}"
-    pm["time_elapsed"] = int(
-        (psa_net.snapshots[1] - psa_net.snapshots[0]).seconds / 3600
+    pm["time_elapsed"] = _get_time_elapsed_in_hours(
+        psa_net.snapshots
     )  # length of timesteps in hours
     pm["baseMVA"] = s_base
     pm["source_version"] = 2
@@ -794,8 +794,8 @@ def _build_branch(edisgo_obj, psa_net, pm, flexible_storage_units, s_base):
             # only modify r, x and l values if min value is too small
             branches[par] = val.clip(lower=min_value)
             logger.warning(
-                f"Min value of {text} is too small. Lowest {100 * quant}% of {text} values will be set "
-                f"to {min_value} {unit}"
+                f"Min value of {text} is too small. Lowest {100 * quant}% of "
+                f"{text} values will be set to {min_value} {unit}"
             )
 
     for branch_i in np.arange(len(branches.index)):
@@ -940,8 +940,8 @@ def _build_load(
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "charging_point")
         else:
             logger.warning(
-                f"No type specified for load {loads_df.index[load_i]}. Power factor and sign will"
-                "be set for conventional load."
+                f"No type specified for load {loads_df.index[load_i]}. "
+                " Power factor and sign will be set for conventional load."
             )
             pf, sign = _get_pf(edisgo_obj, pm, idx_bus, "conventional_load")
         p_d = psa_net.loads_t.p_set[loads_df.index[load_i]]
@@ -1226,9 +1226,9 @@ def _build_heatpump(psa_net, pm, edisgo_obj, s_base, flexible_hps):
     comparison = (heat_df2[hp_p_nom.index] > hp_cop * hp_p_nom.squeeze()).any()
     if comparison.any():
         logger.warning(
-            "Heat demand is higher than rated heatpump power"
-            f" of heatpumps: {comparison.index[comparison.values].values}. Demand can not be covered if no sufficient"
-            " heat storage capacities are available."
+            "Heat demand is higher than rated heatpump power of heatpumps: "
+            f"{comparison.index[comparison.values].values}. Demand can not be "
+            "covered if no sufficient heat storage capacities are available."
         )
     for hp_i in np.arange(len(heat_df.index)):
         idx_bus = _mapping(psa_net, edisgo_obj, heat_df.bus.iloc[hp_i])
@@ -1934,6 +1934,42 @@ def _build_component_timeseries(
             }
 
     pm["time_series"][kind] = pm_comp
+
+
+def _get_time_elapsed_in_hours(snapshots):
+    """
+    Calculate time elapsed in hours between two consecutive snapshots.
+
+    Parameters
+    ----------
+    snapshots : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        DatetimeIndex of snapshots.
+
+    Returns
+    -------
+    float
+        Time elapsed in hours between two consecutive snapshots.
+    """
+    if len(snapshots) < 2:
+        raise ValueError(
+            "At least two snapshots are required to determine time_elapsed "
+            "for the PowerModels OPF."
+        )
+
+    snapshot_deltas = snapshots.to_series().diff().dropna()
+
+    if not (snapshot_deltas == snapshot_deltas.iloc[0]).all():
+        raise ValueError(
+            "PowerModels OPF requires equidistant snapshots because "
+            "inter-timestep couplings use one global time_elapsed value."
+        )
+
+    time_elapsed = snapshot_deltas.iloc[0].total_seconds() / 3600
+
+    if time_elapsed <= 0:
+        raise ValueError("Snapshot time step must be positive.")
+
+    return time_elapsed
 
 
 def _mapping(
