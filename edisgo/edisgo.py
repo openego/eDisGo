@@ -79,6 +79,38 @@ if "READTHEDOCS" not in os.environ:
 logger = logging.getLogger(__name__)
 
 
+def _check_timeindex_coverage(timeindex, name, df):
+    """
+    Raises ``ValueError`` if `df` has columns but is missing data for a time
+    step in `timeindex`.
+
+    Used by :attr:`~.edisgo.EDisGo.set_time_series_manual` to enforce that
+    user-provided time series actually cover the active timeindex, instead of
+    silently writing a partially- or non-overlapping series. A DataFrame with
+    no columns is exempt - nothing is being written, so there is nothing to
+    validate coverage for.
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time index to check coverage against. Assumed non-empty by the
+        caller.
+    name : str
+        Parameter name to reference in the raised error message.
+    df : :pandas:`pandas.DataFrame<DataFrame>` or None
+        DataFrame to check. Skipped if ``None`` or has no columns.
+
+    """
+    if df is None or df.shape[1] == 0:
+        return
+    missing = timeindex.difference(df.index)
+    if len(missing) > 0:
+        raise ValueError(
+            f"'{name}' does not cover the current timeindex - missing time "
+            f"steps: {list(missing)}."
+        )
+
+
 class EDisGo:
     """
     Provides the top-level API for invocation of data import, power flow
@@ -351,7 +383,11 @@ class EDisGo:
         providing the input parameter 'timeindex' or using the function
         :attr:`~.edisgo.EDisGo.set_timeindex`.
         Also make sure that the time steps for which time series are provided include
-        the set time index.
+        the set time index - this is now enforced: a `ValueError` is raised if a
+        non-empty DataFrame is missing data for a time step in
+        :attr:`~.network.timeseries.TimeSeries.timeindex` when a time index is
+        already set. A DataFrame with no columns is exempt from this check (nothing
+        is being written, so there is nothing to validate coverage for).
 
         """
         # check if time index is already set, otherwise raise warning
@@ -362,6 +398,16 @@ class EDisGo:
                 "upon initialisation of the EDisGo object by providing the input "
                 "parameter 'timeindex' or using the function EDisGo.set_timeindex()."
             )
+        else:
+            for name, df in (
+                ("generators_p", generators_p),
+                ("loads_p", loads_p),
+                ("storage_units_p", storage_units_p),
+                ("generators_q", generators_q),
+                ("loads_q", loads_q),
+                ("storage_units_q", storage_units_q),
+            ):
+                _check_timeindex_coverage(self.timeseries.timeindex, name, df)
         self.timeseries.set_active_power_manual(
             self,
             ts_generators=generators_p,
