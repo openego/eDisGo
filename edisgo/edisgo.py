@@ -2376,6 +2376,16 @@ class EDisGo:
             pumps for which COP information in :attr:`~.edisgo.EDisGo.heat_pump` is
             given are used. Default: None.
 
+        Notes
+        -----
+        The written load time series are scoped to
+        :attr:`~.network.timeseries.TimeSeries.timeindex`, regardless of
+        whether :attr:`~.edisgo.EDisGo.heat_pump`'s COP/heat demand time
+        series currently span a wider or different range. Raises
+        ``KeyError`` if they are missing data for a time step in the active
+        timeindex - see :func:`~.flex_opt.heat_pump_operation.operating_strategy`
+        for details.
+
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
