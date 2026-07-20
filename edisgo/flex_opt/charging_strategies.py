@@ -89,7 +89,29 @@ def charging_strategy(
         :attr:`~.edisgo.EDisGo.apply_charging_strategy` for more information.
         Default: 0.1.
 
+    Notes
+    -----
+    The written ``loads_active_power``/``loads_reactive_power`` are trimmed to
+    ``edisgo_obj.timeseries.timeindex`` when its frequency already matches the
+    SimBEV charging-process data's ``stepsize`` (the common case). When it
+    doesn't, this function internally resamples ``edisgo_obj.timeseries`` to
+    SimBEV's frequency and back (see the frequency-mismatch warning below);
+    that round-trip currently fabricates a contiguous timeindex, which can
+    reopen a gap left by ``select_timesteps`` (auto mode). The trim is
+    skipped in that case rather than risk operating on the wrong window -
+    tracked as a known limitation in
+    ``docs_notes/issue_temporal_reduction_flexibility_bands.md``.
+
     """
+    # Capture the target time index before any internal frequency resampling
+    # (below) can mutate it. `TimeSeries.resample` fabricates a contiguous
+    # index spanning first-to-last timestamp, which would silently reopen any
+    # gap `select_timesteps` (auto mode) deliberately left in the timeindex -
+    # trimming against this entry-time snapshot instead ensures only the
+    # steps actually selected by the caller are written. Only used when no
+    # internal resample round-trip happens (see Notes above).
+    target_timeindex = edisgo_obj.timeseries.timeindex
+
     # get integrated charging parks
     integrated_parks = edisgo_obj.electromobility.integrated_charging_parks_df
 
@@ -364,14 +386,48 @@ def charging_strategy(
 
     if resample:
         edisgo_obj.timeseries.resample(freq=edisgo_timedelta)
+        # `TimeSeries.resample` fabricates a contiguous index spanning
+        # first-to-last timestamp, which would reopen any gap
+        # `select_timesteps` (auto mode) left in `target_timeindex`. The trim
+        # below only removes *extra trailing* rows past `target_timeindex`'s
+        # own span - it does not (and, given the above, safely cannot)
+        # reintroduce a gap `resample` already closed. Fixing that root cause
+        # in `TimeSeries.resample` itself is tracked separately (see
+        # docs_notes/issue_temporal_reduction_flexibility_bands.md); until
+        # then, a `select_timesteps`-produced gap combined with a
+        # SimBEV/edisgo frequency mismatch is a known limitation here.
+    else:
+        # Trim the newly written columns down to the target time index. The
+        # writes above (all three strategies) span the full SimBEV
+        # simulation length rather than the active timeindex.
+        # `TimeSeries.loads_active_power` itself already scopes reads to
+        # `self.timeindex`, but the private `_loads_active_power` can still
+        # carry the untrimmed rows (visible to anything reading the private
+        # attribute directly, e.g. `reduce_timeseries_data_to_given_timeindex`)
+        # - rebuild just the touched columns via drop+add so only the extra
+        # rows for `edisgo_ids_to_update` are removed, leaving other
+        # components untouched.
+        trimmed_active_power = edisgo_obj.timeseries._loads_active_power.loc[
+            :, edisgo_ids_to_update
+        ].reindex(target_timeindex)
+        edisgo_obj.timeseries.drop_component_time_series(
+            "loads_active_power", edisgo_ids_to_update
+        )
+        edisgo_obj.timeseries.add_component_time_series(
+            "loads_active_power", trimmed_active_power
+        )
 
-    # set reactive power time series to 0 Mvar
+    # set reactive power time series to 0 Mvar. Use `target_timeindex` only
+    # when it still matches `edisgo_obj.timeseries.timeindex` (i.e. no
+    # internal resample round-trip happened above) - see the comment on the
+    # active-power trim above for why a resampled, gap-closed timeindex isn't
+    # safely reconcilable with `target_timeindex` here yet.
     # fmt: off
     edisgo_obj.timeseries.add_component_time_series(
         "loads_reactive_power",
         pd.DataFrame(
             data=0.0,
-            index=edisgo_obj.timeseries.timeindex,
+            index=target_timeindex if not resample else edisgo_obj.timeseries.timeindex,
             columns=edisgo_ids_to_update,
         ),
     )

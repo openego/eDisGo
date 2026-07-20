@@ -97,6 +97,63 @@ class TestChargingStrategy:
         charging_strategy(self.edisgo_obj, strategy="dumb")
         assert ts._loads_active_power.index.freqstr == "15T"
 
+    @pytest.mark.parametrize("strategy", ["dumb", "reduced", "residual"])
+    def test_charging_strategy_trims_to_short_timeindex(self, strategy):
+        """
+        Regression test for eDisGo#703: charging_strategy used to write the
+        full SimBEV-simulation-length series into loads_active_power/
+        loads_reactive_power regardless of a shorter active timeindex. When
+        the edisgo/SimBEV frequencies already match (no internal resample
+        round-trip), the written series must be trimmed to exactly
+        edisgo.timeseries.timeindex - no extra rows, no missing rows.
+        """
+        edisgo = EDisGo(ding0_grid=self.ding0_path)
+        # 15-min frequency matches the SimBEV fixture's stepsize (see
+        # metadata_simbev_run.json), so no internal resample round-trip is
+        # triggered - one day instead of the fixture's full simulated week.
+        short_timeindex = pd.date_range("1/1/2011", periods=96, freq="15min")
+        edisgo.set_timeindex(short_timeindex)
+        edisgo.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=self.simbev_path,
+            potential_charging_points_dir=self.tracbev_path,
+        )
+
+        charging_strategy(edisgo, strategy=strategy)
+
+        pd.testing.assert_index_equal(
+            edisgo.timeseries._loads_active_power.index, short_timeindex
+        )
+        pd.testing.assert_index_equal(
+            edisgo.timeseries._loads_reactive_power.index, short_timeindex
+        )
+        assert not edisgo.timeseries.loads_active_power.isna().any().any()
+
+    def test_charging_strategy_trims_to_gapped_timeindex(self):
+        """
+        Regression test for eDisGo#703: a gapped timeindex (as produced by
+        select_timesteps in auto mode) must survive charging_strategy
+        unchanged when no internal frequency resample round-trip is
+        triggered - the written series must match the gapped index exactly,
+        not a contiguous range spanning it.
+        """
+        edisgo = EDisGo(ding0_grid=self.ding0_path)
+        gapped_timeindex = pd.date_range("1/1/2011", periods=24, freq="15min").union(
+            pd.date_range("1/6/2011 18:00", periods=24, freq="15min")
+        )
+        edisgo.set_timeindex(gapped_timeindex)
+        edisgo.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=self.simbev_path,
+            potential_charging_points_dir=self.tracbev_path,
+        )
+
+        charging_strategy(edisgo, strategy="dumb")
+
+        pd.testing.assert_index_equal(
+            edisgo.timeseries._loads_active_power.index, gapped_timeindex
+        )
+
     def test_charging_strategy_with_subset_of_parks(self):
         """
         Charging strategies can be applied to different subsets of charging parks
@@ -128,7 +185,6 @@ class TestChargingStrategy:
 
         # store baseline time series for both parks
         loads_before = ts._loads_active_power.copy()
-        ts_a_before = loads_before[edisgo_id_a].copy()
         ts_b_before = loads_before[edisgo_id_b].copy()
 
         # 1) apply a strategy only to park A
@@ -152,7 +208,6 @@ class TestChargingStrategy:
 
         loads_after_second = ts._loads_active_power
         ts_a_after_second = loads_after_second[edisgo_id_a].copy()
-        ts_b_after_second = loads_after_second[edisgo_id_b].copy()
 
         # park A must not be changed by the second call that targets only park B
         pd.testing.assert_series_equal(
