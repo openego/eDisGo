@@ -1445,6 +1445,26 @@ class TestTimeSeries:
         )
         # fmt: on
 
+    def test_predefined_fluctuating_generators_by_technology_missing_timesteps(
+        self,
+    ):
+        """
+        A self-provided DataFrame missing time steps of the time index raises a
+        ValueError.
+        """
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+
+        incomplete_ts = pd.DataFrame(
+            data={"wind": [1], "solar": [3]},
+            index=timeindex[:1],
+        )
+
+        with pytest.raises(ValueError, match="ts_generators"):
+            self.edisgo.timeseries.predefined_fluctuating_generators_by_technology(
+                self.edisgo, incomplete_ts
+            )
+
     def test_predefined_fluctuating_generators_by_technology_oedb(
         self,
         mock_oep_feedin,
@@ -1616,6 +1636,26 @@ class TestTimeSeries:
             check_dtype=False,
         )
         # fmt: on
+
+    def test_predefined_dispatchable_generators_by_technology_missing_timesteps(
+        self,
+    ):
+        """
+        A self-provided DataFrame missing time steps of the time index raises a
+        ValueError.
+        """
+        timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+
+        incomplete_ts = pd.DataFrame(
+            data={"other": [5]},
+            index=timeindex[:1],
+        )
+
+        with pytest.raises(ValueError, match="ts_generators"):
+            self.edisgo.timeseries.predefined_dispatchable_generators_by_technology(
+                self.edisgo, incomplete_ts
+            )
 
     def test_predefined_conventional_loads_by_sector(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")
@@ -1881,6 +1921,26 @@ class TestTimeSeries:
             original_annual_consumption
         )
 
+    def test_predefined_conventional_loads_by_sector_raises_on_missing_timesteps(
+        self,
+    ):
+        """
+        A self-provided DataFrame missing time steps of the time index raises a
+        ValueError.
+        """
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+
+        incomplete_ts = pd.DataFrame(
+            data={"residential": [1, 2]},
+            index=timeindex[:2],
+        )
+
+        with pytest.raises(ValueError, match="ts_loads"):
+            self.edisgo.timeseries.predefined_conventional_loads_by_sector(
+                self.edisgo, incomplete_ts
+            )
+
     def test_predefined_charging_points_by_use_case(self, caplog):
         index = pd.date_range("1/1/2018", periods=3, freq="H")
         self.edisgo.timeseries.timeindex = index
@@ -1987,6 +2047,26 @@ class TestTimeSeries:
             charging_points_active_power_by_use_case.shape\
                == (3, 5)
         # fmt: on
+
+    def test_predefined_charging_points_by_use_case_raises_on_missing_timesteps(
+        self,
+    ):
+        """
+        A self-provided DataFrame missing time steps of the time index raises a
+        ValueError.
+        """
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.timeseries.timeindex = timeindex
+
+        incomplete_ts = pd.DataFrame(
+            data={"home": [1, 2]},
+            index=timeindex[:2],
+        )
+
+        with pytest.raises(ValueError, match="ts_loads"):
+            self.edisgo.timeseries.predefined_charging_points_by_use_case(
+                self.edisgo, incomplete_ts
+            )
 
     def test_fixed_cosphi(self):
         # set active power time series for fixed cosphi
