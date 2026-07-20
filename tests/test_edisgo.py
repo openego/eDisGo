@@ -225,6 +225,55 @@ class TestEDisGo:
             storage_units_ts, self.edisgo.timeseries.storage_units_reactive_power
         )
 
+    def test_set_time_series_manual_raises_on_missing_timesteps(self):
+        """
+        A DataFrame missing time steps of the time index raises a ValueError
+        instead of leaving NaN in the time series.
+        """
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        # only 2 of the 3 required time steps
+        incomplete_ts = pd.DataFrame(
+            data={"GeneratorFluctuating_15": [2.0, 5.0]},
+            index=timeindex[:2],
+        )
+
+        with pytest.raises(ValueError, match="generators_p"):
+            self.edisgo.set_time_series_manual(generators_p=incomplete_ts)
+
+    def test_set_time_series_manual_exempts_zero_column_dataframe(self):
+        """
+        A DataFrame with no columns writes nothing, so it must be exempt
+        from the timeindex-coverage check even if its (empty) column
+        selection would otherwise be checked against a mismatched index.
+        eGo passes such a DataFrame as a placeholder.
+        """
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        empty_cols_ts = pd.DataFrame(index=pd.date_range("1/1/1970", periods=1))
+
+        # must not raise
+        self.edisgo.set_time_series_manual(generators_q=empty_cols_ts)
+
+    def test_set_time_series_manual_allows_covering_superset(self):
+        """
+        A DataFrame covering the active timeindex (even as a superset with
+        extra time steps outside it) must still be accepted.
+        """
+        timeindex = pd.date_range("1/1/2018", periods=3, freq="H")
+        self.edisgo.set_timeindex(timeindex)
+
+        wider_timeindex = pd.date_range("1/1/2018", periods=5, freq="H")
+        wider_ts = pd.DataFrame(
+            data={"GeneratorFluctuating_15": [2.0, 5.0, 6.0, 7.0, 8.0]},
+            index=wider_timeindex,
+        )
+
+        # must not raise
+        self.edisgo.set_time_series_manual(generators_p=wider_ts)
+
     def test_set_time_series_active_power_predefined_demandlib_auto_sets_timeindex(
         self,
     ):
