@@ -87,6 +87,40 @@ def align_series_to_timeindex(ts, timeindex, extra_step=False):
     return ts.reindex(target)
 
 
+def check_timeindex_coverage(timeindex, name, df):
+    """
+    Raises ``ValueError`` if `df` has columns but is missing data for a time
+    step in `timeindex`.
+
+    Used by :attr:`~.edisgo.EDisGo.set_time_series_manual` and the
+    self-provided-DataFrame options of
+    :class:`~.network.timeseries.TimeSeries`'s ``predefined_*`` methods to
+    enforce that user-provided time series actually cover the active
+    timeindex, instead of silently writing a partially- or non-overlapping
+    series. A DataFrame with no columns is exempt - nothing is being
+    written, so there is nothing to validate coverage for.
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time index to check coverage against. Assumed non-empty by the
+        caller.
+    name : str
+        Parameter name to reference in the raised error message.
+    df : :pandas:`pandas.DataFrame<DataFrame>` or None
+        DataFrame to check. Skipped if ``None`` or has no columns.
+
+    """
+    if df is None or df.shape[1] == 0:
+        return
+    missing = timeindex.difference(df.index)
+    if len(missing) > 0:
+        raise ValueError(
+            f"'{name}' does not cover the current timeindex - missing time "
+            f"steps: {list(missing)}."
+        )
+
+
 def select_worstcase_snapshots(edisgo_obj):
     """
     Select two worst-case snapshots from time series
