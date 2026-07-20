@@ -69,6 +69,7 @@ from edisgo.tools.spatial_complexity_reduction import (
     spatial_complexity_reduction,
 )
 from edisgo.tools.tools import (
+    check_timeindex_coverage,
     determine_grid_integration_voltage_level,
     get_path_length_to_station,
 )
@@ -77,38 +78,6 @@ if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
 
 logger = logging.getLogger(__name__)
-
-
-def _check_timeindex_coverage(timeindex, name, df):
-    """
-    Raises ``ValueError`` if `df` has columns but is missing data for a time
-    step in `timeindex`.
-
-    Used by :attr:`~.edisgo.EDisGo.set_time_series_manual` to enforce that
-    user-provided time series actually cover the active timeindex, instead of
-    silently writing a partially- or non-overlapping series. A DataFrame with
-    no columns is exempt - nothing is being written, so there is nothing to
-    validate coverage for.
-
-    Parameters
-    ----------
-    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-        Time index to check coverage against. Assumed non-empty by the
-        caller.
-    name : str
-        Parameter name to reference in the raised error message.
-    df : :pandas:`pandas.DataFrame<DataFrame>` or None
-        DataFrame to check. Skipped if ``None`` or has no columns.
-
-    """
-    if df is None or df.shape[1] == 0:
-        return
-    missing = timeindex.difference(df.index)
-    if len(missing) > 0:
-        raise ValueError(
-            f"'{name}' does not cover the current timeindex - missing time "
-            f"steps: {list(missing)}."
-        )
 
 
 class EDisGo:
@@ -407,7 +376,7 @@ class EDisGo:
                 ("loads_q", loads_q),
                 ("storage_units_q", storage_units_q),
             ):
-                _check_timeindex_coverage(self.timeseries.timeindex, name, df)
+                check_timeindex_coverage(self.timeseries.timeindex, name, df)
         self.timeseries.set_active_power_manual(
             self,
             ts_generators=generators_p,
