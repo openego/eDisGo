@@ -2190,6 +2190,14 @@ class EDisGo:
         match the SimBEV data frequency and after determining the charging demand time
         series resampled back to the original frequency.
 
+        The written charging point time series are trimmed to
+        :attr:`~.network.timeseries.TimeSeries.timeindex` when no such frequency
+        mismatch occurs. When it does occur, the resample round-trip above
+        currently fabricates a contiguous timeindex, which can reopen a gap
+        left by a prior manual/auto time step selection - the trim is skipped
+        in that case rather than risk operating on the wrong window. See
+        :func:`~.flex_opt.charging_strategies.charging_strategy` for details.
+
         """
         charging_strategy(
             self, strategy=strategy, charging_park_ids=charging_park_ids, **kwargs
