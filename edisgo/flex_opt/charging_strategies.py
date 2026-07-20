@@ -90,6 +90,12 @@ def charging_strategy(
         :attr:`~.edisgo.EDisGo.apply_charging_strategy` for more information.
         Default: 0.1.
 
+    Notes
+    -----
+    The written ``loads_active_power`` and ``loads_reactive_power`` cover exactly
+    ``edisgo_obj.timeseries.timeindex``, also if the charging processes span a
+    longer period or the time index has gaps.
+
     """
     # get integrated charging parks
     integrated_parks = edisgo_obj.electromobility.integrated_charging_parks_df
@@ -371,13 +377,28 @@ def charging_strategy(
         # weeks), so restore the original time steps
         edisgo_obj.timeseries.timeindex = timeindex_orig
 
+    # The strategies write the charging demand over the whole period of the
+    # charging processes. Reduce the written columns to the time index, as
+    # anything reading the stored time series directly (e.g.
+    # reduce_timeseries_data_to_given_timeindex) would otherwise see the
+    # other time steps as well.
+    trimmed_active_power = edisgo_obj.timeseries._loads_active_power.loc[
+        :, edisgo_ids_to_update
+    ].reindex(timeindex_orig)
+    edisgo_obj.timeseries.drop_component_time_series(
+        "loads_active_power", edisgo_ids_to_update
+    )
+    edisgo_obj.timeseries.add_component_time_series(
+        "loads_active_power", trimmed_active_power
+    )
+
     # set reactive power time series to 0 Mvar
     # fmt: off
     edisgo_obj.timeseries.add_component_time_series(
         "loads_reactive_power",
         pd.DataFrame(
             data=0.0,
-            index=edisgo_obj.timeseries.timeindex,
+            index=timeindex_orig,
             columns=edisgo_ids_to_update,
         ),
     )

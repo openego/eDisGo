@@ -2171,6 +2171,9 @@ class EDisGo:
         match the SimBEV data frequency and after determining the charging demand time
         series resampled back to the original frequency.
 
+        The written charging point time series cover exactly
+        :attr:`~.network.timeseries.TimeSeries.timeindex`, also if it has gaps.
+
         """
         charging_strategy(
             self, strategy=strategy, charging_park_ids=charging_park_ids, **kwargs
