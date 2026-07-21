@@ -72,6 +72,7 @@ from edisgo.tools.tools import (
     check_timeindex_coverage,
     determine_grid_integration_voltage_level,
     get_path_length_to_station,
+    reduce_timeseries_data_to_given_timeindex,
 )
 
 if "READTHEDOCS" not in os.environ:
@@ -3878,6 +3879,74 @@ class EDisGo:
         self.heat_pump.resample_timeseries(method=method, freq=freq)
         self.dsm.resample(method=method, freq=freq)
         self.overlying_grid.resample(method=method, freq=freq)
+
+    def reduce_timeseries_data_to_given_timeindex(
+        self,
+        timeindex,
+        freq="1H",
+        timeseries=True,
+        electromobility=True,
+        save_ev_soc_initial=True,
+        heat_pump=True,
+        dsm=True,
+        overlying_grid=True,
+    ):
+        """
+        Reduces timeseries data in this EDisGo object to given time index.
+
+        Thin wrapper around
+        :func:`edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex`,
+        exposed here for discoverability - the underlying implementation is
+        otherwise only importable directly from ``edisgo.tools.tools``, which
+        made it easy to miss for anyone using :class:`~.EDisGo` outside the
+        ``run`` pipeline (its only prior callers).
+
+        Parameters
+        -----------
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+            Time index to set.
+        freq : str or :pandas:`pandas.Timedelta<Timedelta>`, optional
+            Frequency of time series data. This is only needed if it cannot be
+            inferred from the given `timeindex` and if electromobility data
+            and/or overlying grid data is reduced, as the initial SoC is
+            tried to be set using the time step before the first time step in
+            the given `timeindex`. Offset aliases can be found here:
+            https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases.
+            Default: '1H'.
+        timeseries : bool
+            Indicates whether timeseries in
+            :class:`~.network.timeseries.TimeSeries` are reduced to given
+            time index. Default: True.
+        electromobility : bool
+            Indicates whether timeseries in
+            :class:`~.network.electromobility.Electromobility` are reduced to
+            given time index. Default: True.
+        save_ev_soc_initial : bool
+            Indicates whether to save initial EV SOC from timestep before
+            first timestep of given time index. Default: True.
+        heat_pump : bool
+            Indicates whether timeseries in :class:`~.network.heat.HeatPump`
+            are reduced to given time index. Default: True.
+        dsm : bool
+            Indicates whether timeseries in :class:`~.network.dsm.DSM` are
+            reduced to given time index. Default: True.
+        overlying_grid : bool
+            Indicates whether timeseries in
+            :class:`~.network.overlying_grid.OverlyingGrid` are reduced to
+            given time index. Default: True.
+
+        """
+        reduce_timeseries_data_to_given_timeindex(
+            self,
+            timeindex,
+            freq=freq,
+            timeseries=timeseries,
+            electromobility=electromobility,
+            save_ev_soc_initial=save_ev_soc_initial,
+            heat_pump=heat_pump,
+            dsm=dsm,
+            overlying_grid=overlying_grid,
+        )
 
 
 def import_edisgo_from_pickle(filename, path=""):

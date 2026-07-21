@@ -18,6 +18,7 @@ from edisgo import EDisGo
 from edisgo.edisgo import import_edisgo_from_files
 from edisgo.flex_opt.reinforce_grid import enhanced_reinforce_grid
 from edisgo.network.results import Results
+from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
 
 
 class TestEDisGo:
@@ -2068,6 +2069,30 @@ class TestEDisGo:
         assert len(self.edisgo.timeseries.loads_active_power) == 8
         assert len(self.edisgo.heat_pump.cop_df) == 4
         assert len(self.edisgo.dsm.p_max) == 4
+
+    def test_reduce_timeseries_data_to_given_timeindex(self):
+        """
+        EDisGo.reduce_timeseries_data_to_given_timeindex is a thin wrapper
+        around edisgo.tools.tools.reduce_timeseries_data_to_given_timeindex,
+        added for discoverability (eDisGo#703 checklist item 7). Must produce
+        the same result as calling the free function directly.
+        """
+        self.setup_worst_case_time_series()
+        target_timeindex = self.edisgo.timeseries.timeindex[:2]
+
+        edisgo_via_method = deepcopy(self.edisgo)
+        edisgo_via_method.reduce_timeseries_data_to_given_timeindex(target_timeindex)
+
+        edisgo_via_function = deepcopy(self.edisgo)
+        reduce_timeseries_data_to_given_timeindex(edisgo_via_function, target_timeindex)
+
+        assert_frame_equal(
+            edisgo_via_method.timeseries.loads_active_power,
+            edisgo_via_function.timeseries.loads_active_power,
+        )
+        pd.testing.assert_index_equal(
+            edisgo_via_method.timeseries.timeindex, target_timeindex
+        )
 
 
 class TestEDisGoFunc:
