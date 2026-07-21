@@ -2055,9 +2055,19 @@ class TestEDisGo:
             },
             index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
         )
+        # regression test for eDisGo#703: DSM data used to be silently left
+        # at its original frequency by resample_timeseries
+        self.edisgo.dsm.p_max = pd.DataFrame(
+            data={
+                "load_1": [5.0, 6.0],
+                "load_2": [7.0, 8.0],
+            },
+            index=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
+        )
         self.edisgo.resample_timeseries(freq="30min")
         assert len(self.edisgo.timeseries.loads_active_power) == 8
         assert len(self.edisgo.heat_pump.cop_df) == 4
+        assert len(self.edisgo.dsm.p_max) == 4
 
 
 class TestEDisGoFunc:
