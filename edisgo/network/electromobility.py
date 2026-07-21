@@ -23,6 +23,7 @@ import pandas as pd
 from sklearn import preprocessing
 
 from edisgo.network.components import PotentialChargingParks
+from edisgo.tools.tools import align_series_to_timeindex
 
 if "READTHEDOCS" not in os.environ:
     import geopandas as gpd
@@ -396,6 +397,21 @@ class Electromobility:
             for more information. To avoid this behaviour, set `tol` to 0.0.
             Default: 1e-6.
 
+        Notes
+        -----
+        The bands are always built spanning SimBEV's own native calendar and
+        simulated date range (independent of ``edisgo_obj.timeseries.timeindex``
+        - a charging process straddling a later window's boundary must still
+        count toward the band inside that window). If
+        ``edisgo_obj.timeseries.timeindex`` is non-empty, the returned/stored
+        bands are then year-aligned (SimBEV's calendar is commonly a fixed
+        reference year, independent of the scenario year) and trimmed to
+        exactly that timeindex - this is done regardless of `resample`, since
+        it is a correctness fix (avoiding a ``KeyError`` when a consumer later
+        indexes the bands by ``edisgo_obj.timeseries.timeindex``), not an
+        optional resampling convenience. When the timeindex is empty, the
+        bands are returned untouched, spanning SimBEV's own range/calendar.
+
         Returns
         --------
         dict(str, :pandas:`pandas.DataFrame<DataFrame>`)
@@ -582,15 +598,26 @@ class Electromobility:
 
         # sanity check
         self.check_integrity()
-        # check time index
+
+        # Scope the bands to edisgo_obj's own timeindex, so this method is
+        # correct regardless of caller (not just the run pipeline, which
+        # previously had to patch this up itself via
+        # reduce_timeseries_data_to_given_timeindex right after calling this
+        # method). The bands built above always span SimBEV's own native
+        # calendar (its start_date, typically a fixed reference year like
+        # 2011) and simulated range - independent of edisgo_timeindex, which
+        # is why this can't just be a `.loc[edisgo_timeindex]` here: a year
+        # mismatch alone would raise KeyError, and a shorter/different-range
+        # edisgo_timeindex would too. align_series_to_timeindex year-shifts
+        # and reindexes (filling any still-missing steps with NaN rather than
+        # raising) before the final trim below.
         if len(edisgo_timeindex) > 0:
-            missing_indices = [_ for _ in edisgo_timeindex if _ not in flex_band_index]
-            if len(missing_indices) > 0:
-                logger.warning(
-                    "There are time steps in timeindex of TimeSeries object that "
-                    "are not in the index of the flexibility bands. This may lead "
-                    "to problems."
-                )
+            for key, df in self.flexibility_bands.items():
+                if not df.empty:
+                    self.flexibility_bands[key] = align_series_to_timeindex(
+                        df, edisgo_timeindex
+                    ).loc[edisgo_timeindex]
+
         return self.flexibility_bands
 
     def fix_flexibility_bands_rounding_errors(self, tol=1e-6):

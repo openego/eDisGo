@@ -17,9 +17,11 @@ import pytest
 import edisgo.run as edisgo_run
 
 from edisgo.edisgo import EDisGo
+from edisgo.io import electromobility_import
 from edisgo.run.config import load_config
 from edisgo.run.context import RunContext
 from edisgo.run.tasks.analysis import task_optimize
+from edisgo.run.tasks.flex import task_build_flexibility_bands
 from edisgo.run.tasks.io import task_import_overlying_grid_data
 from edisgo.run.tasks.timeseries import (
     task_manual_ts,
@@ -56,6 +58,40 @@ class TestManualTs:
 
         assert gen in result.timeseries.generators_active_power.columns
         assert ctx.flags["timeseries_set"] is True
+
+
+class TestBuildFlexibilityBands:
+    def test_build_flexibility_bands_scopes_to_timeindex(self):
+        """
+        Regression test for eDisGo#703: task_build_flexibility_bands used to
+        need an explicit reduce_timeseries_data_to_given_timeindex call after
+        get_flexibility_bands to trim/year-align the bands to the active
+        timeindex; get_flexibility_bands now does this itself, so the task
+        (which no longer makes that call) must still produce bands matching
+        edisgo.timeseries.timeindex exactly - including across the year
+        mismatch between SimBEV's own calendar (2011 in this fixture) and
+        the scenario timeindex (2035 here).
+        """
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo,
+            pytest.simbev_example_scenario_path,
+            pytest.tracbev_example_scenario_path,
+        )
+        electromobility_import.distribute_charging_demand(edisgo)
+        electromobility_import.integrate_charging_parks(edisgo)
+
+        short_timeindex = pd.date_range("2035-01-15", periods=24, freq="h")
+        edisgo.set_timeindex(short_timeindex)
+
+        ctx = RunContext()
+        result = task_build_flexibility_bands(edisgo, ctx)
+
+        for key in ("upper_power", "lower_energy", "upper_energy"):
+            pd.testing.assert_index_equal(
+                result.electromobility.flexibility_bands[key].index,
+                short_timeindex,
+            )
 
 
 class TestImportOverlyingGridData:
