@@ -19,6 +19,8 @@ from zipfile import ZipFile
 import numpy as np
 import pandas as pd
 
+from edisgo.tools import tools
+
 logger = logging.getLogger(__name__)
 
 
@@ -151,6 +153,32 @@ class DSM:
             "e_min",
             "e_max",
         ]
+
+    def resample(self, method: str = "ffill", freq: str | pd.Timedelta = "15min"):
+        """
+        Resamples DSM potential time series to a desired resolution.
+
+        Both up- and down-sampling methods are possible.
+
+        Parameters
+        ----------
+        method : str, optional
+            See :attr:`~.EDisGo.resample_timeseries` for more information.
+
+        freq : str, optional
+            See :attr:`~.EDisGo.resample_timeseries` for more information.
+
+        """
+        for attr in self._attributes:
+            attr_index = getattr(self, attr).index
+            if len(attr_index) < 2:
+                logger.debug(
+                    f"{attr} cannot be resampled as it contains less than two "
+                    f"time steps."
+                )
+            else:
+                freq_orig = attr_index[1] - attr_index[0]
+                tools.resample(self, freq_orig, method, freq, attr_to_resample=[attr])
 
     def reduce_memory(
         self,

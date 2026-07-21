@@ -273,28 +273,11 @@ class TestOverlyingGridFunc:
                 df,
             )
 
-        # Resample timeseries and reindex to hourly timedelta
+        # Resample timeseries and reindex to hourly timedelta. DSM (p_min/p_max)
+        # is resampled by this call too (eDisGo#703) - no separate manual
+        # DSM resample needed anymore.
         self.edisgo.resample_timeseries(freq="1min")
 
-        for attr in ["p_min", "p_max"]:
-            new_dates = pd.DatetimeIndex(
-                [getattr(self.edisgo.dsm, attr).index[-1] + pd.Timedelta("1h")]
-            )
-            setattr(
-                self.edisgo.dsm,
-                attr,
-                getattr(self.edisgo.dsm, attr)
-                .reindex(
-                    getattr(self.edisgo.dsm, attr)
-                    .index.union(new_dates)
-                    .unique()
-                    .sort_values()
-                )
-                .ffill()
-                .resample("1min")
-                .ffill()
-                .iloc[:-1],
-            )
         self.timesteps = pd.date_range(start="01/01/2018", periods=240, freq="h")
         attributes = self.edisgo.timeseries._attributes
         for attr in attributes:

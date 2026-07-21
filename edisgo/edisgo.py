@@ -3811,8 +3811,8 @@ class EDisGo:
         """
         Resamples time series data in
         :class:`~.network.timeseries.TimeSeries`, :class:`~.network.heat.HeatPump`,
-        :class:`~.network.electromobility.Electromobility` and
-        :class:`~.network.overlying_grid.OverlyingGrid`.
+        :class:`~.network.electromobility.Electromobility`,
+        :class:`~.network.dsm.DSM` and :class:`~.network.overlying_grid.OverlyingGrid`.
 
         Both up- and down-sampling methods are possible.
 
@@ -3835,6 +3835,14 @@ class EDisGo:
         * :attr:`~.network.heat.HeatPump.cop_df`
 
         * :attr:`~.network.heat.HeatPump.heat_demand_df`
+
+        * :attr:`~.network.dsm.DSM.p_min`
+
+        * :attr:`~.network.dsm.DSM.p_max`
+
+        * :attr:`~.network.dsm.DSM.e_min`
+
+        * :attr:`~.network.dsm.DSM.e_max`
 
         * All data in :class:`~.network.overlying_grid.OverlyingGrid`
 
@@ -3868,6 +3876,7 @@ class EDisGo:
         self.timeseries.resample(method=method, freq=freq)
         self.electromobility.resample(freq=freq)
         self.heat_pump.resample_timeseries(method=method, freq=freq)
+        self.dsm.resample(method=method, freq=freq)
         self.overlying_grid.resample(method=method, freq=freq)
 
 
