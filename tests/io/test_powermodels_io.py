@@ -304,6 +304,103 @@ class TestPowermodelsIO:
             )
         )
 
+    def test_to_powermodels_flexibility_bands_wider_than_timeindex(self):
+        """
+        Regression test for eDisGo#718: _build_electromobility and
+        _build_component_timeseries used to read flexibility_bands
+        positionally (.iloc[0], .values.tolist() on the whole column)
+        instead of aligning to edisgo.timeseries.timeindex first. When
+        flexibility_bands spans more rows than the active timeindex (e.g.
+        stale data from before a later select_timesteps step), this used to
+        silently take the wrong/misaligned static p_max/e_min/e_max and
+        write a longer time series than pm["time_series"]["num_steps"] -
+        both must now be exactly scoped to the active timeindex.
+        """
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo.set_time_series_worst_case_analysis()
+        timeindex = edisgo.timeseries.timeindex
+
+        edisgo.add_component(
+            comp_type="load",
+            type="charging_point",
+            ts_active_power=pd.Series(index=timeindex, data=[0.5] * 4),
+            ts_reactive_power="default",
+            bus=edisgo.topology.buses_df.index[32],
+            p_set=3,
+        )
+
+        # flexibility_bands spans 8 steps, twice the active 4-step timeindex,
+        # with distinctive values so misalignment is obvious
+        wide_index = pd.date_range(timeindex[0], periods=8, freq=timeindex.freq)
+        edisgo.electromobility.flexibility_bands = {
+            "lower_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [0.0] * 8}, index=wide_index
+            ),
+            "upper_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [9.0, 1, 2, 3, 4, 5, 6, 7]},
+                index=wide_index,
+            ),
+            "upper_power": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [9.0, 1, 2, 3, 4, 5, 6, 7]},
+                index=wide_index,
+            ),
+        }
+
+        pm, _ = powermodels_io.to_powermodels(
+            edisgo, flexible_cps=["Charging_Point_LVGrid_6_1"]
+        )
+
+        num_steps = pm["time_series"]["num_steps"]
+        assert num_steps == len(timeindex)
+        for key in ("p_max", "e_min", "e_max"):
+            assert len(pm["time_series"]["electromobility"]["1"][key]) == num_steps
+        assert pm["time_series"]["electromobility"]["1"]["p_max"] == [
+            9.0,
+            1.0,
+            2.0,
+            3.0,
+        ]
+        assert pm["electromobility"]["1"]["p_max"] == pytest.approx(9.0)
+
+    def test_to_powermodels_flexibility_bands_wrong_calendar_raises(self):
+        """
+        Regression test for eDisGo#718: when flexibility_bands doesn't cover
+        edisgo.timeseries.timeindex at all (genuine staleness, not just a
+        wider/narrower matching-calendar range), to_powermodels must raise a
+        clear KeyError rather than silently building wrong OPF input from
+        mismatched rows.
+        """
+        edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
+        edisgo.set_time_series_worst_case_analysis()
+        timeindex = edisgo.timeseries.timeindex
+
+        edisgo.add_component(
+            comp_type="load",
+            type="charging_point",
+            ts_active_power=pd.Series(index=timeindex, data=[0.5] * 4),
+            ts_reactive_power="default",
+            bus=edisgo.topology.buses_df.index[32],
+            p_set=3,
+        )
+
+        wrong_index = pd.date_range("2035-01-01", periods=4, freq=timeindex.freq)
+        edisgo.electromobility.flexibility_bands = {
+            "lower_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [0.0] * 4}, index=wrong_index
+            ),
+            "upper_energy": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [1.0] * 4}, index=wrong_index
+            ),
+            "upper_power": pd.DataFrame(
+                {"Charging_Point_LVGrid_6_1": [1.0] * 4}, index=wrong_index
+            ),
+        }
+
+        with pytest.raises(KeyError):
+            powermodels_io.to_powermodels(
+                edisgo, flexible_cps=["Charging_Point_LVGrid_6_1"]
+            )
+
     def test__get_pf(self):
         self.edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         self.edisgo.set_time_series_worst_case_analysis()
