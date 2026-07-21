@@ -43,6 +43,7 @@ def reinforce_grid(
     without_generator_import: bool = False,
     n_minus_one: bool = False,
     crosssection_escalation: bool = False,
+    crosssection_escalation_existing: bool = False,
     **kwargs,
 ) -> Results:
     """
@@ -95,6 +96,16 @@ def reinforce_grid(
         length x quantity, see `costs.py`), so an escalated cross-section is never
         more expensive in eDisGo's current cost model than the parallel lines it
         replaces.
+        Default: False.
+    crosssection_escalation_existing : bool
+        If True, ALSO considers LV lines that are already the standard cross-
+        section for escalation, not only lines that would otherwise be
+        replaced by parallel standard lines. Requires
+        `crosssection_escalation=True`. Unlike `crosssection_escalation` alone,
+        this can replace cross-sections that were part of the original input
+        topology (e.g. native multi-cable ding0 lines), not only eDisGo's own
+        prior reinforcement decisions -- see PR description for why this is
+        called out separately.
         Default: False.
 
     Other Parameters
@@ -157,6 +168,12 @@ def reinforce_grid(
     """
     if n_minus_one is True:
         raise NotImplementedError("n-1 security can currently not be checked.")
+
+    if crosssection_escalation_existing and not crosssection_escalation:
+        raise ValueError(
+            "crosssection_escalation_existing=True requires "
+            "crosssection_escalation=True."
+        )
 
     # check if provided mode is valid
     if mode and mode not in ["mv", "mvlv", "lv"]:
@@ -293,7 +310,9 @@ def reinforce_grid(
         if not crit_lines.empty:
             # reinforce lines
             lines_changes = reinforce_measures.reinforce_lines_overloading(
-                edisgo, crit_lines, crosssection_escalation=crosssection_escalation
+                edisgo, crit_lines,
+                crosssection_escalation=crosssection_escalation,
+                crosssection_escalation_existing=crosssection_escalation_existing,
             )
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes(
@@ -617,7 +636,9 @@ def reinforce_grid(
         if not crit_lines.empty:
             # reinforce lines
             lines_changes = reinforce_measures.reinforce_lines_overloading(
-                edisgo, crit_lines, crosssection_escalation=crosssection_escalation
+                edisgo, crit_lines,
+                crosssection_escalation=crosssection_escalation,
+                crosssection_escalation_existing=crosssection_escalation_existing,
             )
             # write changed lines to results.equipment_changes
             _add_lines_changes_to_equipment_changes(
