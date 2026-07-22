@@ -156,6 +156,24 @@ class TestOverlyingGrid:
             "Data cannot be resampled as it only contains one time step." in caplog.text
         )
 
+    def test_resample_preserves_gapped_index(self):
+        """
+        Regression test: resampling a gapped index must not bridge the gap
+        with resample artifacts.
+        """
+        gapped_index = pd.date_range("2035-01-08", periods=24, freq="h").union(
+            pd.date_range("2035-06-10", periods=24, freq="h")
+        )
+        overlying_grid = OverlyingGrid()
+        overlying_grid.feedin_district_heating = pd.DataFrame(
+            {"dh1": [1.4] * 48}, index=gapped_index
+        )
+
+        overlying_grid.resample(freq="15min")
+        gap = overlying_grid.feedin_district_heating.index.to_series().diff().max()
+        assert gap > pd.Timedelta("15min")
+        assert len(overlying_grid.feedin_district_heating) == 192
+
 
 class TestOverlyingGridFunc:
     @classmethod
