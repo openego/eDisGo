@@ -1181,7 +1181,16 @@ def _build_electromobility(edisgo_obj, psa_net, pm, s_base, flexible_cps):
         Updated array containing all charging points that allow for flexible charging.
 
     """
-    flex_bands_df = edisgo_obj.electromobility.flexibility_bands
+    # Align to the active timeindex explicitly rather than relying on
+    # flexibility_bands already being in the same order/length - correct
+    # regardless of what ran before this function (e.g. a second
+    # select_timesteps step, or direct EDisGo API use), not just when the
+    # standard run pipeline's task ordering happens to keep them aligned.
+    timeindex = edisgo_obj.timeseries.timeindex
+    flex_bands_df = {
+        key: df.loc[timeindex]
+        for key, df in edisgo_obj.electromobility.flexibility_bands.items()
+    }
     if (flex_bands_df["lower_energy"] > flex_bands_df["upper_energy"]).any().any():
         logger.warning(
             "Upper energy level is smaller than lower energy level for "
@@ -1920,21 +1929,27 @@ def _build_component_timeseries(
             }
     elif kind == "electromobility":
         if len(flexible_cps) > 0:
+            # Align to the active timeindex explicitly (see
+            # _build_electromobility for the same fix and its rationale) -
+            # also guards against a length mismatch with
+            # pm["time_series"]["num_steps"] (set from len(psa_net.snapshots)
+            # independently of flexibility_bands' own length).
+            timeindex = edisgo_obj.timeseries.timeindex
             p_set = (
-                edisgo_obj.electromobility.flexibility_bands["upper_power"][
-                    flexible_cps
+                edisgo_obj.electromobility.flexibility_bands["upper_power"].loc[
+                    timeindex, flexible_cps
                 ]
                 / s_base
             ).round(20)
             e_min = (
-                edisgo_obj.electromobility.flexibility_bands["lower_energy"][
-                    flexible_cps
+                edisgo_obj.electromobility.flexibility_bands["lower_energy"].loc[
+                    timeindex, flexible_cps
                 ]
                 / s_base
             ).round(20)
             e_max = (
-                edisgo_obj.electromobility.flexibility_bands["upper_energy"][
-                    flexible_cps
+                edisgo_obj.electromobility.flexibility_bands["upper_energy"].loc[
+                    timeindex, flexible_cps
                 ]
                 / s_base
             ).round(20)
