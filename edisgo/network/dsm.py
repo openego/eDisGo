@@ -168,6 +168,11 @@ class DSM:
         freq : str, optional
             See :attr:`~.EDisGo.resample_timeseries` for more information.
 
+        Notes
+        -----
+        A gapped index is resampled per contiguous run - see
+        :func:`edisgo.tools.tools.split_into_contiguous_runs`.
+
         """
         for attr in self._attributes:
             attr_index = getattr(self, attr).index

@@ -27,6 +27,7 @@ from edisgo.tools.tools import (
     assign_voltage_level_to_component,
     check_timeindex_coverage,
     resample,
+    split_into_contiguous_runs,
 )
 
 if TYPE_CHECKING:
@@ -2325,20 +2326,33 @@ class TimeSeries:
 
         resample(self, freq_orig, method, freq)
 
-        # create new index
-        if pd.Timedelta(freq) < freq_orig:  # up-sampling
-            index = pd.date_range(
-                self.timeindex[0],
-                self.timeindex[-1] + freq_orig,
-                freq=freq,
-                inclusive="left",
-            )
-        else:  # down-sampling
-            index = pd.date_range(
-                self.timeindex[0],
-                self.timeindex[-1],
-                freq=freq,
-            )
+        # Rebuild the new index per contiguous run of the original timeindex
+        # (mirroring how `resample()` above already resamples the data
+        # per-run) and union them back together, so a gap in the original
+        # timeindex (e.g. from `select_timesteps` in auto mode) is preserved
+        # here too, rather than bridged by one date_range(first, last, freq)
+        # span.
+        freq_td = pd.Timedelta(freq)
+        new_indices = []
+        for run in split_into_contiguous_runs(
+            pd.DataFrame(index=self.timeindex), freq_orig
+        ):
+            if freq_td < freq_orig:  # up-sampling
+                new_indices.append(
+                    pd.date_range(
+                        run.index[0],
+                        run.index[-1] + freq_orig,
+                        freq=freq,
+                        inclusive="left",
+                    )
+                )
+            else:  # down-sampling
+                new_indices.append(
+                    pd.date_range(run.index[0], run.index[-1], freq=freq)
+                )
+        index = new_indices[0]
+        for other in new_indices[1:]:
+            index = index.union(other)
 
         # set new timeindex
         self._timeindex = index

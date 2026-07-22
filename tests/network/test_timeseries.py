@@ -2581,6 +2581,30 @@ class TestTimeSeries:
             atol=1e-5,
         )
 
+    def test_resample_preserves_gapped_timeindex(self):
+        """
+        Regression test: resampling a gapped timeindex (as produced by
+        select_timesteps in auto mode, which deliberately keeps two disjoint
+        intervals separate) must not bridge the gap with resample artifacts -
+        the gap must survive an up-sample/down-sample round-trip, and the
+        timeindex must be restored exactly.
+        """
+        gapped_index = pd.date_range("2035-01-08", periods=24, freq="h").union(
+            pd.date_range("2035-06-10", periods=24, freq="h")
+        )
+        self.edisgo.set_timeindex(gapped_index)
+        gen = self.edisgo.topology.generators_df.index[0]
+        self.edisgo.set_time_series_manual(
+            generators_p=pd.DataFrame({gen: [0.1] * 48}, index=gapped_index)
+        )
+
+        self.edisgo.timeseries.resample(freq="15min")
+        gap = self.edisgo.timeseries.timeindex.to_series().diff().max()
+        assert gap > pd.Timedelta("15min")
+
+        self.edisgo.timeseries.resample(freq="1h")
+        assert_index_equal(self.edisgo.timeseries.timeindex, gapped_index)
+
     def test_scale_timeseries(self):
         self.edisgo.set_time_series_worst_case_analysis()
         edisgo_scaled = copy.deepcopy(self.edisgo)
