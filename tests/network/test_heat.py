@@ -363,6 +363,23 @@ class TestHeatPump:
         assert len(heatpump.heat_demand_df) == 2
         assert len(heatpump.cop_df) == 2
 
+    def test_resample_timeseries_preserves_gapped_index(self):
+        """
+        Regression test: resampling a gapped index must not bridge the gap
+        with resample artifacts (pandas' own .resample() would otherwise
+        fabricate contiguous data across it).
+        """
+        gapped_index = pd.date_range("2035-01-08", periods=24, freq="h").union(
+            pd.date_range("2035-06-10", periods=24, freq="h")
+        )
+        heatpump = HeatPump()
+        heatpump.cop_df = pd.DataFrame({"hp1": [5.0] * 48}, index=gapped_index)
+
+        heatpump.resample_timeseries(freq="15min")
+        gap = heatpump.cop_df.index.to_series().diff().max()
+        assert gap > pd.Timedelta("15min")
+        assert len(heatpump.cop_df) == 192  # 2 runs * 24h * 4 (15min steps/h)
+
     def test_check_integrity(self, caplog):
         # check for empty HeatPump class
         heatpump = HeatPump()

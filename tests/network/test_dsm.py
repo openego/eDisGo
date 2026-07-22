@@ -93,6 +93,22 @@ class TestDSM:
         self.dsm.e_max = pd.DataFrame()
         self.dsm.resample()
 
+    def test_resample_preserves_gapped_index(self):
+        """
+        Regression test: resampling a gapped index must not bridge the gap
+        with resample artifacts.
+        """
+        gapped_index = pd.date_range("2035-01-08", periods=24, freq="h").union(
+            pd.date_range("2035-06-10", periods=24, freq="h")
+        )
+        dsm = DSM()
+        dsm.p_max = pd.DataFrame({"load_1": [5.0] * 48}, index=gapped_index)
+
+        dsm.resample(freq="15min")
+        gap = dsm.p_max.index.to_series().diff().max()
+        assert gap > pd.Timedelta("15min")
+        assert len(dsm.p_max) == 192  # 2 runs * 24h * 4 (15min steps/h)
+
     def test_to_csv(self):
         # test with default values
         save_dir = os.path.join(os.getcwd(), "dsm_csv")
