@@ -42,6 +42,7 @@ def reinforce_grid(
     mode: str | None = None,
     without_generator_import: bool = False,
     n_minus_one: bool = False,
+    enable_ront: bool = False,
     **kwargs,
 ) -> Results:
     """
@@ -82,6 +83,24 @@ def reinforce_grid(
         Determines whether n-1 security should be checked. Currently, n-1 security
         cannot be handled correctly, wherefore the case where this parameter is set to
         True will lead to an error being raised. Default: False.
+    enable_ront : bool
+        If True, resolves LV-internal voltage issues by installing a RONT
+        (regelbarer Ortsnetztransformator, voltage-regulating transformer) instead of
+        disconnecting or reinforcing lines, for LV grids for which
+        :func:`~.flex_opt.check_tech_constraints.lv_grid_ront_feasible` reports that a
+        RONT with the configured control range (`ront_voltage_range`, section
+        `grid_expansion_ront`) can resolve all voltage issues at every time step,
+        respecting both the RONT's bounded control range and the hard +/-10% system
+        voltage limit. The RONT's regulating effect is modelled as an idealised
+        reference-voltage shift in the voltage limit checks -- not as an actual
+        tap-changing transformer in the power flow, which the current eDisGo/PyPSA
+        power flow call pattern (one vectorized call for all time steps) does not
+        support without substantially larger changes. See
+        :func:`~.flex_opt.reinforce_measures.reinforce_lv_grid_ront_voltage_issues`,
+        :func:`~.flex_opt.check_tech_constraints.lv_grid_ront_feasible`, and
+        CONCEPT_ront.md for the underlying assumptions and a discussion of a more
+        realistic, load-flow-based RONT model (tap ratio control) as a possible
+        follow-up. Default: False.
 
     Other Parameters
     -----------------
@@ -483,14 +502,51 @@ def reinforce_grid(
             lv_grid_id=lv_grid_id,
         )
 
+        if enable_ront:
+            ront_voltage_range = float(
+                edisgo.config["grid_expansion_ront"]["ront_voltage_range"]
+            )
+
         while_counter = 0
         while not crit_nodes.empty and while_counter < max_while_iterations:
             # for every topology in crit_nodes do reinforcement
             for grid_id in crit_nodes.lv_grid_id.unique():
+                lv_grid = edisgo.topology.get_lv_grid(int(grid_id))
+
+                # if enabled, prefer installing a RONT over disconnecting or
+                # reinforcing lines, for grids for which a RONT with the
+                # configured control range can resolve all voltage issues
+                # (see CONCEPT_ront.md). lv_grid_ront_feasible() is the same
+                # function used by the RONT-aware final +/-10% check further
+                # below (RECHECK FOR OVERLOADED TRANSFORMERS AND LINES,
+                # unaffected by enable_ront -- a RONT is electrically
+                # identical to the standard transformer it replaces, see
+                # reinforce_lv_grid_ront_voltage_issues()), which guarantees
+                # that a grid RONT is set for here will also pass that check.
+                # The 'not tools.is_ront(...)' guard avoids re-triggering the
+                # measure for a grid that already has a RONT (idempotency
+                # across while-iterations).
+                if (
+                    enable_ront
+                    and not tools.is_ront(lv_grid.transformers_df.iloc[0].type_info)
+                    and checks.lv_grid_ront_feasible(
+                        edisgo, lv_grid, ront_voltage_range
+                    )
+                ):
+                    transformer_changes = (
+                        reinforce_measures.reinforce_lv_grid_ront_voltage_issues(
+                            edisgo, lv_grid
+                        )
+                    )
+                    _add_transformer_changes_to_equipment_changes(
+                        edisgo, transformer_changes, iteration_step, "changed"
+                    )
+                    continue
+
                 # reinforce lines
                 lines_changes = reinforce_measures.reinforce_lines_voltage_issues(
                     edisgo,
-                    edisgo.topology.get_lv_grid(int(grid_id)),
+                    lv_grid,
                     crit_nodes[crit_nodes.lv_grid_id == grid_id],
                 )
                 # write changed lines to results.equipment_changes

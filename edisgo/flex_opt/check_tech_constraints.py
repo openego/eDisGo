@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 
 from edisgo.network.grids import LVGrid, MVGrid
+from edisgo.tools.tools import is_ront
 
 logger = logging.getLogger(__name__)
 
@@ -993,6 +994,42 @@ def allowed_voltage_limits(edisgo_obj, buses=None, split_voltage_band=True):
     else:
         upper = pd.DataFrame(1.1, columns=buses, index=edisgo_obj.results.v_res.index)
         lower = pd.DataFrame(0.9, columns=buses, index=edisgo_obj.results.v_res.index)
+
+        # RONT-tagged stations for which lv_grid_ront_feasible() (the same
+        # single source of truth used by the enable_ront guard, re-evaluated
+        # here against the CURRENT v_res) confirms that a RONT with the
+        # configured control range resolves all voltage issues: exclude
+        # their buses from this blind absolute check entirely, rather than
+        # constructing a substitute per-bus band. lv_grid_ront_feasible()
+        # proves the EXISTENCE of a valid reference ref(t) under which the
+        # raw bus voltages satisfy the LV rise/drop band -- it does NOT
+        # claim the raw bus voltages themselves lie in some window around
+        # v_unreg(t), so comparing them directly against such a window
+        # (an earlier, incorrect version of this fix) is not a valid
+        # substitute criterion (see CONCEPT_ront.md, "Finaler Check --
+        # erlaubtes Band als Schnitt"). Dropping these columns is safe:
+        # voltage_deviation_from_allowed_voltage_limits() derives its own
+        # `buses` from these DataFrames' columns (see the comment there),
+        # so dropped buses are cleanly excluded from the violation
+        # computation, not compared against NaN/inf. RONT-tagged stations
+        # that are NOT (or no longer) feasible are left on the hard
+        # [0.9, 1.1] band -- an honest backstop, not a silent pass. Buses
+        # not belonging to any RONT station are left untouched (bit-
+        # identical to the unconditional [0.9, 1.1] band above).
+        ront_voltage_range = float(
+            edisgo_obj.config["grid_expansion_ront"]["ront_voltage_range"]
+        )
+        for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
+            if not is_ront(lv_grid.transformers_df.iloc[0].type_info):
+                continue
+            if not lv_grid_ront_feasible(edisgo_obj, lv_grid, ront_voltage_range):
+                continue
+            grid_buses = [b for b in lv_grid.buses_df.index if b in upper.columns]
+            if not grid_buses:
+                continue
+            upper = upper.drop(columns=grid_buses)
+            lower = lower.drop(columns=grid_buses)
+
         return upper, lower
 
 
@@ -1107,33 +1144,67 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
         )
     else:
         config_string = "lv"
+        v_max_rise = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+            f"{config_string}_max_v_rise"
+        ]
+        v_max_drop = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+            f"{config_string}_max_v_drop"
+        ]
+        ront_voltage_range = float(
+            edisgo_obj.config["grid_expansion_ront"]["ront_voltage_range"]
+        )
 
         # get all secondary sides and buses in grids
         buses_dict = {}
         secondary_sides_dict = {}
+        voltage_base_dict = {}
         for grid in lv_grids:
             secondary_side = grid.station.index[0]
             if secondary_side in buses_in_pfa:
                 secondary_sides_dict[grid] = secondary_side
-                buses_dict[grid.station.index[0]] = grid.buses_df.index.drop(
-                    grid.station.index[0]
-                )
+                internal_buses = grid.buses_df.index.drop(secondary_side)
+                buses_dict[secondary_side] = internal_buses
+                if is_ront(grid.transformers_df.iloc[0].type_info):
+                    # RONT (regelbarer Ortsnetztransformator): the reference
+                    # voltage used to build the allowed band is not the
+                    # actual, unregulated secondary side voltage, but an
+                    # idealised per-time-step value chosen such that the
+                    # achievable band [ref - v_max_drop, ref + v_max_rise]
+                    # contains the actual spread of this grid's internal bus
+                    # voltages at this time step, whenever that spread fits
+                    # within the band width (v_max_rise + v_max_drop) -- see
+                    # CONCEPT_ront.md, "Constraint-Check-Mechanismus". The
+                    # idealised reference is clipped to
+                    # [v_unreg - ront_voltage_range, v_unreg + ront_voltage_range]
+                    # -- a RONT can only shift its secondary voltage relative
+                    # to its own unregulated (neutral tap) operating point,
+                    # v_unreg, by a bounded amount (its real, finite control
+                    # range), not by an arbitrary amount. v_unreg is exactly
+                    # the value this branch would otherwise use directly
+                    # (the "else" case below), since r_pu/x_pu/s_nom are left
+                    # unchanged for a RONT (see CONCEPT_ront.md, Befund 1).
+                    v_internal = voltages_pfa.loc[
+                        :, internal_buses.intersection(buses_in_pfa)
+                    ]
+                    v_unreg = voltages_pfa.loc[:, secondary_side]
+                    ref_unclipped = (
+                        (v_internal.max(axis=1) - v_max_rise)
+                        + (v_internal.min(axis=1) + v_max_drop)
+                    ) / 2
+                    voltage_base_dict[secondary_side] = ref_unclipped.clip(
+                        lower=v_unreg - ront_voltage_range,
+                        upper=v_unreg + ront_voltage_range,
+                    )
+                else:
+                    voltage_base_dict[secondary_side] = voltages_pfa.loc[
+                        :, secondary_side
+                    ]
         secondary_sides = pd.Series(secondary_sides_dict)
 
-        voltage_base = voltages_pfa.loc[:, secondary_sides.values]
+        voltage_base = pd.DataFrame(voltage_base_dict)
 
-        upper_limits_df_tmp = (
-            voltage_base
-            + edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                f"{config_string}_max_v_rise"
-            ]
-        )
-        lower_limits_df_tmp = (
-            voltage_base
-            - edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
-                f"{config_string}_max_v_drop"
-            ]
-        )
+        upper_limits_df_tmp = voltage_base + v_max_rise
+        lower_limits_df_tmp = voltage_base - v_max_drop
 
         # rename columns to secondary side
         for colname, values in upper_limits_df_tmp.items():
@@ -1152,6 +1223,107 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
             lower_limits_df = pd.concat([lower_limits_df, tmp], axis=1)
 
     return upper_limits_df, lower_limits_df
+
+
+def lv_grid_voltage_spread(edisgo_obj, lv_grid):
+    """
+    Returns the maximum voltage spread of the given LV grid.
+
+    The voltage spread of a time step is the difference between the highest
+    and lowest voltage magnitude in p.u. across all buses in the LV grid,
+    excluding the station's secondary side. The maximum voltage spread is
+    the maximum of this value over all time steps included in the last power
+    flow analysis. This is a diagnostic/logging quantity only -- it is NOT
+    used as the `enable_ront` trigger criterion (see
+    :func:`lv_grid_ront_feasible` for that), since spread alone does not
+    account for the RONT's bounded control range or the hard +/-10% system
+    limit.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    lv_grid : :class:`~.network.grids.LVGrid`
+
+    Returns
+    -------
+    float
+        Maximum voltage spread in p.u.. Returns 0.0 if none of the grid's
+        buses (other than the station) were included in the last power flow
+        analysis.
+
+    """
+    secondary_side = lv_grid.station.index[0]
+    internal_buses = lv_grid.buses_df.index.drop(secondary_side).intersection(
+        edisgo_obj.results.v_res.columns
+    )
+    if internal_buses.empty:
+        return 0.0
+    v_internal = edisgo_obj.results.v_res.loc[:, internal_buses]
+    return (v_internal.max(axis=1) - v_internal.min(axis=1)).max()
+
+
+def lv_grid_ront_feasible(edisgo_obj, lv_grid, ront_voltage_range):
+    """
+    Checks whether a RONT with the given control range could resolve all
+    voltage issues in the given LV grid.
+
+    This is the single source of truth for RONT feasibility, used both by
+    the `enable_ront` trigger in :func:`~.flex_opt.reinforce_grid.
+    reinforce_grid` and by the RONT-aware final +/-10% check in
+    :func:`allowed_voltage_limits` (`split_voltage_band=False`) -- using one
+    shared function guarantees that a grid for which RONT is set will also
+    pass the final check, rather than relying on two independently derived
+    criteria that happen to agree (see CONCEPT_ront.md, "Finaler Check --
+    erlaubtes Band als Schnitt", point 3).
+
+    For every time step, a reference voltage ref(t) must exist that lies
+    both within the RONT's control range around its unregulated secondary
+    voltage v_unreg(t) intersected with the hard +/-10% system limit,
+    `[max(0.9, v_unreg(t) - ront_voltage_range),
+    min(1.1, v_unreg(t) + ront_voltage_range)]`, and within the window
+    required to keep the grid's internal buses inside the allowed LV band,
+    `[v_max(t) - lv_max_v_rise, v_min(t) + lv_max_v_drop]`. Feasible for the
+    grid overall only if this holds for every time step.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    lv_grid : :class:`~.network.grids.LVGrid`
+    ront_voltage_range : float
+        RONT control range in p.u. (see config option
+        `ront_voltage_range` in section `grid_expansion_ront`).
+
+    Returns
+    -------
+    bool
+        True if a RONT could resolve all voltage issues in the given LV
+        grid for every time step in the last power flow analysis.
+
+    """
+    secondary_side = lv_grid.station.index[0]
+    internal_buses = lv_grid.buses_df.index.drop(secondary_side).intersection(
+        edisgo_obj.results.v_res.columns
+    )
+    if secondary_side not in edisgo_obj.results.v_res.columns or internal_buses.empty:
+        return False
+
+    v_max_rise = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+        "lv_max_v_rise"
+    ]
+    v_max_drop = edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+        "lv_max_v_drop"
+    ]
+
+    v_unreg = edisgo_obj.results.v_res[secondary_side]
+    v_internal = edisgo_obj.results.v_res[internal_buses]
+    v_max_t = v_internal.max(axis=1)
+    v_min_t = v_internal.min(axis=1)
+
+    lower_allowed = np.maximum(0.9, v_unreg - ront_voltage_range)
+    upper_allowed = np.minimum(1.1, v_unreg + ront_voltage_range)
+    lower_needed = np.maximum(v_max_t - v_max_rise, lower_allowed)
+    upper_needed = np.minimum(v_min_t + v_max_drop, upper_allowed)
+    return bool((lower_needed <= upper_needed).all())
 
 
 def voltage_deviation_from_allowed_voltage_limits(

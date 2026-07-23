@@ -6,6 +6,7 @@ from pandas.testing import assert_frame_equal
 
 from edisgo import EDisGo
 from edisgo.flex_opt import check_tech_constraints
+from edisgo.tools import tools
 
 
 class TestCheckTechConstraints:
@@ -695,6 +696,78 @@ class TestCheckTechConstraints:
         )
         assert upper.shape == (4, 41)
 
+    def test_allowed_voltage_limits_ront_split_voltage_band_false(self):
+        # RONT-aware final +/-10% check (CONCEPT_ront.md, "Finaler Check --
+        # erlaubtes Band als Schnitt"): lv_grid_ront_feasible() proves the
+        # EXISTENCE of a valid reference ref(t), not that raw bus voltages
+        # lie in some window around v_unreg(t) -- so a feasible RONT
+        # station's buses are EXCLUDED from this blind check (column drop),
+        # not given a substitute band. An infeasible RONT station's buses
+        # stay on the hard [0.9, 1.1] backstop. Non-RONT buses must remain
+        # bit-identical to the unconditional [0.9, 1.1] band.
+        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
+        lv_grid_3 = self.edisgo.topology.get_lv_grid(3)
+        station_bus_1 = lv_grid_1.station.index[0]
+        internal_buses_1 = lv_grid_1.buses_df.index.drop(station_bus_1)
+        transformer_name = lv_grid_1.transformers_df.index[0]
+        original_type_info = self.edisgo.topology.transformers_df.at[
+            transformer_name, "type_info"
+        ]
+
+        # feasible at the default +/-6% control range (same numbers as
+        # test__lv_allowed_voltage_limits_ront)
+        self.edisgo.results._v_res.loc[:, station_bus_1] = 1.00
+        self.edisgo.results._v_res.loc[:, internal_buses_1[::2]] = 1.05
+        self.edisgo.results._v_res.loc[:, internal_buses_1[1::2]] = 1.03
+
+        try:
+            self.edisgo.topology.transformers_df.at[transformer_name, "type_info"] = (
+                tools.ront_type_name(original_type_info)
+            )
+            assert (
+                check_tech_constraints.lv_grid_ront_feasible(
+                    self.edisgo, lv_grid_1, 0.06
+                )
+                is True
+            )
+            upper, lower = check_tech_constraints.allowed_voltage_limits(
+                self.edisgo,
+                buses=self.edisgo.topology.buses_df.index,
+                split_voltage_band=False,
+            )
+
+            # feasible RONT grid: buses excluded entirely, not present
+            ront_buses = lv_grid_1.buses_df.index
+            assert not any(b in upper.columns for b in ront_buses)
+            assert not any(b in lower.columns for b in ront_buses)
+
+            # non-RONT grid: bit-identical to the unconditional [0.9, 1.1]
+            non_ront_buses = lv_grid_3.buses_df.index
+            assert (upper.loc[:, non_ront_buses] == 1.1).all().all()
+            assert (lower.loc[:, non_ront_buses] == 0.9).all().all()
+
+            # now make the same RONT grid infeasible (spread too large) --
+            # its buses must stay on the hard [0.9, 1.1] backstop
+            self.edisgo.results._v_res.loc[:, internal_buses_1[::2]] = 1.21
+            self.edisgo.results._v_res.loc[:, internal_buses_1[1::2]] = 1.09
+            assert (
+                check_tech_constraints.lv_grid_ront_feasible(
+                    self.edisgo, lv_grid_1, 0.06
+                )
+                is False
+            )
+            upper2, lower2 = check_tech_constraints.allowed_voltage_limits(
+                self.edisgo,
+                buses=self.edisgo.topology.buses_df.index,
+                split_voltage_band=False,
+            )
+            assert (upper2.loc[:, ront_buses] == 1.1).all().all()
+            assert (lower2.loc[:, ront_buses] == 0.9).all().all()
+        finally:
+            self.edisgo.topology.transformers_df.at[transformer_name, "type_info"] = (
+                original_type_info
+            )
+
     def test__mv_allowed_voltage_limits(self):
         (
             v_limits_upper,
@@ -806,6 +879,154 @@ class TestCheckTechConstraints:
             0.99 - 0.02
             == v_limits_lower.at[self.timesteps[1], "BusBar_MVGrid_1_LVGrid_1_LV"]
         )
+
+    def test_lv_grid_voltage_spread(self):
+        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
+        station_bus = lv_grid_1.station.index[0]
+        internal_buses = lv_grid_1.buses_df.index.drop(station_bus)
+
+        self.edisgo.results._v_res.loc[:, station_bus] = 1.00
+        self.edisgo.results._v_res.loc[:, internal_buses] = 1.05
+        self.edisgo.results._v_res.loc[self.timesteps[0], internal_buses[0]] = 1.09
+        self.edisgo.results._v_res.loc[self.timesteps[0], internal_buses[1]] = 1.02
+
+        spread = check_tech_constraints.lv_grid_voltage_spread(self.edisgo, lv_grid_1)
+        assert np.isclose(spread, 1.09 - 1.02)
+
+    def test_lv_grid_ront_feasible(self):
+        # three scenarios, same pattern reused at the constraint-check level
+        # below (test__lv_allowed_voltage_limits_ront*): (a) small spread,
+        # v_unreg close enough that a +/-6% control range reaches it --
+        # feasible; (b) small spread (well within the 0.10 LV band) but
+        # v_unreg far enough away that +/-6% does NOT reach -- infeasible at
+        # 6%, feasible at a hypothetically larger range (20%), demonstrating
+        # the bounded control range is the limiting factor, not the spread;
+        # (c) spread itself exceeds the LV band -- infeasible regardless of
+        # range (see CONCEPT_ront.md, "Befund 1").
+        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
+        station_bus = lv_grid_1.station.index[0]
+        internal_buses = lv_grid_1.buses_df.index.drop(station_bus)
+
+        # (a) feasible at +/-6%
+        self.edisgo.results._v_res.loc[:, station_bus] = 1.00
+        self.edisgo.results._v_res.loc[:, internal_buses[::2]] = 1.05
+        self.edisgo.results._v_res.loc[:, internal_buses[1::2]] = 1.03
+        assert (
+            check_tech_constraints.lv_grid_ront_feasible(self.edisgo, lv_grid_1, 0.06)
+            is True
+        )
+
+        # (b) small spread (0.03), but v_unreg too far away for +/-6%;
+        # +/-10% would reach. Internal levels chosen so that the required
+        # window (v_max-rise=1.085, v_min+drop=1.155) stays within the hard
+        # +/-10% system limit at range=0.10 (v_unreg+0.10=1.10), so this
+        # tests the control-range limit specifically, not the hard clip
+        # from Punkt 1 (see test__lv_allowed_voltage_limits_ront_bounded_
+        # range_insufficient for a case where the hard clip itself binds).
+        self.edisgo.results._v_res.loc[:, station_bus] = 1.00
+        self.edisgo.results._v_res.loc[:, internal_buses[::2]] = 1.12
+        self.edisgo.results._v_res.loc[:, internal_buses[1::2]] = 1.09
+        assert (
+            check_tech_constraints.lv_grid_ront_feasible(self.edisgo, lv_grid_1, 0.06)
+            is False
+        )
+        assert (
+            check_tech_constraints.lv_grid_ront_feasible(self.edisgo, lv_grid_1, 0.10)
+            is True
+        )
+
+        # (c) spread itself (0.12) exceeds the LV band (0.10) -- infeasible
+        # even with a very large range
+        self.edisgo.results._v_res.loc[:, station_bus] = 1.00
+        self.edisgo.results._v_res.loc[:, internal_buses[::2]] = 1.21
+        self.edisgo.results._v_res.loc[:, internal_buses[1::2]] = 1.09
+        assert (
+            check_tech_constraints.lv_grid_ront_feasible(self.edisgo, lv_grid_1, 0.50)
+            is False
+        )
+
+    def test__lv_allowed_voltage_limits_ront(self):
+        # Isolated test of the RONT constraint-check mechanism (Option A,
+        # see CONCEPT_ront.md, "Constraint-Check-Mechanismus"): for a RONT
+        # (regelbarer Ortsnetztransformator) grid, the reference voltage
+        # used to build the allowed band is not the actual, unregulated
+        # secondary side voltage, but an idealised per-time-step value
+        # derived from the grid's own internal bus voltages, clipped to the
+        # configured control range (default ront_voltage_range=0.06) around
+        # the unregulated secondary voltage. Same v_res in both cases, only
+        # `type_info` differs.
+        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
+        station_bus = lv_grid_1.station.index[0]
+        internal_buses = lv_grid_1.buses_df.index.drop(station_bus)
+        transformer_name = lv_grid_1.transformers_df.index[0]
+        original_type_info = self.edisgo.topology.transformers_df.at[
+            transformer_name, "type_info"
+        ]
+
+        # station (unregulated reference) at 1.00, internal buses close
+        # enough (1.03/1.05) that the default +/-6% control range reaches --
+        # but the absolute level still exceeds the unregulated +/-[3.5%,6.5%]
+        # LV band.
+        self.edisgo.results._v_res.loc[:, station_bus] = 1.00
+        self.edisgo.results._v_res.loc[:, internal_buses[::2]] = 1.05
+        self.edisgo.results._v_res.loc[:, internal_buses[1::2]] = 1.03
+
+        try:
+            # without RONT: reference is the actual secondary side voltage
+            # (1.00) -- band [0.935, 1.035] does not reach 1.05, violation
+            # remains
+            upper, lower = check_tech_constraints._lv_allowed_voltage_limits(
+                self.edisgo, lv_grids=[lv_grid_1], mode=None
+            )
+            v = self.edisgo.results.v_res.loc[:, internal_buses]
+            assert (v > upper[internal_buses]).any().any()
+
+            # with RONT: reference floats (clipped to +/-6% around 1.00) --
+            # no violation
+            self.edisgo.topology.transformers_df.at[transformer_name, "type_info"] = (
+                tools.ront_type_name(original_type_info)
+            )
+            upper_r, lower_r = check_tech_constraints._lv_allowed_voltage_limits(
+                self.edisgo, lv_grids=[lv_grid_1], mode=None
+            )
+            assert not (v > upper_r[internal_buses]).any().any()
+            assert not (v < lower_r[internal_buses]).any().any()
+        finally:
+            self.edisgo.topology.transformers_df.at[transformer_name, "type_info"] = (
+                original_type_info
+            )
+
+    def test__lv_allowed_voltage_limits_ront_bounded_range_insufficient(self):
+        # small spread (0.02, well within the 0.10 LV band) but v_unreg far
+        # enough from the internal buses that the default +/-6% control
+        # range cannot reach -- must remain a violation (bounding, not just
+        # spread, is the limiting factor here; see CONCEPT_ront.md,
+        # "Befund 1").
+        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
+        station_bus = lv_grid_1.station.index[0]
+        internal_buses = lv_grid_1.buses_df.index.drop(station_bus)
+        transformer_name = lv_grid_1.transformers_df.index[0]
+        original_type_info = self.edisgo.topology.transformers_df.at[
+            transformer_name, "type_info"
+        ]
+
+        self.edisgo.results._v_res.loc[:, station_bus] = 1.00
+        self.edisgo.results._v_res.loc[:, internal_buses[::2]] = 1.16
+        self.edisgo.results._v_res.loc[:, internal_buses[1::2]] = 1.14
+
+        try:
+            self.edisgo.topology.transformers_df.at[transformer_name, "type_info"] = (
+                tools.ront_type_name(original_type_info)
+            )
+            upper_r, lower_r = check_tech_constraints._lv_allowed_voltage_limits(
+                self.edisgo, lv_grids=[lv_grid_1], mode=None
+            )
+            v = self.edisgo.results.v_res.loc[:, internal_buses]
+            assert (v > upper_r[internal_buses]).any().any()
+        finally:
+            self.edisgo.topology.transformers_df.at[transformer_name, "type_info"] = (
+                original_type_info
+            )
 
     def test_voltage_deviation_from_allowed_voltage_limits(self):
         # create MV voltage issues

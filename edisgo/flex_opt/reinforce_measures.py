@@ -25,7 +25,12 @@ from networkx.algorithms.shortest_paths.weighted import (
 )
 
 from edisgo.network.grids import LVGrid, MVGrid
-from edisgo.tools.tools import get_downstream_buses
+from edisgo.tools.tools import (
+    get_downstream_buses,
+    is_ront,
+    ront_type_name,
+    standard_type_name,
+)
 
 if TYPE_CHECKING:
     from edisgo import EDisGo
@@ -212,6 +217,16 @@ def _reinforce_station_overloading(edisgo_obj, critical_stations, voltage_level)
                     ].idxmin()
                 ]
             ]
+            if is_ront(new_transformers.iloc[0].type_info):
+                # the cloned transformer is a plain standard unit that
+                # resolves overloading, not a second RONT -- a RONT resolves
+                # voltage issues and stays untouched (see CONCEPT_ront.md,
+                # "Integrationsbefunde & Aufloesung", Befund 2). s_nom/r_pu/
+                # x_pu are left unchanged since RONT is electrically
+                # identical to its base standard type.
+                new_transformers["type_info"] = standard_type_name(
+                    new_transformers.iloc[0].type_info
+                )
             name = new_transformers.index[0].split("_")
             name.insert(-1, "reinforced")
             name[-1] = len(grid.transformers_df) + 1
@@ -351,6 +366,61 @@ def reinforce_mv_lv_station_voltage_issues(edisgo_obj, critical_stations):
         )
 
     return transformers_changes
+
+
+def reinforce_lv_grid_ront_voltage_issues(edisgo_obj, lv_grid):
+    """
+    Installs a RONT (regelbarer Ortsnetztransformator) in the given LV grid
+    to resolve LV-internal voltage issues, instead of disconnecting or
+    reinforcing lines.
+
+    The existing (first) transformer's electrical parameters (`s_nom`,
+    `r_pu`, `x_pu`) are left unchanged -- only `type_info` is changed to the
+    corresponding RONT type (see :func:`~.tools.tools.ront_type_name`). The
+    RONT's voltage-regulating effect is therefore not modelled in the power
+    flow; it is accounted for in the voltage limit checks instead (see
+    :func:`~.flex_opt.check_tech_constraints._lv_allowed_voltage_limits` and
+    :func:`~.flex_opt.check_tech_constraints.allowed_voltage_limits`). This
+    models a bounded (see `ront_voltage_range`), otherwise ideal tap changer
+    -- a real RONT has discrete steps; this is a deliberate simplification,
+    see CONCEPT_ront.md. Whether installing a RONT is an appropriate measure
+    for the given grid must be checked by the caller beforehand, using
+    :func:`~.flex_opt.check_tech_constraints.lv_grid_ront_feasible`.
+
+    If the LV grid has more than one transformer, only the first one (as in
+    :attr:`~.network.grids.LVGrid.transformers_df`) is converted to a RONT
+    -- consistent with the "one representative transformer" pattern already
+    used in :func:`reinforce_mv_lv_station_voltage_issues`.
+
+    Parameters
+    ----------
+    edisgo_obj : :class:`~.EDisGo`
+    lv_grid : :class:`~.network.grids.LVGrid`
+
+    Returns
+    -------
+    dict
+        Dictionary with the changed transformer in the form::
+
+            {'changed': {'LVGrid_1': ['transformer_reinforced_1']}}
+
+        Empty (`{'changed': {}}`) if the grid's transformer already is a
+        RONT.
+
+    """
+    transformer_name = lv_grid.transformers_df.index[0]
+    base_type_info = lv_grid.transformers_df.at[transformer_name, "type_info"]
+
+    if is_ront(base_type_info):
+        return {"changed": {}}
+
+    edisgo_obj.topology.transformers_df.at[transformer_name, "type_info"] = (
+        ront_type_name(base_type_info)
+    )
+
+    logger.debug(f"==> RONT installed in LV grid {lv_grid} to resolve voltage issues.")
+
+    return {"changed": {str(lv_grid): [transformer_name]}}
 
 
 def reinforce_lines_voltage_issues(edisgo_obj, grid, crit_nodes):

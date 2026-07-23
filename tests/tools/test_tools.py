@@ -248,6 +248,23 @@ class TestTools:
         )
         assert_allclose(data, np.array([1039.23 * 2, 1558.84 * 3]), rtol=1e-5)
 
+    def test_is_ront(self):
+        assert tools.is_ront("630 kVA RONT") is True
+        assert tools.is_ront("630 kVA") is False
+        assert tools.is_ront("NAYY 4x1x150") is False
+
+    def test_ront_type_name(self):
+        assert tools.ront_type_name("630 kVA") == "630 kVA RONT"
+        assert tools.is_ront(tools.ront_type_name("630 kVA")) is True
+
+    def test_standard_type_name(self):
+        assert tools.standard_type_name("630 kVA RONT") == "630 kVA"
+        assert (
+            tools.standard_type_name(tools.ront_type_name("630 kVA")) == "630 kVA"
+        )
+        with pytest.raises(ValueError, match="is not a RONT type"):
+            tools.standard_type_name("630 kVA")
+
     def test_drop_duplicated_indices(self):
         test_df = pd.DataFrame(
             data={
