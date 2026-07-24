@@ -1,0 +1,117 @@
+_comment: |
+  UC6 — OPF with a manual timestep selection, PLUS spatial complexity
+  reduction bracketing the OPF step.
+
+  This preset was ported from edisgo_run_edisgo's uc6_spatial_reduction.yaml
+  (renamed here to follow this branch's <name>[_opf].yaml preset convention),
+  which built on that branch's uc5 feature (a dual-mode "select_timesteps"
+  task switched via a `position:`/`mode:` config, acting either pre-import
+  (manual) or post-grid (auto scoring via a power flow / residual load
+  ranking) and no-opping otherwise). This branch (feat/pipeline-runner) does
+  not have that uc5 feature — it only has the two split, always-active
+  tasks `set_timeindex` (manual, early) and `select_critical_timesteps`
+  (auto, late). This preset is therefore hardwired to the MANUAL case
+  (`set_timeindex` replaces the pre_import step; the post_grid step is
+  dropped since it would have no-opped here anyway). To get the AUTO
+  scoring option back, port the uc5 feature from edisgo_run_edisgo first,
+  or add a `select_critical_timesteps` step after `import_overlying_grid_data`
+  yourself.
+
+  Spatial complexity reduction (spatial_reduce / spatial_restore) brackets
+  `optimize` only:
+  - spatial_reduce (before optimize): deepcopies and stashes the full grid on
+    ctx, then spatially reduces the working object so `optimize` runs on a
+    smaller grid.
+  - spatial_restore (after optimize): writes the optimized flexible-component
+    dispatch back onto the stashed full grid (by name, or disaggregated onto
+    `old_name` members if aggregation_mode is true), recomputes reactive power
+    for those components, and makes the full grid active again for `reinforce`.
+  Both are no-ops when `spatial_reduction.enabled` is false (default), so
+  `reinforce` then runs on the same grid `optimize` used. `reactive_power`
+  (pre-OPF, full time series) stays where it already was, unaffected by the
+  spatial bracket.
+  Reinforcement always runs on the full topology, regardless of the flag.
+
+_workflow:
+  - setup_grid: load ding0 topology
+  - import_generators / import_home_batteries
+  - set_timeindex: manual — set explicit time index
+  - import_heat_pumps / import_dsm: fetch only selected steps
+  - import_electromobility: dumb charging, flex bands
+  - oedb_ts: real wind/solar + load time series
+  - apply_charging_strategy / apply_heat_pump_strategy
+  - build_flexibility_bands: EV bands on the fixed hourly index
+  - import_overlying_grid_data: HV constraints from CSV dir
+  - reactive_power: fixed cosphi on the selected index
+  - spatial_reduce: no-op unless spatial_reduction.enabled — stash full grid,
+      reduce working object
+  - optimize: pm_optimize with flex assets, on the (possibly) reduced grid
+  - spatial_restore: no-op unless spatial_reduction.enabled — write dispatch
+      back onto the stashed full grid, recompute reactive power
+  - reinforce / save: always on the full topology
+
+# Self-contained (no `extends`): this preset can be run on its own via
+#   run_edisgo({"extends": "spatial_reduction_opf", "grid": {"ding0_path": ...}})
+scenario: eGon2035
+
+grid:
+  ding0_path: "/path/to/ding0_grid"
+  legacy_ding0_grids: false
+
+database:
+  source: local
+
+overlying_grid:
+  enabled: true          # set true to activate import_overlying_grid_data
+  source: csv            # "csv" (load from path) or "etrago" (kwarg)
+  path: "/home/gurobi/.edisgo_input/overlying_grid"
+
+results:
+  directory: results/spatial_reduction_opf
+
+# The manual timestep selection (start/periods/freq) is passed directly to
+# the pipeline's set_timeindex step below, not via a top-level config block
+# — unlike edisgo_run_edisgo's uc5/uc6, this branch's set_timeindex /
+# select_critical_timesteps tasks take their parameters as step params.
+
+# Top-level block read by the spatial_reduce/spatial_restore tasks via
+# ctx.raw_config. eGo can inject this block the same way it injects
+# overlying_grid/timeseries_selection (global `spatial_reduction` default +
+# per-grid `spatial_reduction_per_grid` override keyed by mv_grid_id).
+spatial_reduction:
+  enabled: true          # set true to activate spatial_reduce/spatial_restore
+  mode: kmeansdijkstra               # clustering mode for spatial_complexity_reduction
+  cluster_area: feeder
+  reduction_factor: 0.3
+  reduction_factor_not_focused: False
+  aggregation_mode: false  # start with false; true enables load/generator merging
+
+pipeline:
+  - setup_grid
+  - import_generators
+  - import_home_batteries
+  - set_timeindex: {start: "2035-01-15 00:00", periods: 24, freq: h}
+  - import_heat_pumps
+  - import_dsm
+  - import_electromobility:
+      charging_strategy: null
+      # flexibility bands are built later (build_flexibility_bands), once the
+      # analysis time index is fixed, so they are resampled to it
+  - oedb_ts:
+      dispatchable: {other: 0.7}
+  - apply_charging_strategy: {strategy: dumb}
+  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - build_flexibility_bands                    # hourly bands on the 2035 index
+  - import_overlying_grid_data
+  - reactive_power
+  - spatial_reduce                             # no-op unless spatial_reduction.enabled
+  - optimize:
+      flexible: [heat_pumps, storage, charging_points, dsm]
+      method: soc
+      opf_version: 2
+  - spatial_restore                            # no-op unless spatial_reduction.enabled
+  - reinforce:
+      catch_convergence_problems: true
+  - save:
+      archive: true
+      save_opf_results: true

@@ -8,7 +8,7 @@
 # Documentation: https://edisgo.readthedocs.io/
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Runner für uc6_spatial_reduction.yaml — einfach ``python run_example_05.py``."""
+"""Runner for spatial_reduction_opf.yaml — run via ``python run_spatial_reduction_example.py``."""
 
 import logging
 
@@ -19,11 +19,9 @@ logging.basicConfig(
     format="%(asctime)s %(name)s %(levelname)s: %(message)s",
 )
 
-# edisgo = run_edisgo("/storage/JoDa/ego/edisgo_run_edisgo/eDisGo/edisgo/run/presets/uc4_example_MS.yaml")  # noqa: E501
 edisgo = run_edisgo(
     {
-        "extends": "uc6_spatial_reduction.yaml",
-        # "grid": {"ding0_path": "/home/gurobi/.ding0/run_hetzner_59763_2023_04_06/ding0_grids/32355"}  # noqa: E501
+        "extends": "spatial_reduction_opf",
         "grid": {
             "ding0_path": "/home/gurobi/.ding0/2024-07-25T17:38:34_new_planning_new_edisgo/ding0_grids/32377"  # noqa: E501
         },

@@ -307,23 +307,20 @@ def task_build_flexibility_bands(edisgo, ctx, *, use_case=None):
     :func:`task_import_electromobility` can do inline. Running it as a
     separate step lets it execute *after* the analysis time index is fixed
     (e.g. after ``oedb_ts`` / timestep selection), so
-    :meth:`Electromobility.get_flexibility_bands` resamples the bands to the
-    edisgo time-series frequency instead of leaving them at the raw SimBEV
-    resolution. This mirrors how the heat-pump time series are set outside
-    ``import_heat_pumps``, and is more efficient than building bands over a
-    non-final index.
+    :meth:`Electromobility.get_flexibility_bands` resamples/scopes the bands
+    to the edisgo time-series frequency and timeindex instead of leaving
+    them at the raw SimBEV resolution and range. This mirrors how the
+    heat-pump time series are set outside ``import_heat_pumps``, and is more
+    efficient than building bands over a non-final index.
 
     Skipped with an info-log if no electromobility data is present
     (``ctx.flags['has_electromobility']`` is falsy), so presets can
     include this step regardless of the ``flexibilities:`` selection.
 
-    ``get_flexibility_bands`` only resamples to the active *frequency* - the
-    bands still span whatever date range the underlying SimBEV charging-
-    process data covers, which is not necessarily the same range as
-    ``edisgo.timeseries.timeindex`` (e.g. a manually-selected window). This
-    task additionally trims the bands down to that exact index, so
-    ``electromobility.flexibility_bands`` always matches
-    ``edisgo.timeseries.timeindex`` after this step runs.
+    ``get_flexibility_bands`` itself year-aligns and trims the bands down to
+    ``edisgo.timeseries.timeindex`` (see its docstring) whenever that
+    timeindex is non-empty, so ``electromobility.flexibility_bands`` always
+    matches it after this step runs - no separate trim call needed here.
 
     Parameters
     ----------
@@ -341,8 +338,6 @@ def task_build_flexibility_bands(edisgo, ctx, *, use_case=None):
     edisgo.EDisGo
         The modified EDisGo instance.
     """
-    from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
-
     if not ctx.flags.get("has_electromobility"):
         ctx.logger.info(
             "Skipping 'build_flexibility_bands': no electromobility data present."
@@ -351,15 +346,6 @@ def task_build_flexibility_bands(edisgo, ctx, *, use_case=None):
     if use_case is None:
         use_case = ["home", "work", "public", "hpc"]
     edisgo.electromobility.get_flexibility_bands(edisgo, use_case=use_case)
-    reduce_timeseries_data_to_given_timeindex(
-        edisgo,
-        edisgo.timeseries.timeindex,
-        timeseries=False,
-        electromobility=True,
-        heat_pump=False,
-        dsm=False,
-        overlying_grid=False,
-    )
     return edisgo
 
 
