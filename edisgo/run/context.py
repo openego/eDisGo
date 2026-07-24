@@ -70,6 +70,11 @@ class RunContext:
         ``overlying_grid_data=`` argument of :func:`edisgo.run.run_edisgo`.
         Consumed by the ``import_overlying_grid_data`` task when
         ``overlying_grid.source == "etrago"``.
+    full_grid_stash : edisgo.EDisGo or None
+        The pre-reduction :class:`~edisgo.EDisGo` instance, deepcopied and
+        stashed by the ``spatial_reduce`` task before it spatially reduces
+        the working object. Consumed (and cleared back to ``None``) by
+        ``spatial_restore``. ``None`` when spatial reduction is not in use.
 
     """
 
@@ -82,6 +87,7 @@ class RunContext:
     flags: dict[str, Any] = field(default_factory=dict)
     raw_config: dict[str, Any] = field(default_factory=dict)
     overlying_grid_data: Any = None
+    full_grid_stash: Any = None
 
     def ensure_engine(self):
         """

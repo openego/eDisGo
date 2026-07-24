@@ -317,6 +317,14 @@ def task_build_flexibility_bands(edisgo, ctx, *, use_case=None):
     (``ctx.flags['has_electromobility']`` is falsy), so presets can
     include this step regardless of the ``flexibilities:`` selection.
 
+    ``get_flexibility_bands`` only resamples to the active *frequency* - the
+    bands still span whatever date range the underlying SimBEV charging-
+    process data covers, which is not necessarily the same range as
+    ``edisgo.timeseries.timeindex`` (e.g. a manually-selected window). This
+    task additionally trims the bands down to that exact index, so
+    ``electromobility.flexibility_bands`` always matches
+    ``edisgo.timeseries.timeindex`` after this step runs.
+
     Parameters
     ----------
     edisgo : edisgo.EDisGo
@@ -333,6 +341,8 @@ def task_build_flexibility_bands(edisgo, ctx, *, use_case=None):
     edisgo.EDisGo
         The modified EDisGo instance.
     """
+    from edisgo.tools.tools import reduce_timeseries_data_to_given_timeindex
+
     if not ctx.flags.get("has_electromobility"):
         ctx.logger.info(
             "Skipping 'build_flexibility_bands': no electromobility data present."
@@ -341,6 +351,15 @@ def task_build_flexibility_bands(edisgo, ctx, *, use_case=None):
     if use_case is None:
         use_case = ["home", "work", "public", "hpc"]
     edisgo.electromobility.get_flexibility_bands(edisgo, use_case=use_case)
+    reduce_timeseries_data_to_given_timeindex(
+        edisgo,
+        edisgo.timeseries.timeindex,
+        timeseries=False,
+        electromobility=True,
+        heat_pump=False,
+        dsm=False,
+        overlying_grid=False,
+    )
     return edisgo
 
 

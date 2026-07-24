@@ -26,6 +26,7 @@ that the runner sees them at execution time. The submodules are:
 * :mod:`.analysis` — ``check_integrity``, ``analyze``, ``reinforce``,
   ``base_reinforce``, ``optimize``
 * :mod:`.io` — ``save``, ``import_overlying_grid_data``
+* :mod:`.spatial` — ``spatial_reduce``, ``spatial_restore``
 
 Task signature convention: ``(edisgo, ctx, **params)``. A task may
 mutate ``edisgo`` in place and/or return a new EDisGo instance (the
@@ -33,4 +34,11 @@ returned value, if non-None, replaces the current one in the runner's
 loop).
 """
 
-from edisgo.run.tasks import analysis, flex, grid, io, timeseries  # noqa: F401
+from edisgo.run.tasks import (  # noqa: F401
+    analysis,
+    flex,
+    grid,
+    io,
+    spatial,
+    timeseries,
+)
