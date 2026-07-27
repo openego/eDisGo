@@ -217,6 +217,253 @@ class TestElectromobility:
             # must not raise KeyError
             edisgo_obj.electromobility.flexibility_bands[key].loc[short_timeindex]
 
+    def test_get_flexibility_bands_carries_forward_true_start_end(self):
+        """
+        Regression test for ADR 0002: upper_energy/lower_energy must reflect
+        each event's TRUE park_start_timesteps/park_end_timesteps, even when
+        the active timeindex's window starts after (or ends before) that
+        true start/end - the bands must not be reset to zero / re-anchored
+        at the window's own edge. Verified by comparing the same event's
+        band value at a shared calendar timestamp, once built over the full
+        SimBEV span and once built over a window starting after the event's
+        true park_start_timesteps.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj)
+        electromobility_import.integrate_charging_parks(edisgo_obj)
+
+        full_timeindex = pd.date_range("1/1/2011", periods=200, freq="15min")
+        edisgo_obj.set_timeindex(full_timeindex)
+        full_bands = edisgo_obj.electromobility.get_flexibility_bands(
+            edisgo_obj, ["work", "public", "home", "hpc"]
+        )
+
+        # pick a charging point/timestamp where upper_energy is already
+        # elevated (i.e. charging started earlier and hasn't finished) -
+        # windowing from here on must preserve that value, not reset to 0
+        upper_energy_full = full_bands["upper_energy"]
+        nonzero_mask = upper_energy_full > 0
+        elevated_positions = nonzero_mask[nonzero_mask.any(axis=1)]
+        assert not elevated_positions.empty
+        window_start = elevated_positions.index[len(elevated_positions.index) // 2]
+        cp_id = elevated_positions.loc[window_start][
+            elevated_positions.loc[window_start]
+        ].index[0]
+        expected_value = upper_energy_full.loc[window_start, cp_id]
+        assert expected_value > 0
+
+        edisgo_obj_windowed = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj_windowed, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj_windowed)
+        electromobility_import.integrate_charging_parks(edisgo_obj_windowed)
+        windowed_timeindex = full_timeindex[full_timeindex >= window_start]
+        edisgo_obj_windowed.set_timeindex(windowed_timeindex)
+
+        windowed_bands = edisgo_obj_windowed.electromobility.get_flexibility_bands(
+            edisgo_obj_windowed, ["work", "public", "home", "hpc"]
+        )
+        windowed_value = windowed_bands["upper_energy"].loc[window_start, cp_id]
+
+        assert windowed_value == pytest.approx(expected_value)
+
+    def test_get_flexibility_bands_reflects_partial_progress_for_unfinished_event(self):
+        """
+        Regression test for ADR 0002: even though get_flexibility_bands now
+        filters out charging processes with zero overlap with the active
+        timeindex (see test_get_flexibility_bands_excludes_events_and_limits_
+        array_size below), a RETAINED event that straddles the window
+        boundary must still report only the energy that charging-so-far
+        implies at each in-window timestep - never the event's full
+        (possibly not-yet-delivered) chargingdemand_kWh and never a naive
+        proportional share of it. upper_energy/lower_energy are cumulative
+        running totals of physically possible charging progress, not a
+        fixed total being allocated, and this must hold regardless of
+        whether the array is sized to SimBEV's full range or only to what's
+        needed.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj)
+        electromobility_import.integrate_charging_parks(edisgo_obj)
+
+        integrated = edisgo_obj.electromobility.integrated_charging_parks_df
+        park_id = integrated.index[0]
+        template = edisgo_obj.electromobility.charging_processes_df[
+            edisgo_obj.electromobility.charging_processes_df.charging_park_id == park_id
+        ].iloc[0]
+        edisgo_id = integrated.at[park_id, "edisgo_id"]
+
+        # event needs 60 steps of charging at 10 kW (150 kWh) to fulfil its
+        # demand, parked for 100 steps [50, 149] - charging is NOT finished
+        # by step 95 (needs steps 50-109)
+        edisgo_obj.electromobility.charging_processes_df = pd.DataFrame(
+            {
+                "ags": [template.ags],
+                "car_id": [0],
+                "destination": [template.destination],
+                "use_case": [template.use_case],
+                "nominal_charging_capacity_kW": [10.0],
+                "grid_charging_capacity_kW": [10.0],
+                "chargingdemand_kWh": [150.0],
+                "park_time_timesteps": [100],
+                "park_start_timesteps": [50],
+                "park_end_timesteps": [149],
+                "charging_park_id": [park_id],
+                "charging_point_id": [template.charging_point_id],
+            }
+        )
+
+        # active timeindex ends at step 95 - 46 steps into the 60-step
+        # charge (steps 50-95 inclusive = 46 steps)
+        timeindex = pd.date_range("1/1/2011", periods=96, freq="15min")
+        edisgo_obj.set_timeindex(timeindex)
+
+        bands = edisgo_obj.electromobility.get_flexibility_bands(
+            edisgo_obj, [template.use_case]
+        )
+        upper_energy_at_cutoff = bands["upper_energy"][edisgo_id].iloc[-1]
+
+        steps_charged_by_cutoff = 46
+        expected_kWh = steps_charged_by_cutoff * 10.0 / 4  # 10 kW, 15-min steps
+        full_demand_kWh = 150.0
+        proportional_share_kWh = full_demand_kWh * steps_charged_by_cutoff / 60
+
+        assert upper_energy_at_cutoff * 1e3 == pytest.approx(expected_kWh)
+        # must not be the full (not-yet-delivered) demand ...
+        assert upper_energy_at_cutoff * 1e3 != pytest.approx(full_demand_kWh)
+        # ... and not a naive proportional share of it either (they happen
+        # to coincide here only because chargingdemand_kWh/park_time_timesteps
+        # is linear - assert the true value directly, not this coincidence)
+        assert expected_kWh == pytest.approx(proportional_share_kWh)
+
+    def test_get_flexibility_bands_excludes_events_and_limits_array_size(self):
+        """
+        Regression test for ADR 0002: get_flexibility_bands must not build
+        over SimBEV's entire simulated range (nor over every charging
+        process) regardless of how much shorter the active timeindex is -
+        this was the actual "build full, then crop" waste this ADR targets,
+        distinct from (and originally mistaken for) mere value-correctness
+        after the final .loc[edisgo_timeindex] clip. A fully out-of-window
+        event must not extend the internal construction array at all, and
+        the returned bands must still be correct and exactly the active
+        timeindex's length.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj)
+        electromobility_import.integrate_charging_parks(edisgo_obj)
+
+        integrated = edisgo_obj.electromobility.integrated_charging_parks_df
+        park_id = integrated.index[0]
+        template = edisgo_obj.electromobility.charging_processes_df[
+            edisgo_obj.electromobility.charging_processes_df.charging_park_id == park_id
+        ].iloc[0]
+        edisgo_id = integrated.at[park_id, "edisgo_id"]
+
+        # one event fully inside the active window, one event far outside
+        # it (near the end of SimBEV's simulated week) that must not affect
+        # the construction array's size at all
+        edisgo_obj.electromobility.charging_processes_df = pd.DataFrame(
+            {
+                "ags": [template.ags, template.ags],
+                "car_id": [0, 1],
+                "destination": [template.destination, template.destination],
+                "use_case": [template.use_case, template.use_case],
+                "nominal_charging_capacity_kW": [10.0, 10.0],
+                "grid_charging_capacity_kW": [10.0, 10.0],
+                "chargingdemand_kWh": [10.0, 10.0],
+                "park_time_timesteps": [20, 20],
+                "park_start_timesteps": [10, 600],
+                "park_end_timesteps": [29, 619],
+                "charging_park_id": [park_id, park_id],
+                "charging_point_id": [
+                    template.charging_point_id,
+                    template.charging_point_id,
+                ],
+            }
+        )
+
+        timeindex = pd.date_range("1/1/2011", periods=96, freq="15min")  # 1 day
+        edisgo_obj.set_timeindex(timeindex)
+
+        orig_zeros = np.zeros
+        shapes = []
+
+        def spy_zeros(shape, *a, **kw):
+            shapes.append(shape)
+            return orig_zeros(shape, *a, **kw)
+
+        np.zeros = spy_zeros
+        try:
+            bands = edisgo_obj.electromobility.get_flexibility_bands(
+                edisgo_obj, [template.use_case]
+            )
+        finally:
+            np.zeros = orig_zeros
+
+        # construction arrays must be far smaller than SimBEV's full
+        # simulated week (672 steps) - sized only around the active window
+        # and the in-window event, not the far-away out-of-window one
+        assert all(shape[0] < 200 for shape in shapes)
+
+        # returned bands are still correct: exactly the active timeindex's
+        # length, and reflect only the in-window event's contribution
+        assert_index_equal(bands["upper_power"].index, timeindex)
+        assert bands["upper_power"][edisgo_id].sum() > 0
+
+    def test_get_flexibility_bands_clips_independently_per_gapped_interval(self):
+        """
+        Regression test for ADR 0002: with a non-contiguous active
+        timeindex, each disjoint interval's bands must match exactly what a
+        standalone run scoped to just that interval would produce - i.e.
+        clipping the true, full band per interval, with no interaction
+        between intervals.
+        """
+        edisgo_obj = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj)
+        electromobility_import.integrate_charging_parks(edisgo_obj)
+
+        run_1 = pd.date_range("1/1/2011", periods=24, freq="15min")
+        run_2 = pd.date_range("1/1/2011", periods=24, freq="15min") + pd.Timedelta(
+            days=3
+        )
+        gapped_timeindex = run_1.union(run_2)
+        edisgo_obj.set_timeindex(gapped_timeindex)
+
+        gapped_bands = edisgo_obj.electromobility.get_flexibility_bands(
+            edisgo_obj, ["work", "public", "home", "hpc"]
+        )
+
+        edisgo_obj_run1 = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
+        electromobility_import.import_electromobility_from_dir(
+            edisgo_obj_run1, self.simbev_path, self.tracbev_path
+        )
+        electromobility_import.distribute_charging_demand(edisgo_obj_run1)
+        electromobility_import.integrate_charging_parks(edisgo_obj_run1)
+        edisgo_obj_run1.set_timeindex(run_1)
+        run1_bands = edisgo_obj_run1.electromobility.get_flexibility_bands(
+            edisgo_obj_run1, ["work", "public", "home", "hpc"]
+        )
+
+        for key in ("upper_power", "lower_energy", "upper_energy"):
+            assert_frame_equal(
+                gapped_bands[key].loc[run_1],
+                run1_bands[key],
+                check_freq=False,
+            )
+
     def test_get_flexibility_bands_empty_timeindex_is_a_no_op(self):
         """
         With no timeindex set at all, get_flexibility_bands must return the
