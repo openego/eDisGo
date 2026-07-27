@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import atexit
 import importlib.util
 import logging
 import os
@@ -35,6 +36,14 @@ if TYPE_CHECKING:
     from edisgo import EDisGo
 
 logger = logging.getLogger(__name__)
+
+
+def _close_ssh_tunnel(server):
+    """Best-effort stop of an SSH tunnel (used as an atexit cleanup)."""
+    try:
+        server.stop()
+    except Exception:  # pragma: no cover - cleanup at interpreter shutdown
+        pass
 
 #: Default location of the egon-data SSH tunnel configuration file. Used when
 #: no explicit config path is passed and the connection mode is not forced.
@@ -179,6 +188,15 @@ def ssh_tunnel(cred: dict) -> str:
         Name of local port.
 
     """
+    # paramiko logs every keepalive request ("Sending global request
+    # keepalive@lag.net") at DEBUG from a daemon transport thread. The tunnel
+    # opened here outlives the caller (it is never explicitly stopped), so that
+    # thread can still fire after the interpreter / pytest has closed the log
+    # streams, raising a noisy "ValueError: I/O operation on closed file" for
+    # every keepalive. Lifting the paramiko.transport logger to WARNING drops
+    # those DEBUG keepalive messages (the emit becomes a no-op) without
+    # affecting the tunnel itself or any real warnings/errors.
+    logging.getLogger("paramiko.transport").setLevel(logging.WARNING)
     server = SSHTunnelForwarder(
         ssh_address_or_host=(cred["SSH_HOST"], 22),
         ssh_username=cred["SSH_USER"],
@@ -194,6 +212,13 @@ def ssh_tunnel(cred: dict) -> str:
         set_keepalive=30.0,
     )
     server.start()
+    # The tunnel is intentionally kept open for the lifetime of the engine
+    # (which is cached and reused across tasks/grids), but it used to leak: the
+    # SSHTunnelForwarder was never referenced again, so it — and its keepalive
+    # daemon thread — lived until the process died without ever being stopped.
+    # Register an atexit hook so every tunnel is torn down cleanly at process
+    # exit (also stops the keepalive thread before shutdown).
+    atexit.register(_close_ssh_tunnel, server)
 
     return str(server.local_bind_port)
 
