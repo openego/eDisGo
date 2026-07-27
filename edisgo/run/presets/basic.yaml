@@ -1,0 +1,22 @@
+_comment: |
+  Basic preset: worst-case pre-reinforce → reinforce.
+  Minimal end-to-end example with no database dependency.
+  Reproduces the core of example_01 without flex imports.
+
+_workflow:
+  - setup_grid: load ding0 topology
+  - worst_case_ts: set worst-case time series (feed-in + load)
+  - reactive_power: fix reactive power control
+  - check_integrity: validate grid consistency
+  - reinforce: run grid reinforcement
+  - save: persist topology + timeseries + results
+
+scenario: eGon2035
+
+pipeline:
+  - setup_grid
+  - worst_case_ts
+  - reactive_power
+  - check_integrity
+  - reinforce
+  - save

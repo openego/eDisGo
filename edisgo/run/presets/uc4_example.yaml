@@ -1,0 +1,65 @@
+_comment: |
+  UC4 — OPF with full flexibility:
+  Loads real egon_data time series (oedb) and runs a powermodels OPF
+  over flexibilities (heat pumps, EV, DSM, storage) with HV requirements
+  from overlying grid. opf_version 3 activates HV-constraints from
+  overlying_grid CSV directory.
+
+_workflow:
+  - setup_grid: load ding0 topology
+  - import_generators: from egon_data
+  - import_home_batteries: from egon_data
+  - import_heat_pumps: from egon_data
+  - import_dsm: from egon_data
+  - import_electromobility: from egon_data (dumb charging, flex bands)
+  - oedb_ts: real wind/solar + load time series (24 h, 2035)
+  - apply_charging_strategy: dumb
+  - apply_heat_pump_strategy: uncontrolled (overwritten by OPF)
+  - import_overlying_grid_data: HV constraints from CSV dir
+  - optimize: pm_optimize with flex assets (SOC, opf v3 = HV constraints)
+
+scenario: eGon2035
+
+grid:
+  ding0_path: "/path/to/ding0_grid"
+  legacy_ding0_grids: false
+
+database:
+  ssh:
+    enabled: false
+
+timeindex: {start: "2035-01-01", periods: 24, freq: h}
+
+overlying_grid:
+  enabled: true                              # master switch — set true to activate import_overlying_grid_data
+  source: csv                                 # "csv" (load from path) or "etrago" (consume overlying_grid_data kwarg)
+  path: "/storage/JoDa/edisgo_playground/overlying_grid_data"     # required when source == csv; full leaf dir for ONE grid (like ding0_path)
+
+results:
+  directory: results/uc4_example
+
+
+pipeline:
+  - setup_grid
+  - import_generators
+  - import_home_batteries
+  - import_heat_pumps
+  - import_dsm
+  - import_electromobility:
+      charging_strategy: null
+      flexibility_bands_ucs: ["home", "work", "public", "hpc"]
+  - oedb_ts:
+      dispatchable: {other: 0.7}
+      timeindex: {start: "2035-01-01", periods: 24, freq: h}
+  - apply_charging_strategy: {strategy: dumb}
+  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - import_overlying_grid_data
+  - reactive_power
+  - optimize:
+      flexible: [heat_pumps, storage, charging_points, dsm]
+      method: soc
+      opf_version: 2
+  - reinforce
+  - save:
+      archive: true
+      save_opf_results: true

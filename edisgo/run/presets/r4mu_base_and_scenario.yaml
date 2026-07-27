@@ -1,0 +1,49 @@
+_comment: |
+  R4MU — two-stage base + scenario reinforcement:
+  Stage 1 produces a base-reinforced grid (generators + heat pumps)
+  and saves it as an artifact. Stage 2 loads that artifact, integrates
+  scenario-specific charging stations from a GeoPackage/CSV directory,
+  applies worst-case time series, and runs a scenario-specific
+  reinforce. Cost delta = extra reinforcement caused by the charging
+  scenario.
+
+_workflow:
+  - stage base:
+      - setup_grid: load ding0 topology + import generators
+      - import_heat_pumps: from egon_data
+      - worst_case_ts
+      - reactive_power
+      - reinforce
+      - save (artifact consumed by next stage)
+  - stage scenario:
+      - load_from: base
+      - load_charging_from_files: integrate scenario charging
+      - worst_case_ts
+      - reactive_power
+      - reinforce (delta only)
+      - save
+
+scenario: eGon2035
+
+stages:
+  - name: base
+    pipeline:
+      - setup_grid: {import_generators: true}
+      - import_heat_pumps
+      - worst_case_ts
+      - reactive_power
+      - reinforce
+      - save
+  - name: scenario
+    load_from: base
+    params:
+      charging_dir: "./charging_scenario_1"
+      mv_threshold_kw: 100
+    pipeline:
+      - load_charging_from_files:
+          charging_dir: "{{params.charging_dir}}"
+          mv_threshold_kw: "{{params.mv_threshold_kw}}"
+      - worst_case_ts
+      - reactive_power
+      - reinforce
+      - save

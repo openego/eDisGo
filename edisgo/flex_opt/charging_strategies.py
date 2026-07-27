@@ -89,7 +89,29 @@ def charging_strategy(
         :attr:`~.edisgo.EDisGo.apply_charging_strategy` for more information.
         Default: 0.1.
 
+    Notes
+    -----
+    The written ``loads_active_power``/``loads_reactive_power`` are trimmed to
+    ``edisgo_obj.timeseries.timeindex`` when its frequency already matches the
+    SimBEV charging-process data's ``stepsize`` (the common case). When it
+    doesn't, this function internally resamples ``edisgo_obj.timeseries`` to
+    SimBEV's frequency and back (see the frequency-mismatch warning below);
+    that round-trip currently fabricates a contiguous timeindex, which can
+    reopen a gap left by ``select_timesteps`` (auto mode). The trim is
+    skipped in that case rather than risk operating on the wrong window -
+    tracked as a known limitation in
+    ``docs_notes/issue_temporal_reduction_flexibility_bands.md``.
+
     """
+    # Capture the target time index before any internal frequency resampling
+    # (below) can mutate it. `TimeSeries.resample` fabricates a contiguous
+    # index spanning first-to-last timestamp, which would silently reopen any
+    # gap `select_timesteps` (auto mode) deliberately left in the timeindex -
+    # trimming against this entry-time snapshot instead ensures only the
+    # steps actually selected by the caller are written. Only used when no
+    # internal resample round-trip happens (see Notes above).
+    target_timeindex = edisgo_obj.timeseries.timeindex
+
     # get integrated charging parks
     integrated_parks = edisgo_obj.electromobility.integrated_charging_parks_df
 
@@ -170,6 +192,27 @@ def charging_strategy(
 
         edisgo_obj.timeseries.resample(freq=simbev_timedelta)
 
+    # Map each SimBEV step position (0 .. len_ts - 1, the same positional
+    # space as park_start_timesteps/the placement slices below) to whether it
+    # is present in the active timeindex (`target_timeindex`). `dumb` and
+    # `reduced` place each event's demand deterministically at
+    # [start, start+stop) - rather than building the full-SimBEV-length
+    # series unconditionally and cropping the *output* down to the active
+    # timeindex afterwards (as before), the placement itself is now clipped
+    # to whatever of that interval is actually in-window, so an event's
+    # reported energy is a direct consequence of which positions get
+    # written, not a separate proration calculation (see ADR 0002).
+    # `resample=True` means `target_timeindex` predates an internal
+    # frequency round-trip and is no longer in the same step space as
+    # `park_start_timesteps` - the crop-after-build step already skips
+    # trimming in that case (see the module docstring), so this reduction is
+    # skipped here too and every step is treated as in-window, preserving
+    # today's (build-full) behavior only for that known limitation.
+    if resample:
+        step_in_window = np.ones(len_ts, dtype=bool)
+    else:
+        step_in_window = np.isin(timeindex, target_timeindex)
+
     if strategy == "dumb":
         # "dumb" charging
         # Collect each charging park's series and add them to the time series in a
@@ -192,7 +235,15 @@ def charging_strategy(
             for _, start, stop, cap in charging_processes_df[
                 RELEVANT_CHARGING_STRATEGIES_COLUMNS["dumb"]
             ].itertuples():
-                dummy_ts[start : start + stop] += cap
+                # Write only to in-window positions of the deterministic
+                # charging interval [start, start+stop) - if the active
+                # timeindex has a gap inside this interval, every in-window
+                # sub-slice still gets the event's full, unscaled power (see
+                # ADR 0002); out-of-window positions are simply not written.
+                in_window_idx = (
+                    np.flatnonzero(step_in_window[start : start + stop]) + start
+                )
+                dummy_ts[in_window_idx] += cap
 
             cp_ts[cp.edisgo_id] = dummy_ts
 
@@ -231,12 +282,20 @@ def charging_strategy(
             ) in charging_processes_df[
                 RELEVANT_CHARGING_STRATEGIES_COLUMNS["reduced"]
             ].itertuples():
+                # See the "dumb" branch above for why the placement slice
+                # itself (not a separate energy calculation) is clipped to
+                # in-window positions.
                 if use_case == "public" or use_case == "hpc":
                     # if the charging process takes place in a "public" setting
                     # the charging is "dumb"
-                    dummy_ts[start : start + stop_dumb] += cap_dumb
+                    start_, stop_, cap = start, stop_dumb, cap_dumb
                 else:
-                    dummy_ts[start : start + stop_reduced] += cap_reduced
+                    start_, stop_, cap = start, stop_reduced, cap_reduced
+
+                in_window_idx = (
+                    np.flatnonzero(step_in_window[start_ : start_ + stop_]) + start_
+                )
+                dummy_ts[in_window_idx] += cap
 
             cp_ts[cp.edisgo_id] = dummy_ts
 
@@ -264,35 +323,118 @@ def charging_strategy(
             eta_cp=eta_cp,
         )
 
-        # get residual load
-        init_residual_load = edisgo_obj.timeseries.residual_load
-
         len_residual_load = int(charging_processes_df.park_end_timesteps.max())
 
-        if len(init_residual_load) >= len_residual_load:
-            init_residual_load = init_residual_load.loc[timeindex]
+        if not resample:
+            # The active timeindex can extend past the last charging event
+            # (e.g. a trailing gapped run with no events in it at all) - the
+            # step-space array built below must cover at least as far as
+            # target_timeindex itself, or the crop-after-build step later
+            # would reindex into positions that were never built, producing
+            # NaN rather than a legitimate zero.
+            target_span_steps = int(
+                (target_timeindex[-1] - target_timeindex[0])
+                / pd.Timedelta(f"{edisgo_obj.electromobility.stepsize}min")
+            )
+            len_residual_load = max(len_residual_load, target_span_steps)
+
+        # Map each SimBEV step position (0 .. len_residual_load, the same
+        # positional space as park_start_timesteps/park_end_timesteps) to
+        # whether it is present in the active timeindex (`target_timeindex`).
+        # Real residual_load only exists for `target_timeindex`. Rather than
+        # tiling (cyclically repeating) it to cover steps beyond the active
+        # timeindex - which would rank timesteps against a fabricated,
+        # non-periodic-in-reality signal (see ADR 0001) - steps outside the
+        # active timeindex are simply marked as having no usable data.
+        # `resample=True` means `target_timeindex` predates an internal
+        # frequency round-trip and is no longer in the same step space as
+        # `park_start_timesteps` - the crop-after-build step already skips
+        # trimming in that case (see the module docstring), so this reduction
+        # is skipped here too and every step is treated as in-window,
+        # preserving today's (tiling) behavior only for that known
+        # limitation.
+        if resample:
+            step_in_window = np.ones(len_residual_load + 1, dtype=bool)
         else:
-            while len(init_residual_load) < len_residual_load:
-                len_rl = len(init_residual_load)
-                len_append = min(len_rl, len_residual_load - len_rl)
+            step_in_window = np.isin(
+                pd.date_range(
+                    target_timeindex[0],
+                    periods=len_residual_load + 1,
+                    freq=f"{edisgo_obj.electromobility.stepsize}min",
+                ),
+                target_timeindex,
+            )
+        in_window_steps_cumsum = np.concatenate(([0], np.cumsum(step_in_window)))
 
-                s_append = init_residual_load.iloc[:len_append]
+        if not resample:
+            # Events are reduced to the active timeindex before being
+            # scheduled: fully in-window events are untouched, fully
+            # out-of-window events are dropped, and boundary-straddling
+            # events have their charging demand prorated by how much of
+            # their parking time is actually observable. This mirrors
+            # `harmonize_charging_processes_df`'s own derivation of
+            # `minimum_charging_time` from demand and nominal power.
+            parking_time = (
+                charging_processes_df.park_end_timesteps
+                - charging_processes_df.park_start_timesteps
+                + 1
+            )
+            overlap_steps = (
+                in_window_steps_cumsum[
+                    charging_processes_df.park_end_timesteps.to_numpy() + 1
+                ]
+                - in_window_steps_cumsum[
+                    charging_processes_df.park_start_timesteps.to_numpy()
+                ]
+            )
 
-                init_residual_load = pd.concat(
-                    [
-                        init_residual_load,
-                        s_append,
-                    ],
-                    ignore_index=True,
-                )
+            # drop events with zero overlap - nothing to schedule, no
+            # residual_load data exists for them at all
+            in_window = overlap_steps > 0
+            charging_processes_df = charging_processes_df.loc[in_window]
+            in_window_fraction = (
+                (overlap_steps[in_window]) / (parking_time.to_numpy()[in_window])
+            )
 
-        init_residual_load = init_residual_load.to_numpy()
+            scaled_demand_kWh = (
+                charging_processes_df.harmonized_chargingdemand * in_window_fraction
+            )
+            scaled_minimum_charging_time = (
+                scaled_demand_kWh
+                / charging_processes_df.nominal_charging_capacity_kW
+                * 60
+                / edisgo_obj.electromobility.stepsize
+            )
+            scaled_minimum_charging_time = np.ceil(scaled_minimum_charging_time).astype(
+                np.uint16
+            )
+
+            # defensive clamp: proration preserves
+            # minimum_charging_time <= parking_time, so this should only ever
+            # bind on pre-existing anomalous input (an event whose full,
+            # unscaled demand already didn't fit its own parking time)
+            scaled_minimum_charging_time = np.minimum(
+                scaled_minimum_charging_time, overlap_steps[in_window]
+            )
+
+            charging_processes_df = charging_processes_df.assign(
+                minimum_charging_time=scaled_minimum_charging_time,
+                flex_time=charging_processes_df.park_time_timesteps
+                - scaled_minimum_charging_time,
+            )
+
+        # get residual load; steps outside the active timeindex carry no
+        # real data (see above) and are set to NaN so they can never be
+        # selected as charging candidates below
+        init_residual_load = edisgo_obj.timeseries.residual_load
 
         timeindex_residual = pd.date_range(
             edisgo_obj.timeseries.timeindex[0],
-            periods=len(init_residual_load),
+            periods=len_residual_load + 1,
             freq=f"{edisgo_obj.electromobility.stepsize}min",
         )
+        init_residual_load = init_residual_load.reindex(timeindex_residual).to_numpy()
+        init_residual_load[~step_in_window] = np.nan
 
         dummy_ts = pd.DataFrame(
             data=0.0, columns=[_.id for _ in charging_parks], index=timeindex_residual
@@ -313,7 +455,15 @@ def charging_strategy(
             RELEVANT_CHARGING_STRATEGIES_COLUMNS["residual_dumb"]
         ].itertuples():
             try:
-                dummy_ts.loc[:, cp_id].iloc[start : start + stop] += cap
+                # Write only to in-window positions of the deterministic
+                # charging interval [start, start+stop) - if the active
+                # timeindex has a gap inside this interval, every in-window
+                # sub-slice still gets the event's full, unscaled power (see
+                # ADR 0002); out-of-window positions are simply not written.
+                in_window_idx = (
+                    np.flatnonzero(step_in_window[start : start + stop]) + start
+                )
+                dummy_ts.loc[:, cp_id].iloc[in_window_idx] += cap
 
             except Exception:
                 maximum_ts = len(dummy_ts)
@@ -329,11 +479,23 @@ def charging_strategy(
         for _, start, end, k, cp_id, cap in flex_charging_processes_df[
             RELEVANT_CHARGING_STRATEGIES_COLUMNS["residual"]
         ].itertuples():
-            flex_band = residual_load[start : end + 1]
+            # Restrict ranking candidates to timesteps that are both within
+            # the parking window and present in the active timeindex -
+            # `residual_load` is NaN outside the active timeindex (no real
+            # data exists there, see above), so those positions must never
+            # be selected, even if the parking window itself spans a gap.
+            candidates = np.flatnonzero(step_in_window[start : end + 1]) + start
 
-            # get k time steps with the lowest residual load in the parking
-            # time
-            idx = np.argpartition(flex_band, k)[:k] + start
+            if k >= len(candidates):
+                # k charging demand may (after proration/clamping) exactly
+                # saturate the available in-window candidates - nothing left
+                # to rank, every candidate is used.
+                idx = candidates
+            else:
+                flex_band = residual_load[candidates]
+                # get k time steps with the lowest residual load in the
+                # parking time, among the valid (in-window) candidates only
+                idx = candidates[np.argpartition(flex_band, k)[:k]]
 
             try:
                 dummy_ts[cp_id].iloc[idx] += cap
@@ -364,14 +526,48 @@ def charging_strategy(
 
     if resample:
         edisgo_obj.timeseries.resample(freq=edisgo_timedelta)
+        # `TimeSeries.resample` fabricates a contiguous index spanning
+        # first-to-last timestamp, which would reopen any gap
+        # `select_timesteps` (auto mode) left in `target_timeindex`. The trim
+        # below only removes *extra trailing* rows past `target_timeindex`'s
+        # own span - it does not (and, given the above, safely cannot)
+        # reintroduce a gap `resample` already closed. Fixing that root cause
+        # in `TimeSeries.resample` itself is tracked separately (see
+        # docs_notes/issue_temporal_reduction_flexibility_bands.md); until
+        # then, a `select_timesteps`-produced gap combined with a
+        # SimBEV/edisgo frequency mismatch is a known limitation here.
+    else:
+        # Trim the newly written columns down to the target time index. The
+        # writes above (all three strategies) span the full SimBEV
+        # simulation length rather than the active timeindex.
+        # `TimeSeries.loads_active_power` itself already scopes reads to
+        # `self.timeindex`, but the private `_loads_active_power` can still
+        # carry the untrimmed rows (visible to anything reading the private
+        # attribute directly, e.g. `reduce_timeseries_data_to_given_timeindex`)
+        # - rebuild just the touched columns via drop+add so only the extra
+        # rows for `edisgo_ids_to_update` are removed, leaving other
+        # components untouched.
+        trimmed_active_power = edisgo_obj.timeseries._loads_active_power.loc[
+            :, edisgo_ids_to_update
+        ].reindex(target_timeindex)
+        edisgo_obj.timeseries.drop_component_time_series(
+            "loads_active_power", edisgo_ids_to_update
+        )
+        edisgo_obj.timeseries.add_component_time_series(
+            "loads_active_power", trimmed_active_power
+        )
 
-    # set reactive power time series to 0 Mvar
+    # set reactive power time series to 0 Mvar. Use `target_timeindex` only
+    # when it still matches `edisgo_obj.timeseries.timeindex` (i.e. no
+    # internal resample round-trip happened above) - see the comment on the
+    # active-power trim above for why a resampled, gap-closed timeindex isn't
+    # safely reconcilable with `target_timeindex` here yet.
     # fmt: off
     edisgo_obj.timeseries.add_component_time_series(
         "loads_reactive_power",
         pd.DataFrame(
             data=0.0,
-            index=edisgo_obj.timeseries.timeindex,
+            index=target_timeindex if not resample else edisgo_obj.timeseries.timeindex,
             columns=edisgo_ids_to_update,
         ),
     )

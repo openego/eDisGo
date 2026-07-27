@@ -66,6 +66,49 @@ class TestDSM:
         self.dsm.e_max = pd.DataFrame()
         self.dsm.reduce_memory()
 
+    def test_resample(self):
+        """
+        Regression test for eDisGo#703: DSM had no resample() method, so
+        EDisGo.resample_timeseries silently left DSM data at its original
+        frequency while every sibling container (TimeSeries, Electromobility,
+        HeatPump, OverlyingGrid) was resampled.
+        """
+        # test up-sampling with default parameters
+        self.dsm.resample()
+        assert len(self.dsm.p_max) == 8
+        assert (self.dsm.p_max.iloc[0:4, 0] == 5).all()
+        assert (self.dsm.p_max.iloc[4:8, 1] == 8).all()
+        assert len(self.dsm.p_min) == 8
+        assert len(self.dsm.e_max) == 8
+        assert len(self.dsm.e_min) == 8
+
+        # test down-sampling
+        self.dsm.resample(freq="1H")
+        assert len(self.dsm.p_max) == 2
+        assert len(self.dsm.p_min) == 2
+        assert len(self.dsm.e_max) == 2
+        assert len(self.dsm.e_min) == 2
+
+        # test with empty dataframes - must not raise
+        self.dsm.e_max = pd.DataFrame()
+        self.dsm.resample()
+
+    def test_resample_preserves_gapped_index(self):
+        """
+        Regression test: resampling a gapped index must not bridge the gap
+        with resample artifacts.
+        """
+        gapped_index = pd.date_range("2035-01-08", periods=24, freq="h").union(
+            pd.date_range("2035-06-10", periods=24, freq="h")
+        )
+        dsm = DSM()
+        dsm.p_max = pd.DataFrame({"load_1": [5.0] * 48}, index=gapped_index)
+
+        dsm.resample(freq="15min")
+        gap = dsm.p_max.index.to_series().diff().max()
+        assert gap > pd.Timedelta("15min")
+        assert len(dsm.p_max) == 192  # 2 runs * 24h * 4 (15min steps/h)
+
     def test_to_csv(self):
         # test with default values
         save_dir = os.path.join(os.getcwd(), "dsm_csv")

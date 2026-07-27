@@ -38,6 +38,89 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def align_series_to_timeindex(ts, timeindex, extra_step=False):
+    """
+    Align a time series to a target time index, tolerating a year mismatch.
+
+    Data imported for the overlying grid (from CSV or eTraGo) may be indexed
+    in a different year than the EDisGo time index. This helper shifts the
+    series' index by whole years to match ``timeindex`` (using
+    :class:`pandas.DateOffset`, which — unlike ``Timestamp.replace(year=...)``
+    — does not raise on a Feb-29 timestamp when the target year is not a leap
+    year) and reindexes onto it. Missing steps become ``NaN`` rather than
+    raising a ``KeyError``.
+
+    Parameters
+    ----------
+    ts : :pandas:`pandas.Series<Series>` or \
+        :pandas:`pandas.DataFrame<DataFrame>` or None
+        The time series to align. Returned unchanged if ``None``, empty, or
+        when ``timeindex`` is empty.
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Target time index to align to.
+    extra_step : bool, optional
+        If ``True``, append one trailing step to the target index (used for
+        state-of-charge series that carry an end-of-period value). The step
+        width is taken from ``timeindex.freq``, falling back to the spacing
+        of the first two entries; if neither is available (single-entry
+        index without freq) no extra step is added.
+
+    Returns
+    -------
+    Same type as ``ts``
+        ``ts`` reindexed onto the (optionally extended) target index.
+
+    """
+    if ts is None or ts.empty or timeindex.empty:
+        return ts
+    year_diff = timeindex[0].year - ts.index[0].year
+    if year_diff != 0:
+        ts = ts.copy()
+        ts.index = ts.index + pd.DateOffset(years=year_diff)
+    target = timeindex
+    if extra_step:
+        freq = timeindex.freq or (
+            timeindex[1] - timeindex[0] if len(timeindex) > 1 else None
+        )
+        if freq is not None:
+            target = timeindex.union([timeindex[-1] + freq])
+    return ts.reindex(target)
+
+
+def check_timeindex_coverage(timeindex, name, df):
+    """
+    Raises ``ValueError`` if `df` has columns but is missing data for a time
+    step in `timeindex`.
+
+    Used by :attr:`~.edisgo.EDisGo.set_time_series_manual` and the
+    self-provided-DataFrame options of
+    :class:`~.network.timeseries.TimeSeries`'s ``predefined_*`` methods to
+    enforce that user-provided time series actually cover the active
+    timeindex, instead of silently writing a partially- or non-overlapping
+    series. A DataFrame with no columns is exempt - nothing is being
+    written, so there is nothing to validate coverage for.
+
+    Parameters
+    ----------
+    timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
+        Time index to check coverage against. Assumed non-empty by the
+        caller.
+    name : str
+        Parameter name to reference in the raised error message.
+    df : :pandas:`pandas.DataFrame<DataFrame>` or None
+        DataFrame to check. Skipped if ``None`` or has no columns.
+
+    """
+    if df is None or df.shape[1] == 0:
+        return
+    missing = timeindex.difference(df.index)
+    if len(missing) > 0:
+        raise ValueError(
+            f"'{name}' does not cover the current timeindex - missing time "
+            f"steps: {list(missing)}."
+        )
+
+
 def select_worstcase_snapshots(edisgo_obj):
     """
     Select two worst-case snapshots from time series
@@ -1179,6 +1262,25 @@ def reduce_timeseries_data_to_given_timeindex(
                 )
     # Battery electric vehicle timeseries
     if electromobility:
+        # The EV flexibility bands are built in import_electromobility from the
+        # raw SimBEV grid (typically 15-min and in the reference year 2011),
+        # independently of the analysis time index. Before slicing by datetime,
+        # align them to the target index: first resample to its frequency
+        # (Electromobility.resample uses the correct per-band aggregation —
+        # mean for power, max for energy), then shift the year and reindex via
+        # align_series_to_timeindex so datetime .loc lookups below succeed.
+        _bands = edisgo_obj.electromobility.flexibility_bands
+        _band0 = next((b for b in _bands.values() if not b.empty), None)
+        if _band0 is not None and len(_band0.index) > 1:
+            band_freq = _band0.index[1] - _band0.index[0]
+            if band_freq != frequency:
+                edisgo_obj.electromobility.resample(freq=frequency)
+            # year-align every (now correctly-sampled) band onto the timeindex
+            for key, df in edisgo_obj.electromobility.flexibility_bands.items():
+                if not df.empty:
+                    edisgo_obj.electromobility.flexibility_bands[key] = (
+                        align_series_to_timeindex(df, timeindex)
+                    )
         if save_ev_soc_initial:
             # timestep EV SOC from timestep before if possible
             ts_before = timeindex[0] - frequency
@@ -1265,6 +1367,51 @@ def reduce_timeseries_data_to_given_timeindex(
                     )
 
 
+def split_into_contiguous_runs(df, freq_orig):
+    """
+    Splits a DataFrame with a (possibly gapped) `DatetimeIndex` into its
+    maximal contiguous runs.
+
+    A run boundary is any gap between consecutive index entries strictly
+    larger than `freq_orig`. Used by :func:`resample` so that resampling a
+    gapped timeindex (e.g. as produced by ``select_timesteps`` in auto mode,
+    which deliberately keeps two disjoint intervals separate) resamples each
+    contiguous block independently, rather than silently bridging the gap
+    with resample artifacts (pandas' own `.resample()` always buckets
+    contiguously across whatever span the data's index covers, filling any
+    gap with forward-filled/averaged data rather than leaving it empty).
+
+    Parameters
+    ----------
+    df : :pandas:`pandas.DataFrame<DataFrame>`
+        DataFrame with a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+        Assumed non-empty and sorted.
+    freq_orig : :pandas:`pandas.Timedelta<Timedelta>`
+        Frequency of the original time series data. Any gap larger than this
+        is treated as a run boundary.
+
+    Returns
+    -------
+    list(:pandas:`pandas.DataFrame<DataFrame>`)
+        The contiguous runs, in order. A continuous `df` returns a
+        single-element list containing `df` itself unchanged.
+
+    """
+    if len(df.index) < 2:
+        return [df]
+    gaps = df.index.to_series().diff().iloc[1:]
+    run_boundaries = np.flatnonzero((gaps > freq_orig).to_numpy()) + 1
+    if len(run_boundaries) == 0:
+        return [df]
+    return [
+        df.iloc[start:end]
+        for start, end in zip(
+            [0, *run_boundaries.tolist()],
+            [*run_boundaries.tolist(), len(df.index)],
+        )
+    ]
+
+
 def resample(
     object,
     freq_orig,
@@ -1294,58 +1441,46 @@ def resample(
         List of attributes to resample. Per default, all attributes specified in
         respective object's `_attributes` are resampled.
 
+    Notes
+    -----
+    A gapped index (e.g. as produced by ``select_timesteps`` in auto mode) is
+    resampled per contiguous run (see :func:`split_into_contiguous_runs`), so
+    a gap is preserved rather than silently bridged with resample artifacts.
+
     """
     if attr_to_resample is None:
         attr_to_resample = object._attributes
+    freq_orig = pd.Timedelta(freq_orig)
+    freq = pd.Timedelta(freq) if not isinstance(freq, pd.Timedelta) else freq
+    up_sampling = freq < freq_orig
 
-    # add time step at the end of the time series in case of up-sampling so that
-    # last time interval in the original time series is still included
-    df_dict = {}
+    if method not in ("interpolate", "ffill", "bfill"):
+        raise NotImplementedError(f"Resampling method {method} is not implemented.")
+
     for attr in attr_to_resample:
-        if not getattr(object, attr).empty:
-            df_dict[attr] = getattr(object, attr)
-            if pd.Timedelta(freq) < freq_orig:  # up-sampling
-                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1] + freq_orig])
-            else:  # down-sampling
-                new_dates = pd.DatetimeIndex([df_dict[attr].index[-1]])
-            df_dict[attr] = (
-                df_dict[attr]
-                .reindex(df_dict[attr].index.union(new_dates).unique().sort_values())
-                .ffill()
-            )
+        df = getattr(object, attr)
+        if df.empty:
+            continue
 
-    # resample time series
-    if pd.Timedelta(freq) < freq_orig:  # up-sampling
-        if method == "interpolate":
-            for attr in df_dict.keys():
-                setattr(
-                    object,
-                    attr,
-                    df_dict[attr].resample(freq, closed="left").interpolate().iloc[:-1],
-                )
-        elif method == "ffill":
-            for attr in df_dict.keys():
-                setattr(
-                    object,
-                    attr,
-                    df_dict[attr].resample(freq, closed="left").ffill().iloc[:-1],
-                )
-        elif method == "bfill":
-            for attr in df_dict.keys():
-                setattr(
-                    object,
-                    attr,
-                    df_dict[attr].resample(freq, closed="left").bfill().iloc[:-1],
-                )
-        else:
-            raise NotImplementedError(f"Resampling method {method} is not implemented.")
-    else:  # down-sampling
-        for attr in df_dict.keys():
-            setattr(
-                object,
-                attr,
-                df_dict[attr].resample(freq).mean(),
-            )
+        resampled_runs = []
+        for run in split_into_contiguous_runs(df, freq_orig):
+            # add time step at the end of the run in case of up-sampling so
+            # that the last time interval in the run is still included
+            if up_sampling:
+                new_dates = pd.DatetimeIndex([run.index[-1] + freq_orig])
+            else:
+                new_dates = pd.DatetimeIndex([run.index[-1]])
+            run = run.reindex(run.index.union(new_dates).unique().sort_values()).ffill()
+
+            if up_sampling:
+                resampled = getattr(run.resample(freq, closed="left"), method)().iloc[
+                    :-1
+                ]
+            else:
+                resampled = run.resample(freq).mean()
+            resampled_runs.append(resampled)
+
+        setattr(object, attr, pd.concat(resampled_runs))
 
 
 def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.DataFrame:
@@ -1374,7 +1509,7 @@ def reduce_memory_usage(df: pd.DataFrame, show_reduction: bool = False) -> pd.Da
     for col in df.columns:
         col_type = df[col].dtype
 
-        if col_type != object and str(col_type) != "category":
+        if not pd.api.types.is_object_dtype(col_type) and str(col_type) != "category":
             c_min = df[col].min()
             c_max = df[col].max()
 

@@ -156,6 +156,24 @@ class TestOverlyingGrid:
             "Data cannot be resampled as it only contains one time step." in caplog.text
         )
 
+    def test_resample_preserves_gapped_index(self):
+        """
+        Regression test: resampling a gapped index must not bridge the gap
+        with resample artifacts.
+        """
+        gapped_index = pd.date_range("2035-01-08", periods=24, freq="h").union(
+            pd.date_range("2035-06-10", periods=24, freq="h")
+        )
+        overlying_grid = OverlyingGrid()
+        overlying_grid.feedin_district_heating = pd.DataFrame(
+            {"dh1": [1.4] * 48}, index=gapped_index
+        )
+
+        overlying_grid.resample(freq="15min")
+        gap = overlying_grid.feedin_district_heating.index.to_series().diff().max()
+        assert gap > pd.Timedelta("15min")
+        assert len(overlying_grid.feedin_district_heating) == 192
+
 
 class TestOverlyingGridFunc:
     @classmethod
@@ -273,28 +291,11 @@ class TestOverlyingGridFunc:
                 df,
             )
 
-        # Resample timeseries and reindex to hourly timedelta
+        # Resample timeseries and reindex to hourly timedelta. DSM (p_min/p_max)
+        # is resampled by this call too (eDisGo#703) - no separate manual
+        # DSM resample needed anymore.
         self.edisgo.resample_timeseries(freq="1min")
 
-        for attr in ["p_min", "p_max"]:
-            new_dates = pd.DatetimeIndex(
-                [getattr(self.edisgo.dsm, attr).index[-1] + pd.Timedelta("1h")]
-            )
-            setattr(
-                self.edisgo.dsm,
-                attr,
-                getattr(self.edisgo.dsm, attr)
-                .reindex(
-                    getattr(self.edisgo.dsm, attr)
-                    .index.union(new_dates)
-                    .unique()
-                    .sort_values()
-                )
-                .ffill()
-                .resample("1min")
-                .ffill()
-                .iloc[:-1],
-            )
         self.timesteps = pd.date_range(start="01/01/2018", periods=240, freq="h")
         attributes = self.edisgo.timeseries._attributes
         for attr in attributes:
