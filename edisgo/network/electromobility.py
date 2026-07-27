@@ -489,6 +489,91 @@ class Electromobility:
                 start=start_date, periods=t_max + 1, freq=f"{stepsize}min"
             )
 
+        # Reduce to only the charging processes actually needed for
+        # edisgo_obj.timeseries.timeindex, instead of always building over
+        # every process regardless of how much shorter the active timeindex
+        # is (see ADR 0002). SimBEV's calendar (start_date) is typically a
+        # fixed reference year independent of the scenario year, so the
+        # active timeindex is inverse year-shifted onto that calendar to
+        # find which SimBEV steps are actually relevant - this mirrors the
+        # forward year-shift `align_series_to_timeindex` already applies to
+        # the built bands further down. Only events overlapping that window
+        # are kept (mirrors dumb/reduced/residual: zero overlap -> zero
+        # contribution, not a special case).
+        #
+        # The array itself is NOT truncated to the window's end, only
+        # (potentially) to the earliest relevant event's start: clamping a
+        # retained event's true end down to an artificial array boundary
+        # would push it onto the `end == n_steps - 1` edge case below (a
+        # pre-existing, unrelated exclusion for events ending exactly on the
+        # array's last row) for every boundary-straddling event, silently
+        # dropping their contribution entirely rather than only trimming it.
+        # The array is instead sized to comfortably cover every retained
+        # event's true end - the pre-existing final `.loc[edisgo_timeindex]`
+        # step below still discards whatever trailing rows aren't needed.
+        edisgo_timeindex = edisgo_obj.timeseries.timeindex
+        if len(edisgo_timeindex) > 0:
+            year_diff = flex_band_index[0].year - edisgo_timeindex[0].year
+            simbev_calendar_timeindex = edisgo_timeindex + pd.DateOffset(
+                years=year_diff
+            )
+            window_start_step = int(
+                (simbev_calendar_timeindex.min() - flex_band_index[0])
+                / pd.Timedelta(f"{stepsize}min")
+            )
+            window_end_step = int(
+                (simbev_calendar_timeindex.max() - flex_band_index[0])
+                / pd.Timedelta(f"{stepsize}min")
+            )
+
+            overlaps_window = (
+                self.charging_processes_df.park_end_timesteps >= window_start_step
+            ) & (self.charging_processes_df.park_start_timesteps <= window_end_step)
+            relevant_processes = self.charging_processes_df.loc[overlaps_window]
+
+            if relevant_processes.empty:
+                # No event overlaps the active window at all (e.g. the
+                # window falls entirely outside SimBEV's simulated range) -
+                # size the array to the window itself so the final
+                # `.loc[edisgo_timeindex]` step still produces the expected
+                # shape (filled with NaN via `align_series_to_timeindex`,
+                # exactly as the pre-existing full-span build already would
+                # have for this case), without ever touching t_max, which
+                # only bounds where real event data can be, not the window.
+                array_start_step = window_start_step
+                array_end_step = window_end_step
+            else:
+                array_start_step = min(
+                    window_start_step,
+                    int(relevant_processes.park_start_timesteps.min()),
+                )
+                # Cover every retained event's true end (never clamped down
+                # below it) as well as the active window's own end. +1 extra
+                # step of padding mirrors the pre-existing `end_date + 1 day`
+                # padding on the full-span build (see above) - it exists so
+                # a retained event's true end never lands exactly on the
+                # array's last row, which would otherwise trip the
+                # pre-existing `end == n_steps - 1` exclusion below for
+                # every such event instead of just the rare full-span case
+                # it originally guarded against.
+                array_end_step = (
+                    max(
+                        window_end_step,
+                        int(relevant_processes.park_end_timesteps.max()),
+                    )
+                    + 1
+                )
+
+            flex_band_index = pd.date_range(
+                start=flex_band_index[0]
+                + pd.Timedelta(f"{array_start_step * stepsize}min"),
+                periods=max(array_end_step - array_start_step + 1, 0),
+                freq=f"{stepsize}min",
+            )
+        else:
+            relevant_processes = self.charging_processes_df
+            array_start_step = 0
+
         # set up bands
         n_steps = len(flex_band_index)
         tmp_idx = range(n_steps)
@@ -502,14 +587,21 @@ class Electromobility:
         # map every charging process to the column (charging point) it belongs to;
         # processes of charging points outside `cps` map to -1 and are dropped
         park_to_cp = self.integrated_charging_parks_df["edisgo_id"]
-        proc = self.charging_processes_df
+        proc = relevant_processes
         col = cps.index.get_indexer(proc["charging_park_id"].map(park_to_cp))
-        end_all = proc["park_end_timesteps"].to_numpy()
+        # shift into the (possibly truncated) array's own step space - never
+        # clamped, since the array was sized to cover every retained event's
+        # true end above
+        start_all = proc["park_start_timesteps"].to_numpy() - array_start_step
+        end_all = proc["park_end_timesteps"].to_numpy() - array_start_step
         # the last time step can lead to problems --> skip those processes
         keep = (col >= 0) & (end_all != n_steps - 1)
 
         col = col[keep]
-        sub = proc.loc[keep]
+        sub = proc.loc[keep].assign(
+            park_start_timesteps=start_all[keep],
+            park_end_timesteps=end_all[keep],
+        )
         start = sub["park_start_timesteps"].to_numpy().astype(int)
         end = sub["park_end_timesteps"].to_numpy().astype(int)
         power = sub["nominal_charging_capacity_kW"].to_numpy(dtype=float)
