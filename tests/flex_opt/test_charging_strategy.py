@@ -396,6 +396,147 @@ class TestChargingStrategy:
         # no NaNs, no crash from writing into a position that doesn't exist
         assert not written.isna().any()
 
+    @pytest.mark.parametrize("strategy", ["dumb", "reduced"])
+    def test_dumb_reduced_clip_placement_to_active_timeindex(self, strategy):
+        """
+        Regression test for ADR 0002: dumb/reduced must clip their
+        deterministic charging placement slice to the active timeindex
+        instead of building the full-SimBEV-length series and relying on a
+        later crop - a charging interval that extends beyond the active
+        timeindex must only ever be written for its in-window positions,
+        at unchanged (unscaled) power.
+        """
+        # active timeindex ends at step 92 (93 steps: 0-92)
+        timeindex = pd.date_range("1/1/2011", periods=93, freq="15min")
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            timeindex,
+            park_start_timesteps=90,
+            park_end_timesteps=149,
+            chargingdemand_kWh=12.0,
+        )
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+
+        charging_strategy(edisgo, strategy=strategy)
+
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+        nonzero = written[written != 0]
+
+        # written series must match the active timeindex exactly - no extra
+        # rows for steps beyond it (nothing fabricated/built past the window)
+        pd.testing.assert_index_equal(written.index, timeindex)
+        # only in-window steps (<= step 92, i.e. before 1/1/2011 23:15) may
+        # ever carry a nonzero value
+        assert (nonzero.index <= timeindex[-1]).all()
+        assert len(nonzero) > 0
+
+        # compare against the same event given a timeindex long enough to
+        # cover its whole charging interval - the clipped case must report
+        # strictly less energy, since some of its charging steps fall
+        # outside the shorter active timeindex
+        long_timeindex = pd.date_range("1/1/2011", periods=150, freq="15min")
+        edisgo_long, park_id_long = self._setup_edisgo_with_single_synthetic_event(
+            long_timeindex,
+            park_start_timesteps=90,
+            park_end_timesteps=149,
+            chargingdemand_kWh=12.0,
+        )
+        edisgo_id_long = edisgo_long.electromobility.integrated_charging_parks_df.at[
+            park_id_long, "edisgo_id"
+        ]
+        charging_strategy(edisgo_long, strategy=strategy)
+        full_energy = edisgo_long.timeseries.loads_active_power[edisgo_id_long].sum()
+
+        assert 0 < written.sum() < full_energy
+
+        # power at each in-window step must be unchanged (no proration of
+        # the rate itself) - every nonzero value equals the same per-step
+        # power the long-timeindex (unclipped) run reports
+        long_nonzero_values = edisgo_long.timeseries.loads_active_power[edisgo_id_long]
+        long_nonzero_values = long_nonzero_values[long_nonzero_values != 0]
+        assert nonzero.iloc[0] == pytest.approx(long_nonzero_values.iloc[0])
+
+    @pytest.mark.parametrize("strategy", ["dumb", "reduced"])
+    def test_dumb_reduced_fully_out_of_window_event_contributes_nothing(self, strategy):
+        """
+        Regression test for ADR 0002: an event whose deterministic charging
+        interval has zero overlap with the active timeindex must contribute
+        nothing.
+        """
+        timeindex = pd.date_range("1/1/2011", periods=96, freq="15min")  # 1 day
+        edisgo, park_id = self._setup_edisgo_with_single_synthetic_event(
+            timeindex,
+            park_start_timesteps=300,
+            park_end_timesteps=320,
+            chargingdemand_kWh=10.0,
+        )
+        edisgo_id = edisgo.electromobility.integrated_charging_parks_df.at[
+            park_id, "edisgo_id"
+        ]
+
+        charging_strategy(edisgo, strategy=strategy)
+
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+        assert (written == 0).all()
+
+    @pytest.mark.parametrize("strategy", ["dumb", "reduced"])
+    def test_dumb_reduced_respect_internal_gap(self, strategy):
+        """
+        Regression test for ADR 0002: if an event's deterministic charging
+        interval itself spans a gap in a non-contiguous active timeindex,
+        every in-window sub-slice of that interval must be written
+        independently, at full unscaled power - never a blind contiguous
+        write bridging the gap.
+        """
+        run_1 = pd.date_range("1/1/2011", periods=10, freq="15min")
+        run_2 = pd.date_range("1/1/2011", periods=10, freq="15min") + pd.Timedelta(
+            minutes=15 * 20
+        )
+        gapped_timeindex = run_1.union(run_2)
+
+        edisgo = EDisGo(ding0_grid=self.ding0_path)
+        edisgo.set_timeindex(gapped_timeindex)
+        edisgo.import_electromobility(
+            data_source="directory",
+            charging_processes_dir=self.simbev_path,
+            potential_charging_points_dir=self.tracbev_path,
+        )
+        integrated = edisgo.electromobility.integrated_charging_parks_df
+        park_id = integrated.index[0]
+        template = edisgo.electromobility.charging_processes_df[
+            edisgo.electromobility.charging_processes_df.charging_park_id == park_id
+        ].iloc[0]
+
+        # work use_case, small enough demand that minimum_charging_time (or
+        # reduced_charging_time) spans steps 5-24, straddling the gap
+        # (steps 10-19, absent from the active timeindex)
+        edisgo.electromobility.charging_processes_df = pd.DataFrame(
+            {
+                "ags": [template.ags],
+                "car_id": [0],
+                "destination": [template.destination],
+                "use_case": ["work"],
+                "nominal_charging_capacity_kW": [template.nominal_charging_capacity_kW],
+                "grid_charging_capacity_kW": [template.grid_charging_capacity_kW],
+                "chargingdemand_kWh": [2.0],
+                "park_time_timesteps": [20],
+                "park_start_timesteps": [5],
+                "park_end_timesteps": [24],
+                "charging_park_id": [park_id],
+                "charging_point_id": [template.charging_point_id],
+            }
+        )
+
+        charging_strategy(edisgo, strategy=strategy)
+
+        edisgo_id = integrated.at[park_id, "edisgo_id"]
+        written = edisgo.timeseries.loads_active_power[edisgo_id]
+
+        pd.testing.assert_index_equal(written.index, gapped_timeindex)
+        # no NaNs, no crash from writing into a position that doesn't exist
+        assert not written.isna().any()
+
     def test_charging_strategy_with_subset_of_parks(self):
         """
         Charging strategies can be applied to different subsets of charging parks

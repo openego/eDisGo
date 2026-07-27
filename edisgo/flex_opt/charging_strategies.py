@@ -192,6 +192,27 @@ def charging_strategy(
 
         edisgo_obj.timeseries.resample(freq=simbev_timedelta)
 
+    # Map each SimBEV step position (0 .. len_ts - 1, the same positional
+    # space as park_start_timesteps/the placement slices below) to whether it
+    # is present in the active timeindex (`target_timeindex`). `dumb` and
+    # `reduced` place each event's demand deterministically at
+    # [start, start+stop) - rather than building the full-SimBEV-length
+    # series unconditionally and cropping the *output* down to the active
+    # timeindex afterwards (as before), the placement itself is now clipped
+    # to whatever of that interval is actually in-window, so an event's
+    # reported energy is a direct consequence of which positions get
+    # written, not a separate proration calculation (see ADR 0002).
+    # `resample=True` means `target_timeindex` predates an internal
+    # frequency round-trip and is no longer in the same step space as
+    # `park_start_timesteps` - the crop-after-build step already skips
+    # trimming in that case (see the module docstring), so this reduction is
+    # skipped here too and every step is treated as in-window, preserving
+    # today's (build-full) behavior only for that known limitation.
+    if resample:
+        step_in_window = np.ones(len_ts, dtype=bool)
+    else:
+        step_in_window = np.isin(timeindex, target_timeindex)
+
     if strategy == "dumb":
         # "dumb" charging
         # Collect each charging park's series and add them to the time series in a
@@ -214,7 +235,15 @@ def charging_strategy(
             for _, start, stop, cap in charging_processes_df[
                 RELEVANT_CHARGING_STRATEGIES_COLUMNS["dumb"]
             ].itertuples():
-                dummy_ts[start : start + stop] += cap
+                # Write only to in-window positions of the deterministic
+                # charging interval [start, start+stop) - if the active
+                # timeindex has a gap inside this interval, every in-window
+                # sub-slice still gets the event's full, unscaled power (see
+                # ADR 0002); out-of-window positions are simply not written.
+                in_window_idx = (
+                    np.flatnonzero(step_in_window[start : start + stop]) + start
+                )
+                dummy_ts[in_window_idx] += cap
 
             cp_ts[cp.edisgo_id] = dummy_ts
 
@@ -253,12 +282,20 @@ def charging_strategy(
             ) in charging_processes_df[
                 RELEVANT_CHARGING_STRATEGIES_COLUMNS["reduced"]
             ].itertuples():
+                # See the "dumb" branch above for why the placement slice
+                # itself (not a separate energy calculation) is clipped to
+                # in-window positions.
                 if use_case == "public" or use_case == "hpc":
                     # if the charging process takes place in a "public" setting
                     # the charging is "dumb"
-                    dummy_ts[start : start + stop_dumb] += cap_dumb
+                    start_, stop_, cap = start, stop_dumb, cap_dumb
                 else:
-                    dummy_ts[start : start + stop_reduced] += cap_reduced
+                    start_, stop_, cap = start, stop_reduced, cap_reduced
+
+                in_window_idx = (
+                    np.flatnonzero(step_in_window[start_ : start_ + stop_]) + start_
+                )
+                dummy_ts[in_window_idx] += cap
 
             cp_ts[cp.edisgo_id] = dummy_ts
 
