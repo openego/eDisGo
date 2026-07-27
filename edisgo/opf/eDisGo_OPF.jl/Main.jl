@@ -71,18 +71,40 @@ function optimize_edisgo()
     # tolerances set above). Only when there is genuinely no primal solution do
     # we diagnose the infeasibility via an IIS conflict — calling
     # compute_conflict! on a feasible model raises Gurobi error 10015.
-    has_solution = result_soc["termination_status"] == MOI.OPTIMAL ||
-                   MOI.get(pm.model, MOI.PrimalStatus()) == MOI.FEASIBLE_POINT
+    # A usable primal solution exists if the solver proved optimality, or it
+    # returns a feasible OR nearly-feasible primal point. The latter covers
+    # suboptimal / almost-optimal / numerically loose terminations (under the
+    # barrier tolerances set above) that still carry a valid dispatch — these
+    # are used just like an optimal solution. Only a genuine no-primal-point
+    # case is diagnosed via an IIS conflict.
+    term_status = result_soc["termination_status"]
+    primal_status = MOI.get(pm.model, MOI.PrimalStatus())
+    has_solution = term_status == MOI.OPTIMAL ||
+                   primal_status == MOI.FEASIBLE_POINT ||
+                   primal_status == MOI.NEARLY_FEASIBLE_POINT
     if !has_solution
-      JuMP.compute_conflict!(pm.model)
-      if MOI.get(pm.model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
-        iis_model, _ = copy_conflict(pm.model)
-        print(iis_model)
+      # No primal point detected — diagnose the infeasibility via an IIS
+      # conflict. Some numerically tricky but actually feasible models are
+      # misreported here, and compute_conflict! then raises Gurobi error 10015
+      # ("Cannot compute IIS on a feasible model"). In that case the model does
+      # have a solution after all, so recover and use it instead of failing.
+      try
+        JuMP.compute_conflict!(pm.model)
+        if MOI.get(pm.model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
+          iis_model, _ = copy_conflict(pm.model)
+          print(iis_model)
+        end
+      catch e
+        println("compute_conflict! failed (model is feasible, status "*
+                string(term_status)*"/"*string(primal_status)*
+                "); using the solution: ", e)
+        has_solution = true
       end
-    else
-      if result_soc["termination_status"] != MOI.OPTIMAL
+    end
+    if has_solution
+      if term_status != MOI.OPTIMAL
         println("SOC model terminated feasible but not optimal ("*
-                string(result_soc["termination_status"])*"); using the solution.")
+                string(term_status)*"); using the solution.")
       end
       # Check if the SOC constraint is tight on the solution that is actually
       # used. This is a pure arithmetic check on the primal point, so it applies

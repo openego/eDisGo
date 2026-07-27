@@ -370,23 +370,35 @@ def from_powermodels(
         # calculate relative error
         df2 = deepcopy(df)
         for flex in df2.columns:
-            if isinstance(hv_flex_dict[flex], pd.Series):
-                abs_error = abs(df2[flex].values - hv_flex_dict[flex].values)
+            # For a temporally reduced OPF the runner solves one interval at a
+            # time: df2 is indexed by the current interval's timeindex, while
+            # hv_flex_dict is built from the overlying-grid series over the full
+            # reduced index. Align the requirement to df2's timesteps so the
+            # element-wise error compares matching rows (otherwise a multi-
+            # interval run raises a 168-vs-336 broadcast error here). For a
+            # single full run df2.index equals the requirement index, so this
+            # is a no-op.
+            flex_req = hv_flex_dict[flex]
+            if isinstance(flex_req, (pd.Series, pd.DataFrame)):
+                try:
+                    flex_req = flex_req.loc[df2.index]
+                except KeyError:
+                    pass
+            if isinstance(flex_req, pd.Series):
+                abs_error = abs(df2[flex].values - flex_req.values)
                 rel_error = [
-                    abs_error[i] / hv_flex_dict[flex].iloc[i]
-                    if ((abs_error > 0.01)[i] & (hv_flex_dict[flex].iloc[i] != 0))
+                    abs_error[i] / flex_req.iloc[i]
+                    if ((abs_error > 0.01)[i] & (flex_req.iloc[i] != 0))
                     else 0
                     for i in range(len(abs_error))
                 ]
             else:
-                abs_error = abs(
-                    df2[flex].values - hv_flex_dict[flex].sum(axis=1).values
-                )
+                abs_error = abs(df2[flex].values - flex_req.sum(axis=1).values)
                 rel_error = [
-                    abs_error[i] / hv_flex_dict[flex].sum(axis=1).iloc[i]
+                    abs_error[i] / flex_req.sum(axis=1).iloc[i]
                     if (
                         (abs_error > 0.01)[i]
-                        & (hv_flex_dict[flex].sum(axis=1).iloc[i] != 0)
+                        & (flex_req.sum(axis=1).iloc[i] != 0)
                     )
                     else 0
                     for i in range(len(abs_error))
