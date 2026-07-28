@@ -123,3 +123,11 @@ Changes
   and added in-depth methodology pages for power flow, grid reinforcement, complexity
   reduction and the flexibility optimisation. Tutorial notebooks are now rendered via
   nbsphinx and unmaintained methods are collected in a dedicated legacy section.
+* Fixed the Julia OPF sources not being packaged: ``edisgo/opf/eDisGo_OPF.jl`` was
+  missing from every sdist and wheel, so :meth:`~.edisgo.EDisGo.pm_optimize` failed in
+  any non-editable installation (for instance eGo's
+  ``edisgo @ git+https://github.com/openego/eDisGo.git``). ``edisgo.opf`` is a package
+  of its own, so its data files need their own ``package_data`` key. A new
+  ``Packaging`` workflow now builds both artifacts, asserts that all runtime data files
+  ship and that the OPF entry point resolves in an installed layout, so this cannot
+  regress unnoticed again

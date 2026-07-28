@@ -113,6 +113,14 @@ setup(
             os.path.join("config", "*.cfg"),
             os.path.join("equipment", "*.csv"),
             os.path.join("run", "presets", "*.yaml"),
-        ]
+        ],
+        # The Julia OPF sources need their own key: edisgo/opf is a package of its
+        # own, and package_data patterns are resolved relative to the package they
+        # are listed under, so they cannot be reached from the "edisgo" entry above.
+        # Without this, pm_optimize() is broken in any non-editable install (e.g.
+        # eGo's "edisgo @ git+..."), because Main.jl never ships.
+        "edisgo.opf": [
+            os.path.join("eDisGo_OPF.jl", "**", "*"),
+        ],
     },
 )
