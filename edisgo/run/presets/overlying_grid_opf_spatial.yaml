@@ -1,0 +1,53 @@
+# overlying_grid_opf_spatial — overlying_grid_opf PLUS spatial complexity
+# reduction. This is the "full" use case: it does BOTH complexity reductions
+#   * temporal — select_critical_timesteps reduces the year to the most
+#     critical intervals (as in overlying_grid_opf), and
+#   * spatial  — spatial_reduce / spatial_restore bracket the optimize step,
+#     so the OPF runs on a spatially reduced grid while reinforcement still
+#     runs on the full topology.
+#
+# ego passes eTraGo results via run_edisgo(config, overlying_grid_data=...)
+# with `overlying_grid.source: etrago`; standalone users can set
+# `source: csv` and point `path` at a CSV directory (see overlying_grid_opf).
+#
+# Both reductions are togglable: spatial via `spatial_reduction.enabled`
+# (spatial_reduce/spatial_restore no-op when false), temporal via the method
+# of select_critical_timesteps.
+
+scenario: eGon2035
+
+flexibilities: [heat_pumps, electromobility, dsm, home_batteries]
+
+overlying_grid:
+  enabled: true
+  source: etrago  # "etrago" (overlying_grid_data kwarg) or "csv" (path below)
+  # path: /path/to/overlying_grid_csvs   # required when source: csv
+
+# Top-level block read by the spatial_reduce / spatial_restore tasks via
+# ctx.raw_config. eGo can inject this the same way it injects overlying_grid.
+spatial_reduction:
+  enabled: true            # set false to no-op the spatial bracket
+  mode: kmeansdijkstra     # clustering mode for spatial_complexity_reduction
+  cluster_area: feeder
+  reduction_factor: 0.3
+  reduction_factor_not_focused: False
+  aggregation_mode: false  # start with false; true enables load/generator merging
+
+pipeline:
+  - setup_grid
+  - import_generators
+  - import_flex:
+      electromobility: {charging_strategy: null}
+  - oedb_ts:
+      dispatchable: {other: 0.7}
+  - apply_charging_strategy: {strategy: dumb}
+  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - build_flexibility_bands
+  - import_overlying_grid_data
+  - select_critical_timesteps: {method: residual_load}   # TEMPORAL reduction
+  - reactive_power
+  - spatial_reduce                                        # SPATIAL: stash full grid, reduce
+  - optimize: {method: soc, opf_version: 3}               #          OPF on reduced grid
+  - spatial_restore                                       # SPATIAL: dispatch back onto full grid
+  - reinforce: {catch_convergence_problems: true}         # reinforce on FULL topology
+  - save: {archive: true, save_opf_results: true}

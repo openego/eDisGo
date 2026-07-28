@@ -51,6 +51,7 @@ requirements = [
     # sqlalchemy leads to new errors.. should be fixed at some point
     "numpy ==1.26.4",
     "pandas >= 1.4.0, < 2.2.0",
+    "paramiko < 4.0",
     "plotly < 6.0",
     "pydot < 4.1.0",
     "pypower < 5.2.0",
@@ -111,6 +112,7 @@ setup(
         "edisgo": [
             os.path.join("config", "*.cfg"),
             os.path.join("equipment", "*.csv"),
+            os.path.join("run", "presets", "*.yaml"),
         ]
     },
 )
