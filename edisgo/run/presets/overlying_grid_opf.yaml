@@ -1,0 +1,37 @@
+# overlying_grid_opf — OPF with overlying-grid requirements (the ego path):
+# import flexibilities, load real egon_data time series, set
+# overlying-grid requirements (e.g. eTraGo results), automatically
+# reduce the year to the most critical time intervals, then run a
+# powermodels OPF (opf_version 3 = with high-voltage requirements;
+# falls back to 2 if no overlying-grid data is present).
+#
+# ego passes eTraGo results via
+#   run_edisgo(config, overlying_grid_data=...)
+# with `overlying_grid.source: etrago` (as below). Standalone users can
+# set `source: csv` and point `path` at a CSV directory instead.
+
+scenario: eGon2035
+
+flexibilities: [heat_pumps, electromobility, dsm, home_batteries]
+
+overlying_grid:
+  enabled: true
+  source: etrago  # "etrago" (overlying_grid_data kwarg) or "csv" (path below)
+  # path: /path/to/overlying_grid_csvs   # required when source: csv
+
+pipeline:
+  - setup_grid
+  - import_generators
+  - import_flex:
+      electromobility: {charging_strategy: null}
+  - oedb_ts:
+      dispatchable: {other: 0.7}
+  - apply_charging_strategy: {strategy: dumb}
+  - apply_heat_pump_strategy: {strategy: uncontrolled}
+  - build_flexibility_bands
+  - import_overlying_grid_data
+  - select_critical_timesteps: {method: residual_load}
+  - reactive_power
+  - optimize: {method: soc, opf_version: 3}
+  - reinforce: {catch_convergence_problems: true}
+  - save: {archive: true, save_opf_results: true}
