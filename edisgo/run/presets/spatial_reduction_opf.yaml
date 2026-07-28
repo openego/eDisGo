@@ -59,12 +59,12 @@ grid:
   legacy_ding0_grids: false
 
 database:
-  source: local
+  source: egon-data      # "egon-data" (local egon-data via ~/.ssh config), "oep", or empty to auto-detect
 
 overlying_grid:
   enabled: true          # set true to activate import_overlying_grid_data
   source: csv            # "csv" (load from path) or "etrago" (kwarg)
-  path: "/home/gurobi/.edisgo_input/overlying_grid"
+  path: "/path/to/overlying_grid_csvs"
 
 results:
   directory: results/spatial_reduction_opf
