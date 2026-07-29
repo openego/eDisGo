@@ -94,18 +94,43 @@ extras = {"dev": dev_requirements}
 
 setup(
     name="eDisGo",
-    version="0.3.0dev",
+    version="0.3.0",
     packages=find_packages(),
     url="https://github.com/openego/eDisGo",
+    project_urls={
+        "Documentation": "https://edisgo.readthedocs.io/",
+        "Source": "https://github.com/openego/eDisGo",
+        "Changelog": "https://edisgo.readthedocs.io/en/dev/whatsnew.html",
+        "Issues": "https://github.com/openego/eDisGo/issues",
+    },
     license="GNU Affero General Public License v3.0",
+    # Maintainers first, then the largest contributors. The complete list is in
+    # AUTHORS.md and CITATION.cff.
     author=(
-        "birgits, AnyaHe, khelfen, mltja, gplssm, nesnoj, jaappedersen, Elias, "
-        "boltbeard"
+        "Jonas Danke, Moritz Schlösser, Maike Held, birgits, AnyaHe, khelfen, "
+        "mltja, gplssm, nesnoj, jaappedersen, Elias, boltbeard"
     ),
-    author_email="anya.heider@rl-institut.de",
+    author_email="jonas.danke@rl-institut.de",
+    maintainer="Jonas Danke, Moritz Schlösser",
+    maintainer_email="jonas.danke@rl-institut.de",
     description="A python package for distribution network analysis and optimization",
     long_description=read("README.md"),
     long_description_content_type="text/markdown",
+    # numpy is pinned to 1.26.4, which has no wheels for 3.13; the test matrix covers
+    # 3.10 to 3.12.
+    python_requires=">=3.10,<3.13",
+    classifiers=[
+        "Development Status :: 4 - Beta",
+        "Intended Audience :: Science/Research",
+        "License :: OSI Approved :: GNU Affero General Public License v3 or later "
+        "(AGPLv3+)",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
+        "Topic :: Scientific/Engineering",
+    ],
     install_requires=requirements,
     extras_require=extras,
     package_data={
