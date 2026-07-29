@@ -1,0 +1,61 @@
+# Consolidates the multiple git identities contributors committed under, so that
+# `git shortlog -sne` and `git log --author=...` report one entry per person.
+# Format: Canonical Name <canonical@email> [<other@email> | Commit Name <other@email>]
+# See https://git-scm.com/docs/gitmailmap
+
+Jonas Danke <jonas.danke@rl-institut.de>
+Jonas Danke <jonas.danke@rl-institut.de> <66819219+joda9@users.noreply.github.com>
+# two commits were authored with Jonas' name but Kilian's address; match on both
+# fields so Kilian's own commits are not reassigned
+Jonas Danke <jonas.danke@rl-institut.de> Jonas Danke <kilian.helfenbein@rl-institut.de>
+
+Moritz Schlösser <moritz.schloesser@rl-institut.de>
+Moritz Schlösser <moritz.schloesser@rl-institut.de> <moritz.schloesser@gmx.de>
+
+Maike Held <maike.held@rl-institut.de>
+Maike Held <maike.held@rl-institut.de> <Maike.Held@rl-institut.de>
+Maike Held <maike.held@rl-institut.de> <56869935+maike93he@users.noreply.github.com>
+Maike Held <maike.held@rl-institut.de> <RL-INSTITUT\maike.held@rli-vm-01.rl-institut.local>
+
+Birgit Schachler <birgit.schachler@rl-institut.de>
+Birgit Schachler <birgit.schachler@rl-institut.de> <RL-INSTITUT\birgit.schachler@solydxk>
+
+Anya Heider <anya.heider@rl-institut.de>
+Anya Heider <anya.heider@rl-institut.de> <Anya.Heider@rl-institut.de>
+Anya Heider <anya.heider@rl-institut.de> <50416149+AnyaHe@users.noreply.github.com>
+
+Kilian Helfenbein <kilian.helfenbein@rl-institut.de>
+Kilian Helfenbein <kilian.helfenbein@rl-institut.de> <Kilian.Helfenbein@rl-institut.de>
+Kilian Helfenbein <kilian.helfenbein@rl-institut.de> <46815982+khelfen@users.noreply.github.com>
+Kilian Helfenbein <kilian.helfenbein@rl-institut.de> <s0554994@htw-berlin.de>
+
+Guido Plessmann <guido.plessmann@rl-institut.de>
+Guido Plessmann <guido.plessmann@rl-institut.de> <gplssm@users.noreply.github.com>
+
+Jonathan Amme <jonathan.amme@rl-institut.de>
+
+Bharadwaj Narasimhan <bharadwaj.narasimhan@rl-institut.de>
+Bharadwaj Narasimhan <bharadwaj.narasimhan@rl-institut.de> <29677472+boltbeard@users.noreply.github.com>
+Bharadwaj Narasimhan <bharadwaj.narasimhan@rl-institut.de> <RL-INSTITUT\bharadwaj.narasimhan@rli-nb-26lin.rl-institut.local>
+
+Elias Trommer <elias.trommer@rl-institut.de>
+Elias Trommer <elias.trommer@rl-institut.de> <elias_trommer@gmx.de>
+
+Jaap Pedersen <jaappedersen@posteo.net>
+Jaap Pedersen <jaappedersen@posteo.net> <RL-INSTITUT\jaap.pedersen@rli-nb-13.rl-institut.local>
+
+Malte Jahn <malte.jahn@rl-institut.de>
+
+Jonas Jeckstadt <jonas.jeckstadt@rl-institut.de>
+Jonas Jeckstadt <jonas.jeckstadt@rl-institut.de> <RL-INSTITUT\jonas.jeckstadt@rli-nb-44.rl-institut.local>
+
+mltja <mltja+github@mailbox.org>
+mltja <mltja+github@mailbox.org> <82087381+mltja@users.noreply.github.com>
+
+Nader Algherbawi <nadergherbawi@gmail.com>
+
+Santiago Infantino Moreno <santiago.infantino.moreno@gmail.com>
+
+Malte Scharf <malte.scharf@googlemail.com>
+
+Martin Soethe <martin.soethe@gmx.de>
