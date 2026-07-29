@@ -1,7 +1,7 @@
 Release v0.3.0
 ================
 
-Release date: unreleased (development version)
+Release date: July 29, 2026
 
 Changes
 -------
@@ -123,6 +123,42 @@ Changes
   and added in-depth methodology pages for power flow, grid reinforcement, complexity
   reduction and the flexibility optimisation. Tutorial notebooks are now rendered via
   nbsphinx and unmaintained methods are collected in a dedicated legacy section.
+* Added a declarative pipeline runner, :mod:`edisgo.run`: a whole eDisGo study is
+  described as a flat ``pipeline:`` list of named tasks in a YAML or JSON config and
+  executed through the single entry point :func:`~.run.runner.run_edisgo`. Tasks live
+  in :mod:`edisgo.run.tasks` (grid import, time series, flexibilities, analysis,
+  optimisation, spatial reduction, I/O) and register themselves with a
+  requires/provides contract that :mod:`~.run.validator` checks before anything runs,
+  so a misordered or incomplete config fails immediately instead of halfway through a
+  long run. Configs can build on a bundled preset (``worst_case``, ``flex_opf``,
+  ``overlying_grid_opf``, ``spatial_reduction_opf``, ``overlying_grid_opf_spatial``)
+  or on another config file via ``extends:``
+  `#731 <https://github.com/openego/eDisGo/pull/731>`_
+* Integrated spatial complexity reduction into the run pipeline via ``spatial_reduce``
+  and ``spatial_restore`` tasks bracketing ``optimize``, so the optimal power flow can
+  run on a spatially reduced grid while grid reinforcement still runs on the full
+  topology. The new
+  :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid` maps
+  the optimised dispatch of flexible components back onto the full grid, by name or
+  disaggregated onto the aggregated members per time step, weighted by each member's
+  pre-optimisation flexibility envelope
+  `#706 <https://github.com/openego/eDisGo/pull/706>`_
+* Reworked the optimal power flow to accept feasible but non-optimal solutions instead
+  of aborting and computing an irreducible inconsistent subsystem, to solve long
+  horizons interval by interval, and to write results back robustly across intervals
+  including the solver status and state-of-charge handling
+* Reworked the database access in :mod:`~.io.db`: the source (a local egon-data
+  database or the open energy platform) is now auto-detected, the SSH tunnel is
+  hardened and closed at process exit, pooled connections survive long multi-grid runs,
+  and etrago tables are resolved in the ``grid`` schema when running against local
+  egon-data
+* Scoped :meth:`~.network.electromobility.Electromobility.get_flexibility_bands` to the
+  active time index. It previously only resampled the bands to the active *frequency*,
+  so after selecting a shorter time window the flexibility bands kept spanning the full
+  underlying SimBEV data range and consumers indexing them by
+  ``edisgo.timeseries.timeindex`` could hit missing time steps
+* Added standardised SPDX license headers to all source files
+  `#607 <https://github.com/openego/eDisGo/pull/607>`_
 * Fixed the Julia OPF sources not being packaged: ``edisgo/opf/eDisGo_OPF.jl`` was
   missing from every sdist and wheel, so :meth:`~.edisgo.EDisGo.pm_optimize` failed in
   any non-editable installation (for instance eGo's
