@@ -136,12 +136,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      # Julia is only needed on Linux
+      # Julia is only needed on Linux. The version must match the one the checked-in
+      # eDisGo_OPF.jl/Manifest.toml was resolved with: Main.jl runs Pkg.instantiate()
+      # on that manifest, and it pins stdlibs that only exist from Julia 1.12 on.
       - name: Set up Julia
         if: runner.os == 'Linux'
         uses: julia-actions/setup-julia@v3
         with:
-          version: "1.6"
+          version: "1.12"
 
       # Linux package installation (classic pip install)
       - name: Install dependencies (Linux)
