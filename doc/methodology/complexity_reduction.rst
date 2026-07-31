@@ -113,7 +113,7 @@ References
    effects of spatial complexity reduction on distribution grid expansion planning
    with flexibilities"), master's thesis, Technische Universität Berlin (in
    cooperation with the Reiner Lemoine Institut), 2022.
-   `PDF <https://reiner-lemoine-institut.de/wp-content/uploads/2024/09/2022_MA_Malte_Jahn_Raeumliche_Komplexitaetsreduktion.pdf>`__
+   `PDF <https://reiner-lemoine-institut.de/wp-content/uploads/2022/09/2022_MA_Malte_Jahn_Raeumliche_Komplexitaetsreduktion.pdf>`__
    The four clustering modes offered by
    :meth:`~edisgo.edisgo.EDisGo.spatial_complexity_reduction` (``"kmeans"``,
    ``"kmeansdijkstra"``, ``"aggregate_to_main_feeder"`` and ``"equidistant_nodes"``)
