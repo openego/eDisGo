@@ -23,7 +23,7 @@ because shifting energy in time only makes sense across time.
       Verteilnetzen basierend auf einem AC-Lastflussmodell* (in German), master's
       thesis, Technische Universität Berlin (in cooperation with the Reiner Lemoine
       Institut), 2023.
-      `PDF <https://reiner-lemoine-institut.de/wp-content/uploads/2024/09/2023_MA_Maike_Held_Netzdienlich_optimaler_Einsatz_von_Flexibilitaeten.pdf>`__
+      `PDF <https://reiner-lemoine-institut.de/wp-content/uploads/2023/09/2023_MA_Maike_Held_Netzdienlich_optimaler_Einsatz_von_Flexibilitaeten.pdf>`__
 
    The equation numbers used below (``Eq. (3.x)``) follow chapter 3 of that thesis,
    and the Julia source comments use the same numbering. Consult the thesis for the
