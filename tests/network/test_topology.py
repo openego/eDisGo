@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import shutil
@@ -13,7 +14,7 @@ from shapely.geometry import Point
 from edisgo import EDisGo
 from edisgo.io import ding0_import
 from edisgo.network.components import Switch
-from edisgo.network.grids import LVGrid
+from edisgo.network.grids import LVGrid, MVGrid
 from edisgo.network.topology import Topology
 from edisgo.tools.geopandas_helper import GeoPandasGridContainer
 
@@ -30,6 +31,12 @@ class TestTopology:
     def setup_fixture(self):
         self.topology = Topology()
         ding0_import.import_ding0_grid(pytest.ding0_test_network_path, self)
+
+    def test_grids(self):
+        grids = list(self.topology.grids)
+        assert len(grids) == 11
+        assert isinstance(grids[0], MVGrid)
+        assert isinstance(grids[1], LVGrid)
 
     def test_lv_grids(self):
         lv_grids = list(self.topology.lv_grids)
@@ -276,10 +283,7 @@ class TestTopology:
         assert self.topology.loads_df.loc[name, "p_set"] == 3
 
         # test error raising if bus is not valid
-        msg = (
-            "Specified bus Unknown_bus is not valid as it is not defined in "
-            "buses_df."
-        )
+        msg = "Specified bus Unknown_bus is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_load(
                 load_id=8,
@@ -319,10 +323,7 @@ class TestTopology:
         assert self.topology.charging_points_df.at[name, "p_set"] == 0.5
 
         # test error raising if bus is not valid
-        msg = (
-            "Specified bus Unknown_bus is not valid as it is not defined in "
-            "buses_df."
-        )
+        msg = "Specified bus Unknown_bus is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_load(bus="Unknown_bus", p_set=0.5, sector="work")
 
@@ -357,10 +358,7 @@ class TestTopology:
         assert self.topology.generators_df.at[name, "p_nom"] == 0.5
 
         # test error raising if bus is not valid
-        msg = (
-            "Specified bus Unknown_bus is not valid as it is not defined in "
-            "buses_df."
-        )
+        msg = "Specified bus Unknown_bus is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_generator(
                 bus="Unknown_bus", p_nom=0.5, generator_type="solar"
@@ -391,10 +389,7 @@ class TestTopology:
         assert self.topology.storage_units_df.at[name, "control"] == "PQ"
 
         # test error raising if bus is not valid
-        msg = (
-            "Specified bus Unknown_bus is not valid as it is not "
-            "defined in buses_df."
-        )
+        msg = "Specified bus Unknown_bus is not valid as it is not defined in buses_df."
         with pytest.raises(ValueError, match=msg):
             self.topology.add_storage_unit(bus="Unknown_bus", p_nom=1, control="PQ")
 
@@ -535,7 +530,6 @@ class TestTopology:
         assert return_value
 
     def test_check_line_for_removal(self, caplog):
-
         # test warning if line does not exist
         msg = "Line of name TestLine not in Topology. Cannot be removed."
         with caplog.at_level(logging.WARNING):
@@ -749,7 +743,6 @@ class TestTopology:
         assert bus_name not in self.topology.buses_df.index
 
     def test_update_number_of_parallel_lines(self):
-
         line_1 = "Line_10026"
         line_2 = "Line_90000010"
         # manipulate number of parallel lines of line_2
@@ -789,7 +782,6 @@ class TestTopology:
         )
 
     def test_change_line_type(self):
-
         # test line type not in equipment data
         line_1 = "Line_10027"
         msg = (
@@ -838,6 +830,25 @@ class TestTopology:
             == np.sqrt(3) * 0.4 * 0.419
         ).all()
 
+    def test_sort_buses(self):
+        lines_df_before = self.topology.lines_df.copy()
+
+        self.topology.sort_buses()
+
+        # check that buses were exchanged
+        line = "Line_10008"
+        assert (
+            lines_df_before.at[line, "bus0"] == self.topology.lines_df.at[line, "bus1"]
+        )
+        assert (
+            lines_df_before.at[line, "bus1"] == self.topology.lines_df.at[line, "bus0"]
+        )
+
+        # check number of lines where buses were exchanged
+        assert (lines_df_before.bus0 == self.topology.lines_df.bus0).value_counts().loc[
+            False
+        ] == 11
+
     def test_to_csv(self):
         """Test for method to_csv."""
         dir = os.path.join(os.getcwd(), "topology")
@@ -848,6 +859,72 @@ class TestTopology:
         assert "generators.csv" in saved_files
 
         shutil.rmtree(dir)
+
+    def test_assign_feeders(self):
+        # Test mode 'grid_feeder'
+        self.topology.assign_feeders(mode="grid_feeder")
+        # check specific values
+        assert self.topology.buses_df.loc[
+            ["Bus_MVStation_1", "Bus_Generator_1"], "grid_feeder"
+        ].to_list() == [
+            "station_node",
+            "Bus_BranchTee_MVGrid_1_1",
+        ]
+        assert self.topology.lines_df.loc[
+            ["Line_10003", "Line_10004"], "grid_feeder"
+        ].to_list() == [
+            "Bus_BranchTee_MVGrid_1_1",
+            "Bus_BranchTee_MVGrid_1_4",
+        ]
+        # check that all buses and lines have a grid feeder assigned
+        assert not self.topology.lines_df.grid_feeder.isna().any()
+        assert not self.topology.buses_df.grid_feeder.isna().any()
+
+        # test mode 'mv_feeder'
+        self.topology.assign_feeders(mode="mv_feeder")
+        # check specific values
+        assert self.topology.buses_df.loc[
+            ["Bus_MVStation_1", "Bus_Generator_1"], "mv_feeder"
+        ].to_list() == [
+            "station_node",
+            "Bus_BranchTee_MVGrid_1_1",
+        ]
+        assert self.topology.lines_df.loc[
+            ["Line_10003", "Line_10004"], "mv_feeder"
+        ].to_list() == [
+            "Bus_BranchTee_MVGrid_1_1",
+            "Bus_BranchTee_MVGrid_1_4",
+        ]
+        lv_grids_mv_bus = self.topology.grids[2].transformers_df["bus0"][0]
+        feeder_of_lv_grids_mv_bus = self.topology.buses_df.loc[
+            lv_grids_mv_bus, "mv_feeder"
+        ]
+        list_of_feeders = self.topology.grids[2].buses_df["mv_feeder"].to_list()
+        assert len(list_of_feeders) == 15
+        assert len(set(list_of_feeders)) == 1
+        assert list_of_feeders[0] == feeder_of_lv_grids_mv_bus
+        list_of_feeders = self.topology.grids[2].lines_df["mv_feeder"].to_list()
+        assert len(list_of_feeders) == 14
+        assert len(set(list_of_feeders)) == 1
+        assert list_of_feeders[0] == feeder_of_lv_grids_mv_bus
+
+    def test_aggregate_lv_grid_at_station(self, caplog):
+        """Test method aggregate_lv_grid_at_station"""
+
+        lv_grid_id = 1
+        topology_obj = copy.deepcopy(self.topology)
+        lv_grid_orig = self.topology.get_lv_grid(lv_grid_id)
+        topology_obj.aggregate_lv_grid_at_station(lv_grid_id=lv_grid_id)
+        lv_grid = topology_obj.get_lv_grid(lv_grid_id)
+
+        assert lv_grid_orig.buses_df.shape[0] == 15
+        assert lv_grid.buses_df.shape[0] == 1
+
+        with caplog.at_level(logging.WARNING):
+            topology_obj.check_integrity()
+        assert "which are not defined" not in caplog.text
+        assert "The following buses are isolated" not in caplog.text
+        assert "The network has isolated nodes or edges." not in caplog.text
 
 
 class TestTopologyWithEdisgoObject:
@@ -862,9 +939,17 @@ class TestTopologyWithEdisgoObject:
         self.edisgo.set_time_series_worst_case_analysis()
 
     def test_to_geopandas(self):
-        geopandas_container = self.edisgo.topology.to_geopandas()
+        # further tests of to_geopandas are conducted in test_geopandas_helper.py
 
-        assert isinstance(geopandas_container, GeoPandasGridContainer)
+        # set up edisgo object with georeferenced LV
+        edisgo_geo = EDisGo(
+            ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
+        )
+        test_suits = {
+            "mv": {"edisgo_obj": self.edisgo, "mode": "mv", "lv_grid_id": None},
+            "lv": {"edisgo_obj": edisgo_geo, "mode": "lv", "lv_grid_id": 1164120002},
+            "mv+lv": {"edisgo_obj": edisgo_geo, "mode": None, "lv_grid_id": None},
+        }
 
         attrs = [
             "buses_gdf",
@@ -875,19 +960,30 @@ class TestTopologyWithEdisgoObject:
             "transformers_gdf",
         ]
 
-        for attr_str in attrs:
-            attr = getattr(geopandas_container, attr_str)
-            grid_attr = getattr(
-                self.edisgo.topology.mv_grid, attr_str.replace("_gdf", "_df")
+        for test_suit, params in test_suits.items():
+            # call to_geopandas() function with different settings
+            geopandas_container = params["edisgo_obj"].topology.to_geopandas(
+                mode=params["mode"], lv_grid_id=params["lv_grid_id"]
             )
 
-            assert isinstance(attr, GeoDataFrame)
+            assert isinstance(geopandas_container, GeoPandasGridContainer)
 
-            common_cols = list(set(attr.columns).intersection(grid_attr.columns))
+            # check that content of geodataframes is the same as content of original
+            # dataframes
+            for attr_str in attrs:
+                grid = getattr(geopandas_container, "grid")
+                attr = getattr(geopandas_container, attr_str)
+                grid_attr = getattr(grid, attr_str.replace("_gdf", "_df"))
 
-            assert_frame_equal(
-                attr[common_cols], grid_attr[common_cols], check_names=False
-            )
+                assert isinstance(attr, GeoDataFrame)
+
+                common_cols = list(set(attr.columns).intersection(grid_attr.columns))
+
+                assert_frame_equal(
+                    attr[common_cols].sort_index(),
+                    grid_attr[common_cols].sort_index(),
+                    check_names=False,
+                )
 
     def test_from_csv(self):
         """
@@ -1144,8 +1240,42 @@ class TestTopologyWithEdisgoObject:
         )
         assert self.edisgo.topology.loads_df.at[comp_name, "type"] == "heat_pump"
 
-    def test_connect_to_lv(self):
+        # ######### Storage unit #############
+        # add generator
+        x = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "x"]
+        y = self.edisgo.topology.buses_df.at["Bus_GeneratorFluctuating_6", "y"]
+        geom = Point((x, y))
+        test_stor = {
+            "p_nom": 2.5,
+            "geom": geom,
+            "voltage_level": 5,
+        }
+        num_storage_units_before = len(self.edisgo.topology.storage_units_df)
+        num_buses_before = len(self.edisgo.topology.buses_df)
+        num_lines_before = len(self.edisgo.topology.lines_df)
+        comp_name = self.edisgo.topology.connect_to_mv(
+            self.edisgo, test_stor, comp_type="storage_unit"
+        )
 
+        # check if number of buses increased (by one because closest connection
+        # object is a bus)
+        assert num_buses_before + 1 == len(self.edisgo.topology.buses_df)
+        # check if number of lines increased
+        assert num_lines_before + 1 == len(self.edisgo.topology.lines_df)
+        # check if number of storage units increased
+        assert num_storage_units_before + 1 == len(
+            self.edisgo.topology.storage_units_df
+        )
+
+        # check new storage
+        assert (
+            self.edisgo.topology.storage_units_df.at[comp_name, "p_nom"]
+            == test_stor["p_nom"]
+        )
+        assert self.edisgo.topology.storage_units_df.at[comp_name, "control"] == "PQ"
+        assert "Storage" in self.edisgo.topology.storage_units_df.at[comp_name, "bus"]
+
+    def test_connect_to_lv(self):
         # ######### Generator #############
 
         # test substation ID that does not exist in the grid
@@ -1597,7 +1727,7 @@ class TestTopologyWithEdisgoObject:
         loads_before = self.edisgo.topology.loads_df
 
         test_hp = {
-            "p_set": 0.3,
+            "p_set": 0.1,
             "geom": geom,
             "voltage_level": 6,
             "mvlv_subst_id": 6,
@@ -1628,7 +1758,41 @@ class TestTopologyWithEdisgoObject:
             new_line_df.loc[new_line_df.index[0], ["bus0", "bus1"]]
         )
         # check new heat pump
-        assert self.edisgo.topology.loads_df.at[comp_name, "p_set"] == 0.3
+        assert self.edisgo.topology.loads_df.at[comp_name, "p_set"] == 0.1
+
+        # ############# storage unit #################
+        # test existing substation ID (voltage level 7)
+        # storage can be connected to residential load
+
+        num_lines_before = len(self.edisgo.topology.lines_df)
+        num_buses_before = len(self.edisgo.topology.buses_df)
+        num_stores_before = len(self.edisgo.topology.storage_units_df)
+
+        # add generator
+        test_stor = {
+            "p_nom": 0.03,
+            "geom": geom,
+            "voltage_level": 7,
+            "mvlv_subst_id": 1,
+        }
+
+        comp_name = self.edisgo.topology.connect_to_lv(
+            self.edisgo, test_stor, comp_type="storage_unit"
+        )
+
+        # check that number of buses stayed the same
+        assert num_buses_before == len(self.edisgo.topology.buses_df)
+        # check that number of lines stayed the same
+        assert num_lines_before == len(self.edisgo.topology.lines_df)
+        # check that number of storage units increased
+        assert num_stores_before + 1 == len(self.edisgo.topology.storage_units_df)
+
+        # check bus
+        bus = self.edisgo.topology.storage_units_df.at[comp_name, "bus"]
+        assert bus == "Bus_BranchTee_LVGrid_1_12"
+        assert self.edisgo.topology.buses_df.at[bus, "lv_grid_id"] == 1
+        # check new storage
+        assert self.edisgo.topology.storage_units_df.at[comp_name, "p_nom"] == 0.03
 
     def test_check_integrity(self, caplog):
         """Test of validation of grids."""
@@ -1642,9 +1806,13 @@ class TestTopologyWithEdisgoObject:
         }
         # check duplicate node
         for comp, name in comps_dict.items():
-            new_comp = getattr(self.edisgo.topology, "_{}_df".format(comp)).loc[name]
-            comps = getattr(self.edisgo.topology, "_{}_df".format(comp))
-            setattr(self.edisgo.topology, "_{}_df".format(comp), comps.append(new_comp))
+            new_comp = getattr(self.edisgo.topology, f"_{comp}_df").loc[name]
+            comps = getattr(self.edisgo.topology, f"_{comp}_df")
+            setattr(
+                self.edisgo.topology,
+                f"_{comp}_df",
+                pd.concat([comps, new_comp.to_frame().T]),
+            )  # comps.append(new_comp))
             self.edisgo.topology.check_integrity()
             assert (
                 f"{name} have duplicate entry in one of the following components' "
@@ -1653,36 +1821,34 @@ class TestTopologyWithEdisgoObject:
             caplog.clear()
 
             # reset dataframe
-            setattr(self.edisgo.topology, "_{}_df".format(comp), comps)
+            setattr(self.edisgo.topology, f"_{comp}_df", comps)
             self.edisgo.topology.check_integrity()
 
         # check not connected generator and load
         for nodal_component in ["loads", "generators"]:
-            comps = getattr(self.edisgo.topology, "_{}_df".format(nodal_component))
+            comps = getattr(self.edisgo.topology, f"_{nodal_component}_df")
             new_comp = comps.loc[comps_dict[nodal_component]]
             new_comp.name = "new_nodal_component"
             new_comp.bus = "Non_existent_bus_" + nodal_component
             setattr(
                 self.edisgo.topology,
-                "_{}_df".format(nodal_component),
-                comps.append(new_comp),
+                f"_{nodal_component}_df",
+                pd.concat([comps, new_comp.to_frame().T]),
             )
             self.edisgo.topology.check_integrity()
             assert (
-                "The following {} have buses which are not defined: {}.".format(
-                    nodal_component, new_comp.name
-                )
+                f"The following {nodal_component} have buses which are not defined: {new_comp.name}."
                 in caplog.text
             )
             caplog.clear()
             # reset dataframe
-            setattr(self.edisgo.topology, "_{}_df".format(nodal_component), comps)
+            setattr(self.edisgo.topology, f"_{nodal_component}_df", comps)
             self.edisgo.topology.check_integrity()
 
         # check branch components
         i = 0
         for branch_component in ["lines", "transformers"]:
-            comps = getattr(self.edisgo.topology, "_{}_df".format(branch_component))
+            comps = getattr(self.edisgo.topology, f"_{branch_component}_df")
             new_comp = comps.loc[comps_dict[branch_component]]
             new_comp.name = "new_branch_component"
             setattr(
@@ -1692,19 +1858,17 @@ class TestTopologyWithEdisgoObject:
             )
             setattr(
                 self.edisgo.topology,
-                "_{}_df".format(branch_component),
-                comps.append(new_comp),
+                f"_{branch_component}_df",
+                pd.concat([comps, new_comp.to_frame().T]),
             )
             self.edisgo.topology.check_integrity()
             assert (
-                "The following {} have bus{} which are not defined: {}.".format(
-                    branch_component, i, new_comp.name
-                )
+                f"The following {branch_component} have bus{i} which are not defined: {new_comp.name}."
                 in caplog.text
             )
             caplog.clear()
             # reset dataframe
-            setattr(self.edisgo.topology, "_{}_df".format(branch_component), comps)
+            setattr(self.edisgo.topology, f"_{branch_component}_df", comps)
             self.edisgo.topology.check_integrity()
             i += 1
 
@@ -1713,14 +1877,12 @@ class TestTopologyWithEdisgoObject:
         for attr in ["bus_open", "bus_closed"]:
             new_comp = comps.loc[comps_dict["switches"]]
             new_comp.name = "new_switch"
-            new_comps = comps.append(new_comp)
+            new_comps = pd.concat([comps, new_comp.to_frame().T])
             new_comps.at[new_comp.name, attr] = "Non_existent_" + attr
             self.edisgo.topology.switches_df = new_comps
             self.edisgo.topology.check_integrity()
             assert (
-                "The following switches have {} which are not defined: {}.".format(
-                    attr, new_comp.name
-                )
+                f"The following switches have {attr} which are not defined: {new_comp.name}."
                 in caplog.text
             )
             caplog.clear()
@@ -1730,18 +1892,43 @@ class TestTopologyWithEdisgoObject:
         # check isolated node
         bus = self.edisgo.topology.buses_df.loc[comps_dict["buses"]]
         bus.name = "New_bus"
-        self.edisgo.topology.buses_df = self.edisgo.topology.buses_df.append(bus)
+        self.edisgo.topology.buses_df = pd.concat(
+            [self.edisgo.topology.buses_df, bus.to_frame().T]
+        )
         self.edisgo.topology.check_integrity()
-        assert "The following buses are isolated: {}.".format(bus.name) in caplog.text
+        assert f"The following buses are isolated: {bus.name}." in caplog.text
         assert "The network has isolated nodes or edges." in caplog.text
         caplog.clear()
 
-        # check small impedance and large line length
+        # check small impedance and large/short line length
         line = "Line_10017"
         self.edisgo.topology.lines_df.at[line, "length"] = 12.0
         self.edisgo.topology.lines_df.at[line, "x"] = 1e-7
         self.edisgo.topology.lines_df.at[line, "r"] = 1e-7
         self.edisgo.topology.check_integrity()
         assert "There are lines with very large line lengths" in caplog.text
+        assert "There are lines with very short line lengths" in caplog.text
         assert "Very small values for impedance of lines" and line in caplog.text
         caplog.clear()
+
+    def test_find_meshes(self, caplog: pytest.LogCaptureFixture):
+        meshes = Topology.find_meshes(self.edisgo)
+        assert not meshes
+        self.edisgo.topology.add_line(
+            "Bus_GeneratorFluctuating_2",
+            "Bus_GeneratorFluctuating_6",
+            0.1,
+            x=0.1,
+            r=0.1,
+        )
+        meshes = Topology.find_meshes(self.edisgo)
+        assert len(meshes) == 1
+        assert "Bus_GeneratorFluctuating_2" in meshes[0]
+        assert "Bus_GeneratorFluctuating_6" in meshes[0]
+        self.edisgo.topology.add_line(
+            "Bus_BranchTee_LVGrid_2_3", "Bus_BranchTee_LVGrid_3_3", 0.1, x=0.1, r=0.1
+        )
+        meshes = Topology.find_meshes(self.edisgo)
+        assert len(meshes) == 2
+        assert "Bus_BranchTee_LVGrid_2_3" in meshes[1]
+        assert "Grid contains mesh(es)." in caplog.text

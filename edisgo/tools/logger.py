@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import logging
 import os
 import sys
@@ -119,7 +130,7 @@ def setup_logger(
 
     def create_dir(dir_path):
         if not os.path.isdir(dir_path):
-            os.mkdir(dir_path)
+            os.makedirs(dir_path)
 
     def get_default_root_dir():
         dir_path = str(cfg_edisgo.get("user_dirs", "root_dir"))
@@ -140,9 +151,9 @@ def setup_logger(
         log_dir = os.path.join(
             get_default_root_dir(), cfg_edisgo.get("user_dirs", "log_dir")
         )
-        create_dir(log_dir)
 
     if log_dir is not None:
+        create_dir(log_dir)
         file_name = os.path.join(log_dir, file_name)
 
     if reset_loggers:

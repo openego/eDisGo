@@ -15,13 +15,17 @@ class TestPlots:
         cls.edisgo_reinforced = copy.deepcopy(cls.edisgo_root)
         cls.edisgo_analyzed.analyze()
         cls.edisgo_reinforced.reinforce()
-        cls.edisgo_reinforced.results.equipment_changes.loc[
-            "Line_10006", "change"
-        ] = "added"
+        cls.edisgo_reinforced.results.equipment_changes.loc["Line_10006", "change"] = (
+            "added"
+        )
 
     @pytest.mark.parametrize(
-        "line_color, node_color, line_result_selection, node_result_selection"
-        ", center_coordinates, pseudo_coordinates",
+        "line_color,"
+        "node_color,"
+        "line_result_selection,"
+        "node_result_selection,"
+        "plot_map,"
+        "pseudo_coordinates",
         [
             ("loading", "voltage_deviation", "min", "min", True, True),
             ("relative_loading", "adjacencies", "max", "max", False, False),
@@ -52,11 +56,10 @@ class TestPlots:
         line_result_selection,
         node_result_selection,
         selected_timesteps,
-        center_coordinates,
+        plot_map,
         pseudo_coordinates,
         node_selection,
     ):
-
         if edisgo_obj_name == "edisgo_root":
             edisgo_obj = self.edisgo_root
         elif edisgo_obj_name == "edisgo_analyzed":
@@ -79,7 +82,7 @@ class TestPlots:
                     line_result_selection=line_result_selection,
                     node_result_selection=node_result_selection,
                     selected_timesteps=selected_timesteps,
-                    center_coordinates=center_coordinates,
+                    plot_map=plot_map,
                     pseudo_coordinates=pseudo_coordinates,
                     node_selection=node_selection,
                 )
@@ -92,7 +95,7 @@ class TestPlots:
                 line_result_selection=line_result_selection,
                 node_result_selection=node_result_selection,
                 selected_timesteps=selected_timesteps,
-                center_coordinates=center_coordinates,
+                plot_map=plot_map,
                 pseudo_coordinates=pseudo_coordinates,
                 node_selection=node_selection,
             )

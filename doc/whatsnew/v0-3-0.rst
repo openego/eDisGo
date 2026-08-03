@@ -1,0 +1,169 @@
+Release v0.3.0
+================
+
+Release date: July 29, 2026
+
+Changes
+-------
+
+* Added functionalities to obtain electromobility, DSM, storage and electricity timeseries data from oedb `#328 <https://github.com/openego/eDisGo/pull/328>`_
+* Added functionalities to obtain heat pump data from oedb `#324 <https://github.com/openego/eDisGo/pull/324>`_
+* Added functionality to resample and check integrity of flexibility bands `#341 <https://github.com/openego/eDisGo/pull/341>`_
+* Added spatial complexity reduction methods `#343 <https://github.com/openego/eDisGo/pull/343>`_
+* Added function to sort buses in lines dataframe such that bus0 is always the upstream bus `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Changed to_pypsa function such that pypsa network can be build even though not all components have time series `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Added class holding data from overlying grid, such as curtailment requirements and
+  conventional generator dispatch `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Added integrity check for very short lines `#335 <https://github.com/openego/eDisGo/pull/335>`_
+* Refactoring of check_tech_constraints functions `#290 <https://github.com/openego/eDisGo/pull/290>`_
+* Add background map to plots `#364 <https://github.com/openego/eDisGo/pull/364>`_
+* Added method to scale timeseries `#353 <https://github.com/openego/eDisGo/pull/353>`_
+* Added method to iteratively reinforce a grid in case the power flow analysis does not always converge `#353 <https://github.com/openego/eDisGo/pull/353>`_
+* Added method to aggregate LV grid buses to station bus secondary side `#353 <https://github.com/openego/eDisGo/pull/353>`_
+* Adapted codebase to work with pandas 2.0 `#373 <https://github.com/openego/eDisGo/pull/373>`_
+* Added option to run reinforcement with reduced number of time steps `#379 <https://github.com/openego/eDisGo/pull/379>`_
+  (adapted in `#395 <https://github.com/openego/eDisGo/pull/395>`_)
+* Added optimization method to determine dispatch of flexibilities that lead to minimal network expansion costs `#376 <https://github.com/openego/eDisGo/pull/376>`_
+* Added a new reinforcement method that separate lv grids when the overloading is very high `#380 <https://github.com/openego/eDisGo/pull/380>`_
+* Move function to assign feeder to Topology class and add methods to the Grid class to get information on the feeders `#360 <https://github.com/openego/eDisGo/pull/360>`_
+* Added a storage operation strategy where the storage is charged when PV feed-in is higher than electricity demand of the household and discharged when electricity demand exceeds PV generation `#386 <https://github.com/openego/eDisGo/pull/386>`_
+* Added an estimation of the voltage deviation over a cable when selecting a suitable cable to connect a new component `#411 <https://github.com/openego/eDisGo/pull/411>`_
+* Added clipping of heat pump electrical power at its maximum value `#428 <https://github.com/openego/eDisGo/pull/428>`_
+* Replaced flake8, isort, pyupgrade, and Black with Ruff for linting
+  and formatting in pre-commit configuration `#222 <https://github.com/openego/eDisGo/issues/222>`_
+* Made ``engine`` parameter optional in
+  :meth:`~.edisgo.EDisGo.set_time_series_active_power_predefined`,
+  :meth:`~.edisgo.EDisGo.import_generators`,
+  :meth:`~.edisgo.EDisGo.import_electromobility`,
+  :meth:`~.edisgo.EDisGo.import_heat_pumps`,
+  :meth:`~.edisgo.EDisGo.import_dsm`, and
+  :meth:`~.edisgo.EDisGo.import_home_batteries`;
+  defaults to a standard open energy platform engine when not provided
+* Vectorised :func:`~.tools.geo.find_nearest_bus` to drop the per-bus geodesic
+  loop, greatly speeding up component geolocation on large grids; the returned
+  distance stays exact `#672 <https://github.com/openego/eDisGo/issues/672>`_
+* Reworked :meth:`~.network.electromobility.Electromobility.get_flexibility_bands`
+  to build the energy and power bands without the per-charging-process Python loop:
+  each process is expressed as range updates on difference arrays that are summed
+  with a single ``cumsum``, computed with vectorised ``numpy`` operations. This
+  fixes an intermittent segfault in pandas' ``_setitem_with_indexer`` and greatly
+  speeds it up on large grids; band values are unchanged apart from negligible
+  floating-point reordering noise
+  `#673 <https://github.com/openego/eDisGo/issues/673>`_
+* Replaced the O(n^2) per-building ``pd.concat`` loop in
+  :func:`~.io.timeseries_import.get_residential_electricity_profiles_per_building`
+  with a single sparse matrix product (building-to-profile incidence matrix times
+  the profiles), greatly speeding up residential demand-profile assembly on grids
+  with many buildings; the returned profiles are unchanged apart from negligible
+  floating-point reordering noise (~1e-18)
+  `#674 <https://github.com/openego/eDisGo/issues/674>`_
+* Sped up :func:`~.io.electromobility_import.distribute_private_charging_demand`
+  by recording the drawn charging park and point per car and writing them back to
+  the charging processes once after the loop, instead of scanning the whole frame
+  for every car; the per-car capacity lookup is replaced by a single groupby. The
+  stochastic assignment is unchanged
+  `#675 <https://github.com/openego/eDisGo/issues/675>`_
+* Removed the O(parks^2) per-charging-park time-series concatenation in the
+  ``dumb`` and ``reduced`` branches of
+  :func:`~.flex_opt.charging_strategies.charging_strategy` by collecting all
+  charging park columns and adding them to the load time series in a single call,
+  greatly speeding up the charging strategy on grids with many charging parks; the
+  resulting time series are unchanged
+  `#677 <https://github.com/openego/eDisGo/issues/677>`_
+* Removed the per-grid ``pd.concat`` loop in
+  :func:`~.io.timeseries_import.get_cts_profiles_per_building` by collecting the
+  per-grid profiles and concatenating them once; the returned profiles are
+  unchanged `#678 <https://github.com/openego/eDisGo/issues/678>`_
+* Performed a codebase-wide performance audit and removed a range of super-linear
+  (O(n^2)) accumulation and per-row Python hotspots; all changes are
+  output-identical apart from negligible floating-point reordering noise where
+  noted `#682 <https://github.com/openego/eDisGo/issues/682>`_:
+
+  * Replaced the O(n^2) per-component lookup in the PowerModels OPF builder
+    ``_mapping`` (:mod:`~.io.powermodels_io`) — a full linear name scan plus a
+    per-call frame rebuild — with a cached ``pandas.Index.get_loc`` and hoisted
+    the loop-invariant generator-type masks out of ``_build_component_timeseries``
+  * Rewrote the per-node ``networkx.shortest_simple_paths`` searches in
+    :func:`~.tools.pseudo_coordinates.make_pseudo_coordinates` as single
+    single-source path-length traversals, turning the O(nodes^2) coordinate
+    assignment into a near-linear one
+  * Collected the per-LV-station voltage-limit frames in
+    :func:`~.flex_opt.check_tech_constraints._lv_allowed_voltage_limits` and the
+    per-grid station load/loading frames in
+    :func:`~.flex_opt.check_tech_constraints.stations_allowed_load` and
+    :func:`~.flex_opt.check_tech_constraints.stations_relative_load` into single
+    ``pd.concat`` calls instead of growing them inside the loop
+  * Replaced the per-time-step ``iterrows`` in
+    :func:`~.flex_opt.battery_storage_operation.apply_reference_operation` with a
+    ``numpy`` array loop (the sequential state-of-energy recursion is unchanged)
+    and deferred the per-storage state-of-energy concatenation to a single call
+  * Batched the per-station transformer additions/removals in the grid
+    reinforcement measures (:mod:`~.flex_opt.reinforce_measures`) into single
+    ``pd.concat``/drop operations after the loop
+  * Vectorised the ``DataFrame.apply(..., axis=1)`` calls in the
+    ``predefined_*`` time-series setters of :mod:`~.network.timeseries` into
+    broadcast multiplications
+  * Batched the per-component grid-integration loops in
+    :mod:`~.io.generators_import`, :mod:`~.io.heat_pump_import` and
+    :mod:`~.io.storage_import` (single ``pd.concat`` and ``Index`` build instead
+    of per-element ``pd.concat``/``Index.append``)
+  * Vectorised :func:`~.tools.tools.add_line_susceptance` and replaced the
+    per-bus shortest-path loops in
+    :func:`~.tools.tools.get_path_length_to_station` and the MV branch of
+    ``plot_voltage_over_dist_mv`` (:mod:`~.edisgo`) with single single-source
+    traversals
+  * Pulled the time-series frames to ``numpy`` arrays once in the
+    ``_build_load_dict``/``_build_generator_dict`` helpers of
+    :mod:`~.tools.powermodels_io`, vectorised
+    :func:`~.flex_opt.costs._get_line_costs`, and removed the growing-frame
+    ``pd.concat`` loops in :func:`~.tools.spatial_complexity_reduction` busmap
+    assembly and :mod:`~.tools.preprocess_pypsa_opf_structure`
+* Restructured the documentation into clearly separated tiers (Getting Started,
+  User Guide, Methodology & Physics, Tutorials, Reference, and Experimental & Legacy)
+  and added in-depth methodology pages for power flow, grid reinforcement, complexity
+  reduction and the flexibility optimisation. Tutorial notebooks are now rendered via
+  nbsphinx and unmaintained methods are collected in a dedicated legacy section.
+* Added a declarative pipeline runner, :mod:`edisgo.run`: a whole eDisGo study is
+  described as a flat ``pipeline:`` list of named tasks in a YAML or JSON config and
+  executed through the single entry point :func:`~.run.runner.run_edisgo`. Tasks live
+  in :mod:`edisgo.run.tasks` (grid import, time series, flexibilities, analysis,
+  optimisation, spatial reduction, I/O) and register themselves with a
+  requires/provides contract that :mod:`~.run.validator` checks before anything runs,
+  so a misordered or incomplete config fails immediately instead of halfway through a
+  long run. Configs can build on a bundled preset (``worst_case``, ``flex_opf``,
+  ``overlying_grid_opf``, ``spatial_reduction_opf``, ``overlying_grid_opf_spatial``)
+  or on another config file via ``extends:``
+  `#731 <https://github.com/openego/eDisGo/pull/731>`_
+* Integrated spatial complexity reduction into the run pipeline via ``spatial_reduce``
+  and ``spatial_restore`` tasks bracketing ``optimize``, so the optimal power flow can
+  run on a spatially reduced grid while grid reinforcement still runs on the full
+  topology. The new
+  :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid` maps
+  the optimised dispatch of flexible components back onto the full grid, by name or
+  disaggregated onto the aggregated members per time step, weighted by each member's
+  pre-optimisation flexibility envelope
+  `#706 <https://github.com/openego/eDisGo/pull/706>`_
+* Reworked the optimal power flow to accept feasible but non-optimal solutions instead
+  of aborting and computing an irreducible inconsistent subsystem, to solve long
+  horizons interval by interval, and to write results back robustly across intervals
+  including the solver status and state-of-charge handling
+* Reworked the database access in :mod:`~.io.db`: the source (a local egon-data
+  database or the open energy platform) is now auto-detected, the SSH tunnel is
+  hardened and closed at process exit, pooled connections survive long multi-grid runs,
+  and etrago tables are resolved in the ``grid`` schema when running against local
+  egon-data
+* Scoped :meth:`~.network.electromobility.Electromobility.get_flexibility_bands` to the
+  active time index. It previously only resampled the bands to the active *frequency*,
+  so after selecting a shorter time window the flexibility bands kept spanning the full
+  underlying SimBEV data range and consumers indexing them by
+  ``edisgo.timeseries.timeindex`` could hit missing time steps
+* Added standardised SPDX license headers to all source files
+  `#607 <https://github.com/openego/eDisGo/pull/607>`_
+* Fixed the Julia OPF sources not being packaged: ``edisgo/opf/eDisGo_OPF.jl`` was
+  missing from every sdist and wheel, so :meth:`~.edisgo.EDisGo.pm_optimize` failed in
+  any non-editable installation (for instance eGo's
+  ``edisgo @ git+https://github.com/openego/eDisGo.git``). ``edisgo.opf`` is a package
+  of its own, so its data files need their own ``package_data`` key. A new
+  ``Packaging`` workflow now builds both artifacts, asserts that all runtime data files
+  ship and that the OPF entry point resolves in an installed layout, so this cannot
+  regress unnoticed again

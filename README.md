@@ -3,8 +3,11 @@
 
 # Overview
 
+
 [![Coverage Status](https://coveralls.io/repos/github/openego/eDisGo/badge.svg?branch=dev)](https://coveralls.io/github/openego/eDisGo?branch=dev)
 [![Tests & coverage](https://github.com/openego/eDisGo/actions/workflows/tests-coverage.yml/badge.svg)](https://github.com/openego/eDisGo/actions/workflows/tests-coverage.yml)
+![Python Versions](https://img.shields.io/badge/python-3.10%20|%203.11%20|%203.12-blue)
+
 
 
 # eDisGo

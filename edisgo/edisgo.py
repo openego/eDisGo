@@ -1,6 +1,18 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import copy
+import json
 import logging
 import os
 import pickle
@@ -12,31 +24,54 @@ from pathlib import PurePath
 import numpy as np
 import pandas as pd
 
+from sqlalchemy.engine.base import Engine
+
 from edisgo.flex_opt.charging_strategies import charging_strategy
+from edisgo.flex_opt.check_tech_constraints import lines_relative_load
 from edisgo.flex_opt.heat_pump_operation import (
     operating_strategy as hp_operating_strategy,
 )
-from edisgo.flex_opt.reinforce_grid import reinforce_grid
-from edisgo.io import pypsa_io
+from edisgo.flex_opt.reinforce_grid import (
+    catch_convergence_reinforce_grid,
+    reinforce_grid,
+)
+from edisgo.io import (
+    dsm_import,
+    generators_import,
+    powermodels_io,
+    pypsa_io,
+    timeseries_import,
+)
+from edisgo.io.db import engine as egon_engine
 from edisgo.io.ding0_import import import_ding0_grid
 from edisgo.io.electromobility_import import (
     distribute_charging_demand,
-    import_electromobility,
+    import_electromobility_from_dir,
+    import_electromobility_from_oedb,
     integrate_charging_parks,
 )
-from edisgo.io.generators_import import oedb as import_generators_oedb
-
-# from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
+from edisgo.io.heat_pump_import import oedb as import_heat_pumps_oedb
+from edisgo.io.storage_import import home_batteries_oedb
 from edisgo.network import timeseries
+from edisgo.network.dsm import DSM
 from edisgo.network.electromobility import Electromobility
 from edisgo.network.heat import HeatPump
+from edisgo.network.overlying_grid import OverlyingGrid
 from edisgo.network.results import Results
 from edisgo.network.topology import Topology
+from edisgo.opf import powermodels_opf
 from edisgo.opf.results.opf_result_class import OPFResults
-from edisgo.opf.run_mp_opf import run_mp_opf
 from edisgo.tools import plots, tools
 from edisgo.tools.config import Config
 from edisgo.tools.geo import find_nearest_bus
+from edisgo.tools.spatial_complexity_reduction import (
+    apply_reduced_results_to_full_grid,
+    spatial_complexity_reduction,
+)
+from edisgo.tools.tools import (
+    determine_grid_integration_voltage_level,
+    get_path_length_to_station,
+)
 
 if "READTHEDOCS" not in os.environ:
     from shapely.geometry import Point
@@ -108,6 +143,8 @@ class EDisGo:
             default config files are copied into the directory.
 
         Default: "default".
+    legacy_ding0_grids : bool
+        Allow import of old ding0 grids. Default: True.
 
     Attributes
     ----------
@@ -129,28 +166,36 @@ class EDisGo:
     heat_pump : :class:`~.network.heat.HeatPump`
         This is a container holding heat pump data such as COP, heat demand to be
         served and heat storage information.
+    overlying_grid : :class:`~.network.overlying_grid.OverlyingGrid`
+        This is a container holding data from the overlying grid such as curtailment
+        requirements or power plant dispatch.
+    dsm : :class:`~.network.dsm.DSM`
+        This is a container holding data on demand side management potential.
 
     """
 
     def __init__(self, **kwargs):
-
         # load configuration
         self._config = Config(**kwargs)
 
         # instantiate topology object and load grid data
         self.topology = Topology(config=self.config)
-        self.import_ding0_grid(path=kwargs.get("ding0_grid", None))
+        self.import_ding0_grid(
+            path=kwargs.get("ding0_grid", None),
+            legacy_ding0_grids=kwargs.get("legacy_ding0_grids", True),
+        )
+        self.legacy_grids = kwargs.get("legacy_ding0_grids", True)
 
-        # set up results and time series container
+        # instantiate other data classes
         self.results = Results(self)
         self.opf_results = OPFResults()
         self.timeseries = timeseries.TimeSeries(
             timeindex=kwargs.get("timeindex", pd.DatetimeIndex([]))
         )
-
-        # instantiate electromobility and heat pump object
         self.electromobility = Electromobility(edisgo_obj=self)
         self.heat_pump = HeatPump()
+        self.dsm = DSM()
+        self.overlying_grid = OverlyingGrid()
 
         # import new generators
         if kwargs.get("generator_scenario", None) is not None:
@@ -201,7 +246,7 @@ class EDisGo:
     def config(self, kwargs):
         self._config = Config(**kwargs)
 
-    def import_ding0_grid(self, path):
+    def import_ding0_grid(self, path, legacy_ding0_grids=True):
         """
         Import ding0 topology data from csv files in the format as
         `Ding0 <https://github.com/openego/ding0>`_ provides it.
@@ -210,10 +255,12 @@ class EDisGo:
         -----------
         path : str
             Path to directory containing csv files of network to be loaded.
+        legacy_ding0_grids : bool
+            Allow import of old ding0 grids. Default: True.
 
         """
         if path is not None:
-            import_ding0_grid(path, self)
+            import_ding0_grid(path, self, legacy_ding0_grids)
 
     def set_timeindex(self, timeindex):
         """
@@ -314,7 +361,7 @@ class EDisGo:
         Sets demand and feed-in of all loads, generators and storage units for the
         specified worst cases.
 
-        See :func:`~.network.timeseries.TimeSeries.set_worst_case` for more information.
+        See :attr:`~.network.timeseries.TimeSeries.set_worst_case` for more information.
 
         Parameters
         -----------
@@ -352,102 +399,240 @@ class EDisGo:
         conventional_loads_names=None,
         charging_points_ts=None,
         charging_points_names=None,
+        **kwargs,
     ):
         """
-        Uses predefined feed-in or demand profiles.
+        Uses predefined feed-in or demand profiles to set active power time series.
 
         Predefined profiles comprise i.e. standard electric conventional load profiles
         for different sectors generated using the oemof
-        `demandlib <https://github.com/oemof/demandlib/>`_ or feed-in time series of
-        fluctuating solar and wind generators provided on the OpenEnergy DataBase for
-        the weather year 2011.
-
+        `demandlib <https://github.com/oemof/oemof-demand>`_ or feed-in time series of
+        fluctuating solar and wind generators provided on the OpenEnergy DataBase.
         This function can also be used to provide your own profiles per technology or
         load sector.
 
-        Parameters
-        -----------
-        fluctuating_generators_ts : str or :pandas:`pandas.DataFrame<DataFrame>`
-            Defines which technology-specific (or technology and weather cell specific)
-            time series to use to set active power time series of fluctuating
-            generators. See parameter `ts_generators` in
-            :func:`~.network.timeseries.TimeSeries.predefined_fluctuating_generators_by_technology`
-            for more information. If None, no time series of fluctuating generators
-            are set. Default: None.
-        fluctuating_generators_names : list(str)
-            Defines for which fluctuating generators to apply technology-specific time
-            series. See parameter `generator_names` in
-            :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
-            for more information. Default: None.
-        dispatchable_generators_ts : :pandas:`pandas.DataFrame<DataFrame>`
-            Defines which technology-specific time series to use to set active power
-            time series of dispatchable generators.
-            See parameter `ts_generators` in
-            :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
-            for more information. If None, no time series of dispatchable generators
-            are set. Default: None.
-        dispatchable_generators_names : list(str)
-            Defines for which dispatchable generators to apply technology-specific time
-            series. See parameter `generator_names` in
-            :func:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
-            for more information. Default: None.
-        conventional_loads_ts : :pandas:`pandas.DataFrame<DataFrame>`
-            Defines which sector-specific time series to use to set active power
-            time series of conventional loads.
-            See parameter `ts_loads` in
-            :func:`~.network.timeseries.TimeSeries.predefined_conventional_loads_by_sector`
-            for more information. If None, no time series of conventional loads
-            are set. Default: None.
-        conventional_loads_names : list(str)
-            Defines for which conventional loads to apply technology-specific time
-            series. See parameter `load_names` in
-            :func:`~.network.timeseries.TimeSeries.predefined_conventional_loads_by_sector`
-            for more information. Default: None.
-        charging_points_ts : :pandas:`pandas.DataFrame<DataFrame>`
-            Defines which use-case-specific time series to use to set active power
-            time series of charging points.
-            See parameter `ts_loads` in
-            :func:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
-            for more information. If None, no time series of charging points
-            are set. Default: None.
-        charging_points_names : list(str)
-            Defines for which charging points to apply use-case-specific time
-            series. See parameter `load_names` in
-            :func:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
-            for more information. Default: None.
-
-        Notes
-        ------
-        This function raises a warning in case a time index was not previously set.
+        The active power time series are written to
+        :attr:`~.network.timeseries.TimeSeries.generators_active_power` or
+        :attr:`~.network.timeseries.TimeSeries.loads_active_power`.
+        As data in :class:`~.network.timeseries.TimeSeries` is indexed by
+        :attr:`~.network.timeseries.TimeSeries.timeindex` it is better to set
+        :attr:`~.network.timeseries.TimeSeries.timeindex` before calling this function.
         You can set the time index upon initialisation of the EDisGo object by
         providing the input parameter 'timeindex' or using the function
         :attr:`~.edisgo.EDisGo.set_timeindex`.
-        Also make sure that the time steps for which time series are provided include
+        Also make sure that the time steps of self-provided time series include
         the set time index.
 
+        Parameters
+        -----------
+        fluctuating_generators_ts : str or :pandas:`pandas.DataFrame<DataFrame>` or None
+            Defines option to set technology-specific or technology- and weather cell
+            specific active power time series of wind and solar generators.
+            Possible options are:
+
+            * 'oedb'
+
+                Technology- and weather cell-specific hourly feed-in time series are
+                obtained from the
+                `OpenEnergy DataBase
+                <https://openenergyplatform.org/database/>`_. See
+                :func:`edisgo.io.timeseries_import.feedin_oedb` for more information.
+
+                This option requires that the parameter `engine` is provided in case
+                new ding0 grids with geo-referenced LV grids are used. For further
+                settings, the parameter `timeindex` can also be provided.
+
+            * :pandas:`pandas.DataFrame<DataFrame>`
+
+                DataFrame with self-provided feed-in time series per technology or
+                per technology and weather cell ID normalized to a nominal capacity
+                of 1.
+                In case time series are provided only by technology, columns of the
+                DataFrame contain the technology type as string.
+                In case time series are provided by technology and weather cell ID
+                columns need to be a :pandas:`pandas.MultiIndex<MultiIndex>` with the
+                first level containing the technology as string and the second level
+                the weather cell ID as integer.
+                Index needs to be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+
+                When importing a ding0 grid and/or using predefined scenarios
+                of the future generator park,
+                each generator has an assigned weather cell ID that identifies the
+                weather data cell from the weather data set used in the research
+                project `open_eGo <https://openegoproject.wordpress.com/>`_ to
+                determine feed-in profiles. The weather cell ID can be retrieved
+                from column `weather_cell_id` in
+                :attr:`~.network.topology.Topology.generators_df` and could be
+                overwritten to use own weather cells.
+
+            * None
+
+                If None, time series are not set.
+
+            Default: None.
+
+        fluctuating_generators_names : list(str) or None
+            Defines for which fluctuating generators to apply technology-specific time
+            series. See parameter `generator_names` in
+            :attr:`~.network.timeseries.TimeSeries.predefined_fluctuating_generators_by_technology`
+            for more information. Default: None.
+        dispatchable_generators_ts : :pandas:`pandas.DataFrame<DataFrame>` or None
+            Defines which technology-specific time series to use to set active power
+            time series of dispatchable generators.
+            See parameter `ts_generators` in
+            :attr:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
+            for more information. If None, no time series of dispatchable generators
+            are set. Default: None.
+        dispatchable_generators_names : list(str) or None
+            Defines for which dispatchable generators to apply technology-specific time
+            series. See parameter `generator_names` in
+            :attr:`~.network.timeseries.TimeSeries.predefined_dispatchable_generators_by_technology`
+            for more information. Default: None.
+        conventional_loads_ts : str or :pandas:`pandas.DataFrame<DataFrame>` or None
+            Defines option to set active power time series of conventional loads.
+            Possible options are:
+
+            * 'oedb'
+
+                Sets active power demand time series using individual hourly electricity
+                load time series for one year obtained from the `OpenEnergy DataBase
+                <https://openenergyplatform.org/database/>`_.
+
+                This option requires that the parameters `engine` and `scenario` are
+                provided. For further settings, the parameter `timeindex` can also be
+                provided.
+
+            * 'demandlib'
+
+                Sets active power demand time series using hourly electricity load time
+                series obtained using standard electric load profiles from
+                the oemof `demandlib <https://github.com/oemof/oemof-demand>`_.
+                The demandlib provides sector-specific time series for the sectors
+                'residential', 'cts', 'industrial', and 'agricultural'.
+
+                For further settings, the parameter `timeindex` can also be provided.
+
+            * :pandas:`pandas.DataFrame<DataFrame>`
+
+                Sets active power demand time series using sector-specific demand
+                time series provided in this DataFrame.
+                The load time series per sector need to be normalized to an annual
+                consumption of 1. Index needs to
+                be a :pandas:`pandas.DatetimeIndex<DatetimeIndex>`.
+                Columns need to contain the sector as string.
+                In the current grid existing load types can be retrieved from column
+                `sector` in :attr:`~.network.topology.Topology.loads_df` (make sure to
+                select `type` 'conventional_load').
+                In ding0 grids the differentiated sectors are 'residential', 'cts',
+                and 'industrial'.
+
+            * None
+
+                If None, conventional load time series are not set.
+
+            Default: None.
+        conventional_loads_names : list(str) or None
+            Defines for which conventional loads to set time series. In case
+            `conventional_loads_ts` is 'oedb' see parameter `load_names` in
+            :func:`edisgo.io.timeseries_import.electricity_demand_oedb` for more
+            information. For other cases see parameter `load_names` in
+            :attr:`~.network.timeseries.TimeSeries.predefined_conventional_loads_by_sector`
+            for more information. Default: None.
+        charging_points_ts : :pandas:`pandas.DataFrame<DataFrame>` or None
+            Defines which use-case-specific time series to use to set active power
+            time series of charging points.
+            See parameter `ts_loads` in
+            :attr:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
+            for more information. If None, no time series of charging points
+            are set. Default: None.
+        charging_points_names : list(str) or None
+            Defines for which charging points to apply use-case-specific time
+            series. See parameter `load_names` in
+            :attr:`~.network.timeseries.TimeSeries.predefined_charging_points_by_use_case`
+            for more information. Default: None.
+
+        Other Parameters
+        ------------------
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine. This parameter is only required in case
+            `conventional_loads_ts` or `fluctuating_generators_ts` is 'oedb'.
+        scenario : str
+            Scenario for which to retrieve demand data. Possible options are 'eGon2035'
+            and 'eGon100RE'. This parameter is only required in case
+            `conventional_loads_ts` is 'oedb'.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            This parameter can optionally be provided in case `conventional_loads_ts`
+            is 'oedb' or 'demandlib' and in case `fluctuating_generators_ts` is
+            'oedb'. It is used to specify time steps for which to set active power data.
+            Leap years can currently not be handled when data is retrieved from the
+            oedb. In case the given timeindex contains a leap year, the data will
+            be indexed using a default year and set for the whole year.
+            If no timeindex is provided, the timeindex set in
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+            is indexed using a default year and set for the whole year.
+            In this case, the EDisGo TimeSeries timeindex is automatically set to
+            the selected default year so that imported data is linked to a valid
+            time index.
+
         """
-        if self.timeseries.timeindex.empty:
-            logger.warning(
-                "When setting time series using predefined profiles a time index is "
-                "not automatically set but needs to be set by the user. In some cases "
-                "not setting a time index prior to calling this function may lead "
-                "to errors. You can set the time index upon initialisation of the "
-                "EDisGo object by providing the input parameter 'timeindex' or using "
-                "the function EDisGo.set_timeindex()."
+        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
+        if self.timeseries.timeindex.empty and kwargs.get("timeindex", None) is None:
+            if conventional_loads_ts == "oedb":
+                default_year = tools.get_year_based_on_scenario(kwargs.get("scenario"))
+                if default_year is None:
+                    default_year = 2011
+            else:
+                default_year = 2011
+            self.timeseries.timeindex = pd.date_range(
+                f"1/1/{default_year}", periods=8760, freq="H"
             )
-            return
+            logger.warning(
+                "No timeindex was set. TimeSeries.timeindex is automatically "
+                f"set to the default year {default_year} to match imported "
+                "time series."
+            )
+        elif self.timeseries.timeindex.empty:
+            logger.warning(
+                "When setting time series using predefined profiles it is better to "
+                "set a time index as all data in TimeSeries class is indexed by the"
+                "time index. You can set the time index upon initialisation of "
+                "the EDisGo object by providing the input parameter 'timeindex' or by "
+                "using the function EDisGo.set_timeindex()."
+            )
         if fluctuating_generators_ts is not None:
             self.timeseries.predefined_fluctuating_generators_by_technology(
-                self, fluctuating_generators_ts, fluctuating_generators_names
+                self,
+                fluctuating_generators_ts,
+                fluctuating_generators_names,
+                engine=engine,
+                timeindex=kwargs.get("timeindex", None),
             )
         if dispatchable_generators_ts is not None:
             self.timeseries.predefined_dispatchable_generators_by_technology(
                 self, dispatchable_generators_ts, dispatchable_generators_names
             )
         if conventional_loads_ts is not None:
-            self.timeseries.predefined_conventional_loads_by_sector(
-                self, conventional_loads_ts, conventional_loads_names
-            )
+            if (
+                isinstance(conventional_loads_ts, str)
+                and conventional_loads_ts == "oedb"
+            ):
+                loads_ts_df = timeseries_import.electricity_demand_oedb(
+                    edisgo_obj=self,
+                    scenario=kwargs.get("scenario"),
+                    engine=engine,
+                    timeindex=kwargs.get("timeindex", None),
+                    load_names=conventional_loads_names,
+                )
+                # concat new time series with existing ones and drop any duplicate
+                # entries
+                self.timeseries.loads_active_power = tools.drop_duplicated_columns(
+                    pd.concat([self.timeseries.loads_active_power, loads_ts_df], axis=1)
+                )
+            else:
+                self.timeseries.predefined_conventional_loads_by_sector(
+                    self, conventional_loads_ts, conventional_loads_names
+                )
         if charging_points_ts is not None:
             self.timeseries.predefined_charging_points_by_use_case(
                 self, charging_points_ts, charging_points_names
@@ -466,20 +651,20 @@ class EDisGo:
         Parameters
         -----------
         control : str
-            Type of reactive power control to apply. Currently the only option is
-            'fixed_coshpi'. See :func:`~.network.timeseries.TimeSeries.fixed_cosphi`
+            Type of reactive power control to apply. Currently, the only option is
+            'fixed_coshpi'. See :attr:`~.network.timeseries.TimeSeries.fixed_cosphi`
             for further information.
         generators_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `generators_parametrisation` in
-            :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
+            :attr:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
         loads_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `loads_parametrisation` in
-            :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
+            :attr:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
         storage_units_parametrisation : str or :pandas:`pandas.DataFrame<DataFrame>`
             See parameter `storage_units_parametrisation` in
-            :func:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
+            :attr:`~.network.timeseries.TimeSeries.fixed_cosphi` for further
             information. Here, per default, the option 'default' is used.
 
         Notes
@@ -527,7 +712,7 @@ class EDisGo:
 
         In the example above, `generators_parametrisation` and
         `storage_units_parametrisation` do not need to be set as default configurations
-        are per default used for all generators and storage units anyways.
+        are per default used for all generators and storage units anyway.
 
         """
         if control == "fixed_cosphi":
@@ -596,7 +781,7 @@ class EDisGo:
             Check integrity of edisgo object before translating to pypsa. This option is
             meant to help the identification of possible sources of errors if the power
             flow calculations fail. See :attr:`~.edisgo.EDisGo.check_integrity` for
-            more information.
+            more information. Default: False.
 
         Other Parameters
         -------------------
@@ -609,7 +794,7 @@ class EDisGo:
             Default: False.
         lv_grid_id : int or str
             ID (e.g. 1) or name (string representation, e.g. "LVGrid_1") of LV grid
-            to export in case mode is 'lv'.
+            to export in case mode is 'lv'. Default: None.
         aggregate_loads : str
             Mode for load aggregation in LV grids in case mode is 'mv' or 'mvlv'.
             Can be 'sectoral' aggregating the loads sector-wise, 'all' aggregating all
@@ -638,13 +823,140 @@ class EDisGo:
             self.check_integrity()
         return pypsa_io.to_pypsa(self, mode, timesteps, **kwargs)
 
+    def to_powermodels(
+        self,
+        s_base=1,
+        flexible_cps=None,
+        flexible_hps=None,
+        flexible_loads=None,
+        flexible_storage_units=None,
+        opf_version=1,
+    ):
+        """
+        Convert eDisGo representation of the network topology and timeseries to
+        PowerModels network data format.
+
+        Parameters
+        ----------
+        s_base : int
+            Base value of apparent power for per unit system.
+            Default: 1 MVA
+        flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all charging points that allow for flexible charging.
+        flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all heat pumps that allow for flexible operation due to an
+            attached heat storage.
+        flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible loads that allow for application of demand
+            side management strategy.
+        flexible_storage_units : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible storages. Non-flexible storages operate to
+            optimize self consumption.
+            Default: None.
+        opf_version : int
+            Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+            For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: 1.
+
+        Returns
+        -------
+        dict
+            Dictionary that contains all network data in PowerModels network data
+            format.
+
+        """
+        return powermodels_io.to_powermodels(
+            self,
+            s_base=s_base,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            flexible_storage_units=flexible_storage_units,
+            opf_version=opf_version,
+        )
+
+    def pm_optimize(
+        self,
+        s_base=1,
+        flexible_cps=None,
+        flexible_hps=None,
+        flexible_loads=None,
+        flexible_storage_units=None,
+        opf_version=1,
+        method="soc",
+        warm_start=False,
+        silence_moi=False,
+        save_heat_storage=True,
+        save_slack_gen=True,
+        save_slacks=True,
+    ):
+        """
+        Run OPF in julia subprocess and write results of OPF back to edisgo object.
+
+        Results of OPF are time series of operation schedules of flexibilities.
+
+        Parameters
+        ----------
+        s_base : int
+            Base value of apparent power for per unit system.
+            Default: 1 MVA.
+        flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all charging points that allow for flexible charging.
+            Default: None.
+        flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all heat pumps that allow for flexible operation due to an
+            attached heat storage.
+            Default: None.
+        flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible loads that allow for application of demand
+            side management strategy.
+            Default: None.
+        flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible storages. Non-flexible storages operate to
+            optimize self consumption.
+            Default: None.
+        opf_version : int
+            Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+            For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: 1.
+        method : str
+            Optimization method to use. Must be either "soc" (Second Order Cone) or "nc"
+            (Non Convex). For more information see
+            :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: "soc".
+        warm_start : bool
+            If set to True and if method is set to "soc", non-convex IPOPT OPF will be
+            run additionally and will be warm started with Gurobi SOC solution.
+            Warm-start will only be run if results for Gurobi's SOC relaxation is exact.
+            Default: False.
+        silence_moi : bool
+            If set to True, MathOptInterface's optimizer attribute "MOI.Silent" is set
+            to True in julia subprocess. This attribute is for silencing the output of
+            an optimizer. When set to True, it requires the solver to produce no output,
+            hence there will be no logging coming from julia subprocess in python
+            process.
+            Default: False.
+        """
+        return powermodels_opf.pm_optimize(
+            self,
+            s_base=s_base,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            flexible_storage_units=flexible_storage_units,
+            opf_version=opf_version,
+            method=method,
+            warm_start=warm_start,
+            silence_moi=silence_moi,
+        )
+
     def to_graph(self):
         """
         Returns networkx graph representation of the grid.
 
         Returns
         -------
-        :networkx:`networkx.Graph<>`
+        :networkx:`networkx.Graph<networkx.Graph>`
             Graph representation of the grid as networkx Ordered Graph,
             where lines are represented by edges in the graph, and buses and
             transformers are represented by nodes.
@@ -655,61 +967,64 @@ class EDisGo:
 
     def import_generators(self, generator_scenario=None, **kwargs):
         """
-        Gets generator park for specified scenario and integrates them into
-        the grid.
+        Gets generator park for specified scenario and integrates generators into grid.
 
-        Currently, the only supported data source is scenario data generated
-        in the research project
+        The generator data is retrieved from the
+        `open energy platform <https://openenergyplatform.org/>`_. Decommissioned
+        generators are removed from the grid, generators with changed capacity
+        updated and new generators newly integrated into the grid.
+
+        In case you are using new ding0 grids, where the LV is geo-referenced, the
+        supported data source is scenario data generated in the research project
+        `eGo^n <https://rego-n.org/>`_. You can choose between two scenarios:
+        'eGon2035' and 'eGon100RE'. For more information on database tables used and
+        how generator park is adapted see :func:`~.io.generators_import.oedb`.
+
+        In case you are using old ding0 grids, where the LV is not geo-referenced,
+        the supported data source is scenario data generated in the research project
         `open_eGo <https://openegoproject.wordpress.com/>`_. You can choose
         between two scenarios: 'nep2035' and 'ego100'. You can get more
         information on the scenarios in the
         `final report <https://www.uni-flensburg.de/fileadmin/content/\
         abteilungen/industrial/dokumente/downloads/veroeffentlichungen/\
         forschungsergebnisse/20190426endbericht-openego-fkz0325881-final\
-        .pdf>`_.
+        .pdf>`_. For more information on database tables used and
+        how generator park is adapted see :func:`~.io.generators_import.oedb_legacy`.
 
-        The generator data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_
-        from tables for
-        `conventional power plants <https://openenergy-platform.org/dataedit/\
-        view/supply/ego_dp_conv_powerplant>`_ and
-        `renewable power plants <https://openenergy-platform.org/dataedit/\
-        view/supply/ego_dp_res_powerplant>`_.
-
-        When the generator data is retrieved, the following steps are
-        conducted:
-
-            * Step 1: Update capacity of existing generators if `
-              update_existing` is True, which it is by default.
-            * Step 2: Remove decommissioned generators if
-              `remove_decommissioned` is True, which it is by default.
-            * Step 3: Integrate new MV generators.
-            * Step 4: Integrate new LV generators.
-
-        For more information on how generators are integrated, see
-        :attr:`~.network.topology.Topology.connect_to_mv` and
-        :attr:`~.network.topology.Topology.connect_to_lv`.
-
-        After the generator park is changed there may be grid issues due to the
-        additional in-feed. These are not solved automatically. If you want to
+        After the generator park is adapted there may be grid issues due to the
+        additional feed-in. These are not solved automatically. If you want to
         have a stable grid without grid issues you can invoke the automatic
         grid expansion through the function :attr:`~.EDisGo.reinforce`.
 
         Parameters
         ----------
         generator_scenario : str
-            Scenario for which to retrieve generator data. Possible options
-            are 'nep2035' and 'ego100'.
+            Scenario for which to retrieve generator data. In case you are using new
+            ding0 grids, where the LV is geo-referenced, possible options are
+            'eGon2035' and 'eGon100RE'. In case you are using old ding0 grids, where
+            the LV is not geo-referenced, possible options are 'nep2035' and 'ego100'.
 
         Other Parameters
         ----------------
         kwargs :
-            See :func:`edisgo.io.generators_import.oedb`.
+            In case you are using new ding0 grids, where the LV is geo-referenced, a
+            database engine needs to be provided through keyword argument `engine`.
+            In case you are using old ding0 grids, where the LV is not geo-referenced,
+            you can check :func:`edisgo.io.generators_import.oedb_legacy` for possible
+            keyword arguments.
 
         """
-        import_generators_oedb(
-            edisgo_object=self, generator_scenario=generator_scenario, **kwargs
-        )
+        engine = kwargs["engine"] if "engine" in kwargs else egon_engine()
+        if self.legacy_grids is True:
+            generators_import.oedb_legacy(
+                edisgo_object=self, generator_scenario=generator_scenario, **kwargs
+            )
+        else:
+            generators_import.oedb(
+                edisgo_object=self,
+                engine=engine,
+                scenario=generator_scenario,
+            )
 
     def analyze(
         self,
@@ -719,14 +1034,15 @@ class EDisGo:
         troubleshooting_mode: str | None = None,
         range_start: Number = 0.1,
         range_num: int = 10,
+        scale_timeseries: float | None = None,
         **kwargs,
-    ):
+    ) -> tuple[pd.DatetimeIndex, pd.DatetimeIndex]:
         """
         Conducts a static, non-linear power flow analysis.
 
         Conducts a static, non-linear power flow analysis using
-        `PyPSA <https://pypsa.readthedocs.io/en/latest/power_flow.html#\
-        full-non-linear-power-flow>`_
+        `PyPSA <https://docs.pypsa.org/v0.35.1/user-guide/power-flow.html#\
+        non-linear-power-flow>`_
         and writes results (active, reactive and apparent power as well as
         current on lines and voltages at buses) to :class:`~.network.results.Results`
         (e.g. :attr:`~.network.results.Results.v_res` for voltages).
@@ -781,7 +1097,7 @@ class EDisGo:
             Default: True.
 
         troubleshooting_mode : str or None
-            Two optional troubleshooting methods in case of nonconvergence of nonlinear
+            Two optional troubleshooting methods in case of non-convergence of nonlinear
             power flow (cf. [1])
 
             * None (default)
@@ -793,16 +1109,26 @@ class EDisGo:
                 Power flow analysis is conducted by reducing all power values of
                 generators and loads to a fraction, e.g. 10%, solving the load flow and
                 using it as a seed for the power at 20%, iteratively up to 100%.
+                Using parameters `range_start` and `range_num` you can define at what
+                scaling factor the iteration should start and how many iterations
+                should be conducted.
 
         range_start : float, optional
             Specifies the minimum fraction that power values are set to when using
-            troubleshooting_mode 'iteration'. Must be between 0 and 1.
+            `troubleshooting_mode` 'iteration'. Must be between 0 and 1.
             Default: 0.1.
-
         range_num : int, optional
             Specifies the number of fraction samples to generate when using
-            troubleshooting_mode 'iteration'. Must be non-negative.
+            `troubleshooting_mode` 'iteration'. Must be non-negative.
             Default: 10.
+        scale_timeseries : float or None, optional
+            If a value is given, the timeseries in the pypsa object are scaled with
+            this factor (values between 0 and 1 will scale down the time series and
+            values above 1 will scale the timeseries up). Downscaling of time series
+            can be used to check if power flow converges for smaller
+            grid loads. If None, timeseries are not scaled. In case of
+            `troubleshooting_mode` 'iteration' this parameter is ignored.
+            Default: None.
 
         Other Parameters
         -----------------
@@ -812,12 +1138,15 @@ class EDisGo:
 
         Returns
         --------
-        :pandas:`pandas.DatetimeIndex<DatetimeIndex>`
-            Returns the time steps for which power flow analysis did not converge.
+        tuple(:pandas:`pandas.DatetimeIndex<DatetimeIndex>`,\
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>`)
+            First index contains time steps for which power flow analysis did converge.
+            Second index contains time steps for which power flow analysis did not
+            converge.
 
         References
         --------
-        [1] https://pypsa.readthedocs.io/en/latest/troubleshooting.html
+        [1] https://docs.pypsa.org/v0.35.1/troubleshooting.html
 
         """
 
@@ -833,18 +1162,30 @@ class EDisGo:
             if raise_not_converged and len(timesteps_not_converged) > 0:
                 raise ValueError(
                     "Power flow analysis did not converge for the "
-                    "following {} time steps: {}.".format(
-                        len(timesteps_not_converged), timesteps_not_converged
-                    )
+                    f"following {len(timesteps_not_converged)} time steps: "
+                    f"{timesteps_not_converged}."
                 )
             elif len(timesteps_not_converged) > 0:
                 logger.warning(
                     "Power flow analysis did not converge for the "
-                    "following {} time steps: {}.".format(
-                        len(timesteps_not_converged), timesteps_not_converged
-                    )
+                    f"following {len(timesteps_not_converged)} time steps: "
+                    f"{timesteps_not_converged}."
                 )
             return timesteps_converged, timesteps_not_converged
+
+        def _scale_timeseries(pypsa_network_copy, fraction):
+            # Scales the timeseries in the pypsa object, the pypsa_network_copy is
+            # the network with the original time series
+            # Reduce power values of generators, loads and storages to given fraction
+            for obj1, obj2 in [
+                (pypsa_network.generators_t, pypsa_network_copy.generators_t),
+                (pypsa_network.loads_t, pypsa_network_copy.loads_t),
+                (pypsa_network.storage_units_t, pypsa_network_copy.storage_units_t),
+            ]:
+                for attr in ["p_set", "q_set"]:
+                    setattr(obj1, attr, getattr(obj2, attr) * fraction)
+
+            return pypsa_network
 
         if timesteps is None:
             timesteps = self.timeseries.timeindex
@@ -853,6 +1194,9 @@ class EDisGo:
             timesteps = [timesteps]
 
         pypsa_network = self.to_pypsa(mode=mode, timesteps=timesteps, **kwargs)
+
+        if scale_timeseries is not None and troubleshooting_mode != "iteration":
+            pypsa_network = _scale_timeseries(pypsa_network, scale_timeseries)
 
         if troubleshooting_mode == "lpf":
             # run linear power flow analysis
@@ -864,20 +1208,10 @@ class EDisGo:
         elif troubleshooting_mode == "iteration":
             pypsa_network_copy = pypsa_network.copy()
             for fraction in np.linspace(range_start, 1, range_num):
-                # Reduce power values of generators, loads and storages to fraction of
-                # original value
-                for obj1, obj2 in [
-                    (pypsa_network.generators_t, pypsa_network_copy.generators_t),
-                    (pypsa_network.loads_t, pypsa_network_copy.loads_t),
-                    (pypsa_network.storage_units_t, pypsa_network_copy.storage_units_t),
-                ]:
-                    for attr in ["p_set", "q_set"]:
-                        setattr(obj1, attr, getattr(obj2, attr) * fraction)
+                pypsa_network = _scale_timeseries(pypsa_network_copy, fraction)
                 # run power flow analysis
                 pf_results = pypsa_network.pf(timesteps, use_seed=True)
-                logging.warning(
-                    "Current fraction in iterative process: {}.".format(fraction)
-                )
+                logger.info(f"Current fraction in iterative process: {fraction}.")
                 # get converged and not converged time steps
                 timesteps_converged, timesteps_not_converged = _check_convergence()
         else:
@@ -891,126 +1225,268 @@ class EDisGo:
         # handle converged time steps
         pypsa_io.process_pfa_results(self, pypsa_network, timesteps_converged)
 
-        return timesteps_not_converged
+        return timesteps_converged, timesteps_not_converged
 
     def reinforce(
         self,
         timesteps_pfa: str | pd.DatetimeIndex | pd.Timestamp | None = None,
+        reduced_analysis: bool = False,
         copy_grid: bool = False,
         max_while_iterations: int = 20,
-        combined_analysis: bool = False,
+        split_voltage_band: bool = True,
         mode: str | None = None,
         without_generator_import: bool = False,
+        n_minus_one: bool = False,
+        catch_convergence_problems: bool = False,
         **kwargs,
     ) -> Results:
         """
         Reinforces the network and calculates network expansion costs.
 
         If the :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case` is
-        True input for `timesteps_pfa` and `mode` are overwritten and therefore
-        ignored.
+        True input for `timesteps_pfa` is overwritten and therefore ignored.
 
-        See :func:`edisgo.flex_opt.reinforce_grid.reinforce_grid` for more
-        information on input parameters and methodology.
+        See :ref:`grid-reinforcement` for more information on how network
+        reinforcement is conducted.
+
+        Parameters
+        -----------
+        timesteps_pfa : str or \
+            :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+            :pandas:`pandas.Timestamp<Timestamp>`
+            timesteps_pfa specifies for which time steps power flow analysis is
+            conducted and therefore which time steps to consider when checking
+            for over-loading and over-voltage issues.
+            It defaults to None in which case all timesteps in
+            :attr:`~.network.timeseries.TimeSeries.timeindex` are used.
+            Possible options are:
+
+            * None
+              Time steps in :attr:`~.network.timeseries.TimeSeries.timeindex` are used.
+            * 'snapshot_analysis'
+              Reinforcement is conducted for two worst-case snapshots. See
+              :meth:`edisgo.tools.tools.select_worstcase_snapshots()` for further
+              explanation on how worst-case snapshots are chosen.
+              Note: If you have large time series, choosing this option will save
+              calculation time since power flow analysis is only conducted for two
+              time steps. If your time series already represents the worst-case,
+              keep the default value of None because finding the worst-case
+              snapshots takes some time.
+            * :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or \
+              :pandas:`pandas.Timestamp<Timestamp>`
+              Use this option to explicitly choose which time steps to consider.
+        reduced_analysis : bool
+              If True, reinforcement is conducted for all time steps at which at least
+              one branch shows its highest overloading or one bus shows its highest
+              voltage violation. Time steps to consider are specified through parameter
+              `timesteps_pfa`. If False, all time steps in parameter `timesteps_pfa`
+              are used. Default: False.
+        copy_grid : bool
+            If True, reinforcement is conducted on a copied grid and discarded.
+            Default: False.
+        max_while_iterations : int
+            Maximum number of times each while loop is conducted. Default: 20.
+        split_voltage_band : bool
+            If True the allowed voltage band of +/-10 percent is allocated to the
+            different voltage levels MV, MV/LV and LV according to config values set
+            in section `grid_expansion_allowed_voltage_deviations`. If False, the same
+            voltage limits are used for all voltage levels. Be aware that this does
+            currently not work correctly. Default: True.
+        mode : str
+            Determines network levels reinforcement is conducted for. Specify
+
+            * None to reinforce MV and LV network levels. None is the default.
+            * 'mv' to reinforce MV level only, neglecting MV/LV stations,
+              and LV network topology. LV load and generation is aggregated per
+              LV network and directly connected to the primary side of the
+              respective MV/LV station.
+            * 'mvlv' to reinforce MV network level only, including MV/LV stations,
+              and neglecting LV network topology. LV load and generation is
+              aggregated per LV network and directly connected to the secondary
+              side of the respective MV/LV station.
+            * 'lv' to reinforce LV networks. In case an LV grid is specified through
+              parameter `lv_grid_id`, the grid's MV/LV station is not included. In case
+              no LV grid ID is given, all MV/LV stations are included.
+        without_generator_import : bool
+            If True, excludes lines that were added in the generator import to connect
+            new generators from calculation of network expansion costs. Default: False.
+        n_minus_one : bool
+            Determines whether n-1 security should be checked. Currently, n-1 security
+            cannot be handled correctly, wherefore the case where this parameter is set
+            to True will lead to an error being raised. Default: False.
+        catch_convergence_problems : bool
+            Uses reinforcement strategy to reinforce not converging grid.
+            Reinforces first with only converging timesteps. Reinforce again with at
+            start not converging timesteps. If still not converging, scale timeseries.
+            Default: False
 
         Other Parameters
         -----------------
         is_worst_case : bool
             Is used to overwrite the return value from
-            :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case`. If True
+            :attr:`edisgo.network.timeseries.TimeSeries.is_worst_case`. If True,
             reinforcement is calculated for worst-case MV and LV cases separately.
+        lv_grid_id : str or int or None
+            LV grid id to specify the grid to check, if mode is "lv". If no grid is
+            specified, all LV grids are checked. In that case, the power flow analysis
+            is conducted including the MV grid, in order to check loading and voltage
+            drop/rise of MV/LV stations.
+        skip_mv_reinforcement : bool
+            If True, MV is not reinforced, even if `mode` is "mv", "mvlv" or None.
+            This is used in case worst-case grid reinforcement is conducted in order to
+            reinforce MV/LV stations for LV worst-cases.
+            Default: False.
+        num_steps_loading : int
+            In case `reduced_analysis` is set to True, this parameter can be
+            used to specify the number of most critical overloading events to consider.
+            If None, `percentage` is used. Default: None.
+        num_steps_voltage : int
+            In case `reduced_analysis` is set to True, this parameter can be
+            used to specify the number of most critical voltage issues to select. If
+            None, `percentage` is used. Default: None.
+        percentage : float
+            In case `reduced_analysis` is set to True, this parameter can be
+            used to specify the percentage of most critical time steps to select. The
+            default is 1.0, in which case all most critical time steps are selected.
+            Default: 1.0.
+        use_troubleshooting_mode : bool
+            In case `reduced_analysis` is set to True, this parameter can be used to
+            specify how to handle non-convergence issues when determining the most
+            critical time steps. If set to True, non-convergence issues are tried to be
+            circumvented by reducing load and feed-in until the power flow converges.
+            The most critical time steps are then determined based on the power flow
+            results with the reduced load and feed-in. If False, an error will be
+            raised in case time steps do not converge.
+            Setting this to True doesn't make sense for the grid reinforcement as the
+            troubleshooting mode is only used when determining the most critical time
+            steps not when running a power flow analysis to determine grid reinforcement
+            needs. To handle non-convergence in the grid reinforcement set parameter
+            `catch_convergence_problems` to True.
+            Default: False.
+        run_initial_analyze : bool
+            In case `reduced_analysis` is set to True, this parameter can be
+            used to specify whether to run an initial analyze to determine most
+            critical time steps or to use existing results. If set to False,
+            `use_troubleshooting_mode` is ignored. Default: True.
+        weight_by_costs : bool
+            In case `reduced_analysis` is set to True, this parameter can be used
+            to specify whether to weight time steps by estimated grid expansion costs.
+            See parameter `weight_by_costs` in
+            :func:`~.tools.temporal_complexity_reduction.get_most_critical_time_steps`
+            for more information. Default: False.
+
+        Returns
+        --------
+        :class:`~.network.results.Results`
+            Returns the Results object holding network expansion costs, equipment
+            changes, etc.
 
         """
-        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
+        if copy_grid:
+            edisgo_obj = copy.deepcopy(self)
+        else:
+            edisgo_obj = self
 
+        # Build reinforce run settings
+        if kwargs.get("is_worst_case", self.timeseries.is_worst_case):
             logger.debug(
                 "Running reinforcement in worst-case mode by differentiating between "
                 "MV and LV load and feed-in cases."
             )
-
-            if copy_grid:
-                edisgo_obj = copy.deepcopy(self)
-            else:
-                edisgo_obj = self
-
             timeindex_worst_cases = self.timeseries.timeindex_worst_cases
-
-            if mode != "lv":
-
-                timesteps_pfa = pd.DatetimeIndex(
-                    timeindex_worst_cases.loc[
-                        timeindex_worst_cases.index.str.contains("mv")
-                    ]
+            timesteps_mv = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("mv")
+                ]
+            )
+            timesteps_lv = pd.DatetimeIndex(
+                timeindex_worst_cases.loc[
+                    timeindex_worst_cases.index.str.contains("lv")
+                ]
+            )
+            # Run the analyze-method at the end, to get a power flow for all
+            # timesteps for reinforced components
+            run_analyze_at_the_end = True
+            if mode is None:
+                kwargs_mv = kwargs.copy()
+                kwargs_mv.update({"mode": "mv", "timesteps_pfa": timesteps_mv})
+                kwargs_mvlv = kwargs.copy()
+                kwargs_mvlv.update(
+                    {
+                        "mode": "mvlv",
+                        "timesteps_pfa": timesteps_lv,
+                        "skip_mv_reinforcement": True,
+                    }
                 )
-                reinforce_grid(
-                    edisgo_obj,
-                    max_while_iterations=max_while_iterations,
-                    copy_grid=False,
-                    timesteps_pfa=timesteps_pfa,
-                    combined_analysis=combined_analysis,
-                    mode="mv",
-                    without_generator_import=without_generator_import,
+                kwargs_lv = kwargs.copy()
+                kwargs_lv.update({"mode": "lv", "timesteps_pfa": timesteps_lv})
+                kwargs.update({"mode": "mv", "timesteps_pfa": timesteps_mv})
+                setting_list = [
+                    kwargs_mv,
+                    kwargs_mvlv,
+                    kwargs_lv,
+                ]
+            elif mode == "mv":
+                kwargs.update({"mode": "mv", "timesteps_pfa": timesteps_mv})
+                setting_list = [kwargs]
+            elif mode == "mvlv":
+                kwargs.update(
+                    {
+                        "mode": "mvlv",
+                        "timesteps_pfa": timesteps_lv,
+                        "skip_mv_reinforcement": True,
+                    }
                 )
-
-            if mode != "mv":
-                timesteps_pfa = pd.DatetimeIndex(
-                    timeindex_worst_cases.loc[
-                        timeindex_worst_cases.index.str.contains("lv")
-                    ]
-                )
-                reinforce_mode = mode if mode == "mvlv" else "lv"
-                reinforce_grid(
-                    edisgo_obj,
-                    max_while_iterations=max_while_iterations,
-                    copy_grid=False,
-                    timesteps_pfa=timesteps_pfa,
-                    combined_analysis=combined_analysis,
-                    mode=reinforce_mode,
-                    without_generator_import=without_generator_import,
-                )
-
-            if mode not in ["mv", "lv"]:
-                edisgo_obj.analyze(mode=mode)
-            results = edisgo_obj.results
-
+                setting_list = [kwargs]
+            elif mode == "lv":
+                kwargs.update({"mode": "lv", "timesteps_pfa": timesteps_lv})
+                setting_list = [kwargs]
+            else:
+                raise ValueError(f"Mode {mode} does not exist.")
         else:
-            results = reinforce_grid(
-                self,
+            kwargs.update({"mode": mode, "timesteps_pfa": timesteps_pfa})
+            setting_list = [kwargs]
+            run_analyze_at_the_end = False
+
+        logger.info(f"Run the following reinforcements: {setting_list=}")
+
+        for setting in setting_list:
+            logger.info(f"Run the following reinforcement: {setting=}")
+            func = (
+                catch_convergence_reinforce_grid
+                if catch_convergence_problems
+                else reinforce_grid
+            )
+
+            func(
+                edisgo_obj,
+                reduced_analysis=reduced_analysis,
                 max_while_iterations=max_while_iterations,
-                copy_grid=copy_grid,
-                timesteps_pfa=timesteps_pfa,
-                combined_analysis=combined_analysis,
-                mode=mode,
+                split_voltage_band=split_voltage_band,
                 without_generator_import=without_generator_import,
+                n_minus_one=n_minus_one,
+                **setting,
+            )
+
+        if run_analyze_at_the_end:
+            lv_grid_id = kwargs.get("lv_grid_id", None)
+
+            if mode == "lv" and lv_grid_id:
+                analyze_mode = "lv"
+            elif mode == "lv":
+                analyze_mode = None
+            else:
+                analyze_mode = mode
+
+            edisgo_obj.analyze(
+                mode=analyze_mode, lv_grid_id=lv_grid_id, timesteps=timesteps_pfa
             )
 
         # add measure to Results object
         if not copy_grid:
             self.results.measures = "grid_expansion"
 
-        return results
-
-    def perform_mp_opf(self, timesteps, storage_series=None, **kwargs):
-        """
-        Run optimal power flow with julia.
-
-        Parameters
-        -----------
-        timesteps : list
-            List of timesteps to perform OPF for.
-        kwargs :
-            See :func:`~.opf.run_mp_opf.run_mp_opf` for further
-            information.
-
-        Returns
-        --------
-        str
-            Status of optimization.
-
-        """
-        if storage_series is None:
-            storage_series = []
-        return run_mp_opf(self, timesteps, storage_series=storage_series, **kwargs)
+        return edisgo_obj.results
 
     def add_component(
         self,
@@ -1063,7 +1539,7 @@ class EDisGo:
                 No reactive power time series is set.
 
             Default: None
-        **kwargs: dict
+        **kwargs : dict
             Attributes of added component. See respective functions for required
             entries.
 
@@ -1076,6 +1552,14 @@ class EDisGo:
             * 'generator' : :attr:`~.network.topology.Topology.add_generator`
 
             * 'storage_unit' : :attr:`~.network.topology.Topology.add_storage_unit`
+
+        Returns
+        --------
+        str
+            The identifier of the newly integrated component as in index of
+            :attr:`~.network.topology.Topology.generators_df`,
+            :attr:`~.network.topology.Topology.loads_df`, etc., depending on component
+            type.
 
         """
         # ToDo: Add option to add transformer.
@@ -1109,7 +1593,7 @@ class EDisGo:
                     )
                 elif ts_reactive_power == "default":
                     if ts_active_power is None:
-                        logging.warning(
+                        logger.warning(
                             f"Default reactive power time series of {comp_name} cannot "
                             "be set as active power time series was not provided."
                         )
@@ -1169,16 +1653,19 @@ class EDisGo:
         """
         Adds single component to topology based on geolocation.
 
-        Currently components can be generators, charging points and heat pumps.
+        Currently, components can be generators, charging points, heat pumps and
+        storage units.
 
-        See :attr:`~.network.topology.Topology.connect_to_mv` and
-        :attr:`~.network.topology.Topology.connect_to_lv` for more information.
+        See :attr:`~.network.topology.Topology.connect_to_mv`,
+        :attr:`~.network.topology.Topology.connect_to_lv` and
+        :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation` for more
+        information.
 
         Parameters
         ----------
         comp_type : str
-            Type of added component. Can be 'generator', 'charging_point' or
-            'heat_pump'.
+            Type of added component. Can be 'generator', 'charging_point', 'heat_pump'
+            or 'storage_unit'.
         geolocation : :shapely:`shapely.Point<Point>` or tuple
             Geolocation of the new component. In case of tuple, the geolocation
             must be given in the form (longitude, latitude).
@@ -1186,17 +1673,11 @@ class EDisGo:
             Specifies the voltage level the new component is integrated in.
             Possible options are 4 (MV busbar), 5 (MV grid), 6 (LV busbar) or
             7 (LV grid). If no voltage level is provided the voltage level
-            is determined based on the nominal power `p_nom` or `p_set` (given as kwarg)
-            as follows:
-
-            * voltage level 4 (MV busbar): nominal power between 4.5 MW and
-              17.5 MW
-            * voltage level 5 (MV grid) : nominal power between 0.3 MW and
-              4.5 MW
-            * voltage level 6 (LV busbar): nominal power between 0.1 MW and
-              0.3 MW
-            * voltage level 7 (LV grid): nominal power below 0.1 MW
-
+            is determined based on the nominal power `p_nom` or `p_set` (given as
+            kwarg). For this, upper limits up to which capacity a component is
+            integrated into a certain voltage level (set in the config section
+            `grid_connection` through the parameters 'upper_limit_voltage_level_{4:7}')
+            are used.
         add_ts : bool, optional
             Indicator if time series for component are added as well.
             Default: True.
@@ -1219,10 +1700,19 @@ class EDisGo:
         ------------------
         kwargs :
             Attributes of added component.
-            See :attr:`~.network.topology.Topology.add_generator` respectively
+            See :attr:`~.network.topology.Topology.add_generator`,
+            :attr:`~.network.topology.Topology.add_storage_unit` respectively
             :attr:`~.network.topology.Topology.add_load` methods
-            for more information on required and optional parameters of
-            generators respectively charging points and heat pumps.
+            for more information on required and optional parameters.
+
+        Returns
+        -------
+        str
+            The identifier of the newly integrated component as in index of
+            :attr:`~.network.topology.Topology.generators_df`,
+            :attr:`~.network.topology.Topology.loads_df` or
+            :attr:`~.network.topology.Topology.storage_units_df`, depending on component
+            type.
 
         """
         supported_voltage_levels = {4, 5, 6, 7}
@@ -1236,43 +1726,48 @@ class EDisGo:
         if voltage_level not in supported_voltage_levels:
             if p is None:
                 raise ValueError(
-                    "Neither appropriate voltage level nor nominal power "
-                    "were supplied."
+                    "Neither appropriate voltage level nor nominal power were supplied."
                 )
-            # Determine voltage level manually from nominal power
-            if 4.5 < p <= 17.5:
-                voltage_level = 4
-            elif 0.3 < p <= 4.5:
-                voltage_level = 5
-            elif 0.1 < p <= 0.3:
-                voltage_level = 6
-            elif 0 < p <= 0.1:
-                voltage_level = 7
-            else:
-                raise ValueError("Unsupported voltage level")
+            # determine voltage level manually from nominal power
+            voltage_level = determine_grid_integration_voltage_level(self, p)
 
         # check if geolocation is given as shapely Point, otherwise transform
         # to shapely Point
         if type(geolocation) is not Point:
             geolocation = Point(geolocation)
 
+        # write voltage level and geolocation to kwargs
+        kwargs["geom"] = geolocation
+        kwargs["voltage_level"] = voltage_level
+
         # Connect in MV
         if voltage_level in [4, 5]:
-            kwargs["voltage_level"] = voltage_level
-            kwargs["geom"] = geolocation
             comp_name = self.topology.connect_to_mv(self, kwargs, comp_type)
 
         # Connect in LV
         else:
-            if kwargs.get("mvlv_subst_id", None) is None:
-                substations = self.topology.buses_df.loc[
-                    self.topology.transformers_df.bus1.unique()
-                ]
-                nearest_substation, _ = find_nearest_bus(geolocation, substations)
-                kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
-            kwargs["geom"] = geolocation
-            kwargs["voltage_level"] = voltage_level
-            comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
+            # check if LV is geo-referenced or not
+            lv_buses = self.topology.buses_df.drop(self.topology.mv_grid.buses_df.index)
+            lv_buses_dropna = lv_buses.dropna(axis=0, subset=["x", "y"])
+
+            # if there are some LV buses without geo-reference, use function where
+            # components are not integrated based on geolocation
+            if len(lv_buses_dropna) < len(lv_buses):
+                if kwargs.get("mvlv_subst_id", None) is None:
+                    substations = self.topology.buses_df.loc[
+                        self.topology.transformers_df.bus1.unique()
+                    ]
+                    nearest_substation, _ = find_nearest_bus(geolocation, substations)
+                    kwargs["mvlv_subst_id"] = int(nearest_substation.split("_")[-2])
+                comp_name = self.topology.connect_to_lv(self, kwargs, comp_type)
+
+            else:
+                max_distance_from_target_bus = kwargs.pop(
+                    "max_distance_from_target_bus", 0.02
+                )
+                comp_name = self.topology.connect_to_lv_based_on_geolocation(
+                    self, kwargs, comp_type, max_distance_from_target_bus
+                )
 
         if add_ts:
             if comp_type == "generator":
@@ -1383,11 +1878,11 @@ class EDisGo:
                 [
                     pd.DataFrame(
                         {
-                            naming.format("_".join(k))
-                            if isinstance(k, tuple)
-                            else naming.format(k): getattr(self.timeseries, attribute)
-                            .loc[:, v]
-                            .sum(axis=1)
+                            (
+                                naming.format("_".join(k))
+                                if isinstance(k, tuple)
+                                else naming.format(k)
+                            ): getattr(self.timeseries, attribute).loc[:, v].sum(axis=1)
                         }
                     )
                     for k, v in groups.items()
@@ -1405,7 +1900,6 @@ class EDisGo:
             len(aggregate_generators_by_cols) > 0
             and not self.topology.generators_df.empty
         ):
-
             gens_groupby = self.topology.generators_df.groupby(
                 aggregate_generators_by_cols
             )
@@ -1418,8 +1912,10 @@ class EDisGo:
                 axis=1,
             )
             gens_df_grouped["control"] = "PQ"
+
             if "weather_cell_id" in gens_df_grouped.columns:
                 gens_df_grouped.drop(columns=["weather_cell_id"], inplace=True)
+
             self.topology.generators_df = gens_df_grouped.set_index("name")
 
             # set up new generator time series
@@ -1432,7 +1928,6 @@ class EDisGo:
 
         # aggregate loads
         if len(aggregate_loads_by_cols) > 0 and not self.topology.loads_df.empty:
-
             loads_groupby = self.topology.loads_df.groupby(aggregate_loads_by_cols)
             naming = "Loads_{}"
 
@@ -1454,29 +1949,33 @@ class EDisGo:
 
     def import_electromobility(
         self,
-        simbev_directory: PurePath | str,
-        tracbev_directory: PurePath | str,
+        data_source: str,
+        scenario: str = None,
+        engine: Engine = None,
+        charging_processes_dir: PurePath | str = None,
+        potential_charging_points_dir: PurePath | str = None,
         import_electromobility_data_kwds=None,
         allocate_charging_demand_kwds=None,
     ):
         """
         Imports electromobility data and integrates charging points into grid.
 
-        So far, this function requires electromobility data from
+        Electromobility data can be obtained from the `OpenEnergy DataBase
+        <https://openenergyplatform.org/database/>`_ or from self-provided
+        data. In case you want to use self-provided data, it needs to be generated
+        using the tools
         `SimBEV <https://github.com/rl-institut/simbev>`_ (required version:
         `3083c5a <https://github.com/rl-institut/simbev/commit/
         86076c936940365587c9fba98a5b774e13083c5a>`_) and
         `TracBEV <https://github.com/rl-institut/tracbev>`_ (required version:
         `14d864c <https://github.com/rl-institut/tracbev/commit/
-        03e335655770a377166c05293a966052314d864c>`_) to be stored in the
-        directories specified through the parameters `simbev_directory` and
-        `tracbev_directory`. SimBEV provides data on standing times, charging demand,
-        etc. per vehicle, whereas TracBEV provides potential charging point locations.
+        03e335655770a377166c05293a966052314d864c>`_). SimBEV provides data on standing
+        times, charging demand, etc. per vehicle, whereas TracBEV provides potential
+        charging point locations.
 
-        After electromobility data is loaded, the charging demand from SimBEV is
-        allocated to potential charging points from TracBEV. Afterwards,
-        all potential charging points with charging demand allocated to them are
-        integrated into the grid.
+        After electromobility data is loaded, the charging demand from is allocated to
+        potential charging points. Afterwards, all potential charging points with
+        charging demand allocated to them are integrated into the grid.
 
         Be aware that this function does not yield charging time series per charging
         point but only charging processes (see
@@ -1487,73 +1986,105 @@ class EDisGo:
 
         Parameters
         ----------
-        simbev_directory : str
-            SimBEV directory holding SimBEV data.
-        tracbev_directory : str
-            TracBEV directory holding TracBEV data.
+        data_source : str
+            Specifies source from where to obtain electromobility data.
+            Possible options are:
+
+            * "oedb"
+
+                Electromobility data is obtained from the `OpenEnergy DataBase
+                <https://openenergyplatform.org/database/>`_.
+
+                This option requires that the parameters `scenario` and `engine` are
+                provided.
+
+            * "directory"
+
+                Electromobility data is obtained from directories specified through
+                parameters `charging_processes_dir` and `potential_charging_points_dir`.
+
+        scenario : str
+            Scenario for which to retrieve electromobility data in case `data_source` is
+            set to "oedb". Possible options are "eGon2035" and "eGon100RE".
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>`
+            Database engine. Needs to be provided in case `data_source` is set to
+            "oedb".
+        charging_processes_dir : str or pathlib.PurePath
+            Directory holding data on charging processes (standing times, charging
+            demand, etc. per vehicle), including metadata, from SimBEV.
+        potential_charging_points_dir : str or pathlib.PurePath
+            Directory holding data on potential charging point locations from TracBEV.
         import_electromobility_data_kwds : dict
-            These may contain any further attributes you want to specify when calling
-            the function to import electromobility data from SimBEV and TracBEV using
-            :func:`~.io.electromobility_import.import_electromobility`.
+            These may contain any further attributes you want to specify when importing
+            electromobility data.
 
             gc_to_car_rate_home : float
-                Specifies the minimum rate between potential charging parks
-                points for the use case "home" and the total number of cars.
-                Default 0.5.
+                Specifies the minimum rate between potential charging points for the
+                use case "home" and the total number of cars. Default: 0.5.
             gc_to_car_rate_work : float
-                Specifies the minimum rate between potential charging parks
-                points for the use case "work" and the total number of cars.
-                Default 0.25.
+                Specifies the minimum rate between potential charging points for the
+                use case "work" and the total number of cars. Default: 0.25.
             gc_to_car_rate_public : float
-                Specifies the minimum rate between potential charging parks
-                points for the use case "public" and the total number of cars.
-                Default 0.1.
+                Specifies the minimum rate between potential charging points for the
+                use case "public" and the total number of cars. Default: 0.1.
             gc_to_car_rate_hpc : float
-                Specifies the minimum rate between potential charging parks
-                points for the use case "hpc" and the total number of cars.
-                Default 0.005.
+                Specifies the minimum rate between potential charging points for the
+                use case "hpc" and the total number of cars. Default: 0.005.
             mode_parking_times : str
                 If the mode_parking_times is set to "frugal" only parking times
                 with any charging demand are imported. Any other input will lead
-                to all parking and driving events being imported. Default "frugal".
+                to all parking and driving events being imported. Default: "frugal".
             charging_processes_dir : str
-                Charging processes sub-directory. Default None.
+                Charging processes sub-directory. Only used when `data_source` is
+                set to "directory". Default: None.
             simbev_config_file : str
-                Name of the simbev config file. Default "metadata_simbev_run.json".
+                Name of the simbev config file. Only used when `data_source` is
+                set to "directory". Default: "metadata_simbev_run.json".
 
         allocate_charging_demand_kwds :
             These may contain any further attributes you want to specify when calling
-            the function that allocates charging processes from SimBEV to potential
-            charging points from TracBEV using
-            :func:`~.io.electromobility_import.distribute_charging_demand`.
+            the function :func:`~.io.electromobility_import.distribute_charging_demand`
+            that allocates charging processes to potential charging points.
 
             mode : str
                 Distribution mode. If the mode is set to "user_friendly" only the
                 simbev weights are used for the distribution. If the mode is
                 "grid_friendly" also grid conditions are respected.
-                Default "user_friendly".
+                Default: "user_friendly".
             generators_weight_factor : float
                 Weighting factor of the generators weight within an LV grid in
-                comparison to the loads weight. Default 0.5.
+                comparison to the loads weight. Default: 0.5.
             distance_weight : float
                 Weighting factor for the distance between a potential charging park
                 and its nearest substation in comparison to the combination of
-                the generators and load factors of the LV grids.
-                Default 1 / 3.
+                the generators and load factors of the LV grids. Default: 1 / 3.
             user_friendly_weight : float
-                Weighting factor of the user friendly weight in comparison to the
-                grid friendly weight. Default 0.5.
+                Weighting factor of the user-friendly weight in comparison to the
+                grid friendly weight. Default: 0.5.
 
         """
         if import_electromobility_data_kwds is None:
             import_electromobility_data_kwds = {}
 
-        import_electromobility(
-            self,
-            simbev_directory,
-            tracbev_directory,
-            **import_electromobility_data_kwds,
-        )
+        if data_source == "oedb":
+            import_electromobility_from_oedb(
+                self,
+                scenario=scenario,
+                engine=engine,
+                **import_electromobility_data_kwds,
+            )
+        elif data_source == "directory":
+            import_electromobility_from_dir(
+                self,
+                charging_processes_dir,
+                potential_charging_points_dir,
+                **import_electromobility_data_kwds,
+            )
+        else:
+            raise ValueError(
+                "Invalid input for parameter 'data_source'. Possible options are "
+                "'oedb' and 'directory'."
+            )
 
         if allocate_charging_demand_kwds is None:
             allocate_charging_demand_kwds = {}
@@ -1562,7 +2093,12 @@ class EDisGo:
 
         integrate_charging_parks(self)
 
-    def apply_charging_strategy(self, strategy="dumb", **kwargs):
+    def apply_charging_strategy(
+        self,
+        strategy: str = "dumb",
+        charging_park_ids: list[int] | None = None,
+        **kwargs,
+    ):
         """
         Applies charging strategy to set EV charging time series at charging parks.
 
@@ -1571,7 +2107,7 @@ class EDisGo:
         :attr:`~.edisgo.EDisGo.import_electromobility`.
 
         It is assumed that only 'private' charging processes at 'home' or at 'work' can
-        be flexibilized. 'public' charging processes will always be 'dumb'.
+        be flexibilized. 'public' and 'hpc' charging processes will always be 'dumb'.
 
         The charging time series at each charging parks are written to
         :attr:`~.network.timeseries.TimeSeries.loads_active_power`. Reactive power
@@ -1630,46 +2166,59 @@ class EDisGo:
         series resampled back to the original frequency.
 
         """
-        charging_strategy(self, strategy=strategy, **kwargs)
+        charging_strategy(
+            self, strategy=strategy, charging_park_ids=charging_park_ids, **kwargs
+        )
 
-    def import_heat_pumps(self, scenario=None, **kwargs):
+    def import_heat_pumps(
+        self, scenario, engine=None, timeindex=None, import_types=None
+    ):
         """
-        Gets heat pump capacities for specified scenario from oedb and integrates them
-        into the grid.
+        Gets heat pump data for specified scenario from oedb and integrates the heat
+        pumps into the grid.
 
         Besides heat pump capacity the heat pump's COP and heat demand to be served
         are as well retrieved.
 
         Currently, the only supported data source is scenario data generated
-        in the research project `eGo^n <https://ego-n.org/>`_. You can choose
+        in the research project `eGo^n <https://rego-n.org/>`_. You can choose
         between two scenarios: 'eGon2035' and 'eGon100RE'.
 
         The data is retrieved from the
-        `open energy platform <https://openenergy-platform.org/>`_.
+        `open energy platform <https://openenergyplatform.org/>`_.
 
         # ToDo Add information on scenarios and from which tables data is retrieved.
 
         The following steps are conducted in this function:
 
-            * Spatially disaggregated data on heat pump capacities in individual and
-              district heating are obtained from the database for the specified
-              scenario.
+            * Heat pump capacities for individual and district heating per building
+              respectively district heating area are obtained from the database for the
+              specified scenario and integrated into the grid using the function
+              :func:`~.io.heat_pump_import.oedb`.
             * Heat pumps are integrated into the grid (added to
-              :attr:`~.network.topology.Topology.loads_df`).
+              :attr:`~.network.topology.Topology.loads_df`) as follows.
 
               * Grid connection points of heat pumps for individual heating are
-                determined based on the corresponding building ID.
+                determined based on the corresponding building ID. In case the heat
+                pump is too large to use the same grid connection point, they are
+                connected via their own grid connection point.
               * Grid connection points of heat pumps for district heating are determined
                 based on their geolocation and installed capacity.
                 See :attr:`~.network.topology.Topology.connect_to_mv` and
-                :attr:`~.network.topology.Topology.connect_to_lv` for more information.
-            * COP and heat demand for each heat pump are retrieved from the database
-              and stored in the :class:`~.network.heat.HeatPump` class that can be
-              accessed through :attr:`~.edisgo.EDisGo.heat_pump`.
+                :attr:`~.network.topology.Topology.connect_to_lv_based_on_geolocation`
+                for more information.
+            * COP and heat demand for each heat pump are retrieved from the database,
+              using the functions :func:`~.io.timeseries_import.cop_oedb` respectively
+              :func:`~.io.timeseries_import.heat_demand_oedb`, and stored in the
+              :class:`~.network.heat.HeatPump` class that can be accessed through
+              :attr:`~.edisgo.EDisGo.heat_pump`.
 
         Be aware that this function does not yield electricity load time series for the
         heat pumps. The actual time series are determined through applying an
-        operation strategy or optimising heat pump dispatch.
+        operation strategy or optimising heat pump dispatch. Further, the heat pumps
+        do not yet have a thermal storage and can therefore not yet be used as a
+        flexibility. Thermal storage units need to be added manually to
+        :attr:`~.edisgo.EDisGo.thermal_storage_units_df`.
 
         After the heat pumps are integrated there may be grid issues due to the
         additional load. These are not solved automatically. If you want to
@@ -1681,21 +2230,77 @@ class EDisGo:
         scenario : str
             Scenario for which to retrieve heat pump data. Possible options
             are 'eGon2035' and 'eGon100RE'.
-
-        Other Parameters
-        ----------------
-        kwargs :
-            See :func:`edisgo.io.heat_pump_import.oedb`.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            Specifies time steps for which to set COP and heat demand data. Leap years
+            can currently not be handled. In case the given
+            timeindex contains a leap year, the data will be indexed using the default
+            year (2035 in case of the 'eGon2035' and to 2045 in case of the
+            'eGon100RE' scenario) and returned for the whole year.
+            If no timeindex is provided, the timeindex set in
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+            is indexed using the default year and returned for the whole year.
+        import_types : list(str) or None
+            Specifies which technologies to import. Possible options are
+            "individual_heat_pumps", "central_heat_pumps" and
+            "central_resistive_heaters". If None, all are imported.
 
         """
-        raise NotImplementedError
-        # integrated_heat_pumps = import_heat_pumps_oedb(
-        #     edisgo_object=self, scenario=scenario, **kwargs
-        # )
-        # self.heat_pump.set_heat_demand(
-        #     self, "oedb", heat_pump_names=integrated_heat_pumps
-        # )
-        # self.heat_pump.set_cop(self, "oedb", heat_pump_names=integrated_heat_pumps)
+        engine = engine if engine is not None else egon_engine()
+        # set up year to index data by
+        # first try to get index from time index
+        if timeindex is None:
+            timeindex = self.timeseries.timeindex
+            # if time index is not set get year from scenario
+            if timeindex.empty:
+                year = tools.get_year_based_on_scenario(scenario)
+                # if year is still None, scenario is not valid
+                if year is None:
+                    raise ValueError(
+                        "Invalid input for parameter 'scenario'. Possible options are "
+                        "'eGon2035' and 'eGon100RE'."
+                    )
+                timeindex = pd.date_range(f"1/1/{year}", periods=8760, freq="H")
+        # if year is leap year set year according to scenario
+        if pd.Timestamp(timeindex.year[0], 1, 1).is_leap_year:
+            logger.warning(
+                "A leap year was given to 'heat_demand_oedb' function. This is "
+                "currently not valid. The year the data is indexed by is therefore set "
+                "according to the given scenario."
+            )
+            year = tools.get_year_based_on_scenario(scenario)
+            return self.import_heat_pumps(
+                scenario,
+                engine,
+                timeindex=pd.date_range(f"1/1/{year}", periods=8760, freq="H"),
+                import_types=import_types,
+            )
+
+        integrated_heat_pumps = import_heat_pumps_oedb(
+            edisgo_object=self,
+            scenario=scenario,
+            engine=engine,
+            import_types=import_types,
+        )
+        if len(integrated_heat_pumps) > 0:
+            self.heat_pump.set_heat_demand(
+                self,
+                "oedb",
+                heat_pump_names=integrated_heat_pumps,
+                engine=engine,
+                scenario=scenario,
+                timeindex=timeindex,
+            )
+            self.heat_pump.set_cop(
+                self,
+                "oedb",
+                heat_pump_names=integrated_heat_pumps,
+                engine=engine,
+                timeindex=timeindex,
+            )
 
     def apply_heat_pump_operating_strategy(
         self, strategy="uncontrolled", heat_pump_names=None, **kwargs
@@ -1741,6 +2346,91 @@ class EDisGo:
         """
         hp_operating_strategy(self, strategy=strategy, heat_pump_names=heat_pump_names)
 
+    def import_dsm(self, scenario: str, engine: Engine = None, timeindex=None):
+        """
+        Gets industrial and CTS DSM profiles from the
+        `OpenEnergy DataBase <https://openenergyplatform.org/database/>`_.
+
+        Profiles comprise the maximum load decrease (``p_min``) and maximum load
+        increase (``p_max``) in MW as well as the maximum energy preponing (``e_min``)
+        and postponing (``e_max``) in MWh. The data is written to the
+        :class:`~.network.dsm.DSM` object.
+
+        Currently, the only supported data source is scenario data generated
+        in the research project `eGo^n <https://rego-n.org/>`_. You can choose
+        between two scenarios: 'eGon2035' and 'eGon100RE'.
+
+        Parameters
+        ----------
+        scenario : str
+            Scenario for which to retrieve DSM data. Possible options
+            are 'eGon2035' and 'eGon100RE'.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
+        timeindex : :pandas:`pandas.DatetimeIndex<DatetimeIndex>` or None
+            Specifies time steps for which to get data. Leap years can currently not be
+            handled. In case the given timeindex contains a leap year, the data will be
+            indexed using the default year (2035 in case of the 'eGon2035' and to 2045
+            in case of the 'eGon100RE' scenario) and returned for the whole year.
+            If no timeindex is provided, the timeindex set in
+            :py:attr:`~.network.timeseries.TimeSeries.timeindex` is used.
+            If :py:attr:`~.network.timeseries.TimeSeries.timeindex` is not set, the data
+            is indexed using the default year and returned for the whole year.
+
+        """
+        engine = engine if engine is not None else egon_engine()
+        dsm_profiles = dsm_import.oedb(
+            edisgo_obj=self, scenario=scenario, engine=engine, timeindex=timeindex
+        )
+        self.dsm.p_min = dsm_profiles["p_min"]
+        self.dsm.p_max = dsm_profiles["p_max"]
+        self.dsm.e_min = dsm_profiles["e_min"]
+        self.dsm.e_max = dsm_profiles["e_max"]
+
+    def import_home_batteries(
+        self,
+        scenario: str,
+        engine: Engine = None,
+    ):
+        """
+        Gets home battery data for specified scenario and integrates the batteries into
+        the grid.
+
+        Currently, the only supported data source is scenario data generated
+        in the research project `eGo^n <https://rego-n.org/>`_. You can choose
+        between two scenarios: 'eGon2035' and 'eGon100RE'.
+
+        The data is retrieved from the
+        `open energy platform <https://openenergyplatform.org/>`_.
+
+        The batteries are integrated into the grid (added to
+        :attr:`~.network.topology.Topology.storage_units_df`) based on their building
+        ID. In case the battery is too large to use the same grid connection point as
+        the generator or, if no generator is allocated at the same building ID, the
+        load, they are connected via their own grid connection point, based on their
+        geolocation and installed capacity.
+
+        Be aware that this function does not yield time series for the batteries. The
+        actual time series can be determined through a dispatch optimisation.
+
+        Parameters
+        ----------
+        scenario : str
+            Scenario for which to retrieve home battery data. Possible options
+            are 'eGon2035' and 'eGon100RE'.
+        engine : :sqlalchemy:`sqlalchemy.Engine<sqlalchemy.engine.Engine>` or None
+            Database engine. If None, a default engine to the open energy platform
+            is created.
+
+        """
+        engine = engine if engine is not None else egon_engine()
+        home_batteries_oedb(
+            edisgo_obj=self,
+            scenario=scenario,
+            engine=engine,
+        )
+
     def plot_mv_grid_topology(self, technologies=False, **kwargs):
         """
         Plots plain MV network topology and optionally nodes by technology type
@@ -1776,15 +2466,13 @@ class EDisGo:
         """
         try:
             if self.results.v_res is None:
-                logging.warning(
-                    "Voltages from power flow "
-                    "analysis must be available to plot them."
+                logger.warning(
+                    "Voltages from power flow analysis must be available to plot them."
                 )
                 return
         except AttributeError:
-            logging.warning(
-                "Results must be available to plot voltages. "
-                "Please analyze grid first."
+            logger.warning(
+                "Results must be available to plot voltages. Please analyze grid first."
             )
             return
         except ValueError:
@@ -1797,7 +2485,6 @@ class EDisGo:
             filename=kwargs.get("filename", None),
             grid_district_geom=kwargs.get("grid_district_geom", True),
             background_map=kwargs.get("background_map", True),
-            voltage=self.results.v_res,
             limits_cb_nodes=kwargs.get("limits_cb_nodes", None),
             xlim=kwargs.get("xlim", None),
             ylim=kwargs.get("ylim", None),
@@ -1814,13 +2501,13 @@ class EDisGo:
         """
         try:
             if self.results.i_res is None:
-                logging.warning(
+                logger.warning(
                     "Currents `i_res` from power flow analysis "
                     "must be available to plot line loading."
                 )
                 return
         except AttributeError:
-            logging.warning(
+            logger.warning(
                 "Results must be available to plot line loading. "
                 "Please analyze grid first."
             )
@@ -1831,7 +2518,6 @@ class EDisGo:
             timestep=kwargs.get("timestep", None),
             line_color="loading",
             node_color=kwargs.get("node_color", None),
-            line_load=self.results.i_res,
             filename=kwargs.get("filename", None),
             arrows=kwargs.get("arrows", None),
             grid_district_geom=kwargs.get("grid_district_geom", True),
@@ -1856,13 +2542,13 @@ class EDisGo:
         """
         try:
             if self.results.grid_expansion_costs is None:
-                logging.warning(
+                logger.warning(
                     "Grid expansion cost results needed to plot "
                     "them. Please do grid reinforcement."
                 )
                 return
         except AttributeError:
-            logging.warning(
+            logger.warning(
                 "Results of MV topology needed to  plot topology "
                 "expansion costs. Please reinforce first."
             )
@@ -1950,6 +2636,370 @@ class EDisGo:
             title = None
         plots.histogram(data=data, title=title, timeindex=timestep, **kwargs)
 
+    def plot_voltage_over_dist(
+        self,
+        mv_id,
+        lv_id,
+        save_as=False,
+        split_branches=False,
+        return_data=False,
+        other=None,
+    ):
+        """
+        Plot LV voltage over distance to the MV/LV transformer for one LV grid,
+
+        Parameters
+        ----------
+        mv_id : kept for API compatibility (currently unused)
+        lv_id : int or str identifying LV grid (int = index in mv_grid.lv_grids)
+        save_as : bool or str
+            If True -> writes default html. If str -> file path (.html or .png).
+        split_branches : kept for API compatibility (currently unused)
+        other : EDisGo object, optional
+            Another EDisGo object to compare voltage data. If None, only self is used.
+        """
+        # Local imports to avoid import overhead
+        from edisgo.tools.voltage_over_distance import (
+            _get_v_res_df,
+            _infer_load_and_feedin_timesteps,
+            _series_at_t,
+            build_voltage_over_distance_df,
+            make_voltage_over_distance_figure,
+        )
+
+        # If other is None, use self for comparison
+        if other is None:
+            other = self
+
+        # Require results on both
+        v_a = _get_v_res_df(self)
+        v_b = _get_v_res_df(other)
+        if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
+            raise RuntimeError(
+                "Voltage results (results.v_res) are empty. "
+                "Run analyze() with timesteps/snapshots so voltage "
+                "results are generated."
+            )
+        # Resolve LV grids (index-based resolution)
+        lv_grids_a = list(self.topology.mv_grid.lv_grids)
+        lv_grids_b = list(other.topology.mv_grid.lv_grids)
+
+        if isinstance(lv_id, int):
+            try:
+                lv_grid_a = lv_grids_a[lv_id]
+                lv_grid_b = lv_grids_b[lv_id]
+            except IndexError as e:
+                raise ValueError(
+                    f"lv_id={lv_id} out of range. base has {len(lv_grids_a)} LV grids."
+                ) from e
+        else:
+            # String matching fallback
+            target = str(lv_id)
+
+            def _match(lvs):
+                for g in lvs:
+                    for cand in (
+                        getattr(g, "id", None),
+                        getattr(g, "name", None),
+                        str(g),
+                    ):
+                        if cand is not None and str(cand) == target:
+                            return g
+                return None
+
+            lv_grid_a = _match(lv_grids_a)
+            lv_grid_b = _match(lv_grids_b)
+            if lv_grid_a is None or lv_grid_b is None:
+                raise ValueError(
+                    f"Could not resolve lv_id='{lv_id}' in one of the EDisGo objects."
+                )
+
+        # Determine LV transformer (source) bus
+        # Prefer station-like attributes; fallback to first bus if not found.
+        def _lv_source_bus(lv_grid):
+            for attr in ("station", "mv_lv_station", "lv_station"):
+                st = getattr(lv_grid, attr, None)
+                if st is not None:
+                    bus = getattr(st, "bus", None)
+                    if bus is not None:
+                        return str(bus)
+            # fallback: take first bus in lv_grid
+            return str(lv_grid.buses_df.index[0])
+
+        source_a = _lv_source_bus(lv_grid_a)
+        source_b = _lv_source_bus(lv_grid_b)
+
+        # Distances (Dijkstra)
+        # Edge weight attribute commonly is 'length' in eDisGo graphs;
+        # adjust if your graph uses 'length_km'
+        pl_a = get_path_length_to_station(self)
+        pl_b = get_path_length_to_station(other)
+
+        # restrict to LV buses and shift so LV station bus is at 0
+        lv_buses_a = pd.Index([str(b) for b in lv_grid_a.buses_df.index])
+        lv_buses_b = pd.Index([str(b) for b in lv_grid_b.buses_df.index])
+
+        dist_a = pl_a.reindex(lv_buses_a).astype(float)
+        dist_b = pl_b.reindex(lv_buses_b).astype(float)
+
+        # Import networkx once
+        import networkx as nx
+
+        # If LV station bus is not in pl_a (external bus), set its distance to 0
+        # and compute other buses relative to it
+        if str(source_a) in dist_a.index and pd.isna(dist_a.loc[str(source_a)]):
+            # Use LV grid graph to compute path lengths
+            try:
+                lv_graph = lv_grid_a.graph
+                lv_station = (
+                    str(lv_grid_a.station.index[0])
+                    if hasattr(lv_grid_a, "station")
+                    else str(source_a)
+                )
+
+                # Compute all path lengths from station at once using BFS
+                try:
+                    path_lengths = nx.single_source_shortest_path_length(
+                        lv_graph, source=lv_station
+                    )
+                    for bus in lv_buses_a:
+                        dist_a.loc[bus] = path_lengths.get(bus, 0)
+                except (nx.NetworkXError, nx.NodeNotFound):
+                    # If computation fails, set all to 0
+                    dist_a.loc[:] = 0
+            except Exception:
+                # Fallback: set all LV buses to 0
+                dist_a.loc[:] = 0
+
+        if str(source_b) in dist_b.index and pd.isna(dist_b.loc[str(source_b)]):
+            # Use LV grid graph to compute path lengths
+            try:
+                lv_graph = lv_grid_b.graph
+                lv_station = (
+                    str(lv_grid_b.station.index[0])
+                    if hasattr(lv_grid_b, "station")
+                    else str(source_b)
+                )
+
+                # Compute all path lengths from station at once using BFS
+                try:
+                    path_lengths = nx.single_source_shortest_path_length(
+                        lv_graph, source=lv_station
+                    )
+                    for bus in lv_buses_b:
+                        dist_b.loc[bus] = path_lengths.get(bus, 0)
+                except (nx.NetworkXError, nx.NodeNotFound):
+                    # If computation fails, set all to 0
+                    dist_b.loc[:] = 0
+            except Exception:
+                # Fallback: set all LV buses to 0
+                dist_b.loc[:] = 0
+
+        # Shift to LV station reference (station bus distance -> 0)
+        if str(source_a) in pl_a.index and not pd.isna(pl_a.loc[str(source_a)]):
+            dist_a = dist_a - float(pl_a.loc[str(source_a)])
+        if str(source_b) in pl_b.index and not pd.isna(pl_b.loc[str(source_b)]):
+            dist_b = dist_b - float(pl_b.loc[str(source_b)])
+
+        # Worst-case timesteps
+        t_load_a, t_feed_a = _infer_load_and_feedin_timesteps(self, v_a)
+        t_load_b, t_feed_b = _infer_load_and_feedin_timesteps(other, v_b)
+
+        # Voltages at those timesteps
+        v_a_load = _series_at_t(v_a, t_load_a)
+        v_a_feed = _series_at_t(v_a, t_feed_a)
+        # Use all buses (grids are identical), no intersection needed
+        buses = pd.Index([str(b) for b in lv_grid_a.buses_df.index])
+        if buses.empty:
+            raise RuntimeError("No LV buses found in LV grid.")
+
+        df = build_voltage_over_distance_df(
+            buses=buses,
+            dist_a=dist_a,
+            v_a_load=v_a_load,
+            v_a_feed=v_a_feed,
+        )
+
+        fig = make_voltage_over_distance_figure(
+            title=f"LV voltage over distance (lv_id={lv_id})",
+            buses=buses,
+            dist_a=dist_a,
+            v_a_load=v_a_load,
+            v_a_feed=v_a_feed,
+            band_low=0.90,
+            band_high=1.10,
+            x_label="Path length to LV station [-]",
+            df=df,
+        )
+
+        if save_as:
+            if isinstance(save_as, str):
+                if save_as.lower().endswith(".html"):
+                    fig.write_html(save_as)
+                elif save_as.lower().endswith(".png"):
+                    fig.write_image(save_as)
+                else:
+                    fig.write_html(save_as)
+            else:
+                fig.write_html("voltage_over_distance_lv.html")
+
+        return (fig, df) if return_data else fig
+
+    def plot_voltage_over_dist_mv(self, mv_id, other, save_as=False, return_data=False):
+        """
+        Plot MV voltage over distance to the HV/MV transformer,
+        comparing two EDisGo objects.
+
+        Parameters
+        ----------
+        mv_id : kept for API compatibility (currently unused)
+        other : EDisGo
+        save_as : bool or str
+            If True -> writes default html. If str -> file path (.html or .png).
+        """
+        from edisgo.tools.voltage_over_distance import (
+            _get_v_res_df,
+            _infer_load_and_feedin_timesteps,
+            _series_at_t,
+            build_voltage_over_distance_df,
+            make_voltage_over_distance_figure,
+        )
+
+        v_a = _get_v_res_df(self)
+        v_b = _get_v_res_df(other)
+        if getattr(v_a, "empty", True) or getattr(v_b, "empty", True):
+            raise RuntimeError(
+                "Voltage results (results.v_res) are empty. "
+                "Run analyze() with timesteps/snapshots so voltage "
+                "results are generated."
+            )
+        mv_a = self.topology.mv_grid
+        mv_b = other.topology.mv_grid
+
+        # HV/MV transformer (source) bus:
+        # Use first MV bus as fallback if no explicit station bus is available.
+        def _mv_source_bus(edisgo_obj):
+            mv = edisgo_obj.topology.mv_grid
+            G = mv.graph
+
+            # 1) Try transformer buses, but only accept if they exist in graph nodes
+            trafos = getattr(edisgo_obj.topology, "transformers_hvmv_df", None)
+            if (
+                trafos is not None
+                and hasattr(trafos, "columns")
+                and {"bus0", "bus1"}.issubset(trafos.columns)
+            ):
+                for col in ("bus0", "bus1"):
+                    b = str(trafos.iloc[0][col])
+                    if b in G:
+                        return b
+
+            # 2) Try common station bus attributes (if present)
+            for attr in ("station", "hvmv_station", "mv_station"):
+                st = getattr(mv, attr, None)
+                if st is not None:
+                    bus = getattr(st, "bus", None)
+                    if bus is not None and str(bus) in G:
+                        return str(bus)
+                # Fallback: first graph node (guaranteed)
+            return str(next(iter(G.nodes)))
+
+        source_a = _mv_source_bus(self)
+        source_b = _mv_source_bus(other)
+
+        # Path length to station (topological distance, not km)
+        pl_a = get_path_length_to_station(self)
+        pl_b = get_path_length_to_station(other)
+
+        mv_buses_a = pd.Index([str(b) for b in mv_a.buses_df.index])
+        mv_buses_b = pd.Index([str(b) for b in mv_b.buses_df.index])
+
+        dist_a = pl_a.reindex(mv_buses_a).astype(float)
+        dist_b = pl_b.reindex(mv_buses_b).astype(float)
+
+        # Handle cases where MV buses are not in pl_a (e.g., external buses)
+        # Use MV grid graph to compute path lengths if needed
+        import networkx as nx
+
+        if dist_a.isna().any():
+            try:
+                mv_graph = mv_a.graph
+                # Compute all path lengths from source at once using BFS instead
+                # of one shortest_path call per bus.
+                path_lengths_a = nx.single_source_shortest_path_length(
+                    mv_graph, source=source_a
+                )
+                for bus in mv_buses_a:
+                    if pd.isna(dist_a.loc[bus]):
+                        dist_a.loc[bus] = path_lengths_a.get(bus, 0)
+            except Exception:
+                # Fallback: set all NaN values to 0
+                dist_a = dist_a.fillna(0)
+
+        if dist_b.isna().any():
+            try:
+                mv_graph = mv_b.graph
+                # Compute all path lengths from source at once using BFS instead
+                # of one shortest_path call per bus.
+                path_lengths_b = nx.single_source_shortest_path_length(
+                    mv_graph, source=source_b
+                )
+                for bus in mv_buses_b:
+                    if pd.isna(dist_b.loc[bus]):
+                        dist_b.loc[bus] = path_lengths_b.get(bus, 0)
+            except Exception:
+                # Fallback: set all NaN values to 0
+                dist_b = dist_b.fillna(0)
+
+        t_load_a, t_feed_a = _infer_load_and_feedin_timesteps(self, v_a)
+        t_load_b, t_feed_b = _infer_load_and_feedin_timesteps(other, v_b)
+
+        v_a_load = _series_at_t(v_a, t_load_a)
+        v_a_feed = _series_at_t(v_a, t_feed_a)
+        v_b_load = _series_at_t(v_b, t_load_b)
+        v_b_feed = _series_at_t(v_b, t_feed_b)
+
+        buses = pd.Index([str(b) for b in mv_a.buses_df.index])
+        if buses.empty:
+            raise RuntimeError("No MV buses found in MV grid.")
+
+        df = build_voltage_over_distance_df(
+            buses=buses,
+            dist_a=dist_a,
+            v_a_load=v_a_load,
+            v_a_feed=v_a_feed,
+            dist_b=dist_b,
+            v_b_load=v_b_load,
+            v_b_feed=v_b_feed,
+        )
+        fig = make_voltage_over_distance_figure(
+            title="MV voltage over distance",
+            buses=buses,
+            dist_a=dist_a,
+            v_a_load=v_a_load,
+            v_a_feed=v_a_feed,
+            dist_b=dist_b,
+            v_b_load=v_b_load,
+            v_b_feed=v_b_feed,
+            band_low=0.96,
+            band_high=1.06,
+            x_label="Path length to HV/MV station [-]",
+            df=df,
+        )
+
+        if save_as:
+            if isinstance(save_as, str):
+                if save_as.lower().endswith(".html"):
+                    fig.write_html(save_as)
+                elif save_as.lower().endswith(".png"):
+                    fig.write_image(save_as)
+                else:
+                    fig.write_html(save_as)
+            else:
+                fig.write_html("voltage_over_distance_mv.html")
+
+        return (fig, df) if return_data else fig
+
     def histogram_relative_line_load(
         self, timestep=None, title=True, voltage_level="mv_lv", **kwargs
     ):
@@ -1957,7 +3007,7 @@ class EDisGo:
         Plots histogram of relative line loads.
 
         For more information on how the relative line load is calculated see
-        :func:`edisgo.tools.tools.get_line_loading_from_network`.
+        :func:`edisgo.tools.tools.calculate_relative_line_load`.
         For more information on the histogram plot and possible configurations
         see :func:`edisgo.tools.plots.histogram`.
 
@@ -2001,15 +3051,14 @@ class EDisGo:
         else:
             lines = self.topology.lines_df
 
-        rel_line_loading = tools.calculate_relative_line_load(
-            self, lines.index, timestep
-        )
+        rel_line_loading = lines_relative_load(self, lines.index)
 
         if timestep is None:
             timestep = rel_line_loading.index
         # check if timesteps is array-like, otherwise convert to list
         if not hasattr(timestep, "__len__"):
             timestep = [timestep]
+        rel_line_loading = rel_line_loading.loc[timestep, :]
 
         if title is True:
             if len(timestep) == 1:
@@ -2030,7 +3079,10 @@ class EDisGo:
         save_timeseries=True,
         save_results=True,
         save_electromobility=False,
+        save_opf_results=False,
         save_heatpump=False,
+        save_overlying_grid=False,
+        save_dsm=False,
         **kwargs,
     ):
         """
@@ -2047,20 +3099,20 @@ class EDisGo:
             Main directory to save EDisGo object to.
         save_topology : bool, optional
             Indicates whether to save :class:`~.network.topology.Topology` object.
-            Per default it is saved to sub-directory 'topology'. See
+            Per default, it is saved to sub-directory 'topology'. See
             :attr:`~.network.topology.Topology.to_csv` for more information.
             Default: True.
         save_timeseries : bool, optional
-            Indicates whether to save :class:`~.network.timeseries.Timeseries` object.
+            Indicates whether to save :class:`~.network.timeseries.TimeSeries` object.
             Per default it is saved to subdirectory 'timeseries'.
             Through the keyword arguments `reduce_memory`
             and `to_type` it can be chosen if memory should be reduced. See
-            :attr:`~.network.timeseries.Timeseries.to_csv` for more
+            :attr:`~.network.timeseries.TimeSeries.to_csv` for more
             information.
             Default: True.
         save_results : bool, optional
             Indicates whether to save :class:`~.network.results.Results`
-            object. Per default it is saved to subdirectory 'results'.
+            object. Per default, it is saved to subdirectory 'results'.
             Through the keyword argument `parameters` the results that should
             be stored can be specified. Further, through the keyword parameters
             `reduce_memory` and `to_type` it can be chosen if memory should be reduced.
@@ -2068,22 +3120,41 @@ class EDisGo:
             Default: True.
         save_electromobility : bool, optional
             Indicates whether to save
-            :class:`~.network.electromobility.Electromobility` object. Per default it is
-            not saved. If set to True, it is saved to subdirectory 'electromobility'.
+            :class:`~.network.electromobility.Electromobility` object. Per default, it
+            is not saved. If set to True, it is saved to subdirectory 'electromobility'.
             See :attr:`~.network.electromobility.Electromobility.to_csv` for more
+            information.
+        save_opf_results : bool, optional
+            Indicates whether to save
+            :class:`~.opf.results.opf_result_class.OPFResults` object. Per default, it
+            is not saved. If set to True, it is saved to subdirectory 'opf_results'.
+            See :attr:`~.opf.results.opf_result_class.OPFResults.to_csv` for more
             information.
         save_heatpump : bool, optional
             Indicates whether to save
-            :class:`~.network.heat.HeatPump` object. Per default it is not saved.
+            :class:`~.network.heat.HeatPump` object. Per default, it is not saved.
             If set to True, it is saved to subdirectory 'heat_pump'.
             See :attr:`~.network.heat.HeatPump.to_csv` for more information.
+        save_overlying_grid : bool, optional
+            Indicates whether to save
+            :class:`~.network.overlying_grid.OverlyingGrid` object. Per default, it is
+            not saved. If set to True, it is saved to subdirectory 'overlying_grid'.
+            See :attr:`~.network.overlying_grid.OverlyingGrid.to_csv` for more
+            information.
+        save_dsm : bool, optional
+            Indicates whether to save :class:`~.network.dsm.DSM` object. Per default,
+            it is not saved. If set to True, it is saved to subdirectory 'dsm'. See
+            :attr:`~.network.dsm.DSM.to_csv` for more information.
 
         Other Parameters
         ------------------
         reduce_memory : bool, optional
             If True, size of dataframes containing time series in
-            :class:`~.network.results.Results`, :class:`~.network.timeseries.TimeSeries`
-            and :class:`~.network.heat.HeatPump`
+            :class:`~.network.results.Results`,
+            :class:`~.network.timeseries.TimeSeries`,
+            :class:`~.network.heat.HeatPump`,
+            :class:`~.network.overlying_grid.OverlyingGrid` and
+            :class:`~.network.dsm.DSM`
             is reduced. See respective classes `reduce_memory` functions for more
             information. Type to convert to can be specified by providing
             `to_type` as keyword argument. Further parameters of reduce_memory
@@ -2093,13 +3164,13 @@ class EDisGo:
             Data type to convert time series data to. This is a trade-off
             between precision and memory. Default: "float32".
         parameters : None or dict
-            Specifies which results to store. By default this is set to None,
+            Specifies which results to store. By default, this is set to None,
             in which case all available results are stored.
             To only store certain results provide a dictionary. See function docstring
-            `parameters` parameter in :func:`~.network.results.Results.to_csv`
+            `parameters` parameter in :attr:`~.network.results.Results.to_csv`
             for more information.
         electromobility_attributes : None or list(str)
-            Specifies which electromobility attributes to store. By default this is set
+            Specifies which electromobility attributes to store. By default, this is set
             to None, in which case all attributes are stored.
             See function docstring `attributes` parameter in
             :attr:`~.network.electromobility.Electromobility.to_csv` for more
@@ -2141,6 +3212,12 @@ class EDisGo:
                 attributes=kwargs.get("electromobility_attributes", None),
             )
 
+        if save_opf_results:
+            self.opf_results.to_csv(
+                os.path.join(directory, "opf_results"),
+                attributes=kwargs.get("opf_results_attributes", None),
+            )
+
         # save configs
         self.config.to_json(directory)
 
@@ -2151,12 +3228,26 @@ class EDisGo:
                 to_type=kwargs.get("to_type", "float32"),
             )
 
+        if save_dsm:
+            self.dsm.to_csv(
+                os.path.join(directory, "dsm"),
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32"),
+            )
+
+        if save_overlying_grid:
+            self.overlying_grid.to_csv(
+                os.path.join(directory, "overlying_grid"),
+                reduce_memory=kwargs.get("reduce_memory", False),
+                to_type=kwargs.get("to_type", "float32"),
+            )
+
         if kwargs.get("archive", False):
             archive_type = kwargs.get("archive_type", "zip")
             shutil.make_archive(directory, archive_type, directory)
 
             dir_size = tools.get_directory_size(directory)
-            zip_size = os.path.getsize(directory + ".zip")
+            zip_size = os.path.getsize(str(directory) + ".zip")
 
             reduction = (1 - zip_size / dir_size) * 100
 
@@ -2167,8 +3258,8 @@ class EDisGo:
 
             logger.info(
                 f"Archived files in a {archive_type} archive and reduced "
-                f"storage needs by {reduction:.2f} %. The unarchived files"
-                f" were dropped: {drop_unarchived}"
+                f"storage needs by {reduction:.2f} %. The unarchived files "
+                f"were dropped: {drop_unarchived}"
             )
 
     def save_edisgo_to_pickle(self, path="", filename=None):
@@ -2190,9 +3281,87 @@ class EDisGo:
             filename = f"edisgo_object_{self.topology.mv_grid.id}.pkl"
         pickle.dump(self, open(os.path.join(abs_path, filename), "wb"))
 
+    def save_edisgo_to_json(
+        self,
+        filename=None,
+        path="",
+        s_base=1,
+        flexible_cps=None,
+        flexible_hps=None,
+        flexible_loads=None,
+        flexible_storage_units=None,
+        opf_version=1,
+    ):
+        """
+        Saves EDisGo object in PowerModels network data format to json file.
+
+        Parameters
+        -----------
+        filename : str or None
+            Filename the json file is saved under. If None, filename is
+            'ding0_{grid_id}_t_{#timesteps}.json'.
+        path : str
+            Directory the json file is saved to. Per default, it takes the current
+            working directory.
+        s_base : int
+            Base value of apparent power for per unit system.
+            Default: 1 MVA
+        flexible_cps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all charging points that allow for flexible charging.
+        flexible_hps : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all heat pumps that allow for flexible operation due to an
+            attached heat storage.
+        flexible_loads : :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible loads that allow for application of demand
+            side management strategy.
+        flexible_storage_units: :numpy:`numpy.ndarray<ndarray>` or None
+            Array containing all flexible storages. Non-flexible storages operate to
+            optimize self consumption.
+            Default: None
+        opf_version: Int
+            Version of optimization models to choose from. Must be one of [1, 2, 3, 4].
+            For more information see :func:`edisgo.opf.powermodels_opf.pm_optimize`.
+            Default: 1.
+
+        Returns
+        -------
+        dict
+            Dictionary that contains all network data in PowerModels network data
+            format.
+
+        """
+        abs_path = os.path.abspath(path)
+        pm, hv_flex_dict = self.to_powermodels(
+            s_base=s_base,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            flexible_storage_units=flexible_storage_units,
+            opf_version=opf_version,
+        )
+
+        def _convert(o):
+            """
+            Helper function for json dump, as int64 cannot be dumped.
+
+            """
+            if isinstance(o, np.int64):
+                return int(o)
+            raise TypeError
+
+        if filename is None:
+            filename = "{}.json".format(pm["name"])
+
+        with open(
+            os.path.join(abs_path, filename),
+            "w",
+        ) as outfile:
+            json.dump(pm, outfile, default=_convert)
+        return pm
+
     def reduce_memory(self, **kwargs):
         """
-        Reduces size of dataframes containing time series to save memory.
+        Reduces size of time series data to save memory.
 
         Per default, float data is stored as float64. As this precision is
         barely needed, this function can be used to convert time series data
@@ -2205,11 +3374,20 @@ class EDisGo:
             between precision and memory. Default: "float32".
         results_attr_to_reduce : list(str), optional
             See `attr_to_reduce` parameter in
-            :attr:`~.network.results.Results.reduce_memory` for more
-            information.
+            :attr:`~.network.results.Results.reduce_memory` for more information.
         timeseries_attr_to_reduce : list(str), optional
             See `attr_to_reduce` parameter in
-            :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more
+            :attr:`~.network.timeseries.TimeSeries.reduce_memory` for more information.
+        heat_pump_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.heat.HeatPump.reduce_memory` for more information.
+        overlying_grid_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.overlying_grid.OverlyingGrid.reduce_memory` for more
+            information.
+        dsm_attr_to_reduce : list(str), optional
+            See `attr_to_reduce` parameter in
+            :attr:`~.network.overlying_grid.OverlyingGrid.reduce_memory` for more
             information.
 
         """
@@ -2223,18 +3401,243 @@ class EDisGo:
             to_type=kwargs.get("to_type", "float32"),
             attr_to_reduce=kwargs.get("results_attr_to_reduce", None),
         )
+        # heat pump data
+        self.heat_pump.reduce_memory(
+            to_type=kwargs.get("to_type", "float32"),
+            attr_to_reduce=kwargs.get("heat_pump_attr_to_reduce", None),
+        )
+        # overlying grid
+        self.overlying_grid.reduce_memory(
+            to_type=kwargs.get("to_type", "float32"),
+            attr_to_reduce=kwargs.get("overlying_grid_attr_to_reduce", None),
+        )
+
+    def spatial_complexity_reduction(
+        self,
+        copy_edisgo: bool = False,
+        mode: str = "kmeansdijkstra",
+        cluster_area: str = "feeder",
+        reduction_factor: float = 0.25,
+        reduction_factor_not_focused: bool | float = False,
+        apply_pseudo_coordinates: bool = True,
+        **kwargs,
+    ) -> tuple[EDisGo, pd.DataFrame, pd.DataFrame]:
+        """
+        Reduces the number of busses and lines by applying a spatial clustering.
+
+        Per default, this function creates pseudo coordinates for all busses in the LV
+        grids (see function :func:`~.tools.pseudo_coordinates.make_pseudo_coordinates`).
+        In case LV grids are not geo-referenced, this is a necessary step. If they are
+        already geo-referenced it can still be useful to obtain better results.
+
+        Which busses are clustered is determined in function
+        :func:`~.tools.spatial_complexity_reduction.make_busmap`.
+        The clustering method used can be specified through the parameter `mode`.
+        Further, the clustering can be applied to different areas such as the whole grid
+        or the separate feeders, which is specified through the parameter
+        `cluster_area`, and to different degrees, specified through the parameter
+        `reduction_factor`.
+
+        The actual spatial reduction of the EDisGo object is conducted in function
+        :func:`~.tools.spatial_complexity_reduction.apply_busmap`. The changes, such as
+        dropping of lines connecting the same buses and adapting buses loads, generators
+        and storage units are connected to, are applied directly in the Topology object.
+        If you want to keep information on the original grid, hand a copy of the EDisGo
+        object to this function. You can also set how loads and generators at clustered
+        busses are aggregated through the keyword arguments
+        `load_aggregation_mode` and `generator_aggregation_mode`.
+
+        Parameters
+        ----------
+        copy_edisgo : bool
+            Defines whether to apply the spatial complexity reduction directly on the
+            EDisGo object or on a copy. Per default, the complexity reduction is
+            directly applied.
+        mode : str
+            Clustering method to use. Possible options are "kmeans", "kmeansdijkstra",
+            "aggregate_to_main_feeder" or "equidistant_nodes". The clustering methods
+            "aggregate_to_main_feeder" and "equidistant_nodes" only work for the cluster
+            area "main_feeder".
+
+            - "kmeans":
+                Perform the k-means algorithm on the cluster area and then map the buses
+                to the cluster centers.
+            - "kmeansdijkstra":
+                Perform the k-means algorithm and then map the nodes to the cluster
+                centers through the shortest distance in the graph. The distances are
+                calculated using the dijkstra algorithm.
+            - "aggregate_to_main_feeder":
+                Aggregate the nodes in the feeder to the longest path in the feeder,
+                here called main feeder.
+            - "equidistant_nodes":
+                Uses the method "aggregate_to_main_feeder" and then reduces the nodes
+                again through a reduction of the nodes by the specified reduction factor
+                and distributing the remaining nodes on the graph equidistantly.
+
+            Default: "kmeansdijkstra".
+        cluster_area : str
+            The cluster area is the area the different clustering methods are applied
+            to. Possible options are 'grid', 'feeder' or 'main_feeder'.
+            Default: "feeder".
+        reduction_factor : float
+            Factor to reduce number of nodes by. Must be between 0 and 1. Default: 0.25.
+        reduction_factor_not_focused : bool or float
+            If False, uses the same reduction factor for all cluster areas. If between 0
+            and 1, this sets the reduction factor for buses not of interest (these are
+            buses without voltage or overloading issues, that are determined through a
+            worst case power flow analysis). When selecting 0, the nodes of the
+            clustering area are aggregated to the transformer bus. This parameter is
+            only used when parameter `cluster_area` is set to 'feeder' or 'main_feeder'.
+            Default: False.
+        apply_pseudo_coordinates : bool
+            If True pseudo coordinates are applied. The spatial complexity reduction
+            method is only tested with pseudo coordinates. Default: True.
+
+        Other Parameters
+        -----------------
+        line_naming_convention : str
+            Determines how to set "type_info" and "kind" in case two or more lines are
+            aggregated. Possible options are "standard_lines" or "combined_name".
+            If "standard_lines" is selected, the values of the standard line of the
+            respective voltage level are used to set "type_info" and "kind".
+            If "combined_name" is selected, "type_info" and "kind" contain the
+            concatenated values of the merged lines. x and r of the lines are not
+            influenced by this as they are always determined from the x and r values of
+            the aggregated lines.
+            Default: "standard_lines".
+        aggregation_mode : bool
+            Specifies, whether to aggregate loads and generators at the same bus or not.
+            If True, loads and generators at the same bus are aggregated
+            according to their selected modes (see parameters `load_aggregation_mode`
+            and `generator_aggregation_mode`). Default: False.
+        load_aggregation_mode : str
+            Specifies, how to aggregate loads at the same bus, in case parameter
+            `aggregation_mode` is set to True. Possible options are "bus" or "sector".
+            If "bus" is chosen, loads are aggregated per bus. When "sector" is chosen,
+            loads are aggregated by bus, type and sector. Default: "sector".
+        generator_aggregation_mode : str
+            Specifies, how to aggregate generators at the same bus, in case parameter
+            `aggregation_mode` is set to True. Possible options are "bus" or "type".
+            If "bus" is chosen, generators are aggregated per bus. When "type" is
+            chosen, generators are aggregated by bus and type.
+        mv_pseudo_coordinates : bool, optional
+            If True pseudo coordinates are also generated for MV grid.
+            Default: False.
+
+        Returns
+        -------
+        tuple(:class:`~.EDisGo`, :pandas:`pandas.DataFrame<DataFrame>`,\
+            :pandas:`pandas.DataFrame<DataFrame>`)
+            Returns the EDisGo object (which is only relevant in case the parameter
+            `copy_edisgo` was set to True), as well as the busmap and linemap
+            dataframes.
+            The busmap maps the original busses to the new busses with new coordinates.
+            Columns are "new_bus" with new bus name, "new_x" with new x-coordinate and
+            "new_y" with new y-coordinate. Index of the dataframe holds bus names of
+            original buses as in buses_df.
+            The linemap maps the original line names (in the index of the dataframe) to
+            the new line names (in column "new_line_name").
+
+        """
+        if copy_edisgo is True:
+            edisgo_obj = copy.deepcopy(self)
+        else:
+            edisgo_obj = self
+        busmap_df, linemap_df = spatial_complexity_reduction(
+            edisgo_obj=edisgo_obj,
+            mode=mode,
+            cluster_area=cluster_area,
+            reduction_factor=reduction_factor,
+            reduction_factor_not_focused=reduction_factor_not_focused,
+            apply_pseudo_coordinates=apply_pseudo_coordinates,
+            **kwargs,
+        )
+        return edisgo_obj, busmap_df, linemap_df
+
+    def map_reduced_results_to_full_grid(
+        self,
+        reduced_grid: EDisGo,
+        flexible_cps: list | None = None,
+        flexible_hps: list | None = None,
+        flexible_loads: list | None = None,
+        flexible_storage_units: list | None = None,
+    ) -> EDisGo:
+        """
+        Writes optimized flexible-component dispatch from a spatially-reduced
+        grid back onto this (full) grid.
+
+        Counterpart to :meth:`spatial_complexity_reduction`: where that
+        method shrinks this grid for a faster OPF, this method maps the OPF's
+        active-power results from ``reduced_grid`` back onto ``self`` so
+        reinforcement can run on the full topology. Only components the OPF
+        actually rewrites are touched — flexible charging points, heat pumps,
+        DSM loads, and storage units. Inflexible loads/generators are
+        untouched, since the OPF never changed their series and ``self``
+        already holds the correct values for them.
+
+        See
+        :func:`~.tools.spatial_complexity_reduction.apply_reduced_results_to_full_grid`
+        for the full matching/disaggregation rules and the reactive-power
+        recompute this method triggers as a side effect.
+
+        Parameters
+        ----------
+        reduced_grid : :class:`~.EDisGo`
+            The spatially-reduced EDisGo instance the OPF ran on. Supplies
+            the optimized active-power series and, if aggregated, the
+            ``old_name`` provenance for disaggregation.
+        flexible_cps : list of str, optional
+            Names of flexible charging points in ``reduced_grid`` to map
+            back.
+        flexible_hps : list of str, optional
+            Names of flexible heat-pump loads in ``reduced_grid`` to map
+            back.
+        flexible_loads : list of str, optional
+            Names of flexible DSM loads in ``reduced_grid`` to map back.
+        flexible_storage_units : list of str, optional
+            Names of flexible storage units in ``reduced_grid`` to map back.
+
+        Returns
+        -------
+        :class:`~.EDisGo`
+            ``self``, with active power written for the given flexible
+            components and reactive power recomputed.
+
+        """
+        return apply_reduced_results_to_full_grid(
+            full_grid=self,
+            reduced_grid=reduced_grid,
+            flexible_cps=flexible_cps,
+            flexible_hps=flexible_hps,
+            flexible_loads=flexible_loads,
+            flexible_storage_units=flexible_storage_units,
+        )
 
     def check_integrity(self):
         """
         Method to check the integrity of the EDisGo object.
 
         Checks for consistency of topology (see
-        :func:`edisgo.topology.check_integrity`), timeseries (see
-        :func:`edisgo.timeseries.check_integrity`) and the interplay of both.
+        :func:`edisgo.network.topology.Topology.check_integrity`), timeseries (see
+        :func:`edisgo.network.timeseries.TimeSeries.check_integrity`) and the interplay
+        of both.
+        Further, checks integrity of electromobility object (see
+        :func:`edisgo.network.electromobility.Electromobility.check_integrity`),
+        the heat pump object (see :func:`edisgo.network.heat.HeatPump.check_integrity`)
+        and the DSM object (see :func:`edisgo.network.dsm.DSM.check_integrity`).
+        Additionally, checks whether time series data in
+        :class:`~.network.heat.HeatPump`,
+        :class:`~.network.electromobility.Electromobility`,
+        :class:`~.network.overlying_grid.OverlyingGrid` and :class:`~.network.dsm.DSM`
+        contains all time steps in
+        :attr:`edisgo.network.timeseries.TimeSeries.timeindex`.
 
         """
         self.topology.check_integrity()
         self.timeseries.check_integrity()
+        self.electromobility.check_integrity()
+        self.dsm.check_integrity()
+        self.heat_pump.check_integrity()
 
         # check consistency of topology and timeseries
         comp_types = ["generators", "loads", "storage_units"]
@@ -2276,19 +3679,84 @@ class EDisGo:
                 (active_power[comps_complete].max() > comps.loc[comps_complete, attr])
             ]
 
-            if len(exceeding) > 0:
+            if len(exceeding) > 1e-6:
                 logger.warning(
                     f"Values of active power in the timeseries object exceed {attr} for"
                     f" the following {comp_type}: {exceeding.values}"
                 )
 
-            logging.info("Integrity check finished. Please pay attention to warnings.")
+        def _check_timeindex(check_df, param_name):
+            if not check_df.empty:
+                missing_indices = [
+                    _ for _ in self.timeseries.timeindex if _ not in check_df.index
+                ]
+                if len(missing_indices) > 0:
+                    logger.warning(
+                        f"There are time steps in timeindex of TimeSeries object that "
+                        f"are not in the index of {param_name}. This may lead "
+                        f"to problems."
+                    )
+
+        # check if time index of other time series data contains all time steps
+        # in TimeSeries.timeindex
+        if len(self.timeseries.timeindex) > 0:
+            # check time index of electromobility flexibility bands
+            flex_band = list(self.electromobility.flexibility_bands.values())[0]
+            _check_timeindex(flex_band, "Electromobility.flexibility_bands")
+            # check time index of HeatPump data
+            for param_name in self.heat_pump._timeseries_attributes:
+                _check_timeindex(
+                    getattr(self.heat_pump, param_name), f"HeatPump.{param_name}"
+                )
+            # check time index of OverlyingGrid data
+            for param_name in self.overlying_grid._attributes:
+                _check_timeindex(
+                    getattr(self.overlying_grid, param_name),
+                    f"OverlyingGrid.{param_name}",
+                )
+            # check time index of DSM data
+            for param_name in self.dsm._attributes:
+                _check_timeindex(
+                    getattr(self.dsm, param_name),
+                    f"DSM.{param_name}",
+                )
+
+        # check if heat demand can be met by corresponding heatpump at all times.
+        if len(self.heat_pump.cop_df.columns) > len(
+            self.heat_pump.heat_demand_df.columns
+        ):
+            # If there are heat pumps with heat demand but no COP time series, or the
+            # other way around, a warning is raised in HeatPump.check_integrity
+            pass
+        else:
+            hp_cop = self.heat_pump.cop_df
+            hp_p_nom = self.topology.loads_df.loc[
+                self.heat_pump.heat_demand_df.columns.values
+            ][["p_set"]]
+            heat_demand = self.heat_pump.heat_demand_df
+            comparison = (
+                heat_demand[hp_p_nom.index] > hp_cop * hp_p_nom.squeeze()
+            ).any()
+            if comparison.any():
+                logger.warning(
+                    "Heat demand is higher than rated heatpump power"
+                    f" of heatpumps: {comparison.index[comparison.values].values}."
+                    " Demand can not be covered if no sufficient"
+                    " heat storage capacities are available."
+                )
+
+        logging.info("Integrity check finished. Please pay attention to warnings.")
 
     def resample_timeseries(
         self, method: str = "ffill", freq: str | pd.Timedelta = "15min"
     ):
         """
-        Resamples all generator, load and storage time series to a desired resolution.
+        Resamples time series data in
+        :class:`~.network.timeseries.TimeSeries`, :class:`~.network.heat.HeatPump`,
+        :class:`~.network.electromobility.Electromobility` and
+        :class:`~.network.overlying_grid.OverlyingGrid`.
+
+        Both up- and down-sampling methods are possible.
 
         The following time series are affected by this:
 
@@ -2304,15 +3772,24 @@ class EDisGo:
 
         * :attr:`~.network.timeseries.TimeSeries.storage_units_reactive_power`
 
-        Both up- and down-sampling methods are possible.
+        * :attr:`~.network.electromobility.Electromobility.flexibility_bands`
+
+        * :attr:`~.network.heat.HeatPump.cop_df`
+
+        * :attr:`~.network.heat.HeatPump.heat_demand_df`
+
+        * All data in :class:`~.network.overlying_grid.OverlyingGrid`
 
         Parameters
         ----------
         method : str, optional
-            Method to choose from to fill missing values when resampling.
+            Method to choose from to fill missing values when resampling time series
+            data (only exception from this is for flexibility bands in
+            :class:`~.network.electromobility.Electromobility` object where method
+            cannot be chosen to assure consistency of flexibility band data).
             Possible options are:
 
-            * 'ffill'
+            * 'ffill' (default)
                 Propagate last valid observation forward to next valid
                 observation. See :pandas:`pandas.DataFrame.ffill<DataFrame.ffill>`.
             * 'bfill'
@@ -2330,7 +3807,10 @@ class EDisGo:
             Default: '15min'.
 
         """
-        self.timeseries.resample_timeseries(method=method, freq=freq)
+        self.timeseries.resample(method=method, freq=freq)
+        self.electromobility.resample(freq=freq)
+        self.heat_pump.resample_timeseries(method=method, freq=freq)
+        self.overlying_grid.resample(method=method, freq=freq)
 
 
 def import_edisgo_from_pickle(filename, path=""):
@@ -2351,25 +3831,28 @@ def import_edisgo_from_pickle(filename, path=""):
 
 
 def import_edisgo_from_files(
-    edisgo_path,
-    import_topology=True,
-    import_timeseries=False,
-    import_results=False,
-    import_electromobility=False,
-    import_heat_pump=False,
-    from_zip_archive=False,
+    edisgo_path: str | PurePath,
+    import_topology: bool = True,
+    import_timeseries: bool = False,
+    import_results: bool = False,
+    import_electromobility: bool = False,
+    import_opf_results: bool = False,
+    import_heat_pump: bool = False,
+    import_dsm: bool = False,
+    import_overlying_grid: bool = False,
+    from_zip_archive: bool = False,
     **kwargs,
 ):
     """
     Sets up EDisGo object from csv files.
 
-    This is the reverse function of :func:`~.edisgo.EDisGo.save` and if not specified
+    This is the reverse function of :attr:`~.edisgo.EDisGo.save` and if not specified
     differently assumes all data in the default sub-directories created in the
-    :func:`~.edisgo.EDisGo.save` function.
+    :attr:`~.edisgo.EDisGo.save` function.
 
     Parameters
     -----------
-    edisgo_path : str
+    edisgo_path : str or pathlib.PurePath
         Main directory to restore EDisGo object from. This directory must contain the
         config files. Further, if not specified differently,
         it is assumed to be the main directory containing sub-directories with
@@ -2377,40 +3860,63 @@ def import_edisgo_from_files(
         is the name of the archive.
     import_topology : bool
         Indicates whether to import :class:`~.network.topology.Topology` object.
-        Per default it is set to True, in which case topology data is imported.
+        Per default, it is set to True, in which case topology data is imported.
         The default directory topology data is imported from is the sub-directory
         'topology'. A different directory can be specified through keyword argument
         `topology_directory`.
         Default: True.
     import_timeseries : bool
-        Indicates whether to import :class:`~.network.timeseries.Timeseries` object.
-        Per default it is set to False, in which case timeseries data is not imported.
+        Indicates whether to import :class:`~.network.timeseries.TimeSeries` object.
+        Per default, it is set to False, in which case timeseries data is not imported.
         The default directory time series data is imported from is the sub-directory
         'timeseries'. A different directory can be specified through keyword argument
         `timeseries_directory`.
         Default: False.
     import_results : bool
         Indicates whether to import :class:`~.network.results.Results` object.
-        Per default it is set to False, in which case results data is not imported.
+        Per default, it is set to False, in which case results data is not imported.
         The default directory results data is imported from is the sub-directory
         'results'. A different directory can be specified through keyword argument
         `results_directory`.
         Default: False.
     import_electromobility : bool
         Indicates whether to import :class:`~.network.electromobility.Electromobility`
-        object. Per default it is set to False, in which case electromobility data is
+        object. Per default, it is set to False, in which case electromobility data is
         not imported.
         The default directory electromobility data is imported from is the sub-directory
         'electromobility'. A different directory can be specified through keyword
         argument `electromobility_directory`.
         Default: False.
+    import_opf_results : bool
+        Indicates whether to import :class:`~.opf.results.opf_result_class.OPFResults`
+        object. Per default, it is set to False, in which case opf results data is not
+        imported. The default directory results data is imported from is the
+        sub-directory 'opf_results'. A different directory can be specified through
+        keyword argument `opf_results_directory`.
+        Default: False.
     import_heat_pump : bool
         Indicates whether to import :class:`~.network.heat.HeatPump` object.
-        Per default it is set to False, in which case heat pump data containing
+        Per default, it is set to False, in which case heat pump data containing
         information on COP, heat demand time series, etc. is not imported.
         The default directory heat pump data is imported from is the sub-directory
         'heat_pump'. A different directory can be specified through keyword
         argument `heat_pump_directory`.
+        Default: False.
+    import_overlying_grid : bool
+        Indicates whether to import :class:`~.network.overlying_grid.OverlyingGrid`
+        object. Per default, it is set to False, in which case overlying grid data
+        containing information on renewables curtailment requirements, generator
+        dispatch, etc. is not imported.
+        The default directory overlying grid data is imported from is the sub-directory
+        'overlying_grid'. A different directory can be specified through keyword
+        argument `overlying_grid_directory`.
+        Default: False.
+    import_dsm : bool
+        Indicates whether to import :class:`~.network.dsm.DSM`
+        object. Per default, it is set to False, in which case DSM data is not imported.
+        The default directory DSM data is imported from is the sub-directory
+        'dsm'. A different directory can be specified through keyword
+        argument `dsm_directory`.
         Default: False.
     from_zip_archive : bool
         Set to True if data needs to be imported from an archive, e.g. a zip
@@ -2420,35 +3926,46 @@ def import_edisgo_from_files(
     -----------------
     topology_directory : str
         Indicates directory :class:`~.network.topology.Topology` object is imported
-        from. Per default topology data is imported from `edisgo_path` sub-directory
+        from. Per default, topology data is imported from `edisgo_path` sub-directory
         'topology'.
     timeseries_directory : str
-        Indicates directory :class:`~.network.timeseries.Timeseries` object is imported
-        from. Per default time series data is imported from `edisgo_path` sub-directory
+        Indicates directory :class:`~.network.timeseries.TimeSeries` object is imported
+        from. Per default, time series data is imported from `edisgo_path` sub-directory
         'timeseries'.
     results_directory : str
         Indicates directory :class:`~.network.results.Results` object is imported
-        from. Per default results data is imported from `edisgo_path` sub-directory
+        from. Per default, results data is imported from `edisgo_path` sub-directory
         'results'.
     electromobility_directory : str
         Indicates directory :class:`~.network.electromobility.Electromobility` object is
-        imported from. Per default electromobility data is imported from `edisgo_path`
+        imported from. Per default, electromobility data is imported from `edisgo_path`
         sub-directory 'electromobility'.
+    opf_results_directory : str
+        Indicates directory :class:`~.opf.results.opf_result_class.OPFResults` object is
+        imported from. Per default, results data is imported from `edisgo_path`
+        sub-directory 'opf_results'.
     heat_pump_directory : str
         Indicates directory :class:`~.network.heat.HeatPump` object is
-        imported from. Per default heat pump data is imported from `edisgo_path`
+        imported from. Per default, heat pump data is imported from `edisgo_path`
         sub-directory 'heat_pump'.
+    overlying_grid_directory : str
+        Indicates directory :class:`~.network.overlying_grid.OverlyingGrid` object is
+        imported from. Per default, overlying grid data is imported from `edisgo_path`
+        sub-directory 'overlying_grid'.
+    dsm_directory : str
+        Indicates directory :class:`~.network.dsm.DSM` object is imported from. Per
+        default, DSM data is imported from `edisgo_path` sub-directory 'dsm'.
     dtype : str
         Numerical data type for time series and results data to be imported,
-        e.g. "float32". Per default this is None in which case data type is inferred.
+        e.g. "float32". Per default, this is None in which case data type is inferred.
     parameters : None or dict
-        Specifies which results to restore. By default this is set to None,
+        Specifies which results to restore. By default, this is set to None,
         in which case all available results are restored.
         To only restore certain results provide a dictionary. See function docstring
         `parameters` parameter in :func:`~.network.results.Results.to_csv`
         for more information.
 
-    Results
+    Returns
     ---------
     :class:`~.EDisGo`
         Restored EDisGo object.
@@ -2460,7 +3977,7 @@ def import_edisgo_from_files(
 
     if not from_zip_archive and str(edisgo_path).endswith(".zip"):
         from_zip_archive = True
-        logging.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
+        logger.info("Given path is a zip archive. Setting 'from_zip_archive' to True.")
 
     edisgo_obj = EDisGo()
     try:
@@ -2470,7 +3987,7 @@ def import_edisgo_from_files(
             "from_zip_archive": from_zip_archive,
         }
     except FileNotFoundError:
-        logging.info(
+        logger.info(
             "Configuration data could not be loaded from json wherefore "
             "the default configuration data is loaded."
         )
@@ -2489,7 +4006,7 @@ def import_edisgo_from_files(
         if os.path.exists(directory):
             edisgo_obj.topology.from_csv(directory, edisgo_obj, from_zip_archive)
         else:
-            logging.warning("No topology data found. Topology not imported.")
+            logger.warning("No topology data found. Topology not imported.")
 
     if import_timeseries:
         dtype = kwargs.get("dtype", None)
@@ -2504,7 +4021,7 @@ def import_edisgo_from_files(
                 directory, dtype=dtype, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning("No time series data found. Timeseries not imported.")
+            logger.warning("No time series data found. Timeseries not imported.")
 
     if import_results:
         parameters = kwargs.get("parameters", None)
@@ -2520,7 +4037,7 @@ def import_edisgo_from_files(
                 directory, parameters, dtype=dtype, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning("No results data found. Results not imported.")
+            logger.warning("No results data found. Results not imported.")
 
     if import_electromobility:
         if not from_zip_archive:
@@ -2534,9 +4051,22 @@ def import_edisgo_from_files(
                 directory, edisgo_obj, from_zip_archive=from_zip_archive
             )
         else:
-            logging.warning(
+            logger.warning(
                 "No electromobility data found. Electromobility not imported."
             )
+
+    if import_opf_results:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "opf_results_directory", os.path.join(edisgo_path, "opf_results")
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.opf_results.from_csv(
+                directory, from_zip_archive=from_zip_archive
+            )
+        else:
+            logger.warning("No opf results data found. OPF results not imported.")
 
     if import_heat_pump:
         if not from_zip_archive:
@@ -2548,6 +4078,34 @@ def import_edisgo_from_files(
         if os.path.exists(directory):
             edisgo_obj.heat_pump.from_csv(directory, from_zip_archive=from_zip_archive)
         else:
-            logging.warning("No heat pump data found. Heat pump data not imported.")
+            logger.warning("No heat pump data found. Heat pump data not imported.")
+
+    if import_dsm:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "dsm_directory",
+                os.path.join(edisgo_path, "dsm"),
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.dsm.from_csv(directory, from_zip_archive=from_zip_archive)
+        else:
+            logger.warning("No DSM data found. DSM data not imported.")
+
+    if import_overlying_grid:
+        if not from_zip_archive:
+            directory = kwargs.get(
+                "overlying_grid_directory",
+                os.path.join(edisgo_path, "overlying_grid"),
+            )
+
+        if os.path.exists(directory):
+            edisgo_obj.overlying_grid.from_csv(
+                directory, from_zip_archive=from_zip_archive
+            )
+        else:
+            logger.warning(
+                "No overlying grid data found. Overlying grid data not imported."
+            )
 
     return edisgo_obj

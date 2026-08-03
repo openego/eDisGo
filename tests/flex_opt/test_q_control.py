@@ -15,7 +15,6 @@ class TestQControl:
         assert q_control.get_q_sign_load("Capacitive") == -1
 
     def test_fixed_cosphi(self):
-
         timeindex = pd.date_range("1/1/1970", periods=2, freq="H")
         active_power_ts = pd.DataFrame(
             data={
@@ -102,7 +101,7 @@ class TestQControl:
 
         # test for component_type="generators"
         pf = q_control._fixed_cosphi_default_power_factor(
-            comp_df=df, component_type="generators", configs=config
+            comp_df=df, component_type="generator", configs=config
         )
 
         assert pf.shape == (3,)
@@ -113,7 +112,7 @@ class TestQControl:
 
         # test for component_type="loads"
         pf = q_control._fixed_cosphi_default_power_factor(
-            comp_df=df, component_type="conventional_loads", configs=config
+            comp_df=df, component_type="conventional_load", configs=config
         )
 
         assert pf.shape == (3,)
@@ -124,7 +123,7 @@ class TestQControl:
 
         # test for component_type="charging_points"
         pf = q_control._fixed_cosphi_default_power_factor(
-            comp_df=df, component_type="charging_points", configs=config
+            comp_df=df, component_type="charging_point", configs=config
         )
 
         assert pf.shape == (3,)
@@ -135,7 +134,7 @@ class TestQControl:
 
         # test for component_type="heat_pumps"
         pf = q_control._fixed_cosphi_default_power_factor(
-            comp_df=df, component_type="heat_pumps", configs=config
+            comp_df=df, component_type="heat_pump", configs=config
         )
 
         assert pf.shape == (3,)
@@ -146,7 +145,7 @@ class TestQControl:
 
         # test for component_type="storage_units"
         pf = q_control._fixed_cosphi_default_power_factor(
-            comp_df=df, component_type="storage_units", configs=config
+            comp_df=df, component_type="storage_unit", configs=config
         )
 
         assert pf.shape == (3,)
@@ -158,7 +157,6 @@ class TestQControl:
     def test__fixed_cosphi_default_reactive_power_sign(
         self,
     ):
-
         df = pd.DataFrame(
             data={"voltage_level": ["mv", "lv", "lv"]},
             index=["comp_mv_1", "comp_lv_1", "comp_lv_2"],
@@ -167,7 +165,7 @@ class TestQControl:
 
         # test for component_type="generators"
         pf = q_control._fixed_cosphi_default_reactive_power_sign(
-            comp_df=df, component_type="generators", configs=config
+            comp_df=df, component_type="generator", configs=config
         )
 
         assert pf.shape == (3,)
@@ -178,7 +176,7 @@ class TestQControl:
 
         # test for component_type="conventional_loads"
         pf = q_control._fixed_cosphi_default_reactive_power_sign(
-            comp_df=df, component_type="conventional_loads", configs=config
+            comp_df=df, component_type="conventional_load", configs=config
         )
 
         assert pf.shape == (3,)
@@ -189,7 +187,7 @@ class TestQControl:
 
         # test for component_type="charging_points"
         pf = q_control._fixed_cosphi_default_reactive_power_sign(
-            comp_df=df, component_type="charging_points", configs=config
+            comp_df=df, component_type="charging_point", configs=config
         )
 
         assert pf.shape == (3,)
@@ -200,7 +198,7 @@ class TestQControl:
 
         # test for component_type="heat_pumps"
         pf = q_control._fixed_cosphi_default_reactive_power_sign(
-            comp_df=df, component_type="heat_pumps", configs=config
+            comp_df=df, component_type="heat_pump", configs=config
         )
 
         assert pf.shape == (3,)
@@ -211,7 +209,7 @@ class TestQControl:
 
         # test for component_type="storage_units"
         pf = q_control._fixed_cosphi_default_reactive_power_sign(
-            comp_df=df, component_type="storage_units", configs=config
+            comp_df=df, component_type="storage_unit", configs=config
         )
 
         assert pf.shape == (3,)

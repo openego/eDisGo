@@ -1,7 +1,19 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import logging
 
+from collections.abc import Iterable
 from numbers import Number
 from typing import TYPE_CHECKING
 
@@ -52,7 +64,8 @@ def charging_strategy(
     strategy: str = "dumb",
     timestamp_share_threshold: Number = 0.2,
     minimum_charging_capacity_factor: Number = 0.1,
-):
+    charging_park_ids: Iterable[int] | None = None,
+) -> None:
     """
     Applies charging strategy to set EV charging time series at charging parks.
 
@@ -78,21 +91,48 @@ def charging_strategy(
 
     """
     # get integrated charging parks
+    integrated_parks = edisgo_obj.electromobility.integrated_charging_parks_df
+
+    # Bestimmen, welche Ladeparks überhaupt angesprochen werden
+    if charging_park_ids is None:
+        target_park_ids = integrated_parks.index
+    else:
+        charging_park_ids = list(charging_park_ids)
+        target_park_ids = integrated_parks.index.intersection(charging_park_ids)
+
+        missing_ids = sorted(set(charging_park_ids) - set(target_park_ids))
+        if missing_ids:
+            logger.warning(
+                "The following charging park IDs are not integrated and will be "
+                "ignored in charging_strategy: %s",
+                missing_ids,
+            )
+
+    # PotentialChargingParks-Objekte auf diese Submenge filtern
     charging_parks = [
         cp
-        for cp in list(edisgo_obj.electromobility.potential_charging_parks)
-        if cp.grid is not None
+        for cp in edisgo_obj.electromobility.potential_charging_parks
+        if cp.grid is not None and cp.id in target_park_ids
     ]
 
-    # Delete possible old time series as these influence "residual" charging
+    if len(charging_parks) == 0:
+        logger.info(
+            "No charging parks selected for charging strategy '%s'. Nothing to do.",
+            strategy,
+        )
+        return
+
+    # EDisGo-IDs der betroffenen Ladeparks
+    edisgo_ids_to_update = integrated_parks.loc[target_park_ids, "edisgo_id"].values
+
+    # Nur für diese Ladeparks alte Zeitreihen löschen
     edisgo_obj.timeseries.drop_component_time_series(
         "loads_active_power",
-        edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values,
+        edisgo_ids_to_update,
     )
-
     edisgo_obj.timeseries.drop_component_time_series(
         "loads_reactive_power",
-        edisgo_obj.electromobility.integrated_charging_parks_df.edisgo_id.values,
+        edisgo_ids_to_update,
     )
 
     eta_cp = edisgo_obj.electromobility.eta_charging_points
@@ -128,10 +168,15 @@ def charging_strategy(
             f"to the original frequency of the edisgo time series data."
         )
 
-        edisgo_obj.resample_timeseries(freq=simbev_timedelta)
+        edisgo_obj.timeseries.resample(freq=simbev_timedelta)
 
     if strategy == "dumb":
         # "dumb" charging
+        # Collect each charging park's series and add them to the time series in a
+        # single call after the loop. Adding them one at a time concatenates onto
+        # the growing loads_active_power frame on every iteration (O(parks^2)),
+        # which dominated the runtime on large grids.
+        cp_ts = {}
         for cp in charging_parks:
             dummy_ts = np.zeros(len_ts)
 
@@ -149,13 +194,19 @@ def charging_strategy(
             ].itertuples():
                 dummy_ts[start : start + stop] += cap
 
+            cp_ts[cp.edisgo_id] = dummy_ts
+
+        if cp_ts:
             edisgo_obj.timeseries.add_component_time_series(
                 "loads_active_power",
-                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex),
+                pd.DataFrame(data=cp_ts, index=timeindex),
             )
 
     elif strategy == "reduced":
         # "reduced" charging
+        # See the "dumb" branch above: accumulate all park columns and add them
+        # once to avoid the O(parks^2) per-park concatenation.
+        cp_ts = {}
         for cp in charging_parks:
             dummy_ts = np.zeros(len_ts)
 
@@ -187,9 +238,12 @@ def charging_strategy(
                 else:
                     dummy_ts[start : start + stop_reduced] += cap_reduced
 
+            cp_ts[cp.edisgo_id] = dummy_ts
+
+        if cp_ts:
             edisgo_obj.timeseries.add_component_time_series(
                 "loads_active_power",
-                pd.DataFrame(data={cp.edisgo_id: dummy_ts}, index=timeindex),
+                pd.DataFrame(data=cp_ts, index=timeindex),
             )
 
     elif strategy == "residual":
@@ -197,7 +251,7 @@ def charging_strategy(
         # only use charging processes from integrated charging parks
         charging_processes_df = edisgo_obj.electromobility.charging_processes_df[
             edisgo_obj.electromobility.charging_processes_df.charging_park_id.isin(
-                edisgo_obj.electromobility.integrated_charging_parks_df.index
+                target_park_ids
             )
         ]
 
@@ -309,7 +363,7 @@ def charging_strategy(
         raise ValueError(f"Strategy {strategy} has not yet been implemented.")
 
     if resample:
-        edisgo_obj.resample_timeseries(freq=edisgo_timedelta)
+        edisgo_obj.timeseries.resample(freq=edisgo_timedelta)
 
     # set reactive power time series to 0 Mvar
     # fmt: off
@@ -318,13 +372,12 @@ def charging_strategy(
         pd.DataFrame(
             data=0.0,
             index=edisgo_obj.timeseries.timeindex,
-            columns=edisgo_obj.electromobility.integrated_charging_parks_df
-            .edisgo_id.values,
+            columns=edisgo_ids_to_update,
         ),
     )
     # fmt: on
 
-    logging.info(f"Charging strategy {strategy} completed.")
+    logger.info(f"Charging strategy {strategy} completed.")
 
 
 def harmonize_charging_processes_df(

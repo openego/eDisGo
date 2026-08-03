@@ -1,0 +1,78 @@
+# Citation metadata for eDisGo. GitHub renders this as "Cite this repository".
+# Format specification: https://citation-file-format.github.io/
+#
+# Author order puts the current maintainers first, then the largest contributors to
+# the codebase. The complete list of everyone who has contributed is in AUTHORS.md,
+# and the authoritative record is the version control history.
+cff-version: 1.2.0
+message: "If you use this software, please cite it using these metadata."
+title: eDisGo
+abstract: >-
+  eDisGo (Electrical Distribution Grid Optimization) is a Python toolbox for
+  analysing flexibility options in electrical distribution grids. It models
+  medium- and low-voltage grids, runs power flow and grid reinforcement, and
+  optimises the dispatch of flexibilities such as electric vehicles, heat pumps,
+  storage and demand-side management with a multi-period optimal power flow.
+type: software
+license: AGPL-3.0-or-later
+version: 0.3.0
+date-released: "2026-07-29"
+repository-code: "https://github.com/openego/eDisGo"
+url: "https://edisgo.readthedocs.io/"
+keywords:
+  - distribution grid
+  - power flow
+  - grid reinforcement
+  - flexibility
+  - optimal power flow
+  - energy system modelling
+authors:
+  - given-names: Jonas
+    family-names: Danke
+    email: jonas.danke@rl-institut.de
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Moritz
+    family-names: Schlösser
+    email: moritz.schloesser@rl-institut.de
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Maike
+    family-names: Held
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Birgit
+    family-names: Schachler
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Guido
+    family-names: Plessmann
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Kilian
+    family-names: Helfenbein
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Jonathan
+    family-names: Amme
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Anya
+    family-names: Heider
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Bharadwaj
+    family-names: Narasimhan
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Elias
+    family-names: Trommer
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Malte
+    family-names: Jahn
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Jaap
+    family-names: Pedersen
+  - name: mltja
+  - given-names: Nader
+    family-names: Algherbawi
+  - given-names: Jonas
+    family-names: Jeckstadt
+    affiliation: Reiner Lemoine Institut gGmbH
+  - given-names: Santiago
+    family-names: Infantino Moreno
+  - given-names: Malte
+    family-names: Scharf
+  - given-names: Martin
+    family-names: Soethe

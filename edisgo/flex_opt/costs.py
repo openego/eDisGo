@@ -1,3 +1,15 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+import logging
 import os
 
 import pandas as pd
@@ -7,15 +19,17 @@ if "READTHEDOCS" not in os.environ:
 
 from edisgo.tools.geo import proj2equidistant
 
+logger = logging.getLogger(__name__)
+
 
 def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     """
     Calculates topology expansion costs for each reinforced transformer and line
     in kEUR.
 
-    Attributes
+    Parameters
     ----------
-    edisgo_obj : :class:`~.self.edisgo.EDisGo`
+    edisgo_obj : :class:`~.EDisGo`
     without_generator_import : bool
         If True excludes lines that were added in the generator import to
         connect new generators to the topology from calculation of topology expansion
@@ -40,15 +54,11 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
             For transformers quantity is always one, for lines it specifies the
             number of parallel lines.
 
-        line_length : float
+        length : float
             Length of line or in case of parallel lines all lines in km.
 
         voltage_level : str {'lv' | 'mv' | 'mv/lv'}
             Specifies voltage level the equipment is in.
-
-        mv_feeder : :class:`~.network.components.Line`
-            First line segment of half-ring used to identify in which
-            feeder the network expansion was conducted in.
 
     Notes
     -------
@@ -67,7 +77,8 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         costs_trafos = pd.DataFrame(
             {
                 "costs_transformers": len(hvmv_trafos)
-                * [float(edisgo_obj.config["costs_transformers"]["mv"])]
+                * [float(edisgo_obj.config["costs_transformers"]["mv"])],
+                "voltage_level": len(hvmv_trafos) * ["hv/mv"],
             },
             index=hvmv_trafos,
         )
@@ -77,20 +88,23 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
                 pd.DataFrame(
                     {
                         "costs_transformers": len(mvlv_trafos)
-                        * [float(edisgo_obj.config["costs_transformers"]["lv"])]
+                        * [float(edisgo_obj.config["costs_transformers"]["lv"])],
+                        "voltage_level": len(mvlv_trafos) * ["mv/lv"],
                     },
                     index=mvlv_trafos,
                 ),
             ]
         )
-        return costs_trafos.loc[trafos.index, "costs_transformers"].values
+        return costs_trafos.loc[trafos.index, :]
 
     def _get_line_costs(lines_added):
         costs_lines = line_expansion_costs(edisgo_obj, lines_added.index)
-        costs_lines["costs"] = costs_lines.apply(
-            lambda x: x.costs_earthworks
-            + x.costs_cable * lines_added.loc[x.name, "quantity"],
-            axis=1,
+        # Align quantity to costs_lines index and compute elementwise (vectorised
+        # equivalent of the former per-row apply).
+        quantity_aligned = lines_added["quantity"].reindex(costs_lines.index)
+        costs_lines["costs"] = (
+            costs_lines["costs_earthworks"]
+            + costs_lines["costs_cable"] * quantity_aligned
         )
 
         return costs_lines[["costs", "voltage_level"]]
@@ -107,7 +121,8 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     # costs for transformers
     if not equipment_changes.empty:
         transformers = equipment_changes[
-            equipment_changes.index.isin(edisgo_obj.topology._grids_repr)
+            equipment_changes.equipment.str.contains("Transformer")
+            | equipment_changes.equipment.str.contains("transformer")
         ]
         added_transformers = transformers[transformers["change"] == "added"]
         removed_transformers = transformers[transformers["change"] == "removed"]
@@ -127,15 +142,16 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         )
         trafos = all_trafos.loc[added_transformers["equipment"]]
         # calculate costs for each transformer
+        transformer_costs = _get_transformer_costs(trafos)
         costs = pd.concat(
             [
                 costs,
                 pd.DataFrame(
                     {
                         "type": trafos.type_info.values,
-                        "total_costs": _get_transformer_costs(trafos),
+                        "total_costs": transformer_costs.costs_transformers,
                         "quantity": len(trafos) * [1],
-                        "voltage_level": len(trafos) * ["mv/lv"],
+                        "voltage_level": transformer_costs.voltage_level,
                     },
                     index=trafos.index,
                 ),
@@ -155,10 +171,21 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
         ]["quantity"].to_frame()
         lines_added_unique = lines_added.index.unique()
         lines_added = (
-            lines_added.groupby(axis=0, level=0)
-            .sum()
-            .loc[lines_added_unique, ["quantity"]]
+            lines_added.groupby(level=0).sum().loc[lines_added_unique, ["quantity"]]
         )
+        # use the minimum of quantity and num_parallel, as sometimes lines are added
+        # and in a next reinforcement step removed again, e.g. when feeder is split
+        # at 2/3 and a new single standard line is added
+        lines_added = pd.merge(
+            lines_added,
+            edisgo_obj.topology.lines_df.loc[:, ["num_parallel"]],
+            how="left",
+            left_index=True,
+            right_index=True,
+        )
+        lines_added["quantity_added"] = lines_added.loc[
+            :, ["quantity", "num_parallel"]
+        ].min(axis=1)
         lines_added["length"] = edisgo_obj.topology.lines_df.loc[
             lines_added.index, "length"
         ]
@@ -174,9 +201,9 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
                             ].values,
                             "total_costs": line_costs.costs.values,
                             "length": (
-                                lines_added.quantity * lines_added.length
+                                lines_added.quantity_added * lines_added.length
                             ).values,
-                            "quantity": lines_added.quantity.values,
+                            "quantity": lines_added.quantity_added.values,
                             "voltage_level": line_costs.voltage_level.values,
                         },
                         index=lines_added.index,
@@ -206,26 +233,31 @@ def grid_expansion_costs(edisgo_obj, without_generator_import=False):
     return costs
 
 
-def line_expansion_costs(edisgo_obj, lines_names):
+def line_expansion_costs(edisgo_obj, lines_names=None):
     """
-    Returns costs for earthworks and per added cable as well as voltage level
-    for chosen lines in edisgo_obj.
+    Returns costs for earthwork and per added cable in kEUR as well as voltage level
+    for chosen lines.
 
     Parameters
     -----------
-    edisgo_obj : :class:`~.edisgo.EDisGo`
-        eDisGo object of which lines of lines_df are part
-    lines_names: list of str
-        List of names of evaluated lines
+    edisgo_obj : :class:`~.EDisGo`
+        eDisGo object
+    lines_names: None or list(str)
+        List of names of lines to return cost information for. If None, it is returned
+        for all lines in :attr:`~.network.topology.Topology.lines_df`.
 
     Returns
     -------
     costs: :pandas:`pandas.DataFrame<DataFrame>`
-        Dataframe with names of lines as index and entries for
-        'costs_earthworks', 'costs_cable', 'voltage_level' for each line
+        Dataframe with names of lines in index and columns 'costs_earthworks' with
+        earthwork costs in kEUR, 'costs_cable' with costs per cable/line in kEUR, and
+        'voltage_level' with information on voltage level the line is in.
 
     """
-    lines_df = edisgo_obj.topology.lines_df.loc[lines_names, ["length"]]
+    if lines_names is None:
+        lines_df = edisgo_obj.topology.lines_df.loc[:, ["length"]]
+    else:
+        lines_df = edisgo_obj.topology.lines_df.loc[lines_names, ["length"]]
     mv_lines = lines_df[
         lines_df.index.isin(edisgo_obj.topology.mv_grid.lines_df.index)
     ].index
@@ -247,12 +279,12 @@ def line_expansion_costs(edisgo_obj, lines_names):
     costs_cable_lv = float(edisgo_obj.config["costs_cables"]["lv_cable"])
     costs_cable_earthwork_mv = float(
         edisgo_obj.config["costs_cables"][
-            "mv_cable_incl_earthwork_{}".format(population_density)
+            f"mv_cable_incl_earthwork_{population_density}"
         ]
     )
     costs_cable_earthwork_lv = float(
         edisgo_obj.config["costs_cables"][
-            "lv_cable_incl_earthwork_{}".format(population_density)
+            f"lv_cable_incl_earthwork_{population_density}"
         ]
     )
 
@@ -281,3 +313,69 @@ def line_expansion_costs(edisgo_obj, lines_names):
         ]
     )
     return costs_lines.loc[lines_df.index]
+
+
+def transformer_expansion_costs(edisgo_obj, transformer_names=None):
+    """
+    Returns costs per transformer in kEUR as well as voltage level they are in.
+
+    Parameters
+    -----------
+    edisgo_obj : :class:`~.EDisGo`
+        eDisGo object
+    transformer_names: None or list(str)
+        List of names of transformers to return cost information for. If None, it is
+        returned for all transformers in
+        :attr:`~.network.topology.Topology.transformers_df` and
+        :attr:`~.network.topology.Topology.transformers_hvmv_df`.
+
+    Returns
+    -------
+    costs: :pandas:`pandas.DataFrame<DataFrame>`
+        Dataframe with names of transformers in index and columns 'costs' with
+        costs per transformer in kEUR and 'voltage_level' with information on voltage
+        level the transformer is in.
+
+    """
+    transformers_df = pd.concat(
+        [
+            edisgo_obj.topology.transformers_df.copy(),
+            edisgo_obj.topology.transformers_hvmv_df.copy(),
+        ]
+    )
+    if transformer_names is not None:
+        transformers_df = transformers_df.loc[transformer_names, ["type_info"]]
+
+    if len(transformers_df) == 0:
+        return pd.DataFrame(columns=["costs", "voltage_level"])
+
+    hvmv_transformers = transformers_df[
+        transformers_df.index.isin(edisgo_obj.topology.transformers_hvmv_df.index)
+    ].index
+    mvlv_transformers = transformers_df[
+        transformers_df.index.isin(edisgo_obj.topology.transformers_df.index)
+    ].index
+
+    costs_hvmv = float(edisgo_obj.config["costs_transformers"]["mv"])
+    costs_mvlv = float(edisgo_obj.config["costs_transformers"]["lv"])
+
+    costs_df = pd.DataFrame(
+        {
+            "costs": costs_hvmv,
+            "voltage_level": "hv/mv",
+        },
+        index=hvmv_transformers,
+    )
+    costs_df = pd.concat(
+        [
+            costs_df,
+            pd.DataFrame(
+                {
+                    "costs": costs_mvlv,
+                    "voltage_level": "mv/lv",
+                },
+                index=mvlv_transformers,
+            ),
+        ]
+    )
+    return costs_df

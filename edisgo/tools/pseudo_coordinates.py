@@ -1,10 +1,20 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
-import copy
 import logging
 import math
 
-from time import time
+from collections import deque
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -106,24 +116,35 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
     graph_root.nodes[start_node]["pos"] = (0, 0)
     graph_copy = graph_root.copy()
 
-    long_paths = []
-    next_nodes = []
+    long_paths: list = []
+    next_nodes: deque = deque()
 
-    # Find longest paths
-    for i in range(0, len(list(nx.neighbors(graph_root, start_node)))):
-        path_length_to_transformer = []
+    # Find longest paths.
+    # For each neighbour branch of the transformer, locate the node that is
+    # farthest away (measured in number of hops/nodes, unweighted), recover the
+    # path to it and peel it off so the next iteration finds the next branch.
+    # ``nx.shortest_path_length`` returns *all* distances from ``start_node`` in
+    # a single traversal, replacing the previous per-node O(nodes**2) calls to
+    # ``nx.shortest_simple_paths``.
+    for _ in range(0, len(list(nx.neighbors(graph_root, start_node)))):
+        # Distance in number of nodes on the path: reachable nodes use the hop
+        # count + 1, unreachable nodes are treated as 0 (as the old code did via
+        # ``len([])`` for an empty path).
+        distances = nx.shortest_path_length(graph_copy, start_node)
+        farthest_node = None
+        max_path_length = -1
+        # Iterating in ``graph_copy.nodes()`` order with a strict ``>`` keeps the
+        # original first-wins tie-break (``list.index(max(...))``).
         for node in graph_copy.nodes():
-            try:
-                paths = list(nx.shortest_simple_paths(graph_copy, start_node, node))
-            except nx.NetworkXNoPath:
-                paths = [[]]
-            path_length_to_transformer.append(len(paths[0]))
-        index = path_length_to_transformer.index(max(path_length_to_transformer))
-        path_to_max_distance_node = list(
-            nx.shortest_simple_paths(
-                graph_copy, start_node, list(nx.nodes(graph_copy))[index]
-            )
-        )[0]
+            path_length = distances[node] + 1 if node in distances else 0
+            if path_length > max_path_length:
+                max_path_length = path_length
+                farthest_node = node
+        # For a (forest) tree the shortest path is unique and identical to the
+        # first path returned by ``shortest_simple_paths``.
+        path_to_max_distance_node = nx.shortest_path(
+            graph_copy, start_node, farthest_node
+        )
         path_to_max_distance_node.remove(start_node)
         graph_copy.remove_nodes_from(path_to_max_distance_node)
         for node in path_to_max_distance_node:
@@ -131,6 +152,12 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
 
     path_to_max_distance_node = long_paths
     n = 0
+
+    # Precompute the number of nodes on the path from the transformer to every
+    # node once. ``len(path) % 2`` (the alternating direction flag below) equals
+    # ``(distance_in_hops + 1) % 2`` and no longer needs a per-node call to
+    # ``nx.shortest_simple_paths``.
+    path_length_from_start = nx.shortest_path_length(graph_root, start_node)
 
     # make the coordinates
     for node in list(nx.neighbors(graph_root, start_node)):
@@ -147,6 +174,8 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
 
     graph_copy = graph_root.copy()
     graph_copy.remove_node(start_node)
+    # ``next_nodes`` is a FIFO queue; using a deque with ``popleft`` preserves the
+    # exact processing order of the previous ``list``/``remove`` implementation.
     while graph_copy.number_of_nodes() > 0:
         next_node = next_nodes[0]
         n = 0
@@ -159,14 +188,7 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
                     graph_root.edges[next_node, node]["length"],
                 )
             elif next_node in path_to_max_distance_node:
-                direction = math.fmod(
-                    len(
-                        list(
-                            nx.shortest_simple_paths(graph_root, start_node, next_node)
-                        )[0]
-                    ),
-                    2,
-                )
+                direction = float((path_length_from_start[next_node] + 1) % 2)
                 pos, origin_angle = coordinate_longest_path_neighbor(
                     graph_root.nodes[next_node]["pos"],
                     graph_root.nodes[next_node]["origin_angle"],
@@ -187,7 +209,7 @@ def _make_coordinates(graph_root: Graph, branch_detour_factor: float) -> Graph:
             next_nodes.append(node)
 
         graph_copy.remove_node(next_node)
-        next_nodes.remove(next_node)
+        next_nodes.popleft()
 
     return graph_root
 
@@ -210,55 +232,39 @@ def make_pseudo_coordinates_graph(G: Graph, branch_detour_factor: float) -> Grap
         Graph with pseudo coordinates for all nodes.
 
     """
-    start_time = time()
-    logger.debug("Start - Making pseudo coordinates for graph")
-
     x0, y0 = G.nodes[list(nx.nodes(G))[0]]["pos"]
     G = _make_coordinates(G, branch_detour_factor)
     x0, y0 = coor_transform.transform(x0, y0)
     for node in G.nodes():
         x, y = G.nodes[node]["pos"]
         G.nodes[node]["pos"] = coor_transform_back.transform(x + x0, y + y0)
-
-    logger.debug("Finished in {}s".format(time() - start_time))
     return G
 
 
-def make_pseudo_coordinates(
-    edisgo_root: EDisGo, mv_coordinates: bool = False
-) -> EDisGo:
+def make_pseudo_coordinates(edisgo_obj: EDisGo, mv_coordinates: bool = False):
     """
     Generates pseudo coordinates for all LV grids and optionally MV grid.
 
+    Bus coordinates are changed in the Topology object directly. If you want to keep
+    information on the original coordinates, hand a copy of the EDisGo object to this
+    function.
+
     Parameters
     ----------
-    edisgo_root : :class:`~.EDisGo`
-        eDisGo object
+    edisgo_obj : :class:`~.EDisGo`
+        eDisGo object to create pseudo coordinates for.
     mv_coordinates : bool, optional
-        If True pseudo coordinates are also generated for MV grid.
+        If False, pseudo coordinates are only generated for LV buses. If True, pseudo
+        coordinates are as well generated for MV buses.
         Default: False.
 
-    Returns
-    -------
-    :class:`~.EDisGo`
-        eDisGo object with pseudo coordinates for all LV nodes and optionally MV nodes.
-
     """
-    start_time = time()
-    logger.debug(
-        "Start - Making pseudo coordinates for grid: {}".format(
-            str(edisgo_root.topology.mv_grid)
-        )
-    )
-
-    edisgo_obj = copy.deepcopy(edisgo_root)
-
     grids = list(edisgo_obj.topology.mv_grid.lv_grids)
     if mv_coordinates:
         grids = [edisgo_obj.topology.mv_grid] + grids
 
     for grid in grids:
-        logger.debug("Make pseudo coordinates for: {}".format(grid))
+        logger.debug(f"Make pseudo coordinates for: {grid}")
         G = grid.graph
         G = make_pseudo_coordinates_graph(
             G, edisgo_obj.config["grid_connection"]["branch_detour_factor"]
@@ -267,6 +273,3 @@ def make_pseudo_coordinates(
             x, y = G.nodes[node]["pos"]
             edisgo_obj.topology.buses_df.loc[node, "x"] = x
             edisgo_obj.topology.buses_df.loc[node, "y"] = y
-
-    logger.debug("Finished in {}s".format(time() - start_time))
-    return edisgo_obj

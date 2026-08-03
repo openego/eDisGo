@@ -1,0 +1,45 @@
+name: "Packaging"
+on: [push]
+
+jobs:
+  data-files:
+    name: "Packaged data files"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build
+
+      - name: Check that all runtime data files ship
+        run: python .github/scripts/check_packaged_data.py
+
+      - name: Check that the OPF entry point resolves in an installed layout
+        run: |
+          python -m venv /tmp/installcheck
+          /tmp/installcheck/bin/pip install --no-deps dist/*.whl
+          /tmp/installcheck/bin/python - <<'PY'
+          import os
+          import pathlib
+          import sysconfig
+
+          # Resolve Main.jl exactly the way edisgo/opf/powermodels_opf.py does at
+          # runtime, without importing edisgo (installed here without dependencies).
+          opf_dir = pathlib.Path(sysconfig.get_paths()["purelib"]) / "edisgo" / "opf"
+          main_jl = opf_dir / "eDisGo_OPF.jl" / "Main.jl"
+
+          assert (opf_dir / "powermodels_opf.py").is_file(), f"no opf module in {opf_dir}"
+          assert main_jl.is_file(), f"pm_optimize would fail: {main_jl} is missing"
+          assert os.access(main_jl.parent, os.W_OK), (
+              f"{main_jl.parent} is not writable -- Main.jl runs Pkg.instantiate() in "
+              "place, which needs write access to the installed Julia environment"
+          )
+          print(f"OPF entry point OK: {main_jl}")
+          PY

@@ -1,17 +1,13 @@
-"""This file is part of DINGO, the DIstribution Network GeneratOr.
-DINGO is a tool to generate synthetic medium and low voltage power
-distribution grids based on open data.
-
-It is developed in the project open_eGo: https://openegoproject.wordpress.com
-
-DINGO lives at github: https://github.com/openego/dingo/
-The documentation is available on RTD: https://edisgo.readthedocs.io/en/dev/"""
-
-__copyright__ = "Reiner Lemoine Institut gGmbH"
-__license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
-__url__ = "https://github.com/openego/eDisGo/blob/dev/LICENSE"
-__author__ = "nesnoj, gplssm"
-
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
 
 # -*- coding: utf-8 -*-
 #
@@ -27,15 +23,17 @@ __author__ = "nesnoj, gplssm"
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+import importlib.metadata
+import logging
 import os
 import sys
-
-from unittest.mock import MagicMock
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath("../"))
+# Local Sphinx extensions (e.g. the Julia OPF docstring harvester).
+sys.path.insert(0, os.path.abspath("_ext"))
 
 # -- General configuration ------------------------------------------------
 
@@ -51,13 +49,30 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.todo",
     "sphinx.ext.coverage",
-    "sphinx.ext.imgmath",
+    "sphinx.ext.mathjax",
     "sphinx.ext.viewcode",
     "sphinx.ext.napoleon",  # enable Napoleon Sphinx v>1.3
     "sphinx.ext.extlinks",  # enables external links with a key
     "sphinx_autodoc_typehints",
     "sphinx.ext.inheritance_diagram",
+    "nbsphinx",  # render Jupyter notebooks as documentation pages
+    "myst_parser",  # render the generated Julia API page (Markdown)
+    "julia_autodoc",  # harvest eDisGo_OPF Julia docstrings into a Sphinx page
 ]
+
+# -- MyST settings --------------------------------------------------------
+# Only the auto-generated Julia API page uses Markdown; enable dollar math and
+# colon fences so Julia docstrings render faithfully.
+myst_enable_extensions = ["dollarmath", "colon_fence"]
+
+# -- nbsphinx settings ----------------------------------------------------
+# Notebooks are rendered with their stored outputs and are NOT executed during
+# the documentation build, because they require a database connection (OEP/
+# egon-data) and, for the optimisation, Julia and Gurobi, none of which are
+# available in the build environment (e.g. ReadTheDocs CI). Make sure the
+# notebooks are committed with up-to-date outputs.
+nbsphinx_execute = "never"
+nbsphinx_allow_errors = True
 # Autoapi settings
 autoapi_type = "python"
 autoapi_dirs = ["../edisgo"]
@@ -67,14 +82,15 @@ autoapi_options = [
     "show-inheritance",
     "show-inheritance-diagram",
     "show-module-summary",
-    "special-members",
 ]
+autoapi_own_page_level = "class"
 # Files to ignore when building api documentation
 autoapi_ignore = [
-    "*/flex_opt/curtailment.py",
-    "*/flex_opt/storage_positioning.py",
-    "*/opf/*",
+    "*/opf/timeseries_reduction.py",
+    "*/opf/opf_solutions/*",
 ]
+# Don't add autoapi to toctree if no modules were successfully parsed
+autoapi_add_toctree_entry = False
 
 
 def skip_autoapi_parts(app, what, name, obj, skip, options):
@@ -83,9 +99,88 @@ def skip_autoapi_parts(app, what, name, obj, skip, options):
     return skip
 
 
+class _SuppressDuplicateObjectFilter(logging.Filter):
+    """Suppress autoapi duplicate object description warnings.
+
+    These warnings arise because autoapi registers attributes both from
+    instance assignments in __init__ and from the Attributes section in the
+    class docstring.
+    """
+
+    def filter(self, record):
+        return "duplicate object description" not in record.getMessage()
+
+
 def setup(sphinx):
     sphinx.connect("autoapi-skip-member", skip_autoapi_parts)
+    logging.getLogger("sphinx.domains.python").addFilter(
+        _SuppressDuplicateObjectFilter()
+    )
 
+
+# Autodoc mock imports - Mock all heavy dependencies that cause import issues
+# This prevents AutoAPI from failing when modules execute code on import
+autodoc_mock_imports = [
+    # Core scientific computing
+    "numpy",
+    "pandas",
+    "scipy",
+    # Geospatial libraries
+    "geopandas",
+    "shapely",
+    "shapely.geometry",
+    "shapely.wkt",
+    "shapely.wkb",
+    "shapely.ops",
+    "pyproj",
+    "geopy",
+    # Network analysis
+    "networkx",
+    # Energy system modeling
+    "pypsa",
+    "pypower",
+    "pypower.idx_brch",
+    "pypower.idx_bus",
+    "pypower.idx_gen",
+    # Database and I/O
+    "sqlalchemy",
+    "sqlalchemy.engine",
+    "sqlalchemy.engine.base",
+    "sqlalchemy.orm",
+    "egoio",
+    "egoio.tools",
+    "egoio.tools.db",
+    "saio",
+    # Machine learning
+    "sklearn",
+    "sklearn.cluster",
+    "sklearn.metrics",
+    "sklearn.preprocessing",
+    # Visualization
+    "plotly",
+    "plotly.graph_objects",
+    "plotly.graph_objs",
+    "matplotlib",
+    "matplotlib.pyplot",
+    # Grid data
+    "ding0",
+    "ding0.core",
+    "ding0.core.network",
+    "ding0.core.network.grids",
+    "ding0.core.network.stations",
+    "ding0.tools",
+    "ding0.results",
+    # Demand modeling
+    "demandlib",
+    "demandlib.bdew",
+    "demandlib.particular_profiles",
+    # Other dependencies
+    "dash",
+    "jupyter_dash",
+    "multiprocess",
+    "sshtunnel",
+    "workalendar",
+]
 
 # Napoleon settings
 napoleon_google_docstring = True
@@ -111,24 +206,49 @@ extlinks = {
         "geopandas.%s",
     ),
     "networkx": (
-        "https://networkx.org/documentation/stable/reference/classes/" "graph.html#%s",
+        "https://networkx.org/documentation/stable/reference/classes/graph.html#%s",
         "networkx.%s",
     ),
     "sqlalchemy": (
-        "http://docs.sqlalchemy.org/en/latest/orm/session_basics.html%s",
+        "https://docs.sqlalchemy.org/en/20/core/connections.html#%s",
         "sqlalchemy.%s",
+    ),
+    "numpy": (
+        "https://numpy.org/doc/stable/reference/generated/numpy.%s.html",
+        "numpy.%s",
     ),
     "shapely": (
         "https://shapely.readthedocs.io/en/latest/manual.html#%s",
         "shapely.%s",
     ),
     "ding0": ("https://dingo.readthedocs.io/en/dev/api/ding0.html#%s", "ding0.%s"),
-    "pypsa": ("https://pypsa.readthedocs.io/en/latest/components.html#%s", "pypsa.%s"),
+    "pypsa": (
+        "https://docs.pypsa.org/v0.35.1/user-guide/components.html#%s",
+        "pypsa.%s",
+    ),
     "plotly": (
         "https://plotly.com/python-api-reference/generated/%s.html",
         "plotly.%s",
     ),
 }
+# ignore the following external links when checking the links
+# stackoverflow and gurobi is listed here because for some reason
+# the link check fails for these
+# in the github action, even though the link is correct
+linkcheck_ignore = [
+    r"https://stackoverflow.com*",
+    r"https://support.gurobi.com/*",
+    r"https://www.gnu.org/licenses/",
+    r"https://www.mdpi.com/*",
+    # zenodo and numpy.org return errors in CI even though the links are correct
+    r"https://zenodo.org/*",
+    r"https://numpy.org/*",
+    # ACM Digital Library (via doi.org) returns 403 to the CI bot, link is correct
+    r"https://doi.org/10.1145/.*",
+    # pandoc.org intermittently fails decompression in CI, link is correct
+    r"https://pandoc.org",
+]
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
@@ -145,7 +265,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "eDisGo"
-copyright = "2017, open_eGo-Team"
+copyright = "2017-2026, open_eGo-Team"
 author = "open_eGo-Team"
 
 # The version info for the project you're documenting, acts as replacement for
@@ -153,7 +273,10 @@ author = "open_eGo-Team"
 # built documents.
 #
 # The short X.Y version.
-version = "0.2.1"
+try:
+    version = importlib.metadata.version("eDisGo")
+except importlib.metadata.PackageNotFoundError:
+    version = "unknown"
 # The full version, including alpha/beta/rc tags.
 release = version
 
@@ -162,7 +285,7 @@ release = version
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = "English"
+language = "en"
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
@@ -172,7 +295,7 @@ language = "English"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = ["_build", "whatsnew", "examples"]
+exclude_patterns = ["_build", "whatsnew", "examples", "**.ipynb_checkpoints"]
 
 # The reST default role (used for this markup: `text`) to use for all
 # documents.
@@ -201,19 +324,11 @@ pygments_style = "sphinx"
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
 
-
-# Fix import error of modules which depend on C modules (mock out the imports for these
-# modules) see http://read-the-docs.readthedocs.io/en/latest/
-#  faq.html#i-get-import-errors-on-libraries-that-depend-on-c-modules
-if "READTHEDOCS" in os.environ:
-
-    class Mock(MagicMock):
-        @classmethod
-        def __getattr__(cls, name):
-            return MagicMock()
-
-    MOCK_MODULES = ["ding0", "ding0.results", "shapely", "shapely.wkt", "shapely.wkb"]
-    sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
+# Suppress warnings from AutoAPI when modules cannot be imported
+# This prevents the build from failing when some modules have import issues
+suppress_warnings = [
+    "autoapi.python_import_resolution",
+]
 
 
 # -- Options for HTML output ----------------------------------------------
@@ -222,9 +337,6 @@ if "READTHEDOCS" in os.environ:
 # a list of builtin themes.
 # html_theme = 'alabaster'
 
-import sphinx_rtd_theme  # noqa: E402
-
-html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
 html_theme = "sphinx_rtd_theme"
 
 # Theme options are theme-specific and customize the look and feel of a theme
@@ -407,3 +519,7 @@ intersphinx_mapping = {"python": ("https://docs.python.org/3", None)}
 numfig = True
 
 autodoc_member_order = "bysource"
+
+# Autodoc settings for better compatibility
+autodoc_typehints = "description"
+autodoc_typehints_description_target = "documented"

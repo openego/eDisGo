@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -81,8 +92,8 @@ class Grid(ABC):
         -------
         :networkx:`networkx.Graph<>`
             Graph representation of the grid as networkx Ordered Graph,
-            where lines are represented by edges in the graph, and buses and
-            transformers are represented by nodes.
+            where lines are represented by edges in the graph and buses are
+            represented by nodes. Transformers are not included.
 
         """
         return translate_df_to_graph(self.buses_df, self.lines_df)
@@ -90,20 +101,19 @@ class Grid(ABC):
     @property
     def geopandas(self):
         """
-        Returns components as :geopandas:`GeoDataFrame`\\ s
+        Returns components as :geopandas:`GeoDataFrame`\\ s.
 
         Returns container with :geopandas:`GeoDataFrame`\\ s containing all
         georeferenced components within the grid.
 
         Returns
         -------
-        :class:`~.tools.geopandas_helper.GeoPandasGridContainer` or \
-            list(:class:`~.tools.geopandas_helper.GeoPandasGridContainer`)
+        :class:`~.tools.geopandas_helper.GeoPandasGridContainer`
             Data container with GeoDataFrames containing all georeferenced components
-            within the grid(s).
+            within the grid.
 
         """
-        return to_geopandas(self)
+        return to_geopandas(self, srid=self.edisgo_obj.topology.grid_district["srid"])
 
     @property
     def station(self):
@@ -113,6 +123,16 @@ class Grid(ABC):
 
         """
         return self.buses_df.loc[self.transformers_df.iloc[0].bus1].to_frame().T
+
+    @property
+    def station_name(self):
+        """
+        Name of station to the overlying voltage level.
+
+        Name of station is composed of grid name with the extension '_station'.
+
+        """
+        return f"{self}_station"
 
     @property
     def generators_df(self):
@@ -340,6 +360,97 @@ class Grid(ABC):
         """
         return self.loads_df.groupby(["sector"]).sum()["p_set"]
 
+    def assign_length_to_grid_station(self):
+        """
+        Assign length in km from each bus in the grid to the grid's station.
+
+        The length is written to column 'length_to_grid_station' in
+        :attr:`~.network.topology.Topology.buses_df`.
+
+        """
+        buses_df = self._edisgo_obj.topology.buses_df
+        graph = self.graph
+        station = self.station.index[0]
+
+        for bus in self.buses_df.index:
+            buses_df.at[bus, "length_to_grid_station"] = nx.shortest_path_length(
+                graph, source=station, target=bus, weight="length"
+            )
+
+    def assign_grid_feeder(self, mode: str = "grid_feeder"):
+        """
+        Assigns MV or LV feeder to each bus and line, depending on the `mode`.
+
+        See :attr:`~.network.topology.Topology.assign_feeders` for more information.
+
+        Parameters
+        ----------
+        mode : str
+            Specifies whether to assign MV or grid feeder.
+            If mode is "mv_feeder" the MV feeder the buses and lines are in are
+            determined. If mode is "grid_feeder" LV buses and lines are assigned the
+            LV feeder they are in and MV buses and lines are assigned the MV feeder
+            they are in. Default: "grid_feeder".
+
+        """
+        buses_df = self._edisgo_obj.topology.buses_df
+        lines_df = self._edisgo_obj.topology.lines_df
+
+        if mode == "grid_feeder":
+            graph = self.graph
+            column_name = "grid_feeder"
+        elif mode == "mv_feeder":
+            graph = self._edisgo_obj.topology.to_graph()
+            column_name = "mv_feeder"
+        else:
+            raise ValueError("Choose an existing mode.")
+
+        station = self.station.index[0]
+        # get all buses in network and remove station to get separate sub-graphs
+        graph_nodes = list(graph.nodes())
+        graph_nodes.remove(station)
+        subgraph = graph.subgraph(graph_nodes)
+
+        buses_df.at[station, column_name] = "station_node"
+        for neighbor in graph.neighbors(station):
+            # get all nodes in that feeder by doing a DFS in the disconnected
+            # subgraph starting from the node adjacent to the station `neighbor`
+            feeder_graph = nx.dfs_tree(subgraph, source=neighbor)
+            feeder_lines = set()
+            for node in feeder_graph.nodes():
+                buses_df.at[node, column_name] = neighbor
+                feeder_lines.update(
+                    {edge[2]["branch_name"] for edge in graph.edges(node, data=True)}
+                )
+            lines_df.loc[lines_df.index.isin(feeder_lines), column_name] = neighbor
+
+    def get_feeder_stats(self) -> pd.DataFrame:
+        """
+        Generate statistics of the grid's feeders.
+
+        So far, only the feeder length is determined.
+
+        Returns
+        -------
+        :pandas:`pandas.DataFrame<DataFrame>`
+            Dataframe with feeder name in index and column 'length' containing the
+            respective feeder length in km.
+
+        """
+        self.assign_grid_feeder()
+        self.assign_length_to_grid_station()
+        buses_df = self.buses_df
+        feeders = (
+            buses_df.loc[
+                buses_df["grid_feeder"] != "station_node",
+                ["grid_feeder", "length_to_grid_station"],
+            ]
+            .groupby("grid_feeder")
+            .max()
+            .rename(columns={"length_to_grid_station": "length"})
+        )
+        return feeders
+
     def __repr__(self):
         return "_".join([self.__class__.__name__, str(self.id)])
 
@@ -549,10 +660,3 @@ class LVGrid(Grid):
         else:
             plt.savefig(filename, dpi=150, bbox_inches="tight", pad_inches=0.1)
             plt.close()
-
-    @property
-    def geopandas(self):
-        """
-        TODO: Remove this as soon as LVGrids are georeferenced
-        """
-        raise NotImplementedError("LV Grids are not georeferenced yet.")

@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 from __future__ import annotations
 
 import os
@@ -11,6 +22,7 @@ if "READTHEDOCS" not in os.environ:
 
 if TYPE_CHECKING:
     from edisgo.network.grids import Grid
+    from edisgo.network.topology import Topology
 
 COMPONENTS: list[str] = [
     "generators_df",
@@ -157,19 +169,25 @@ class GeoPandasGridContainer:
 
         def plot(self):
             """
-            TODO: Implement plotting functions as needed
+            Plot the grid container.
+
+            .. note:: Not yet implemented; currently raises
+                :class:`NotImplementedError`.
             """
             raise NotImplementedError
 
 
-def to_geopandas(grid_obj: Grid):
+def to_geopandas(grid_obj: Grid | Topology, srid: int) -> GeoPandasGridContainer:
     """
-    Translates all DataFrames with geolocations within a Grid class to GeoDataFrames.
+    Translates all DataFrames with geolocations within a grid topology to GeoDataFrames.
 
     Parameters
     ----------
-    grid_obj : :class:`~.network.grids.Grid`
-        Grid object to transform.
+    grid_obj : :class:`~.network.grids.Grid` or :class:`~.network.topology.Topology`
+        Grid or Topology object to transform.
+    srid : int
+        SRID (spatial reference ID) of x and y coordinates of buses. Usually given in
+        Topology.grid_district["srid"].
 
     Returns
     -------
@@ -178,9 +196,6 @@ def to_geopandas(grid_obj: Grid):
         their geolocation.
 
     """
-    # get srid id
-    srid = grid_obj._edisgo_obj.topology.grid_district["srid"]
-
     # convert buses_df
     buses_df = grid_obj.buses_df
     buses_df = buses_df.assign(
@@ -203,22 +218,28 @@ def to_geopandas(grid_obj: Grid):
             ),
             crs=f"EPSG:{srid}",
         )
+        if components_dict[component.replace("_df", "_gdf")].empty:
+            components_dict[component.replace("_df", "_gdf")].index = attr.index
 
     # convert lines_df
     lines_df = grid_obj.lines_df
 
-    geom_0 = lines_df.merge(
-        buses_gdf[["geometry"]], left_on="bus0", right_index=True
-    ).geometry
-    geom_1 = lines_df.merge(
-        buses_gdf[["geometry"]], left_on="bus1", right_index=True
-    ).geometry
-
-    geometry = [
-        LineString([point_0, point_1]) for point_0, point_1 in list(zip(geom_0, geom_1))
-    ]
-
-    lines_gdf = gpd.GeoDataFrame(lines_df.assign(geometry=geometry), crs=f"EPSG:{srid}")
+    lines_gdf = lines_df.merge(
+        buses_gdf[["geometry", "v_nom"]].rename(columns={"geometry": "geom_0"}),
+        left_on="bus0",
+        right_index=True,
+    )
+    lines_gdf = lines_gdf.merge(
+        buses_gdf[["geometry"]].rename(columns={"geometry": "geom_1"}),
+        left_on="bus1",
+        right_index=True,
+    )
+    lines_gdf["geometry"] = lines_gdf.apply(
+        lambda _: LineString([_["geom_0"], _["geom_1"]]), axis=1
+    )
+    lines_gdf = gpd.GeoDataFrame(
+        lines_gdf.drop(columns=["geom_0", "geom_1"]), crs=f"EPSG:{srid}"
+    )
 
     return GeoPandasGridContainer(
         crs=f"EPSG:{srid}",

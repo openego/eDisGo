@@ -1,25 +1,24 @@
-"""This file is part of eDisGo, a python package for distribution network
-analysis and optimization.
-
-It is developed in the project open_eGo: https://openegoproject.wordpress.com
-
-eDisGo lives on github: https://github.com/openego/edisgo/
-The documentation is available on RTD: https://edisgo.readthedocs.io/en/dev/
-
-Based on code by oemof developing group
-
-This module provides a highlevel layer for reading and writing config files.
-
-"""
-
-__copyright__ = "Reiner Lemoine Institut gGmbH"
-__license__ = "GNU Affero General Public License Version 3 (AGPL-3.0)"
-__url__ = "https://github.com/openego/edisgo/blob/master/LICENSE"
-__author__ = "nesnoj, gplssm"
-
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+# This file is part of eDisGo. Copyright belongs to
+# Reiner Lemoine Institut gGmbH, authors are recorded in the version control
+# history of the file, available from its original location on github:
+# https://github.com/openego/eDisGo/.
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# eDisGo st available on RTD: https://edisgo.readthedocs.io.
 
 import copy
 import datetime
+import importlib
 import json
 import logging
 import os
@@ -28,7 +27,17 @@ import shutil
 from glob import glob
 from zipfile import ZipFile
 
+import oedialect  # noqa: F401
+import sqlalchemy as sa
+
+from saio import register_schema
+from sqlalchemy import MetaData, Table
+from sqlalchemy.ext.declarative import declarative_base
+
 import edisgo
+
+from edisgo.io.db import engine as Engine
+from edisgo.io.db import session_scope_egon_data
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +56,7 @@ internal_config_file = os.path.join(package_path, "config", "config_system.cfg")
 try:
     cfg.read(internal_config_file)
 except Exception:
-    logger.exception("Internal config {} file not found.".format(internal_config_file))
+    logger.exception(f"Internal config {internal_config_file} file not found.")
 
 
 class Config:
@@ -55,39 +64,22 @@ class Config:
     Container for all configurations.
 
     Other Parameters
-    -----------------
-    config_path : None or str or :dict
+    ----------------
+    config_path : None or str or dict
         Path to the config directory. Options are:
 
-        * 'default' (default)
-            If `config_path` is set to 'default', the provided default config files
-            are used directly.
-        * str
-            If `config_path` is a string, configs will be loaded from the
-            directory specified by `config_path`. If the directory
-            does not exist, it is created. If config files don't exist, the
-            default config files are copied into the directory.
-        * dict
-            A dictionary can be used to specify different paths to the
-            different config files. The dictionary must have the following
-            keys:
-
-            * 'config_db_tables'
-
-            * 'config_grid'
-
-            * 'config_grid_expansion'
-
-            * 'config_timeseries'
-
-            Values of the dictionary are paths to the corresponding
-            config file. In contrast to the other options, the directories
-            and config files must exist and are not automatically created.
-        * None
-            If `config_path` is None, configs are loaded from the edisgo
-            default config directory ($HOME$/.edisgo). If the directory
-            does not exist, it is created. If config files don't exist, the
-            default config files are copied into the directory.
+        * 'default' (default): The provided default config files are used directly.
+        * str: Configs will be loaded from the directory specified by `config_path`.
+          If the directory does not exist, it is created. If config files don't exist,
+          the default config files are copied into the directory.
+        * dict: A dictionary can be used to specify different paths to the different
+          config files. Keys are 'config_db_tables', 'config_grid',
+          'config_grid_expansion', and 'config_timeseries'. Values are paths to the
+          corresponding config file. The directories and config files must exist and
+          are not automatically created.
+        * None: Configs are loaded from the edisgo default config directory
+          (~/.edisgo). If the directory does not exist, it is created. If config
+          files don't exist, the default config files are copied into the directory.
 
         Default: "default".
 
@@ -116,7 +108,7 @@ class Config:
 
     Get reactive power factor for generators in the MV network
 
-    >>> config['reactive_power_factor']['mv_gen']
+    >>> config['reactive_power_factor']['mv_generator']
 
     """
 
@@ -129,6 +121,234 @@ class Config:
                 filename=kwargs.get("json_filename", None),
                 from_zip_archive=kwargs.get("from_zip_archive", False),
             )
+        self._config_dict = {}
+
+    @property
+    def db_table_mapping(self):
+        """
+        Mapping of dataset names to database table names.
+
+        Read lazily from the ``config_db_tables`` configuration (see
+        :ref:`default_configs`) on first access and used when retrieving data from the
+        Open Energy Platform.
+
+        Returns
+        -------
+        dict
+            Mapping of dataset name to database table name.
+
+        """
+        if not self._config_dict.get("db_table_mapping"):
+            self._ensure_db_mappings_loaded()
+        return self._config_dict.get("db_table_mapping", {})
+
+    @db_table_mapping.setter
+    def db_table_mapping(self, value):
+        self._config_dict["db_table_mapping"] = value
+
+    @property
+    def db_schema_mapping(self):
+        """
+        Mapping of dataset names to database schema names.
+
+        Read lazily from the ``config_db_tables`` configuration (see
+        :ref:`default_configs`) on first access and used when retrieving data from the
+        Open Energy Platform.
+
+        Returns
+        -------
+        dict
+            Mapping of dataset name to database schema name.
+
+        """
+        if not self._config_dict.get("db_schema_mapping"):
+            self._ensure_db_mappings_loaded()
+        return self._config_dict.get("db_schema_mapping", {})
+
+    @db_schema_mapping.setter
+    def db_schema_mapping(self, value):
+        self._config_dict["db_schema_mapping"] = value
+
+    def _ensure_db_mappings_loaded(self, engine: sa.engine.Engine = None) -> None:
+        """Lazy-loads DB mappings only when needed for remote OEP access.
+
+        ``engine`` is forwarded to :meth:`get_database_alias_dictionaries` and
+        should be the OEP engine the mapped tables are read from; see that
+        method for what happens when it is ``None``.
+        """
+        if self._config_dict.get("db_table_mapping") and self._config_dict.get(
+            "db_schema_mapping"
+        ):
+            return
+
+        name_mapping, schema_mapping = self.get_database_alias_dictionaries(engine)
+        self.db_table_mapping = name_mapping
+        self.db_schema_mapping = schema_mapping
+
+    def get_database_alias_dictionaries(
+        self, engine: sa.engine.Engine = None
+    ) -> tuple[dict[str, str], dict[str, str]]:
+        """
+        Retrieves the database alias dictionaries for table and schema mappings.
+
+        Parameters
+        ----------
+        engine : sqlalchemy.engine.Engine, optional
+            Engine to read the ``data.edut_00`` alias dictionary from. It must
+            point at the same database the mapped tables are read from (the
+            OEP), so callers pass the engine handed to
+            :meth:`import_tables_from_oep`. If ``None``, the database is
+            auto-detected via :func:`edisgo.io.db.engine` — which, in an
+            environment that has an egon-data configuration file, resolves to
+            the local egon-data database (opening an SSH tunnel) rather than
+            the OEP, where ``edut_00`` does not exist. Passing the engine
+            explicitly avoids that mismatch.
+
+        Returns
+        -------
+        tuple
+            A tuple containing two dictionaries:
+
+            - ``name_mapping``: dictionary mapping source table names to target
+              table names.
+            - ``schema_mapping``: dictionary mapping source schema names to target
+              schema names.
+        """
+        if engine is None:
+            engine = Engine()
+        dictionary_schema_name = "data"
+        dictionary_table = self._get_module_attr(
+            self._get_saio_module(dictionary_schema_name, engine),
+            "edut_00",
+            f"saio.{dictionary_schema_name}",
+        )
+        with session_scope_egon_data(engine) as session:
+            query = session.query(dictionary_table)
+            dictionary_entries = query.all()
+            name_mapping = {
+                entry.source_name: entry.target_name for entry in dictionary_entries
+            }
+            schema_mapping = {
+                entry.source_schema: getattr(entry, "target_schema", "dataset")
+                for entry in dictionary_entries
+            }
+
+        return name_mapping, schema_mapping
+
+    @staticmethod
+    def _get_module_attr(module, attribute: str, module_name: str):
+        try:
+            return getattr(module, attribute)
+        except AttributeError as exc:
+            raise AttributeError(
+                f"Module '{module_name}' has no attribute '{attribute}'. "
+                "Check the table mapping configuration."
+            ) from exc
+
+    def _get_saio_module(self, schema: str, engine: sa.engine.Engine):
+        register_schema(schema, engine)
+        module_name = f"saio.{schema}"
+        try:
+            return importlib.import_module(module_name)
+        except ModuleNotFoundError as exc:
+            raise ModuleNotFoundError(
+                f"Could not import module '{module_name}'. "
+                "Verify schema registration and saio package availability."
+            ) from exc
+
+    @staticmethod
+    def _parse_time(value):
+        if isinstance(value, datetime.time):
+            return value
+        for time_format in ("%H:%M:%S", "%H:%M"):
+            try:
+                parsed = datetime.datetime.strptime(value, time_format)
+                return datetime.time(parsed.hour, parsed.minute)
+            except (TypeError, ValueError):
+                continue
+        raise ValueError(f"Unsupported time format for value '{value}'")
+
+    def _normalize_demandlib_times(self, config_dict: dict) -> None:
+        if "demandlib" not in config_dict:
+            return
+        demandlib = config_dict["demandlib"]
+        for key in ("day_start", "day_end"):
+            if key in demandlib:
+                demandlib[key] = self._parse_time(demandlib[key])
+
+    def import_tables_from_oep(
+        self, engine: sa.engine.Engine, table_names: list[str], schema_name: str
+    ) -> list[sa.Table]:
+        """
+        Imports tables from the OEP database based on the provided table names and
+        schema name.
+
+        Parameters
+        ----------
+        engine : sqlalchemy.engine.Engine
+            The SQLAlchemy engine to use for database connection.
+        table_names : list of str
+            List of table names to import.
+        schema_name : str
+            The schema name to use for importing tables.
+
+        Returns
+        -------
+        list of sqlalchemy.Table
+            A list of SQLAlchemy Table objects corresponding to the imported tables.
+        """
+        if "openenergyplatform" in str(engine.url):
+            self._ensure_db_mappings_loaded(engine)
+            schema = self.db_schema_mapping.get(schema_name)
+            if not schema:
+                raise KeyError(
+                    f"No schema mapping found for '{schema_name}'. "
+                    "Ensure database alias dictionaries are available."
+                )
+
+            module = self._get_saio_module(schema, engine)
+
+            tables: list[sa.Table] = []
+            for table in table_names:
+                mapped_table = self.db_table_mapping.get(table)
+                if not mapped_table:
+                    raise KeyError(
+                        f"No table mapping found for '{table}'. "
+                        "Update the database alias dictionaries."
+                    )
+                tables.append(
+                    self._get_module_attr(module, mapped_table, module.__name__)
+                )
+
+            return tables
+        else:
+            # --- Local egon_data DB case ---
+            Base = declarative_base()
+            metadata = MetaData(schema=schema_name)
+            metadata.reflect(bind=engine, only=table_names)
+
+            orm_classes = []
+            for table_name in table_names:
+                table = Table(
+                    table_name, metadata, autoload_with=engine, schema=schema_name
+                )
+
+                # The declarative mapper requires a primary key. Some egon-data
+                # tables/views have none reflected; declare all columns as a
+                # composite primary key so the ORM class can be built. This
+                # mirrors what saio does on the OEP path ("assuming primary
+                # key") and only affects mapping, not the data read back.
+                class_dict = {"__tablename__": table_name, "__table__": table}
+                if not list(table.primary_key.columns):
+                    class_dict["__mapper_args__"] = {
+                        "primary_key": list(table.columns)
+                    }
+
+                # dynamisch eine ORM-Klasse erzeugen
+                orm_class = type(table_name, (Base,), class_dict)
+                orm_classes.append(orm_class)
+
+            return orm_classes
 
     def from_cfg(self, config_path=None):
         """
@@ -159,19 +379,19 @@ class Config:
             for conf in config_files:
                 conf = conf + "_default"
                 load_config(
-                    filename="{}.cfg".format(conf),
+                    filename=f"{conf}.cfg",
                     config_dir=os.path.join(package_path, "config"),
                 )
         elif isinstance(config_path, dict):
             for conf in config_files:
                 load_config(
-                    filename="{}.cfg".format(conf),
+                    filename=f"{conf}.cfg",
                     config_dir=config_path[conf],
                     copy_default_config=False,
                 )
         else:
             for conf in config_files:
-                load_config(filename="{}.cfg".format(conf), config_dir=config_path)
+                load_config(filename=f"{conf}.cfg", config_dir=config_path)
 
         config_dict = cfg._sections
 
@@ -184,22 +404,7 @@ class Config:
                 except Exception:
                     pass
 
-        # convert to time object
-        config_dict["demandlib"]["day_start"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_start"], "%H:%M"
-        )
-        config_dict["demandlib"]["day_start"] = datetime.time(
-            config_dict["demandlib"]["day_start"].hour,
-            config_dict["demandlib"]["day_start"].minute,
-        )
-        config_dict["demandlib"]["day_end"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_end"], "%H:%M"
-        )
-        config_dict["demandlib"]["day_end"] = datetime.time(
-            config_dict["demandlib"]["day_end"].hour,
-            config_dict["demandlib"]["day_end"].minute,
-        )
-
+        self._normalize_demandlib_times(config_dict)
         return config_dict
 
     def to_json(self, directory, filename=None):
@@ -260,20 +465,7 @@ class Config:
 
         config_dict = json.loads(data)
 
-        config_dict["demandlib"]["day_start"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_start"], "%H:%M:%S"
-        )
-        config_dict["demandlib"]["day_start"] = datetime.time(
-            config_dict["demandlib"]["day_start"].hour,
-            config_dict["demandlib"]["day_start"].minute,
-        )
-        config_dict["demandlib"]["day_end"] = datetime.datetime.strptime(
-            config_dict["demandlib"]["day_end"], "%H:%M:%S"
-        )
-        config_dict["demandlib"]["day_end"] = datetime.time(
-            config_dict["demandlib"]["day_end"].hour,
-            config_dict["demandlib"]["day_end"].minute,
-        )
+        self._normalize_demandlib_times(config_dict)
 
         return config_dict
 
@@ -282,14 +474,13 @@ class Config:
             try:
                 return self._data[key1]
             except Exception:
-                raise KeyError("Config does not contain section {}.".format(key1))
+                raise KeyError(f"Config does not contain section {key1}.")
         else:
             try:
                 return self._data[key1][key2]
             except Exception:
                 raise KeyError(
-                    "Config does not contain value for {} or "
-                    "section {}.".format(key2, key1)
+                    f"Config does not contain value for {key2} or section {key1}."
                 )
 
     def __setitem__(self, key, value):
@@ -331,8 +522,8 @@ def load_config(filename, config_dir=None, copy_default_config=True):
         if not os.path.isfile(config_file):
             if copy_default_config:
                 logger.info(
-                    "Config file {} not found, I will create a "
-                    "default version".format(config_file)
+                    f"Config file {config_file} not found, I will create a "
+                    "default version"
                 )
                 make_directory(config_dir)
                 shutil.copy(
@@ -344,12 +535,12 @@ def load_config(filename, config_dir=None, copy_default_config=True):
                     config_file,
                 )
             else:
-                message = "Config file {} not found.".format(config_file)
+                message = f"Config file {config_file} not found."
                 logger.error(message)
                 raise FileNotFoundError(message)
 
     if len(cfg.read(config_file)) == 0:
-        message = "Config file {} not found or empty.".format(config_file)
+        message = f"Config file {config_file} not found or empty."
         logger.error(message)
         raise FileNotFoundError(message)
     global _loaded
@@ -375,16 +566,12 @@ def get(section, key):
     """
     if not _loaded:
         pass
-    try:
-        return cfg.getfloat(section, key)
-    except Exception:
+    for accessor in (cfg.getfloat, cfg.getint, cfg.getboolean):
         try:
-            return cfg.getint(section, key)
+            return accessor(section, key)
         except Exception:
-            try:
-                return cfg.getboolean(section, key)
-            except Exception:
-                return cfg.get(section, key)
+            continue
+    return cfg.get(section, key)
 
 
 def get_default_config_path():
@@ -408,9 +595,7 @@ def get_default_config_path():
     # root directory does not exist
     if not os.path.isdir(root_path):
         # create it
-        logger.info(
-            "eDisGo root path {} not found, I will create it.".format(root_path)
-        )
+        logger.info(f"eDisGo root path {root_path} not found, I will create it.")
         make_directory(root_path)
 
     # config directory does not exist
@@ -420,9 +605,7 @@ def get_default_config_path():
         make_directory(config_path)
 
         # copy default config files
-        logger.info(
-            "eDisGo config path {} not found, I will create it.".format(config_path)
-        )
+        logger.info(f"eDisGo config path {config_path} not found, I will create it.")
 
     # copy default config files if they don't exist
     internal_config_dir = os.path.join(package_path, "config")
@@ -431,9 +614,7 @@ def get_default_config_path():
             config_path, os.path.basename(file).replace("_default", "")
         )
         if not os.path.isfile(filename):
-            logger.info(
-                "I will create a default config file {} in {}".format(file, config_path)
-            )
+            logger.info(f"I will create a default config file {file} in {config_path}")
             shutil.copy(file, filename)
     return config_path
 
@@ -450,4 +631,4 @@ def make_directory(directory):
     """
     if not os.path.isdir(directory):
         os.makedirs(directory)
-        logger.info("Path {} not found, I will create it.".format(directory))
+        logger.info(f"Path {directory} not found, I will create it.")

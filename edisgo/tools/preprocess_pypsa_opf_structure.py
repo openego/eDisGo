@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import numpy as np
 import pandas as pd
 
@@ -40,9 +51,9 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
 
     # check if generator slack has a fluctuating variable set
     gen_slack_loc = psa_network.generators.control == "Slack"
-    psa_network.buses.control.loc[
-        psa_network.generators.bus.loc[gen_slack_loc]
-    ] = "Slack"
+    psa_network.buses.control.loc[psa_network.generators.bus.loc[gen_slack_loc]] = (
+        "Slack"
+    )
     is_fluct = psa_network.generators.fluctuating.loc[gen_slack_loc][0]
     # check for nan value
     if is_fluct != is_fluct:
@@ -69,7 +80,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
         slack_bus_mv = psa_network.buses.loc[psa_network.buses.control == "Slack"]
     else:
         slack_bus_mv = psa_network.buses.loc[
-            psa_network.generators.loc[gen_slack_loc].bus[0]
+            psa_network.generators.loc[gen_slack_loc].bus.iloc[0]
         ]
 
     # get trafo type from pypsa
@@ -95,7 +106,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
     # Add Transformer to network
     psa_network.add(
         "Transformer",
-        "Transformer_hvmv_{}".format(psa_network.name),
+        f"Transformer_hvmv_{psa_network.name}",
         type=trafo_type,
         bus0=hvmv_trafos.iloc[0].bus0,
         bus1=hvmv_trafos.iloc[0].bus1,
@@ -125,7 +136,7 @@ def preprocess_pypsa_opf_structure(edisgo_grid, psa_network, hvmv_trafo=False):
             try:
                 val.insert(0, slack_bus_hv_name, [1.0] * len(psa_network.snapshots))
             except ValueError as e:
-                print("ValueError: {}".format(e))
+                print(f"ValueError: {e}")
 
 
 def aggregate_fluct_generators(psa_network):
@@ -143,7 +154,6 @@ def aggregate_fluct_generators(psa_network):
     gen_df = psa_network.generators.copy()
     gen_t_dict = psa_network.generators_t.copy()
     gen_buses = np.unique(gen_df.bus)
-    gen_aggr_df_all = pd.DataFrame(columns=gen_df.columns)
     for gen_bus in gen_buses:
         gens = gen_df[gen_df.bus == gen_bus]
         n_gens = len(gens)
@@ -151,7 +161,7 @@ def aggregate_fluct_generators(psa_network):
             # no generators to aggregate at this bus
             continue
         else:
-            print("{} has {} generators attached".format(gen_bus, n_gens))
+            print(f"{gen_bus} has {n_gens} generators attached")
 
             for fluct in ["wind", "solar"]:
                 if "mvgd" in gen_bus:
@@ -159,15 +169,15 @@ def aggregate_fluct_generators(psa_network):
                         gen_bus[gen_bus.index("mvgd") :], fluct
                     )
                 else:
-                    gen_name = "Generator_aggr_{}_{}".format(gen_bus, fluct)
+                    gen_name = f"Generator_aggr_{gen_bus}_{fluct}"
                 # ToDo check for type rather than generator name
                 gens_to_aggr = gens.loc[gens.index.str.contains(fluct)]
-                print("{} gens of type {}".format(len(gens_to_aggr), fluct))
+                print(f"{len(gens_to_aggr)} gens of type {fluct}")
                 if len(gens_to_aggr) == 0:
                     continue
                 gen_aggr_df = pd.DataFrame(
                     {
-                        "bus": [gens_to_aggr.bus[0]],
+                        "bus": [gens_to_aggr.bus.iloc[0]],
                         "control": ["PQ"],
                         "p_set": gens_to_aggr["p_set"].iloc[0],
                         "q_set": gens_to_aggr["q_set"].iloc[0],
@@ -178,12 +188,6 @@ def aggregate_fluct_generators(psa_network):
                         "fluctuating": [True],
                     },
                     index=[gen_name],
-                )
-                gen_aggr_df_all = pd.concat(
-                    [
-                        gen_aggr_df_all,
-                        gen_aggr_df,
-                    ]
                 )
                 # drop aggregated generators and add new generator to generator
                 # dataframe

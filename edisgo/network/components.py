@@ -1,3 +1,14 @@
+# This file is part of eDisGo (Electrical Distribution Grid Optimization),
+# a Python package for analyzing flexibility options in distribution grids.
+#
+# Copyright (c) Reiner Lemoine Institut gGmbH
+# Contributors are listed in the version control history:
+# https://github.com/openego/eDisGo/
+#
+# Documentation: https://edisgo.readthedocs.io/
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
 import logging
 import math
 import os
@@ -89,7 +100,7 @@ class BasicComponent(ABC):
 
         Returns
         --------
-        :class:`~.network.components.Grid`
+        :class:`~.network.grids.Grid`
             Grid component is in.
 
         """
@@ -147,7 +158,7 @@ class Component(BasicComponent):
 
         Returns
         --------
-        :class:`~.network.components.Grid`
+        :class:`~.network.grids.Grid`
             Grid object the component is in.
 
         """
@@ -163,7 +174,7 @@ class Component(BasicComponent):
     @property
     def geom(self):
         """
-        Geo location of component.
+        Geolocation of component.
 
         Returns
         --------
@@ -257,7 +268,7 @@ class Load(Component):
 
         The sector is e.g. used to assign load time series to a load using the
         demandlib. The following four sectors are considered:
-        'agricultural', 'retail', 'residential', 'industrial'.
+        'agricultural', 'cts', 'residential', 'industrial'.
 
         Parameters
         -----------
@@ -544,6 +555,19 @@ class Storage(Component):
         """
         return self.edisgo_obj.timeseries.storage_units_reactive_power.loc[:, self.id]
 
+    @property
+    def state_of_charge_timeseries(self):
+        """
+        State of charge time series of storage unit in MWh.
+
+        Returns
+        --------
+        :pandas:`pandas.Series<Series>`
+            State of charge time series of storage unit in MWh.
+
+        """
+        return self.edisgo_obj.timeseries.storage_units_state_of_charge.loc[:, self.id]
+
     def _set_bus(self, bus):
         # check if bus is valid
         if bus in self.topology.buses_df.index:
@@ -690,7 +714,7 @@ class Switch(BasicComponent):
 
         Returns
         --------
-        :class:`~.topology.components.Grid`
+        :class:`~.topology.grids.Grid`
             Grid switch is in.
 
         """
@@ -712,10 +736,8 @@ class Switch(BasicComponent):
                 self.topology.lines_df.at[self.branch, col] = self.bus_open
             else:
                 raise AttributeError(
-                    "Could not open switch {}. Specified branch {} of switch "
-                    "has no bus {}. Please check the switch.".format(
-                        self.id, self.branch, self.bus_closed
-                    )
+                    f"Could not open switch {self.id}. Specified branch {self.branch} "
+                    f"of switch has no bus {self.bus_closed}. Please check the switch."
                 )
 
     def close(self):
@@ -730,10 +752,8 @@ class Switch(BasicComponent):
                 self.topology.lines_df.at[self.branch, col] = self.bus_closed
             else:
                 raise AttributeError(
-                    "Could not close switch {}. Specified branch {} of switch "
-                    "has no bus {}. Please check the switch.".format(
-                        self.id, self.branch, self.bus_closed
-                    )
+                    f"Could not close switch {self.id}. Specified branch {self.branch} "
+                    f"of switch has no bus {self.bus_closed}. Please check the switch."
                 )
 
     def _get_bus_column(self, bus):
@@ -751,6 +771,19 @@ class Switch(BasicComponent):
 
 
 class PotentialChargingParks(BasicComponent):
+    """
+    Charging park (potential charging-point location) for electric vehicles.
+
+    A potential charging park is a candidate site, derived from the SimBEV/TracBEV
+    data held in the :class:`~.network.electromobility.Electromobility` container, at
+    which one or more charging points may be connected. It is used by
+    :meth:`~.EDisGo.import_electromobility` to allocate charging demand and integrate
+    the resulting charging points into the grid.
+
+    See :class:`~.network.components.BasicComponent` for the constructor arguments.
+
+    """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -778,7 +811,7 @@ class PotentialChargingParks(BasicComponent):
 
         Returns
         --------
-        :class:`~.network.components.Grid`
+        :class:`~.network.grids.Grid`
             Grid component is in.
 
         """
@@ -827,7 +860,7 @@ class PotentialChargingParks(BasicComponent):
     @property
     def designated_charging_point_capacity(self):
         """
-        Total gross designated charging park capacity.
+        Total gross designated charging park capacity in kW.
 
         This is not necessarily equal to the connection rating.
 
@@ -837,12 +870,11 @@ class PotentialChargingParks(BasicComponent):
             Total gross designated charging park capacity
 
         """
-        return round(
+        return (
             self.charging_processes_df.groupby("charging_point_id")
             .max()
             .nominal_charging_capacity_kW.sum()
-            / self._edisgo_obj.electromobility.eta_charging_points,
-            1,
+            / self._edisgo_obj.electromobility.eta_charging_points
         )
 
     @property
@@ -895,8 +927,6 @@ class PotentialChargingParks(BasicComponent):
         """
         substations = self._topology.buses_df.loc[self._topology.transformers_df.bus1]
 
-        if self.geometry.y > 90:
-            print("break")
         nearest_substation, distance = find_nearest_bus(self.geometry, substations)
 
         lv_grid_id = int(self._topology.buses_df.at[nearest_substation, "lv_grid_id"])
@@ -909,6 +939,17 @@ class PotentialChargingParks(BasicComponent):
 
     @property
     def edisgo_id(self):
+        """
+        Name of the charging point this charging park was integrated as.
+
+        Returns
+        --------
+        :obj:`str`
+            Identifier of the integrated charging point (as in the index of
+            :attr:`~.network.topology.Topology.charging_points_df`), or None if the
+            potential charging park has not been integrated into the grid yet.
+
+        """
         try:
             return self._edisgo_obj.electromobility.integrated_charging_parks_df.at[
                 self.id, "edisgo_id"
@@ -925,9 +966,9 @@ class PotentialChargingParks(BasicComponent):
         --------
         :pandas:`pandas.DataFrame<DataFrame>`
             DataFrame with AGS, car ID, trip destination, charging use case
-            (private or public), netto charging capacity, charging demand,
-            charge start, charge end, potential charging park ID and charging point
-            ID.
+            ("hpc", "home", "public" or "work"), netto charging capacity, charging
+            demand, charge start, charge end, potential charging park ID and charging
+            point ID.
 
         """
         return self._edisgo_obj.electromobility.charging_processes_df.loc[
@@ -937,6 +978,19 @@ class PotentialChargingParks(BasicComponent):
 
     @property
     def grid_connection_capacity(self):
+        """
+        Required grid connection capacity of the potential charging park in MW.
+
+        Returns
+        --------
+        :obj:`float`
+            Grid connection capacity in MW. For high-power charging
+            (``use_case == "hpc"``) this equals the designated charging-point
+            capacity; for the other use cases it is reduced via
+            :func:`~.io.electromobility_import.determine_grid_connection_capacity` to
+            account for simultaneity.
+
+        """
         if self.use_case == "hpc":
             return self.designated_charging_point_capacity / 10**3
         else:
