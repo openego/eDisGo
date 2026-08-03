@@ -768,6 +768,59 @@ class TestCheckTechConstraints:
                 original_type_info
             )
 
+    def test_allowed_voltage_limits_ront_buses_param_excludes_station(self):
+        # `buses` need not cover every bus with power flow results -- e.g.
+        # voltage_deviation_from_allowed_voltage_limits() is commonly called
+        # with `buses` restricted to a single LV grid after
+        # edisgo.analyze(mode="lv", lv_grid_id=...) for just that grid (see
+        # test_lv_line_max_relative_overload for that call pattern). For a
+        # feasible RONT station whose buses are not part of the
+        # caller-supplied `buses` in the first place (independent of
+        # whether it has power flow results), `grid_buses` is empty and the
+        # loop must skip it (continue) rather than erroring on an empty
+        # column drop.
+        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
+        lv_grid_3 = self.edisgo.topology.get_lv_grid(3)
+        station_bus_1 = lv_grid_1.station.index[0]
+        internal_buses_1 = lv_grid_1.buses_df.index.drop(station_bus_1)
+        transformer_name = lv_grid_1.transformers_df.index[0]
+        original_type_info = self.edisgo.topology.transformers_df.at[
+            transformer_name, "type_info"
+        ]
+
+        self.edisgo.results._v_res.loc[:, station_bus_1] = 1.00
+        self.edisgo.results._v_res.loc[:, internal_buses_1[::2]] = 1.05
+        self.edisgo.results._v_res.loc[:, internal_buses_1[1::2]] = 1.03
+
+        buses_excl_lv_grid_1 = lv_grid_3.buses_df.index
+
+        try:
+            self.edisgo.topology.transformers_df.at[transformer_name, "type_info"] = (
+                tools.ront_type_name(original_type_info)
+            )
+            assert (
+                check_tech_constraints.lv_grid_ront_feasible(
+                    self.edisgo, lv_grid_1, 0.06
+                )
+                is True
+            )
+            upper, lower = check_tech_constraints.allowed_voltage_limits(
+                self.edisgo,
+                buses=buses_excl_lv_grid_1,
+                split_voltage_band=False,
+            )
+
+            # lv_grid_1 was never part of `buses` -- stays absent, no error
+            assert not any(b in upper.columns for b in lv_grid_1.buses_df.index)
+            assert not any(b in lower.columns for b in lv_grid_1.buses_df.index)
+            # buses that were requested are untouched
+            assert (upper.loc[:, buses_excl_lv_grid_1] == 1.1).all().all()
+            assert (lower.loc[:, buses_excl_lv_grid_1] == 0.9).all().all()
+        finally:
+            self.edisgo.topology.transformers_df.at[transformer_name, "type_info"] = (
+                original_type_info
+            )
+
     def test__mv_allowed_voltage_limits(self):
         (
             v_limits_upper,
@@ -893,6 +946,18 @@ class TestCheckTechConstraints:
         spread = check_tech_constraints.lv_grid_voltage_spread(self.edisgo, lv_grid_1)
         assert np.isclose(spread, 1.09 - 1.02)
 
+    def test_lv_grid_voltage_spread_grid_not_in_power_flow(self):
+        # if the last power flow only covered a different LV grid (e.g.
+        # edisgo.analyze(mode="lv", lv_grid_id=...) for a single grid, see
+        # test_lv_line_max_relative_overload), none of this grid's internal
+        # buses are in v_res -- lv_grid_voltage_spread() must return 0.0 per
+        # its documented contract rather than raising.
+        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
+        self.edisgo.analyze(mode="lv", lv_grid_id=5)
+
+        spread = check_tech_constraints.lv_grid_voltage_spread(self.edisgo, lv_grid_1)
+        assert spread == 0.0
+
     def test_lv_grid_ront_feasible(self):
         # three scenarios, same pattern reused at the constraint-check level
         # below (test__lv_allowed_voltage_limits_ront*): (a) small spread,
@@ -942,6 +1007,21 @@ class TestCheckTechConstraints:
         self.edisgo.results._v_res.loc[:, internal_buses[1::2]] = 1.09
         assert (
             check_tech_constraints.lv_grid_ront_feasible(self.edisgo, lv_grid_1, 0.50)
+            is False
+        )
+
+    def test_lv_grid_ront_feasible_grid_not_in_power_flow(self):
+        # same scenario as test_lv_grid_voltage_spread_grid_not_in_power_flow:
+        # if this grid's secondary side was not part of the last power flow
+        # (e.g. edisgo.analyze(mode="lv", lv_grid_id=...) for a different
+        # grid), lv_grid_ront_feasible() cannot prove feasibility and must
+        # return False via its guard clause rather than raising a KeyError
+        # when indexing v_res.
+        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
+        self.edisgo.analyze(mode="lv", lv_grid_id=5)
+
+        assert (
+            check_tech_constraints.lv_grid_ront_feasible(self.edisgo, lv_grid_1, 0.06)
             is False
         )
 
