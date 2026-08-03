@@ -16,7 +16,7 @@ abstract: >-
 type: software
 license: AGPL-3.0-or-later
 version: 0.3.0
-date-released: "2026-07-29"
+date-released: "2026-08-03"
 repository-code: "https://github.com/openego/eDisGo"
 url: "https://edisgo.readthedocs.io/"
 keywords:

@@ -1,7 +1,7 @@
 Release v0.3.0
 ================
 
-Release date: July 29, 2026
+Release date: August 3, 2026
 
 Changes
 -------
