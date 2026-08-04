@@ -265,7 +265,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "eDisGo"
-copyright = "2017, open_eGo-Team"
+copyright = "2017-2026, open_eGo-Team"
 author = "open_eGo-Team"
 
 # The version info for the project you're documenting, acts as replacement for

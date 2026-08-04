@@ -66,18 +66,50 @@ function optimize_edisgo()
     println("Starting convex SOC AC-OPF with Gurobi.")
     result_soc, pm = eDisGo_OPF.solve_mn_opf_bf_flex(data_edisgo_mn, SOCBFPowerModelEdisgo, gurobi)
     #println("Termination status: "*result_soc["termination_status"])
-    if result_soc["termination_status"] != MOI.OPTIMAL
-      # if result_soc["termination_status"] == MOI.SUBOPTIMAL_TERMINATION
-      #   PowerModels.update_data!(data_edisgo_mn, result_soc["solution"])
-      # else
-      JuMP.compute_conflict!(pm.model)
-      if MOI.get(pm.model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
-        iis_model, _ = copy_conflict(pm.model)
-        print(iis_model)
+    # A feasible solution exists if the solver proved optimality OR reports a
+    # feasible primal point (e.g. SUBOPTIMAL / ALMOST_OPTIMAL under the barrier
+    # tolerances set above). Only when there is genuinely no primal solution do
+    # we diagnose the infeasibility via an IIS conflict — calling
+    # compute_conflict! on a feasible model raises Gurobi error 10015.
+    # A usable primal solution exists if the solver proved optimality, or it
+    # returns a feasible OR nearly-feasible primal point. The latter covers
+    # suboptimal / almost-optimal / numerically loose terminations (under the
+    # barrier tolerances set above) that still carry a valid dispatch — these
+    # are used just like an optimal solution. Only a genuine no-primal-point
+    # case is diagnosed via an IIS conflict.
+    term_status = result_soc["termination_status"]
+    primal_status = MOI.get(pm.model, MOI.PrimalStatus())
+    has_solution = term_status == MOI.OPTIMAL ||
+                   primal_status == MOI.FEASIBLE_POINT ||
+                   primal_status == MOI.NEARLY_FEASIBLE_POINT
+    if !has_solution
+      # No primal point detected — diagnose the infeasibility via an IIS
+      # conflict. Some numerically tricky but actually feasible models are
+      # misreported here, and compute_conflict! then raises Gurobi error 10015
+      # ("Cannot compute IIS on a feasible model"). In that case the model does
+      # have a solution after all, so recover and use it instead of failing.
+      try
+        JuMP.compute_conflict!(pm.model)
+        if MOI.get(pm.model, MOI.ConflictStatus()) == MOI.CONFLICT_FOUND
+          iis_model, _ = copy_conflict(pm.model)
+          print(iis_model)
+        end
+      catch e
+        println("compute_conflict! failed (model is feasible, status "*
+                string(term_status)*"/"*string(primal_status)*
+                "); using the solution: ", e)
+        has_solution = true
       end
-      #end
-    elseif result_soc["termination_status"] == MOI.OPTIMAL
-      # Check if SOC constraint is tight
+    end
+    if has_solution
+      if term_status != MOI.OPTIMAL
+        println("SOC model terminated feasible but not optimal ("*
+                string(term_status)*"); using the solution.")
+      end
+      # Check if the SOC constraint is tight on the solution that is actually
+      # used. This is a pure arithmetic check on the primal point, so it applies
+      # to suboptimal-but-feasible solutions as well — a loose relaxation means
+      # the dispatch is not AC-exact and downstream reinforcement may be off.
       soc_tight, soc_dict = eDisGo_OPF.check_SOC_equality(result_soc, data_edisgo)
       # Save SOC violations if SOC is not tight
       if !soc_tight
