@@ -1,0 +1,23 @@
+Release v0.3.1
+================
+
+Release date: not yet released
+
+Changes
+-------
+
+* Fixed :func:`~.flex_opt.reinforce_measures.reinforce_lines_voltage_issues` reinforcing
+  only the first line segment of a feeder when the node at two thirds of the feeder
+  length coincides with the feeder representative, i.e. the bus directly connected to
+  the station. In that case no line can be disconnected, so the measure falls back to
+  reinforcing lines - but it only reinforced the line between the station and the
+  representative, not the remaining lines on the path to the critical node. As the
+  voltage deviation at the critical node is generally dominated by the segments further
+  away from the station, the measure often had no effect on the reported voltage issue,
+  so grid reinforcement repeated the same ineffective measure in every iteration and
+  eventually aborted with
+  :class:`~.flex_opt.exceptions.MaximumIterationError`, typically reporting a residual
+  deviation in the per mille range. All lines on the path from the station to the
+  critical node are now reinforced. This mostly affects short feeders and grids that
+  went through spatial complexity reduction, where the two-thirds node frequently is the
+  representative

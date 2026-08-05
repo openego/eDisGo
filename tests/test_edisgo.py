@@ -551,7 +551,7 @@ class TestEDisGo:
         )
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 134
-        assert len(results.equipment_changes) == 230
+        assert len(results.equipment_changes) == 236
         assert results.v_res.shape == (4, 142)
 
         # ############### test with catch convergence worst case true ################
@@ -562,7 +562,7 @@ class TestEDisGo:
         results = self.edisgo.reinforce(catch_convergence_problems=True)
         assert results.unresolved_issues.empty
         assert len(results.grid_expansion_costs) == 134
-        assert len(results.equipment_changes) == 218
+        assert len(results.equipment_changes) == 223
         assert results.v_res.shape == (4, 142)
 
     @pytest.mark.slow
@@ -583,8 +583,8 @@ class TestEDisGo:
 
         results = edisgo_obj.results
 
-        assert len(results.grid_expansion_costs) == 454
-        assert len(results.equipment_changes) == 892
+        assert len(results.grid_expansion_costs) == 460
+        assert len(results.equipment_changes) == 935
         assert results.v_res.shape == (4, 148)
 
         edisgo_obj = copy.deepcopy(self.edisgo)
