@@ -42,6 +42,9 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "local: mark test as local to run")
     config.addinivalue_line("markers", "runonlinux: mark test to run only on linux")
+    config.addinivalue_line(
+        "markers", "oep: mark test as intentionally accessing the live OEP"
+    )
 
     if config.getoption("--runlocal"):
         pytest.engine_local = engine(path=pytest.egon_data_config_yml, ssh=True)

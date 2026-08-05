@@ -191,6 +191,7 @@ class TestElectromobilityImport:
 
         assert edisgo_ids_cp == edisgo_ids_topology
 
+    @pytest.mark.oep
     def test_simbev_config_from_oedb(self):
         config_df = electromobility_import.simbev_config_from_oedb(
             engine=pytest.engine, scenario="eGon2035"
@@ -200,6 +201,7 @@ class TestElectromobilityImport:
         assert config_df["stepsize"][0] == 15
         assert config_df["days"][0] == 365
 
+    @pytest.mark.oep
     def test_potential_charging_parks_from_oedb(self):
         edisgo_obj = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -213,6 +215,7 @@ class TestElectromobilityImport:
         assert all(potential_parks_df.geom.iloc[10].within(grid_gdf.geometry))
         assert all(potential_parks_df.geom.iloc[100].within(grid_gdf.geometry))
 
+    @pytest.mark.oep
     def test_charging_processes_from_oedb(self):
         edisgo_obj = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False

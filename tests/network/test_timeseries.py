@@ -1235,6 +1235,7 @@ class TestTimeSeries:
             )
 
     @pytest.mark.slow
+    @pytest.mark.oep
     def test_predefined_fluctuating_generators_by_technology(self):
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
         self.edisgo.timeseries.timeindex = timeindex
@@ -1403,6 +1404,7 @@ class TestTimeSeries:
         )
         # fmt: on
 
+    @pytest.mark.oep
     def test_predefined_fluctuating_generators_by_technology_oedb(self):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -2339,8 +2341,8 @@ class TestTimeSeries:
                 setattr(self.edisgo.timeseries, attr, ts_tmp_duplicated)
                 self.edisgo.timeseries.check_integrity()
                 assert (
-                    f"{attr} has duplicated columns: {ts_tmp.iloc[:, 0:2].columns.values}"
-                    in caplog.text
+                    f"{attr} has duplicated columns:"
+                    f"{ts_tmp.iloc[:, 0:2].columns.values}" in caplog.text
                 )
                 caplog.clear()
                 setattr(self.edisgo.timeseries, attr, ts_tmp)

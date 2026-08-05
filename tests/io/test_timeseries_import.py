@@ -59,6 +59,7 @@ class TestTimeseriesImport:
         assert_index_equal(ind, given_index)
         assert_index_equal(ind_full, timeindex)
 
+    @pytest.mark.oep
     def test_feedin_oedb_legacy(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         timeindex = pd.date_range("1/1/2010", periods=3000, freq="H")
@@ -72,6 +73,7 @@ class TestTimeseriesImport:
         assert np.isclose(feedin["solar"][1122075][timeindex[61]], 0.423823)
         assert np.isclose(feedin["wind"][1122075][timeindex[1356]], 0.106361)
 
+    @pytest.mark.oep
     def test_feedin_oedb(self):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -102,6 +104,7 @@ class TestTimeseriesImport:
         assert np.isclose(load.sum()["agricultural"], 1.0)
         assert np.isclose(load.sum()["industrial"], 1.0)
 
+    @pytest.mark.oep
     def test_cop_oedb(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         cop_df = timeseries_import.cop_oedb(
@@ -137,6 +140,7 @@ class TestTimeseriesImport:
         )
         return hp_df
 
+    @pytest.mark.oep
     def test_heat_demand_oedb(self, caplog):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -165,6 +169,7 @@ class TestTimeseriesImport:
 
         # ToDo add further tests
 
+    @pytest.mark.oep
     def test_electricity_demand_oedb(self, caplog):
         # test with one load each and without year
         edisgo_object = EDisGo(
@@ -211,6 +216,7 @@ class TestTimeseriesImport:
 
         # ToDo add further tests to check values
 
+    @pytest.mark.oep
     def test_get_residential_heat_profiles_per_building(self):
         df = timeseries_import.get_residential_heat_profiles_per_building(
             [442081, 430859], "eGon2035", pytest.engine
@@ -218,6 +224,7 @@ class TestTimeseriesImport:
         assert df.shape == (8760, 2)
         # ToDo add further tests
 
+    @pytest.mark.oep
     def test_get_district_heating_heat_demand_profiles(self):
         df = timeseries_import.get_district_heating_heat_demand_profiles(
             [6], "eGon2035", pytest.engine
@@ -225,6 +232,7 @@ class TestTimeseriesImport:
         assert df.shape == (8760, 1)
         # ToDo add further tests
 
+    @pytest.mark.oep
     def test_get_cts_profiles_per_building(self):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -245,6 +253,7 @@ class TestTimeseriesImport:
         assert df.shape == (8760, len(cts_loads))
         # ToDo add further tests
 
+    @pytest.mark.oep
     def test_get_cts_profiles_per_grid(self):
         df = timeseries_import.get_cts_profiles_per_grid(
             33535, "eGon2035", "heat", pytest.engine
@@ -256,6 +265,7 @@ class TestTimeseriesImport:
         assert df.shape == (8760, 85)
         # ToDo add further tests
 
+    @pytest.mark.oep
     def test_get_residential_electricity_profiles_per_building(self):
         df = timeseries_import.get_residential_electricity_profiles_per_building(
             [-1, 442081], "eGon2035", pytest.engine
@@ -270,6 +280,7 @@ class TestTimeseriesImport:
         assert df.shape == (8760, 1)
         assert np.isclose(df.loc[:, 442081].sum(), 4.288845, atol=1e-3)
 
+    @pytest.mark.oep
     def test_get_industrial_electricity_profiles_per_site(self):
         # test with one site and one OSM area
         df = timeseries_import.get_industrial_electricity_profiles_per_site(

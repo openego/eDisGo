@@ -26,6 +26,7 @@ class TestStorageImport:
         )
         return df
 
+    @pytest.mark.oep
     def test_oedb(self, caplog):
         # test without new PV rooftop plants
         with caplog.at_level(logging.DEBUG):

@@ -5,6 +5,7 @@ from edisgo.io import dsm_import
 
 
 class TestDSMImport:
+    @pytest.mark.oep
     def test_oedb(self):
         # test without industrial load
         edisgo_object = EDisGo(
@@ -39,6 +40,7 @@ class TestDSMImport:
         assert (dsm_profiles["p_max"] >= 0.0).all().all()
         assert (dsm_profiles["e_max"] >= 0.0).all().all()
 
+    @pytest.mark.oep
     def test_get_profiles_per_industrial_load(self):
         dsm_profiles = dsm_import.get_profiles_per_industrial_load(
             load_ids=[15388, 241, 1], scenario="eGon2035", engine=pytest.engine
@@ -56,6 +58,7 @@ class TestDSMImport:
         )
         assert dsm_profiles["p_min"].empty
 
+    @pytest.mark.oep
     def test_get_profile_cts(self):
         edisgo = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False

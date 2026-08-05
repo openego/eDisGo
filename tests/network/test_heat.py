@@ -101,6 +101,7 @@ class TestHeatPump:
             check_freq=False,
         )
 
+    @pytest.mark.oep
     def test_set_cop_oedb(self, caplog):
         # ################### test with oedb ###################
         edisgo_object = EDisGo(
@@ -208,6 +209,7 @@ class TestHeatPump:
             check_freq=False,
         )
 
+    @pytest.mark.oep
     def test_set_heat_demand_oedb(self):
         # test with oedb
         edisgo_object = EDisGo(

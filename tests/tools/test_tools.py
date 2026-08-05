@@ -431,6 +431,7 @@ class TestTools:
         assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_6) == 6
         assert tools.determine_bus_voltage_level(self.edisgo, bus_voltage_level_7) == 7
 
+    @pytest.mark.oep
     def test_get_weather_cells_intersecting_with_grid_district(self):
         weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
             self.edisgo
@@ -444,6 +445,7 @@ class TestTools:
         # for some reason..
         assert 1122074 in weather_cells
 
+    @pytest.mark.oep
     def test_get_weather_cells_intersecting_with_grid_district_egon(self):
         edisgo_obj = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False

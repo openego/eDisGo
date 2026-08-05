@@ -164,7 +164,9 @@ class TestEDisGo:
             storage_units_ts, self.edisgo.timeseries.storage_units_reactive_power
         )
 
-    def test_set_time_series_active_power_predefined_demandlib_auto_sets_timeindex(self):
+    def test_set_time_series_active_power_predefined_demandlib_auto_sets_timeindex(
+        self,
+    ):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_path)
         # Ensure timeindex is empty initially
         assert edisgo.timeseries.timeindex.empty
@@ -219,7 +221,9 @@ class TestEDisGo:
 
         # check warning
         self.edisgo.set_time_series_active_power_predefined()
-        assert "No timeindex was set. TimeSeries.timeindex is automatically" in caplog.text
+        assert (
+            "No timeindex was set. TimeSeries.timeindex is automatically" in caplog.text
+        )
 
         # check if right functions are called
         timeindex = pd.date_range("1/1/2011 12:00", periods=2, freq="H")
@@ -267,6 +271,7 @@ class TestEDisGo:
         assert self.edisgo.timeseries.storage_units_active_power.shape == (2, 0)
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
 
+    @pytest.mark.oep
     def test_set_time_series_active_power_predefined_oedb(self):
         # test conventional_loads_ts="oedb" for all loads in grid
         edisgo_object = EDisGo(
@@ -297,6 +302,7 @@ class TestEDisGo:
         )
 
     @pytest.mark.slow
+    @pytest.mark.oep
     def test_set_time_series_active_power_predefined_oedb_auto_sets_timeindex(
         self,
     ):
@@ -414,6 +420,7 @@ class TestEDisGo:
         )
 
     @pytest.mark.slow
+    @pytest.mark.oep
     def test_generator_import(self):
         edisgo = EDisGo(ding0_grid=pytest.ding0_test_network_2_path)
         try:
@@ -422,7 +429,8 @@ class TestEDisGo:
         except Exception as e:
             if "Table does not exist" in str(e) or "HTTP 404" in str(e):
                 pytest.skip(
-                    "Database table not accessible (requires external database connection)"
+                    "Database table not accessible "
+                    "(requires external database connection)"
                 )
             else:
                 raise
@@ -1335,6 +1343,7 @@ class TestEDisGo:
         )
         # fmt: on
 
+    @pytest.mark.oep
     def test_import_electromobility_oedb(self):
         """
         Test import from oedb.
@@ -1392,6 +1401,7 @@ class TestEDisGo:
         )
         # fmt: on
 
+    @pytest.mark.oep
     def test_import_heat_pumps(self):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
