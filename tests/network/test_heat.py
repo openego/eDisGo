@@ -102,7 +102,7 @@ class TestHeatPump:
         )
 
     @pytest.mark.oep
-    def test_set_cop_oedb(self, caplog):
+    def test_set_cop_oedb(self, caplog, oep_engine):
         # ################### test with oedb ###################
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -115,7 +115,7 @@ class TestHeatPump:
             edisgo_object.heat_pump.set_cop(
                 edisgo_object,
                 "oedb",
-                engine=pytest.engine,
+                engine=oep_engine,
                 heat_pump_names=edisgo_object.topology.loads_df.index[0:4],
             )
 
@@ -126,7 +126,7 @@ class TestHeatPump:
             edisgo_object.heat_pump.set_cop(
                 edisgo_object,
                 "oedb",
-                engine=pytest.engine,
+                engine=oep_engine,
                 heat_pump_names=edisgo_object.topology.loads_df.index[0:4],
             )
 
@@ -134,7 +134,7 @@ class TestHeatPump:
         edisgo_object.heat_pump.set_cop(
             edisgo_object,
             "oedb",
-            engine=pytest.engine,
+            engine=oep_engine,
             heat_pump_names=[],
         )
         assert edisgo_object.heat_pump.cop_df.empty
@@ -152,7 +152,7 @@ class TestHeatPump:
             edisgo_object.heat_pump.set_cop(
                 edisgo_object,
                 "oedb",
-                engine=pytest.engine,
+                engine=oep_engine,
                 heat_pump_names=heat_pump_names,
             )
         assert "There are heat pumps with no weather cell ID." in caplog.text
@@ -210,7 +210,7 @@ class TestHeatPump:
         )
 
     @pytest.mark.oep
-    def test_set_heat_demand_oedb(self):
+    def test_set_heat_demand_oedb(self, oep_engine):
         # test with oedb
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -224,7 +224,7 @@ class TestHeatPump:
         edisgo_object.heat_pump.set_heat_demand(
             edisgo_object,
             "oedb",
-            engine=pytest.engine,
+            engine=oep_engine,
             scenario="eGon2035",
         )
         assert edisgo_object.heat_pump.heat_demand_df.shape == (8760, 5)
@@ -239,7 +239,7 @@ class TestHeatPump:
         edisgo_object.heat_pump.set_heat_demand(
             edisgo_object,
             "oedb",
-            engine=pytest.engine,
+            engine=oep_engine,
             scenario="eGon2035",
             heat_pump_names=["HP_442081", "HP_dummy"],
         )
@@ -250,7 +250,7 @@ class TestHeatPump:
         edisgo_object.heat_pump.set_heat_demand(
             edisgo_object,
             "oedb",
-            engine=pytest.engine,
+            engine=oep_engine,
             scenario="eGon2035",
             heat_pump_names=[],
         )

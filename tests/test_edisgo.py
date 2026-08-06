@@ -272,7 +272,7 @@ class TestEDisGo:
         assert self.edisgo.timeseries.storage_units_reactive_power.shape == (2, 0)
 
     @pytest.mark.oep
-    def test_set_time_series_active_power_predefined_oedb(self):
+    def test_set_time_series_active_power_predefined_oedb(self, oep_engine):
         # test conventional_loads_ts="oedb" for all loads in grid
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
@@ -282,7 +282,7 @@ class TestEDisGo:
             conventional_loads_ts="oedb",
             fluctuating_generators_ts="oedb",
             scenario="eGon2035",
-            engine=pytest.engine,
+            engine=oep_engine,
             timeindex=pd.date_range("1/1/2011 12:00", periods=2, freq="H"),
             conventional_loads_names=[
                 "Load_mvgd_33535_lvgd_1164210000_244_residential"
@@ -304,7 +304,7 @@ class TestEDisGo:
     @pytest.mark.slow
     @pytest.mark.oep
     def test_set_time_series_active_power_predefined_oedb_auto_sets_timeindex(
-        self,
+        self, oep_engine
     ):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path,
@@ -315,7 +315,7 @@ class TestEDisGo:
             conventional_loads_ts="oedb",
             fluctuating_generators_ts="oedb",
             scenario="eGon2035",
-            engine=pytest.engine,
+            engine=oep_engine,
             conventional_loads_names=[
                 "Load_mvgd_33535_lvgd_1164210000_244_residential"
             ],
@@ -1344,7 +1344,7 @@ class TestEDisGo:
         # fmt: on
 
     @pytest.mark.oep
-    def test_import_electromobility_oedb(self):
+    def test_import_electromobility_oedb(self, oep_engine):
         """
         Test import from oedb.
         """
@@ -1354,7 +1354,7 @@ class TestEDisGo:
 
         # test with default parameters
         self.edisgo.import_electromobility(
-            data_source="oedb", scenario="eGon2035", engine=pytest.engine
+            data_source="oedb", scenario="eGon2035", engine=oep_engine
         )
 
         assert len(self.edisgo.electromobility.charging_processes_df) == 324117
@@ -1402,7 +1402,7 @@ class TestEDisGo:
         # fmt: on
 
     @pytest.mark.oep
-    def test_import_heat_pumps(self):
+    def test_import_heat_pumps(self, oep_engine):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -1411,13 +1411,13 @@ class TestEDisGo:
         with pytest.raises(ValueError):
             edisgo_object.import_heat_pumps(
                 scenario="eGon",
-                engine=pytest.engine,
+                engine=oep_engine,
             )
 
         # ################# test with leap year #############
         edisgo_object.import_heat_pumps(
             scenario="eGon2035",
-            engine=pytest.engine,
+            engine=oep_engine,
             timeindex=pd.date_range("1/1/2020", periods=2, freq="H"),
             import_types=["individual_heat_pumps", "central_heat_pumps"],
         )

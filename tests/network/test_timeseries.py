@@ -1405,7 +1405,7 @@ class TestTimeSeries:
         # fmt: on
 
     @pytest.mark.oep
-    def test_predefined_fluctuating_generators_by_technology_oedb(self):
+    def test_predefined_fluctuating_generators_by_technology_oedb(self, oep_engine):
         edisgo_object = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
@@ -1414,7 +1414,7 @@ class TestTimeSeries:
 
         # ############# oedb, all generators (default)
         edisgo_object.timeseries.predefined_fluctuating_generators_by_technology(
-            edisgo_object, "oedb", engine=pytest.engine
+            edisgo_object, "oedb", engine=oep_engine
         )
 
         # check shape

@@ -446,12 +446,12 @@ class TestTools:
         assert 1122074 in weather_cells
 
     @pytest.mark.oep
-    def test_get_weather_cells_intersecting_with_grid_district_egon(self):
+    def test_get_weather_cells_intersecting_with_grid_district_egon(self, oep_engine):
         edisgo_obj = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         weather_cells = tools.get_weather_cells_intersecting_with_grid_district(
-            edisgo_obj, pytest.engine
+            edisgo_obj, oep_engine
         )
         assert len(weather_cells) == 2
         assert 11051 in weather_cells

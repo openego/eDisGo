@@ -4,6 +4,8 @@ import os
 import matplotlib
 import pytest
 
+from sqlalchemy.engine import Engine
+
 matplotlib.use("Agg")
 
 from edisgo.io.db import default_config_path, engine
@@ -34,10 +36,6 @@ def pytest_configure(config):
     )
 
     pytest.egon_data_config_yml = default_config_path()
-
-    # The test suite is written against OEP data — pin the source explicitly
-    # so auto-detection cannot switch it to a local egon-data database.
-    pytest.engine = engine(ssh=False)
 
     config.addinivalue_line("markers", "slow: mark test as slow to run")
     config.addinivalue_line("markers", "local: mark test as local to run")
@@ -84,3 +82,59 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if "runonlinux" in item.keywords:
                 item.add_marker(skip_windows)
+
+
+def _is_oep_engine(db_engine):
+    return (
+        db_engine.url.host == "openenergyplatform.org"
+        or db_engine.url.drivername.endswith("+oedialect")
+    )
+
+
+@pytest.fixture
+def oep_engine(request):
+    """Create an OEP engine only for a test that explicitly requests it."""
+
+    if request.node.get_closest_marker("oep") is None:
+        pytest.fail(
+            "The oep_engine fixture may only be used by tests marked with "
+            "@pytest.mark.oep.",
+            pytrace=False,
+        )
+
+    # OEP tests assert against live OEP data. Force the OEP instead of
+    # auto-selecting a potentially different local eGon database.
+    db_engine = engine(ssh=False)
+
+    yield db_engine
+
+    db_engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def prevent_unmarked_oep_access(request, monkeypatch):
+    """Prevent tests without the oep marker from connecting to the OEP."""
+
+    oep_access_allowed = request.node.get_closest_marker("oep") is not None
+
+    original_connect = Engine.connect
+    original_raw_connection = Engine.raw_connection
+
+    def check_access(engine):
+        if _is_oep_engine(engine) and not oep_access_allowed:
+            pytest.fail(
+                "Unmarked test attempted to connect to the live OEP: "
+                f"{request.node.nodeid}",
+                pytrace=False,
+            )
+
+    def guarded_connect(engine, *args, **kwargs):
+        check_access(engine)
+        return original_connect(engine, *args, **kwargs)
+
+    def guarded_raw_connection(engine, *args, **kwargs):
+        check_access(engine)
+        return original_raw_connection(engine, *args, **kwargs)
+
+    monkeypatch.setattr(Engine, "connect", guarded_connect)
+    monkeypatch.setattr(Engine, "raw_connection", guarded_raw_connection)

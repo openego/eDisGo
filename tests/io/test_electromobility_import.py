@@ -192,9 +192,9 @@ class TestElectromobilityImport:
         assert edisgo_ids_cp == edisgo_ids_topology
 
     @pytest.mark.oep
-    def test_simbev_config_from_oedb(self):
+    def test_simbev_config_from_oedb(self, oep_engine):
         config_df = electromobility_import.simbev_config_from_oedb(
-            engine=pytest.engine, scenario="eGon2035"
+            engine=oep_engine, scenario="eGon2035"
         )
         assert len(config_df) == 1
         assert config_df["eta_cp"][0] == 0.9
@@ -202,12 +202,12 @@ class TestElectromobilityImport:
         assert config_df["days"][0] == 365
 
     @pytest.mark.oep
-    def test_potential_charging_parks_from_oedb(self):
+    def test_potential_charging_parks_from_oedb(self, oep_engine):
         edisgo_obj = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         potential_parks_df = electromobility_import.potential_charging_parks_from_oedb(
-            edisgo_obj=edisgo_obj, engine=pytest.engine
+            edisgo_obj=edisgo_obj, engine=oep_engine
         )
         assert len(potential_parks_df) == 1083
         # check for random charging points if they are within MV grid district
@@ -216,12 +216,12 @@ class TestElectromobilityImport:
         assert all(potential_parks_df.geom.iloc[100].within(grid_gdf.geometry))
 
     @pytest.mark.oep
-    def test_charging_processes_from_oedb(self):
+    def test_charging_processes_from_oedb(self, oep_engine):
         edisgo_obj = EDisGo(
             ding0_grid=pytest.ding0_test_network_3_path, legacy_ding0_grids=False
         )
         charging_processes_df = electromobility_import.charging_processes_from_oedb(
-            edisgo_obj=edisgo_obj, engine=pytest.engine, scenario="eGon2035"
+            edisgo_obj=edisgo_obj, engine=oep_engine, scenario="eGon2035"
         )
         assert len(charging_processes_df.car_id.unique()) == 1604
         assert len(charging_processes_df) == 324117
