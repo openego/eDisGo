@@ -13,6 +13,7 @@ from pandas.testing import assert_frame_equal, assert_index_equal, assert_series
 
 from edisgo import EDisGo
 from edisgo.network import timeseries
+from edisgo.tools.config import Config
 from edisgo.tools.tools import assign_voltage_level_to_component
 
 
@@ -401,10 +402,11 @@ class TestTimeSeries:
             check_dtype=False,
         )
         # check charging point
+        # load_case_mv = 0.0: only LV HPC CP exists, MV-HPC group is empty (n=0)
         comp = "Load_residential_LVGrid_1_4"  # lv, hpc
         p_set = 0.001397
         exp = pd.Series(
-            data=[0.0 * p_set, 0.0 * p_set, 1.0 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 0.0 * p_set, 1.0 * p_set],
             name=comp,
             index=timeindex,
         )
@@ -420,10 +422,15 @@ class TestTimeSeries:
             check_dtype=False,
         )
         # check heat pump
-        comp = "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"  # mv
+        # despite the "MVGrid_1" name (refers to the parent grid hierarchy),
+        # this load's actual voltage_level is "lv" (bus=BusBar_lac_1).
+        # load_case_lv=1.0: only LV HP exists, group n=1 (was fixed 1.0,
+        # unchanged here); load_case_mv=0.0: MV-HP group is empty (n=0, was
+        # fixed 0.8)
+        comp = "Load_retail_MVGrid_1_Load_aggregated_retail_MVGrid_1_1"  # lv
         p_set = 0.31
         exp = pd.Series(
-            data=[0.0 * p_set, 0.0 * p_set, 0.8 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 0.0 * p_set, 1.0 * p_set],
             name=comp,
             index=timeindex,
         )
@@ -895,10 +902,10 @@ class TestTimeSeries:
 
         # check values
         index = ["feed-in_case_mv", "feed-in_case_lv", "load_case_mv", "load_case_lv"]
-        comp = "CP1"  # mv, hpc
+        comp = "CP1"  # mv, hpc — load_case_lv=0.0: no LV HPC CPs (n=0)
         p_set = 0.1
         exp = pd.Series(
-            data=[0.0 * p_set, 0.0 * p_set, 1.0 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 1.0 * p_set, 0.0 * p_set],
             name=comp,
             index=index,
         )
@@ -906,10 +913,10 @@ class TestTimeSeries:
         pf = tan(acos(1.0))
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
-        comp = "CP2"  # mv, public
+        comp = "CP2"  # mv, public — load_case_lv=0.0: no LV public CPs (n=0)
         p_set = 0.2
         exp = pd.Series(
-            data=[0.0 * p_set, 0.0 * p_set, 1.0 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 1.0 * p_set, 0.0 * p_set],
             name=comp,
             index=index,
         )
@@ -917,10 +924,10 @@ class TestTimeSeries:
         pf = tan(acos(1.0))
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
-        comp = "CP3"  # lv, home
+        comp = "CP3"  # lv, home — load_case_mv=0.0: no MV home CPs (n=0)
         p_set = 0.3
         exp = pd.Series(
-            data=[0.0 * p_set, 0.0 * p_set, 0.2 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 0.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -928,10 +935,10 @@ class TestTimeSeries:
         pf = tan(acos(1.0))
         assert_series_equal(q_ts.loc[:, comp], exp * pf, check_dtype=False)
 
-        comp = "CP4"  # lv, work
+        comp = "CP4"  # lv, work — load_case_mv=0.0: no MV work CPs (n=0)
         p_set = 0.4
         exp = pd.Series(
-            data=[0.0 * p_set, 0.0 * p_set, 0.2 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 0.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -986,10 +993,10 @@ class TestTimeSeries:
 
         # check values
         index = ["load_case_mv", "load_case_lv"]
-        comp = "CP2"  # mv, public
+        comp = "CP2"  # mv, public — load_case_lv=0.0: no LV public CPs (n=0)
         p_set = 0.2
         exp = pd.Series(
-            data=[1.0 * p_set, 1.0 * p_set],
+            data=[1.0 * p_set, 0.0 * p_set],
             name=comp,
             index=index,
         )
@@ -1037,10 +1044,12 @@ class TestTimeSeries:
 
         # check values
         index = ["feed-in_case_mv", "feed-in_case_lv", "load_case_mv", "load_case_lv"]
+        # load_case_mv=1.0: MV-HP group has n=1 -> simultaneity factor 1.0 (was
+        # fixed constant 0.8)
         comp = "HP1"  # mv
         p_set = 0.1
         exp = pd.Series(
-            data=[0.0 * p_set, 0.0 * p_set, 0.8 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -1051,7 +1060,7 @@ class TestTimeSeries:
         comp = "HP2"  # lv
         p_set = 0.2
         exp = pd.Series(
-            data=[0.0 * p_set, 0.0 * p_set, 0.8 * p_set, 1.0 * p_set],
+            data=[0.0 * p_set, 0.0 * p_set, 1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -1106,10 +1115,11 @@ class TestTimeSeries:
 
         # check values
         index = ["load_case_mv", "load_case_lv"]
+        # load_case_mv=1.0: MV-HP group has n=1 -> simultaneity factor 1.0
         comp = "HP1"  # mv
         p_set = 0.1
         exp = pd.Series(
-            data=[0.8 * p_set, 1.0 * p_set],
+            data=[1.0 * p_set, 1.0 * p_set],
             name=comp,
             index=index,
         )
@@ -2643,3 +2653,135 @@ class TestTimeSeriesRaw:
         )
 
         shutil.rmtree(save_dir)
+
+
+class TestCpSimultaneityFactor:
+    """Unit tests for the module-level helper _cp_simultaneity_factor.
+
+    All expected values are taken directly from the VDE FNN 2021 support-point
+    table (suburban residential, evening peak) stored in
+    config_timeseries_default.cfg under [simultaneity_curves].
+    """
+
+    @pytest.fixture(autouse=True)
+    def setup_class(self):
+        self.config = Config()
+
+    # ------------------------------------------------------------------
+    # 1. Exact support-point values
+    # ------------------------------------------------------------------
+
+    def test_exact_support_points_11kw(self):
+        f = timeseries._cp_simultaneity_factor
+        assert f(1, 11, self.config) == pytest.approx(1.0)
+        assert f(20, 11, self.config) == pytest.approx(0.35)
+        assert f(50, 11, self.config) == pytest.approx(0.26)
+        assert f(150, 11, self.config) == pytest.approx(0.173)
+
+    def test_exact_support_points_other_classes(self):
+        f = timeseries._cp_simultaneity_factor
+        assert f(10, 3.7, self.config) == pytest.approx(0.8)
+        assert f(10, 22, self.config) == pytest.approx(0.5)
+
+    # ------------------------------------------------------------------
+    # 2. Logarithmic interpolation between support points
+    # ------------------------------------------------------------------
+
+    def test_log_interpolation_between_n10_and_n20(self):
+        # n=15 lies between support points n=10 (factor=0.6) and n=20 (factor=0.35).
+        # Log-interpolation yields a value closer to 0.35 than the linear midpoint
+        # (0.475), because log(15) is proportionally nearer to log(20) than to log(10).
+        factor = timeseries._cp_simultaneity_factor(15, 11, self.config)
+        linear_midpoint = (0.6 + 0.35) / 2  # 0.475
+        assert factor > 0.35, "factor must be above the n=20 support point"
+        assert factor < linear_midpoint, "log-interp must be below the linear midpoint"
+
+    # ------------------------------------------------------------------
+    # 3. Clamping at boundaries
+    # ------------------------------------------------------------------
+
+    def test_clamping_above_max_support_point(self):
+        # n=200 exceeds the largest support point (n=150); factor must stay at 0.173.
+        assert timeseries._cp_simultaneity_factor(200, 11, self.config) == pytest.approx(
+            0.173
+        )
+
+    def test_clamping_at_min_support_point(self):
+        # n=1 is the smallest support point; factor must be 1.0.
+        assert timeseries._cp_simultaneity_factor(1, 11, self.config) == pytest.approx(
+            1.0
+        )
+
+    # ------------------------------------------------------------------
+    # 4. Power-class selection: nearest class wins
+    # ------------------------------------------------------------------
+
+    def test_power_class_selection_near_11kw(self):
+        # 10 kW is closer to 11 kW than to 3.7 kW → uses 11 kW curve (n=20 → 0.35)
+        assert timeseries._cp_simultaneity_factor(20, 10, self.config) == pytest.approx(
+            0.35
+        )
+
+    def test_power_class_selection_near_3_7kw(self):
+        # 4 kW is closer to 3.7 kW than to 11 kW → uses 3.7 kW curve (n=10 → 0.8)
+        assert timeseries._cp_simultaneity_factor(10, 4, self.config) == pytest.approx(
+            0.8
+        )
+
+    def test_power_class_selection_near_22kw(self):
+        # 18 kW is closer to 22 kW than to 11 kW → uses 22 kW curve (n=10 → 0.5)
+        assert timeseries._cp_simultaneity_factor(10, 18, self.config) == pytest.approx(
+            0.5
+        )
+
+
+class TestHpSimultaneityFactor:
+    """Unit tests for the module-level helper _hp_simultaneity_factor.
+
+    All expected values are taken directly from the Kerber-derived support-point
+    table stored in config_timeseries_default.cfg under [simultaneity_curves].
+    """
+
+    @pytest.fixture(autouse=True)
+    def setup_class(self):
+        self.config = Config()
+
+    # ------------------------------------------------------------------
+    # 1. Exact support-point values
+    # ------------------------------------------------------------------
+
+    def test_exact_support_points(self):
+        f = timeseries._hp_simultaneity_factor
+        assert f(1, self.config) == pytest.approx(1.0)
+        assert f(20, self.config) == pytest.approx(0.91)
+        assert f(50, self.config) == pytest.approx(0.9)
+        assert f(150, self.config) == pytest.approx(0.9)
+
+    # ------------------------------------------------------------------
+    # 2. Logarithmic interpolation between support points
+    # ------------------------------------------------------------------
+
+    def test_log_interpolation_between_n20_and_n50(self):
+        # n=30 lies between support points n=20 (factor=0.91) and n=50
+        # (factor=0.9). The interpolated factor must lie strictly within
+        # that range.
+        factor = timeseries._hp_simultaneity_factor(30, self.config)
+        assert factor < 0.91, "factor must be below the n=20 support point"
+        assert factor > 0.9, "factor must be above the n=50 support point"
+
+    # ------------------------------------------------------------------
+    # 3. Clamping at boundaries
+    # ------------------------------------------------------------------
+
+    def test_clamping_above_max_support_point(self):
+        # n=300 exceeds the largest support point (n=150); factor must stay
+        # at 0.9.
+        assert timeseries._hp_simultaneity_factor(300, self.config) == pytest.approx(
+            0.9
+        )
+
+    def test_clamping_at_min_support_point(self):
+        # n=1 is the smallest support point; factor must be 1.0.
+        assert timeseries._hp_simultaneity_factor(1, self.config) == pytest.approx(
+            1.0
+        )
