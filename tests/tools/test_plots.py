@@ -1,5 +1,6 @@
 import copy
 
+import pandas as pd
 import pytest
 
 from edisgo import EDisGo
@@ -99,6 +100,51 @@ class TestPlots:
                 pseudo_coordinates=pseudo_coordinates,
                 node_selection=node_selection,
             )
+
+    def test_plot_plotly_custom_colors(self):
+        # partial Series: 2 lines explicitly colored, rest fall back to grey
+        line_colors = pd.Series(
+            {"Line_10003": "red", "Line_10004": "blue"}
+        )
+        fig = plot_plotly(
+            edisgo_obj=self.edisgo_root,
+            line_color=line_colors,
+        )
+        assert fig is not None
+        assert len(fig.data) > 0
+
+        # dict input for line_color
+        fig = plot_plotly(
+            edisgo_obj=self.edisgo_root,
+            line_color={"Line_10003": "green"},
+        )
+        assert fig is not None
+
+        # partial Series for node_color
+        node_colors = pd.Series(
+            {"Bus_MVStation_1": "orange", "Bus_Generator_1": "purple"}
+        )
+        fig = plot_plotly(
+            edisgo_obj=self.edisgo_root,
+            node_color=node_colors,
+        )
+        assert fig is not None
+
+        # dict input for node_color
+        fig = plot_plotly(
+            edisgo_obj=self.edisgo_root,
+            node_color={"Bus_MVStation_1": "cyan"},
+        )
+        assert fig is not None
+
+        # both line_color and node_color as Series simultaneously
+        fig = plot_plotly(
+            edisgo_obj=self.edisgo_root,
+            line_color=line_colors,
+            node_color=node_colors,
+        )
+        assert fig is not None
+        assert len(fig.data) > 0
 
     def test_chosen_graph(self):
         chosen_graph(edisgo_obj=self.edisgo_root, selected_grid="Grid")
