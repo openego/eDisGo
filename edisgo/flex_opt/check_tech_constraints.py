@@ -1017,7 +1017,9 @@ def allowed_voltage_limits(edisgo_obj, buses=None, split_voltage_band=True):
         # not belonging to any RONT station are left untouched (bit-
         # identical to the unconditional [0.9, 1.1] band above).
         ront_voltage_range = float(
-            edisgo_obj.config["grid_expansion_ront"]["ront_voltage_range"]
+            edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+                "ront_voltage_range"
+            ]
         )
         for lv_grid in edisgo_obj.topology.mv_grid.lv_grids:
             if not is_ront(lv_grid.transformers_df.iloc[0].type_info):
@@ -1151,7 +1153,9 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
             f"{config_string}_max_v_drop"
         ]
         ront_voltage_range = float(
-            edisgo_obj.config["grid_expansion_ront"]["ront_voltage_range"]
+            edisgo_obj.config["grid_expansion_allowed_voltage_deviations"][
+                "ront_voltage_range"
+            ]
         )
 
         # get all secondary sides and buses in grids
@@ -1225,43 +1229,6 @@ def _lv_allowed_voltage_limits(edisgo_obj, lv_grids=None, mode=None):
     return upper_limits_df, lower_limits_df
 
 
-def lv_grid_voltage_spread(edisgo_obj, lv_grid):
-    """
-    Returns the maximum voltage spread of the given LV grid.
-
-    The voltage spread of a time step is the difference between the highest
-    and lowest voltage magnitude in p.u. across all buses in the LV grid,
-    excluding the station's secondary side. The maximum voltage spread is
-    the maximum of this value over all time steps included in the last power
-    flow analysis. This is a diagnostic/logging quantity only -- it is NOT
-    used as the `enable_ront` trigger criterion (see
-    :func:`lv_grid_ront_feasible` for that), since spread alone does not
-    account for the RONT's bounded control range or the hard +/-10% system
-    limit.
-
-    Parameters
-    ----------
-    edisgo_obj : :class:`~.EDisGo`
-    lv_grid : :class:`~.network.grids.LVGrid`
-
-    Returns
-    -------
-    float
-        Maximum voltage spread in p.u.. Returns 0.0 if none of the grid's
-        buses (other than the station) were included in the last power flow
-        analysis.
-
-    """
-    secondary_side = lv_grid.station.index[0]
-    internal_buses = lv_grid.buses_df.index.drop(secondary_side).intersection(
-        edisgo_obj.results.v_res.columns
-    )
-    if internal_buses.empty:
-        return 0.0
-    v_internal = edisgo_obj.results.v_res.loc[:, internal_buses]
-    return (v_internal.max(axis=1) - v_internal.min(axis=1)).max()
-
-
 def lv_grid_ront_feasible(edisgo_obj, lv_grid, ront_voltage_range):
     """
     Checks whether a RONT with the given control range could resolve all
@@ -1291,7 +1258,7 @@ def lv_grid_ront_feasible(edisgo_obj, lv_grid, ront_voltage_range):
     lv_grid : :class:`~.network.grids.LVGrid`
     ront_voltage_range : float
         RONT control range in p.u. (see config option
-        `ront_voltage_range` in section `grid_expansion_ront`).
+        `ront_voltage_range` in section `grid_expansion_allowed_voltage_deviations`).
 
     Returns
     -------

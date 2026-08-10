@@ -204,6 +204,18 @@ def ront_type_name(type_info):
 
     See :func:`is_ront`.
 
+    The RONT-suffixed name returned here is a marker, not a catalogue type:
+    it is not, and does not need to be, a row in
+    :attr:`~.network.topology.Topology.equipment_data` `["lv_transformers"]`.
+    A transformer's electrical parameters (`s_nom`/`r_pu`/`x_pu`) always come
+    from its existing row in
+    :attr:`~.network.topology.Topology.transformers_df`, which
+    :func:`~.flex_opt.reinforce_measures.reinforce_lv_grid_ront_voltage_issues`
+    leaves unchanged when converting to RONT -- no code path re-derives them
+    by looking up `type_info` (RONT-suffixed or not) in the equipment
+    catalogue, so this works for any base name, including non-standard ones
+    from grid import that never had a catalogue entry to begin with.
+
     Parameters
     ----------
     type_info : str

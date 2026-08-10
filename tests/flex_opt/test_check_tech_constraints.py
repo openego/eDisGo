@@ -933,31 +933,6 @@ class TestCheckTechConstraints:
             == v_limits_lower.at[self.timesteps[1], "BusBar_MVGrid_1_LVGrid_1_LV"]
         )
 
-    def test_lv_grid_voltage_spread(self):
-        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
-        station_bus = lv_grid_1.station.index[0]
-        internal_buses = lv_grid_1.buses_df.index.drop(station_bus)
-
-        self.edisgo.results._v_res.loc[:, station_bus] = 1.00
-        self.edisgo.results._v_res.loc[:, internal_buses] = 1.05
-        self.edisgo.results._v_res.loc[self.timesteps[0], internal_buses[0]] = 1.09
-        self.edisgo.results._v_res.loc[self.timesteps[0], internal_buses[1]] = 1.02
-
-        spread = check_tech_constraints.lv_grid_voltage_spread(self.edisgo, lv_grid_1)
-        assert np.isclose(spread, 1.09 - 1.02)
-
-    def test_lv_grid_voltage_spread_grid_not_in_power_flow(self):
-        # if the last power flow only covered a different LV grid (e.g.
-        # edisgo.analyze(mode="lv", lv_grid_id=...) for a single grid, see
-        # test_lv_line_max_relative_overload), none of this grid's internal
-        # buses are in v_res -- lv_grid_voltage_spread() must return 0.0 per
-        # its documented contract rather than raising.
-        lv_grid_1 = self.edisgo.topology.get_lv_grid(1)
-        self.edisgo.analyze(mode="lv", lv_grid_id=5)
-
-        spread = check_tech_constraints.lv_grid_voltage_spread(self.edisgo, lv_grid_1)
-        assert spread == 0.0
-
     def test_lv_grid_ront_feasible(self):
         # three scenarios, same pattern reused at the constraint-check level
         # below (test__lv_allowed_voltage_limits_ront*): (a) small spread,
@@ -1011,7 +986,6 @@ class TestCheckTechConstraints:
         )
 
     def test_lv_grid_ront_feasible_grid_not_in_power_flow(self):
-        # same scenario as test_lv_grid_voltage_spread_grid_not_in_power_flow:
         # if this grid's secondary side was not part of the last power flow
         # (e.g. edisgo.analyze(mode="lv", lv_grid_id=...) for a different
         # grid), lv_grid_ront_feasible() cannot prove feasibility and must

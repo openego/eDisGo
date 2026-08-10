@@ -89,9 +89,10 @@ def reinforce_grid(
         disconnecting or reinforcing lines, for LV grids for which
         :func:`~.flex_opt.check_tech_constraints.lv_grid_ront_feasible` reports that a
         RONT with the configured control range (`ront_voltage_range`, section
-        `grid_expansion_ront`) can resolve all voltage issues at every time step,
-        respecting both the RONT's bounded control range and the hard +/-10% system
-        voltage limit. The RONT's regulating effect is modelled as an idealised
+        `grid_expansion_allowed_voltage_deviations`) can resolve all voltage
+        issues at every time step, respecting both the RONT's bounded control
+        range and the hard +/-10% system voltage limit. The RONT's
+        regulating effect is modelled as an idealised
         reference-voltage shift in the voltage limit checks -- not as an actual
         tap-changing transformer in the power flow, which the current eDisGo/PyPSA
         power flow call pattern (one vectorized call for all time steps) does not
@@ -504,7 +505,9 @@ def reinforce_grid(
 
         if enable_ront:
             ront_voltage_range = float(
-                edisgo.config["grid_expansion_ront"]["ront_voltage_range"]
+                edisgo.config["grid_expansion_allowed_voltage_deviations"][
+                    "ront_voltage_range"
+                ]
             )
 
         while_counter = 0
